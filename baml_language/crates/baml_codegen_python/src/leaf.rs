@@ -115,7 +115,7 @@ impl LeafBody {
     /// annotations in the `.py` (factory bindings only), but they're
     /// included for parity with `.pyi` so the import block is identical
     /// across the two files where the underlying type sources match.
-    /// The TYPE_CHECKING guard makes the extras free at runtime.
+    /// The `TYPE_CHECKING` guard makes the extras free at runtime.
     pub(crate) fn cross_leaf_first_segments_py(&self) -> Vec<String> {
         let mut set: BTreeSet<String> = BTreeSet::new();
         let current = &self.leaf;
@@ -514,7 +514,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     // needs `import typing`. `stdlib_imports` returns `["enum"?,
     // "typing"?]` in alphabetical order; appending keeps that order
     // because "typing" sorts after "enum".
-    if !cross_leaf_segments.is_empty() && !stdlibs.iter().any(|s| *s == "typing") {
+    if !cross_leaf_segments.is_empty() && !stdlibs.contains(&"typing") {
         stdlibs.push("typing");
     }
     let needs_pydantic = body.needs_pydantic();
@@ -665,11 +665,7 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> Vec<String> {
             // 12d §3.3 — same `translate_ty` call and the same whole-
             // RHS single-quote wrap for recursive aliases.
             let rhs = translate_ty(&a.resolves_to, &ctx);
-            let rhs = if a.recursive {
-                format!("'{rhs}'")
-            } else {
-                rhs
-            };
+            let rhs = if a.recursive { format!("'{rhs}'") } else { rhs };
             vec![format!("{}: typing.TypeAlias = {}", a.py_name, rhs)]
         }
         EmittedSymbol::Function(f) => vec![render_function_signature_pyi(f, &ctx)],

@@ -9,7 +9,9 @@ use std::collections::HashMap;
 use baml_codegen_types::{self as cg, Origin, SymbolPool};
 use baml_compiler2_ast::DeclarativeMeta;
 use baml_compiler2_hir::{
-    compiler2_all_files, file_package, ids::FunctionMarker, ids::LocalItemId, package::PackageId,
+    compiler2_all_files, file_package,
+    ids::{FunctionMarker, LocalItemId},
+    package::PackageId,
 };
 use baml_compiler2_tir::{
     lower_type_expr,

@@ -450,7 +450,7 @@ fn type_name_matches_external_name(external_name: &str, type_name: &baml_type::T
     let qualified_name = type_name
         .module_path
         .iter()
-        .map(|segment| segment.as_str())
+        .map(baml_type::Name::as_str)
         .chain(std::iter::once(type_name.name.as_str()))
         .collect::<Vec<_>>()
         .join(".");

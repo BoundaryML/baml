@@ -6413,17 +6413,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rig_empty"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_python",
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
-]
-
-[[package]]
 name = "rig_llm_functions"
 version = "0.1.0"
 dependencies = [

@@ -354,9 +354,7 @@ fn lookup_llm_function<'a>(
         return Some(info);
     }
     let suffix = format!(".{function_name}");
-    let mut matches = llm_functions
-        .iter()
-        .filter(|(k, _)| k.ends_with(&suffix));
+    let mut matches = llm_functions.iter().filter(|(k, _)| k.ends_with(&suffix));
     let first = matches.next()?;
     if matches.next().is_some() {
         // Ambiguous — let the caller treat this as "not found" so the

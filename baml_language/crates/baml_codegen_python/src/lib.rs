@@ -1450,7 +1450,10 @@ mod tests {
             n.clone(),
             class_with_props(
                 n,
-                vec![("name", Ty::String), ("email", Ty::Optional(Box::new(Ty::String)))],
+                vec![
+                    ("name", Ty::String),
+                    ("email", Ty::Optional(Box::new(Ty::String))),
+                ],
                 "x.baml",
                 0,
             ),
@@ -1739,7 +1742,10 @@ mod tests {
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
-        assert!(!leaf.contains("import typing"), "no typing expected in:\n{leaf}");
+        assert!(
+            !leaf.contains("import typing"),
+            "no typing expected in:\n{leaf}"
+        );
 
         // Add a function — typing now required (signatures may use
         // `typing.Optional` / `typing.List` / etc., per 12d §7).
@@ -1878,12 +1884,7 @@ mod tests {
         );
         pool.insert(
             stream.clone(),
-            class_with_props(
-                stream,
-                vec![("origin", Ty::Class(non_stream))],
-                "x.baml",
-                0,
-            ),
+            class_with_props(stream, vec![("origin", Ty::Class(non_stream))], "x.baml", 0),
         );
         let out = to_source_code(&pool, &[]);
         let py = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
@@ -1927,16 +1928,19 @@ mod tests {
         let sentiment = cg_name("user", &["ipsum"], "Sentiment");
         let bucket = cg_name("aws", &["s3"], "Bucket");
         let response = cg_name("baml", &["http"], "Response");
-        pool.insert(sentiment.clone(), Symbol::Enum(Enum {
-            name: sentiment.clone(),
-            docstring: None,
-            variants: vec![EnumVariant {
-                name: BaseName::new("X"),
+        pool.insert(
+            sentiment.clone(),
+            Symbol::Enum(Enum {
+                name: sentiment.clone(),
                 docstring: None,
-                value: "X".to_string(),
-            }],
-            origin: origin("x.baml", 0),
-        }));
+                variants: vec![EnumVariant {
+                    name: BaseName::new("X"),
+                    docstring: None,
+                    value: "X".to_string(),
+                }],
+                origin: origin("x.baml", 0),
+            }),
+        );
         pool.insert(bucket.clone(), class(bucket.clone()));
         pool.insert(response.clone(), class(response.clone()));
         pool.insert(
@@ -1981,10 +1985,7 @@ mod tests {
             resume.clone(),
             class_with_props(
                 resume,
-                vec![
-                    ("a", Ty::Class(s3_bucket)),
-                    ("b", Ty::Class(gcs_object)),
-                ],
+                vec![("a", Ty::Class(s3_bucket)), ("b", Ty::Class(gcs_object))],
                 "x.baml",
                 0,
             ),
@@ -2032,9 +2033,7 @@ mod tests {
         let root_py = &out[&PathBuf::from("__init__.py")];
         // The children re-export line exists and is NOT under a guard.
         assert!(root_py.contains("from . import baml, lorem, vendor\n"));
-        let line_idx = root_py
-            .find("from . import baml, lorem, vendor")
-            .unwrap();
+        let line_idx = root_py.find("from . import baml, lorem, vendor").unwrap();
         let prefix = &root_py[..line_idx];
         // No TYPE_CHECKING block precedes the children re-export line.
         assert!(!prefix.contains("if typing.TYPE_CHECKING:"));
@@ -2048,16 +2047,19 @@ mod tests {
         let mut pool: SymbolPool = HashMap::new();
         let sentiment = cg_name("user", &["ipsum"], "Sentiment");
         let func = cg_name("user", &["lorem"], "classify");
-        pool.insert(sentiment.clone(), Symbol::Enum(Enum {
-            name: sentiment.clone(),
-            docstring: None,
-            variants: vec![EnumVariant {
-                name: BaseName::new("X"),
+        pool.insert(
+            sentiment.clone(),
+            Symbol::Enum(Enum {
+                name: sentiment.clone(),
                 docstring: None,
-                value: "X".to_string(),
-            }],
-            origin: origin("x.baml", 0),
-        }));
+                variants: vec![EnumVariant {
+                    name: BaseName::new("X"),
+                    docstring: None,
+                    value: "X".to_string(),
+                }],
+                origin: origin("x.baml", 0),
+            }),
+        );
         pool.insert(
             func,
             Symbol::Function(Function {
@@ -2117,7 +2119,9 @@ mod tests {
         ];
         let mut last = 0usize;
         for needle in needles {
-            let i = leaf.find(needle).unwrap_or_else(|| panic!("missing {needle} in:\n{leaf}"));
+            let i = leaf
+                .find(needle)
+                .unwrap_or_else(|| panic!("missing {needle} in:\n{leaf}"));
             assert!(i >= last, "out-of-order signature: {needle}");
             last = i;
         }
