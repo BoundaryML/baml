@@ -33,7 +33,7 @@ async fn parse_companion_allows_missing_optional_class_field() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Instance {
-            class_name: "Payload".to_string(),
+            class_name: "user.Payload".to_string(),
             fields: indexmap! {
                 "text".to_string() => BexExternalValue::Null,
             },
@@ -74,7 +74,7 @@ async fn parse_companion_allows_missing_nullable_alias_field() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Instance {
-            class_name: "Payload".to_string(),
+            class_name: "user.Payload".to_string(),
             fields: indexmap! {
                 "text".to_string() => BexExternalValue::union(
                     BexExternalValue::Null,
