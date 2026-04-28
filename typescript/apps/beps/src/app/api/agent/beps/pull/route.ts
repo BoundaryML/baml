@@ -76,12 +76,12 @@ export async function GET(request: NextRequest): Promise<Response> {
     }
   }
 
-  const zipContent = await zip.generateAsync({ type: "uint8array" });
+  const zipContent = await zip.generateAsync({ type: "arraybuffer" });
 
   const date = new Date().toISOString().split("T")[0];
   const filename = `all-beps-${date}.zip`;
 
-  return new Response(zipContent as Uint8Array, {
+  return new Response(zipContent, {
     status: 200,
     headers: {
       ...CORS_HEADERS,
