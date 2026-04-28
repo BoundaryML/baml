@@ -164,10 +164,10 @@ function extractSummary(content: string, maxLength: number = 300): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INDEX.md Generation
+// Claude.md Generation (main index file)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function generateIndexMd(data: ExportAllData): string {
+export function generateClaudeMd(data: ExportAllData): string {
   const sortedBeps = sortBepsByStatus(data.beps);
 
   let md = `# BAML Enhancement Proposals (BEPs) - Reference Bundle
@@ -226,7 +226,7 @@ BEPs are sorted by maturity - **implemented and accepted BEPs are the best refer
       const issueInfo = bep.openIssueCount > 0 ? ` | ${bep.openIssueCount} open issues` : "";
       const starBadge = bep.isGoodReference ? " ⭐" : "";
 
-      md += `- **[${bepNum}: ${bep.title}](./${bepFolder}/Claude.md)**${starBadge} (v${bep.currentVersion}${pageInfo}${issueInfo})
+      md += `- **[${bepNum}: ${bep.title}](./${bepFolder}/README.md)**${starBadge} (v${bep.currentVersion}${pageInfo}${issueInfo})
   ${summary}
   *Shepherds: ${bep.shepherdNames.join(", ") || "None"}*
 
@@ -249,7 +249,7 @@ BEPs are sorted by maturity - **implemented and accepted BEPs are the best refer
     const bepFolder = formatBepFolderName(bep.number, bep.title);
     const emoji = getStatusEmoji(bep.status);
     const starBadge = bep.isGoodReference ? " ⭐" : "";
-    md += `| [${bepNum}](./${bepFolder}/Claude.md)${starBadge} | ${bep.title} | ${emoji} ${bep.status} | v${bep.currentVersion} | ${bep.shepherdNames.join(", ") || "-"} |\n`;
+    md += `| [${bepNum}](./${bepFolder}/README.md)${starBadge} | ${bep.title} | ${emoji} ${bep.status} | v${bep.currentVersion} | ${bep.shepherdNames.join(", ") || "-"} |\n`;
   }
 
   md += `
@@ -315,10 +315,10 @@ export function generateBepMetaJson(bep: ExportAllBep): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Individual BEP Claude.md Generation (main content file)
+// Individual BEP README.md Generation (main content file)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function generateBepClaudeMd(bep: ExportAllBep): string {
+export function generateBepReadme(bep: ExportAllBep): string {
   const bepNum = formatBepNumber(bep.number);
 
   let md = "";
@@ -395,7 +395,7 @@ These BEPs are excellent examples of writing style and structure:
       const refBepNum = formatBepNumber(bep.number);
       const refFolder = formatBepFolderName(bep.number, bep.title);
       const summary = extractSummary(bep.content, 120);
-      md += `- **[${refBepNum}: ${bep.title}](../${refFolder}/Claude.md)** (${getStatusEmoji(bep.status)} ${bep.status})
+      md += `- **[${refBepNum}: ${bep.title}](../${refFolder}/README.md)** (${getStatusEmoji(bep.status)} ${bep.status})
   ${summary}
 
 `;
@@ -412,7 +412,7 @@ Each BEP is exported as a folder with this structure:
 \`\`\`
 BEP-001-your-proposal-slug/
 ├── meta.json           # Metadata (status, version, shepherds, pages list)
-├── Claude.md           # Main proposal content
+├── README.md           # Main proposal content
 └── pages/              # Additional pages (addenda)
     ├── background.md
     └── examples.md
@@ -630,10 +630,10 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
     data.beps.filter((bep) => bep.isGoodReference)
   );
 
-  // Index file
+  // Main index file (Claude.md)
   files.push({
-    path: "INDEX.md",
-    content: generateIndexMd(data),
+    path: "Claude.md",
+    content: generateClaudeMd(data),
   });
 
   // NEW-BEP instructions
@@ -652,10 +652,10 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
       content: generateBepMetaJson(bep),
     });
 
-    // Main content file (Claude.md)
+    // Main content file (README.md)
     files.push({
-      path: `${bepFolder}/Claude.md`,
-      content: generateBepClaudeMd(bep),
+      path: `${bepFolder}/README.md`,
+      content: generateBepReadme(bep),
     });
 
     // Additional pages

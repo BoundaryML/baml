@@ -228,12 +228,12 @@ export function BepExportAllDialog({ trigger }: BepExportAllDialogProps) {
               </Label>
               <pre className="mt-2 text-xs font-mono text-muted-foreground whitespace-pre">
 {`all-beps/
-  INDEX.md              # Overview with status-sorted list
+  Claude.md             # Main index with status-sorted list
   NEW-BEP/
     INSTRUCTIONS.md     # How to create & upload a new BEP
   BEP-001-proposal-slug/
     meta.json           # Metadata (status, version, pages)
-    Claude.md           # Full proposal content
+    README.md           # Full proposal content
     pages/              # Additional pages (if any)
   BEP-002-another-slug/
     ...`}
