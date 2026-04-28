@@ -1,3 +1,0 @@
-# This directory contains BEPs pulled from the server.
-# Dynamic content (BEP-*/, Claude.md, etc.) is gitignored.
-# Run `../bep pull` to fetch all BEPs.
