@@ -57,7 +57,7 @@ function user.DuplicateBoolLiteral(b: bool) -> string  [expr] {
   {  } match (b) { true => "first true", true => "second true", false => "false" }
 }
 function user.DuplicateEnumVariant(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "first", user.Status.Active => "second", user.Status.Inactive => "inactive", user.Status.Pending => "pending" }
+  {  } match (s) { Status.Active => "first", Status.Active => "second", Status.Inactive => "inactive", Status.Pending => "pending" }
 }
 function user.DuplicateIntLiteral(x: int) -> string  [expr] {
   {  } match (x) { 1 => "first one", 1 => "second one", _ => "other" }
@@ -66,13 +66,13 @@ function user.DuplicateStringLiteral(role: user.Role) -> string  [expr] {
   {  } match (role) { "user" => "first user", "user" => "second user", "assistant" => "assistant", "system" => "system" }
 }
 function user.EnumVariantAfterTypedEnum(s: user.Status) -> string  [expr] {
-  {  } match (s) { x: user.Status => "any status", user.Status.Active => "unreachable" }
+  {  } match (s) { x: user.Status => "any status", Status.Active => "unreachable" }
 }
 function user.EnumVariantUnion(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active | user.Status.Pending => "actionable", user.Status.Inactive => "inactive" }
+  {  } match (s) { Status.Active | Status.Pending => "actionable", Status.Inactive => "inactive" }
 }
 function user.EnumVariantUnionWithCatchAll(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active | user.Status.Pending => "actionable", _ => "other" }
+  {  } match (s) { Status.Active | Status.Pending => "actionable", _ => "other" }
 }
 function user.ExhaustiveAliasOfLiterals(code: user.OkOrCreated) -> string  [expr] {
   {  } match (code) { 200 => "ok", 201 => "created" }
@@ -90,10 +90,10 @@ function user.ExhaustiveDoubleMaybe(dm: user.DoubleMaybe) -> string  [expr] {
   {  } match (dm) { s: user.Success => s.data, f: user.Failure => f.reason, null => "nothing" }
 }
 function user.ExhaustiveEnumAllVariants(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", user.Status.Inactive => "inactive", user.Status.Pending => "pending" }
+  {  } match (s) { Status.Active => "active", Status.Inactive => "inactive", Status.Pending => "pending" }
 }
 function user.ExhaustiveEnumWithCatchAll(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", _ => "other" }
+  {  } match (s) { Status.Active => "active", _ => "other" }
 }
 function user.ExhaustiveEnumWithTypedPattern(s: user.Status) -> string  [expr] {
   {  } match (s) { x: user.Status => "any status" }
@@ -111,7 +111,7 @@ function user.ExhaustiveMixedLiterals(x: user.MixedLiterals) -> string  [expr] {
   {  } match (x) { 200 => "http ok", "success" => "string success", true => "boolean true" }
 }
 function user.ExhaustiveNullableEnum(s: user.Status?) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", user.Status.Inactive => "inactive", user.Status.Pending => "pending", null => "no status" }
+  {  } match (s) { Status.Active => "active", Status.Inactive => "inactive", Status.Pending => "pending", null => "no status" }
 }
 function user.ExhaustiveNullableEnumWithTypedPattern(s: user.Status?) -> string  [expr] {
   {  } match (s) { x: user.Status => "some status", null => "no status" }
@@ -138,7 +138,7 @@ function user.ExhaustiveTypeAliasWithCatchAll(r: user.Result) -> string  [expr] 
   {  } match (r) { s: user.Success => s.data, _ => "fallback" }
 }
 function user.ExhaustiveWithNamedCatchAll(x: int) -> int  [expr] {
-  {  } match (x) { 1 => 100, other => other Add 1 }
+  {  } match (x) { 1 => 100, user.other => other Add 1 }
 }
 function user.ExhaustiveWithUnderscore(x: int) -> int  [expr] {
   {  } match (x) { 1 => 100, 2 => 200, _ => 0 }
@@ -153,7 +153,7 @@ function user.GuardedWithFallback(x: int) -> int  [expr] {
   {  } match (x) { n: int => n Mul 2, _ => 0 }
 }
 function user.HighLineNumberNonExhaustive(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active only" }
+  {  } match (s) { Status.Active => "active only" }
 }
 function user.IntLiteralUnionPattern(code: user.SuccessCode) -> string  [expr] {
   {  } match (code) { 200 | 201 => "success with body", 204 => "no content" }
@@ -162,7 +162,7 @@ function user.JumpTableClassTypeTag(pet: user.Cat | user.Dog | user.Bird | user.
   {  } match (pet) { c: user.Cat => "cat", d: user.Dog => "dog", b: user.Bird => "bird", f: user.Fish => "fish" }
 }
 function user.JumpTableEnumDiscriminant(state: user.DispatchState) -> int  [expr] {
-  {  } match (state) { user.DispatchState.Alpha => 10, user.DispatchState.Beta => 20, user.DispatchState.Gamma => 30, user.DispatchState.Delta => 40 }
+  {  } match (state) { DispatchState.Alpha => 10, DispatchState.Beta => 20, DispatchState.Gamma => 30, DispatchState.Delta => 40 }
 }
 function user.JumpTableTypeTag(value: int | string | bool | float) -> string  [expr] {
   {  } match (value) { i: int => "int", s: string => "string", b: bool => "bool", f: float => "float" }
@@ -180,19 +180,19 @@ function user.MatchComplexScrutinee(x: int) -> string  [expr] {
   {  } match (x Mul 2 Add 1) { 1 => "x was 0", 3 => "x was 1", _ => "other" }
 }
 function user.MatchFunctionCallScrutinee() -> string  [expr] {
-  {  } match (GetStatus()) { user.Status.Active => "active", user.Status.Inactive => "inactive", user.Status.Pending => "pending" }
+  {  } match (GetStatus()) { Status.Active => "active", Status.Inactive => "inactive", Status.Pending => "pending" }
 }
 function user.MixedPatterns(x: int) -> string  [expr] {
   {  } match (x) { 0 => "zero", 1 => "one", n: int => "positive", _ => "negative" }
 }
 function user.MultipleUnreachableSpans(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", user.Status.Active => "duplicate 1", user.Status.Inactive => "inactive", user.Status.Active => "duplicate 2", user.Status.Pending => "pending" }
+  {  } match (s) { Status.Active => "active", Status.Active => "duplicate 1", Status.Inactive => "inactive", Status.Active => "duplicate 2", Status.Pending => "pending" }
 }
 function user.NestedEnumMatch(s1: user.Status, s2: user.Status) -> string  [expr] {
-  {  } match (s1) { user.Status.Active => match (s2) { user.Status.Active => "both active", user.Status.Inactive => "first active, sec...", user.Status.Pending => "first active, sec..." }, user.Status.Inactive => "first inactive", user.Status.Pending => "first pending" }
+  {  } match (s1) { Status.Active => match (s2) { Status.Active => "both active", Status.Inactive => "first active, sec...", Status.Pending => "first active, sec..." }, Status.Inactive => "first inactive", Status.Pending => "first pending" }
 }
 function user.NestedEnumVariantUnions(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active | user.Status.Pending | user.Status.Inactive => "all statuses" }
+  {  } match (s) { Status.Active | Status.Pending | Status.Inactive => "all statuses" }
 }
 function user.NestedLiteralUnions(code: int) -> string  [expr] {
   {  } match (code) { 200 | 201 | 202 | 204 => "success", 400 | 404 | 405 | 406 | 409 => "client error", _ => "other" }
@@ -228,10 +228,10 @@ function user.NonExhaustiveDoubleMaybeMissingNull(dm: user.DoubleMaybe) -> strin
   {  } match (dm) { s: user.Success => s.data, f: user.Failure => f.reason }
 }
 function user.NonExhaustiveEnumMissingMultiple(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active" }
+  {  } match (s) { Status.Active => "active" }
 }
 function user.NonExhaustiveEnumMissingOne(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", user.Status.Inactive => "inactive" }
+  {  } match (s) { Status.Active => "active", Status.Inactive => "inactive" }
 }
 function user.NonExhaustiveFullResultMissingOne(r: user.FullResult) -> string  [expr] {
   {  } match (r) { s: user.Success => s.data, f: user.Failure => f.reason }
@@ -243,10 +243,10 @@ function user.NonExhaustiveMixedLiterals(x: user.MixedLiterals) -> string  [expr
   {  } match (x) { 200 => "http ok", "success" => "string success" }
 }
 function user.NonExhaustiveNullableEnumMissingNull(s: user.Status?) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", user.Status.Inactive => "inactive", user.Status.Pending => "pending" }
+  {  } match (s) { Status.Active => "active", Status.Inactive => "inactive", Status.Pending => "pending" }
 }
 function user.NonExhaustiveNullableEnumMissingVariant(s: user.Status?) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", user.Status.Inactive => "inactive", null => "no status" }
+  {  } match (s) { Status.Active => "active", Status.Inactive => "inactive", null => "no status" }
 }
 function user.NonExhaustiveOptionalMissingNull(code: user.MaybeOk) -> string  [expr] {
   {  } match (code) { 200 => "OK" }

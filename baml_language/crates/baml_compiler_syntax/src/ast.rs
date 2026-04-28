@@ -817,12 +817,12 @@ ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
 ast_node!(EnvAccessExpr, ENV_ACCESS_EXPR);
 ast_node!(MatchExpr, MATCH_EXPR);
 ast_node!(MatchArm, MATCH_ARM);
-ast_node!(MatchPattern, MATCH_PATTERN);
+ast_node!(Pattern, PATTERN);
+ast_node!(PatternField, PATTERN_FIELD);
 ast_node!(MatchGuard, MATCH_GUARD);
 ast_node!(CatchExpr, CATCH_EXPR);
 ast_node!(CatchClause, CATCH_CLAUSE);
 ast_node!(CatchArm, CATCH_ARM);
-ast_node!(CatchPattern, CATCH_PATTERN);
 ast_node!(ThrowExpr, THROW_EXPR);
 ast_node!(ThrowsClause, THROWS_CLAUSE);
 
@@ -2574,8 +2574,8 @@ impl MatchExpr {
 
 impl MatchArm {
     /// Get the pattern for this arm.
-    pub fn pattern(&self) -> Option<MatchPattern> {
-        self.syntax.children().find_map(MatchPattern::cast)
+    pub fn pattern(&self) -> Option<Pattern> {
+        self.syntax.children().find_map(Pattern::cast)
     }
 
     /// Get the guard expression, if present.
@@ -2618,7 +2618,7 @@ impl MatchArm {
     }
 }
 
-impl MatchPattern {
+impl Pattern {
     /// Check if this is a union pattern (has `|` separators).
     pub fn is_union(&self) -> bool {
         self.syntax
@@ -2791,8 +2791,8 @@ impl CatchClause {
     }
 
     /// Get the binding pattern from `catch (...)`.
-    pub fn binding(&self) -> Option<CatchPattern> {
-        self.syntax.children().find_map(CatchPattern::cast)
+    pub fn binding(&self) -> Option<Pattern> {
+        self.syntax.children().find_map(Pattern::cast)
     }
 
     /// Get the optional stack trace binding node from `catch (e, st)`.
@@ -2810,8 +2810,8 @@ impl CatchClause {
 
 impl CatchArm {
     /// Get the pattern for this catch arm.
-    pub fn pattern(&self) -> Option<CatchPattern> {
-        self.syntax.children().find_map(CatchPattern::cast)
+    pub fn pattern(&self) -> Option<Pattern> {
+        self.syntax.children().find_map(Pattern::cast)
     }
 
     /// Get the body expression of this arm.
@@ -2839,48 +2839,6 @@ impl CatchArm {
         self.body()
             .map(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
             .unwrap_or(false)
-    }
-}
-
-impl CatchPattern {
-    /// Check if this is a union pattern (has `|` separators).
-    pub fn is_union(&self) -> bool {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .any(|token| token.kind() == SyntaxKind::PIPE)
-    }
-
-    /// Check if this is a typed binding pattern (has `:`).
-    pub fn is_typed_binding(&self) -> bool {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .any(|token| token.kind() == SyntaxKind::COLON)
-    }
-
-    /// Check if this is a wildcard pattern (`_`).
-    pub fn is_wildcard(&self) -> bool {
-        let tokens: Vec<_> = self
-            .syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|t| t.kind() == SyntaxKind::WORD)
-            .collect();
-        tokens.len() == 1 && tokens[0].text() == "_"
-    }
-
-    /// Get the binding name for this pattern.
-    pub fn binding_name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
-    }
-
-    /// Get the type expression for typed bindings.
-    pub fn binding_type(&self) -> Option<TypeExpr> {
-        self.syntax.children().find_map(TypeExpr::cast)
     }
 }
 

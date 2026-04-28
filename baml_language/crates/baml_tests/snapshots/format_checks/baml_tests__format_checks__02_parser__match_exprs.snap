@@ -82,8 +82,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             STRING_LITERAL "zero"
               QUOTE """
@@ -91,8 +92,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -106,8 +108,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             STRING_LITERAL "zero"
               QUOTE """
@@ -115,8 +118,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "1"
-              INTEGER_LITERAL "1"
+            PATTERN
+              TYPE_EXPR "1"
+                INTEGER_LITERAL "1"
             FAT_ARROW "=>"
             STRING_LITERAL "one"
               QUOTE """
@@ -124,8 +128,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "2"
-              INTEGER_LITERAL "2"
+            PATTERN
+              TYPE_EXPR "2"
+                INTEGER_LITERAL "2"
             FAT_ARROW "=>"
             STRING_LITERAL "two"
               QUOTE """
@@ -133,8 +138,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "3"
-              INTEGER_LITERAL "3"
+            PATTERN
+              TYPE_EXPR "3"
+                INTEGER_LITERAL "3"
             FAT_ARROW "=>"
             STRING_LITERAL "three"
               QUOTE """
@@ -142,8 +148,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "4"
-              INTEGER_LITERAL "4"
+            PATTERN
+              TYPE_EXPR "4"
+                INTEGER_LITERAL "4"
             FAT_ARROW "=>"
             STRING_LITERAL "four"
               QUOTE """
@@ -151,8 +158,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -166,8 +174,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             BLOCK_EXPR
               L_BRACE "{"
@@ -179,14 +188,16 @@ SOURCE_FILE
               R_BRACE "}"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             BLOCK_EXPR
               L_BRACE "{"
               LET_STMT
-                KW_LET "let"
-                WORD "y"
+                PATTERN "let y"
+                  KW_LET "let"
+                  WORD "y"
                 EQUALS "="
                 BINARY_EXPR "x + 1"
                   WORD "x"
@@ -207,10 +218,11 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "// 6 open brace trailing
+            PATTERN
+              TYPE_EXPR "// 6 open brace trailing
         // 7 first arm leading
         0"
-              INTEGER_LITERAL "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             STRING_LITERAL "zero"
               QUOTE """
@@ -218,10 +230,11 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "// 14 comma trailing
+            PATTERN
+              TYPE_EXPR "// 14 comma trailing
         // 15 second arm leading
         _"
-              WORD "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -235,10 +248,11 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "/* 6 open brace trailing */
+            PATTERN
+              TYPE_EXPR "/* 6 open brace trailing */
         /* 7 first arm leading */
         0"
-              INTEGER_LITERAL "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             STRING_LITERAL "zero"
               QUOTE """
@@ -246,10 +260,11 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "/* 14 comma trailing */
+            PATTERN
+              TYPE_EXPR "/* 14 comma trailing */
         /* 15 second arm leading */
         _"
-              WORD "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -263,7 +278,8 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
+            PATTERN
+              KW_LET "let"
               WORD "n"
               COLON ":"
               TYPE_EXPR "// 3 colon trailing
@@ -283,9 +299,10 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "// 14 comma trailing
+            PATTERN
+              TYPE_EXPR "// 14 comma trailing
         _"
-              WORD "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -299,7 +316,8 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
+            PATTERN
+              KW_LET "let"
               WORD "n"
               COLON ":"
               TYPE_EXPR "/* 3 colon trailing */
@@ -319,9 +337,10 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "/* 14 comma trailing */
+            PATTERN
+              TYPE_EXPR "/* 14 comma trailing */
         _"
-              WORD "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -335,8 +354,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             STRING_LITERAL "zero"
               QUOTE """
@@ -344,8 +364,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "1"
-              INTEGER_LITERAL "1"
+            PATTERN
+              TYPE_EXPR "1"
+                INTEGER_LITERAL "1"
             FAT_ARROW "=>"
             STRING_LITERAL "one"
               QUOTE """
@@ -353,8 +374,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "42"
-              INTEGER_LITERAL "42"
+            PATTERN
+              TYPE_EXPR "42"
+                INTEGER_LITERAL "42"
             FAT_ARROW "=>"
             STRING_LITERAL "the answer"
               QUOTE """
@@ -363,8 +385,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "unknown"
               QUOTE """
@@ -381,11 +404,12 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
-              STRING_LITERAL "hello"
-                QUOTE """
-                WORD "hello"
-                QUOTE """
+            PATTERN
+              TYPE_EXPR
+                STRING_LITERAL "hello"
+                  QUOTE """
+                  WORD "hello"
+                  QUOTE """
             FAT_ARROW "=>"
             STRING_LITERAL "greeting"
               QUOTE """
@@ -393,11 +417,12 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN
-              STRING_LITERAL "bye"
-                QUOTE """
-                WORD "bye"
-                QUOTE """
+            PATTERN
+              TYPE_EXPR
+                STRING_LITERAL "bye"
+                  QUOTE """
+                  WORD "bye"
+                  QUOTE """
             FAT_ARROW "=>"
             STRING_LITERAL "farewell"
               QUOTE """
@@ -405,8 +430,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -420,8 +446,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "true"
-              WORD "true"
+            PATTERN
+              TYPE_EXPR "true"
+                WORD "true"
             FAT_ARROW "=>"
             STRING_LITERAL "yes"
               QUOTE """
@@ -429,8 +456,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "false"
-              WORD "false"
+            PATTERN
+              TYPE_EXPR "false"
+                WORD "false"
             FAT_ARROW "=>"
             STRING_LITERAL "no"
               QUOTE """
@@ -444,8 +472,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             STRING_LITERAL "zero"
               QUOTE """
@@ -453,7 +482,8 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "n"
+            PATTERN "let n"
+              KW_LET "let"
               WORD "n"
             FAT_ARROW "=>"
             STRING_LITERAL "nonzero"
@@ -468,7 +498,8 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
+            PATTERN
+              KW_LET "let"
               WORD "n"
               COLON ":"
               TYPE_EXPR "int"
@@ -487,10 +518,11 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "MatchStatus.Active"
-              WORD "MatchStatus"
-              DOT "."
-              WORD "Active"
+            PATTERN
+              TYPE_EXPR "MatchStatus.Active"
+                WORD "MatchStatus"
+                DOT "."
+                WORD "Active"
             FAT_ARROW "=>"
             STRING_LITERAL "active"
               QUOTE """
@@ -498,10 +530,11 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "MatchStatus.Inactive"
-              WORD "MatchStatus"
-              DOT "."
-              WORD "Inactive"
+            PATTERN
+              TYPE_EXPR "MatchStatus.Inactive"
+                WORD "MatchStatus"
+                DOT "."
+                WORD "Inactive"
             FAT_ARROW "=>"
             STRING_LITERAL "inactive"
               QUOTE """
@@ -509,10 +542,11 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "MatchStatus.Pending"
-              WORD "MatchStatus"
-              DOT "."
-              WORD "Pending"
+            PATTERN
+              TYPE_EXPR "MatchStatus.Pending"
+                WORD "MatchStatus"
+                DOT "."
+                WORD "Pending"
             FAT_ARROW "=>"
             STRING_LITERAL "pending"
               QUOTE """
@@ -526,10 +560,11 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0 | 1"
-              INTEGER_LITERAL "0"
-              PIPE "|"
-              INTEGER_LITERAL "1"
+            PATTERN
+              TYPE_EXPR "0 | 1"
+                INTEGER_LITERAL "0"
+                PIPE "|"
+                INTEGER_LITERAL "1"
             FAT_ARROW "=>"
             STRING_LITERAL "binary"
               QUOTE """
@@ -537,12 +572,13 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "2 | 3 | 4"
-              INTEGER_LITERAL "2"
-              PIPE "|"
-              INTEGER_LITERAL "3"
-              PIPE "|"
-              INTEGER_LITERAL "4"
+            PATTERN
+              TYPE_EXPR "2 | 3 | 4"
+                INTEGER_LITERAL "2"
+                PIPE "|"
+                INTEGER_LITERAL "3"
+                PIPE "|"
+                INTEGER_LITERAL "4"
             FAT_ARROW "=>"
             STRING_LITERAL "small"
               QUOTE """
@@ -550,8 +586,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "big"
               QUOTE """
@@ -565,11 +602,13 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
-              L_PAREN "("
-              MATCH_PATTERN "0"
-                INTEGER_LITERAL "0"
-              R_PAREN ")"
+            PATTERN
+              TYPE_EXPR
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR "0"
+                    INTEGER_LITERAL "0"
+                R_PAREN ")"
             FAT_ARROW "=>"
             STRING_LITERAL "zero"
               QUOTE """
@@ -577,13 +616,15 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN
-              L_PAREN "("
-              MATCH_PATTERN "1 | 2"
-                INTEGER_LITERAL "1"
-                PIPE "|"
-                INTEGER_LITERAL "2"
-              R_PAREN ")"
+            PATTERN
+              TYPE_EXPR
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR "1 | 2"
+                    INTEGER_LITERAL "1"
+                    PIPE "|"
+                    INTEGER_LITERAL "2"
+                R_PAREN ")"
             FAT_ARROW "=>"
             STRING_LITERAL "small"
               QUOTE """
@@ -591,8 +632,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -606,14 +648,15 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "MatchStatus.Active | MatchStatus.Pending"
-              WORD "MatchStatus"
-              DOT "."
-              WORD "Active"
-              PIPE "|"
-              WORD "MatchStatus"
-              DOT "."
-              WORD "Pending"
+            PATTERN
+              TYPE_EXPR "MatchStatus.Active | MatchStatus.Pending"
+                WORD "MatchStatus"
+                DOT "."
+                WORD "Active"
+                PIPE "|"
+                WORD "MatchStatus"
+                DOT "."
+                WORD "Pending"
             FAT_ARROW "=>"
             STRING_LITERAL "actionable"
               QUOTE """
@@ -621,10 +664,11 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "MatchStatus.Inactive"
-              WORD "MatchStatus"
-              DOT "."
-              WORD "Inactive"
+            PATTERN
+              TYPE_EXPR "MatchStatus.Inactive"
+                WORD "MatchStatus"
+                DOT "."
+                WORD "Inactive"
             FAT_ARROW "=>"
             STRING_LITERAL "done"
               QUOTE """
@@ -638,7 +682,8 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
+            PATTERN
+              KW_LET "let"
               WORD "s"
               COLON ":"
               TYPE_EXPR "MatchSuccess"
@@ -650,7 +695,8 @@ SOURCE_FILE
               WORD "data"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN
+            PATTERN
+              KW_LET "let"
               WORD "f"
               COLON ":"
               TYPE_EXPR "MatchFailure"
@@ -668,7 +714,8 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
+            PATTERN
+              KW_LET "let"
               WORD "x"
               COLON ":"
               TYPE_EXPR "MatchSuccess | MatchFailure"
@@ -688,30 +735,35 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
-              L_PAREN "("
-              MATCH_PATTERN "0 | 1"
-                INTEGER_LITERAL "0"
-                PIPE "|"
-                INTEGER_LITERAL "1"
-              R_PAREN ")"
-              PIPE "|"
-              L_PAREN "("
-              MATCH_PATTERN
-                INTEGER_LITERAL "2"
+            PATTERN
+              TYPE_EXPR
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR "0 | 1"
+                    INTEGER_LITERAL "0"
+                    PIPE "|"
+                    INTEGER_LITERAL "1"
+                R_PAREN ")"
                 PIPE "|"
                 L_PAREN "("
-                MATCH_PATTERN
-                  INTEGER_LITERAL "3"
-                  PIPE "|"
-                  L_PAREN "("
-                  MATCH_PATTERN "4 | 5"
-                    INTEGER_LITERAL "4"
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR
+                    INTEGER_LITERAL "2"
                     PIPE "|"
-                    INTEGER_LITERAL "5"
-                  R_PAREN ")"
+                    L_PAREN "("
+                    FUNCTION_TYPE_PARAM
+                      TYPE_EXPR
+                        INTEGER_LITERAL "3"
+                        PIPE "|"
+                        L_PAREN "("
+                        FUNCTION_TYPE_PARAM
+                          TYPE_EXPR "4 | 5"
+                            INTEGER_LITERAL "4"
+                            PIPE "|"
+                            INTEGER_LITERAL "5"
+                        R_PAREN ")"
+                    R_PAREN ")"
                 R_PAREN ")"
-              R_PAREN ")"
             FAT_ARROW "=>"
             STRING_LITERAL "small"
               QUOTE """
@@ -719,8 +771,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "big"
               QUOTE """
@@ -734,7 +787,8 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
+            PATTERN
+              KW_LET "let"
               WORD "n"
               COLON ":"
               TYPE_EXPR "int"
@@ -752,7 +806,8 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN
+            PATTERN
+              KW_LET "let"
               WORD "n"
               COLON ":"
               TYPE_EXPR "int"
@@ -770,8 +825,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "zero"
               QUOTE """
@@ -785,7 +841,8 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
+            PATTERN
+              KW_LET "let"
               WORD "n"
               COLON ":"
               TYPE_EXPR "int"
@@ -841,8 +898,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -856,8 +914,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             STRING_LITERAL "this is a very long string result that should push the arm width past the default line limit of one hundred columns easily right now"
               QUOTE """
@@ -889,8 +948,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "1"
-              INTEGER_LITERAL "1"
+            PATTERN
+              TYPE_EXPR "1"
+                INTEGER_LITERAL "1"
             FAT_ARROW "=>"
             STRING_LITERAL "another long string result that also exceeds one hundred columns to test wrapping on the second arm as well as the first arm"
               QUOTE """
@@ -920,8 +980,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "short"
               QUOTE """
@@ -935,56 +996,57 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24"
-              INTEGER_LITERAL "0"
-              PIPE "|"
-              INTEGER_LITERAL "1"
-              PIPE "|"
-              INTEGER_LITERAL "2"
-              PIPE "|"
-              INTEGER_LITERAL "3"
-              PIPE "|"
-              INTEGER_LITERAL "4"
-              PIPE "|"
-              INTEGER_LITERAL "5"
-              PIPE "|"
-              INTEGER_LITERAL "6"
-              PIPE "|"
-              INTEGER_LITERAL "7"
-              PIPE "|"
-              INTEGER_LITERAL "8"
-              PIPE "|"
-              INTEGER_LITERAL "9"
-              PIPE "|"
-              INTEGER_LITERAL "10"
-              PIPE "|"
-              INTEGER_LITERAL "11"
-              PIPE "|"
-              INTEGER_LITERAL "12"
-              PIPE "|"
-              INTEGER_LITERAL "13"
-              PIPE "|"
-              INTEGER_LITERAL "14"
-              PIPE "|"
-              INTEGER_LITERAL "15"
-              PIPE "|"
-              INTEGER_LITERAL "16"
-              PIPE "|"
-              INTEGER_LITERAL "17"
-              PIPE "|"
-              INTEGER_LITERAL "18"
-              PIPE "|"
-              INTEGER_LITERAL "19"
-              PIPE "|"
-              INTEGER_LITERAL "20"
-              PIPE "|"
-              INTEGER_LITERAL "21"
-              PIPE "|"
-              INTEGER_LITERAL "22"
-              PIPE "|"
-              INTEGER_LITERAL "23"
-              PIPE "|"
-              INTEGER_LITERAL "24"
+            PATTERN
+              TYPE_EXPR "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24"
+                INTEGER_LITERAL "0"
+                PIPE "|"
+                INTEGER_LITERAL "1"
+                PIPE "|"
+                INTEGER_LITERAL "2"
+                PIPE "|"
+                INTEGER_LITERAL "3"
+                PIPE "|"
+                INTEGER_LITERAL "4"
+                PIPE "|"
+                INTEGER_LITERAL "5"
+                PIPE "|"
+                INTEGER_LITERAL "6"
+                PIPE "|"
+                INTEGER_LITERAL "7"
+                PIPE "|"
+                INTEGER_LITERAL "8"
+                PIPE "|"
+                INTEGER_LITERAL "9"
+                PIPE "|"
+                INTEGER_LITERAL "10"
+                PIPE "|"
+                INTEGER_LITERAL "11"
+                PIPE "|"
+                INTEGER_LITERAL "12"
+                PIPE "|"
+                INTEGER_LITERAL "13"
+                PIPE "|"
+                INTEGER_LITERAL "14"
+                PIPE "|"
+                INTEGER_LITERAL "15"
+                PIPE "|"
+                INTEGER_LITERAL "16"
+                PIPE "|"
+                INTEGER_LITERAL "17"
+                PIPE "|"
+                INTEGER_LITERAL "18"
+                PIPE "|"
+                INTEGER_LITERAL "19"
+                PIPE "|"
+                INTEGER_LITERAL "20"
+                PIPE "|"
+                INTEGER_LITERAL "21"
+                PIPE "|"
+                INTEGER_LITERAL "22"
+                PIPE "|"
+                INTEGER_LITERAL "23"
+                PIPE "|"
+                INTEGER_LITERAL "24"
             FAT_ARROW "=>"
             STRING_LITERAL "lots of literals"
               QUOTE """
@@ -994,8 +1056,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -1009,18 +1072,19 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending"
-              WORD "MatchStatus"
-              DOT "."
-              WORD "Active"
-              PIPE "|"
-              WORD "MatchStatus"
-              DOT "."
-              WORD "Inactive"
-              PIPE "|"
-              WORD "MatchStatus"
-              DOT "."
-              WORD "Pending"
+            PATTERN
+              TYPE_EXPR "MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending"
+                WORD "MatchStatus"
+                DOT "."
+                WORD "Active"
+                PIPE "|"
+                WORD "MatchStatus"
+                DOT "."
+                WORD "Inactive"
+                PIPE "|"
+                WORD "MatchStatus"
+                DOT "."
+                WORD "Pending"
             FAT_ARROW "=>"
             STRING_LITERAL "this arm has many long enum variant names that together push past the limit easily"
               QUOTE """
@@ -1048,14 +1112,16 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             BLOCK_EXPR
               L_BRACE "{"
               LET_STMT
-                KW_LET "let"
-                WORD "result"
+                PATTERN "let result"
+                  KW_LET "let"
+                  WORD "result"
                 EQUALS "="
                 IF_EXPR
                   KW_IF "if"
@@ -1099,8 +1165,9 @@ SOURCE_FILE
               R_BRACE "}"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "short"
               QUOTE """
@@ -1114,7 +1181,8 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
+            PATTERN
+              KW_LET "let"
               WORD "n"
               COLON ":"
               TYPE_EXPR "// 3 colon trailing
@@ -1168,9 +1236,10 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "// 14 comma trailing
+            PATTERN
+              TYPE_EXPR "// 14 comma trailing
         _"
-              WORD "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -1184,7 +1253,8 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
+            PATTERN
+              KW_LET "let"
               WORD "n"
               COLON ":"
               TYPE_EXPR "/* 3 colon trailing */
@@ -1238,9 +1308,10 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "/* 14 comma trailing */
+            PATTERN
+              TYPE_EXPR "/* 14 comma trailing */
         _"
-              WORD "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -1257,8 +1328,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             STRING_LITERAL "was minus one"
               QUOTE """
@@ -1268,8 +1340,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -1340,8 +1413,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             STRING_LITERAL "zero polynomial"
               QUOTE """
@@ -1350,8 +1424,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "nonzero"
               QUOTE """
@@ -1368,8 +1443,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             STRING_LITERAL "whitespace"
               QUOTE """
@@ -1377,8 +1453,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -1392,8 +1469,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             STRING_LITERAL "zero"
               QUOTE """
@@ -1401,8 +1479,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -1416,8 +1495,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             MATCH_EXPR
               KW_MATCH "match"
@@ -1426,8 +1506,9 @@ SOURCE_FILE
               R_PAREN ")"
               L_BRACE "{"
               MATCH_ARM
-                MATCH_PATTERN "true"
-                  WORD "true"
+                PATTERN
+                  TYPE_EXPR "true"
+                    WORD "true"
                 FAT_ARROW "=>"
                 STRING_LITERAL "zero-true"
                   QUOTE """
@@ -1435,8 +1516,9 @@ SOURCE_FILE
                   QUOTE """
                 COMMA ","
               MATCH_ARM
-                MATCH_PATTERN "false"
-                  WORD "false"
+                PATTERN
+                  TYPE_EXPR "false"
+                    WORD "false"
                 FAT_ARROW "=>"
                 STRING_LITERAL "zero-false"
                   QUOTE """
@@ -1445,8 +1527,9 @@ SOURCE_FILE
               R_BRACE "}"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "nonzero"
               QUOTE """
@@ -1460,8 +1543,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             MATCH_EXPR
               KW_MATCH "match"
@@ -1470,8 +1554,9 @@ SOURCE_FILE
               R_PAREN ")"
               L_BRACE "{"
               MATCH_ARM
-                MATCH_PATTERN "true"
-                  WORD "true"
+                PATTERN
+                  TYPE_EXPR "true"
+                    WORD "true"
                 FAT_ARROW "=>"
                 MATCH_EXPR
                   KW_MATCH "match"
@@ -1480,10 +1565,11 @@ SOURCE_FILE
                   R_PAREN ")"
                   L_BRACE "{"
                   MATCH_ARM
-                    MATCH_PATTERN "MatchStatus.Active"
-                      WORD "MatchStatus"
-                      DOT "."
-                      WORD "Active"
+                    PATTERN
+                      TYPE_EXPR "MatchStatus.Active"
+                        WORD "MatchStatus"
+                        DOT "."
+                        WORD "Active"
                     FAT_ARROW "=>"
                     STRING_LITERAL "zero-true-active"
                       QUOTE """
@@ -1491,10 +1577,11 @@ SOURCE_FILE
                       QUOTE """
                     COMMA ","
                   MATCH_ARM
-                    MATCH_PATTERN "MatchStatus.Inactive"
-                      WORD "MatchStatus"
-                      DOT "."
-                      WORD "Inactive"
+                    PATTERN
+                      TYPE_EXPR "MatchStatus.Inactive"
+                        WORD "MatchStatus"
+                        DOT "."
+                        WORD "Inactive"
                     FAT_ARROW "=>"
                     STRING_LITERAL "zero-true-inactive"
                       QUOTE """
@@ -1502,10 +1589,11 @@ SOURCE_FILE
                       QUOTE """
                     COMMA ","
                   MATCH_ARM
-                    MATCH_PATTERN "MatchStatus.Pending"
-                      WORD "MatchStatus"
-                      DOT "."
-                      WORD "Pending"
+                    PATTERN
+                      TYPE_EXPR "MatchStatus.Pending"
+                        WORD "MatchStatus"
+                        DOT "."
+                        WORD "Pending"
                     FAT_ARROW "=>"
                     STRING_LITERAL "zero-true-pending"
                       QUOTE """
@@ -1514,8 +1602,9 @@ SOURCE_FILE
                   R_BRACE "}"
                 COMMA ","
               MATCH_ARM
-                MATCH_PATTERN "false"
-                  WORD "false"
+                PATTERN
+                  TYPE_EXPR "false"
+                    WORD "false"
                 FAT_ARROW "=>"
                 STRING_LITERAL "zero-false"
                   QUOTE """
@@ -1524,8 +1613,9 @@ SOURCE_FILE
               R_BRACE "}"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "1"
-              INTEGER_LITERAL "1"
+            PATTERN
+              TYPE_EXPR "1"
+                INTEGER_LITERAL "1"
             FAT_ARROW "=>"
             MATCH_EXPR
               KW_MATCH "match"
@@ -1534,7 +1624,8 @@ SOURCE_FILE
               R_PAREN ")"
               L_BRACE "{"
               MATCH_ARM
-                MATCH_PATTERN
+                PATTERN
+                  KW_LET "let"
                   WORD "s"
                   COLON ":"
                   TYPE_EXPR "MatchSuccess"
@@ -1547,8 +1638,9 @@ SOURCE_FILE
                   R_PAREN ")"
                   L_BRACE "{"
                   MATCH_ARM
-                    MATCH_PATTERN "true"
-                      WORD "true"
+                    PATTERN
+                      TYPE_EXPR "true"
+                        WORD "true"
                     FAT_ARROW "=>"
                     PATH_EXPR "s.data"
                       WORD "s"
@@ -1556,8 +1648,9 @@ SOURCE_FILE
                       WORD "data"
                     COMMA ","
                   MATCH_ARM
-                    MATCH_PATTERN "false"
-                      WORD "false"
+                    PATTERN
+                      TYPE_EXPR "false"
+                        WORD "false"
                     FAT_ARROW "=>"
                     STRING_LITERAL "one-success-false"
                       QUOTE """
@@ -1566,7 +1659,8 @@ SOURCE_FILE
                   R_BRACE "}"
                 COMMA ","
               MATCH_ARM
-                MATCH_PATTERN
+                PATTERN
+                  KW_LET "let"
                   WORD "f"
                   COLON ":"
                   TYPE_EXPR "MatchFailure"
@@ -1579,8 +1673,9 @@ SOURCE_FILE
               R_BRACE "}"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -1594,8 +1689,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             IF_EXPR
               KW_IF "if"
@@ -1612,10 +1708,11 @@ SOURCE_FILE
                   R_PAREN ")"
                   L_BRACE "{"
                   MATCH_ARM
-                    MATCH_PATTERN "MatchStatus.Active"
-                      WORD "MatchStatus"
-                      DOT "."
-                      WORD "Active"
+                    PATTERN
+                      TYPE_EXPR "MatchStatus.Active"
+                        WORD "MatchStatus"
+                        DOT "."
+                        WORD "Active"
                     FAT_ARROW "=>"
                     STRING_LITERAL "active"
                       QUOTE """
@@ -1623,10 +1720,11 @@ SOURCE_FILE
                       QUOTE """
                     COMMA ","
                   MATCH_ARM
-                    MATCH_PATTERN "MatchStatus.Inactive"
-                      WORD "MatchStatus"
-                      DOT "."
-                      WORD "Inactive"
+                    PATTERN
+                      TYPE_EXPR "MatchStatus.Inactive"
+                        WORD "MatchStatus"
+                        DOT "."
+                        WORD "Inactive"
                     FAT_ARROW "=>"
                     STRING_LITERAL "inactive"
                       QUOTE """
@@ -1634,10 +1732,11 @@ SOURCE_FILE
                       QUOTE """
                     COMMA ","
                   MATCH_ARM
-                    MATCH_PATTERN "MatchStatus.Pending"
-                      WORD "MatchStatus"
-                      DOT "."
-                      WORD "Pending"
+                    PATTERN
+                      TYPE_EXPR "MatchStatus.Pending"
+                        WORD "MatchStatus"
+                        DOT "."
+                        WORD "Pending"
                     FAT_ARROW "=>"
                     STRING_LITERAL "pending"
                       QUOTE """
@@ -1656,8 +1755,9 @@ SOURCE_FILE
                 R_BRACE "}"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -1671,8 +1771,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_EXPR "0"
+                INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             STRING_LITERAL "zero"
               QUOTE """
@@ -1680,8 +1781,9 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """

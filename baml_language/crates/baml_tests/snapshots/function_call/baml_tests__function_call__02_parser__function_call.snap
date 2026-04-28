@@ -16,8 +16,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "x"
+          PATTERN "let x"
+            KW_LET "let"
+            WORD "x"
           EQUALS "="
           CALL_EXPR
             WORD "Foo"
@@ -68,8 +69,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "baz"
+          PATTERN "let baz"
+            KW_LET "let"
+            WORD "baz"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Baz"

@@ -12,39 +12,129 @@ function UnknownBindingTypes(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: invalid catch binding type `any`; use a concrete type instead
-//    ╭─[ catch_unknown_binding_types.baml:6:3 ]
+// Error: Expected ')', found ':'
+//    ╭─[ catch_unknown_binding_types.baml:6:22 ]
 //    │
 //  6 │   MayFail(x) catch (e: any) {
-//    │   ─────┬────  
-//    │        ╰────── invalid catch binding type `any`; use a concrete type instead
+//    │                      ┬  
+//    │                      ╰── Expected ')', found ':'
 //    │ 
-//    │ Note: Error code: E0093
+//    │ Note: Error code: E0010
 // ───╯
-// Warning: unreachable arm
-//    ╭─[ catch_unknown_binding_types.baml:7:10 ]
+// Error: Expected catch clause body, found ':'
+//    ╭─[ catch_unknown_binding_types.baml:6:22 ]
+//    │
+//  6 │   MayFail(x) catch (e: any) {
+//    │                      ┬  
+//    │                      ╰── Expected catch clause body, found ':'
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected expression, found ':'
+//    ╭─[ catch_unknown_binding_types.baml:6:22 ]
+//    │
+//  6 │   MayFail(x) catch (e: any) {
+//    │                      ┬  
+//    │                      ╰── Expected expression, found ':'
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected expression, found ')'
+//    ╭─[ catch_unknown_binding_types.baml:6:27 ]
+//    │
+//  6 │   MayFail(x) catch (e: any) {
+//    │                           ┬  
+//    │                           ╰── Expected expression, found ')'
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected expression, found '=>'
+//    ╭─[ catch_unknown_binding_types.baml:7:7 ]
 //    │
 //  7 │     _ => "caught any"
-//    │          ──────┬─────  
-//    │                ╰─────── unreachable arm
+//    │       ─┬  
+//    │        ╰── Expected expression, found '=>'
 //    │ 
-//    │ Note: Error code: E0063
+//    │ Note: Error code: E0010
 // ───╯
-// Error: invalid catch binding type `unknown`; use a concrete type instead
-//    ╭─[ catch_unknown_binding_types.baml:6:3 ]
+// Error: Expected ')', found ':'
+//    ╭─[ catch_unknown_binding_types.baml:8:17 ]
 //    │
-//  6 │   MayFail(x) catch (e: any) {
-//    │   ─────┬────  
-//    │        ╰────── invalid catch binding type `unknown`; use a concrete type instead
+//  8 │   } catch (other: unknown) {
+//    │                 ┬  
+//    │                 ╰── Expected ')', found ':'
 //    │ 
-//    │ Note: Error code: E0093
+//    │ Note: Error code: E0010
 // ───╯
-// Warning: unreachable arm
-//    ╭─[ catch_unknown_binding_types.baml:9:10 ]
+// Error: Expected catch clause body, found ':'
+//    ╭─[ catch_unknown_binding_types.baml:8:17 ]
+//    │
+//  8 │   } catch (other: unknown) {
+//    │                 ┬  
+//    │                 ╰── Expected catch clause body, found ':'
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected expression, found ':'
+//    ╭─[ catch_unknown_binding_types.baml:8:17 ]
+//    │
+//  8 │   } catch (other: unknown) {
+//    │                 ┬  
+//    │                 ╰── Expected expression, found ':'
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected expression, found ')'
+//    ╭─[ catch_unknown_binding_types.baml:8:26 ]
+//    │
+//  8 │   } catch (other: unknown) {
+//    │                          ┬  
+//    │                          ╰── Expected expression, found ')'
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected expression, found '=>'
+//    ╭─[ catch_unknown_binding_types.baml:9:7 ]
 //    │
 //  9 │     _ => "caught unknown"
-//    │          ────────┬───────  
-//    │                  ╰───────── unreachable arm
+//    │       ─┬  
+//    │        ╰── Expected expression, found '=>'
 //    │ 
-//    │ Note: Error code: E0063
+//    │ Note: Error code: E0010
+// ───╯
+// Error: unresolved name: any
+//    ╭─[ catch_unknown_binding_types.baml:6:24 ]
+//    │
+//  6 │   MayFail(x) catch (e: any) {
+//    │                        ─┬─  
+//    │                         ╰─── unresolved name: any
+//    │ 
+//    │ Note: Error code: E0003
+// ───╯
+// Error: unresolved name: _
+//    ╭─[ catch_unknown_binding_types.baml:7:5 ]
+//    │
+//  7 │     _ => "caught any"
+//    │     ┬  
+//    │     ╰── unresolved name: _
+//    │ 
+//    │ Note: Error code: E0003
+// ───╯
+// Error: unresolved name: unknown
+//    ╭─[ catch_unknown_binding_types.baml:8:19 ]
+//    │
+//  8 │   } catch (other: unknown) {
+//    │                   ───┬───  
+//    │                      ╰───── unresolved name: unknown
+//    │ 
+//    │ Note: Error code: E0003
+// ───╯
+// Error: unresolved name: _
+//    ╭─[ catch_unknown_binding_types.baml:9:5 ]
+//    │
+//  9 │     _ => "caught unknown"
+//    │     ┬  
+//    │     ╰── unresolved name: _
+//    │ 
+//    │ Note: Error code: E0003
 // ───╯

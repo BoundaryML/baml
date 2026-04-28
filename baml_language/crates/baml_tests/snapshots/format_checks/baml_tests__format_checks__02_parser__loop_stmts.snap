@@ -28,10 +28,11 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "// ===== Basic while loop =====
-    let a = 0;"
-          KW_LET "let"
-          WORD "a"
+        LET_STMT
+          PATTERN "// ===== Basic while loop =====
+    let a"
+            KW_LET "let"
+            WORD "a"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
@@ -176,21 +177,23 @@ SOURCE_FILE
             SEMICOLON ";"
             R_BRACE "}"
         SEMICOLON ";"
-        LET_STMT "///////////////////
+        LET_STMT
+          PATTERN "///////////////////
 
     // ===== C-style for loop =====
-    let result = 0;"
-          KW_LET "let"
-          WORD "result"
+    let result"
+            KW_LET "let"
+            WORD "result"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let i = 0;"
-            KW_LET "let"
-            WORD "i"
+          LET_STMT
+            PATTERN "let i"
+              KW_LET "let"
+              WORD "i"
             EQUALS "="
             INTEGER_LITERAL "0"
             SEMICOLON ";"
@@ -216,9 +219,10 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let i = 0;"
-            KW_LET "let"
-            WORD "i"
+          LET_STMT
+            PATTERN "let i"
+              KW_LET "let"
+              WORD "i"
             EQUALS "="
             INTEGER_LITERAL "0"
             SEMICOLON ";"
@@ -247,7 +251,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let item"
+          PATTERN "let item"
             KW_LET "let"
             WORD "item"
           KW_IN "in"
@@ -265,7 +269,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let x"
+          PATTERN "let x"
             KW_LET "let"
             WORD "x"
           KW_IN "in"
@@ -294,7 +298,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let i"
+          PATTERN "let i"
             KW_LET "let"
             WORD "i"
           KW_IN "in"
@@ -312,7 +316,7 @@ SOURCE_FILE
             FOR_EXPR
               KW_FOR "for"
               L_PAREN "("
-              LET_STMT "let j"
+              PATTERN "let j"
                 KW_LET "let"
                 WORD "j"
               KW_IN "in"
@@ -342,17 +346,14 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "// 4 open paren trailing
+          LET_STMT
+            PATTERN "// 4 open paren trailing
     // 5 init leading
     let // 6 let trailing
     // 7 var name leading
-    i // 8 var name trailing
-    = // 9 equals trailing
-    // 10 init value leading
-    0 // 11 init value trailing
-    ;"
-            KW_LET "let"
-            WORD "i"
+    i"
+              KW_LET "let"
+              WORD "i"
             EQUALS "="
             INTEGER_LITERAL "0"
             SEMICOLON ";"
@@ -378,17 +379,14 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "/* 4 open paren trailing */
+          LET_STMT
+            PATTERN "/* 4 open paren trailing */
     /* 5 init leading */
     let /* 6 let trailing */
     /* 7 var name leading */
-    i /* 8 var name trailing */
-    = /* 9 equals trailing */
-    /* 10 init value leading */
-    0 /* 11 init value trailing */
-    ;"
-            KW_LET "let"
-            WORD "i"
+    i"
+              KW_LET "let"
+              WORD "i"
             EQUALS "="
             INTEGER_LITERAL "0"
             SEMICOLON ";"
@@ -414,7 +412,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "// 4 open paren trailing
+          PATTERN "// 4 open paren trailing
     // 5 let leading
     let // 6 let trailing
     // 7 var name leading
@@ -436,7 +434,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "/* 4 open paren trailing */
+          PATTERN "/* 4 open paren trailing */
     /* 5 let leading */
     let /* 6 let trailing */
     /* 7 var name leading */
@@ -611,9 +609,10 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let very_long_variable_name = 0;"
-            KW_LET "let"
-            WORD "very_long_variable_name"
+          LET_STMT
+            PATTERN "let very_long_variable_name"
+              KW_LET "let"
+              WORD "very_long_variable_name"
             EQUALS "="
             INTEGER_LITERAL "0"
             SEMICOLON ";"
@@ -643,8 +642,9 @@ SOURCE_FILE
           KW_FOR "for"
           L_PAREN "("
           LET_STMT
-            KW_LET "let"
-            WORD "extremely_long_loop_counter_variable"
+            PATTERN "let extremely_long_loop_counter_variable"
+              KW_LET "let"
+              WORD "extremely_long_loop_counter_variable"
             EQUALS "="
             BINARY_EXPR
               BINARY_EXPR "a * a"
@@ -691,7 +691,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let item"
+          PATTERN "let item"
             KW_LET "let"
             WORD "item"
           KW_IN "in"
@@ -742,7 +742,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let extremely_long_item_variable_name"
+          PATTERN "let extremely_long_item_variable_name"
             KW_LET "let"
             WORD "extremely_long_item_variable_name"
           KW_IN "in"
@@ -924,8 +924,13 @@ SOURCE_FILE
           KW_FOR "for"
           L_PAREN "("
           LET_STMT
-            KW_LET "let"
-            WORD "extremely_long_loop_counter_variable"
+            PATTERN "// 4 open paren trailing
+    // 5 init leading
+    let // 6 let trailing
+    // 7 name leading
+    extremely_long_loop_counter_variable"
+              KW_LET "let"
+              WORD "extremely_long_loop_counter_variable"
             EQUALS "="
             BINARY_EXPR
               BINARY_EXPR "a * a"
@@ -973,8 +978,13 @@ SOURCE_FILE
           KW_FOR "for"
           L_PAREN "("
           LET_STMT
-            KW_LET "let"
-            WORD "extremely_long_loop_counter_variable"
+            PATTERN "/* 4 open paren trailing */
+    /* 5 init leading */
+    let /* 6 let trailing */
+    /* 7 name leading */
+    extremely_long_loop_counter_variable"
+              KW_LET "let"
+              WORD "extremely_long_loop_counter_variable"
             EQUALS "="
             BINARY_EXPR
               BINARY_EXPR "a * a"
@@ -1021,7 +1031,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "// 4 open paren trailing
+          PATTERN "// 4 open paren trailing
     // 5 let leading
     let // 6 let trailing
     // 7 name leading
@@ -1086,7 +1096,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "/* 4 open paren trailing */
+          PATTERN "/* 4 open paren trailing */
     /* 5 let leading */
     let /* 6 let trailing */
     /* 7 name leading */
@@ -1151,7 +1161,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let i"
+          PATTERN "let i"
             KW_LET "let"
             WORD "i"
           KW_IN "in"
@@ -1169,7 +1179,7 @@ SOURCE_FILE
             FOR_EXPR
               KW_FOR "for"
               L_PAREN "("
-              LET_STMT "let j"
+              PATTERN "let j"
                 KW_LET "let"
                 WORD "j"
               KW_IN "in"
@@ -1187,7 +1197,7 @@ SOURCE_FILE
                 FOR_EXPR
                   KW_FOR "for"
                   L_PAREN "("
-                  LET_STMT "let k"
+                  PATTERN "let k"
                     KW_LET "let"
                     WORD "k"
                   KW_IN "in"
@@ -1219,10 +1229,11 @@ SOURCE_FILE
             SEMICOLON ";"
             R_BRACE "}"
         SEMICOLON ";"
-        LET_STMT "// ===== Deeply nested while loops (3 levels) =====
-    let outer = 0;"
-          KW_LET "let"
-          WORD "outer"
+        LET_STMT
+          PATTERN "// ===== Deeply nested while loops (3 levels) =====
+    let outer"
+            KW_LET "let"
+            WORD "outer"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
@@ -1237,9 +1248,10 @@ SOURCE_FILE
             R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
-            LET_STMT "let middle = 0;"
-              KW_LET "let"
-              WORD "middle"
+            LET_STMT
+              PATTERN "let middle"
+                KW_LET "let"
+                WORD "middle"
               EQUALS "="
               INTEGER_LITERAL "0"
               SEMICOLON ";"
@@ -1254,9 +1266,10 @@ SOURCE_FILE
                 R_PAREN ")"
               BLOCK_EXPR
                 L_BRACE "{"
-                LET_STMT "let inner = 0;"
-                  KW_LET "let"
-                  WORD "inner"
+                LET_STMT
+                  PATTERN "let inner"
+                    KW_LET "let"
+                    WORD "inner"
                   EQUALS "="
                   INTEGER_LITERAL "0"
                   SEMICOLON ";"
@@ -1306,7 +1319,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let i"
+          PATTERN "let i"
             KW_LET "let"
             WORD "i"
           KW_IN "in"
@@ -1343,7 +1356,7 @@ SOURCE_FILE
             FOR_EXPR
               KW_FOR "for"
               L_PAREN "("
-              LET_STMT "let j"
+              PATTERN "let j"
                 KW_LET "let"
                 WORD "j"
               KW_IN "in"
@@ -1363,8 +1376,9 @@ SOURCE_FILE
               BLOCK_EXPR
                 L_BRACE "{"
                 LET_STMT
-                  KW_LET "let"
-                  WORD "val"
+                  PATTERN "let val"
+                    KW_LET "let"
+                    WORD "val"
                   EQUALS "="
                   MATCH_EXPR
                     KW_MATCH "match"
@@ -1376,8 +1390,9 @@ SOURCE_FILE
                     R_PAREN ")"
                     L_BRACE "{"
                     MATCH_ARM
-                      MATCH_PATTERN "0"
-                        INTEGER_LITERAL "0"
+                      PATTERN
+                        TYPE_EXPR "0"
+                          INTEGER_LITERAL "0"
                       FAT_ARROW "=>"
                       BLOCK_EXPR
                         L_BRACE "{"
@@ -1388,8 +1403,9 @@ SOURCE_FILE
                         R_BRACE "}"
                       COMMA ","
                     MATCH_ARM
-                      MATCH_PATTERN
-                        WORD "n"
+                      PATTERN
+                        TYPE_EXPR "n"
+                          WORD "n"
                         COLON ":"
                         TYPE_EXPR "int"
                           WORD "int"
@@ -1409,8 +1425,9 @@ SOURCE_FILE
                         R_BRACE "}"
                       COMMA ","
                     MATCH_ARM
-                      MATCH_PATTERN
-                        WORD "n"
+                      PATTERN
+                        TYPE_EXPR "n"
+                          WORD "n"
                         COLON ":"
                         TYPE_EXPR "int"
                           WORD "int"
@@ -1427,10 +1444,11 @@ SOURCE_FILE
             SEMICOLON ";"
             R_BRACE "}"
         SEMICOLON ";"
-        LET_STMT "// ===== Very deeply nested (4 levels) with mixed loop types =====
-    let lvl1 = 0;"
-          KW_LET "let"
-          WORD "lvl1"
+        LET_STMT
+          PATTERN "// ===== Very deeply nested (4 levels) with mixed loop types =====
+    let lvl1"
+            KW_LET "let"
+            WORD "lvl1"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
@@ -1448,7 +1466,7 @@ SOURCE_FILE
             FOR_EXPR
               KW_FOR "for"
               L_PAREN "("
-              LET_STMT "let lvl2"
+              PATTERN "let lvl2"
                 KW_LET "let"
                 WORD "lvl2"
               KW_IN "in"
@@ -1464,9 +1482,10 @@ SOURCE_FILE
                 FOR_EXPR
                   KW_FOR "for"
                   L_PAREN "("
-                  LET_STMT "let lvl3 = 0;"
-                    KW_LET "let"
-                    WORD "lvl3"
+                  LET_STMT
+                    PATTERN "let lvl3"
+                      KW_LET "let"
+                      WORD "lvl3"
                     EQUALS "="
                     INTEGER_LITERAL "0"
                     SEMICOLON ";"
@@ -1482,9 +1501,10 @@ SOURCE_FILE
                   R_PAREN ")"
                   BLOCK_EXPR
                     L_BRACE "{"
-                    LET_STMT "let lvl4 = 0;"
-                      KW_LET "let"
-                      WORD "lvl4"
+                    LET_STMT
+                      PATTERN "let lvl4"
+                        KW_LET "let"
+                        WORD "lvl4"
                       EQUALS "="
                       INTEGER_LITERAL "0"
                       SEMICOLON ";"
@@ -1534,7 +1554,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let i"
+          PATTERN "let i"
             KW_LET "let"
             WORD "i"
           KW_IN "in"
@@ -1546,8 +1566,9 @@ SOURCE_FILE
               KW_FOR "for"
               L_PAREN "("
               LET_STMT
-                KW_LET "let"
-                WORD "j"
+                PATTERN "let j"
+                  KW_LET "let"
+                  WORD "j"
                 EQUALS "="
                 BINARY_EXPR
                   BINARY_EXPR "i * i"
@@ -1611,7 +1632,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let i"
+          PATTERN "let i"
             KW_LET "let"
             WORD "i"
           KW_IN "in"
@@ -1643,7 +1664,7 @@ SOURCE_FILE
             FOR_EXPR
               KW_FOR "for"
               L_PAREN "("
-              LET_STMT "let j"
+              PATTERN "let j"
                 KW_LET "let"
                 WORD "j"
               KW_IN "in"
@@ -1673,8 +1694,9 @@ SOURCE_FILE
               BLOCK_EXPR
                 L_BRACE "{"
                 LET_STMT
-                  KW_LET "let"
-                  WORD "computation"
+                  PATTERN "let computation"
+                    KW_LET "let"
+                    WORD "computation"
                   EQUALS "="
                   IF_EXPR
                     KW_IF "if"
@@ -1709,8 +1731,9 @@ SOURCE_FILE
                         R_PAREN ")"
                         L_BRACE "{"
                         MATCH_ARM
-                          MATCH_PATTERN "0"
-                            INTEGER_LITERAL "0"
+                          PATTERN
+                            TYPE_EXPR "0"
+                              INTEGER_LITERAL "0"
                           FAT_ARROW "=>"
                           BINARY_EXPR
                             BINARY_EXPR "i * j"
@@ -1721,8 +1744,9 @@ SOURCE_FILE
                             WORD "result"
                           COMMA ","
                         MATCH_ARM
-                          MATCH_PATTERN "1"
-                            INTEGER_LITERAL "1"
+                          PATTERN
+                            TYPE_EXPR "1"
+                              INTEGER_LITERAL "1"
                           FAT_ARROW "=>"
                           BINARY_EXPR
                             BINARY_EXPR "i * j"
@@ -1733,8 +1757,9 @@ SOURCE_FILE
                             WORD "result"
                           COMMA ","
                         MATCH_ARM
-                          MATCH_PATTERN "_"
-                            WORD "_"
+                          PATTERN
+                            TYPE_EXPR "_"
+                              WORD "_"
                           FAT_ARROW "=>"
                           BINARY_EXPR "i * j"
                             WORD "i"
@@ -1780,9 +1805,10 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let  i  =  0  ;"
-            KW_LET "let"
-            WORD "i"
+          LET_STMT
+            PATTERN "let  i"
+              KW_LET "let"
+              WORD "i"
             EQUALS "="
             INTEGER_LITERAL "0"
             SEMICOLON ";"
@@ -1808,7 +1834,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let  item"
+          PATTERN "let  item"
             KW_LET "let"
             WORD "item"
           KW_IN "in"
@@ -1823,25 +1849,28 @@ SOURCE_FILE
             SEMICOLON ";"
             R_BRACE "}"
         SEMICOLON ";"
-        LET_STMT "// ===== Let statement variations =====
-    let plain = 1;"
-          KW_LET "let"
-          WORD "plain"
+        LET_STMT
+          PATTERN "// ===== Let statement variations =====
+    let plain"
+            KW_LET "let"
+            WORD "plain"
           EQUALS "="
           INTEGER_LITERAL "1"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "typed"
-          COLON ":"
-          TYPE_EXPR "int"
-            WORD "int"
+          PATTERN
+            KW_LET "let"
+            WORD "typed"
+            COLON ":"
+            TYPE_EXPR "int"
+              WORD "int"
           EQUALS "="
           INTEGER_LITERAL "2"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "complex_init"
+          PATTERN "let complex_init"
+            KW_LET "let"
+            WORD "complex_init"
           EQUALS "="
           BINARY_EXPR "a + result"
             WORD "a"
@@ -1849,27 +1878,28 @@ SOURCE_FILE
             WORD "result"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "very_long_variable_name_for_testing_wrapping"
-          COLON ":"
-          TYPE_EXPR
-            WORD "map"
-            TYPE_ARGS
-              LESS "<"
-              TYPE_EXPR "string"
-                WORD "string"
-              COMMA ","
-              TYPE_EXPR "int | string | bool | float | null"
-                WORD "int"
-                PIPE "|"
-                WORD "string"
-                PIPE "|"
-                WORD "bool"
-                PIPE "|"
-                WORD "float"
-                PIPE "|"
-                WORD "null"
-              GREATER ">"
+          PATTERN
+            KW_LET "let"
+            WORD "very_long_variable_name_for_testing_wrapping"
+            COLON ":"
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR "int | string | bool | float | null"
+                  WORD "int"
+                  PIPE "|"
+                  WORD "string"
+                  PIPE "|"
+                  WORD "bool"
+                  PIPE "|"
+                  WORD "float"
+                  PIPE "|"
+                  WORD "null"
+                GREATER ">"
           EQUALS "="
           MAP_LITERAL
             L_BRACE "{"
@@ -1883,8 +1913,10 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "another_extremely_long_variable_name"
+          PATTERN "// ===== Very long let with expression exceeding limit =====
+    let another_extremely_long_variable_name"
+            KW_LET "let"
+            WORD "another_extremely_long_variable_name"
           EQUALS "="
           BINARY_EXPR
             BINARY_EXPR
@@ -1946,39 +1978,40 @@ SOURCE_FILE
               WORD "result"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "deeply_typed"
-          COLON ":"
-          TYPE_EXPR
-            WORD "map"
-            TYPE_ARGS
-              LESS "<"
-              TYPE_EXPR "string"
-                WORD "string"
-              COMMA ","
-              TYPE_EXPR
-                WORD "map"
-                TYPE_ARGS
-                  LESS "<"
-                  TYPE_EXPR "string"
-                    WORD "string"
-                  COMMA ","
-                  TYPE_EXPR
-                    WORD "map"
-                    TYPE_ARGS
-                      LESS "<"
-                      TYPE_EXPR "string"
-                        WORD "string"
-                      COMMA ","
-                      TYPE_EXPR "int | string | bool"
-                        WORD "int"
-                        PIPE "|"
-                        WORD "string"
-                        PIPE "|"
-                        WORD "bool"
-                      GREATER ">"
-                  GREATER ">"
-              GREATER ">"
+          PATTERN
+            KW_LET "let"
+            WORD "deeply_typed"
+            COLON ":"
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR
+                  WORD "map"
+                  TYPE_ARGS
+                    LESS "<"
+                    TYPE_EXPR "string"
+                      WORD "string"
+                    COMMA ","
+                    TYPE_EXPR
+                      WORD "map"
+                      TYPE_ARGS
+                        LESS "<"
+                        TYPE_EXPR "string"
+                          WORD "string"
+                        COMMA ","
+                        TYPE_EXPR "int | string | bool"
+                          WORD "int"
+                          PIPE "|"
+                          WORD "string"
+                          PIPE "|"
+                          WORD "bool"
+                        GREATER ">"
+                    GREATER ">"
+                GREATER ">"
           EQUALS "="
           MAP_LITERAL
             L_BRACE "{"
@@ -2010,49 +2043,52 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "trivia_var"
-          COLON ":"
-          TYPE_EXPR "// 6 colon trailing
+          PATTERN
+            KW_LET "let"
+            WORD "trivia_var"
+            COLON ":"
+            TYPE_EXPR "// 6 colon trailing
     // 7 type leading
     int"
-            WORD "int"
+              WORD "int"
           EQUALS "="
           INTEGER_LITERAL "42"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "trivia_var_block"
-          COLON ":"
-          TYPE_EXPR "/* 6 colon trailing */
+          PATTERN
+            KW_LET "let"
+            WORD "trivia_var_block"
+            COLON ":"
+            TYPE_EXPR "/* 6 colon trailing */
     /* 7 type leading */
     int"
-            WORD "int"
+              WORD "int"
           EQUALS "="
           INTEGER_LITERAL "42"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "very_long_variable_name_for_testing_wrapping"
-          COLON ":"
-          TYPE_EXPR
-            WORD "map"
-            TYPE_ARGS
-              LESS "<"
-              TYPE_EXPR "string"
-                WORD "string"
-              COMMA ","
-              TYPE_EXPR "int | string | bool | float | null"
-                WORD "int"
-                PIPE "|"
-                WORD "string"
-                PIPE "|"
-                WORD "bool"
-                PIPE "|"
-                WORD "float"
-                PIPE "|"
-                WORD "null"
-              GREATER ">"
+          PATTERN
+            KW_LET "let"
+            WORD "very_long_variable_name_for_testing_wrapping"
+            COLON ":"
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR "int | string | bool | float | null"
+                  WORD "int"
+                  PIPE "|"
+                  WORD "string"
+                  PIPE "|"
+                  WORD "bool"
+                  PIPE "|"
+                  WORD "float"
+                  PIPE "|"
+                  WORD "null"
+                GREATER ">"
           EQUALS "="
           MAP_LITERAL
             L_BRACE "{"
@@ -2066,27 +2102,28 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "very_long_variable_name_for_testing_wrapping"
-          COLON ":"
-          TYPE_EXPR
-            WORD "map"
-            TYPE_ARGS
-              LESS "<"
-              TYPE_EXPR "string"
-                WORD "string"
-              COMMA ","
-              TYPE_EXPR "int | string | bool | float | null"
-                WORD "int"
-                PIPE "|"
-                WORD "string"
-                PIPE "|"
-                WORD "bool"
-                PIPE "|"
-                WORD "float"
-                PIPE "|"
-                WORD "null"
-              GREATER ">"
+          PATTERN
+            KW_LET "let"
+            WORD "very_long_variable_name_for_testing_wrapping"
+            COLON ":"
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR "int | string | bool | float | null"
+                  WORD "int"
+                  PIPE "|"
+                  WORD "string"
+                  PIPE "|"
+                  WORD "bool"
+                  PIPE "|"
+                  WORD "float"
+                  PIPE "|"
+                  WORD "null"
+                GREATER ">"
           EQUALS "="
           MAP_LITERAL
             L_BRACE "{"
@@ -2100,8 +2137,17 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "another_extremely_long_variable_name"
+          PATTERN "/* 13 semicolon trailing */
+
+    ///////////////////
+
+    // ===== Trivia on wrapping let with long expression (line comments) =====
+    // 1 let leading
+    let // 2 let trailing
+    // 3 name leading
+    another_extremely_long_variable_name"
+            KW_LET "let"
+            WORD "another_extremely_long_variable_name"
           EQUALS "="
           BINARY_EXPR
             BINARY_EXPR
@@ -2163,8 +2209,17 @@ SOURCE_FILE
               WORD "result"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "another_extremely_long_variable_name"
+          PATTERN "// 9 semicolon trailing
+
+    ///////////////////
+
+    // ===== Trivia on wrapping let with long expression (block comments) =====
+    /* 1 let leading */
+    let /* 2 let trailing */
+    /* 3 name leading */
+    another_extremely_long_variable_name"
+            KW_LET "let"
+            WORD "another_extremely_long_variable_name"
           EQUALS "="
           BINARY_EXPR
             BINARY_EXPR

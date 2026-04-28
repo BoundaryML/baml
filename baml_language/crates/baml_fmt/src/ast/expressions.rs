@@ -5,8 +5,8 @@ use rowan::TextRange;
 
 use crate::{
     ast::{
-        BinaryOp, FromCST, KnownKind, MatchPattern, Statement, StrongAstError, SyntaxNodeIter,
-        Token, UnaryOp, tokens as t,
+        BinaryOp, FmtPattern, FromCST, KnownKind, Statement, StrongAstError, SyntaxNodeIter, Token,
+        UnaryOp, tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt,
@@ -1159,7 +1159,7 @@ impl Printable for MatchExpr {
 /// Corresponds to a [`SyntaxKind::MATCH_ARM`] node.
 #[derive(Debug)]
 pub struct MatchArm {
-    pub pattern: MatchPattern,
+    pub pattern: FmtPattern,
     pub guard: Option<MatchGuard>,
     pub fat_arrow: t::FatArrow,
     pub body: Expression,
@@ -1173,8 +1173,8 @@ impl FromCST for MatchArm {
 
         let mut it = SyntaxNodeIter::new(&node);
 
-        // MATCH_PATTERN
-        let pattern: MatchPattern = it.expect_parse()?;
+        // PATTERN
+        let pattern: FmtPattern = it.expect_parse()?;
 
         // Check for optional guard (if condition)
         let guard = it

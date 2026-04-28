@@ -172,6 +172,51 @@ pub fn lower_type_expr_in_ns(
                         return Ty::TypeVar(segments[0].clone(), TyAttr::default());
                     }
                 }
+                // Enum variant: try interpreting as Enum.Variant (all but last
+                // segment = enum name, last segment = variant).
+                if segments.len() >= 2 {
+                    let enum_name = &segments[..segments.len() - 1];
+                    let variant = segments.last().unwrap();
+                    let enum_item_name = if enum_name.len() == 1 {
+                        enum_name[0].clone()
+                    } else {
+                        baml_base::Name::new(
+                            enum_name
+                                .iter()
+                                .map(smol_str::SmolStr::as_str)
+                                .collect::<Vec<_>>()
+                                .join("."),
+                        )
+                    };
+                    let enum_resolved = if !ns_context.is_empty() {
+                        let ns: Vec<baml_base::Name> = ns_context.to_vec();
+                        package_items.lookup_type(&ns, &enum_item_name)
+                    } else {
+                        package_items.lookup_type(&[], &enum_item_name)
+                    };
+                    let enum_resolved = enum_resolved.or_else(|| {
+                        if enum_name.len() >= 2 {
+                            if enum_name[0].as_str() == "root" {
+                                package_items.lookup_type(&enum_name[1..], &enum_item_name)
+                            } else {
+                                let pkg_id = PackageId::new(db, enum_name[0].clone());
+                                let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+                                pkg.lookup_type(&enum_name[1..], &enum_item_name)
+                            }
+                        } else {
+                            None
+                        }
+                    });
+                    if let Some(def) = enum_resolved {
+                        if matches!(def, Definition::Enum(_)) {
+                            return Ty::EnumVariant(
+                                qualify_def(db, def, &enum_item_name),
+                                variant.clone(),
+                                TyAttr::default(),
+                            );
+                        }
+                    }
+                }
                 let name_str = segments
                     .iter()
                     .map(smol_str::SmolStr::as_str)

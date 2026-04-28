@@ -660,17 +660,11 @@ impl<'a> AstGraphBuilder<'a> {
                 name,
                 inner: _inner,
             } => name.to_string(),
-            ast::PatternKind::Literal(lit) => format_literal_ast(lit),
-            ast::PatternKind::Null => "null".to_string(),
-            ast::PatternKind::EnumVariant { enum_name, variant } => {
-                let path: Vec<_> = enum_name.iter().map(baml_base::Name::as_str).collect();
-                format!("{}.{variant}", path.join("."))
-            }
+            ast::PatternKind::Type(ty) => ty.to_string(),
             ast::PatternKind::Or(pats) => {
                 let parts: Vec<_> = pats.iter().map(|p| self.format_pattern(*p)).collect();
                 parts.join(" | ")
             }
-            ast::PatternKind::Type(ty) => ty.to_string(),
             ast::PatternKind::Class { class, fields } => {
                 let field_strs: Vec<_> = fields
                     .iter()
@@ -685,8 +679,8 @@ impl<'a> AstGraphBuilder<'a> {
                 format!("{} {{ {} }}", class, field_strs.join(", "))
             }
         };
-        if let Some(narrow) = &pat.narrow {
-            format!("{base}: {narrow}")
+        if let Some(chain_id) = pat.chain {
+            format!("{base}: {}", self.format_pattern(chain_id))
         } else {
             base
         }
@@ -1024,8 +1018,14 @@ mod tests {
     fn match_creates_branch_group_with_arms() {
         let body = make_ast_body(|exprs, _, patterns, match_arms| {
             let scrutinee = exprs.alloc(ast::Expr::Path(vec!["x".into()]));
-            let pat1 = patterns.alloc(ast::Pattern::literal(ast::Literal::Int(1)));
-            let pat2 = patterns.alloc(ast::Pattern::literal(ast::Literal::Int(2)));
+            let pat1 = patterns.alloc(ast::Pattern::type_match(ast::TypeExpr::Literal {
+                value: ast::Literal::Int(1),
+                attrs: vec![],
+            }));
+            let pat2 = patterns.alloc(ast::Pattern::type_match(ast::TypeExpr::Literal {
+                value: ast::Literal::Int(2),
+                attrs: vec![],
+            }));
             let body1 = exprs.alloc(ast::Expr::Null);
             let body2 = exprs.alloc(ast::Expr::Null);
             let arm1 = match_arms.alloc(ast::MatchArm {

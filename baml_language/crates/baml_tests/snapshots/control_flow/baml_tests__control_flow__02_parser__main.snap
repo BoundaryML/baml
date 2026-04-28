@@ -36,9 +36,10 @@ SOURCE_FILE
           SLASH "/"
           HASH "#"
           WORD "Setup"
-        LET_STMT "let x = 1;"
-          KW_LET "let"
-          WORD "x"
+        LET_STMT
+          PATTERN "let x"
+            KW_LET "let"
+            WORD "x"
           EQUALS "="
           INTEGER_LITERAL "1"
           SEMICOLON ";"
@@ -48,9 +49,10 @@ SOURCE_FILE
           HASH "#"
           HASH "#"
           WORD "Configuration"
-        LET_STMT "let y = 2;"
-          KW_LET "let"
-          WORD "y"
+        LET_STMT
+          PATTERN "let y"
+            KW_LET "let"
+            WORD "y"
           EQUALS "="
           INTEGER_LITERAL "2"
           SEMICOLON ";"
@@ -60,8 +62,9 @@ SOURCE_FILE
           HASH "#"
           WORD "Processing"
         LET_STMT
-          KW_LET "let"
-          WORD "z"
+          PATTERN "let z"
+            KW_LET "let"
+            WORD "z"
           EQUALS "="
           BINARY_EXPR "x + y"
             WORD "x"
@@ -251,9 +254,10 @@ SOURCE_FILE
           SLASH "/"
           HASH "#"
           WORD "Initialize"
-        LET_STMT "let count = 0;"
-          KW_LET "let"
-          WORD "count"
+        LET_STMT
+          PATTERN "let count"
+            KW_LET "let"
+            WORD "count"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
@@ -315,8 +319,9 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "1"
-              INTEGER_LITERAL "1"
+            PATTERN
+              TYPE_EXPR "1"
+                INTEGER_LITERAL "1"
             FAT_ARROW "=>"
             BLOCK_EXPR
               L_BRACE "{"
@@ -331,8 +336,9 @@ SOURCE_FILE
                 QUOTE """
               R_BRACE "}"
           MATCH_ARM
-            MATCH_PATTERN "2"
-              INTEGER_LITERAL "2"
+            PATTERN
+              TYPE_EXPR "2"
+                INTEGER_LITERAL "2"
             FAT_ARROW "=>"
             BLOCK_EXPR
               L_BRACE "{"
@@ -347,8 +353,9 @@ SOURCE_FILE
                 QUOTE """
               R_BRACE "}"
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              TYPE_EXPR "_"
+                WORD "_"
             FAT_ARROW "=>"
             BLOCK_EXPR
               L_BRACE "{"

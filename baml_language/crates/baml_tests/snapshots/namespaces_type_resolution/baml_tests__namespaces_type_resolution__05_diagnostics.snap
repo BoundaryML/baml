@@ -2,4 +2,315 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-No errors found.
+  [type] Error: unresolved type: root.Status.Ok
+     ╭─[ auth.baml:110:47 ]
+     │
+ 110 │ function AuthUsesLlmConfig(cfg: root.llm.Config) -> string {
+     │                                               ──┬─  
+     │                                                 ╰─── unresolved type: root.Status.Ok
+     │ 
+     │ Note: Error code: E0002
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ auth.baml:114:5 ]
+     │
+ 114 │ function AuthUsesLlmResponse(r: root.llm.Response) -> string {
+     │     ────┬───  
+     │         ╰───── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: unresolved type: root.Status.Failed
+     ╭─[ auth.baml:114:5 ]
+     │
+ 114 │ function AuthUsesLlmResponse(r: root.llm.Response) -> string {
+     │     ────┬───  
+     │         ╰───── unresolved type: root.Status.Failed
+     │ 
+     │ Note: Error code: E0002
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ auth.baml:114:46 ]
+     │
+ 114 │ function AuthUsesLlmResponse(r: root.llm.Response) -> string {
+     │                                              ────┬────  
+     │                                                  ╰────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: unresolved type: root.Status.Pending
+     ╭─[ auth.baml:114:46 ]
+     │
+ 114 │ function AuthUsesLlmResponse(r: root.llm.Response) -> string {
+     │                                              ────┬────  
+     │                                                  ╰────── unresolved type: root.Status.Pending
+     │ 
+     │ Note: Error code: E0002
+─────╯
+
+  [type] Error: unresolved type: root.llm.Status.Ready
+     ╭─[ auth.baml:141:13 ]
+     │
+ 141 │     llm_cfg: root.llm.Config
+     │             ───┬───  
+     │                ╰───── unresolved type: root.llm.Status.Ready
+     │ 
+     │ Note: Error code: E0002
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ auth.baml:143:17 ]
+     │
+ 143 │ ╭─▶     auth_cfg.provider
+     ┆ ┆   
+ 146 │ ├─▶ // auth.Error + root.Error + llm.Error — three different types
+     │ │                                                                    
+     │ ╰──────────────────────────────────────────────────────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0063
+─────╯
+
+  [type] Error: unresolved type: root.llm.Status.Generating
+     ╭─[ auth.baml:143:17 ]
+     │
+ 143 │ ╭─▶     auth_cfg.provider
+     ┆ ┆   
+ 146 │ ├─▶ // auth.Error + root.Error + llm.Error — three different types
+     │ │                                                                    
+     │ ╰──────────────────────────────────────────────────────────────────── unresolved type: root.llm.Status.Generating
+     │     
+     │     Note: Error code: E0002
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ auth.baml:146:38 ]
+     │
+ 146 │ // auth.Error + root.Error + llm.Error — three different types
+     │                                      ───┬──  
+     │                                         ╰──── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: unresolved type: root.llm.Status.Done
+     ╭─[ auth.baml:146:38 ]
+     │
+ 146 │ // auth.Error + root.Error + llm.Error — three different types
+     │                                      ───┬──  
+     │                                         ╰──── unresolved type: root.llm.Status.Done
+     │ 
+     │ Note: Error code: E0002
+─────╯
+
+  [type] Error: unresolved type: root.Status.Ok
+     ╭─[ models.baml:122:47 ]
+     │
+ 122 │ ╭─▶ function LlmThrowsRootError(x: int) -> string {
+ 123 │ ├─▶     match (x) {
+     │ │                     
+     │ ╰───────────────────── unresolved type: root.Status.Ok
+     │     
+     │     Note: Error code: E0002
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ models.baml:124:19 ]
+     │
+ 124 │         0 => throw root.Error { code: 404, message: "not found" },
+     │                   ────┬───  
+     │                       ╰───── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: unresolved type: root.Status.Failed
+     ╭─[ models.baml:124:19 ]
+     │
+ 124 │         0 => throw root.Error { code: 404, message: "not found" },
+     │                   ────┬───  
+     │                       ╰───── unresolved type: root.Status.Failed
+     │ 
+     │ Note: Error code: E0002
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ models.baml:124:60 ]
+     │
+ 124 │ ╭─▶         0 => throw root.Error { code: 404, message: "not found" },
+ 125 │ ├─▶         _ => "ok"
+     │ │                       
+     │ ╰─────────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0063
+─────╯
+
+  [type] Error: unresolved type: root.Status.Pending
+     ╭─[ models.baml:124:60 ]
+     │
+ 124 │ ╭─▶         0 => throw root.Error { code: 404, message: "not found" },
+ 125 │ ├─▶         _ => "ok"
+     │ │                       
+     │ ╰─────────────────────── unresolved type: root.Status.Pending
+     │     
+     │     Note: Error code: E0002
+─────╯
+
+  [type] Error: unresolved type: root.Status.Ok
+    ╭─[ client.baml:87:2 ]
+    │
+ 87 │ ╭─▶ }
+    ┆ ┆   
+ 89 │ ├─▶ function OpenAIUsesLlmStatus() -> root.llm.Status {
+    │ │                                                         
+    │ ╰───────────────────────────────────────────────────────── unresolved type: root.Status.Ok
+    │     
+    │     Note: Error code: E0002
+────╯
+
+  [type] Error: unreachable arm
+    ╭─[ client.baml:89:35 ]
+    │
+ 89 │ function OpenAIUsesLlmStatus() -> root.llm.Status {
+    │                                   ────┬───  
+    │                                       ╰───── unreachable arm
+    │ 
+    │ Note: Error code: E0063
+────╯
+
+  [type] Error: unresolved type: root.Status.Failed
+    ╭─[ client.baml:89:35 ]
+    │
+ 89 │ function OpenAIUsesLlmStatus() -> root.llm.Status {
+    │                                   ────┬───  
+    │                                       ╰───── unresolved type: root.Status.Failed
+    │ 
+    │ Note: Error code: E0002
+────╯
+
+  [type] Error: unreachable arm
+    ╭─[ client.baml:90:24 ]
+    │
+ 90 │ ╭─▶     root.llm.Status.Generating
+ 91 │ ├─▶ }
+    │ │       
+    │ ╰─────── unreachable arm
+    │     
+    │     Note: Error code: E0063
+────╯
+
+  [type] Error: unresolved type: root.Status.Pending
+    ╭─[ client.baml:90:24 ]
+    │
+ 90 │ ╭─▶     root.llm.Status.Generating
+ 91 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved type: root.Status.Pending
+    │     
+    │     Note: Error code: E0002
+────╯
+
+  [type] Error: unresolved type: root.llm.Status.Ready
+     ╭─[ client.baml:113:17 ]
+     │
+ 113 │         root.auth.Role.Admin => "admin",
+     │                 ───┬───  
+     │                    ╰───── unresolved type: root.llm.Status.Ready
+     │ 
+     │ Note: Error code: E0002
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ client.baml:114:23 ]
+     │
+ 114 │         root.auth.Role.User => "user",
+     │                       ──────┬─────  
+     │                             ╰─────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: unresolved type: root.llm.Status.Generating
+     ╭─[ client.baml:114:23 ]
+     │
+ 114 │         root.auth.Role.User => "user",
+     │                       ──────┬─────  
+     │                             ╰─────── unresolved type: root.llm.Status.Generating
+     │ 
+     │ Note: Error code: E0002
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ client.baml:115:30 ]
+     │
+ 115 │         root.auth.Role.Guest => "guest"
+     │                              ───┬──  
+     │                                 ╰──── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: unresolved type: root.llm.Status.Done
+     ╭─[ client.baml:115:30 ]
+     │
+ 115 │         root.auth.Role.Guest => "guest"
+     │                              ───┬──  
+     │                                 ╰──── unresolved type: root.llm.Status.Done
+     │ 
+     │ Note: Error code: E0002
+─────╯
+
+  [type] Error: unresolved type: root.auth.Role.Admin
+     ╭─[ client.baml:132:28 ]
+     │
+ 132 │ // openai.Model, llm.Model — both named Model but different variants
+     │                            ───┬───  
+     │                               ╰───── unresolved type: root.auth.Role.Admin
+     │ 
+     │ Note: Error code: E0002
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ client.baml:132:68 ]
+     │
+ 132 │ ╭─▶ // openai.Model, llm.Model — both named Model but different variants
+ 133 │ ├─▶ function OpenAIMixedModels(
+     │ │                                 
+     │ ╰───────────────────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0063
+─────╯
+
+  [type] Error: unresolved type: root.auth.Role.User
+     ╭─[ client.baml:132:68 ]
+     │
+ 132 │ ╭─▶ // openai.Model, llm.Model — both named Model but different variants
+ 133 │ ├─▶ function OpenAIMixedModels(
+     │ │                                 
+     │ ╰───────────────────────────────── unresolved type: root.auth.Role.User
+     │     
+     │     Note: Error code: E0002
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ client.baml:134:11 ]
+     │
+ 134 │     openai_model: Model,
+     │           ───┬───  
+     │              ╰───── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: unresolved type: root.auth.Role.Guest
+     ╭─[ client.baml:134:11 ]
+     │
+ 134 │     openai_model: Model,
+     │           ───┬───  
+     │              ╰───── unresolved type: root.auth.Role.Guest
+     │ 
+     │ Note: Error code: E0002
+─────╯

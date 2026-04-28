@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 11870
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type `string` has no member `len`
@@ -606,6 +605,16 @@ assertion_line: 11870
      │     Note: Error code: E0001
 ─────╯
 
+  [type] Error: unresolved name: n
+     ╭─[ loop_stmts.baml:406:27 ]
+     │
+ 406 │                 n: int if n > 100 => {
+     │                           ┬  
+     │                           ╰── unresolved name: n
+     │ 
+     │ Note: Error code: E0003
+─────╯
+
   [type] Warning: unreachable code: 1 statement(s) after diverging statement
      ╭─[ loop_stmts.baml:406:39 ]
      │
@@ -615,6 +624,16 @@ assertion_line: 11870
      │ ╰─────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
      │     
      │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: n
+     ╭─[ loop_stmts.baml:410:27 ]
+     │
+ 410 │                 n: int => n
+     │                           ┬  
+     │                           ╰── unresolved name: n
+     │ 
+     │ Note: Error code: E0003
 ─────╯
 
   [hir] Error: Duplicate binding `very_long_variable_name_for_testing_wrapping` in `LoopStmts`
@@ -721,6 +740,16 @@ assertion_line: 11870
      │                                                                                  ╰──── operator `Mul` cannot be applied to `bool` and `int`
      │ 
      │ Note: Error code: E0004
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ match_exprs.baml:309:14 ]
+     │
+ 309 │         _ => "nonzero"
+     │              ────┬────  
+     │                  ╰────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [hir] Error: Duplicate binding `x` in `OtherExprs`

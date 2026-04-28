@@ -16,8 +16,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN "let f"
+            KW_LET "let"
+            WORD "f"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"
@@ -104,8 +105,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f1"
+          PATTERN "let f1"
+            KW_LET "let"
+            WORD "f1"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"
@@ -130,8 +132,9 @@ SOURCE_FILE
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "f2"
+          PATTERN "let f2"
+            KW_LET "let"
+            WORD "f2"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"
@@ -156,8 +159,9 @@ SOURCE_FILE
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "content1"
+          PATTERN "let content1"
+            KW_LET "let"
+            WORD "content1"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "f1.text"
@@ -169,8 +173,9 @@ SOURCE_FILE
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "content2"
+          PATTERN "let content2"
+            KW_LET "let"
+            WORD "content2"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "f2.text"
@@ -199,8 +204,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN "let f"
+            KW_LET "let"
+            WORD "f"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"
@@ -225,8 +231,9 @@ SOURCE_FILE
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "content"
+          PATTERN "let content"
+            KW_LET "let"
+            WORD "content"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "f.text"
@@ -261,8 +268,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN "let f"
+            KW_LET "let"
+            WORD "f"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"
@@ -349,8 +357,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN "let f"
+            KW_LET "let"
+            WORD "f"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"
@@ -375,8 +384,9 @@ SOURCE_FILE
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "data"
+          PATTERN "let data"
+            KW_LET "let"
+            WORD "data"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "f.bytes"
@@ -411,8 +421,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN "let f"
+            KW_LET "let"
+            WORD "f"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"
@@ -459,8 +470,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN "let f"
+            KW_LET "let"
+            WORD "f"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"
@@ -541,8 +553,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "data"
+          PATTERN "let data"
+            KW_LET "let"
+            WORD "data"
           EQUALS "="
           CALL_EXPR
             FIELD_ACCESS_EXPR
@@ -605,8 +618,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN "let f"
+            KW_LET "let"
+            WORD "f"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"
@@ -668,8 +682,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN "let f"
+            KW_LET "let"
+            WORD "f"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"
@@ -720,8 +735,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN "let f"
+            KW_LET "let"
+            WORD "f"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"
@@ -747,8 +763,9 @@ SOURCE_FILE
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "data"
+          PATTERN "let data"
+            KW_LET "let"
+            WORD "data"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "f.bytes"
@@ -797,8 +814,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN "let f"
+            KW_LET "let"
+            WORD "f"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"
@@ -850,8 +868,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN "let f"
+            KW_LET "let"
+            WORD "f"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.fs.open"

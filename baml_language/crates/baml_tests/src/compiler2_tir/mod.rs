@@ -65,28 +65,14 @@ pub(crate) mod support {
                 format!("{class} {{ {fs} }}")
             }
             PatternKind::Type(ty) => ty.to_string(),
-            PatternKind::Literal(lit) => lit.to_string(),
-            PatternKind::Null => "null".into(),
-            PatternKind::EnumVariant { enum_name, variant } => {
-                let path = enum_name
-                    .iter()
-                    .map(|n| n.as_str())
-                    .collect::<Vec<_>>()
-                    .join(".");
-                if path.is_empty() {
-                    variant.to_string()
-                } else {
-                    format!("{path}.{variant}")
-                }
-            }
             PatternKind::Or(pats) => pats
                 .iter()
                 .map(|p| pat_desc(*p, body))
                 .collect::<Vec<_>>()
                 .join(" | "),
         };
-        match &pat.narrow {
-            Some(ty) => format!("{core}: {ty}"),
+        match pat.chain {
+            Some(chain_id) => format!("{core}: {}", pat_desc(chain_id, body)),
             None => core,
         }
     }
@@ -1217,7 +1203,6 @@ pub(crate) mod support {
             pat_id: baml_compiler2_ast::PatId,
             body: &ExprBody,
             prefix: &str,
-            local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
             use baml_compiler2_ast::PatternKind;
             let pat = &body.patterns[pat_id];
@@ -1228,24 +1213,9 @@ pub(crate) mod support {
                     name,
                     inner: _inner,
                 } => name.to_string(),
-                PatternKind::Literal(lit) => lit.to_string(),
-                PatternKind::Null => "null".into(),
-                PatternKind::EnumVariant { enum_name, variant } => {
-                    let joined = baml_base::Name::new(
-                        enum_name
-                            .iter()
-                            .map(|s| s.as_str())
-                            .collect::<Vec<_>>()
-                            .join("."),
-                    );
-                    format!(
-                        "{}.{variant}",
-                        qualify_type_name(&joined, prefix, local_type_names)
-                    )
-                }
                 PatternKind::Or(pats) => pats
                     .iter()
-                    .map(|p| pat_desc_hir(*p, body, prefix, local_type_names))
+                    .map(|p| pat_desc_hir(*p, body, prefix))
                     .collect::<Vec<_>>()
                     .join(" | "),
                 PatternKind::Type(ty) => type_expr_to_string_hir(ty, prefix),
@@ -1254,11 +1224,7 @@ pub(crate) mod support {
                         .iter()
                         .map(|f| {
                             if let Some(inner) = f.pat {
-                                format!(
-                                    "{}: {}",
-                                    f.field,
-                                    pat_desc_hir(inner, body, prefix, local_type_names)
-                                )
+                                format!("{}: {}", f.field, pat_desc_hir(inner, body, prefix))
                             } else {
                                 f.field.to_string()
                             }
@@ -1267,8 +1233,8 @@ pub(crate) mod support {
                     format!("{} {{ {} }}", class, field_strs.join(", "))
                 }
             };
-            if let Some(narrow) = &pat.narrow {
-                format!("{base}: {}", type_expr_to_string_hir(narrow, prefix))
+            if let Some(chain_id) = pat.chain {
+                format!("{base}: {}", pat_desc_hir(chain_id, body, prefix))
             } else {
                 base
             }
@@ -1324,7 +1290,7 @@ pub(crate) mod support {
                         .iter()
                         .map(|arm_id| {
                             let arm = &body.match_arms[*arm_id];
-                            let pat = pat_desc_hir(arm.pattern, body, prefix, local_type_names);
+                            let pat = pat_desc_hir(arm.pattern, body, prefix);
                             let body_desc = expr_desc_hir(arm.body, body, prefix, local_type_names);
                             format!("{pat} => {body_desc}")
                         })
@@ -1341,8 +1307,7 @@ pub(crate) mod support {
                                 CatchClauseKind::CatchAll => "catch_all",
                                 CatchClauseKind::CatchAllPanics => "catch_all_panics",
                             };
-                            let binding =
-                                pat_desc_hir(clause.binding, body, prefix, local_type_names);
+                            let binding = pat_desc_hir(clause.binding, body, prefix);
                             let arms_desc = clause
                                 .arms
                                 .iter()
@@ -1350,7 +1315,7 @@ pub(crate) mod support {
                                     let arm = &body.catch_arms[*arm_id];
                                     format!(
                                         "{} => {}",
-                                        pat_desc_hir(arm.pattern, body, prefix, local_type_names),
+                                        pat_desc_hir(arm.pattern, body, prefix),
                                         expr_desc_hir(arm.body, body, prefix, local_type_names)
                                     )
                                 })
@@ -1503,7 +1468,7 @@ pub(crate) mod support {
                     initializer,
                     ..
                 } => {
-                    let pat = pat_desc_hir(*pattern, body, prefix, local_type_names);
+                    let pat = pat_desc_hir(*pattern, body, prefix);
                     let ty_annot = type_annotation
                         .map(|id| {
                             format!(
@@ -1545,7 +1510,7 @@ pub(crate) mod support {
                     collection,
                     body: for_body,
                 } => {
-                    let bind = pat_desc_hir(*binding, body, prefix, local_type_names);
+                    let bind = pat_desc_hir(*binding, body, prefix);
                     let coll = expr_desc_hir(*collection, body, prefix, local_type_names);
                     format!(
                         "for {bind} in {coll} {}",

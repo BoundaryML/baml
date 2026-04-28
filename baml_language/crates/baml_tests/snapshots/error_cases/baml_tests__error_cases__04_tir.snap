@@ -10,15 +10,11 @@ function user.Broken.Invalid() -> ? throws never {
   }
 }
 function user.Broken.BadUnionPattern(x: int | bool) -> string throws never {
-  { : unknown | "bad"
-    match (x : int | bool) : unknown | "bad"
-      a: int | b =>
-        <missing> : unknown
-      bool =>
+  { : "bad"
+    match (x : int | bool) : "bad"
+      a: bool =>
         "bad" : "bad"
   }
-  !! 635..655: unresolved type: b
-  !! 664..669: unreachable arm
 }
 function user.Broken.MixedLiteralAndTyped(x: int) -> string throws never {
   { : "mixed"

@@ -2,4 +2,4 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === STRONG AST ERROR ===
-An element at main.baml:28:17 was a node when it should have been a token.
+Expected token/node of kind LET_STMT, but found PATTERN at main.baml:27:10

@@ -91,9 +91,6 @@ fn validate_expr_body(body: &ExprBody, diagnostics: &mut Vec<(String, text_size:
 
     // Check typed patterns (e.g. `let x: string @alias("n") = ...`).
     for (_, pat) in body.patterns.iter() {
-        if let Some(ty) = &pat.narrow {
-            validate_type_expr_tree(ty, diagnostics);
-        }
         if let crate::ast::PatternKind::Type(ty) = &pat.kind {
             validate_type_expr_tree(ty, diagnostics);
         }

@@ -12,7 +12,7 @@ function CatchWildcardOnly(x: int) -> string {
 // Wildcard with binding name
 function CatchNamedWildcard(x: int) -> string {
   MayFail(x) catch (e) {
-    other => "caught: " + other
+    let other => "caught: " + other
   }
 }
 
@@ -29,9 +29,9 @@ function CatchNamedWildcard(x: int) -> string {
 //    │     Note: Error code: E0063
 // ───╯
 // Warning: unreachable arm
-//     ╭─[ catch_catch_wildcard_only.baml:15:15 ]
+//     ╭─[ catch_catch_wildcard_only.baml:15:19 ]
 //     │
-//  15 │ ╭─▶     other => "caught: " + other
+//  15 │ ╭─▶     let other => "caught: " + other
 //  16 │ ├─▶   }
 //     │ │         
 //     │ ╰───────── unreachable arm

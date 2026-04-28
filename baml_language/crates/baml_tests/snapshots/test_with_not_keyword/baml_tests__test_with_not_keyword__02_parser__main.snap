@@ -45,9 +45,10 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let with = 42"
-          KW_LET "let"
-          WORD "with"
+        LET_STMT
+          PATTERN "let with"
+            KW_LET "let"
+            WORD "with"
           EQUALS "="
           INTEGER_LITERAL "42"
         WORD "with"
@@ -72,8 +73,9 @@ SOURCE_FILE
     BLOCK_EXPR
       L_BRACE "{"
       LET_STMT
-        KW_LET "let"
-        WORD "h"
+        PATTERN "let h"
+          KW_LET "let"
+          WORD "h"
         EQUALS "="
         OBJECT_LITERAL
           WORD "HasWith"

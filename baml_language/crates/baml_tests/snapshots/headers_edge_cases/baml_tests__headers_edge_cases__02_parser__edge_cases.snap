@@ -199,8 +199,9 @@ SOURCE_FILE
           WORD "All"
           WORD "Tabs"
         LET_STMT
-          KW_LET "let"
-          WORD "x"
+          PATTERN "let x"
+            KW_LET "let"
+            WORD "x"
           EQUALS "="
           STRING_LITERAL "whitespace test"
             QUOTE """
@@ -245,8 +246,11 @@ SOURCE_FILE
           WORD "Before"
           WORD "Comment"
         LET_STMT
-          KW_LET "let"
-          WORD "x"
+          PATTERN "// This is a regular comment
+
+    let x"
+            KW_LET "let"
+            WORD "x"
           EQUALS "="
           STRING_LITERAL "test"
             QUOTE """
@@ -292,8 +296,9 @@ SOURCE_FILE
           WORD "Main"
           WORD "Function"
         LET_STMT
-          KW_LET "let"
-          WORD "result"
+          PATTERN "let result"
+            KW_LET "let"
+            WORD "result"
           EQUALS "="
           BLOCK_EXPR
             L_BRACE "{"
@@ -306,8 +311,9 @@ SOURCE_FILE
               WORD "Block"
               WORD "Expression"
             LET_STMT
-              KW_LET "let"
-              WORD "inner"
+              PATTERN "let inner"
+                KW_LET "let"
+                WORD "inner"
               EQUALS "="
               IF_EXPR
                 KW_IF "if"
@@ -327,8 +333,9 @@ SOURCE_FILE
                     WORD "If"
                     WORD "True"
                   LET_STMT
-                    KW_LET "let"
-                    WORD "deep"
+                    PATTERN "let deep"
+                      KW_LET "let"
+                      WORD "deep"
                     EQUALS "="
                     BLOCK_EXPR
                       L_BRACE "{"
@@ -556,9 +563,10 @@ SOURCE_FILE
           HASH "#"
           WORD "Before"
           WORD "Let"
-        LET_STMT "let x = 5;"
-          KW_LET "let"
-          WORD "x"
+        LET_STMT
+          PATTERN "let x"
+            KW_LET "let"
+            WORD "x"
           EQUALS "="
           INTEGER_LITERAL "5"
           SEMICOLON ";"
@@ -631,7 +639,7 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let i"
+          PATTERN "let i"
             KW_LET "let"
             WORD "i"
           KW_IN "in"

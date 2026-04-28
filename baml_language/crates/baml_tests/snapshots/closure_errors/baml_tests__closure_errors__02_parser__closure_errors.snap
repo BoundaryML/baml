@@ -132,8 +132,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "fmt"
+          PATTERN "let fmt"
+            KW_LET "let"
+            WORD "fmt"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Formatter"
@@ -148,8 +149,9 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "transform"
+          PATTERN "let transform"
+            KW_LET "let"
+            WORD "transform"
           EQUALS "="
           PATH_EXPR "fmt.format"
             WORD "fmt"
@@ -181,8 +183,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN "let f"
+            KW_LET "let"
+            WORD "f"
           EQUALS "="
           PATH_EXPR "Employee.full_name"
             WORD "Employee"
@@ -208,8 +211,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "c"
+          PATTERN "let c"
+            KW_LET "let"
+            WORD "c"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Counter"
@@ -221,18 +225,19 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "inc"
-          COLON ":"
-          TYPE_EXPR
-            L_PAREN "("
-            FUNCTION_TYPE_PARAM
-              TYPE_EXPR "Counter"
-                WORD "Counter"
-            R_PAREN ")"
-            ARROW "->"
-            TYPE_EXPR "int"
-              WORD "int"
+          PATTERN
+            KW_LET "let"
+            WORD "inc"
+            COLON ":"
+            TYPE_EXPR
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "Counter"
+                  WORD "Counter"
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
           EQUALS "="
           PATH_EXPR "c.increment"
             WORD "c"
@@ -254,15 +259,16 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
-          COLON ":"
-          TYPE_EXPR
-            L_PAREN "("
-            R_PAREN ")"
-            ARROW "->"
-            TYPE_EXPR "string"
-              WORD "string"
+          PATTERN
+            KW_LET "let"
+            WORD "f"
+            COLON ":"
+            TYPE_EXPR
+              L_PAREN "("
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "string"
+                WORD "string"
           EQUALS "="
           PATH_EXPR "Employee.full_name"
             WORD "Employee"
@@ -298,8 +304,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "e"
+          PATTERN "let e"
+            KW_LET "let"
+            WORD "e"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Employee"
@@ -341,8 +348,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "e"
+          PATTERN "let e"
+            KW_LET "let"
+            WORD "e"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Employee"

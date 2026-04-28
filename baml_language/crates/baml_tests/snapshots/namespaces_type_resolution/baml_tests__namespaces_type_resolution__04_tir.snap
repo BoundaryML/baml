@@ -219,6 +219,11 @@ function user.auth.AuthMatchesRootStatus(s: user.Status) -> string throws never 
       root.Status.Pending =>
         "pending" : "pending"
   }
+  !! 2474..2478: unresolved type: root.Status.Ok
+  !! 2510..2518: unresolved type: root.Status.Failed
+  !! 2510..2518: unreachable arm
+  !! 2551..2560: unresolved type: root.Status.Pending
+  !! 2551..2560: unreachable arm
 }
 function user.auth.AuthThrowsRootError(x: int) -> string throws never {
   { : "ok"
@@ -254,6 +259,11 @@ function user.auth.AuthMatchesLlmStatus(s: user.llm.Status) -> string throws nev
       root.llm.Status.Done =>
         "done" : "done"
   }
+  !! 3193..3200: unresolved type: root.llm.Status.Ready
+  !! 3240..3252: unresolved type: root.llm.Status.Generating
+  !! 3240..3252: unreachable arm
+  !! 3286..3292: unresolved type: root.llm.Status.Done
+  !! 3286..3292: unreachable arm
 }
 function user.auth.AuthUsesNestedClient(c: user.llm.openai.Client) -> string throws never {
   { : string
@@ -378,6 +388,11 @@ function user.llm.LlmMatchesRootStatus(s: user.Status) -> string throws never {
       root.Status.Pending =>
         "pending" : "pending"
   }
+  !! 2853..2857: unresolved type: root.Status.Ok
+  !! 2889..2897: unresolved type: root.Status.Failed
+  !! 2889..2897: unreachable arm
+  !! 2930..2939: unresolved type: root.Status.Pending
+  !! 2930..2939: unreachable arm
 }
 function user.llm.LlmUsesRootAlias(cfg: user.ConfigAlias) -> string throws never {
   { : string
@@ -544,6 +559,11 @@ function user.llm.openai.OpenAIMatchesRootStatus(s: user.Status) -> string throw
       root.Status.Pending =>
         "pending" : "pending"
   }
+  !! 1921..1925: unresolved type: root.Status.Ok
+  !! 1957..1965: unresolved type: root.Status.Failed
+  !! 1957..1965: unreachable arm
+  !! 1998..2007: unresolved type: root.Status.Pending
+  !! 1998..2007: unreachable arm
 }
 function user.llm.openai.OpenAIUsesLlmConfig(cfg: user.llm.Config) -> string throws never {
   { : string
@@ -570,6 +590,11 @@ function user.llm.openai.OpenAIMatchesLlmStatus(s: user.llm.Status) -> string th
       root.llm.Status.Done =>
         "done" : "done"
   }
+  !! 2556..2563: unresolved type: root.llm.Status.Ready
+  !! 2603..2615: unresolved type: root.llm.Status.Generating
+  !! 2603..2615: unreachable arm
+  !! 2649..2655: unresolved type: root.llm.Status.Done
+  !! 2649..2655: unreachable arm
 }
 function user.llm.openai.OpenAIUsesAuthConfig(cfg: user.auth.Config) -> string throws never {
   { : string
@@ -591,6 +616,11 @@ function user.llm.openai.OpenAIMatchesAuthRole(r: user.auth.Role) -> string thro
       root.auth.Role.Guest =>
         "guest" : "guest"
   }
+  !! 3034..3041: unresolved type: root.auth.Role.Admin
+  !! 3074..3080: unresolved type: root.auth.Role.User
+  !! 3074..3080: unreachable arm
+  !! 3114..3121: unresolved type: root.auth.Role.Guest
+  !! 3114..3121: unreachable arm
 }
 function user.llm.openai.OpenAIMixedErrors(openai_err: user.llm.openai.Error, root_err: user.Error, llm_err: user.llm.Error, auth_err: user.auth.Error) -> string throws never {
   { : string

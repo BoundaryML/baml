@@ -200,15 +200,30 @@ impl FromCST for LetStmt {
             None
         };
 
-        let keyword = it.expect_parse()?;
-
-        let name = it.expect_parse()?;
-
-        let type_annotation = if let Some(colon) = it.next_if_kind(SyntaxKind::COLON) {
-            Some((t::Colon::from_cst(colon)?, it.expect_parse()?))
-        } else {
-            None
-        };
+        // The parser wraps KW_LET, WORD, and optional COLON+TYPE_EXPR inside a
+        // PATTERN node.  Dig into it to extract the pieces the formatter needs.
+        let (keyword, name, type_annotation) =
+            if let Some(pattern_elem) = it.next_if_kind(SyntaxKind::PATTERN) {
+                let pattern_node = StrongAstError::assert_is_node(pattern_elem)?;
+                let mut pit = SyntaxNodeIter::new(&pattern_node);
+                let kw = pit.expect_parse()?;
+                let nm = pit.expect_parse()?;
+                let ta = if let Some(colon) = pit.next_if_kind(SyntaxKind::COLON) {
+                    Some((t::Colon::from_cst(colon)?, pit.expect_parse()?))
+                } else {
+                    None
+                };
+                (kw, nm, ta)
+            } else {
+                let kw = it.expect_parse()?;
+                let nm = it.expect_parse()?;
+                let ta = if let Some(colon) = it.next_if_kind(SyntaxKind::COLON) {
+                    Some((t::Colon::from_cst(colon)?, it.expect_parse()?))
+                } else {
+                    None
+                };
+                (kw, nm, ta)
+            };
 
         let initializer = if let Some(equals) = it.next_if_kind(SyntaxKind::EQUALS) {
             let value = it.expect_next("an expression")?;

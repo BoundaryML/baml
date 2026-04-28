@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 855
 ---
 === HIR2 ===
 
@@ -59,16 +58,16 @@ function testing.register_test_set(self: ?, name: string, collector: testing.Tes
   { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for ts in self.testsets {  } if (ts.name Eq full_name Or ts.name.startsWith(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add baml.unstable.string(count Add 1) else {  } full_name; let _ = self.testsets.push(testing.TestSetRegistration { name: final_name, collector: collector, runner: runner }) }
 }
 function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -> testing.TestReport  [expr] {
-  { let base_run: testing.TestReportThunk = () -> TestReport { { let start = baml.sys.now_ms(); let result = { body() } RunReport { outcome: "pass", duration_ms: 0 } catch_all (e) { _ => {  } RunReport { outcome: "fail", duration_ms: 0 } } } TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start }] } } } match (runner) { null => base_run(), r: testing.TestRunner => { let wrapped: testing.TestReportThunk = r(base_run) } wrapped() }
+  { let base_run: testing.TestReportThunk: testing.TestReportThunk = () -> TestReport { { let start = baml.sys.now_ms(); let result = { body() } RunReport { outcome: "pass", duration_ms: 0 } catch_all (e) { _ => {  } RunReport { outcome: "fail", duration_ms: 0 } } } TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start }] } } } match (runner) { null => base_run(), r: testing.TestRunner => { let wrapped: testing.TestReportThunk: testing.TestReportThunk = r(base_run) } wrapped() }
 }
 function testing.run_test(self: ?, name: string) -> testing.TestReport  [expr] {
   { for t in self.collector.tests {  } if (t.name Eq name) { return root.run_test(t.body, t.runner) }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.startsWith(k Add "/")) { return sub.run_test(name) }; throw "Test not found: " Add name }
 }
 function testing.run_testset(run_children: testing.TestSetReportThunk, runner: testing.TestSetRunner?) -> testing.TestSetReport  [expr] {
-  {  } match (runner) { null => run_children(), r: testing.TestSetRunner => { let wrapped: testing.TestSetReportThunk = r(run_children) } wrapped() }
+  {  } match (runner) { null => run_children(), r: testing.TestSetRunner => { let wrapped: testing.TestSetReportThunk: testing.TestSetReportThunk = r(run_children) } wrapped() }
 }
 function testing.serialize(self: ?) -> testing.SerializedTestDef[]  [expr] {
-  { let items: testing.SerializedTestDef[] = []; for t in self.collector.tests {  } items.push(testing.SerializedTest { type: "test", name: t.name }); for ts in self.collector.testsets { let expanded = self.expansions.get(ts.name) } match (expanded) { sub: testing.TestRegistry => {  } items.push(testing.SerializedTestSet { name: ts.name, items: sub.serialize(), loadingTimeMs: sub.loading_time_ms }), null => {  } items.push(testing.SerializedTest { type: "lazyTestSet", name: ts.name }) }; return items }
+  { let items: testing.SerializedTestDef[]: testing.SerializedTestDef[] = []; for t in self.collector.tests {  } items.push(testing.SerializedTest { type: "test", name: t.name }); for ts in self.collector.testsets { let expanded = self.expansions.get(ts.name) } match (expanded) { sub: testing.TestRegistry => {  } items.push(testing.SerializedTestSet { name: ts.name, items: sub.serialize(), loadingTimeMs: sub.loading_time_ms }), null => {  } items.push(testing.SerializedTest { type: "lazyTestSet", name: ts.name }) }; return items }
 }
 
 --- captures ---

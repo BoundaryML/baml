@@ -21,8 +21,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "name"
+          PATTERN "// Simple field access
+  let name"
+            KW_LET "let"
+            WORD "name"
           EQUALS "="
           PATH_EXPR "user.name"
             WORD "user"
@@ -30,8 +32,10 @@ SOURCE_FILE
             WORD "name"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "bio"
+          PATTERN "// Nested field access
+  let bio"
+            KW_LET "let"
+            WORD "bio"
           EQUALS "="
           PATH_EXPR "user.profile.bio"
             WORD "user"
@@ -41,8 +45,10 @@ SOURCE_FILE
             WORD "bio"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "theme"
+          PATTERN "// Deep nesting
+  let theme"
+            KW_LET "let"
+            WORD "theme"
           EQUALS "="
           PATH_EXPR "user.profile.settings.theme"
             WORD "user"
@@ -54,8 +60,10 @@ SOURCE_FILE
             WORD "theme"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "firstTag"
+          PATTERN "// Field access then array index
+  let firstTag"
+            KW_LET "let"
+            WORD "firstTag"
           EQUALS "="
           INDEX_EXPR
             PATH_EXPR "user.tags"

@@ -372,8 +372,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "fmt"
+          PATTERN "let fmt"
+            KW_LET "let"
+            WORD "fmt"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Formatter"
@@ -388,8 +389,9 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "transform"
+          PATTERN "let transform"
+            KW_LET "let"
+            WORD "transform"
           EQUALS "="
           PATH_EXPR "fmt.format"
             WORD "fmt"
@@ -432,8 +434,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "employees"
+          PATTERN "let employees"
+            KW_LET "let"
+            WORD "employees"
           EQUALS "="
           ARRAY_LITERAL
             L_BRACKET "["
@@ -507,8 +510,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "valid"
+          PATTERN "let valid"
+            KW_LET "let"
+            WORD "valid"
           EQUALS "="
           OBJECT_LITERAL
             WORD "RangeCheck"
@@ -525,8 +529,9 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "check"
+          PATTERN "let check"
+            KW_LET "let"
+            WORD "check"
           EQUALS "="
           PATH_EXPR "valid.is_valid"
             WORD "valid"
@@ -570,8 +575,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "enc"
+          PATTERN "let enc"
+            KW_LET "let"
+            WORD "enc"
           EQUALS "="
           PATH_EXPR "cfg.encoder.encode"
             WORD "cfg"
@@ -654,8 +660,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "add_calc"
+          PATTERN "let add_calc"
+            KW_LET "let"
+            WORD "add_calc"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Calculator"
@@ -670,8 +677,9 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "mul_calc"
+          PATTERN "let mul_calc"
+            KW_LET "let"
+            WORD "mul_calc"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Calculator"
@@ -686,8 +694,9 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "do_add"
+          PATTERN "let do_add"
+            KW_LET "let"
+            WORD "do_add"
           EQUALS "="
           PATH_EXPR "add_calc.compute"
             WORD "add_calc"
@@ -695,8 +704,9 @@ SOURCE_FILE
             WORD "compute"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "do_mul"
+          PATTERN "let do_mul"
+            KW_LET "let"
+            WORD "do_mul"
           EQUALS "="
           PATH_EXPR "mul_calc.compute"
             WORD "mul_calc"
@@ -787,8 +797,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "employees"
+          PATTERN "let employees"
+            KW_LET "let"
+            WORD "employees"
           EQUALS "="
           ARRAY_LITERAL
             L_BRACKET "["
@@ -838,8 +849,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "c"
+          PATTERN "let c"
+            KW_LET "let"
+            WORD "c"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Counter"
@@ -851,8 +863,9 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "inc"
+          PATTERN "let inc"
+            KW_LET "let"
+            WORD "inc"
           EQUALS "="
           PATH_EXPR "c.increment"
             WORD "c"
@@ -886,8 +899,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "b"
+          PATTERN "let b"
+            KW_LET "let"
+            WORD "b"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Box"
@@ -899,8 +913,9 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "get"
+          PATTERN "let get"
+            KW_LET "let"
+            WORD "get"
           EQUALS "="
           PATH_EXPR "b.unwrap"
             WORD "b"
@@ -926,8 +941,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "emp"
+          PATTERN "let emp"
+            KW_LET "let"
+            WORD "emp"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Employee"
@@ -950,8 +966,9 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "make_greeter"
+          PATTERN "let make_greeter"
+            KW_LET "let"
+            WORD "make_greeter"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST "()"
@@ -967,8 +984,9 @@ SOURCE_FILE
               R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "greeter"
+          PATTERN "let greeter"
+            KW_LET "let"
+            WORD "greeter"
           EQUALS "="
           CALL_EXPR
             WORD "make_greeter"
@@ -999,8 +1017,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "c"
+          PATTERN "let c"
+            KW_LET "let"
+            WORD "c"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Counter"
@@ -1012,8 +1031,9 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "inc"
+          PATTERN "let inc"
+            KW_LET "let"
+            WORD "inc"
           EQUALS "="
           PATH_EXPR "c.increment"
             WORD "c"

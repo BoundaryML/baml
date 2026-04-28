@@ -684,16 +684,15 @@ pub enum Stmt {
 
 /// Patterns — modeled after `Pattern` in `body.rs`.
 ///
-/// A pattern is `kind` plus an optional trailing `: T` narrow per BEP-015.
-/// Narrow currently carries the type-ascription part of `let x: T = ...`
-/// (and is also where future second-colon narrowing on structural patterns
-/// will land). All other shape lives in [`PatternKind`].
+/// A pattern is `kind` plus an optional `: <pat>` chain per BEP-015.
+/// Each colon introduces another pattern in the chain, enabling recursive
+/// refinement: `let x: int`, `let x: Cat { name }: Serializable`, etc.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pattern {
     pub kind: PatternKind,
-    /// Trailing `: T` narrow. For irrefutable `let`, the scrutinee's static
-    /// type must equal this type; checked in TIR, not at the AST level.
-    pub narrow: Option<TypeExpr>,
+    /// Chained pattern after `:`. Each colon-separated position in the
+    /// source becomes a link in this chain.
+    pub chain: Option<PatId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -704,21 +703,14 @@ pub enum PatternKind {
     /// Binds `name` to the matched value; if `inner` is set, the value must
     /// also satisfy the inner pattern.
     Bind { name: Name, inner: Option<PatId> },
-    /// `User { f1, f2: <pat>, ... }` — class destructure. Future variant,
-    /// not yet emitted by the parser.
+    /// `User { f1, f2: <pat>, ... }` — class destructure.
     Class { class: Name, fields: Vec<FieldPat> },
-    /// Bare type-match in pattern position (e.g. an arm `int =>`). Future
-    /// variant, not yet emitted by the parser.
+    /// Type-match in pattern position. Covers bare types (`int =>`), literals
+    /// (`42 =>`, `"hi" =>`), null, enum variants (`Status.Active =>`), and
+    /// unions (`int | string =>`). The TIR resolves the `TypeExpr` to determine
+    /// match semantics.
     Type(TypeExpr),
-    /// `42`, `"hi"`, `true`, etc. Refutable.
-    Literal(Literal),
-    /// `null` literal pattern. Refutable.
-    Null,
-    /// `Status.Active` or `baml.panics.DivideByZero` style enum variant.
-    /// `enum_name` carries the dotted path as proper segments (no string
-    /// round-tripping); the trailing identifier is `variant`. Refutable.
-    EnumVariant { enum_name: Vec<Name>, variant: Name },
-    /// `a | b | c` (formerly `Union`). Refutable in general (each part may be).
+    /// `a | b | c` — or-pattern. Refutable in general (each part may be).
     Or(Vec<PatId>),
 }
 
@@ -735,7 +727,7 @@ impl Pattern {
     pub fn wildcard() -> Self {
         Pattern {
             kind: PatternKind::Wildcard,
-            narrow: None,
+            chain: None,
         }
     }
 
@@ -747,52 +739,21 @@ impl Pattern {
         }
         Pattern {
             kind: PatternKind::Bind { name, inner: None },
-            narrow: None,
+            chain: None,
         }
     }
 
-    /// `Bind { name }` with `narrow: Some(ty)` — the legacy
-    /// `Pattern::TypedBinding { name, ty }` shape. Same `_`-canonicalization
-    /// rule as [`Pattern::binding`]: `typed_binding("_", T)` is a wildcard
-    /// carrying `narrow: Some(T)` (so `let _: int = e` still asserts `int`).
-    pub fn typed_binding(name: Name, ty: TypeExpr) -> Self {
-        if name.as_str() == "_" {
-            return Pattern {
-                kind: PatternKind::Wildcard,
-                narrow: Some(ty),
-            };
-        }
+    pub fn type_match(ty: TypeExpr) -> Self {
         Pattern {
-            kind: PatternKind::Bind { name, inner: None },
-            narrow: Some(ty),
-        }
-    }
-
-    pub fn null() -> Self {
-        Pattern {
-            kind: PatternKind::Null,
-            narrow: None,
-        }
-    }
-
-    pub fn literal(lit: Literal) -> Self {
-        Pattern {
-            kind: PatternKind::Literal(lit),
-            narrow: None,
-        }
-    }
-
-    pub fn enum_variant(enum_name: Vec<Name>, variant: Name) -> Self {
-        Pattern {
-            kind: PatternKind::EnumVariant { enum_name, variant },
-            narrow: None,
+            kind: PatternKind::Type(ty),
+            chain: None,
         }
     }
 
     pub fn or(parts: Vec<PatId>) -> Self {
         Pattern {
             kind: PatternKind::Or(parts),
-            narrow: None,
+            chain: None,
         }
     }
 
@@ -807,7 +768,7 @@ impl Pattern {
     /// True iff this pattern is structurally guaranteed to match every value
     /// at its position. **Pure structural check** — does not consider the
     /// scrutinee's static type. The TIR layer is responsible for verifying
-    /// `narrow` and `Class`/`Type` assertions against the scrutinee type.
+    /// `chain` and `Class`/`Type` assertions against the scrutinee type.
     ///
     /// Used by the let-stmt validator to reject patterns that can fail at
     /// runtime; refutable patterns belong in `match` / `if let` / `let-else`.
@@ -821,13 +782,8 @@ impl Pattern {
                 f.pat
                     .is_none_or(|id| body.patterns[id].is_irrefutable(body))
             }),
-            // `Type(T)` is structurally fine; whether the value is actually
-            // a `T` is a typing concern, not a pattern concern.
             PatternKind::Type(_) => true,
-            PatternKind::Literal(_)
-            | PatternKind::Null
-            | PatternKind::EnumVariant { .. }
-            | PatternKind::Or(_) => false,
+            PatternKind::Or(_) => false,
         }
     }
 }

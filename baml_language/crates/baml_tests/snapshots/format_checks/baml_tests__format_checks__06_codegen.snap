@@ -2572,13 +2572,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const 9
     load_const 10
     alloc_array 10
-    store_var _364
+    store_var _361
     load_const 0
     store_var __for_idx_17
 
   L92:
     load_var __for_idx_17
-    load_var _364
+    load_var _361
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L93
@@ -2650,7 +2650,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L93
 
   L102:
-    load_var _364
+    load_var _361
     load_var __for_idx_17
     load_array_element
     store_var i
@@ -2665,13 +2665,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const 90
     load_const 100
     alloc_array 10
-    store_var _370
+    store_var _367
     load_const 0
     store_var __for_idx_18
 
   L103:
     load_var __for_idx_18
-    load_var _370
+    load_var _367
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L104
@@ -2685,7 +2685,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L92
 
   L105:
-    load_var _370
+    load_var _367
     load_var __for_idx_18
     load_array_element
     store_var j
@@ -2837,13 +2837,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const 1
     load_const 2
     alloc_array 2
-    store_var _318
+    store_var _315
     load_const 0
     store_var __for_idx_15
 
   L123:
     load_var __for_idx_15
-    load_var _318
+    load_var _315
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L124
@@ -2857,7 +2857,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     jump L88
 
   L125:
-    load_var _318
+    load_var _315
     load_var __for_idx_15
     load_array_element
     store_var lvl2
@@ -2957,7 +2957,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_var _304
     is_type int
     pop_jump_if_false L136
-    load_var _304
+    load_const null
     load_const 100
     cmp_op >
     pop_jump_if_false L136
@@ -2967,12 +2967,10 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
     load_var _304
     is_type int
     pop_jump_if_false L137
-    load_var _304
-    store_var val
 
   L137:
     load_var result
-    load_var val
+    load_const null
     bin_op +
     store_var result
 

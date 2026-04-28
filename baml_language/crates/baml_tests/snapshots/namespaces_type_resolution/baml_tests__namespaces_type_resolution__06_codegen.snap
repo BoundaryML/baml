@@ -206,17 +206,15 @@ function user.auth.AuthMakeToken(v: string) -> void {
 
 function user.auth.AuthMatchesLlmStatus(s: llm.Status) -> string {
     load_var s
-    discriminant
-    load_const Status.Ready
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    discriminant
-    load_const Status.Generating
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L1
     jump L2
 
@@ -237,17 +235,15 @@ function user.auth.AuthMatchesLlmStatus(s: llm.Status) -> string {
 
 function user.auth.AuthMatchesRootStatus(s: Status) -> string {
     load_var s
-    load_const user.Status.Ok
-    alloc_variant user.Status
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const user.Status.Failed
-    alloc_variant user.Status
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L1
     jump L2
 
@@ -430,17 +426,15 @@ function user.llm.LlmIdentity(cfg: Config) -> Config {
 
 function user.llm.LlmMatchesRootStatus(s: Status) -> string {
     load_var s
-    load_const user.Status.Ok
-    alloc_variant user.Status
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const user.Status.Failed
-    alloc_variant user.Status
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L1
     jump L2
 
@@ -649,17 +643,15 @@ function user.llm.openai.OpenAIIdentity(c: void) -> void {
 
 function user.llm.openai.OpenAIMatchesAuthRole(r: auth.Role) -> string {
     load_var r
-    discriminant
-    load_const Role.Admin
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var r
-    discriminant
-    load_const Role.User
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L1
     jump L2
 
@@ -680,17 +672,15 @@ function user.llm.openai.OpenAIMatchesAuthRole(r: auth.Role) -> string {
 
 function user.llm.openai.OpenAIMatchesLlmStatus(s: llm.Status) -> string {
     load_var s
-    discriminant
-    load_const Status.Ready
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    discriminant
-    load_const Status.Generating
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L1
     jump L2
 
@@ -711,17 +701,15 @@ function user.llm.openai.OpenAIMatchesLlmStatus(s: llm.Status) -> string {
 
 function user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
     load_var s
-    load_const user.Status.Ok
-    alloc_variant user.Status
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const user.Status.Failed
-    alloc_variant user.Status
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L1
     jump L2
 

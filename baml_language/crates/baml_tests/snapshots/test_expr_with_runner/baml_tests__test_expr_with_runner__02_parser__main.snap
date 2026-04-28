@@ -25,8 +25,9 @@ SOURCE_FILE
     BLOCK_EXPR
       L_BRACE "{"
       LET_STMT
-        KW_LET "let"
-        WORD "result"
+        PATTERN "let result"
+          KW_LET "let"
+          WORD "result"
         EQUALS "="
         STRING_LITERAL "hello"
           QUOTE """

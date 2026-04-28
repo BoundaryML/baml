@@ -558,10 +558,6 @@ function user.ExhaustiveNullableEnum(s: Status?) -> string {
     jump L3
 
   L2:
-    load_var s
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L6
     load_const "no status"
     jump L6
 
@@ -744,6 +740,10 @@ function user.ExhaustiveWithNamedCatchAll(x: int) -> int {
 
   L0:
     load_var x
+    pop 1
+    load_const false
+    pop_jump_if_false L2
+    load_const null
     load_const 1
     bin_op +
     jump L2

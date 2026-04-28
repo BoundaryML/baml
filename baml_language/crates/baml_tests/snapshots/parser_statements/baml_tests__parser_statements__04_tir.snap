@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 28190
 ---
 === TIR2 ===
 function user.simple_assign() -> int throws never {
@@ -254,9 +253,9 @@ function user.ConditionalLogic(age: int) -> string throws never {
 function user.let_statements() -> int throws never {
   { : never
     let x = 1 : 1 -> int
-    let y = 2 : 2
-    let z = [1, 2, 3] : int[]
-    let point = Point { x: 1, y: 2 } : user.Point
+    let y: int = 2 : 2
+    let z: int[] = [1, 2, 3] : int[]
+    let point: Point = Point { x: 1, y: 2 } : user.Point
     return point.x + point.y : int
   }
 }

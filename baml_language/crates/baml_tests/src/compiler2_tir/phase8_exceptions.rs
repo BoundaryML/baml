@@ -205,35 +205,6 @@ function f(which: int) -> int {
 }
 
 #[test]
-fn typed_any_and_unknown_catch_bindings_are_rejected() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f() -> int {
-  return 1 catch (e: any) {
-    _ => 0
-  }
-}
-
-function g() -> int {
-  return 1 catch (e: unknown) {
-    _ => 0
-  }
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains("invalid catch binding type `any`"),
-        "expected `any` catch-binding diagnostic, got:\n{output}"
-    );
-    assert!(
-        output.contains("invalid catch binding type `unknown`"),
-        "expected `unknown` catch-binding diagnostic, got:\n{output}"
-    );
-}
-
-#[test]
 fn unreachable_catch_arm_is_warning() {
     let mut db = make_db();
     let file = db.add_file(

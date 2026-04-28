@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 37588
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: unresolved name: my_runner

@@ -7,7 +7,7 @@ function user.AlwaysThrowsStatus(n: int) -> user.Status  [expr] {
   {  } match (n) { 0 => throw "http_error", _ => throw 404 }
 }
 function user.CatchAllStatusVariants(n: int) -> string  [expr] {
-  {  } ThrowsAllStatusVariants(n) catch (e) { user.Status.HttpError => "http!" } catch (e) { user.Status.IndexError => "index!" } catch (e) { user.Status.AuthError => "auth!" } catch (e) { user.Status.SomeOtherError => "other!" }
+  {  } ThrowsAllStatusVariants(n) catch (e) { Status.HttpError => "http!" } catch (e) { Status.IndexError => "index!" } catch (e) { Status.AuthError => "auth!" } catch (e) { Status.SomeOtherError => "other!" }
 }
 function user.CatchAlwaysThrows(n: int) -> string  [expr] {
   {  } WrapperAlwaysThrows(n) catch (e) { _: string => "http!" } catch (e2) { _: int => "index!" }

@@ -104,7 +104,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia in guard arm (line comments) =====
     match (x) {
         // 1 arm leading
-        n // 2 name trailing
+        let n // 2 name trailing
         : // 3 colon trailing
         // 4 type leading
         int // 5 type trailing
@@ -125,7 +125,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia in guard arm (block comments) =====
     match (x) {
         /* 1 arm leading */
-        n /* 2 name trailing */
+        let n /* 2 name trailing */
         : /* 3 colon trailing */
         /* 4 type leading */
         int /* 5 type trailing */
@@ -167,12 +167,12 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Binding pattern (named catch-all) =====
     match (x) {
         0 => "zero",
-        n => "nonzero"
+        let n => "nonzero"
     }
 
     // ===== Typed binding pattern =====
     match (x) {
-        n: int => "an integer"
+        let n: int => "an integer"
     }
 
     // ===== Enum variant patterns =====
@@ -204,13 +204,13 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     // ===== Typed match on union =====
     match (r) {
-        s: MatchSuccess => s.data,
-        f: MatchFailure => f.reason
+        let s: MatchSuccess => s.data,
+        let f: MatchFailure => f.reason
     }
 
     // ===== Union typed pattern =====
     match (r) {
-        x: MatchSuccess | MatchFailure => "something"
+        let x: MatchSuccess | MatchFailure => "something"
     }
 
     // ===== Deeply nested union patterns =====
@@ -221,14 +221,14 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     // ===== Guard expressions =====
     match (x) {
-        n: int if n > 0 => "positive",
-        n: int if n < 0 => "negative",
+        let n: int if n > 0 => "positive",
+        let n: int if n < 0 => "negative",
         _ => "zero"
     }
 
     // ===== Guard with long condition exceeding limit =====
     match (x) {
-        n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 && n != 99 => "acceptable small positive number that passes all the filters",
+        let n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 && n != 99 => "acceptable small positive number that passes all the filters",
         _ => "other"
     }
 
@@ -262,7 +262,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia on wrapping arm (line comments) =====
     match (x) {
         // 1 arm leading
-        n // 2 name trailing
+        let n // 2 name trailing
         : // 3 colon trailing
         // 4 type leading
         int // 5 type trailing
@@ -281,7 +281,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia on wrapping arm (block comments) =====
     match (x) {
         /* 1 arm leading */
-        n /* 2 name trailing */
+        let n /* 2 name trailing */
         : /* 3 colon trailing */
         /* 4 type leading */
         int /* 5 type trailing */
@@ -341,11 +341,11 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
             false => "zero-false"
         },
         1 => match (r) {
-            s: MatchSuccess => match (b) {
+            let s: MatchSuccess => match (b) {
                 true => s.data,
                 false => "one-success-false"
             },
-            f: MatchFailure => f.reason
+            let f: MatchFailure => f.reason
         },
         _ => "other"
     }

@@ -44,8 +44,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "cmd"
+          PATTERN "let cmd"
+            KW_LET "let"
+            WORD "cmd"
           EQUALS "="
           STRING_LITERAL "ls -la"
             QUOTE """
@@ -79,8 +80,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "result1"
+          PATTERN "let result1"
+            KW_LET "let"
+            WORD "result1"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.sys.shell"
@@ -98,8 +100,9 @@ SOURCE_FILE
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "result2"
+          PATTERN "let result2"
+            KW_LET "let"
+            WORD "result2"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.sys.shell"

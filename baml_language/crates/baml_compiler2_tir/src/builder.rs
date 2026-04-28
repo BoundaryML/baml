@@ -2439,14 +2439,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
 
             let clause_pat = &body.patterns[clause.binding];
-            if let Some(ty) = &clause_pat.narrow {
-                if let Some(banned) = crate::throw_inference::is_banned_catch_binding_type(ty) {
-                    self.context.report_simple(
-                        TirTypeError::InvalidCatchBindingType {
-                            type_name: banned.to_string(),
-                        },
-                        base_expr_id,
-                    );
+            if let Some(chain_id) = clause_pat.chain {
+                if let PatternKind::Type(ty) = &body.patterns[chain_id].kind {
+                    if let Some(banned) = crate::throw_inference::is_banned_catch_binding_type(ty) {
+                        self.context.report_simple(
+                            TirTypeError::InvalidCatchBindingType {
+                                type_name: banned.to_string(),
+                            },
+                            base_expr_id,
+                        );
+                    }
                 }
             }
             let binding_name = clause_pat.binding_name().cloned();
@@ -2575,6 +2577,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .map(|variant| format!("{enum_name}.{variant}"))
                     .collect(),
             ),
+            Ty::EnumVariant(enum_name, variant, _) => {
+                Some(BTreeSet::from([format!("{enum_name}.{variant}")]))
+            }
             Ty::Optional(inner, _) => {
                 let mut cases = self.required_match_cases(inner)?;
                 cases.insert("null".to_string());
@@ -2602,21 +2607,13 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> TypedPattern {
         let pattern = &body.patterns[pattern_id];
 
-        if let Some(ty) = &pattern.narrow {
-            let resolved = self.resolve_type_expr(ty, at_expr);
-            let covers_all = self.is_subtype(scrutinee_ty, &resolved);
-            let match_cases = if covers_all {
-                self.required_match_cases(scrutinee_ty).unwrap_or_default()
-            } else {
-                self.required_match_cases(&resolved).unwrap_or_default()
-            };
-            return TypedPattern {
-                narrowed_ty: resolved.clone(),
-                test_ty: Some(resolved.clone()),
-                binding: pattern.binding_name().map(|n| (n.clone(), resolved)),
-                match_cases,
-                covers_all,
-            };
+        if let Some(chain_id) = pattern.chain {
+            let mut chain_tp = self.lower_pattern(chain_id, scrutinee_ty, body, at_expr);
+            if let Some(binding_name) = pattern.binding_name() {
+                let ty = chain_tp.narrowed_ty.clone();
+                chain_tp.binding = Some((binding_name.clone(), ty));
+            }
+            return chain_tp;
         }
 
         match &pattern.kind {
@@ -2657,46 +2654,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                         match_cases: self.required_match_cases(scrutinee_ty).unwrap_or_default(),
                         covers_all: true,
                     }
-                }
-            }
-
-            PatternKind::Literal(lit) => TypedPattern {
-                narrowed_ty: Ty::Literal(lit.clone(), Freshness::Regular, TyAttr::default()),
-                test_ty: None,
-                binding: None,
-                match_cases: BTreeSet::from([Self::literal_case_name(lit)]),
-                covers_all: false,
-            },
-
-            PatternKind::Null => TypedPattern {
-                narrowed_ty: Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-                test_ty: None,
-                binding: None,
-                match_cases: BTreeSet::from(["null".to_string()]),
-                covers_all: false,
-            },
-
-            PatternKind::EnumVariant { enum_name, variant } => {
-                let enum_name = enum_name.clone();
-                let variant = variant.clone();
-                let scrutinee_enum = match scrutinee_ty {
-                    Ty::Enum(qn, _) if Self::enum_name_matches(&enum_name, qn) => Some(qn),
-                    _ => None,
-                };
-                let narrowed_ty = if let Some(qn) = scrutinee_enum {
-                    Ty::EnumVariant(qn.clone(), variant.clone(), TyAttr::default())
-                } else {
-                    self.resolve_enum_variant(&enum_name, &variant, at_expr)
-                };
-                let qualified_enum = scrutinee_enum
-                    .map(std::string::ToString::to_string)
-                    .unwrap_or_else(|| Self::enum_name_path(&enum_name));
-                TypedPattern {
-                    test_ty: Some(narrowed_ty.clone()),
-                    match_cases: BTreeSet::from([format!("{qualified_enum}.{variant}")]),
-                    narrowed_ty,
-                    binding: None,
-                    covers_all: false,
                 }
             }
 
@@ -2769,27 +2726,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     covers_all,
                 }
             }
-        }
-    }
-
-    fn resolve_enum_variant(&mut self, enum_name: &[Name], variant: &Name, at_expr: ExprId) -> Ty {
-        let lookup_name = Name::new(Self::enum_name_path(enum_name));
-        if let Some(def) = self
-            .package_items
-            .lookup_type(&self.ns_context, &lookup_name)
-        {
-            if matches!(def, Definition::Enum(_)) {
-                return Ty::EnumVariant(
-                    crate::lower_type_expr::qualify_def(self.context.db(), def, &lookup_name),
-                    variant.clone(),
-                    TyAttr::default(),
-                );
-            }
-        }
-        self.context
-            .report_simple(TirTypeError::UnresolvedName { name: lookup_name }, at_expr);
-        Ty::Unknown {
-            attr: TyAttr::default(),
         }
     }
 
@@ -2878,36 +2814,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .package_items
                 .lookup_type(&self.ns_context, name)
                 .is_some()
-    }
-
-    /// Join an enum path (e.g. `[root, Status]`) into a dotted display string.
-    fn enum_name_path(segs: &[Name]) -> String {
-        segs.iter().map(Name::as_str).collect::<Vec<_>>().join(".")
-    }
-
-    /// Check if a pattern's `enum_name` path (e.g. `[Status]`, `[root, Status]`,
-    /// or `[root, llm, Status]`) refers to the same enum as a `QualifiedTypeName`.
-    fn enum_name_matches(enum_name: &[Name], qtn: &crate::ty::QualifiedTypeName) -> bool {
-        // Bare match: single-segment path equal to the enum name.
-        if enum_name.len() == 1 && qtn.name() == &enum_name[0] {
-            return true;
-        }
-        if enum_name.is_empty() {
-            return false;
-        }
-        let (name, path) = enum_name.split_last().unwrap();
-        // Strip leading `root` if present.
-        let ns_parts: &[Name] = if path.first().map(Name::as_str) == Some("root") {
-            &path[1..]
-        } else {
-            path
-        };
-        name == qtn.name()
-            && ns_parts.len() == qtn.namespace().len()
-            && ns_parts
-                .iter()
-                .zip(qtn.namespace().iter())
-                .all(|(a, b)| a == b)
     }
 
     fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<Ty> {

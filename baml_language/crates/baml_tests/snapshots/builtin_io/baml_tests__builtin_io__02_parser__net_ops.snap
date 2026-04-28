@@ -16,8 +16,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "sock"
+          PATTERN "let sock"
+            KW_LET "let"
+            WORD "sock"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.net.connect"
@@ -96,8 +97,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "s1"
+          PATTERN "let s1"
+            KW_LET "let"
+            WORD "s1"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.net.connect"
@@ -117,8 +119,9 @@ SOURCE_FILE
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "s2"
+          PATTERN "let s2"
+            KW_LET "let"
+            WORD "s2"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.net.connect"
@@ -138,8 +141,9 @@ SOURCE_FILE
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "data1"
+          PATTERN "let data1"
+            KW_LET "let"
+            WORD "data1"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "s1.read"
@@ -151,8 +155,9 @@ SOURCE_FILE
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "data2"
+          PATTERN "let data2"
+            KW_LET "let"
+            WORD "data2"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "s2.read"
@@ -181,8 +186,9 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "sock"
+          PATTERN "let sock"
+            KW_LET "let"
+            WORD "sock"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.net.connect"
@@ -204,8 +210,9 @@ SOURCE_FILE
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "data"
+          PATTERN "let data"
+            KW_LET "let"
+            WORD "data"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "sock.read"

@@ -622,12 +622,6 @@ fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBo
             name,
             inner: _inner,
         } => name.to_string(),
-        PatternKind::Literal(lit) => lit.to_string(),
-        PatternKind::Null => "null".into(),
-        PatternKind::EnumVariant { enum_name, variant } => {
-            let path: Vec<_> = enum_name.iter().map(|s| s.as_str()).collect();
-            format!("{}.{variant}", path.join("."))
-        }
         PatternKind::Or(pats) => pats
             .iter()
             .map(|p| pat_desc(*p, body))
@@ -648,8 +642,8 @@ fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBo
             format!("{} {{ {} }}", class, field_strs.join(", "))
         }
     };
-    if let Some(narrow) = &pat.narrow {
-        format!("{base}: {}", hir2_type_expr_to_string(narrow))
+    if let Some(chain_id) = pat.chain {
+        format!("{base}: {}", pat_desc(chain_id, body))
     } else {
         base
     }
@@ -1937,12 +1931,6 @@ impl CompilerRunner {
                     name,
                     inner: _inner,
                 } => name.to_string(),
-                PatternKind::Literal(lit) => lit.to_string(),
-                PatternKind::Null => "null".into(),
-                PatternKind::EnumVariant { enum_name, variant } => {
-                    let path: Vec<_> = enum_name.iter().map(|s| s.as_str()).collect();
-                    format!("{}.{variant}", path.join("."))
-                }
                 PatternKind::Or(pats) => pats
                     .iter()
                     .map(|p| pat_desc(*p, body))
@@ -1963,8 +1951,8 @@ impl CompilerRunner {
                     format!("{} {{ {} }}", class, field_strs.join(", "))
                 }
             };
-            if let Some(narrow) = &pat.narrow {
-                format!("{base}: {}", hir2_type_expr_to_string(narrow))
+            if let Some(chain_id) = pat.chain {
+                format!("{base}: {}", pat_desc(chain_id, body))
             } else {
                 base
             }

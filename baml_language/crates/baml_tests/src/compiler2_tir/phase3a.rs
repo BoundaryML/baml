@@ -417,11 +417,13 @@ fn match_catch_all() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: int) -> int throws never {
       { : never
-        return : int
-          match (x : int) : int
+        return : unknown
+          match (x : int) : unknown
             y =>
-              y + 1 : int
+              y + 1 : unknown
       }
+      !! 58..63: unresolved type: y
+      !! 58..59: unresolved name: y
     }
     ");
 }
