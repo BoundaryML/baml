@@ -10,7 +10,8 @@ call (the stub client uses `api_key "sk-test"`).
 import asyncio
 import json
 
-from baml_sdk import (
+from baml_sdk.baml.http import Request
+from baml_sdk.lorem import (
     Address,
     ExtractResume__build_request,
     ExtractResume__build_request_async,
@@ -18,7 +19,6 @@ from baml_sdk import (
     Resume,
     Sentiment,
 )
-from baml_sdk.baml.http import Request
 
 before = Resume(
     name="Ada Lovelace",

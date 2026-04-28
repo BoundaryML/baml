@@ -51,18 +51,12 @@ Each `assert` in `app/app.py` pins one row of these two matrices.
 
 ## What's deliberately *not* exercised
 
-- **User namespace organization (`ns_lorem/`).** Earlier the demo
-  scoped types under `ns_lorem/`. Two issues forced the flatten:
-  (a) `sys_ops`'s `IoClassLlmClient::get_constructor` builds the
-  resolve-function key as `format!("{}$new", client.name)` and only
-  falls back to `user.{name}$new` — so `client<llm> StubClient` inside
-  `ns_lorem/functions.baml` registers as `user.lorem.StubClient$new`
-  but the runtime only looks up `StubClient$new` /
-  `user.StubClient$new` and bails;
-  (b) cross-namespace class refs in field types (e.g.
-  `contact root.ipsum.PhoneNumber`) emit Python `ipsum.PhoneNumber`
-  without the matching `from baml_sdk.ipsum import …`. Both filed as
-  follow-ups; the demo keeps everything at root namespace.
+- **Cross-namespace class references.** Cross-namespace refs in field
+  types (e.g. `contact root.ipsum.PhoneNumber`) emit Python
+  `ipsum.PhoneNumber` without the matching `from baml_sdk.ipsum
+  import …`, leaving the generated module with an undefined name.
+  Filed as a follow-up; demo keeps `PhoneNumber` in the same `lorem`
+  namespace.
 - **Pure free-function bindings.** `baml_project::build_symbol_pool`
   filters non-LLM free functions out of the codegen pool
   (`client_codegen.rs:350-356`). The demo therefore exposes its
@@ -82,8 +76,8 @@ Each `assert` in `app/app.py` pins one row of these two matrices.
 
 ## Bridge / engine fixes landed alongside the demo
 
-Standing the demo up surfaced two pre-existing bugs that blocked the
-class round-trip end-to-end:
+Standing the demo up surfaced three pre-existing bugs that blocked the
+class round-trip and the LLM modular-API path end-to-end:
 
 1. **Inbound FQN prefix.** `bridge_python`'s
    `_subpath_to_baml_fqn` still emitted the BEP-030 spec prefix
@@ -101,6 +95,18 @@ class round-trip end-to-end:
    the FFI encoder when the class was returned. Switched to
    `lower_type_expr_in_ns(..., &pkg_info.namespace_path, ...)`,
    matching the existing fix on the function-signature path.
+3. **Sys-op LLM lookups ignored namespace.** In
+   `crates/sys_ops/src/lib.rs`, both
+   `IoClassLlmClient::get_constructor` (looking up `<client>$new`) and
+   `lookup_llm_function` (resolving the prompt template / return type)
+   only tried the bare key plus a `user.<name>` fallback. A
+   `client<llm>` declared inside `ns_lorem/functions.baml` registers
+   as `user.lorem.StubClient$new`, and the LLM function as
+   `user.lorem.ExtractResume`, neither of which the lookup tried.
+   Added a final suffix-scan over `.<name>$new` / `.<name>` so a
+   uniquely named entry inside any user namespace resolves;
+   ambiguous matches surface as a hard error rather than silently
+   picking one.
 
 ## Layout
 
@@ -109,8 +115,9 @@ bridge_python_e2e/
 ├── run.sh                   # build + generate + maturin develop + run
 ├── baml_src/
 │   ├── generators.baml      # output_type "python/pydantic", output_dir "../app"
-│   ├── types.baml           # Address, Sentiment, PhoneNumber, Resume{transform}
-│   └── functions.baml       # client<llm> StubClient + ExtractResume LLM fn
+│   └── ns_lorem/
+│       ├── types.baml       # Address, Sentiment, PhoneNumber, Resume{transform}
+│       └── functions.baml   # client<llm> StubClient + ExtractResume LLM fn
 └── app/
     ├── pyproject.toml       # depends on baml (path ../../../crates/bridge_python)
     ├── app.py               # the user-shaped script
