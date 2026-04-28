@@ -72,6 +72,15 @@ def _derive_baml_fqn(cls: type) -> str:
 def _subpath_to_baml_fqn(subpath: str) -> str:
     """Reverse the §1 routing table, recursing on the `stream_types.*`
     prefix to handle nested stream companions.
+
+    Phase 12a collapsed the BEP-030 `root.*` spec convention into the
+    engine's `user.*` package convention; everything downstream (engine
+    `resolved_class_names`, `lookup_function`, outbound `_resolve_type`)
+    now expects `user.*` end-to-end, so emit it directly here. The
+    project-boundary coercion in `bex_project::bex::coerce_arg_to_declared_type`
+    only rewrites the top-level arg's class name; nested classes,
+    enums, and dict/list element types must arrive with the engine FQN
+    already on them or the engine panics on lookup.
     """
     if subpath.startswith("stream_types."):
         inner = _subpath_to_baml_fqn(subpath[len("stream_types."):])
@@ -80,7 +89,7 @@ def _subpath_to_baml_fqn(subpath: str) -> str:
         return subpath[len("vendor."):]
     if subpath.startswith("baml."):
         return subpath
-    return f"root.{subpath}"
+    return f"user.{subpath}"
 
 
 def _safe_sdk_root() -> str:

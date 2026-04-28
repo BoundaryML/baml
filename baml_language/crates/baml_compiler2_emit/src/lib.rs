@@ -300,10 +300,20 @@ pub fn generate_project_bytecode_with_opt(
                     .as_ref()
                     .map(|te| {
                         let mut diags = Vec::new();
-                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                        // Use `lower_type_expr_in_ns` so unqualified field types
+                        // (e.g. `addresses Address[]` inside a `lorem.Resume`
+                        // declared under `ns_lorem/`) resolve against the
+                        // defining file's namespace. Plain `lower_type_expr`
+                        // passes `&[]` as ns context, leaving sibling-namespace
+                        // class refs unresolved → `Ty::Unknown` → `Ty::Void`,
+                        // which trips the FFI encoder when the class is later
+                        // returned. Mirrors the same fix in
+                        // `compute_function_metadata_from_item_tree` below.
+                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                             db,
                             &te.expr,
                             pkg_items,
+                            &pkg_info.namespace_path,
                             &[],
                             &mut diags,
                         );
