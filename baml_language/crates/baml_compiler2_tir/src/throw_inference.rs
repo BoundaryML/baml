@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, TypeExpr};
+use baml_compiler2_ast::{Expr, ExprBody, Literal, TypeExpr};
 use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems, package_dependencies},
@@ -460,11 +460,8 @@ fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
     for (_, expr) in body.exprs.iter() {
         if let Expr::Catch { clauses, .. } = expr {
             for clause in clauses {
-                match &body.patterns[clause.binding] {
-                    Pattern::Binding(name) | Pattern::TypedBinding { name, .. } => {
-                        names.insert(name.as_str());
-                    }
-                    _ => {}
+                if let Some(name) = body.patterns[clause.binding].binding_name() {
+                    names.insert(name.as_str());
                 }
             }
         }

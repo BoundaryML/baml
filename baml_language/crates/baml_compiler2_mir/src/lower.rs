@@ -328,7 +328,7 @@ fn resolution_to_item_ref(
 use baml_compiler2_ast::{
     AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, Expr as AstExpr,
     ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, PatId as AstPatId,
-    Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, UnaryOp as AstUnaryOp,
+    PatternKind as AstPatternKind, Stmt as AstStmt, StmtId as AstStmtId, UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
@@ -393,7 +393,7 @@ struct LoweringContext<'db> {
     // class_fields and class_type_tags are keyed by TypeName (name + module_path)
     // so that e.g. baml.http.Request and a user-defined Request are distinct.
     // enum_variants is keyed by Name (short name only) because match-arm lowering
-    // (AstPattern::EnumVariant) only provides the enum's short Name, not a full
+    // (PatternKind::EnumVariant) only provides the enum's short Name, not a full
     // TypeName with module_path. Upgrading to TypeName would require resolving the
     // enum's package at each match site.
     class_fields: IndexMap<TypeName, IndexMap<String, usize>>,
@@ -3472,11 +3472,10 @@ impl LoweringContext<'_> {
             } => {
                 // Extract binding name from pattern
                 let pat = self.body.patterns[pattern].clone();
-                let name = match &pat {
-                    AstPattern::Binding(n) => n.clone(),
-                    AstPattern::TypedBinding { name, .. } => name.clone(),
-                    _ => Name::new("_"),
-                };
+                let name = pat
+                    .binding_name()
+                    .cloned()
+                    .unwrap_or_else(|| Name::new("_"));
 
                 let local_ty = self.pat_ty(pattern);
                 let local =
@@ -3656,40 +3655,25 @@ impl LoweringContext<'_> {
                 // before the assignment so each iteration's closures capture a
                 // distinct cell.
                 {
-                    let pat = self.body.patterns[binding].clone();
-                    match pat {
-                        AstPattern::Binding(name) if name.as_str() != "_" => {
-                            let ty = self
-                                .pat_types
+                    let pat = &self.body.patterns[binding];
+                    if let Some(name) = pat.binding_name() {
+                        let ty = if let Some(narrow) = &pat.narrow {
+                            self.resolve_type_annotation(narrow)
+                        } else {
+                            self.pat_types
                                 .get(&(self.current_scope, binding))
                                 .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
-                                .unwrap_or_else(|| self.builder.local_ty(elem_local));
-                            let local =
-                                self.builder
-                                    .declare_local(Some(name.clone()), ty, None, false);
-                            self.builder.fresh_cell(local);
-                            self.builder.assign(
-                                Place::local(local),
-                                Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
-                            );
-                            self.locals.insert(name, local);
-                        }
-                        AstPattern::TypedBinding { name, ty, .. } if name.as_str() != "_" => {
-                            let resolved_ty = self.resolve_type_annotation(&ty);
-                            let local = self.builder.declare_local(
-                                Some(name.clone()),
-                                resolved_ty,
-                                None,
-                                false,
-                            );
-                            self.builder.fresh_cell(local);
-                            self.builder.assign(
-                                Place::local(local),
-                                Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
-                            );
-                            self.locals.insert(name, local);
-                        }
-                        _ => {}
+                                .unwrap_or_else(|| self.builder.local_ty(elem_local))
+                        };
+                        let local = self
+                            .builder
+                            .declare_local(Some(name.clone()), ty, None, false);
+                        self.builder.fresh_cell(local);
+                        self.builder.assign(
+                            Place::local(local),
+                            Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
+                        );
+                        self.locals.insert(name.clone(), local);
                     }
                 }
 
@@ -4230,32 +4214,31 @@ impl LoweringContext<'_> {
                 return false;
             }
             let pat = &self.body.patterns[pattern];
-            match pat {
-                AstPattern::Literal(Literal::Int(val)) => {
-                    // Integer arm: verify kind consistency
+            match &pat.kind {
+                AstPatternKind::Literal(Literal::Int(val)) => {
                     match &switch_kind {
                         None => switch_kind = Some(SwitchKind::Integer),
                         Some(SwitchKind::Integer) => {}
-                        Some(_) => return false, // Mixed int + enum
+                        Some(_) => return false,
                     }
                     let v = *val;
                     if seen_values.insert(v) {
                         int_arms.push((v, i));
                     }
                 }
-                AstPattern::EnumVariant { enum_name, variant } => {
-                    // Enum variant arm: verify enum consistency
-                    let enum_name = enum_name.clone();
+                AstPatternKind::EnumVariant { enum_name, variant } => {
+                    let short_name = enum_name.last().unwrap().clone();
                     let variant = variant.clone();
                     match &switch_kind {
-                        None => switch_kind = Some(SwitchKind::EnumDiscriminant(enum_name.clone())),
-                        Some(SwitchKind::EnumDiscriminant(n)) if *n == enum_name => {}
-                        _ => return false, // Different enum or mixed with int
+                        None => {
+                            switch_kind = Some(SwitchKind::EnumDiscriminant(short_name.clone()));
+                        }
+                        Some(SwitchKind::EnumDiscriminant(n)) if *n == short_name => {}
+                        _ => return false,
                     }
-                    // Look up variant index
                     let idx = self
                         .enum_variants
-                        .get(&enum_name)
+                        .get(&short_name)
                         .and_then(|m| m.get(variant.as_str()))
                         .copied();
                     let Some(idx) = idx else { return false };
@@ -4264,13 +4247,11 @@ impl LoweringContext<'_> {
                         int_arms.push((disc, i));
                     }
                 }
-                AstPattern::Union(sub_pats) => {
-                    // Union pattern: each sub-pattern maps to the same arm body.
-                    // All sub-patterns must be the same kind (int, enum variant, or type tag).
+                AstPatternKind::Or(sub_pats) => {
                     for sub_pat_id in sub_pats {
                         let sub_pat = &self.body.patterns[*sub_pat_id];
-                        match sub_pat {
-                            AstPattern::Literal(Literal::Int(val)) => {
+                        match &sub_pat.kind {
+                            AstPatternKind::Literal(Literal::Int(val)) => {
                                 match &switch_kind {
                                     None => switch_kind = Some(SwitchKind::Integer),
                                     Some(SwitchKind::Integer) => {}
@@ -4281,20 +4262,20 @@ impl LoweringContext<'_> {
                                     int_arms.push((v, i));
                                 }
                             }
-                            AstPattern::EnumVariant { enum_name, variant } => {
-                                let enum_name = enum_name.clone();
+                            AstPatternKind::EnumVariant { enum_name, variant } => {
+                                let short_name = enum_name.last().unwrap().clone();
                                 let variant = variant.clone();
                                 match &switch_kind {
                                     None => {
                                         switch_kind =
-                                            Some(SwitchKind::EnumDiscriminant(enum_name.clone()));
+                                            Some(SwitchKind::EnumDiscriminant(short_name.clone()));
                                     }
-                                    Some(SwitchKind::EnumDiscriminant(n)) if *n == enum_name => {}
+                                    Some(SwitchKind::EnumDiscriminant(n)) if *n == short_name => {}
                                     _ => return false,
                                 }
                                 let idx = self
                                     .enum_variants
-                                    .get(&enum_name)
+                                    .get(&short_name)
                                     .and_then(|m| m.get(variant.as_str()))
                                     .copied();
                                 let Some(idx) = idx else { return false };
@@ -4303,8 +4284,7 @@ impl LoweringContext<'_> {
                                     int_arms.push((disc, i));
                                 }
                             }
-                            AstPattern::Binding(_) | AstPattern::TypedBinding { .. } => {
-                                // Type-pattern sub-arm: look up type tag via TIR.
+                            AstPatternKind::Bind { .. } | AstPatternKind::Type(_) => {
                                 match &switch_kind {
                                     None => switch_kind = Some(SwitchKind::TypeTag),
                                     Some(SwitchKind::TypeTag) => {}
@@ -4325,12 +4305,11 @@ impl LoweringContext<'_> {
                         }
                     }
                 }
-                AstPattern::TypedBinding { .. } => {
-                    // Type-annotated binding → classify as TypeTag
+                AstPatternKind::Type(_) => {
                     match &switch_kind {
                         None => switch_kind = Some(SwitchKind::TypeTag),
                         Some(SwitchKind::TypeTag) => {}
-                        Some(_) => return false, // Mixed TypeTag + Integer/Enum
+                        Some(_) => return false,
                     }
                     match self.classify_pattern_type_tag(pattern) {
                         Some(tags) => {
@@ -4343,8 +4322,24 @@ impl LoweringContext<'_> {
                         None => return false,
                     }
                 }
-                AstPattern::Binding(name) if name.as_str() != "_" => {
-                    // Bare name resolved to a type by TIR (e.g. `DivisionByZero =>`)
+                _ if pat.narrow.is_some() => {
+                    match &switch_kind {
+                        None => switch_kind = Some(SwitchKind::TypeTag),
+                        Some(SwitchKind::TypeTag) => {}
+                        Some(_) => return false,
+                    }
+                    match self.classify_pattern_type_tag(pattern) {
+                        Some(tags) => {
+                            for tag in tags {
+                                if seen_values.insert(tag) {
+                                    int_arms.push((tag, i));
+                                }
+                            }
+                        }
+                        None => return false,
+                    }
+                }
+                AstPatternKind::Bind { .. } => {
                     if self.pat_types.contains_key(&(self.current_scope, pattern)) {
                         match &switch_kind {
                             None => switch_kind = Some(SwitchKind::TypeTag),
@@ -4362,21 +4357,21 @@ impl LoweringContext<'_> {
                             None => return false,
                         }
                     } else {
-                        // Regular binding without type info — wildcard-like
                         if i != arms.len() - 1 {
                             return false;
                         }
                         otherwise_idx = Some(i);
                     }
                 }
-                AstPattern::Binding(_) => {
-                    // Wildcard `_` — must be last arm
+                AstPatternKind::Wildcard => {
                     if i != arms.len() - 1 {
                         return false;
                     }
                     otherwise_idx = Some(i);
                 }
-                AstPattern::Null | AstPattern::Literal(_) => return false,
+                AstPatternKind::Null
+                | AstPatternKind::Literal(_)
+                | AstPatternKind::Class { .. } => return false,
             }
         }
 
@@ -4709,33 +4704,37 @@ impl LoweringContext<'_> {
         failure: BlockId,
     ) {
         let pat = self.body.patterns[pat_id].clone();
-        match pat {
-            AstPattern::Binding(ref name) => {
-                // Bare type sugar: the TIR resolved this binding name to a
-                // type (e.g. `DivisionByZero =>` resolves to a class).
-                // Generate an IsType test instead of an unconditional match.
-                if name.as_str() != "_" {
-                    if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned()
-                    {
-                        let resolved = self.resolved_aliases.convert(&tir_ty);
-                        self.emit_is_type_branch(scrutinee, resolved, success, failure);
-                        return;
-                    }
-                }
-                // Regular binding — always matches
+        if let Some(ty) = &pat.narrow {
+            let annotation_ty = self
+                .pat_types
+                .get(&(self.current_scope, pat_id))
+                .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
+                .unwrap_or_else(|| self.resolve_type_annotation(ty));
+            self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
+            return;
+        }
+        match &pat.kind {
+            AstPatternKind::Wildcard => {
                 self.builder.goto(success);
             }
-            AstPattern::TypedBinding { .. } => {
-                // TIR always resolves TypedBinding patterns via record_pattern_test_types.
+            AstPatternKind::Bind { .. } => {
+                if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned() {
+                    let resolved = self.resolved_aliases.convert(&tir_ty);
+                    self.emit_is_type_branch(scrutinee, resolved, success, failure);
+                } else {
+                    self.builder.goto(success);
+                }
+            }
+            AstPatternKind::Type(ty_expr) => {
                 let annotation_ty = self
                     .pat_types
                     .get(&(self.current_scope, pat_id))
                     .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
-                    .expect("TIR must resolve TypedBinding patterns");
+                    .unwrap_or_else(|| self.resolve_type_annotation(ty_expr));
                 self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
             }
-            AstPattern::Literal(lit) => {
-                let constant = Self::lower_literal(&lit);
+            AstPatternKind::Literal(lit) => {
+                let constant = Self::lower_literal(lit);
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,
                     left: Operand::Copy(Place::Local(scrutinee)),
@@ -4748,7 +4747,7 @@ impl LoweringContext<'_> {
                 self.builder
                     .branch(Operand::Copy(Place::Local(test_local)), success, failure);
             }
-            AstPattern::Null => {
+            AstPatternKind::Null => {
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,
                     left: Operand::Copy(Place::Local(scrutinee)),
@@ -4761,9 +4760,11 @@ impl LoweringContext<'_> {
                 self.builder
                     .branch(Operand::Copy(Place::Local(test_local)), success, failure);
             }
-            AstPattern::EnumVariant { enum_name, variant } => {
-                // Resolve the enum's package from TIR type info when available,
-                // otherwise fall back to the current file's package.
+            AstPatternKind::EnumVariant {
+                enum_name: _,
+                variant,
+            } => {
+                let variant = variant.clone();
                 let enum_ref = if let Some(Tir2Ty::EnumVariant(qtn, _, _)) =
                     self.pat_types.get(&(self.current_scope, pat_id))
                 {
@@ -4773,12 +4774,8 @@ impl LoweringContext<'_> {
                         name: qtn.name().clone(),
                     }
                 } else {
-                    let pkg_info = file_package(self.db, self.file);
-                    ItemRef::EnumType {
-                        package: pkg_info.package.clone(),
-                        namespace: pkg_info.namespace_path,
-                        name: enum_name,
-                    }
+                    self.builder.goto(failure);
+                    return;
                 };
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,
@@ -4792,7 +4789,7 @@ impl LoweringContext<'_> {
                 self.builder
                     .branch(Operand::Copy(Place::Local(test_local)), success, failure);
             }
-            AstPattern::Union(sub_pats) => {
+            AstPatternKind::Or(sub_pats) => {
                 if sub_pats.is_empty() {
                     self.builder.goto(failure);
                     return;
@@ -4810,43 +4807,39 @@ impl LoweringContext<'_> {
                     }
                 }
             }
+            AstPatternKind::Class { .. } => {
+                // Class destructure: the IsType test narrows to the class.
+                // Field bindings are handled in bind_pattern.
+                if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned() {
+                    let resolved = self.resolved_aliases.convert(&tir_ty);
+                    self.emit_is_type_branch(scrutinee, resolved, success, failure);
+                } else {
+                    self.builder.goto(success);
+                }
+            }
         }
     }
 
     fn bind_pattern(&mut self, scrutinee: Local, pat_id: AstPatId) {
-        let pat = self.body.patterns[pat_id].clone();
-        match pat {
-            AstPattern::Binding(name) if name.as_str() != "_" => {
-                // Prefer TIR-inferred type; fall back to the scrutinee's declared type
-                // rather than Null, so catch bindings get the error's type (unknown) not null.
-                let ty = self
-                    .pat_types
+        let pat = &self.body.patterns[pat_id];
+        if let Some(name) = pat.binding_name() {
+            let name = name.clone();
+            let ty = if let Some(narrow) = &pat.narrow {
+                self.resolve_type_annotation(narrow)
+            } else {
+                self.pat_types
                     .get(&(self.current_scope, pat_id))
                     .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
-                    .unwrap_or_else(|| self.builder.local_ty(scrutinee));
-                let local = self
-                    .builder
-                    .declare_local(Some(name.clone()), ty, None, false);
-                self.builder.assign(
-                    Place::local(local),
-                    Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
-                );
-                self.locals.insert(name, local);
-            }
-            AstPattern::TypedBinding { name, ty, .. } if name.as_str() != "_" => {
-                let resolved_ty = self.resolve_type_annotation(&ty);
-                let local =
-                    self.builder
-                        .declare_local(Some(name.clone()), resolved_ty, None, false);
-                self.builder.assign(
-                    Place::local(local),
-                    Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
-                );
-                self.locals.insert(name, local);
-            }
-            _ => {
-                // Wildcard `_`, Literal, Null, EnumVariant, Union — no binding needed
-            }
+                    .unwrap_or_else(|| self.builder.local_ty(scrutinee))
+            };
+            let local = self
+                .builder
+                .declare_local(Some(name.clone()), ty, None, false);
+            self.builder.assign(
+                Place::local(local),
+                Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
+            );
+            self.locals.insert(name, local);
         }
     }
 }
@@ -4864,24 +4857,23 @@ impl LoweringContext<'_> {
     /// wildcards, enum variants, and types without tag mappings.
     fn classify_pattern_type_tag(&self, pat_id: AstPatId) -> Option<Vec<i64>> {
         let pat = &self.body.patterns[pat_id];
-        match pat {
-            AstPattern::Binding(name) if name.as_str() == "_" => {
-                // Pure wildcard — handled separately, not a type test
-                None
-            }
-            AstPattern::Binding(_) => {
-                // Named binding resolved by TIR to a type
+        if pat.narrow.is_some() {
+            let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
+            let resolved = self.resolved_aliases.convert(tir_ty);
+            return self.ty_to_type_tags(&resolved);
+        }
+        match &pat.kind {
+            AstPatternKind::Wildcard => None,
+            AstPatternKind::Bind { .. } => {
                 let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
                 let resolved = self.resolved_aliases.convert(tir_ty);
                 self.ty_to_type_tags(&resolved)
             }
-            AstPattern::TypedBinding { .. } => {
-                // Type-annotated binding — always resolved by TIR
+            AstPatternKind::Type(_) => {
                 let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
                 let resolved = self.resolved_aliases.convert(tir_ty);
                 self.ty_to_type_tags(&resolved)
             }
-            // Literal, Null, EnumVariant, Union — not type-tag eligible
             _ => None,
         }
     }
@@ -4949,10 +4941,7 @@ impl LoweringContext<'_> {
         // shows up in bytecode instead of an anonymous `_N` temp.
         let binding_name = clauses
             .first()
-            .and_then(|c| match &self.body.patterns[c.binding] {
-                AstPattern::Binding(name) if name.as_str() != "_" => Some(name.clone()),
-                _ => None,
-            });
+            .and_then(|c| self.body.patterns[c.binding].binding_name().cloned());
         let error_local = self.builder.declare_local(
             binding_name.clone(),
             Ty::BuiltinUnknown {
@@ -4968,10 +4957,7 @@ impl LoweringContext<'_> {
         // Declare stack trace local if the catch clause has a second binding.
         let stack_trace_local = clauses.first().and_then(|c| {
             c.stack_trace_binding.map(|st_pat| {
-                let st_name = match &self.body.patterns[st_pat] {
-                    AstPattern::Binding(name) if name.as_str() != "_" => Some(name.clone()),
-                    _ => None,
-                };
+                let st_name = self.body.patterns[st_pat].binding_name().cloned();
                 let local = self.builder.declare_local(
                     st_name.clone(),
                     Ty::BuiltinUnknown {
@@ -4992,10 +4978,9 @@ impl LoweringContext<'_> {
         for clause in clauses {
             for &arm_id in &clause.arms {
                 let arm = self.body.catch_arms[arm_id].clone();
-                let is_wildcard = matches!(
-                    self.body.patterns[arm.pattern],
-                    AstPattern::Binding(ref name) if name.as_str() == "_"
-                );
+                let pat = &self.body.patterns[arm.pattern];
+                let is_wildcard =
+                    matches!(pat.kind, AstPatternKind::Wildcard) && pat.narrow.is_none();
                 arms.push((arm, is_wildcard));
             }
         }

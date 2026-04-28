@@ -41,12 +41,3 @@ function CallerGood(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0097
 // ────╯
-// Warning: unreachable arm
-//     ╭─[ throw_throws_caller_variant_contract.baml:20:29 ]
-//     │
-//  20 │     Errors.NotFoundError => "notfound"
-//     │                             ─────┬────  
-//     │                                  ╰────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯

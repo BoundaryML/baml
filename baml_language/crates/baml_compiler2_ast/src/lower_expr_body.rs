@@ -1045,10 +1045,9 @@ impl LoweringContext {
         }
 
         let arm = MatchArm {
-            pattern: pattern
-                .unwrap_or_else(|| self.patterns.alloc(Pattern::Binding(Name::new("_")))),
+            pattern: pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::wildcard(), arm_span)),
             guard,
-            body: body.unwrap_or_else(|| self.exprs.alloc(Expr::Missing)),
+            body: body.unwrap_or_else(|| self.alloc_expr(Expr::Missing, arm_span)),
         };
 
         self.alloc_match_arm(arm, arm_span)
@@ -1088,14 +1087,14 @@ impl LoweringContext {
                                 // After `name:`, we expect the type to be a node child (TYPE_EXPR),
                                 // but sometimes parser emits it as a WORD token directly.
                                 // Treat it as a named type.
-                                let pat = Pattern::TypedBinding {
+                                let pat = Pattern::typed_binding(
                                     name,
-                                    ty: crate::ast::TypeExpr::Path {
+                                    crate::ast::TypeExpr::Path {
                                         segments: vec![Name::new(&text)],
                                         generic_args: vec![],
                                         attrs: vec![],
                                     },
-                                };
+                                );
                                 elements.push(self.alloc_pattern(pat, token.text_range()));
                                 continue;
                             }
@@ -1106,7 +1105,7 @@ impl LoweringContext {
                                         elements.push(self.finalize_pattern_element(el));
                                     }
                                     elements.push(self.alloc_pattern(
-                                        Pattern::Literal(Literal::Bool(true)),
+                                        Pattern::literal(Literal::Bool(true)),
                                         token.text_range(),
                                     ));
                                 }
@@ -1115,7 +1114,7 @@ impl LoweringContext {
                                         elements.push(self.finalize_pattern_element(el));
                                     }
                                     elements.push(self.alloc_pattern(
-                                        Pattern::Literal(Literal::Bool(false)),
+                                        Pattern::literal(Literal::Bool(false)),
                                         token.text_range(),
                                     ));
                                 }
@@ -1124,7 +1123,7 @@ impl LoweringContext {
                                         elements.push(self.finalize_pattern_element(el));
                                     }
                                     elements.push(
-                                        self.alloc_pattern(Pattern::Null, token.text_range()),
+                                        self.alloc_pattern(Pattern::null(), token.text_range()),
                                     );
                                 }
                                 _ => {
@@ -1171,7 +1170,7 @@ impl LoweringContext {
                             let value = if pending_negation { -value } else { value };
                             pending_negation = false;
                             elements.push(self.alloc_pattern(
-                                Pattern::Literal(Literal::Int(value)),
+                                Pattern::literal(Literal::Int(value)),
                                 token.text_range(),
                             ));
                         }
@@ -1187,7 +1186,7 @@ impl LoweringContext {
                             };
                             pending_negation = false;
                             elements.push(self.alloc_pattern(
-                                Pattern::Literal(Literal::Float(text)),
+                                Pattern::literal(Literal::Float(text)),
                                 token.text_range(),
                             ));
                         }
@@ -1206,7 +1205,7 @@ impl LoweringContext {
                                 {
                                     let ty =
                                         crate::lower_type_expr::lower_type_expr_node(&type_expr);
-                                    let pat = Pattern::TypedBinding { name, ty };
+                                    let pat = Pattern::typed_binding(name, ty);
                                     elements.push(self.alloc_pattern(pat, child.text_range()));
                                 }
                             }
@@ -1218,7 +1217,7 @@ impl LoweringContext {
                             let text = child.text().to_string();
                             let content = strip_string_delimiters(&text);
                             elements.push(self.alloc_pattern(
-                                Pattern::Literal(Literal::String(content)),
+                                Pattern::literal(Literal::String(content)),
                                 child.text_range(),
                             ));
                         }
@@ -1227,8 +1226,10 @@ impl LoweringContext {
                                 elements.push(self.finalize_pattern_element(el));
                             }
                             let nested_pat = self.lower_match_pattern(&child);
-                            match &self.patterns[nested_pat] {
-                                Pattern::Union(sub) => elements.extend(sub.iter().copied()),
+                            match &self.patterns[nested_pat].kind {
+                                crate::ast::PatternKind::Or(sub) => {
+                                    elements.extend(sub.iter().copied());
+                                }
                                 _ => elements.push(nested_pat),
                             }
                         }
@@ -1244,12 +1245,11 @@ impl LoweringContext {
         let _ = pending_negation; // consumed above
 
         match elements.len() {
-            0 => self.alloc_pattern(Pattern::Binding(Name::new("_")), TextRange::default()),
+            0 => self.alloc_pattern(Pattern::wildcard(), TextRange::default()),
             1 => elements.remove(0),
             _ => {
                 let range = TextRange::default();
-                let union_pat = Pattern::Union(elements);
-                self.alloc_pattern(union_pat, range)
+                self.alloc_pattern(Pattern::or(elements), range)
             }
         }
     }
@@ -1259,25 +1259,14 @@ impl LoweringContext {
             PatternElement::Segments(segs, start) => {
                 let range = TextRange::new(start, start);
                 match segs.len() {
-                    0 => self.alloc_pattern(Pattern::Binding(Name::new("_")), range),
+                    0 => self.alloc_pattern(Pattern::wildcard(), range),
                     1 => self
-                        .alloc_pattern(Pattern::Binding(segs.into_iter().next().unwrap()), range),
+                        .alloc_pattern(Pattern::binding(segs.into_iter().next().unwrap()), range),
                     _ => {
-                        // Multi-segment: last is variant, rest form enum name
-                        let iter = segs.into_iter();
-                        let mut collected = Vec::new();
-                        for s in iter {
-                            collected.push(s);
-                        }
+                        // Multi-segment: last is variant, rest form the enum name path.
+                        let mut collected: Vec<Name> = segs.into_iter().collect();
                         let variant = collected.pop().unwrap();
-                        let enum_name = Name::new(
-                            collected
-                                .iter()
-                                .map(Name::as_str)
-                                .collect::<Vec<_>>()
-                                .join("."),
-                        );
-                        self.alloc_pattern(Pattern::EnumVariant { enum_name, variant }, range)
+                        self.alloc_pattern(Pattern::enum_variant(collected, variant), range)
                     }
                 }
             }
@@ -1285,12 +1274,12 @@ impl LoweringContext {
                 // Incomplete dotted path (ended with a dot) — treat as binding
                 let range = TextRange::new(start, start);
                 let name = segs.last().cloned().unwrap_or(Name::new("_"));
-                self.alloc_pattern(Pattern::Binding(name), range)
+                self.alloc_pattern(Pattern::binding(name), range)
             }
             PatternElement::TypedBindingStart(name, start) => {
                 // `name:` with no type — treat as simple binding
                 let range = TextRange::new(start, start);
-                self.alloc_pattern(Pattern::Binding(name), range)
+                self.alloc_pattern(Pattern::binding(name), range)
             }
         }
     }
@@ -1351,7 +1340,7 @@ impl LoweringContext {
                             })
                             .unwrap_or_else(|| Name::new("_"));
                         stack_trace_binding =
-                            Some(self.alloc_pattern(Pattern::Binding(name), child.text_range()));
+                            Some(self.alloc_pattern(Pattern::binding(name), child.text_range()));
                     }
                     SyntaxKind::CATCH_ARM => {
                         let arm = self.lower_catch_arm(&child);
@@ -1364,9 +1353,8 @@ impl LoweringContext {
 
         CatchClause {
             kind,
-            binding: binding.unwrap_or_else(|| {
-                self.alloc_pattern(Pattern::Binding(Name::new("_")), node.text_range())
-            }),
+            binding: binding
+                .unwrap_or_else(|| self.alloc_pattern(Pattern::wildcard(), node.text_range())),
             stack_trace_binding,
             arms,
         }
@@ -1433,7 +1421,7 @@ impl LoweringContext {
 
         let pattern = match pattern {
             Some(pattern) => pattern,
-            None => self.alloc_pattern(Pattern::Binding(Name::new("_")), node.text_range()),
+            None => self.alloc_pattern(Pattern::wildcard(), node.text_range()),
         };
         let body = match body {
             Some(body) => body,
@@ -2420,7 +2408,7 @@ impl LoweringContext {
                                     .unwrap_or(Name::new("_"));
                                 let range = child.text_range();
                                 pattern_id =
-                                    Some(self.alloc_pattern(Pattern::Binding(name), range));
+                                    Some(self.alloc_pattern(Pattern::binding(name), range));
                             }
                         }
                     } else if initializer.is_none() {
@@ -2443,7 +2431,7 @@ impl LoweringContext {
                             let range = token.text_range();
                             pattern_id =
                                 Some(self.alloc_pattern(
-                                    Pattern::Binding(Name::new(token.text())),
+                                    Pattern::binding(Name::new(token.text())),
                                     range,
                                 ));
                         }
@@ -2454,9 +2442,8 @@ impl LoweringContext {
             }
         }
 
-        let pattern = pattern_id.unwrap_or_else(|| {
-            self.alloc_pattern(Pattern::Binding(Name::new("_")), TextRange::default())
-        });
+        let pattern = pattern_id
+            .unwrap_or_else(|| self.alloc_pattern(Pattern::wildcard(), TextRange::default()));
 
         let origin = if is_watched {
             // TODO: Handle watched let statements
@@ -2647,7 +2634,7 @@ impl LoweringContext {
 
         let collection = iter_expr_opt.unwrap_or_else(|| self.alloc_expr(Expr::Missing, range));
         let body = body_opt.unwrap_or_else(|| self.alloc_expr(Expr::Missing, range));
-        let binding = self.alloc_pattern(Pattern::Binding(iter_name), range);
+        let binding = self.alloc_pattern(Pattern::binding(iter_name), range);
 
         self.alloc_stmt(
             Stmt::For {
