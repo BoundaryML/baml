@@ -634,13 +634,28 @@ impl io::IoClassGlobGlob for NativeSysOps {
                 let entry = match entry {
                     Ok(e) => e,
                     Err(e) => {
-                        if throw_on_broken
-                            && e.io_error()
-                                .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound)
-                        {
-                            return Err(OpErrorKind::Other(format!("Walk error: {e}")));
+                        // Classify: broken symlink vs. other I/O error. A broken
+                        // symlink surfaces as NotFound on a path whose lstat
+                        // identifies it as a symlink. The `throw_on_broken`
+                        // option is scoped to broken symlinks only — every
+                        // other walk error (permission denied, transient I/O,
+                        // symlink loop) is a real failure and propagates
+                        // regardless. Silently swallowing real errors hides
+                        // problems users want to know about.
+                        let is_broken_symlink = e
+                            .io_error()
+                            .is_some_and(|io_err| io_err.kind() == std::io::ErrorKind::NotFound)
+                            && e.path()
+                                .and_then(|p| std::fs::symlink_metadata(p).ok())
+                                .is_some_and(|m| m.file_type().is_symlink());
+
+                        if is_broken_symlink {
+                            if throw_on_broken {
+                                return Err(OpErrorKind::Other(format!("Broken symlink: {e}")));
+                            }
+                            continue;
                         }
-                        continue;
+                        return Err(OpErrorKind::Other(format!("Walk error: {e}")));
                     }
                 };
 
