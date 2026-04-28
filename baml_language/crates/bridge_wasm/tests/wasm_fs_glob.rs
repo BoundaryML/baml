@@ -184,10 +184,6 @@ fn mock_vfs(files: &[(&str, &str)], dirs: &[&str]) -> JsValue {
                 if (glob === '/workspace/baml_src/**/*.baml') {
                     return path.startsWith('/workspace/baml_src/') && path.endsWith('.baml');
                 }
-                if (glob === '/workspace/data/**/*.txt') {
-                    return path.startsWith('/workspace/data/') && path.endsWith('.txt');
-                }
-                if (glob === '**/*.txt') return path.endsWith('.txt');
                 return true;
             }
             var result = [];
@@ -274,6 +270,18 @@ async fn call_no_args(runtime: &BamlWasmRuntime, call_id: u32, name: &str) -> Ba
     BamlOutboundValue::decode(bytes.as_slice()).unwrap()
 }
 
+async fn call_no_args_result(
+    runtime: &BamlWasmRuntime,
+    call_id: u32,
+    name: &str,
+) -> Result<BamlOutboundValue, JsValue> {
+    let args = CallFunctionArgs::default().encode_to_vec();
+    let bytes = runtime
+        .call_function(call_id, "/workspace/baml_src".to_string(), name, &args)
+        .await?;
+    Ok(BamlOutboundValue::decode(bytes.as_slice()).unwrap())
+}
+
 fn bool_value(value: BamlOutboundValue) -> bool {
     match value.value {
         Some(OutboundValue::BoolValue(v)) => v,
@@ -294,151 +302,14 @@ fn string_list(value: BamlOutboundValue) -> Vec<String> {
         .collect()
 }
 
-// ---------------------------------------------------------------------------
-// Mock VFS unit tests — verify the JS mock itself behaves correctly.
-// ---------------------------------------------------------------------------
-
-#[wasm_bindgen_test]
-fn mock_vfs_read_dir_returns_entries() {
-    let vfs = mock_vfs(
-        &[("/root/a.txt", "aaa"), ("/root/b.txt", "bbb")],
-        &["/root", "/root/subdir"],
-    );
-
-    let read_dir_fn: js_sys::Function = js_sys::Reflect::get(&vfs, &JsValue::from_str("readDir"))
-        .unwrap()
-        .unchecked_into();
-    let result = read_dir_fn
-        .call1(&vfs, &JsValue::from_str("/root"))
-        .unwrap();
-    let arr: js_sys::Array = result.unchecked_into();
-
-    let mut names: Vec<String> = arr.iter().map(|v| v.as_string().unwrap()).collect();
-    names.sort();
-    assert_eq!(names, vec!["a.txt", "b.txt", "subdir"]);
-}
-
-#[wasm_bindgen_test]
-fn mock_vfs_exists_works() {
-    let vfs = mock_vfs(&[("/root/file.txt", "content")], &["/root"]);
-
-    let exists_fn: js_sys::Function = js_sys::Reflect::get(&vfs, &JsValue::from_str("exists"))
-        .unwrap()
-        .unchecked_into();
-
-    assert_eq!(
-        exists_fn
-            .call1(&vfs, &JsValue::from_str("/root/file.txt"))
-            .unwrap(),
-        JsValue::TRUE
-    );
-    assert_eq!(
-        exists_fn
-            .call1(&vfs, &JsValue::from_str("/root/nope.txt"))
-            .unwrap(),
-        JsValue::FALSE
-    );
-    assert_eq!(
-        exists_fn.call1(&vfs, &JsValue::from_str("/root")).unwrap(),
-        JsValue::TRUE
-    );
-}
-
-#[wasm_bindgen_test]
-fn mock_vfs_read_write_roundtrip() {
-    let vfs = mock_vfs(&[], &[]);
-
-    let write_fn: js_sys::Function = js_sys::Reflect::get(&vfs, &JsValue::from_str("writeFile"))
-        .unwrap()
-        .unchecked_into();
-    let data = js_sys::Uint8Array::from("hello world".as_bytes());
-    let args = js_sys::Array::new();
-    args.push(&JsValue::from_str("/test.txt"));
-    args.push(&data);
-    write_fn.apply(&vfs, &args).unwrap();
-
-    let read_fn: js_sys::Function = js_sys::Reflect::get(&vfs, &JsValue::from_str("readFile"))
-        .unwrap()
-        .unchecked_into();
-    let result = read_fn
-        .call1(&vfs, &JsValue::from_str("/test.txt"))
-        .unwrap();
-    let arr: js_sys::Uint8Array = result.unchecked_into();
-    assert_eq!(String::from_utf8(arr.to_vec()).unwrap(), "hello world");
-}
-
-#[wasm_bindgen_test]
-fn mock_vfs_metadata_file_vs_dir() {
-    let vfs = mock_vfs(&[("/root/file.txt", "hi")], &["/root"]);
-
-    let meta_fn: js_sys::Function = js_sys::Reflect::get(&vfs, &JsValue::from_str("metadata"))
-        .unwrap()
-        .unchecked_into();
-
-    let result = meta_fn
-        .call1(&vfs, &JsValue::from_str("/root/file.txt"))
-        .unwrap();
-    assert_eq!(
-        js_sys::Reflect::get(&result, &JsValue::from_str("fileType")).unwrap(),
-        JsValue::from_str("file")
-    );
-    assert_eq!(
-        js_sys::Reflect::get(&result, &JsValue::from_str("len")).unwrap(),
-        JsValue::from_f64(2.0)
-    );
-
-    let result = meta_fn.call1(&vfs, &JsValue::from_str("/root")).unwrap();
-    assert_eq!(
-        js_sys::Reflect::get(&result, &JsValue::from_str("fileType")).unwrap(),
-        JsValue::from_str("directory")
-    );
-}
-
-#[wasm_bindgen_test]
-fn mock_vfs_create_dir_then_exists() {
-    let vfs = mock_vfs(&[], &[]);
-
-    let create_fn: js_sys::Function = js_sys::Reflect::get(&vfs, &JsValue::from_str("createDir"))
-        .unwrap()
-        .unchecked_into();
-    create_fn
-        .call1(&vfs, &JsValue::from_str("/newdir"))
-        .unwrap();
-
-    let exists_fn: js_sys::Function = js_sys::Reflect::get(&vfs, &JsValue::from_str("exists"))
-        .unwrap()
-        .unchecked_into();
-    assert_eq!(
-        exists_fn
-            .call1(&vfs, &JsValue::from_str("/newdir"))
-            .unwrap(),
-        JsValue::TRUE
-    );
-}
-
-#[wasm_bindgen_test]
-fn mock_vfs_read_many_returns_pairs() {
-    let vfs = mock_vfs(&[("/root/a.txt", "aaa"), ("/root/b.rs", "bbb")], &[]);
-
-    let read_many_fn: js_sys::Function = js_sys::Reflect::get(&vfs, &JsValue::from_str("readMany"))
-        .unwrap()
-        .unchecked_into();
-    let result = read_many_fn
-        .call1(&vfs, &JsValue::from_str("**/*.txt"))
-        .unwrap();
-    let arr: js_sys::Array = result.unchecked_into();
-
-    assert!(arr.length() >= 1);
-    let first_pair: js_sys::Array = arr.get(0).unchecked_into();
-    assert!(first_pair.get(0).as_string().is_some());
-    let data: js_sys::Uint8Array = first_pair.get(1).unchecked_into();
-    assert!(data.length() > 0);
-}
-
 const FS_GLOB_SOURCE: &str = r#"
 function MkdirRecursive() -> bool {
   baml.fs.mkdir("/generated/nested", baml.fs.MkdirOptions { recursive: true });
   baml.fs.exists("/generated/nested")
+}
+
+function MkdirRecursiveExistingFile() -> null {
+  baml.fs.mkdir("/workspace/data/a.txt", baml.fs.MkdirOptions { recursive: true })
 }
 
 function ReadDirNames() -> string[] {
@@ -452,8 +323,23 @@ function GlobMatchesTxt() -> bool {
 }
 
 function GlobScanTxt() -> string[] {
-  let glob = baml.glob.new("/workspace/data/**/*.txt");
-  glob.scan("/")
+  let glob = baml.glob.new("**/*.txt");
+  glob.scan("/workspace/data")
+}
+
+function GlobScanAbsoluteOptions() -> string[] {
+  let glob = baml.glob.new("**/*.txt");
+  glob.scan(baml.glob.ScanOptions { cwd: "/workspace/data", absolute: true })
+}
+
+function GlobScanDotOptions() -> string[] {
+  let glob = baml.glob.new("**/*.txt");
+  glob.scan(baml.glob.ScanOptions { cwd: "/workspace/data", dot: true })
+}
+
+function GlobScanDirectoryOptions() -> string[] {
+  let glob = baml.glob.new("**/*.txt");
+  glob.scan(baml.glob.ScanOptions { cwd: "/workspace/data", only_files: false })
 }
 "#;
 
@@ -462,6 +348,7 @@ fn runtime_files() -> Vec<(&'static str, &'static str)> {
         ("/workspace/baml_src/main.baml", FS_GLOB_SOURCE),
         ("/workspace/data/a.txt", "aaa"),
         ("/workspace/data/b.rs", "bbb"),
+        ("/workspace/data/.hidden.txt", "hidden"),
         ("/workspace/data/sub/c.txt", "ccc"),
     ]
 }
@@ -471,6 +358,7 @@ fn runtime_dirs() -> Vec<&'static str> {
         "/workspace",
         "/workspace/baml_src",
         "/workspace/data",
+        "/workspace/data/dir.txt",
         "/workspace/data/sub",
     ]
 }
@@ -486,15 +374,28 @@ async fn wasm_runtime_mkdir_recursive_then_exists() {
 }
 
 #[wasm_bindgen_test]
+async fn wasm_runtime_mkdir_recursive_errors_on_existing_file() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args_result(&runtime, 2, "MkdirRecursiveExistingFile").await;
+    assert!(result.is_err());
+}
+
+#[wasm_bindgen_test]
 async fn wasm_runtime_read_dir_returns_entries() {
     let files = runtime_files();
     let dirs = runtime_dirs();
     let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
 
-    let result = call_no_args(&runtime, 2, "ReadDirNames").await;
+    let result = call_no_args(&runtime, 3, "ReadDirNames").await;
     let mut names = string_list(result);
     names.sort();
-    assert_eq!(names, vec!["a.txt", "b.rs", "sub"]);
+    assert_eq!(
+        names,
+        vec![".hidden.txt", "a.txt", "b.rs", "dir.txt", "sub"]
+    );
 }
 
 #[wasm_bindgen_test]
@@ -503,7 +404,7 @@ async fn wasm_runtime_glob_matches_paths() {
     let dirs = runtime_dirs();
     let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
 
-    let result = call_no_args(&runtime, 3, "GlobMatchesTxt").await;
+    let result = call_no_args(&runtime, 4, "GlobMatchesTxt").await;
     assert!(bool_value(result));
 }
 
@@ -513,11 +414,47 @@ async fn wasm_runtime_glob_scan_filters_paths() {
     let dirs = runtime_dirs();
     let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
 
-    let result = call_no_args(&runtime, 4, "GlobScanTxt").await;
+    let result = call_no_args(&runtime, 5, "GlobScanTxt").await;
+    let mut paths = string_list(result);
+    paths.sort();
+    assert_eq!(paths, vec!["a.txt", "sub/c.txt"]);
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_glob_scan_absolute_options() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 6, "GlobScanAbsoluteOptions").await;
     let mut paths = string_list(result);
     paths.sort();
     assert_eq!(
         paths,
         vec!["/workspace/data/a.txt", "/workspace/data/sub/c.txt"]
     );
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_glob_scan_dot_options() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 7, "GlobScanDotOptions").await;
+    let mut paths = string_list(result);
+    paths.sort();
+    assert_eq!(paths, vec![".hidden.txt", "a.txt", "sub/c.txt"]);
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_glob_scan_directory_options() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 8, "GlobScanDirectoryOptions").await;
+    let mut paths = string_list(result);
+    paths.sort();
+    assert_eq!(paths, vec!["a.txt", "dir.txt", "sub/c.txt"]);
 }

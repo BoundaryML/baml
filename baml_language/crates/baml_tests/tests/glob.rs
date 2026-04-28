@@ -17,6 +17,23 @@ fn tmp(files: indexmap::IndexMap<&str, &str>) -> (tempfile::TempDir, String) {
     (tmp, root)
 }
 
+fn string_items(value: &BexExternalValue) -> Vec<String> {
+    let BexExternalValue::Array { items, .. } = value else {
+        panic!("expected array, got: {value:?}");
+    };
+    let mut strings: Vec<String> = items
+        .iter()
+        .map(|v| {
+            let BexExternalValue::String(s) = v else {
+                panic!("expected string, got: {v:?}");
+            };
+            s.clone()
+        })
+        .collect();
+    strings.sort();
+    strings
+}
+
 // ============================================================================
 // baml.glob.new + Glob.matches
 // ============================================================================
@@ -112,20 +129,10 @@ async fn glob_scan_finds_txt_files() {
         "#
     ));
 
-    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
-        panic!("expected array, got: {:?}", output.result);
-    };
-    let mut names: Vec<String> = items
-        .iter()
-        .map(|v| {
-            let BexExternalValue::String(s) = v else {
-                panic!("expected string")
-            };
-            s.clone()
-        })
-        .collect();
-    names.sort();
-    assert_eq!(names, vec!["a.txt", "b.txt"]);
+    assert_eq!(
+        string_items(output.result.as_ref().unwrap()),
+        vec!["a.txt", "b.txt"]
+    );
 }
 
 #[tokio::test]
@@ -185,21 +192,67 @@ async fn glob_scan_only_files_by_default() {
 }
 
 #[tokio::test]
-async fn glob_new_returns_glob_instance() {
-    // Creating a Glob should succeed and return a valid Glob instance
-    let output = baml_test!(
-        r#"
-            function main() -> bool {
-                let g = baml.glob.new("*.txt");
-                g.matches("test.txt")
-            }
-        "#
-    );
+async fn glob_scan_options_include_dot_absolute_and_directories() {
+    let (_tmp, root) = tmp(indexmap! {
+        "file.txt" => "content",
+        ".hidden.txt" => "hidden",
+    });
+    std::fs::create_dir(format!("{root}/dir.txt")).unwrap();
 
-    assert!(
-        output.result.is_ok(),
-        "expected ok, got: {:?}",
-        output.result
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string[] {{
+                let g = baml.glob.new("**/*.txt");
+                g.scan(baml.glob.ScanOptions {{ cwd: "{root}", dot: true, absolute: true, only_files: false }})
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        string_items(output.result.as_ref().unwrap()),
+        vec![
+            format!("{root}/.hidden.txt"),
+            format!("{root}/dir.txt"),
+            format!("{root}/file.txt"),
+        ]
     );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn glob_scan_matches_dot_slash_pattern() {
+    let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string[] {{
+                let g = baml.glob.new("./*.txt");
+                g.scan("{root}")
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        string_items(output.result.as_ref().unwrap()),
+        vec!["file.txt"]
+    );
+}
+
+#[tokio::test]
+async fn glob_scan_matches_absolute_pattern() {
+    let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
+    let pattern = format!("{root}/**/*.txt");
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string[] {{
+                let g = baml.glob.new("{pattern}");
+                g.scan(baml.glob.ScanOptions {{ cwd: "{root}", absolute: true }})
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        string_items(output.result.as_ref().unwrap()),
+        vec![format!("{root}/file.txt")]
+    );
 }

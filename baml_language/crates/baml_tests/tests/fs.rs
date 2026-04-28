@@ -989,6 +989,7 @@ async fn fs_read_dir_type_flags() {
     let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
         panic!("expected array, got: {:?}", output.result);
     };
+    assert_eq!(items.len(), 2);
     for item in items {
         let BexExternalValue::Instance { fields, .. } = item else {
             panic!("expected instance");
@@ -1002,18 +1003,56 @@ async fn fs_read_dir_type_flags() {
         let BexExternalValue::Bool(is_file) = &fields["is_file"] else {
             panic!("expected bool is_file");
         };
+        let BexExternalValue::Bool(is_symlink) = &fields["is_symlink"] else {
+            panic!("expected bool is_symlink");
+        };
         match name.as_str() {
             "file.txt" => {
                 assert!(!is_dir, "file.txt should not be a dir");
                 assert!(is_file, "file.txt should be a file");
+                assert!(!is_symlink, "file.txt should not be a symlink");
             }
             "dir" => {
                 assert!(is_dir, "dir should be a dir");
                 assert!(!is_file, "dir should not be a file");
+                assert!(!is_symlink, "dir should not be a symlink");
             }
             _ => panic!("unexpected entry: {name}"),
         }
     }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_read_dir_reports_symlink_flag() {
+    let (_tmp, root) = tmp(indexmap! { "target.txt" => "content" });
+    std::os::unix::fs::symlink(format!("{root}/target.txt"), format!("{root}/link.txt")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}")
+            }}
+        "#
+    ));
+
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array, got: {:?}", output.result);
+    };
+    let link = items
+        .iter()
+        .find_map(|item| {
+            let BexExternalValue::Instance { fields, .. } = item else {
+                return None;
+            };
+            match &fields["name"] {
+                BexExternalValue::String(name) if name == "link.txt" => Some(fields),
+                _ => None,
+            }
+        })
+        .expect("expected link.txt entry");
+
+    assert_eq!(link["is_symlink"], BexExternalValue::Bool(true));
 }
 
 #[tokio::test]

@@ -295,16 +295,17 @@ impl io::IoNamespaceFs for WasmIoFs {
             Ok(arr) => {
                 let mut entries = Vec::new();
                 for v in arr.iter() {
-                    let Some(name) = v.as_string() else { continue };
+                    let Some(name) = v.as_string() else {
+                        return SysOpOutput::err(OpErrorKind::Other(
+                            "readDir entry is not a string".into(),
+                        ));
+                    };
                     // WasmVfs.readDir returns string[] of entry names.
                     // Probe metadata to distinguish files from directories.
                     let full = join_path(&path, &name);
                     let (is_dir, is_file) = match self.vfs().vfs_metadata(&full) {
                         Ok(meta) => (meta.file_type == "directory", meta.file_type == "file"),
-                        Err(e) => {
-                            log::warn!("failed to read metadata for {full}: {e:?}");
-                            (false, false)
-                        }
+                        Err(e) => return SysOpOutput::err(js_err(&e)),
                     };
                     entries.push(owned::fs::DirEntry {
                         name,
@@ -357,7 +358,15 @@ impl io::IoNamespaceFs for WasmIoFs {
         }
 
         match self.vfs().vfs_exists(&path) {
-            Ok(true) => return SysOpOutput::ok(()),
+            Ok(true) => match self.vfs().vfs_metadata(&path) {
+                Ok(meta) if meta.file_type == "directory" => return SysOpOutput::ok(()),
+                Ok(_) => {
+                    return SysOpOutput::err(OpErrorKind::Other(format!(
+                        "Path exists and is not a directory: {path}"
+                    )));
+                }
+                Err(e) => return SysOpOutput::err(js_err(&e)),
+            },
             Ok(false) => {}
             Err(e) => return SysOpOutput::err(js_err(&e)),
         }

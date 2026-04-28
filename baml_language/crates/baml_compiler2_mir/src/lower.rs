@@ -3239,10 +3239,31 @@ impl LoweringContext<'_> {
         };
 
         if spreads.is_empty() {
-            let field_operands: Vec<Operand> = fields
-                .iter()
-                .map(|(_, e)| self.lower_to_operand(*e))
-                .collect();
+            let field_operands: Vec<Operand> = if let Some(field_name_to_idx) = type_name_key
+                .as_ref()
+                .and_then(|tn| self.class_fields.get(tn))
+                .cloned()
+                .or_else(|| {
+                    self.class_fields
+                        .iter()
+                        .find(|(tn, _)| tn.to_string() == class_name || tn.name == class_name)
+                        .map(|(_, fields)| fields.clone())
+                }) {
+                let mut result: Vec<Operand> = (0..field_name_to_idx.len())
+                    .map(|_| Operand::Constant(Constant::Null))
+                    .collect();
+                for (name, expr) in fields {
+                    if let Some(&idx) = field_name_to_idx.get(&name.to_string()) {
+                        result[idx] = self.lower_to_operand(*expr);
+                    }
+                }
+                result
+            } else {
+                fields
+                    .iter()
+                    .map(|(_, e)| self.lower_to_operand(*e))
+                    .collect()
+            };
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {

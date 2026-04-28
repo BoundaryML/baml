@@ -5208,27 +5208,28 @@ class Response {
     }
 
     #[test]
-    fn raw_string_keeps_line_comment_marker_as_text() {
-        let source = r##"
-function Demo() -> string {
-  #"//"#
-}
-"##;
+    fn raw_string_keeps_comment_markers_as_text() {
+        for marker in ["//", "*/"] {
+            let source = format!(
+                r##"
+function Demo() -> string {{
+  #"{marker}"#
+}}
+"##
+            );
 
-        let (_root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-    }
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
 
-    #[test]
-    fn raw_string_keeps_block_comment_end_marker_as_text() {
-        let source = r##"
-function Demo() -> string {
-  #"*/"#
-}
-"##;
-
-        let (_root, errors) = parse_source(source);
-        assert_no_errors(&errors);
+            let raw_string = root
+                .descendants()
+                .find(|n| n.kind() == SyntaxKind::RAW_STRING_LITERAL)
+                .expect("expected raw string literal");
+            assert!(
+                raw_string.text().to_string().contains(marker),
+                "raw string should retain marker {marker:?}: {raw_string:?}"
+            );
+        }
     }
 
     #[test]
