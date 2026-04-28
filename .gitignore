@@ -182,6 +182,11 @@ baml-graph/_site/
 # beps
 _site/
 
+# all-beps: dynamic content is gitignored, only static files are tracked
+beps/all-beps/BEP-*/
+beps/all-beps/NEW-BEP/
+beps/all-beps/Claude.md
+
 # claude
 .claude/
 rpi/
