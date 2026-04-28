@@ -3851,9 +3851,7 @@ impl LoweringContext<'_> {
                             Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
                         );
                         self.locals.insert(name.clone(), local);
-                        if let Some(binding_id) =
-                            self.binding_id_for_statement(stmt_id, binding)
-                        {
+                        if let Some(binding_id) = self.binding_id_for_statement(stmt_id, binding) {
                             self.binding_locals.insert(binding_id, local);
                         }
                     }

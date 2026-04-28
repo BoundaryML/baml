@@ -163,7 +163,11 @@ async fn lexical_scoping_runtime_regressions() {
     assert_lexical_scope_result("rule2_block_outer_mutation_escapes()", 2).await;
     assert_lexical_scope_result("rule2_for_outer_mutation_escapes()", 2).await;
     assert_lexical_scope_result("rule3_block_shadow_then_assign_inner_does_not_escape()", 1).await;
-    assert_lexical_scope_result("rule2_pre_shadow_mutation_escapes_post_shadow_does_not()", 2).await;
+    assert_lexical_scope_result(
+        "rule2_pre_shadow_mutation_escapes_post_shadow_does_not()",
+        2,
+    )
+    .await;
 }
 
 #[tokio::test]

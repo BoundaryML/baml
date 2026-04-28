@@ -326,10 +326,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.restore_scoped_locals_inner(snapshot);
     }
 
-    fn restore_scoped_locals_inner(
-        &mut self,
-        snapshot: ScopedLocalsSnapshot,
-    ) {
+    fn restore_scoped_locals_inner(&mut self, snapshot: ScopedLocalsSnapshot) {
         // Pull the new assignments and declarations introduced since the
         // snapshot. We filter assignments by binding identity below, so the
         // names alone are not enough.
@@ -2579,12 +2576,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
 
             if let Some((bind_name, bind_ty)) = &tp.binding {
-                self.declare_scoped_local(
-                    bind_name.clone(),
-                    pattern_id,
-                    bind_ty.clone(),
-                    None,
-                );
+                self.declare_scoped_local(bind_name.clone(), pattern_id, bind_ty.clone(), None);
             }
 
             if let Some(guard_expr) = arm.guard {
@@ -2672,7 +2664,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             // We snapshot scoped locals before introducing it and restore
             // after the clause's arms finish, so the binding does not leak
             // into the rest of the function.
-            let st_snapshot = clause.stack_trace_binding.is_some()
+            let st_snapshot = clause
+                .stack_trace_binding
+                .is_some()
                 .then(|| self.snapshot_scoped_locals());
             if let Some(st_binding) = clause.stack_trace_binding {
                 let db = self.context.db();
@@ -6118,7 +6112,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             // always should be, but be defensive).
             let found_fsi = index.lambda_scope_for(func_def.span);
             if let Some(fsi) = found_fsi {
-                for (capture_name, _def_site) in &index.scope_bindings[fsi.index() as usize].captures {
+                for (capture_name, _def_site) in
+                    &index.scope_bindings[fsi.index() as usize].captures
+                {
                     if !self.locals.contains_key(capture_name) {
                         self.seed_capture_unknown(capture_name.clone());
                     }
