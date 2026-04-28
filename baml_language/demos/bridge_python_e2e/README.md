@@ -17,8 +17,12 @@ Requires `uv` (https://docs.astral.sh/uv/) and a working Rust toolchain.
 
 ## What it proves
 
-A single `Resume.transform()` call exercises every non-trivial type
-conversion path in `09d-inbound-serialization.md` /
+`app/app.py` exercises two paths end-to-end:
+
+### Type round-trip (`Resume.transform()`)
+
+A single instance method call covers every non-trivial type conversion
+path in `09d-inbound-serialization.md` /
 `09e-outbound-deserialization.md`:
 
 - Pydantic class ↔ `Instance` (inbound encode + outbound decode)
@@ -29,16 +33,36 @@ conversion path in `09d-inbound-serialization.md` /
 - `Enum` ↔ `Variant` (`sentiment`)
 - sync + async fan-out (`transform` and `transform_async`)
 
-Each `assert` in `app/app.py` pins one row of that matrix.
+### Modular LLM API (`ExtractResume__build_request(...)`)
+
+`ExtractResume(text: string) -> Resume` is an LLM-backed function with
+an OpenAI client (`api_key "sk-test"` — offline). The compiler
+auto-synthesizes the `$build_request` companion, codegen exposes it as
+`ExtractResume__build_request`, and we call it to confirm:
+
+- the auto-synthesized companion routes through `define_function`,
+- the returned `baml.http.Request` decodes into the stdlib Pydantic
+  class (cross-namespace outbound `_resolve_type`),
+- the rendered prompt embeds the caller's `text` argument, so
+  `Jinja` templating + `baml.llm.build_request` ran end-to-end,
+- async sibling (`ExtractResume__build_request_async`) round-trips too.
+
+Each `assert` in `app/app.py` pins one row of these two matrices.
 
 ## What's deliberately *not* exercised
 
-- **Cross-namespace references.** Initial sketch had `Resume.contact:
-  root.ipsum.PhoneNumber` (cross-leaf). The codegen emits the type ref
-  but doesn't emit the matching Python `from baml_sdk.ipsum import
-  PhoneNumber`, leaving the generated module with an undefined name.
-  Filed as a follow-up; demo keeps `PhoneNumber` in the same `lorem`
-  namespace.
+- **User namespace organization (`ns_lorem/`).** Earlier the demo
+  scoped types under `ns_lorem/`. Two issues forced the flatten:
+  (a) `sys_ops`'s `IoClassLlmClient::get_constructor` builds the
+  resolve-function key as `format!("{}$new", client.name)` and only
+  falls back to `user.{name}$new` — so `client<llm> StubClient` inside
+  `ns_lorem/functions.baml` registers as `user.lorem.StubClient$new`
+  but the runtime only looks up `StubClient$new` /
+  `user.StubClient$new` and bails;
+  (b) cross-namespace class refs in field types (e.g.
+  `contact root.ipsum.PhoneNumber`) emit Python `ipsum.PhoneNumber`
+  without the matching `from baml_sdk.ipsum import …`. Both filed as
+  follow-ups; the demo keeps everything at root namespace.
 - **Pure free-function bindings.** `baml_project::build_symbol_pool`
   filters non-LLM free functions out of the codegen pool
   (`client_codegen.rs:350-356`). The demo therefore exposes its
@@ -50,8 +74,9 @@ Each `assert` in `app/app.py` pins one row of that matrix.
   doesn't fire for this expression shape. The demo hardcodes the flip
   instead so we cover the enum *round-trip* path without depending on
   the broken comparison. Filed as a follow-up.
-- **LLM round-trips.** The demo runs offline; no `OPENAI_API_KEY` is
-  needed.
+- **Real LLM round-trips.** Stub client + `__build_request` only;
+  nothing actually leaves the process. `ExtractResume(...)` itself
+  would need a real `OPENAI_API_KEY`.
 - **Streaming, handles, unions of mixed scalars/classes.** Out of
   scope for a smoke test.
 
@@ -84,7 +109,8 @@ bridge_python_e2e/
 ├── run.sh                   # build + generate + maturin develop + run
 ├── baml_src/
 │   ├── generators.baml      # output_type "python/pydantic", output_dir "../app"
-│   └── ns_lorem/types.baml  # Address, Sentiment, PhoneNumber, Resume{transform}
+│   ├── types.baml           # Address, Sentiment, PhoneNumber, Resume{transform}
+│   └── functions.baml       # client<llm> StubClient + ExtractResume LLM fn
 └── app/
     ├── pyproject.toml       # depends on baml (path ../../../crates/bridge_python)
     ├── app.py               # the user-shaped script
