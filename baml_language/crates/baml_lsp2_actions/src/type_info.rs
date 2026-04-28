@@ -597,9 +597,9 @@ fn body_stmt_to_pat_id(
 /// Search the use-site's ancestor-scope chain for the binding type of
 /// `pat_id`.
 ///
-/// PatIds are arena-local to a function/lambda body, so iterating *all*
+/// `PatId`s are arena-local to a function/lambda body, so iterating *all*
 /// scopes in the file can surface a wrong-arena hit if two bodies happen to
-/// allocate the same PatId index. Walking ancestors only — Function or
+/// allocate the same `PatId` index. Walking ancestors only — Function or
 /// Lambda scopes that enclose `from_scope` — restricts the lookup to
 /// inferences whose binding maps were populated from the use-site's own
 /// arena. Mirrors the structure already used by

@@ -237,7 +237,7 @@ pub struct TypeInferenceBuilder<'db> {
     /// earlier outer assignments in the same scope visible after the block.
     scoped_local_declarations: Vec<ScopedLocalDeclaration>,
     /// Assignments whose active local type was updated by assignment or
-    /// container establishment. Tracked by binding identity (PatId) so
+    /// container establishment. Tracked by binding identity (`PatId`) so
     /// scope-restore can filter inner-shadow assignments (which must NOT
     /// propagate — rule 3) from outer-binding assignments (which MUST
     /// propagate — rule 2).
@@ -544,9 +544,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Uses `entry().or_insert()` so repeated calls (e.g. from narrowing
     /// save/restore) don't overwrite the original declared type.
     ///
-    /// Function and lambda parameters do not have AST PatIds, so they cannot
-    /// flow through `declare_scoped_local`. Their assignments are tracked
-    /// separately via `ScopedAssignment { pattern: None }`.
+    /// Function and lambda parameters do not have AST `PatId`s, so they
+    /// cannot flow through `declare_scoped_local`. Their assignments are
+    /// tracked separately via `ScopedAssignment { pattern: None }`.
     pub fn add_local(&mut self, name: Name, ty: Ty) {
         self.declared_types
             .entry(name.clone())
