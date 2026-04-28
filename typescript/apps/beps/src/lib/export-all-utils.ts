@@ -98,6 +98,29 @@ function formatBepNumber(num: number): string {
   return `BEP-${String(num).padStart(3, "0")}`;
 }
 
+/**
+ * Generate a URL-safe slug from a title.
+ * Converts to lowercase, replaces spaces with hyphens, removes special chars.
+ */
+function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "") // Remove special characters
+    .replace(/\s+/g, "-") // Replace spaces with hyphens
+    .replace(/-+/g, "-") // Collapse multiple hyphens
+    .replace(/^-|-$/g, "") // Remove leading/trailing hyphens
+    .slice(0, 50); // Limit length
+}
+
+/**
+ * Generate the folder name for a BEP: BEP-<NUMBER>-<slug>
+ */
+function formatBepFolderName(num: number, title: string): string {
+  const bepNum = `BEP-${String(num).padStart(3, "0")}`;
+  const slug = generateSlug(title);
+  return slug ? `${bepNum}-${slug}` : bepNum;
+}
+
 function formatDate(timestamp: number): string {
   return new Date(timestamp).toISOString().split("T")[0];
 }
@@ -196,13 +219,14 @@ BEPs are sorted by maturity - **implemented and accepted BEPs are the best refer
 
     for (const bep of beps) {
       const bepNum = formatBepNumber(bep.number);
+      const bepFolder = formatBepFolderName(bep.number, bep.title);
       const summary = extractSummary(bep.content, 150);
       const pageCount = bep.pages.length;
       const pageInfo = pageCount > 0 ? ` | ${pageCount} pages` : "";
       const issueInfo = bep.openIssueCount > 0 ? ` | ${bep.openIssueCount} open issues` : "";
       const starBadge = bep.isGoodReference ? " ⭐" : "";
 
-      md += `- **[${bepNum}: ${bep.title}](./${bepNum}/README.md)**${starBadge} (v${bep.currentVersion}${pageInfo}${issueInfo})
+      md += `- **[${bepNum}: ${bep.title}](./${bepFolder}/Claude.md)**${starBadge} (v${bep.currentVersion}${pageInfo}${issueInfo})
   ${summary}
   *Shepherds: ${bep.shepherdNames.join(", ") || "None"}*
 
@@ -222,9 +246,10 @@ BEPs are sorted by maturity - **implemented and accepted BEPs are the best refer
   const byNumber = [...data.beps].sort((a, b) => a.number - b.number);
   for (const bep of byNumber) {
     const bepNum = formatBepNumber(bep.number);
+    const bepFolder = formatBepFolderName(bep.number, bep.title);
     const emoji = getStatusEmoji(bep.status);
     const starBadge = bep.isGoodReference ? " ⭐" : "";
-    md += `| [${bepNum}](./${bepNum}/README.md)${starBadge} | ${bep.title} | ${emoji} ${bep.status} | v${bep.currentVersion} | ${bep.shepherdNames.join(", ") || "-"} |\n`;
+    md += `| [${bepNum}](./${bepFolder}/Claude.md)${starBadge} | ${bep.title} | ${emoji} ${bep.status} | v${bep.currentVersion} | ${bep.shepherdNames.join(", ") || "-"} |\n`;
   }
 
   md += `
@@ -247,24 +272,56 @@ When creating a new BEP, consider referencing:
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Individual BEP README.md Generation
+// Individual BEP meta.json Generation
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function generateBepReadme(bep: ExportAllBep): string {
+export interface BepMetadata {
+  id: string;
+  number: number;
+  title: string;
+  status: string;
+  version: number;
+  shepherds: string[];
+  created: string;
+  updated: string;
+  isGoodReference: boolean;
+  openIssueCount: number;
+  pages: Array<{
+    slug: string;
+    title: string;
+    order: number;
+  }>;
+}
+
+export function generateBepMetaJson(bep: ExportAllBep): string {
+  const metadata: BepMetadata = {
+    id: formatBepNumber(bep.number),
+    number: bep.number,
+    title: bep.title,
+    status: bep.status,
+    version: bep.currentVersion,
+    shepherds: bep.shepherdNames,
+    created: formatDate(bep.createdAt),
+    updated: formatDate(bep.updatedAt),
+    isGoodReference: bep.isGoodReference,
+    openIssueCount: bep.openIssueCount,
+    pages: bep.pages.map((p) => ({
+      slug: p.slug,
+      title: p.title,
+      order: p.order,
+    })),
+  };
+  return JSON.stringify(metadata, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Individual BEP Claude.md Generation (main content file)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function generateBepClaudeMd(bep: ExportAllBep): string {
   const bepNum = formatBepNumber(bep.number);
 
-  let md = `---
-id: ${bepNum}
-title: "${bep.title}"
-status: ${bep.status}
-version: ${bep.currentVersion}
-shepherds: [${bep.shepherdNames.join(", ")}]
-created: ${formatDate(bep.createdAt)}
-updated: ${formatDate(bep.updatedAt)}
-isGoodReference: ${bep.isGoodReference}
----
-
-`;
+  let md = "";
 
   // Good reference badge
   if (bep.isGoodReference) {
@@ -307,13 +364,8 @@ isGoodReference: ${bep.isGoodReference}
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function generatePageMd(page: ExportAllPage): string {
-  return `---
-slug: ${page.slug}
-title: "${page.title}"
----
-
-${page.content}
-`;
+  // No frontmatter - metadata is in meta.json
+  return page.content;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -341,8 +393,9 @@ These BEPs are excellent examples of writing style and structure:
 `;
     for (const bep of goodReferenceBeps) {
       const refBepNum = formatBepNumber(bep.number);
+      const refFolder = formatBepFolderName(bep.number, bep.title);
       const summary = extractSummary(bep.content, 120);
-      md += `- **[${refBepNum}: ${bep.title}](../${refBepNum}/README.md)** (${getStatusEmoji(bep.status)} ${bep.status})
+      md += `- **[${refBepNum}: ${bep.title}](../${refFolder}/Claude.md)** (${getStatusEmoji(bep.status)} ${bep.status})
   ${summary}
 
 `;
@@ -352,7 +405,22 @@ These BEPs are excellent examples of writing style and structure:
 `;
   }
 
-  md += `## Writing Style
+  md += `## Directory Structure
+
+Each BEP is exported as a folder with this structure:
+
+\`\`\`
+BEP-001-your-proposal-slug/
+├── meta.json           # Metadata (status, version, shepherds, pages list)
+├── Claude.md           # Main proposal content
+└── pages/              # Additional pages (addenda)
+    ├── background.md
+    └── examples.md
+\`\`\`
+
+---
+
+## Writing Style
 
 Write in the style of a [PEP](https://peps.python.org/) or [TC39 proposal](https://github.com/tc39/proposals).
 
@@ -419,6 +487,32 @@ Response:
 }
 \`\`\`
 
+### Create a BEP with Additional Pages (Addenda)
+
+You can include multiple pages in a single API call:
+
+\`\`\`bash
+curl -X POST "${apiBaseUrl}/api/agent/beps" \\
+  -H "Authorization: Bearer <your-api-token>" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "Your Proposal Title",
+    "content": "# Main Content\\n\\n...",
+    "pages": [
+      {
+        "slug": "background",
+        "title": "Background Research",
+        "content": "# Background\\n\\nDetailed research..."
+      },
+      {
+        "slug": "examples",
+        "title": "Code Examples",
+        "content": "# Examples\\n\\nUsage examples..."
+      }
+    ]
+  }'
+\`\`\`
+
 ### Update an Existing BEP
 
 \`\`\`bash
@@ -433,23 +527,88 @@ curl -X PUT "${apiBaseUrl}/api/agent/beps" \\
   }'
 \`\`\`
 
-### API Fields
+### Update with Additional Pages
 
-**Create (POST):**
+When updating, you can add, update, or remove pages:
+
+\`\`\`bash
+curl -X PUT "${apiBaseUrl}/api/agent/beps" \\
+  -H "Authorization: Bearer <your-api-token>" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "number": ${nextNumber},
+    "content": "# Updated Main Content\\n\\n...",
+    "pages": [
+      {
+        "slug": "background",
+        "title": "Updated Background",
+        "content": "# Background\\n\\nUpdated research..."
+      },
+      {
+        "slug": "new-addendum",
+        "title": "New Addendum",
+        "content": "# New Section\\n\\nNew content..."
+      }
+    ],
+    "editNote": "Added new addendum, updated background",
+    "versionMode": "new"
+  }'
+\`\`\`
+
+**Note:** When you provide a \`pages\` array in an update:
+- Pages with matching slugs are **updated**
+- Pages with new slugs are **created**
+- Pages that exist but aren't in the array are **deleted**
+
+To keep existing pages unchanged, omit the \`pages\` field entirely.
+
+---
+
+## API Reference
+
+### Create (POST /api/agent/beps)
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | \`title\` | Yes | The BEP title |
+| \`content\` | Yes | Full markdown content for Claude.md |
+| \`pages\` | No | Array of additional pages (addenda) |
+
+**Page object:**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`slug\` | Yes | URL-safe identifier (e.g., \`"background"\`, \`"examples"\`) |
+| \`title\` | Yes | Display title for the page |
 | \`content\` | Yes | Full markdown content |
 
-**Update (PUT):**
+### Update (PUT /api/agent/beps)
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | \`number\` | Yes | The BEP number to update |
-| \`content\` | Yes | Updated markdown content |
+| \`title\` | No | Updated title |
+| \`content\` | No* | Updated markdown content |
+| \`pages\` | No* | Updated pages array (replaces all existing pages) |
 | \`editNote\` | No | Note describing the changes |
-| \`versionMode\` | No | \`"new"\` (default) or \`"current"\` |
+| \`versionMode\` | No | \`"new"\` (default) creates a new version, \`"current"\` updates in place |
+
+*At least one of \`title\`, \`content\`, or \`pages\` must be provided.
+
+### Response Fields
+
+| Field | Description |
+|-------|-------------|
+| \`success\` | \`true\` if operation succeeded |
+| \`bepId\` | Internal BEP ID |
+| \`number\` | BEP number |
+| \`formattedId\` | Formatted ID (e.g., "BEP-001") |
+| \`url\` | URL to view the BEP |
+| \`versionNumber\` | (update only) New version number |
+| \`versionAction\` | (update only) \`"created"\` or \`"updated"\` |
+| \`pagesCreated\` | (update only) Number of pages created |
+| \`pagesUpdated\` | (update only) Number of pages updated |
+| \`pagesDeleted\` | (update only) Number of pages deleted |
 `;
 
   return md;
@@ -483,14 +642,20 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
     content: generateNewBepInstructions(nextNumber, apiBaseUrl, goodReferenceBeps),
   });
 
-  // Individual BEP folders
+  // Individual BEP folders: BEP-<NUMBER>-<slug>/
   for (const bep of data.beps) {
-    const bepFolder = formatBepNumber(bep.number);
+    const bepFolder = formatBepFolderName(bep.number, bep.title);
 
-    // Main README
+    // Metadata JSON file
     files.push({
-      path: `${bepFolder}/README.md`,
-      content: generateBepReadme(bep),
+      path: `${bepFolder}/meta.json`,
+      content: generateBepMetaJson(bep),
+    });
+
+    // Main content file (Claude.md)
+    files.push({
+      path: `${bepFolder}/Claude.md`,
+      content: generateBepClaudeMd(bep),
     });
 
     // Additional pages

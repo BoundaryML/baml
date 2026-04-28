@@ -450,10 +450,12 @@ Both can be created from comments to maintain traceability.
 
 ### HTTP Endpoints
 
-| Endpoint                   | Method | Description                                   |
-| -------------------------- | ------ | --------------------------------------------- |
-| `/api/ai/stream-assistant` | POST   | Stream AI responses for Q&A                   |
-| `/api/agent/beps`          | GET    | Public read-only BEP listing/fetch for agents |
+| Endpoint                   | Method   | Description                                   |
+| -------------------------- | -------- | --------------------------------------------- |
+| `/api/ai/stream-assistant` | POST     | Stream AI responses for Q&A                   |
+| `/api/agent/beps`          | GET      | Public read-only BEP listing/fetch for agents |
+| `/api/agent/beps`          | POST     | Create a new BEP (requires API token)         |
+| `/api/agent/beps`          | PUT      | Update an existing BEP (requires API token)   |
 
 ### Public Agent Endpoint
 
@@ -592,9 +594,136 @@ Schema for `mode: "bep"` JSON responses:
 #### CORS / Preflight
 
 - `OPTIONS /api/agent/beps` is supported for browser preflight and returns `204`.
-- CORS headers: `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET, OPTIONS`, `Access-Control-Allow-Headers: Content-Type`.
+- CORS headers: `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS`, `Access-Control-Allow-Headers: Content-Type, Authorization`.
 
 You should install the `beps` skill through our [skills](https://github.com/BoundaryML/skills) repository.
+
+### Create BEP Endpoint
+
+`POST /api/agent/beps`
+
+Create a new BEP with optional additional pages (addenda).
+
+#### Authentication
+
+Requires a Bearer token in the `Authorization` header:
+```
+Authorization: Bearer bep_xxxxxxxxxxxxx
+```
+
+Get your API token from your profile page (`/profile`).
+
+#### Request Body
+
+```json
+{
+  "title": "Your Proposal Title",
+  "content": "# Your Proposal Title\n\n## Summary\n\n...",
+  "pages": [
+    {
+      "slug": "background",
+      "title": "Background Research",
+      "content": "# Background\n\nDetailed research..."
+    },
+    {
+      "slug": "examples",
+      "title": "Code Examples",
+      "content": "# Examples\n\nUsage examples..."
+    }
+  ]
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `title` | Yes | The BEP title |
+| `content` | Yes | Full markdown content |
+| `pages` | No | Array of additional pages (addenda) |
+
+**Page object:**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `slug` | Yes | URL-safe identifier (e.g., `"background"`, `"examples"`) |
+| `title` | Yes | Display title for the page |
+| `content` | Yes | Full markdown content |
+
+#### Success Response
+
+```json
+{
+  "success": true,
+  "bepId": "abc123...",
+  "number": 15,
+  "formattedId": "BEP-015",
+  "createdBy": "Your Name",
+  "url": "https://beps.boundaryml.com/beps/15"
+}
+```
+
+### Update BEP Endpoint
+
+`PUT /api/agent/beps`
+
+Update an existing BEP with optional page management.
+
+#### Request Body
+
+```json
+{
+  "number": 15,
+  "content": "# Updated Content\n\n...",
+  "pages": [
+    {
+      "slug": "background",
+      "title": "Updated Background",
+      "content": "# Background\n\nUpdated research..."
+    },
+    {
+      "slug": "new-addendum",
+      "title": "New Addendum",
+      "content": "# New Section\n\nNew content..."
+    }
+  ],
+  "editNote": "Added new addendum, updated background",
+  "versionMode": "new"
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `number` | Yes | The BEP number to update |
+| `title` | No | Updated title |
+| `content` | No* | Updated markdown content |
+| `pages` | No* | Updated pages array (replaces all existing pages) |
+| `editNote` | No | Note describing the changes |
+| `versionMode` | No | `"new"` (default) creates a new version, `"current"` updates in place |
+
+*At least one of `title`, `content`, or `pages` must be provided.
+
+**Page Behavior on Update:**
+- Pages with matching slugs are **updated**
+- Pages with new slugs are **created**
+- Pages that exist but aren't in the array are **deleted**
+- To keep existing pages unchanged, omit the `pages` field entirely
+
+#### Success Response
+
+```json
+{
+  "success": true,
+  "bepId": "abc123...",
+  "number": 15,
+  "formattedId": "BEP-015",
+  "versionNumber": 3,
+  "versionAction": "created",
+  "pagesCreated": 1,
+  "pagesUpdated": 1,
+  "pagesDeleted": 0,
+  "updatedBy": "Your Name",
+  "url": "https://beps.boundaryml.com/beps/15"
+}
+```
 
 ---
 

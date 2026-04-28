@@ -231,10 +231,11 @@ export function BepExportAllDialog({ trigger }: BepExportAllDialogProps) {
   INDEX.md              # Overview with status-sorted list
   NEW-BEP/
     INSTRUCTIONS.md     # How to create & upload a new BEP
-  BEP-001/
-    README.md           # Full proposal content
+  BEP-001-proposal-slug/
+    meta.json           # Metadata (status, version, pages)
+    Claude.md           # Full proposal content
     pages/              # Additional pages (if any)
-  BEP-002/
+  BEP-002-another-slug/
     ...`}
               </pre>
             </div>
