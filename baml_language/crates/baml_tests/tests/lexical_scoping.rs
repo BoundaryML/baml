@@ -57,6 +57,77 @@ function capture_before_after_shadow() -> int {
     let f = () -> int { x }
     g() * 10 + f()
 }
+
+// Rule 1: a `let` declared inside a while body must not leak past the
+// loop. After the loop, `x` resolves to the outer binding.
+function rule1_while_no_leakage() -> int {
+    let x = 1
+    let once = true
+    while (once) {
+        let x = 99
+        once = false
+    }
+    x
+}
+
+// Observe the inner shadow's value to rule out optimizer-induced false
+// positives in `rule1_while_no_leakage`. If outer x and inner x were
+// conflated (a shadowing bug), `observed` would still see 99 but the
+// return would be `99 + 99 = 198`, not `1 + 99 = 100`.
+function rule1_while_observed_inner_shadow() -> int {
+    let x = 1
+    let once = true
+    let observed = 0
+    while (once) {
+        let x = 99
+        observed = observed + x
+        once = false
+    }
+    x + observed
+}
+
+// Rule 2: outer-binding mutation in an inner block escapes.
+function rule2_block_outer_mutation_escapes() -> int {
+    let x = 1
+    {
+        x = 2
+    }
+    x
+}
+
+// Rule 2: outer-binding mutation in a `for` body escapes.
+function rule2_for_outer_mutation_escapes() -> int {
+    let x = 1
+    for (let _ in [1]) {
+        x = 2
+    }
+    x
+}
+
+// Rule 3: a block-local shadow's mutation must NOT escape. Without
+// binding-identity-keyed assignment tracking, the inner `x = 3` would
+// conflate with an outer `x` mutation and propagate.
+function rule3_block_shadow_then_assign_inner_does_not_escape() -> int {
+    let x = 1
+    {
+        let x = 2
+        x = 3
+    }
+    x
+}
+
+// Composite test: a pre-shadow outer mutation escapes; a post-shadow
+// inner mutation does not. A name-keyed assignment tracker cannot
+// distinguish these — the binding-identity-keyed tracker can.
+function rule2_pre_shadow_mutation_escapes_post_shadow_does_not() -> int {
+    let x = 1
+    {
+        x = 2
+        let x = 3
+        x = 4
+    }
+    x
+}
 "#;
 
 async fn assert_lexical_scope_result(entry: &str, expected: i64) {
@@ -87,6 +158,12 @@ async fn lexical_scoping_runtime_regressions() {
     assert_lexical_scope_result("for_loop_restores_outer()", 1).await;
     assert_lexical_scope_result("nested_outer_restored()", 1).await;
     assert_lexical_scope_result("capture_before_after_shadow()", 12).await;
+    assert_lexical_scope_result("rule1_while_no_leakage()", 1).await;
+    assert_lexical_scope_result("rule1_while_observed_inner_shadow()", 100).await;
+    assert_lexical_scope_result("rule2_block_outer_mutation_escapes()", 2).await;
+    assert_lexical_scope_result("rule2_for_outer_mutation_escapes()", 2).await;
+    assert_lexical_scope_result("rule3_block_shadow_then_assign_inner_does_not_escape()", 1).await;
+    assert_lexical_scope_result("rule2_pre_shadow_mutation_escapes_post_shadow_does_not()", 2).await;
 }
 
 #[tokio::test]

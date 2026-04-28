@@ -87,3 +87,16 @@ function nested_lambda_capture() -> int {
   };
   outer()
 }
+
+// A `let` declared inside a `while` body must NOT leak to the enclosing
+// scope. The inner `x = 99` shadows the outer `x` for the duration of the
+// body only — after the loop, `x` resolves to the outermost binding.
+function while_body_restores_outer() -> int {
+  let x = 1;
+  let once = true;
+  while (once) {
+    let x = 99;
+    once = false;
+  };
+  x
+}

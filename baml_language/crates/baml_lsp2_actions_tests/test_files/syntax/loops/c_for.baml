@@ -119,6 +119,24 @@ function BreakContinue() -> int {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
+// Error: unresolved name: i
+//     ╭─[ loops_c_for.baml:21:18 ]
+//     │
+//  21 │     for (; i <= 10; i += 1) {
+//     │                     ┬  
+//     │                     ╰── unresolved name: i
+//     │ 
+//     │ Note: Error code: E0003
+// ────╯
+// Error: unresolved name: x
+//     ╭─[ loops_c_for.baml:42:32 ]
+//     │
+//  42 │     for (let i = 0; i <= 10; i += x) {
+//     │                                   ┬  
+//     │                                   ╰── unresolved name: x
+//     │ 
+//     │ Note: Error code: E0003
+// ────╯
 // Warning: unreachable code: 1 statement(s) after diverging statement
 //     ╭─[ loops_c_for.baml:51:12 ]
 //     │

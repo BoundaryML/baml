@@ -35,6 +35,9 @@ function user.shadow_param(x: int) -> int  [expr] {
 function user.watch_block_cleanup() -> int  [expr] {
   { let x = 1; { let x = 2; x } } x
 }
+function user.while_body_restores_outer() -> int  [expr] {
+  { let x = 1; let once = true; while once { let x = 99; once = false } } x
+}
 
 --- captures ---
 lambda () in capture_before_after_shadow: captures [x]

@@ -142,3 +142,19 @@ function user.watch_block_cleanup() -> int {
     unwatch x
     return
 }
+
+function user.while_body_restores_outer() -> int {
+    load_const true
+
+  L0:
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 1
+    return
+
+  L2:
+    load_const false
+    jump L0
+}

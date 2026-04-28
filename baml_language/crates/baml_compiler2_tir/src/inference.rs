@@ -596,20 +596,24 @@ pub fn infer_scope_types<'db>(
                     let inference_fsi = inference_owner_scope(index, ancestor_fsi);
                     let inference_scope_id = index.scope_ids[inference_fsi.index() as usize];
                     let capture_declared_in_ancestor =
-                        |capture_name: &Name, binding_id: &BindingId| -> bool {
+                        |_capture_name: &Name, binding_id: &BindingId| -> bool {
+                            // Under the (scope, site) constraint, a same-name
+                            // distinct binding cannot co-exist: parameter
+                            // indices are unique within their scope and
+                            // DefinitionSite::Statement/PatternBinding carry
+                            // the scope-unique AST id directly. Capture
+                            // resolution is identity-keyed; `capture_name` is
+                            // not load-bearing here.
                             binding_id.scope == ancestor_fsi
                                 && match binding_id.site {
-                                    DefinitionSite::Parameter(idx) => anc_bindings
-                                        .params
-                                        .iter()
-                                        .any(|(n, i)| n == capture_name && *i == idx),
-                                    DefinitionSite::Statement(_)
-                                    | DefinitionSite::PatternBinding(_) => {
-                                        anc_bindings.bindings.iter().any(|binding| {
-                                            &binding.name == capture_name
-                                                && binding.site == binding_id.site
-                                        })
+                                    DefinitionSite::Parameter(idx) => {
+                                        anc_bindings.params.iter().any(|(_, i)| *i == idx)
                                     }
+                                    DefinitionSite::Statement(_)
+                                    | DefinitionSite::PatternBinding(_) => anc_bindings
+                                        .bindings
+                                        .iter()
+                                        .any(|binding| binding.site == binding_id.site),
                                 }
                         };
                     // Only call infer_scope_types if this ancestor has any of
@@ -643,12 +647,13 @@ pub fn infer_scope_types<'db>(
                                 anc_inference.param_type(idx).cloned()
                             }
                             DefinitionSite::Statement(_) | DefinitionSite::PatternBinding(_) => {
+                                // `binding.site == def_site` uniquely
+                                // identifies the binding under shadowing —
+                                // a name tiebreaker would be redundant.
                                 anc_bindings
                                     .bindings
                                     .iter()
-                                    .find(|binding| {
-                                        &binding.name == capture_name && binding.site == def_site
-                                    })
+                                    .find(|binding| binding.site == def_site)
                                     .and_then(|binding| {
                                         anc_inference.binding_type(binding.pattern).cloned()
                                     })

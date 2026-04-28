@@ -320,3 +320,36 @@ fn user.watch_block_cleanup() -> int {
         return;
     }
 }
+
+fn user.while_body_restores_outer() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+    let _2: bool // once
+    let _3: bool
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = copy _2;
+        branch copy _3 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _0 = copy _1;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _2 = const false;
+        goto -> bb1;
+    }
+}

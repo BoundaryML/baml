@@ -129,3 +129,15 @@ lambda user.nested_lambda_capture {
 }
 lambda user.nested_lambda_capture {
 }
+function user.while_body_restores_outer() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    let once = true : true -> bool
+    while once
+      { : void
+        let x = 99 : 99 -> int
+        once = false : false
+      }
+    x : int
+  }
+}

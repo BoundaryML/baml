@@ -626,6 +626,140 @@ mod tests {
         );
     }
 
+    /// A `let` inside a while body must not share the enclosing function's
+    /// scope. The body is an `Expr::Block` which pushes its own scope, so
+    /// the inner `let x = 99` must register in that scope, not the function
+    /// scope.
+    ///
+    /// This test pins the desired invariant. Without `Stmt::While` walking the
+    /// body inside its own block scope, find-references / rename / capture
+    /// analysis would walk ancestors from the wrong starting scope.
+    #[test]
+    fn while_body_let_lives_in_inner_scope() {
+        use baml_compiler2_hir::scope::ScopeKind;
+        use text_size::TextSize;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "while_scope.baml",
+            "function foo() -> int {\n  let x = 1;\n  let once = true;\n  while (once) {\n    let x = 99;\n    once = false;\n  };\n  x\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+
+        // Locate the function scope.
+        let function_scope = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(idx, scope)| {
+                matches!(scope.kind, ScopeKind::Function)
+                    .then_some(baml_compiler2_hir::scope::FileScopeId::new(idx as u32))
+            })
+            .expect("function scope");
+
+        // Find the offset of the inner `x = 99` token.
+        let text = file.text(&db);
+        let inner_x_decl = text.find("x = 99").expect("inner x decl");
+        let inner_x_offset = TextSize::from(inner_x_decl as u32);
+
+        let scope_at_inner = index.scope_at_offset(inner_x_offset, Some(&Name::new("foo")));
+        assert_ne!(
+            scope_at_inner, function_scope,
+            "inner `let x = 99` inside while body must resolve to a non-function scope; got function scope"
+        );
+
+        // The inner binding must register in some descendant of the function
+        // scope, not the function scope itself.
+        let inner_bindings = index.scope_bindings[scope_at_inner.index() as usize]
+            .bindings
+            .iter()
+            .filter(|b| b.name == Name::new("x"))
+            .count();
+        assert!(
+            inner_bindings >= 1,
+            "inner scope must contain the inner `x` binding"
+        );
+
+        // The outer `x = 1` binding must remain in the function scope.
+        let outer_x_in_function = index.scope_bindings[function_scope.index() as usize]
+            .bindings
+            .iter()
+            .filter(|b| b.name == Name::new("x"))
+            .count();
+        assert_eq!(
+            outer_x_in_function, 1,
+            "outer `let x = 1` must stay in function scope; got {} `x` bindings",
+            outer_x_in_function
+        );
+    }
+
+    /// Verify the HIR scope tree contains Block, MatchArm, CatchClause, and
+    /// CatchArm scope kinds nested under a Function. A future regression
+    /// that drops one of these kinds (e.g. a refactor that name-keys some
+    /// lookup and "doesn't need" the explicit scope) will fail this test
+    /// loudly.
+    #[test]
+    fn scope_tree_includes_block_match_catch_kinds() {
+        use baml_compiler2_hir::scope::ScopeKind;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "scope_kinds.baml",
+            r#"function f(x: int) -> int {
+  let _local = 1
+  {
+    let _block_local = 2
+  }
+  let _matched = match (x) {
+    n => n
+    _ => 0
+  }
+  try {
+    1
+  } catch (e) {
+    _ => 2
+  }
+}"#,
+        );
+
+        let index = file_semantic_index(&db, file);
+
+        // Each kind must appear at least once.
+        let kinds: Vec<&ScopeKind> = index.scopes.iter().map(|s| &s.kind).collect();
+        let has_kind = |kind: ScopeKind| {
+            kinds
+                .iter()
+                .any(|k| std::mem::discriminant(*k) == std::mem::discriminant(&kind))
+        };
+
+        assert!(
+            has_kind(ScopeKind::Function),
+            "scope tree missing Function scope; kinds = {:?}",
+            kinds
+        );
+        assert!(
+            has_kind(ScopeKind::Block),
+            "scope tree missing Block scope; kinds = {:?}",
+            kinds
+        );
+        assert!(
+            has_kind(ScopeKind::MatchArm),
+            "scope tree missing MatchArm scope; kinds = {:?}",
+            kinds
+        );
+        assert!(
+            has_kind(ScopeKind::CatchClause),
+            "scope tree missing CatchClause scope; kinds = {:?}",
+            kinds
+        );
+        assert!(
+            has_kind(ScopeKind::CatchArm),
+            "scope tree missing CatchArm scope; kinds = {:?}",
+            kinds
+        );
+    }
+
     /// A field and a method with the same name in a class produce a cross-kind diagnostic.
     #[test]
     fn field_method_same_name_produces_cross_kind_diagnostic() {

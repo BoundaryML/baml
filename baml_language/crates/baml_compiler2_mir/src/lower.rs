@@ -1008,6 +1008,17 @@ impl<'db> LoweringContext<'db> {
                 offset,
             )
         } else {
+            // The source-map-less branch is only valid for **synthesized**
+            // expressions emitted by the lowering itself (e.g. for-loop index
+            // increments, capture forwarding, init function bodies). The
+            // fallback uses `current_scope` and the scope's end offset, which
+            // is correct for synthesized refs at the end of the current scope
+            // but would silently pick the post-shadow binding for a
+            // user-written name lowered without a source map.
+            //
+            // If you find yourself adding a user-visible expression that
+            // hits this path: the right fix is to thread a `BindingId`
+            // through to the call site, not to widen this fallback.
             let scope_id = self.current_scope;
             let offset = index.scopes[scope_id.index() as usize].range.end();
             (scope_id, offset)
@@ -1022,7 +1033,23 @@ impl<'db> LoweringContext<'db> {
             .and_then(|captures| captures.get(&binding_id).copied())
     }
 
-    fn emit_unwatch_since(&mut self, watched_depth: usize) {
+    /// Emit `unwatch` ops for every watched local at index `[watched_depth..]`
+    /// of `watched_locals_stack`, in reverse declaration order.
+    ///
+    /// This is the single emitter for unwatch sequences. All scope-exit
+    /// paths go through it:
+    ///   - normal block fallthrough: `lower_scoped_block` (depth = entry stack len)
+    ///   - normal `for`-body fallthrough (depth = entry stack len)
+    ///   - normal match/catch arm-body fallthrough (depth = arm-entry stack len)
+    ///   - `break` / `continue` (depth = `loop_context.watched_locals_depth`)
+    ///   - `return` / `throw` (depth = 0 — the stack is swapped at lambda
+    ///     boundaries, so 0 means "everything in the enclosing function")
+    ///
+    /// Does NOT truncate the stack — callers that own the scope are
+    /// responsible for truncating via `restore_locals_after_scope`. Divergent
+    /// callers (break/continue/return/throw) leave the stack alone because a
+    /// dead block follows the divergent terminator.
+    fn emit_unwatch_to_depth(&mut self, watched_depth: usize) {
         let watched = self.watched_locals_stack[watched_depth..].to_vec();
         for local in watched.into_iter().rev() {
             self.builder.unwatch(local);
@@ -1659,7 +1686,7 @@ impl LoweringContext<'_> {
         }
 
         if !self.builder.is_current_terminated() {
-            self.emit_unwatch_since(watched_depth);
+            self.emit_unwatch_to_depth(watched_depth);
         }
         self.restore_locals_after_scope(saved_locals, watched_depth);
     }
@@ -3839,7 +3866,7 @@ impl LoweringContext<'_> {
                 self.lower_expr(body, Place::local(body_temp));
 
                 if !self.builder.is_current_terminated() {
-                    self.emit_unwatch_since(watched_depth);
+                    self.emit_unwatch_to_depth(watched_depth);
                     self.builder.goto(bb_after);
                 }
                 self.restore_locals_after_scope(saved_locals, watched_depth);
@@ -3866,11 +3893,10 @@ impl LoweringContext<'_> {
                 if let Some(e) = expr {
                     self.lower_expr(e, Place::local(ret));
                 }
-                // Unwatch all watched locals before returning
-                let watched = self.watched_locals_stack.clone();
-                for &local in watched.iter().rev() {
-                    self.builder.unwatch(local);
-                }
+                // Unwatch all watched locals in this function (the stack is
+                // swapped at lambda boundaries, so depth=0 covers exactly the
+                // current function's watches).
+                self.emit_unwatch_to_depth(0);
                 self.builder.goto(self.exit_block);
                 // Create a dead successor block for the builder cursor
                 // (subsequent statements in the same block-list are dead code)
@@ -3883,6 +3909,10 @@ impl LoweringContext<'_> {
 
             AstStmt::Throw { value } => {
                 let val_op = self.lower_to_operand(value);
+                // Unwatch all watched locals in this function before throwing,
+                // matching the Return path. Without this, a
+                // `watch let conn = …` followed by a `throw` leaks the watcher.
+                self.emit_unwatch_to_depth(0);
                 self.builder.throw(val_op);
                 let dead = self.builder.create_block();
                 self.builder.set_current_block(dead);
@@ -3892,10 +3922,7 @@ impl LoweringContext<'_> {
                 if let Some(ref loop_ctx) = self.loop_context {
                     let target = loop_ctx.break_target;
                     let depth = loop_ctx.watched_locals_depth;
-                    let watched: Vec<Local> = self.watched_locals_stack[depth..].to_vec();
-                    for &local in watched.iter().rev() {
-                        self.builder.unwatch(local);
-                    }
+                    self.emit_unwatch_to_depth(depth);
                     self.builder.goto(target);
                 }
                 let dead = self.builder.create_block();
@@ -3906,10 +3933,7 @@ impl LoweringContext<'_> {
                 if let Some(ref loop_ctx) = self.loop_context {
                     let target = loop_ctx.continue_target;
                     let depth = loop_ctx.watched_locals_depth;
-                    let watched: Vec<Local> = self.watched_locals_stack[depth..].to_vec();
-                    for &local in watched.iter().rev() {
-                        self.builder.unwatch(local);
-                    }
+                    self.emit_unwatch_to_depth(depth);
                     self.builder.goto(target);
                 }
                 let dead = self.builder.create_block();
@@ -4767,12 +4791,19 @@ impl LoweringContext<'_> {
         // Exhaustive last arm: skip the pattern test — it must match.
         if exhaustive && rest.is_empty() && arm.guard.is_none() {
             let saved_locals = self.locals.clone();
+            let watched_depth = self.watched_locals_stack.len();
             self.bind_pattern(scrutinee, arm.pattern);
             self.lower_expr(arm.body, dest);
             if !self.builder.is_current_terminated() {
+                // A `watch let` declared inside an arm body must be torn
+                // down on fallthrough. Without this the watcher leaks past
+                // the arm.
+                self.emit_unwatch_to_depth(watched_depth);
                 self.builder.goto(join);
             }
-            self.restore_active_locals(saved_locals);
+            // Restore both the name→local map AND truncate the watched stack
+            // back to the arm-entry depth (mirrors `lower_scoped_block`).
+            self.restore_locals_after_scope(saved_locals, watched_depth);
             return;
         }
 
@@ -4783,6 +4814,7 @@ impl LoweringContext<'_> {
 
         self.builder.set_current_block(bb_body);
         let saved_locals = self.locals.clone();
+        let watched_depth = self.watched_locals_stack.len();
         self.bind_pattern(scrutinee, arm.pattern);
         if let Some(guard) = arm.guard {
             let guard_op = self.lower_to_operand(guard);
@@ -4792,9 +4824,11 @@ impl LoweringContext<'_> {
         }
         self.lower_expr(arm.body, dest.clone());
         if !self.builder.is_current_terminated() {
+            // See exhaustive arm comment above.
+            self.emit_unwatch_to_depth(watched_depth);
             self.builder.goto(join);
         }
-        self.restore_active_locals(saved_locals);
+        self.restore_locals_after_scope(saved_locals, watched_depth);
 
         self.builder.set_current_block(bb_next);
         self.lower_match_chain(scrutinee, rest, dest, join, exhaustive);
@@ -5343,14 +5377,20 @@ impl LoweringContext<'_> {
         for &(ref arm, body_block, _, clause_idx) in &arms_with_blocks {
             self.builder.set_current_block(body_block);
             let saved_locals = self.locals.clone();
+            let watched_depth = self.watched_locals_stack.len();
             let clause = clause_locals[clause_idx].clone();
             install_clause_locals(self, error_local, &clause);
             self.bind_pattern(error_local, arm.pattern);
             self.lower_expr(arm.body, dest.clone());
             if !self.builder.is_current_terminated() {
+                // A `watch let` declared inside a catch-arm body must be
+                // torn down on fallthrough.
+                self.emit_unwatch_to_depth(watched_depth);
                 self.builder.goto(bb_join);
             }
-            self.restore_active_locals(saved_locals);
+            // Restore name→local map AND truncate the watched stack back to
+            // the arm-entry depth (mirrors `lower_scoped_block`).
+            self.restore_locals_after_scope(saved_locals, watched_depth);
         }
 
         self.builder.set_current_block(bb_join);

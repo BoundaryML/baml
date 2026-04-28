@@ -244,6 +244,21 @@ unsafe impl salsa::Update for FileSemanticIndex<'_> {
 }
 
 impl FileSemanticIndex<'_> {
+    /// Find the `Lambda` scope whose range exactly matches `span`.
+    ///
+    /// Linear walk over the scope list (which is small in practice —
+    /// bounded by the number of lambda nestings in a file).
+    pub fn lambda_scope_for(&self, span: text_size::TextRange) -> Option<FileScopeId> {
+        self.scopes
+            .iter()
+            .enumerate()
+            .find(|(_, scope)| matches!(scope.kind, ScopeKind::Lambda) && scope.range == span)
+            .map(|(i, _)| {
+                #[allow(clippy::cast_possible_truncation)]
+                FileScopeId::new(i as u32)
+            })
+    }
+
     /// Find the innermost scope containing `offset`.
     ///
     /// Scopes are in DFS pre-order. We walk in reverse (deepest first)

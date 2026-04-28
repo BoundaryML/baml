@@ -31,12 +31,6 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WalkContext {
-    RootBody,
-    Nested,
-}
-
 #[derive(Debug, Clone)]
 struct PathRootReference {
     name: Name,
@@ -260,26 +254,32 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// and local bindings in the lexical scope that owns each expression.
     fn walk_expr_body(&mut self, body: &ast::ExprBody, source_map: &ast::AstSourceMap) {
         if let Some(root_expr) = body.root_expr {
-            self.walk_expr(root_expr, body, source_map, WalkContext::RootBody);
+            self.walk_expr(root_expr, body, source_map, false);
         }
     }
 
+    /// Walk an expression, recording its `FileScopeId` and (for `Block`s)
+    /// optionally pushing a `ScopeKind::Block` scope around the contents.
+    ///
+    /// `push_block_scope`: pass `true` for nested expressions; pass `false`
+    /// when walking the root body of a function/lambda (the function/lambda
+    /// scope is already on the stack — pushing another `Block` scope would
+    /// double-wrap the body).
     fn walk_expr(
         &mut self,
         expr_id: ast::ExprId,
         body: &ast::ExprBody,
         source_map: &ast::AstSourceMap,
-        ctx: WalkContext,
+        push_block_scope: bool,
     ) {
         match &body.exprs[expr_id] {
             ast::Expr::Block { stmts, tail_expr } => {
-                let pushed = !matches!(ctx, WalkContext::RootBody);
-                if pushed {
+                if push_block_scope {
                     self.push_scope(ScopeKind::Block, None, source_map.expr_span(expr_id));
                 }
                 self.record_expr_scope(expr_id);
                 self.walk_block_contents(stmts, *tail_expr, body, source_map);
-                if pushed {
+                if push_block_scope {
                     self.pop_scope();
                 }
             }
@@ -305,7 +305,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.walk_stmt(stmt_id, body, source_map);
         }
         if let Some(tail_expr) = tail_expr {
-            self.walk_expr(tail_expr, body, source_map, WalkContext::Nested);
+            self.walk_expr(tail_expr, body, source_map, true);
         }
     }
 
@@ -316,14 +316,14 @@ impl<'db> SemanticIndexBuilder<'db> {
         source_map: &ast::AstSourceMap,
     ) {
         match &body.stmts[stmt_id] {
-            ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, WalkContext::Nested),
+            ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, true),
             ast::Stmt::Let {
                 pattern,
                 initializer,
                 ..
             } => {
                 if let Some(initializer) = initializer {
-                    self.walk_expr(*initializer, body, source_map, WalkContext::Nested);
+                    self.walk_expr(*initializer, body, source_map, true);
                 }
                 self.register_local_pattern(
                     *pattern,
@@ -338,7 +338,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 collection,
                 body: loop_body,
             } => {
-                self.walk_expr(*collection, body, source_map, WalkContext::Nested);
+                self.walk_expr(*collection, body, source_map, true);
                 self.push_scope(ScopeKind::Block, None, source_map.stmt_span(stmt_id));
                 self.register_local_pattern(
                     *binding,
@@ -347,7 +347,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     source_map,
                     source_map.pattern_span(*binding).start(),
                 );
-                self.walk_expr(*loop_body, body, source_map, WalkContext::Nested);
+                self.walk_expr(*loop_body, body, source_map, true);
                 self.pop_scope();
             }
             ast::Stmt::While {
@@ -356,27 +356,43 @@ impl<'db> SemanticIndexBuilder<'db> {
                 after,
                 ..
             } => {
-                self.walk_expr(*condition, body, source_map, WalkContext::Nested);
-                self.walk_expr(*loop_body, body, source_map, WalkContext::Nested);
+                self.walk_expr(*condition, body, source_map, true);
+                // Push a Block scope around the body and the C-style for
+                // `after` step, mirroring `Stmt::For`. While the body is
+                // itself an `Expr::Block` (which pushes its own scope), the
+                // wrapping scope here gives the while-statement its own
+                // identity in the scope tree, so downstream consumers (LSP
+                // find-references, capture analysis, MIR `binding_locals`
+                // lookup) can anchor on the while-statement boundary
+                // symmetrically with for-statements.
+                //
+                // The `after` step (set by C-style `for (init; cond; after)`
+                // desugaring) runs at the same level as the body, not inside
+                // it — it must be able to see the surrounding-scope locals
+                // declared by the for-init, so it stays within this wrapping
+                // scope but outside the body's own block scope.
+                self.push_scope(ScopeKind::Block, None, source_map.stmt_span(stmt_id));
+                self.walk_expr(*loop_body, body, source_map, true);
                 if let Some(after) = after {
                     self.walk_stmt(*after, body, source_map);
                 }
+                self.pop_scope();
             }
             ast::Stmt::Return(expr) => {
                 if let Some(expr) = expr {
-                    self.walk_expr(*expr, body, source_map, WalkContext::Nested);
+                    self.walk_expr(*expr, body, source_map, true);
                 }
             }
             ast::Stmt::Throw { value } => {
-                self.walk_expr(*value, body, source_map, WalkContext::Nested);
+                self.walk_expr(*value, body, source_map, true);
             }
             ast::Stmt::Assign { target, value } => {
-                self.walk_expr(*target, body, source_map, WalkContext::Nested);
-                self.walk_expr(*value, body, source_map, WalkContext::Nested);
+                self.walk_expr(*target, body, source_map, true);
+                self.walk_expr(*value, body, source_map, true);
             }
             ast::Stmt::AssignOp { target, value, .. } => {
-                self.walk_expr(*target, body, source_map, WalkContext::Nested);
-                self.walk_expr(*value, body, source_map, WalkContext::Nested);
+                self.walk_expr(*target, body, source_map, true);
+                self.walk_expr(*value, body, source_map, true);
             }
             ast::Stmt::Break
             | ast::Stmt::Continue
@@ -397,22 +413,22 @@ impl<'db> SemanticIndexBuilder<'db> {
                 then_branch,
                 else_branch,
             } => {
-                self.walk_expr(*condition, body, source_map, WalkContext::Nested);
-                self.walk_expr(*then_branch, body, source_map, WalkContext::Nested);
+                self.walk_expr(*condition, body, source_map, true);
+                self.walk_expr(*then_branch, body, source_map, true);
                 if let Some(else_branch) = else_branch {
-                    self.walk_expr(*else_branch, body, source_map, WalkContext::Nested);
+                    self.walk_expr(*else_branch, body, source_map, true);
                 }
             }
             ast::Expr::Match {
                 scrutinee, arms, ..
             } => {
-                self.walk_expr(*scrutinee, body, source_map, WalkContext::Nested);
+                self.walk_expr(*scrutinee, body, source_map, true);
                 for &arm_id in arms {
                     self.walk_match_arm(arm_id, body, source_map);
                 }
             }
             ast::Expr::Catch { base, clauses } => {
-                self.walk_expr(*base, body, source_map, WalkContext::Nested);
+                self.walk_expr(*base, body, source_map, true);
                 for clause in clauses {
                     self.walk_catch_clause(
                         clause,
@@ -423,48 +439,48 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Expr::Throw { value } => {
-                self.walk_expr(*value, body, source_map, WalkContext::Nested);
+                self.walk_expr(*value, body, source_map, true);
             }
             ast::Expr::Binary { lhs, rhs, .. } => {
-                self.walk_expr(*lhs, body, source_map, WalkContext::Nested);
-                self.walk_expr(*rhs, body, source_map, WalkContext::Nested);
+                self.walk_expr(*lhs, body, source_map, true);
+                self.walk_expr(*rhs, body, source_map, true);
             }
             ast::Expr::Unary { expr, .. } | ast::Expr::OptionalChain { expr } => {
-                self.walk_expr(*expr, body, source_map, WalkContext::Nested);
+                self.walk_expr(*expr, body, source_map, true);
             }
             ast::Expr::Call { callee, args } | ast::Expr::OptionalCall { callee, args } => {
-                self.walk_expr(*callee, body, source_map, WalkContext::Nested);
+                self.walk_expr(*callee, body, source_map, true);
                 for &arg in args {
-                    self.walk_expr(arg, body, source_map, WalkContext::Nested);
+                    self.walk_expr(arg, body, source_map, true);
                 }
             }
             ast::Expr::Object {
                 fields, spreads, ..
             } => {
                 for (_, field_expr) in fields {
-                    self.walk_expr(*field_expr, body, source_map, WalkContext::Nested);
+                    self.walk_expr(*field_expr, body, source_map, true);
                 }
                 for spread in spreads {
-                    self.walk_expr(spread.expr, body, source_map, WalkContext::Nested);
+                    self.walk_expr(spread.expr, body, source_map, true);
                 }
             }
             ast::Expr::Array { elements } => {
                 for &element in elements {
-                    self.walk_expr(element, body, source_map, WalkContext::Nested);
+                    self.walk_expr(element, body, source_map, true);
                 }
             }
             ast::Expr::Map { entries } => {
                 for &(key, value) in entries {
-                    self.walk_expr(key, body, source_map, WalkContext::Nested);
-                    self.walk_expr(value, body, source_map, WalkContext::Nested);
+                    self.walk_expr(key, body, source_map, true);
+                    self.walk_expr(value, body, source_map, true);
                 }
             }
             ast::Expr::MemberAccess { base, .. } | ast::Expr::OptionalMemberAccess { base, .. } => {
-                self.walk_expr(*base, body, source_map, WalkContext::Nested);
+                self.walk_expr(*base, body, source_map, true);
             }
             ast::Expr::Index { base, index } | ast::Expr::OptionalIndex { base, index } => {
-                self.walk_expr(*base, body, source_map, WalkContext::Nested);
-                self.walk_expr(*index, body, source_map, WalkContext::Nested);
+                self.walk_expr(*base, body, source_map, true);
+                self.walk_expr(*index, body, source_map, true);
             }
             ast::Expr::Path(segments) => {
                 if let Some(root) = segments.first() {
@@ -516,23 +532,18 @@ impl<'db> SemanticIndexBuilder<'db> {
     ) {
         let arm = &body.match_arms[arm_id];
         self.push_scope(ScopeKind::MatchArm, None, source_map.match_arm_span(arm_id));
-        if let Some(name) = Self::match_or_catch_binding_name(&body.patterns, arm.pattern) {
-            let name_range = source_map.pattern_span(arm.pattern);
-            let scope_id = self.current_scope_id();
-            self.scope_bindings[scope_id.index() as usize]
-                .bindings
-                .push(LocalBinding {
-                    name: name.clone(),
-                    site: DefinitionSite::PatternBinding(arm.pattern),
-                    pattern: arm.pattern,
-                    name_range,
-                    visible_from: name_range.start(),
-                });
-        }
+        let visible_from = source_map.pattern_span(arm.pattern).start();
+        self.register_local_pattern(
+            arm.pattern,
+            DefinitionSite::PatternBinding(arm.pattern),
+            body,
+            source_map,
+            visible_from,
+        );
         if let Some(guard) = arm.guard {
-            self.walk_expr(guard, body, source_map, WalkContext::Nested);
+            self.walk_expr(guard, body, source_map, true);
         }
-        self.walk_expr(arm.body, body, source_map, WalkContext::Nested);
+        self.walk_expr(arm.body, body, source_map, true);
         self.pop_scope();
     }
 
@@ -544,33 +555,23 @@ impl<'db> SemanticIndexBuilder<'db> {
         catch_span: TextRange,
     ) {
         self.push_scope(ScopeKind::CatchClause, None, catch_span);
-        if let Some(name) = Self::match_or_catch_binding_name(&body.patterns, clause.binding) {
-            let name_range = source_map.pattern_span(clause.binding);
-            let scope_id = self.current_scope_id();
-            self.scope_bindings[scope_id.index() as usize]
-                .bindings
-                .push(LocalBinding {
-                    name: name.clone(),
-                    site: DefinitionSite::PatternBinding(clause.binding),
-                    pattern: clause.binding,
-                    name_range,
-                    visible_from: name_range.start(),
-                });
-        }
+        let binding_visible_from = source_map.pattern_span(clause.binding).start();
+        self.register_local_pattern(
+            clause.binding,
+            DefinitionSite::PatternBinding(clause.binding),
+            body,
+            source_map,
+            binding_visible_from,
+        );
         if let Some(st_pat) = clause.stack_trace_binding {
-            if let Some(name) = Self::match_or_catch_binding_name(&body.patterns, st_pat) {
-                let name_range = source_map.pattern_span(st_pat);
-                let scope_id = self.current_scope_id();
-                self.scope_bindings[scope_id.index() as usize]
-                    .bindings
-                    .push(LocalBinding {
-                        name: name.clone(),
-                        site: DefinitionSite::PatternBinding(st_pat),
-                        pattern: st_pat,
-                        name_range,
-                        visible_from: name_range.start(),
-                    });
-            }
+            let st_visible_from = source_map.pattern_span(st_pat).start();
+            self.register_local_pattern(
+                st_pat,
+                DefinitionSite::PatternBinding(st_pat),
+                body,
+                source_map,
+                st_visible_from,
+            );
         }
         for &arm_id in &clause.arms {
             self.walk_catch_arm(arm_id, body, source_map);
@@ -586,20 +587,15 @@ impl<'db> SemanticIndexBuilder<'db> {
     ) {
         let arm = &body.catch_arms[arm_id];
         self.push_scope(ScopeKind::CatchArm, None, source_map.catch_arm_span(arm_id));
-        if let Some(name) = Self::match_or_catch_binding_name(&body.patterns, arm.pattern) {
-            let name_range = source_map.pattern_span(arm.pattern);
-            let scope_id = self.current_scope_id();
-            self.scope_bindings[scope_id.index() as usize]
-                .bindings
-                .push(LocalBinding {
-                    name: name.clone(),
-                    site: DefinitionSite::PatternBinding(arm.pattern),
-                    pattern: arm.pattern,
-                    name_range,
-                    visible_from: name_range.start(),
-                });
-        }
-        self.walk_expr(arm.body, body, source_map, WalkContext::Nested);
+        let visible_from = source_map.pattern_span(arm.pattern).start();
+        self.register_local_pattern(
+            arm.pattern,
+            DefinitionSite::PatternBinding(arm.pattern),
+            body,
+            source_map,
+            visible_from,
+        );
+        self.walk_expr(arm.body, body, source_map, true);
         self.pop_scope();
     }
 
@@ -742,30 +738,17 @@ impl<'db> SemanticIndexBuilder<'db> {
         });
     }
 
-    /// Extract the binding name from a local declaration pattern, if it has one.
+    /// Extract the binding name from a pattern, if it has one.
     ///
-    /// The AST canonicalizes `let _` to `Wildcard` at construction time
+    /// The AST canonicalizes `_` to `Wildcard` at construction time
     /// (`Pattern::binding`), so `_` never reaches us as a `Bind` regardless of
-    /// the surface form. Both `let`/`for` and `match`/`catch` therefore see
-    /// `_` as "no binding." The distinction between `local_binding_name` and
-    /// `match_or_catch_binding_name` is preserved as a structural marker —
-    /// they are call-site-correct today even though their bodies are
-    /// equivalent under the current AST invariant. If future work reintroduces
-    /// a `_`-as-name path for let/for at the AST layer, only `local_binding_name`
-    /// needs to change.
+    /// the surface form. `let`/`for` patterns and `match`/`catch` arm
+    /// patterns therefore use the same extraction.
     fn local_binding_name(
         patterns: &la_arena::Arena<ast::Pattern>,
         pat_id: ast::PatId,
     ) -> Option<&Name> {
         patterns[pat_id].binding_name()
-    }
-
-    /// Extract match/catch binding names, preserving existing wildcard-like `_` behavior.
-    fn match_or_catch_binding_name(
-        patterns: &la_arena::Arena<ast::Pattern>,
-        pat_id: ast::PatId,
-    ) -> Option<&Name> {
-        Self::local_binding_name(patterns, pat_id).filter(|name| name.as_str() != "_")
     }
 
     // ── Item lowering ────────────────────────────────────────────────────────
