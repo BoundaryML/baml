@@ -12,7 +12,6 @@
 //! let engine = BexEngine::new(program, SysOps::native())?;
 //! ```
 
-mod glob_utils;
 mod io_impls;
 pub mod registry;
 

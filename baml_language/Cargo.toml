@@ -44,6 +44,7 @@ baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_project = { path = "crates/bex_project" }
 bex_engine = { path = "crates/bex_engine" }
+sys_glob = { path = "crates/sys_glob" }
 sys_llm = { path = "crates/sys_llm" }
 sys_ops = { path = "crates/sys_ops" }
 sys_types = { path = "crates/sys_types" }

@@ -522,7 +522,7 @@ async fn write_path(path: &str, data: &[u8]) -> Result<i64, OpErrorKind> {
 // Glob
 // ============================================================================
 
-use crate::glob_utils::GlobPattern;
+use sys_glob::GlobPattern;
 
 type GlobHandle = GlobPattern;
 
@@ -531,6 +531,22 @@ fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, OpE
         .clone()
         .downcast::<GlobHandle>()
         .map_err(|_| OpErrorKind::Other("Invalid glob handle type".into()))
+}
+
+fn external_as_string(value: &BexExternalValue) -> Option<String> {
+    match value {
+        BexExternalValue::String(value) => Some(value.clone()),
+        BexExternalValue::Union { value, .. } => external_as_string(value),
+        _ => None,
+    }
+}
+
+fn external_as_bool(value: &BexExternalValue) -> Option<bool> {
+    match value {
+        BexExternalValue::Bool(value) => Some(*value),
+        BexExternalValue::Union { value, .. } => external_as_bool(value),
+        _ => None,
+    }
 }
 
 impl io::IoNamespaceGlob for NativeSysOps {
@@ -569,19 +585,13 @@ impl io::IoClassGlobGlob for NativeSysOps {
                     let get_string = |key: &str, default: &str| {
                         fields
                             .get(key)
-                            .and_then(|v| match v {
-                                BexExternalValue::String(s) => Some(s.clone()),
-                                _ => None,
-                            })
+                            .and_then(external_as_string)
                             .unwrap_or_else(|| default.to_string())
                     };
                     let get_bool = |key: &str, default: bool| {
                         fields
                             .get(key)
-                            .and_then(|v| match v {
-                                BexExternalValue::Bool(b) => Some(*b),
-                                _ => None,
-                            })
+                            .and_then(external_as_bool)
                             .unwrap_or(default)
                     };
                     let cwd = get_string("cwd", ".");
@@ -646,18 +656,21 @@ impl io::IoClassGlobGlob for NativeSysOps {
 
                 let rel = entry.path().strip_prefix(&abs_cwd).unwrap_or(entry.path());
                 let rel_str = rel.to_string_lossy().replace('\\', "/");
+                let dot_rel_str = format!("./{rel_str}");
+                let abs_str = entry.path().to_string_lossy().replace('\\', "/");
 
                 // Skip dot files/dirs unless dot=true
                 if !dot && rel_str.split('/').any(|seg| seg.starts_with('.')) {
                     continue;
                 }
 
-                if !handle.is_match(&rel_str) {
+                if !handle.is_match_any([rel_str.as_str(), dot_rel_str.as_str(), abs_str.as_str()])
+                {
                     continue;
                 }
 
                 if absolute {
-                    results.push(entry.path().to_string_lossy().replace('\\', "/"));
+                    results.push(abs_str);
                 } else {
                     results.push(rel_str);
                 }

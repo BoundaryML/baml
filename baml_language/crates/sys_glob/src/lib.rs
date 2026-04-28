@@ -1,4 +1,4 @@
-//! Extended glob-to-regex converter supporting Bun-compatible glob patterns.
+//! Bun-compatible glob pattern matcher shared by `sys_native` and `bridge_wasm`.
 //!
 //! Supports: `*` (any non-separator chars), `**` (any chars including separators),
 //! `?` (single non-separator char), `[...]` (character classes), `{a,b}` (alternations),
@@ -6,19 +6,23 @@
 
 use regex::Regex;
 
-pub(crate) struct GlobPattern {
+pub struct GlobPattern {
     re: Regex,
     negated: bool,
 }
 
 impl GlobPattern {
-    pub(crate) fn new(pattern: &str) -> Result<Self, String> {
+    pub fn new(pattern: &str) -> Result<Self, String> {
         let (re, negated) = glob_to_regex(pattern)?;
         Ok(Self { re, negated })
     }
 
-    pub(crate) fn is_match(&self, path: &str) -> bool {
-        let matched = self.re.is_match(path);
+    pub fn is_match(&self, path: &str) -> bool {
+        self.is_match_any([path])
+    }
+
+    pub fn is_match_any<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> bool {
+        let matched = paths.into_iter().any(|path| self.re.is_match(path));
         if self.negated { !matched } else { matched }
     }
 }
@@ -41,11 +45,13 @@ fn glob_to_regex(glob: &str) -> Result<(Regex, bool), String> {
                 i += 2;
             }
             b'*' if i + 1 < bytes.len() && bytes[i + 1] == b'*' => {
-                re.push_str(".*");
                 i += 2;
                 // Consume trailing slash after `**` so `**/foo` matches `foo` at root too
                 if i < bytes.len() && bytes[i] == b'/' {
+                    re.push_str("(?:.*/)?");
                     i += 1;
+                } else {
+                    re.push_str(".*");
                 }
             }
             b'*' => {
@@ -161,6 +167,15 @@ mod tests {
         assert!(g.is_match("src/index.ts"));
         assert!(g.is_match("src/deep/file.ts"));
         assert!(!g.is_match("src/index.rs"));
+    }
+
+    #[test]
+    fn double_star_slash_preserves_separator_boundary() {
+        let g = GlobPattern::new("foo/**/bar").unwrap();
+        assert!(g.is_match("foo/bar"));
+        assert!(g.is_match("foo/a/bar"));
+        assert!(g.is_match("foo/a/b/bar"));
+        assert!(!g.is_match("foo/xbar"));
     }
 
     #[test]

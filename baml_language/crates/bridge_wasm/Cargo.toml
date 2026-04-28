@@ -16,6 +16,7 @@ bex_events = { workspace = true }
 bex_heap = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
+sys_glob = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
@@ -27,7 +28,6 @@ js-sys = { workspace = true }
 log = { workspace = true }
 lsp-server = { workspace = true }
 prost = { workspace = true }
-regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }

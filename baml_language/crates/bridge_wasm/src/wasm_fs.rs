@@ -133,10 +133,6 @@ impl WasmVfs {
     pub(crate) fn vfs_remove_file(&self, path: &str) -> Result<(), JsValue> {
         self.remove_file(path)
     }
-
-    pub(crate) fn vfs_read_many(&self, glob: &str) -> Result<js_sys::Array, JsValue> {
-        self.read_many(glob)
-    }
 }
 
 #[derive(Clone)]
