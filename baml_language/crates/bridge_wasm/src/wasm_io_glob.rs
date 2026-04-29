@@ -253,7 +253,7 @@ fn get_string_field(
 ) -> Result<String, String> {
     match fields.get(key) {
         None | Some(BexExternalValue::Null) => Ok(default.to_string()),
-        Some(value) => external_as_string(value).ok_or_else(|| {
+        Some(value) => value.as_string().ok_or_else(|| {
             format!(
                 "ScanOptions.{key} must be a string, got {}",
                 value.type_name()
@@ -269,28 +269,12 @@ fn get_bool_field(
 ) -> Result<bool, String> {
     match fields.get(key) {
         None | Some(BexExternalValue::Null) => Ok(default),
-        Some(value) => external_as_bool(value).ok_or_else(|| {
+        Some(value) => value.as_bool().ok_or_else(|| {
             format!(
                 "ScanOptions.{key} must be a bool, got {}",
                 value.type_name()
             )
         }),
-    }
-}
-
-fn external_as_string(value: &BexExternalValue) -> Option<String> {
-    match value {
-        BexExternalValue::String(value) => Some(value.clone()),
-        BexExternalValue::Union { value, .. } => external_as_string(value),
-        _ => None,
-    }
-}
-
-fn external_as_bool(value: &BexExternalValue) -> Option<bool> {
-    match value {
-        BexExternalValue::Bool(value) => Some(*value),
-        BexExternalValue::Union { value, .. } => external_as_bool(value),
-        _ => None,
     }
 }
 

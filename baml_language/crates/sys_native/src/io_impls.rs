@@ -533,22 +533,6 @@ fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, OpE
         .map_err(|_| OpErrorKind::Other("Invalid glob handle type".into()))
 }
 
-fn external_as_string(value: &BexExternalValue) -> Option<String> {
-    match value {
-        BexExternalValue::String(value) => Some(value.clone()),
-        BexExternalValue::Union { value, .. } => external_as_string(value),
-        _ => None,
-    }
-}
-
-fn external_as_bool(value: &BexExternalValue) -> Option<bool> {
-    match value {
-        BexExternalValue::Bool(value) => Some(*value),
-        BexExternalValue::Union { value, .. } => external_as_bool(value),
-        _ => None,
-    }
-}
-
 impl io::IoNamespaceGlob for NativeSysOps {
     fn new(
         &self,
@@ -585,13 +569,13 @@ impl io::IoClassGlobGlob for NativeSysOps {
                     let get_string = |key: &str, default: &str| {
                         fields
                             .get(key)
-                            .and_then(external_as_string)
+                            .and_then(BexExternalValue::as_string)
                             .unwrap_or_else(|| default.to_string())
                     };
                     let get_bool = |key: &str, default: bool| {
                         fields
                             .get(key)
-                            .and_then(external_as_bool)
+                            .and_then(BexExternalValue::as_bool)
                             .unwrap_or(default)
                     };
                     let cwd = get_string("cwd", ".");
