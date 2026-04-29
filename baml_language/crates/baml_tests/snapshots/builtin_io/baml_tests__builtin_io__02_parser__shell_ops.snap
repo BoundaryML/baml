@@ -15,21 +15,24 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        CALL_EXPR
-          PATH_EXPR "baml.sys.shell"
-            WORD "baml"
-            DOT "."
-            WORD "sys"
-            DOT "."
-            WORD "shell"
-          CALL_ARGS
-            L_PAREN "("
-            STRING_LITERAL "echo hello"
-              QUOTE """
-              WORD "echo"
-              WORD "hello"
-              QUOTE """
-            R_PAREN ")"
+        FIELD_ACCESS_EXPR
+          CALL_EXPR
+            PATH_EXPR "baml.sys.shell"
+              WORD "baml"
+              DOT "."
+              WORD "sys"
+              DOT "."
+              WORD "shell"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "echo hello"
+                QUOTE """
+                WORD "echo"
+                WORD "hello"
+                QUOTE """
+              R_PAREN ")"
+          DOT "."
+          WORD "stdout"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -54,17 +57,20 @@ SOURCE_FILE
             WORD "la"
             QUOTE """
           SEMICOLON ";"
-        CALL_EXPR
-          PATH_EXPR "baml.sys.shell"
-            WORD "baml"
-            DOT "."
-            WORD "sys"
-            DOT "."
-            WORD "shell"
-          CALL_ARGS "(cmd)"
-            L_PAREN "("
-            WORD "cmd"
-            R_PAREN ")"
+        FIELD_ACCESS_EXPR
+          CALL_EXPR
+            PATH_EXPR "baml.sys.shell"
+              WORD "baml"
+              DOT "."
+              WORD "sys"
+              DOT "."
+              WORD "shell"
+            CALL_ARGS "(cmd)"
+              L_PAREN "("
+              WORD "cmd"
+              R_PAREN ")"
+          DOT "."
+          WORD "stdout"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -118,14 +124,86 @@ SOURCE_FILE
           SEMICOLON ";"
         BINARY_EXPR
           BINARY_EXPR
-            WORD "result1"
+            PATH_EXPR "result1.stdout"
+              WORD "result1"
+              DOT "."
+              WORD "stdout"
             PLUS "+"
             STRING_LITERAL " - "
               QUOTE """
               MINUS "-"
               QUOTE """
           PLUS "+"
-          WORD "result2"
+          PATH_EXPR "result2.stdout"
+            WORD "result2"
+            DOT "."
+            WORD "stdout"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CheckExitCode"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        FIELD_ACCESS_EXPR
+          CALL_EXPR
+            PATH_EXPR "baml.sys.shell"
+              WORD "baml"
+              DOT "."
+              WORD "sys"
+              DOT "."
+              WORD "shell"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "exit 42"
+                QUOTE """
+                WORD "exit"
+                INTEGER_LITERAL "42"
+                QUOTE """
+              R_PAREN ")"
+          DOT "."
+          WORD "exit_code"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CheckOk"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "bool"
+      WORD "bool"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          FIELD_ACCESS_EXPR
+            CALL_EXPR
+              PATH_EXPR "baml.sys.shell"
+                WORD "baml"
+                DOT "."
+                WORD "sys"
+                DOT "."
+                WORD "shell"
+              CALL_ARGS
+                L_PAREN "("
+                STRING_LITERAL "echo test"
+                  QUOTE """
+                  WORD "echo"
+                  KW_TEST "test"
+                  QUOTE """
+                R_PAREN ")"
+            DOT "."
+            WORD "ok"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
         R_BRACE "}"
 
 === ERRORS ===

@@ -1016,7 +1016,7 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _c: CallId,
         _command: String,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
+    ) -> SysOpOutput<io::owned::sys::ShellOutput> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
     fn sleep(

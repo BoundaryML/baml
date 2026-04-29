@@ -2211,6 +2211,23 @@ fn baml.sys.argv = builtin(vm)
 
 fn baml.sys.now_ms = builtin(vm)
 
+fn baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.sys.ShellOutput // self // param
+    let _2: int
+
+    bb0: {
+        _2 = copy _1.2;
+        _0 = copy _2 == const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.sys.panic = builtin(vm)
 
 fn baml.sys.shell = builtin(io)

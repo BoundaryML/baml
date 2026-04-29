@@ -211,7 +211,7 @@ async fn resolve_credentials(
     if io
         .sys_shell("gcloud auth print-access-token --quiet 2>/dev/null".to_string())
         .await
-        .is_ok_and(|out| !out.trim().is_empty())
+        .is_ok_and(|out| !out.stdout.trim().is_empty())
     {
         return Ok(ResolvedCredentials::GcloudCli);
     }
@@ -245,7 +245,7 @@ async fn token_from_credentials(
                         "Google Cloud: gcloud auth print-access-token failed: {e}"
                     ))
                 })?;
-            let token = output.trim().to_string();
+            let token = output.stdout.trim().to_string();
             if token.is_empty() {
                 Err(BuildRequestError::AuthorizationFailed(
                     "Google Cloud: gcloud auth print-access-token returned empty".into(),
@@ -278,7 +278,7 @@ async fn project_id_from_credentials(
                 .sys_shell("gcloud config get-value project 2>/dev/null".to_string())
                 .await
             {
-                let pid = output.trim().to_string();
+                let pid = output.stdout.trim().to_string();
                 if !pid.is_empty() {
                     return Some(pid);
                 }
@@ -352,7 +352,7 @@ async fn project_id_from_credentials(
             .sys_shell("gcloud config get-value project 2>/dev/null".to_string())
             .await
         {
-            let pid = output.trim().to_string();
+            let pid = output.stdout.trim().to_string();
             if !pid.is_empty() {
                 return Some(pid);
             }
@@ -1234,7 +1234,17 @@ mod tests {
         fn sys_shell(
             &self,
             _: String,
-        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            sys_types::generated::owned::sys::ShellOutput,
+                            RuntimeIoError,
+                        >,
+                    > + Send
+                    + '_,
+            >,
+        > {
             Box::pin(async { Err(RuntimeIoError::Other("unsupported".into())) })
         }
     }
@@ -1319,7 +1329,17 @@ mod tests {
         fn sys_shell(
             &self,
             _: String,
-        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            sys_types::generated::owned::sys::ShellOutput,
+                            RuntimeIoError,
+                        >,
+                    > + Send
+                    + '_,
+            >,
+        > {
             Box::pin(async { Err(RuntimeIoError::Other("unsupported".into())) })
         }
     }
@@ -1414,7 +1434,17 @@ mod tests {
         fn sys_shell(
             &self,
             _: String,
-        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            sys_types::generated::owned::sys::ShellOutput,
+                            RuntimeIoError,
+                        >,
+                    > + Send
+                    + '_,
+            >,
+        > {
             Box::pin(async { Err(RuntimeIoError::Other("unsupported".into())) })
         }
     }
@@ -1561,7 +1591,17 @@ mod tests {
         fn sys_shell(
             &self,
             _: String,
-        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            sys_types::generated::owned::sys::ShellOutput,
+                            RuntimeIoError,
+                        >,
+                    > + Send
+                    + '_,
+            >,
+        > {
             Box::pin(async { Err(RuntimeIoError::Other("unsupported".into())) })
         }
     }

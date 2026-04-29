@@ -167,19 +167,29 @@ function user.ConnectReadAndClose() -> string throws never {
 }
 function user.RunCommand() -> string throws never {
   { : string
-    baml.sys.shell("echo hello") : string
+    baml.sys.shell("echo hello").stdout : string
   }
 }
 function user.RunCommandWithVar() -> string throws never {
   { : string
     let cmd = "ls -la" : "ls -la" -> string
-    baml.sys.shell(cmd) : string
+    baml.sys.shell(cmd).stdout : string
   }
 }
 function user.ChainCommands() -> string throws never {
   { : string
-    let result1 = baml.sys.shell("pwd") : string
-    let result2 = baml.sys.shell("whoami") : string
-    result1 + " - " + result2 : string
+    let result1 = baml.sys.shell("pwd") : baml.sys.ShellOutput
+    let result2 = baml.sys.shell("whoami") : baml.sys.ShellOutput
+    result1.stdout + " - " + result2.stdout : string
+  }
+}
+function user.CheckExitCode() -> int throws never {
+  { : int
+    baml.sys.shell("exit 42").exit_code : int
+  }
+}
+function user.CheckOk() -> bool throws never {
+  { : bool
+    baml.sys.shell("echo test").ok() : bool
   }
 }

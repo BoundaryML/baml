@@ -59,10 +59,28 @@ function user.ChainCommands() -> string {
     await
     store_var result2
     load_var result1
+    load_field .stdout
     load_const " - "
     bin_op +
     load_var result2
+    load_field .stdout
     bin_op +
+    return
+}
+
+function user.CheckExitCode() -> int {
+    load_const "exit 42"
+    dispatch_future baml.sys.shell
+    await
+    load_field .exit_code
+    return
+}
+
+function user.CheckOk() -> bool {
+    load_const "echo test"
+    dispatch_future baml.sys.shell
+    await
+    call baml.sys.ShellOutput.ok
     return
 }
 
@@ -306,6 +324,7 @@ function user.RunCommand() -> string {
     load_const "echo hello"
     dispatch_future baml.sys.shell
     await
+    load_field .stdout
     return
 }
 
@@ -313,6 +332,7 @@ function user.RunCommandWithVar() -> string {
     load_const "ls -la"
     dispatch_future baml.sys.shell
     await
+    load_field .stdout
     return
 }
 

@@ -938,6 +938,21 @@ class baml.stream.StreamNoYield$stream {
 }
 
 --- <builtin>/baml/ns_sys/sys.baml ---
+class baml.sys.ShellOutput {
+  stdout: string
+  stderr: string
+  exit_code: int
+}
+function baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool throws never {
+  { : bool
+    self.exit_code == 0 : bool
+  }
+}
+class baml.sys.ShellOutput$stream {
+  stdout: null | string
+  stderr: null | string
+  exit_code: null | int
+}
 
 --- <builtin>/baml/ns_unstable/unstable.baml ---
 

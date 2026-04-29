@@ -710,29 +710,23 @@ impl io::IoNamespaceSys for NativeSysOps {
         _call_id: CallId,
         command: String,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
+    ) -> SysOpOutput<owned::sys::ShellOutput> {
         SysOpOutput::async_op(async move {
             let output = tokio::process::Command::new("sh")
                 .arg("-c")
                 .arg(&command)
                 .output()
                 .await
-                .map_err(|e| {
-                    OpErrorKind::Other(format!("Failed to execute command '{command}': {e}"))
+                .map_err(|e| OpErrorKind::Io {
+                    message: format!("Failed to execute command '{command}': {e}"),
                 })?;
 
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                let code = output.status.code().unwrap_or(-1);
-                return Err(OpErrorKind::Other(format!(
-                    "Command '{}' failed with exit code {}: {}",
-                    command,
-                    code,
-                    stderr.trim()
-                )));
-            }
-
-            Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+            let exit_code = i64::from(output.status.code().unwrap_or(-1));
+            Ok(owned::sys::ShellOutput {
+                stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+                exit_code,
+            })
         })
     }
 

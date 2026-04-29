@@ -1647,6 +1647,14 @@ function baml.net.Socket.read(self: null) -> string {
 function baml.net.connect(addr: string) -> baml.net.Socket {
 }
 
+function baml.sys.ShellOutput.ok(self: null) -> bool {
+    load_var self
+    load_field .exit_code
+    load_const 0
+    cmp_op ==
+    return
+}
+
 function baml.sys.argv() -> string[] {
 }
 
@@ -1656,7 +1664,7 @@ function baml.sys.now_ms() -> int {
 function baml.sys.panic(message: string) -> void {
 }
 
-function baml.sys.shell(command: string) -> string {
+function baml.sys.shell(command: string) -> baml.sys.ShellOutput {
 }
 
 function baml.sys.sleep(ms: int) -> null {

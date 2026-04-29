@@ -1,4 +1,14 @@
-function shell(command: string) -> string throws root.errors.Io {
+class ShellOutput {
+  stdout string
+  stderr string
+  exit_code int
+
+  function ok(self) -> bool {
+    self.exit_code == 0
+  }
+}
+
+function shell(command: string) -> ShellOutput throws root.errors.Io {
   $rust_io_function
 }
 

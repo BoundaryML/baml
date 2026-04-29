@@ -8,7 +8,7 @@ async fn shell_echo() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("echo 'Hello From Shell!'")
+                baml.sys.shell("echo 'Hello From Shell!'").stdout
             }
         "#
     );
@@ -18,6 +18,7 @@ async fn shell_echo() {
         load_const "echo 'Hello From Shell!'"
         dispatch_future baml.sys.shell
         await
+        load_field .stdout
         return
     }
     "#);
@@ -32,7 +33,7 @@ async fn shell_with_pipe() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("echo 'hello world' | tr 'a-z' 'A-Z'")
+                baml.sys.shell("echo 'hello world' | tr 'a-z' 'A-Z'").stdout
             }
         "#
     );
@@ -42,6 +43,7 @@ async fn shell_with_pipe() {
         load_const "echo 'hello world' | tr 'a-z' 'A-Z'"
         dispatch_future baml.sys.shell
         await
+        load_field .stdout
         return
     }
     "#);
@@ -55,43 +57,48 @@ async fn shell_with_pipe() {
 async fn shell_failing_command() {
     let output = baml_test!(
         r#"
-            function main() -> string {
-                baml.sys.shell("exit 1")
+            function main() -> int {
+                baml.sys.shell("exit 1").exit_code
             }
         "#
     );
 
     insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
+    function main() -> int {
         load_const "exit 1"
         dispatch_future baml.sys.shell
         await
+        load_field .exit_code
         return
     }
     "#);
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call baml.sys.shell: Command 'exit 1' failed with exit code 1:");
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
 #[tokio::test]
 async fn shell_nonexistent_command() {
+    // A nonexistent command run through `sh -c` produces a shell error
+    // (exit code 127) rather than a spawn failure, because `sh` itself
+    // spawns successfully. This should return a ShellOutput, not an error.
     let output = baml_test!(
         r#"
-            function main() -> string {
-                baml.sys.shell("nonexistent_command_12345")
+            function main() -> int {
+                baml.sys.shell("nonexistent_command_12345").exit_code
             }
         "#
     );
 
     insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
+    function main() -> int {
         load_const "nonexistent_command_12345"
         dispatch_future baml.sys.shell
         await
+        load_field .exit_code
         return
     }
     "#);
-    // Error message includes shell output which differs across platforms.
-    assert!(output.result.is_err());
+    // Shell returns 127 for command not found
+    assert_eq!(output.result, Ok(BexExternalValue::Int(127)));
 }
 
 #[tokio::test]
@@ -100,7 +107,7 @@ async fn shell_with_variable() {
         r#"
             function main() -> string {
                 let cmd = "echo 'dynamic'";
-                baml.sys.shell(cmd)
+                baml.sys.shell(cmd).stdout
             }
         "#
     );
@@ -110,6 +117,7 @@ async fn shell_with_variable() {
         load_const "echo 'dynamic'"
         dispatch_future baml.sys.shell
         await
+        load_field .stdout
         return
     }
     "#);
@@ -117,4 +125,41 @@ async fn shell_with_variable() {
         output.result,
         Ok(BexExternalValue::String("dynamic\n".to_string()))
     );
+}
+
+#[tokio::test]
+async fn shell_stderr() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                baml.sys.shell("echo 'error output' >&2").stderr
+            }
+        "#
+    );
+
+    assert!(output.result.is_ok());
+    if let Ok(BexExternalValue::String(stderr)) = &output.result {
+        assert!(stderr.contains("error output"));
+    }
+}
+
+#[tokio::test]
+async fn shell_ok_method() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool {
+                baml.sys.shell("echo hi").ok()
+            }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+
+    let output2 = baml_test!(
+        r#"
+            function main() -> bool {
+                baml.sys.shell("exit 1").ok()
+            }
+        "#
+    );
+    assert_eq!(output2.result, Ok(BexExternalValue::Bool(false)));
 }

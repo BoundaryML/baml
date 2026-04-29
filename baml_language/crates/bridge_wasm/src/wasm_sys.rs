@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use sys_ops::io::IoNamespaceSys;
+use sys_ops::io::{self, IoNamespaceSys};
 use sys_types::{BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput};
 use wasm_bindgen::prelude::*;
 
@@ -27,7 +27,7 @@ impl IoNamespaceSys for WasmSys {
         _call_id: CallId,
         _command: String,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
+    ) -> SysOpOutput<io::owned::sys::ShellOutput> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 
