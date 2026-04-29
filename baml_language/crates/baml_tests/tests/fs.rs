@@ -1161,3 +1161,68 @@ async fn fs_mkdir_recursive_is_idempotent() {
 
     assert_eq!(output.result, Ok(BexExternalValue::Null));
 }
+
+#[tokio::test]
+async fn fs_mkdir_non_recursive_errors_when_dir_exists() {
+    // BEP-037: non-recursive mkdir on a path that already exists must error.
+    let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir(format!("{root}/existing")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.mkdir("{root}/existing", baml.fs.MkdirOptions {{ recursive: false }})
+            }}
+        "#
+    ));
+
+    assert!(
+        output.result.is_err(),
+        "expected error creating an already-existing dir, got: {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn fs_mkdir_recursive_errors_when_leaf_is_file() {
+    // BEP-037: even with recursive=true, mkdir must error if the leaf path
+    // exists as a regular file. Idempotency only applies when the leaf is
+    // already a directory.
+    let (_tmp, root) = tmp(indexmap! { "leaf.txt" => "im a file" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.mkdir("{root}/leaf.txt", baml.fs.MkdirOptions {{ recursive: true }})
+            }}
+        "#
+    ));
+
+    assert!(
+        output.result.is_err(),
+        "expected error: leaf path exists as a file, got: {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn fs_read_dir_on_file_errors() {
+    // BEP-037: read_dir on a path that exists but isn't a directory must
+    // throw Io. Without this, callers couldn't distinguish "empty dir" from
+    // "you pointed at a file".
+    let (_tmp, root) = tmp(indexmap! { "not_a_dir.txt" => "x" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}/not_a_dir.txt")
+            }}
+        "#
+    ));
+
+    assert!(
+        output.result.is_err(),
+        "expected error reading_dir on a regular file, got: {:?}",
+        output.result
+    );
+}

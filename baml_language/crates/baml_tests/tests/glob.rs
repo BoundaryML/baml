@@ -108,6 +108,126 @@ async fn glob_matches_question_mark_no_match() {
     assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
 }
 
+#[tokio::test]
+async fn glob_matches_bracket_character_class() {
+    // [abc] matches a single character from the set. Exercised through the
+    // BAML surface to catch any wiring regression between the parser's
+    // string-literal handling, codegen for Glob.matches, and GlobPattern.
+    let output = baml_test!(
+        r#"
+            function main() -> bool[] {
+                let g = baml.glob.new("[abc].txt");
+                [g.matches("a.txt"), g.matches("b.txt"), g.matches("c.txt"), g.matches("d.txt")]
+            }
+        "#
+    );
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array, got: {:?}", output.result);
+    };
+    let bools: Vec<bool> = items
+        .iter()
+        .map(|v| match v {
+            BexExternalValue::Bool(b) => *b,
+            _ => panic!("expected bool"),
+        })
+        .collect();
+    assert_eq!(bools, vec![true, true, true, false]);
+}
+
+#[tokio::test]
+async fn glob_matches_bracket_range() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool[] {
+                let g = baml.glob.new("[a-c].txt");
+                [g.matches("a.txt"), g.matches("c.txt"), g.matches("d.txt")]
+            }
+        "#
+    );
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array");
+    };
+    let bools: Vec<bool> = items
+        .iter()
+        .map(|v| match v {
+            BexExternalValue::Bool(b) => *b,
+            _ => panic!(),
+        })
+        .collect();
+    assert_eq!(bools, vec![true, true, false]);
+}
+
+#[tokio::test]
+async fn glob_matches_negated_bracket() {
+    // [^abc] matches a single character NOT in the set.
+    let output = baml_test!(
+        r#"
+            function main() -> bool[] {
+                let g = baml.glob.new("[^abc].txt");
+                [g.matches("a.txt"), g.matches("d.txt")]
+            }
+        "#
+    );
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array");
+    };
+    let bools: Vec<bool> = items
+        .iter()
+        .map(|v| match v {
+            BexExternalValue::Bool(b) => *b,
+            _ => panic!(),
+        })
+        .collect();
+    assert_eq!(bools, vec![false, true]);
+}
+
+#[tokio::test]
+async fn glob_matches_alternation() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool[] {
+                let g = baml.glob.new("*.{ts,tsx}");
+                [g.matches("app.ts"), g.matches("app.tsx"), g.matches("app.js")]
+            }
+        "#
+    );
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array");
+    };
+    let bools: Vec<bool> = items
+        .iter()
+        .map(|v| match v {
+            BexExternalValue::Bool(b) => *b,
+            _ => panic!(),
+        })
+        .collect();
+    assert_eq!(bools, vec![true, true, false]);
+}
+
+#[tokio::test]
+async fn glob_matches_negated_pattern() {
+    // `!index.ts` — match everything except index.ts.
+    let output = baml_test!(
+        r#"
+            function main() -> bool[] {
+                let g = baml.glob.new("!index.ts");
+                [g.matches("main.ts"), g.matches("index.ts")]
+            }
+        "#
+    );
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array");
+    };
+    let bools: Vec<bool> = items
+        .iter()
+        .map(|v| match v {
+            BexExternalValue::Bool(b) => *b,
+            _ => panic!(),
+        })
+        .collect();
+    assert_eq!(bools, vec![true, false]);
+}
+
 // ============================================================================
 // baml.glob.new + Glob.scan
 // ============================================================================
@@ -307,6 +427,32 @@ async fn glob_scan_default_prunes_dot_directories() {
     assert_eq!(
         string_items(output.result.as_ref().unwrap()),
         vec!["visible.txt"]
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn glob_scan_follows_symlinked_directory_when_enabled() {
+    // follow_symlinks=true: a symlinked directory under the scan root should
+    // be traversed and its contents matched, just like a real directory.
+    let outer = tempfile::TempDir::new().unwrap();
+    let target = tempfile::TempDir::new().unwrap();
+    std::fs::write(target.path().join("hidden_via_link.txt"), "x").unwrap();
+    let outer_root = outer.path().display().to_string().replace('\\', "/");
+    std::os::unix::fs::symlink(target.path(), outer.path().join("link_dir")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string[] {{
+                let g = baml.glob.new("**/*.txt");
+                g.scan(baml.glob.ScanOptions {{ cwd: "{outer_root}", follow_symlinks: true }})
+            }}
+        "#
+    ));
+
+    assert_eq!(
+        string_items(output.result.as_ref().unwrap()),
+        vec!["link_dir/hidden_via_link.txt"]
     );
 }
 
