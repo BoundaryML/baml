@@ -16,15 +16,15 @@ export default async function Page() {
       <VariantHome />
 
       {/* Scroll-scrubbed intro video — full length tied to scroll */}
-      <ScrollVideo src="/scroll-animation.mp4" />
+      {/* <ScrollVideo src="/scroll-animation.mp4" /> */}
 
-      <section
+      {/* <section
         className="w-full relative"
         id="story"
         aria-label="A brief history of languages"
       >
         <StoryTimeline />
-      </section>
+      </section> */}
 
       {/* Why a Language — typographic two-column argument */}
       <WhyALanguage />
@@ -33,7 +33,7 @@ export default async function Page() {
       <IncrementalAdoption />
 
       {/* Built for the Future of AI — bento grid in editorial theme */}
-      <BuiltForTheFuture />
+      {/* <BuiltForTheFuture /> */}
 
       <div className="relative z-10 mx-auto flex w-full max-w-[100rem] flex-col items-center gap-12 border-x border-border bg-background sm:gap-20">
         <TestimonialSection />

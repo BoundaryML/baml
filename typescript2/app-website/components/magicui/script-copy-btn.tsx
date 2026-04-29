@@ -89,11 +89,22 @@ export function ScriptCopyBtn({
         </div>
         <div className="relative flex items-center">
           <div className="min-w-0 w-full grow font-mono">
-            <div className="h-10 rounded border border-border bg-background px-3 text-[11px] sm:text-xs flex items-center">
+            <button
+              type="button"
+              aria-label={linkHref ? 'Open docs' : copied ? 'Copied' : 'Copy to clipboard'}
+              onClick={() => {
+                if (linkHref) {
+                  window.open(linkHref, '_blank', 'noopener,noreferrer');
+                } else {
+                  copyToClipboard();
+                }
+              }}
+              className="h-10 w-full rounded border border-border bg-background px-3 text-[11px] sm:text-xs flex items-center cursor-pointer text-left hover:bg-muted/40 transition-colors"
+            >
               <span className="block w-full overflow-x-auto whitespace-pre">
                 {command}
               </span>
-            </div>
+            </button>
           </div>
           <Button
             aria-label={
@@ -103,7 +114,7 @@ export function ScriptCopyBtn({
                   ? 'Copied'
                   : 'Copy to clipboard'
             }
-            className="relative ml-2 hidden rounded-md md:block"
+            className="relative ml-2 hidden rounded-md md:block cursor-pointer"
             onClick={() => {
               if (linkHref) {
                 window.open(linkHref, '_blank', 'noopener,noreferrer');

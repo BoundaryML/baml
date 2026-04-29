@@ -62,7 +62,7 @@ const TrustMarquee = () => (
   </div>
 );
 
-const ROTATING_WORDS = ['writing', 'building', 'running', 'evaluating', 'debugging', 'orchestrating', 'shipping', 'testing', 'training', 'deploying', 'scaling', 'securing', 'streaming'];
+const ROTATING_WORDS = ['harnessing', 'writing', 'building', 'running', 'evaluating', 'debugging', 'orchestrating', 'shipping', 'testing', 'training', 'deploying', 'scaling', 'securing', 'streaming'];
 const HOLD_MS = 2200;
 const TRANSITION_MS = 400;
 
@@ -561,7 +561,7 @@ const HeroSection = () => {
                     key={opt.id}
                     type="button"
                     onClick={() => setInstallPath(opt.id)}
-                    className="rounded-md px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1.5"
+                    className="rounded-md px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
                     style={installPath === opt.id
                       ? { background: '#1A1612', color: '#fff', border: '1px solid #1A1612' }
                       : { background: 'transparent', color: '#5C5852', border: '1px solid #D9D3C4' }
@@ -588,18 +588,18 @@ const HeroSection = () => {
           />
           <Link
             href="/how-the-playground-works"
-            className="hover:text-[#6D28D9] transition-colors"
+            className="group text-[#5C5852] hover:text-[#A78BFA] no-underline transition-colors duration-500 ease-out"
             style={{
               padding: '12px 24px',
               fontSize: '13px',
-              color: '#5C5852',
               borderTop: '1px solid #D9D3C4',
               backgroundColor: '#ffffff',
-              textDecoration: 'none',
               flexShrink: 0,
             }}
           >
-            Wondering how you&apos;re running BAML in your browser? →
+            <span className="bg-gradient-to-r from-[#A78BFA] to-[#A78BFA] bg-no-repeat [background-position:0_100%] bg-[length:0%_1px] group-hover:bg-[length:100%_1px] transition-[background-size] duration-500 ease-out">
+              Wondering how you&apos;re running BAML in your browser? →
+            </span>
           </Link>
         </div>
       </div>
