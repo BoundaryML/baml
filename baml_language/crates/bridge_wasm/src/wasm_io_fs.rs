@@ -260,7 +260,12 @@ impl io::IoNamespaceFs for WasmIoFs {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         let data = content.into_bytes();
-        let len = i64::try_from(data.len()).unwrap_or(i64::MAX);
+        let Ok(len) = i64::try_from(data.len()) else {
+            return SysOpOutput::err(OpErrorKind::Other(format!(
+                "write size {} exceeds i64::MAX",
+                data.len()
+            )));
+        };
         let uint8 = Uint8Array::from(data.as_slice());
         match self.vfs().vfs_write_file(&path, &uint8) {
             Ok(()) => SysOpOutput::ok(len),
@@ -276,7 +281,12 @@ impl io::IoNamespaceFs for WasmIoFs {
         content: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        let len = i64::try_from(content.len()).unwrap_or(i64::MAX);
+        let Ok(len) = i64::try_from(content.len()) else {
+            return SysOpOutput::err(OpErrorKind::Other(format!(
+                "write size {} exceeds i64::MAX",
+                content.len()
+            )));
+        };
         let uint8 = Uint8Array::from(content.as_slice());
         match self.vfs().vfs_write_file(&path, &uint8) {
             Ok(()) => SysOpOutput::ok(len),

@@ -161,9 +161,21 @@ impl ScanArgs {
                 let dot = get_bool_field(fields, "dot", false)?;
                 let absolute = get_bool_field(fields, "absolute", false)?;
                 let only_files = get_bool_field(fields, "only_files", true)?;
-                let _follow_symlinks = get_bool_field(fields, "follow_symlinks", false)?;
-                let _throw_on_broken =
-                    get_bool_field(fields, "throw_error_on_broken_symlink", false)?;
+                // The WASM bridge has no symlink concept (entries come from a
+                // VFS that doesn't model symlinks). Reject explicit non-default
+                // values for these options instead of silently no-opping, so
+                // users don't think the option took effect.
+                if get_bool_field(fields, "follow_symlinks", false)? {
+                    return Err(
+                        "ScanOptions.follow_symlinks is not supported in the WASM bridge".into(),
+                    );
+                }
+                if get_bool_field(fields, "throw_error_on_broken_symlink", false)? {
+                    return Err(
+                        "ScanOptions.throw_error_on_broken_symlink is not supported in the WASM bridge"
+                            .into(),
+                    );
+                }
                 Ok(Self {
                     cwd: normalize_cwd(&cwd),
                     dot,
