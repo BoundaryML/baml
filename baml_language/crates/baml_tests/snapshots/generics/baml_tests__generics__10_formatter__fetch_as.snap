@@ -1,5 +1,15 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== STRONG AST ERROR ===
-An element at fetch_as.baml:8:29 was a token when it should have been a node.
+class Todo {
+    id: int,
+    title: string,
+    completed: bool,
+    userId: int,
+}
+
+function GetTodo() -> Todo {
+    baml.fetch_as<Todo>(
+        baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/todos/1" },
+    )
+}

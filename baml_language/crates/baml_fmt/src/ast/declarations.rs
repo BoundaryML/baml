@@ -13,6 +13,7 @@ use crate::{
 
 /// Any of the valid top-level declarations in a [`super::SourceFile`].
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum TopLevelDeclaration {
     Function(FunctionDecl),
     Class(ClassDecl),
@@ -127,6 +128,7 @@ impl Printable for TopLevelDeclaration {
 pub struct FunctionDecl {
     pub keyword: t::Function,
     pub name: t::Word,
+    pub generic_params: Option<super::GenericParamList>,
     pub params: FunctionParamList,
     pub arrow: t::Arrow,
     pub return_type: Type,
@@ -143,6 +145,14 @@ impl FromCST for FunctionDecl {
         let keyword = it.expect_parse()?;
 
         let name = it.expect_parse()?;
+
+        let generic_params =
+            if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::GENERIC_PARAM_LIST) {
+                let elem = it.next().expect("peeked");
+                Some(super::GenericParamList::from_cst(elem)?)
+            } else {
+                None
+            };
 
         let params: FunctionParamList = it.expect_parse()?;
 
@@ -165,6 +175,7 @@ impl FromCST for FunctionDecl {
         Ok(FunctionDecl {
             keyword,
             name,
+            generic_params,
             params,
             arrow,
             return_type,
@@ -185,6 +196,9 @@ impl Printable for FunctionDecl {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
+        if let Some(ref gp) = self.generic_params {
+            printer.print(gp, shape.clone());
+        }
 
         let mut param_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
         let param_info = param_printer.print(&self.params, Shape::unlimited_single_line());
@@ -604,6 +618,8 @@ pub struct LlmFunctionBody {
     pub client: ClientField,
     /// Not guaranteed that client is before prompt in the input.
     pub prompt: PromptField,
+    /// Optional `type_builder { ... }` block for inline schema overrides.
+    pub type_builder: Option<TypeBuilderBlock>,
     pub close_brace: t::RBrace,
 }
 impl FromCST for LlmFunctionBody {
@@ -636,6 +652,11 @@ impl FromCST for LlmFunctionBody {
             }
         };
 
+        let type_builder = it
+            .next_if_kind(SyntaxKind::TYPE_BUILDER_BLOCK)
+            .map(TypeBuilderBlock::from_cst)
+            .transpose()?;
+
         let close_brace = it.expect_parse()?;
 
         it.expect_end()?;
@@ -644,6 +665,7 @@ impl FromCST for LlmFunctionBody {
             open_brace,
             client,
             prompt,
+            type_builder,
             close_brace,
         })
     }
@@ -673,6 +695,11 @@ impl Printable for LlmFunctionBody {
 
         printer.print_standalone_with_trivia(&self.prompt, inner_indent);
         printer.print_newline();
+
+        if let Some(type_builder) = &self.type_builder {
+            printer.print_standalone_with_trivia(type_builder, inner_indent);
+            printer.print_newline();
+        }
 
         let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
         printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
@@ -723,7 +750,11 @@ impl FromCST for ClientField {
                     let word = it.expect_parse()?;
                     rest.push((dot, word));
                 }
-                ClientName::Path(PathExpr { first, rest })
+                ClientName::Path(PathExpr {
+                    first,
+                    rest,
+                    generic_args: None,
+                })
             }
             SyntaxKind::PATH_EXPR => ClientName::Path(PathExpr::from_cst(name)?),
             found => {
@@ -911,6 +942,7 @@ impl Printable for PromptValue {
 pub struct ClassDecl {
     pub keyword: t::Class,
     pub name: t::Word,
+    pub generic_params: Option<super::GenericParamList>,
     pub open_brace: t::LBrace,
     pub items: Vec<ClassItem>,
     pub close_brace: t::RBrace,
@@ -926,6 +958,14 @@ impl FromCST for ClassDecl {
         let keyword = it.expect_parse()?;
 
         let name = it.expect_parse()?;
+
+        let generic_params =
+            if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::GENERIC_PARAM_LIST) {
+                let elem = it.next().expect("peeked");
+                Some(super::GenericParamList::from_cst(elem)?)
+            } else {
+                None
+            };
 
         let open_brace = it.expect_parse()?;
 
@@ -976,6 +1016,7 @@ impl FromCST for ClassDecl {
         Ok(ClassDecl {
             keyword,
             name,
+            generic_params,
             open_brace,
             items,
             close_brace,
@@ -996,6 +1037,9 @@ impl Printable for ClassDecl {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
+        if let Some(ref gp) = self.generic_params {
+            printer.print(gp, shape.clone());
+        }
         printer.print_str(" ");
         printer.print_raw_token(&self.open_brace);
         printer.print_trivia_all_trailing_for(self.open_brace.span());
@@ -1211,6 +1255,7 @@ pub enum ClassFieldDelimiter {
 
 /// Any of the valid items in a [`ClassDecl`].
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum ClassItem {
     Field(ClassField, Option<ClassFieldDelimiter>),
     Function(FunctionDecl),
@@ -2515,7 +2560,10 @@ pub struct WithClause {
 #[derive(Debug)]
 pub struct TestExprDecl {
     pub keyword: t::Test,
-    pub name: t::QuotedString,
+    /// Test name — any expression that evaluates to a string. The parser
+    /// accepts string literals, raw strings, identifiers, concatenations,
+    /// arithmetic, etc.; type-checking enforces the string requirement.
+    pub name: Expression,
     pub with_clause: Option<WithClause>,
     pub body: BlockExpr,
 }
@@ -2530,8 +2578,9 @@ impl FromCST for TestExprDecl {
         // keyword: "test"
         let keyword = it.expect_parse()?;
 
-        // name — string literal
-        let name = it.expect_parse()?;
+        // name — any expression
+        let name_elem = it.expect_next("a test name expression")?;
+        let name = Expression::from_cst(name_elem)?;
 
         // optional `with` clause
         let with_clause = if let Some(with_kw_elem) = it.next_if_kind(SyntaxKind::KW_WITH) {
@@ -2592,7 +2641,9 @@ impl Printable for TestExprDecl {
 #[derive(Debug)]
 pub struct TestSetDecl {
     pub keyword: t::TestSet,
-    pub name: t::QuotedString,
+    /// Testset name — any expression (string literal, raw string, identifier,
+    /// concatenation, etc.); type-checking enforces the string requirement.
+    pub name: Expression,
     pub with_clause: Option<WithClause>,
     pub body: BlockExpr,
 }
@@ -2607,8 +2658,9 @@ impl FromCST for TestSetDecl {
         // keyword: "testset"
         let keyword = it.expect_parse()?;
 
-        // name — string literal
-        let name = it.expect_parse()?;
+        // name — any expression
+        let name_elem = it.expect_next("a testset name expression")?;
+        let name = Expression::from_cst(name_elem)?;
 
         // optional `with` clause
         let with_clause = if let Some(with_kw_elem) = it.next_if_kind(SyntaxKind::KW_WITH) {
