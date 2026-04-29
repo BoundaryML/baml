@@ -18,3 +18,12 @@ function user.GetLlmText() -> llm.Response {
     init_field .tokens
     return
 }
+
+function user.ThrowsHttpResponse() -> null {
+    alloc_instance user.http.Response
+    load_const 500
+    init_field .status
+    load_const "boom"
+    init_field .body
+    throw
+}

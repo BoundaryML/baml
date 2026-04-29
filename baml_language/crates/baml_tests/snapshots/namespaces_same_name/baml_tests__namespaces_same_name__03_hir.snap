@@ -8,6 +8,9 @@ function user.GetHttpStatus() -> root.http.Response  [expr] {
 function user.GetLlmText() -> root.llm.Response  [expr] {
   {  } root.llm.Response { text: "hello", tokens: 5 }
 }
+function user.ThrowsHttpResponse() -> ?  [expr] {
+  { throw root.http.Response { status: 500, body: "boom" } }
+}
 class user.http.Response {
   status: int
   body: string

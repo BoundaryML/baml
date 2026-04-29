@@ -12,6 +12,11 @@ function user.GetHttpStatus() -> user.http.Response throws never {
     root.http.Response { status: 200, body: "ok" } : user.http.Response
   }
 }
+function user.ThrowsHttpResponse() -> ? throws user.http.Response {
+  { : never
+    throw root.http.Response { status: 500, body: "boom" } : user.http.Response
+  }
+}
 class user.http.Response {
   status: int
   body: string
