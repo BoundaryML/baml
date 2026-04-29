@@ -29,7 +29,7 @@ async fn return_enum_variant() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::variant("Shape", "Rectangle"))
+        Ok(BexExternalValue::variant("user.Shape", "Rectangle"))
     );
 }
 
@@ -60,7 +60,7 @@ async fn assign_enum_variant() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::variant("Shape", "Rectangle"))
+        Ok(BexExternalValue::variant("user.Shape", "Rectangle"))
     );
 }
 
@@ -100,6 +100,6 @@ async fn pass_enum_variant_to_function() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::variant("Shape", "Rectangle"))
+        Ok(BexExternalValue::variant("user.Shape", "Rectangle"))
     );
 }

@@ -130,12 +130,6 @@ function decodeValueHolder(holder) {
     if (holder.unionVariantValue && holder.unionVariantValue.value) {
         return decodeValueHolder(holder.unionVariantValue.value);
     }
-    if (holder.checkedValue && holder.checkedValue.value) {
-        return decodeValueHolder(holder.checkedValue.value);
-    }
-    if (holder.streamingStateValue && holder.streamingStateValue.value) {
-        return decodeValueHolder(holder.streamingStateValue.value);
-    }
     // handle_value: pass the protobufjs Long directly as the key — BamlHandle's
     // constructor accepts { low, high } which is layout-compatible with Long.
     if (holder.handleValue) {

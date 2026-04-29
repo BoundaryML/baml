@@ -29,8 +29,6 @@ message BamlOutboundValue {
     BamlValueList list_value = 11;
     BamlValueMap map_value = 12;
     BamlValueUnionVariant union_variant_value = 13;
-    BamlValueChecked checked_value = 14;
-    BamlValueStreamingState streaming_state_value = 15;
     BamlHandle handle_value = 16;
     BamlValueMedia media_value = 17;
     BamlValuePromptAst prompt_ast_value = 18;
@@ -92,12 +90,6 @@ message BamlValueUnionVariant {
   BamlFieldType self_type = 4;
   string value_option_name = 5;
   BamlOutboundValue value = 6;
-}
-
-message BamlValueChecked {
-  BamlTypeName name = 1;
-  BamlOutboundValue value = 2;
-  repeated BamlCheckValue checks = 3;
 }
 
 // -----------------------------------------------------------------------------
@@ -273,23 +265,3 @@ message BamlCheckValue {
   BamlOutboundValue value = 4;
 }
 
-// -----------------------------------------------------------------------------
-// Other Enums
-// -----------------------------------------------------------------------------
-
-enum BamlStreamState {
-  PENDING = 0;
-  STARTED = 1;
-  DONE = 2;
-}
-
-// -----------------------------------------------------------------------------
-// BamlOutboundValue definitions
-// -----------------------------------------------------------------------------
-
-// The wrapper message for BamlValueStreamingState.
-message BamlValueStreamingState {
-  BamlOutboundValue value = 1;
-  BamlStreamState state = 2;
-  BamlTypeName name = 3;
-}

@@ -82,7 +82,7 @@ async fn class_with_union_field() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Instance {
-            class_name: "Response".to_string(),
+            class_name: "user.Response".to_string(),
             fields: indexmap! {
                 "data".to_string() => BexExternalValue::union(BexExternalValue::Int(42), [Ty::int(), Ty::string()], Ty::int()),
             },
@@ -111,7 +111,7 @@ async fn union_of_classes_returns_success() {
         output.result,
         Ok(BexExternalValue::union(
             BexExternalValue::Instance {
-                class_name: "Success".to_string(),
+                class_name: "user.Success".to_string(),
                 fields: indexmap! { "value".to_string() => BexExternalValue::Int(42) },
             },
             [Ty::user_class("Success"), Ty::user_class("Failure")],
@@ -141,7 +141,7 @@ async fn union_of_classes_returns_failure() {
         output.result,
         Ok(BexExternalValue::union(
             BexExternalValue::Instance {
-                class_name: "Failure".to_string(),
+                class_name: "user.Failure".to_string(),
                 fields: indexmap! { "error".to_string() => BexExternalValue::String("something went wrong".to_string()) },
             },
             [Ty::user_class("Success"), Ty::user_class("Failure")],
@@ -226,7 +226,7 @@ async fn optional_class() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Instance {
-            class_name: "Data".to_string(),
+            class_name: "user.Data".to_string(),
             fields: indexmap! { "value".to_string() => BexExternalValue::Int(42) },
         })
     );
@@ -265,7 +265,7 @@ async fn class_with_optional_field() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Instance {
-            class_name: "Person".to_string(),
+            class_name: "user.Person".to_string(),
             fields: indexmap! {
                 "name".to_string() => BexExternalValue::String("Alice".to_string()),
                 "age".to_string() => BexExternalValue::Null,

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 690
 ---
 function baml.Array.at(self: null, index: int) -> void? {
 }
@@ -195,7 +194,7 @@ function baml.fs.File.write_bytes(self: null, data: uint8array) -> int {
 function baml.fs.exists(path: string) -> bool {
 }
 
-function baml.fs.open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> void {
+function baml.fs.open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> baml.fs.File {
 }
 
 function baml.fs.read(path: string) -> string {
@@ -241,19 +240,19 @@ function baml.http.SseStream.close(self: null) -> null {
 function baml.http.SseStream.next(self: null) -> string? {
 }
 
-function baml.http.fetch(url: string) -> void {
+function baml.http.fetch(url: string) -> baml.http.Response {
 }
 
-function baml.http.fetch_sse(request: void) -> void {
+function baml.http.fetch_sse(request: baml.http.Request) -> baml.http.SseStream {
 }
 
-function baml.http.send(request: void) -> void {
+function baml.http.send(request: baml.http.Request) -> baml.http.Response {
 }
 
 function baml.io.input(prompt: string?) -> string {
 }
 
-function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, function_name: string) -> void {
+function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream {
     load_var self
     call baml.llm.Client.to_primitive_client
     store_var primitive
@@ -287,7 +286,7 @@ function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, fun
     return
 }
 
-function baml.llm.Client.build_attempt(self: null) -> void[] {
+function baml.llm.Client.build_attempt(self: null) -> baml.llm.OrchestrationStep[] {
     load_var self
     alloc_instance PlannerState
     alloc_array 0
@@ -296,7 +295,7 @@ function baml.llm.Client.build_attempt(self: null) -> void[] {
     return
 }
 
-function baml.llm.Client.build_attempt_with_state(self: null, planner_state: void) -> void[] {
+function baml.llm.Client.build_attempt_with_state(self: null, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
     load_var self
     load_field .client_type
     discriminant
@@ -426,7 +425,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
     return
 }
 
-function baml.llm.Client.build_plan(self: null) -> void[] {
+function baml.llm.Client.build_plan(self: null) -> baml.llm.OrchestrationStep[] {
     load_var self
     alloc_instance PlannerState
     alloc_array 0
@@ -435,7 +434,7 @@ function baml.llm.Client.build_plan(self: null) -> void[] {
     return
 }
 
-function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) -> void[] {
+function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
     load_var self
     load_field .retry
     store_var _3
@@ -559,7 +558,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     jump L9
 }
 
-function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_delay_ms: int) -> void {
+function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.ExecutionContext, active_delay_ms: int) -> void {
     load_var self
     load_field .client_type
     discriminant
@@ -751,7 +750,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: void, active_
     return
 }
 
-function baml.llm.Client.execute_once_stream(self: null, context: void, active_delay_ms: int) -> void {
+function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream {
     load_var self
     load_field .client_type
     discriminant
@@ -889,7 +888,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: void, active_d
     return
 }
 
-function baml.llm.Client.execute_oneshot(self: null, context: void, inherited_delay_ms: int) -> void {
+function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> void {
     load_var self
     load_field .retry
     store_var _4
@@ -997,7 +996,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: void, inherited_de
     return
 }
 
-function baml.llm.Client.execute_stream(self: null, context: void, inherited_delay_ms: int) -> void {
+function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream {
     load_var self
     load_field .retry
     store_var _4
@@ -1105,10 +1104,10 @@ function baml.llm.Client.execute_stream(self: null, context: void, inherited_del
     return
 }
 
-function baml.llm.Client.get_constructor(self: null) -> () -> void throws baml.errors.InvalidArgument {
+function baml.llm.Client.get_constructor(self: null) -> () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument {
 }
 
-function baml.llm.Client.to_primitive_client(self: null) -> void {
+function baml.llm.Client.to_primitive_client(self: null) -> baml.llm.PrimitiveClient {
     load_var self
     load_field .name
     load_const "/"
@@ -1192,22 +1191,22 @@ function baml.llm.PlannerState.rr_pick_index(self: null, client_name: string, co
     return
 }
 
-function baml.llm.PrimitiveClient.build_request(self: null, prompt: void) -> baml.http.Request {
+function baml.llm.PrimitiveClient.build_request(self: null, prompt: baml.llm.PromptAst) -> baml.http.Request {
 }
 
-function baml.llm.PrimitiveClient.build_request_stream(self: null, prompt: void) -> baml.http.Request {
+function baml.llm.PrimitiveClient.build_request_stream(self: null, prompt: baml.llm.PromptAst) -> baml.http.Request {
 }
 
-function baml.llm.PrimitiveClient.new_stream_accumulator(self: null) -> void {
+function baml.llm.PrimitiveClient.new_stream_accumulator(self: null) -> baml.llm.StreamAccumulator {
 }
 
 function baml.llm.PrimitiveClient.parse(self: null, http_response_body: string, type_def: type) -> void {
 }
 
-function baml.llm.PrimitiveClient.render_prompt(self: null, template: string, args: map<string, unknown>, return_type: type) -> void {
+function baml.llm.PrimitiveClient.render_prompt(self: null, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst {
 }
 
-function baml.llm.PrimitiveClient.specialize_prompt(self: null, prompt: void) -> void {
+function baml.llm.PrimitiveClient.specialize_prompt(self: null, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst {
 }
 
 function baml.llm.PrimitiveClient.validate_finish_reason(self: null, finish_reason: string) -> null {
@@ -1400,16 +1399,16 @@ function baml.llm.StreamAccumulator.model(self: null) -> string? {
 function baml.llm.StreamAccumulator.output_tokens(self: null) -> int? {
 }
 
-function baml.llm.StreamCache.new(target: type, streaming: type) -> void {
+function baml.llm.StreamCache.new(target: type, streaming: type) -> baml.llm.StreamCache {
 }
 
-function baml.llm.__sap_parse_final(json: string, cache: void) -> void {
+function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache) -> void {
 }
 
-function baml.llm.__sap_parse_partial(json: string, cache: void) -> void | baml.stream.StreamNoYield {
+function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache) -> void | baml.stream.StreamNoYield {
 }
 
-function baml.llm.build_request(client: void, function_name: string, args: map<string, unknown>) -> baml.http.Request {
+function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request {
     load_var client
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
@@ -1425,7 +1424,7 @@ function baml.llm.build_request(client: void, function_name: string, args: map<s
     return
 }
 
-function baml.llm.build_request_stream(client: void, function_name: string, args: map<string, unknown>) -> baml.http.Request {
+function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request {
     load_var client
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
@@ -1441,7 +1440,7 @@ function baml.llm.build_request_stream(client: void, function_name: string, args
     return
 }
 
-function baml.llm.call_llm_function(client: void, function_name: string, args: map<string, unknown>) -> void {
+function baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> void {
     load_var function_name
     dispatch_future baml.llm.get_jinja_template
     await
@@ -1459,7 +1458,7 @@ function baml.llm.call_llm_function(client: void, function_name: string, args: m
     return
 }
 
-function baml.llm.from_shorthand(shorthand: string) -> void {
+function baml.llm.from_shorthand(shorthand: string) -> baml.llm.PrimitiveClient {
 }
 
 function baml.llm.get_jinja_template(function_name: string) -> string {
@@ -1493,7 +1492,7 @@ function baml.llm.parse(function_name: string, json: string) -> void {
     return
 }
 
-function baml.llm.render_prompt(client: void, function_name: string, args: map<string, unknown>) -> void {
+function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
     load_var function_name
     dispatch_future baml.llm.get_jinja_template
     await
@@ -1519,7 +1518,7 @@ function baml.llm.render_prompt(client: void, function_name: string, args: map<s
     return
 }
 
-function baml.llm.stream_llm_function(client: void, function_name: string, args: map<string, unknown>) -> void {
+function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream {
     load_var function_name
     dispatch_future baml.llm.get_jinja_template
     await
@@ -1630,7 +1629,7 @@ function baml.net.Socket.close(self: null) -> null {
 function baml.net.Socket.read(self: null) -> string {
 }
 
-function baml.net.connect(addr: string) -> void {
+function baml.net.connect(addr: string) -> baml.net.Socket {
 }
 
 function baml.sys.argv() -> string[] {

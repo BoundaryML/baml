@@ -263,6 +263,7 @@ impl BexEngine {
                 let class_ptr = self
                     .resolved_class_names
                     .get(&class_name)
+                    .or_else(|| resolve_named_object(&self.resolved_class_names, &class_name))
                     .unwrap_or_else(|| {
                         panic!("Class '{class_name}' not found in resolved_class_names")
                     });
@@ -287,9 +288,13 @@ impl BexEngine {
                 enum_name,
                 variant_name,
             } => {
-                let enum_ptr = self.resolved_enum_names.get(&enum_name).unwrap_or_else(|| {
-                    panic!("Enum '{enum_name}' not found in resolved_enum_names")
-                });
+                let enum_ptr = self
+                    .resolved_enum_names
+                    .get(&enum_name)
+                    .or_else(|| resolve_named_object(&self.resolved_enum_names, &enum_name))
+                    .unwrap_or_else(|| {
+                        panic!("Enum '{enum_name}' not found in resolved_enum_names")
+                    });
                 #[allow(unsafe_code)]
                 let bex_vm_types::Object::Enum(enum_obj) = (unsafe { enum_ptr.get() }) else {
                     panic!("Expected Object::Enum for '{enum_name}'");
@@ -433,6 +438,40 @@ fn find_matching_member(value: &BexExternalValue, members: &[Ty]) -> Result<Ty, 
     })
 }
 
+fn type_name_matches_external_name(external_name: &str, type_name: &baml_type::TypeName) -> bool {
+    if external_name == type_name.display_name.as_str() {
+        return true;
+    }
+
+    if type_name.module_path.is_empty() {
+        return external_name == type_name.name.as_str();
+    }
+
+    let qualified_name = type_name
+        .module_path
+        .iter()
+        .map(baml_type::Name::as_str)
+        .chain(std::iter::once(type_name.name.as_str()))
+        .collect::<Vec<_>>()
+        .join(".");
+
+    external_name == qualified_name
+}
+
+fn resolve_named_object<'a>(
+    objects: &'a indexmap::IndexMap<String, HeapPtr>,
+    name: &str,
+) -> Option<&'a HeapPtr> {
+    objects.get(name).or_else(|| {
+        if name.contains('.') {
+            None
+        } else {
+            let user_name = format!("user.{name}");
+            objects.get(&user_name)
+        }
+    })
+}
+
 /// Check if a value matches a declared type.
 fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
     match (value, ty) {
@@ -450,10 +489,10 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Array { .. }, Ty::List(_, _)) => true,
         (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
         (BexExternalValue::Instance { class_name, .. }, Ty::Class(tn, _)) => {
-            class_name.as_str() == tn.display_name.as_str()
+            type_name_matches_external_name(class_name, tn)
         }
         (BexExternalValue::Variant { enum_name, .. }, Ty::Enum(tn, _)) => {
-            enum_name.as_str() == tn.display_name.as_str()
+            type_name_matches_external_name(enum_name, tn)
         }
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
         (BexExternalValue::Adt(BexExternalAdt::Type(_)), ty)
