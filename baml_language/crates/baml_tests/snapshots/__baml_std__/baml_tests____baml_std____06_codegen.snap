@@ -1655,6 +1655,12 @@ function baml.sys.ShellOutput.ok(self: null) -> bool {
     return
 }
 
+function baml.sys.ShellOutput.stderr_bytes(self: null) -> uint8array {
+}
+
+function baml.sys.ShellOutput.stdout_bytes(self: null) -> uint8array {
+}
+
 function baml.sys.argv() -> string[] {
 }
 

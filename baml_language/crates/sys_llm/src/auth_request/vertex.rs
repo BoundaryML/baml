@@ -1248,7 +1248,7 @@ mod tests {
             Box<
                 dyn Future<
                         Output = Result<
-                            sys_types::generated::owned::sys::ShellOutput,
+                            sys_types::runtime_io::SysShellOutputHandle,
                             RuntimeIoError,
                         >,
                     > + Send
@@ -1344,7 +1344,7 @@ mod tests {
             Box<
                 dyn Future<
                         Output = Result<
-                            sys_types::generated::owned::sys::ShellOutput,
+                            sys_types::runtime_io::SysShellOutputHandle,
                             RuntimeIoError,
                         >,
                     > + Send
@@ -1450,7 +1450,7 @@ mod tests {
             Box<
                 dyn Future<
                         Output = Result<
-                            sys_types::generated::owned::sys::ShellOutput,
+                            sys_types::runtime_io::SysShellOutputHandle,
                             RuntimeIoError,
                         >,
                     > + Send
@@ -1608,7 +1608,7 @@ mod tests {
             Box<
                 dyn Future<
                         Output = Result<
-                            sys_types::generated::owned::sys::ShellOutput,
+                            sys_types::runtime_io::SysShellOutputHandle,
                             RuntimeIoError,
                         >,
                     > + Send

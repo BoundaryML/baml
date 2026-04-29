@@ -775,11 +775,16 @@ async fn run_process(
             })?
     };
 
+    let raw_stdout = output.stdout;
+    let raw_stderr = output.stderr;
     let exit_code = i64::from(output.status.code().unwrap_or(-1));
+    let handle: Arc<dyn std::any::Any + Send + Sync> =
+        Arc::new((raw_stdout.clone(), raw_stderr.clone()));
     Ok(owned::sys::ShellOutput {
-        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        stdout: String::from_utf8_lossy(&raw_stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&raw_stderr).into_owned(),
         exit_code,
+        _output: handle,
     })
 }
 
@@ -830,6 +835,36 @@ impl io::IoNamespaceSys for NativeSysOps {
             tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
             Ok(())
         })
+    }
+}
+
+impl io::IoClassSysShellOutput for NativeSysOps {
+    fn stdout_bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        shelloutput: owned::sys::ShellOutput,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        let pair = shelloutput
+            ._output
+            .downcast_ref::<(Vec<u8>, Vec<u8>)>()
+            .expect("ShellOutput._output should be (Vec<u8>, Vec<u8>)");
+        SysOpOutput::ok(pair.0.clone())
+    }
+
+    fn stderr_bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        shelloutput: owned::sys::ShellOutput,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        let pair = shelloutput
+            ._output
+            .downcast_ref::<(Vec<u8>, Vec<u8>)>()
+            .expect("ShellOutput._output should be (Vec<u8>, Vec<u8>)");
+        SysOpOutput::ok(pair.1.clone())
     }
 }
 

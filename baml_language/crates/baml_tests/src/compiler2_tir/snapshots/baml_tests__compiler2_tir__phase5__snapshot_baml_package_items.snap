@@ -108,7 +108,7 @@ namespace baml.stream:
   class StreamNoYield { methods: [] }
 namespace baml.sys:
   class ProcessOptions { methods: [] }
-  class ShellOutput { methods: [ok] }
+  class ShellOutput { methods: [stdout_bytes, stderr_bytes, ok] }
   function argv
   function exec
   function now_ms

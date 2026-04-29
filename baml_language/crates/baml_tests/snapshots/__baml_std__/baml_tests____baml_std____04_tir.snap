@@ -948,6 +948,7 @@ class baml.sys.ShellOutput {
   stdout: string
   stderr: string
   exit_code: int
+  _output: $rust_type
 }
 function baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool throws never {
   { : bool
@@ -964,6 +965,7 @@ class baml.sys.ShellOutput$stream {
   stdout: null | string
   stderr: null | string
   exit_code: null | int
+  _output: $rust_type
 }
 
 --- <builtin>/baml/ns_unstable/unstable.baml ---

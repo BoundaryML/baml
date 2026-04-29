@@ -441,6 +441,7 @@ class baml.sys.ShellOutput {
   stdout: string
   stderr: string
   exit_code: int
+  _output: $rust_type
 }
 function baml.sys.argv() -> string[]  [builtin]
 function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
@@ -451,6 +452,8 @@ function baml.sys.ok(self: ?) -> bool  [expr] {
 function baml.sys.panic(message: string) -> never  [builtin]
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.sleep(ms: int) -> null  [builtin]
+function baml.sys.stderr_bytes(self: ?) -> uint8array  [builtin]
+function baml.sys.stdout_bytes(self: ?) -> uint8array  [builtin]
 
 --- <builtin>/baml/ns_unstable/unstable.baml ---
 function baml.unstable.string(value: baml.unstable.T) -> string  [builtin]

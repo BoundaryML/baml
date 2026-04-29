@@ -9,6 +9,15 @@ class ShellOutput {
   stdout string
   stderr string
   exit_code int
+  _output $rust_type
+
+  function stdout_bytes(self) -> uint8array throws root.errors.Io {
+    $rust_io_function
+  }
+
+  function stderr_bytes(self) -> uint8array throws root.errors.Io {
+    $rust_io_function
+  }
 
   function ok(self) -> bool {
     self.exit_code == 0

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use sys_ops::io::{self, IoNamespaceSys};
+use sys_ops::io::{self, IoClassSysShellOutput, IoNamespaceSys};
 use sys_types::{BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput};
 use wasm_bindgen::prelude::*;
 
@@ -17,6 +17,28 @@ pub(crate) struct WasmSys;
 impl WasmSys {
     pub(crate) fn new() -> Self {
         Self
+    }
+}
+
+impl IoClassSysShellOutput for WasmSys {
+    fn stdout_bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _shelloutput: io::owned::sys::ShellOutput,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn stderr_bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _shelloutput: io::owned::sys::ShellOutput,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
 

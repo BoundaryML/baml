@@ -2236,6 +2236,10 @@ fn baml.sys.shell = builtin(io)
 
 fn baml.sys.sleep = builtin(io)
 
+fn baml.sys.ShellOutput.stderr_bytes = builtin(io)
+
+fn baml.sys.ShellOutput.stdout_bytes = builtin(io)
+
 fn baml.unstable.string = builtin(vm)
 
 fn baml.String.charAt = builtin(vm)

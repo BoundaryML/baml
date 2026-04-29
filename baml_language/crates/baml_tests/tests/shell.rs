@@ -288,3 +288,42 @@ async fn shell_with_options() {
         assert!(stdout.trim().contains("tmp"));
     }
 }
+
+// === stdout_bytes() / stderr_bytes() tests ===
+
+#[tokio::test]
+async fn shell_stdout_bytes() {
+    let output = baml_test!(
+        r#"
+            function main() -> uint8array {
+                baml.sys.shell("echo hello", null).stdout_bytes()
+            }
+        "#
+    );
+    assert!(output.result.is_ok());
+    // "hello\n" as UTF-8 bytes: [104, 101, 108, 108, 111, 10]
+    if let Ok(BexExternalValue::Uint8Array(bytes)) = &output.result {
+        assert_eq!(bytes, &[104, 101, 108, 108, 111, 10]);
+    } else {
+        panic!("expected Uint8Array, got {:?}", output.result);
+    }
+}
+
+#[tokio::test]
+async fn shell_stderr_bytes() {
+    let output = baml_test!(
+        r#"
+            function main() -> uint8array {
+                baml.sys.shell("echo err >&2", null).stderr_bytes()
+            }
+        "#
+    );
+    assert!(output.result.is_ok());
+    if let Ok(BexExternalValue::Uint8Array(bytes)) = &output.result {
+        assert!(!bytes.is_empty());
+        // "err" prefix: [101, 114, 114]
+        assert!(bytes.starts_with(&[101, 114, 114]));
+    } else {
+        panic!("expected Uint8Array, got {:?}", output.result);
+    }
+}
