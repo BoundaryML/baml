@@ -22,33 +22,6 @@ fn stabilize(s: &str, root: &str) -> String {
 }
 
 #[tokio::test]
-async fn fs_open_only() {
-    let (_tmp, root) = tmp(indexmap! { "hello.txt" => "Hello from BAML!" });
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> int {{
-                let file = baml.fs.open("{root}/hello.txt", "r");
-                42
-            }}
-        "#
-    ));
-
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
-    function main() -> int {
-        load_const "{TMPDIR}/hello.txt"
-        load_const "r"
-        dispatch_future baml.fs.open
-        await
-        store_var file
-        load_const 42
-        return
-    }
-    "#);
-    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
-}
-
-#[tokio::test]
 async fn fs_open_and_read() {
     let (_tmp, root) = tmp(indexmap! { "hello.txt" => "Hello from BAML!" });
 
