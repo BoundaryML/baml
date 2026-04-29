@@ -1037,7 +1037,7 @@ export namespace baml {
                 enumValue?: (baml.cffi.v1.IBamlValueEnum|null);
 
                 /** BamlOutboundValue literalValue */
-                literalValue?: (baml.cffi.v1.IBamlFieldTypeLiteral|null);
+                literalValue?: (baml.cffi.v1.IBamlTyLiteral|null);
 
                 /** BamlOutboundValue listValue */
                 listValue?: (baml.cffi.v1.IBamlValueList|null);
@@ -1047,12 +1047,6 @@ export namespace baml {
 
                 /** BamlOutboundValue unionVariantValue */
                 unionVariantValue?: (baml.cffi.v1.IBamlValueUnionVariant|null);
-
-                /** BamlOutboundValue checkedValue */
-                checkedValue?: (baml.cffi.v1.IBamlValueChecked|null);
-
-                /** BamlOutboundValue streamingStateValue */
-                streamingStateValue?: (baml.cffi.v1.IBamlValueStreamingState|null);
 
                 /** BamlOutboundValue handleValue */
                 handleValue?: (baml.cffi.v1.IBamlHandle|null);
@@ -1098,7 +1092,7 @@ export namespace baml {
                 public enumValue?: (baml.cffi.v1.IBamlValueEnum|null);
 
                 /** BamlOutboundValue literalValue. */
-                public literalValue?: (baml.cffi.v1.IBamlFieldTypeLiteral|null);
+                public literalValue?: (baml.cffi.v1.IBamlTyLiteral|null);
 
                 /** BamlOutboundValue listValue. */
                 public listValue?: (baml.cffi.v1.IBamlValueList|null);
@@ -1108,12 +1102,6 @@ export namespace baml {
 
                 /** BamlOutboundValue unionVariantValue. */
                 public unionVariantValue?: (baml.cffi.v1.IBamlValueUnionVariant|null);
-
-                /** BamlOutboundValue checkedValue. */
-                public checkedValue?: (baml.cffi.v1.IBamlValueChecked|null);
-
-                /** BamlOutboundValue streamingStateValue. */
-                public streamingStateValue?: (baml.cffi.v1.IBamlValueStreamingState|null);
 
                 /** BamlOutboundValue handleValue. */
                 public handleValue?: (baml.cffi.v1.IBamlHandle|null);
@@ -1128,7 +1116,7 @@ export namespace baml {
                 public uint8arrayValue?: (Uint8Array|null);
 
                 /** BamlOutboundValue value. */
-                public value?: ("nullValue"|"stringValue"|"intValue"|"floatValue"|"boolValue"|"classValue"|"enumValue"|"literalValue"|"listValue"|"mapValue"|"unionVariantValue"|"checkedValue"|"streamingStateValue"|"handleValue"|"mediaValue"|"promptAstValue"|"uint8arrayValue");
+                public value?: ("nullValue"|"stringValue"|"intValue"|"floatValue"|"boolValue"|"classValue"|"enumValue"|"literalValue"|"listValue"|"mapValue"|"unionVariantValue"|"handleValue"|"mediaValue"|"promptAstValue"|"uint8arrayValue");
 
                 /**
                  * Creates a new BamlOutboundValue instance using the specified properties.
@@ -1208,112 +1196,206 @@ export namespace baml {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** BamlTypeNamespace enum. */
-            enum BamlTypeNamespace {
-                INTERNAL = 0,
-                TYPES = 1,
-                STREAM_TYPES = 2,
-                STREAM_STATE_TYPES = 3,
-                CHECKED_TYPES = 4
-            }
+            /** Properties of a BamlTyName. */
+            interface IBamlTyName {
 
-            /** Properties of a BamlTypeName. */
-            interface IBamlTypeName {
-
-                /** BamlTypeName namespace */
-                namespace?: (baml.cffi.v1.BamlTypeNamespace|null);
-
-                /** BamlTypeName name */
+                /** BamlTyName name */
                 name?: (string|null);
+
+                /** BamlTyName genericArgs */
+                genericArgs?: (baml.cffi.v1.IBamlTyGenericArg[]|null);
             }
 
-            /** Represents a BamlTypeName. */
-            class BamlTypeName implements IBamlTypeName {
+            /** Represents a BamlTyName. */
+            class BamlTyName implements IBamlTyName {
 
                 /**
-                 * Constructs a new BamlTypeName.
+                 * Constructs a new BamlTyName.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlTypeName);
+                constructor(properties?: baml.cffi.v1.IBamlTyName);
 
-                /** BamlTypeName namespace. */
-                public namespace: baml.cffi.v1.BamlTypeNamespace;
-
-                /** BamlTypeName name. */
+                /** BamlTyName name. */
                 public name: string;
 
+                /** BamlTyName genericArgs. */
+                public genericArgs: baml.cffi.v1.IBamlTyGenericArg[];
+
                 /**
-                 * Creates a new BamlTypeName instance using the specified properties.
+                 * Creates a new BamlTyName instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlTypeName instance
+                 * @returns BamlTyName instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlTypeName): baml.cffi.v1.BamlTypeName;
+                public static create(properties?: baml.cffi.v1.IBamlTyName): baml.cffi.v1.BamlTyName;
 
                 /**
-                 * Encodes the specified BamlTypeName message. Does not implicitly {@link baml.cffi.v1.BamlTypeName.verify|verify} messages.
-                 * @param message BamlTypeName message or plain object to encode
+                 * Encodes the specified BamlTyName message. Does not implicitly {@link baml.cffi.v1.BamlTyName.verify|verify} messages.
+                 * @param message BamlTyName message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlTypeName, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyName, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlTypeName message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTypeName.verify|verify} messages.
-                 * @param message BamlTypeName message or plain object to encode
+                 * Encodes the specified BamlTyName message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyName.verify|verify} messages.
+                 * @param message BamlTyName message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlTypeName, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyName, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlTypeName message from the specified reader or buffer.
+                 * Decodes a BamlTyName message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlTypeName
+                 * @returns BamlTyName
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTypeName;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyName;
 
                 /**
-                 * Decodes a BamlTypeName message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyName message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlTypeName
+                 * @returns BamlTyName
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTypeName;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyName;
 
                 /**
-                 * Verifies a BamlTypeName message.
+                 * Verifies a BamlTyName message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlTypeName message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyName message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlTypeName
+                 * @returns BamlTyName
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTypeName;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyName;
 
                 /**
-                 * Creates a plain object from a BamlTypeName message. Also converts values to other types if specified.
-                 * @param message BamlTypeName
+                 * Creates a plain object from a BamlTyName message. Also converts values to other types if specified.
+                 * @param message BamlTyName
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlTypeName, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyName, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlTypeName to JSON.
+                 * Converts this BamlTyName to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlTypeName
+                 * Gets the default type url for BamlTyName
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a BamlTyGenericArg. */
+            interface IBamlTyGenericArg {
+
+                /** BamlTyGenericArg name */
+                name?: (string|null);
+
+                /** BamlTyGenericArg ty */
+                ty?: (baml.cffi.v1.IBamlTy|null);
+            }
+
+            /** Represents a BamlTyGenericArg. */
+            class BamlTyGenericArg implements IBamlTyGenericArg {
+
+                /**
+                 * Constructs a new BamlTyGenericArg.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml.cffi.v1.IBamlTyGenericArg);
+
+                /** BamlTyGenericArg name. */
+                public name: string;
+
+                /** BamlTyGenericArg ty. */
+                public ty?: (baml.cffi.v1.IBamlTy|null);
+
+                /**
+                 * Creates a new BamlTyGenericArg instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns BamlTyGenericArg instance
+                 */
+                public static create(properties?: baml.cffi.v1.IBamlTyGenericArg): baml.cffi.v1.BamlTyGenericArg;
+
+                /**
+                 * Encodes the specified BamlTyGenericArg message. Does not implicitly {@link baml.cffi.v1.BamlTyGenericArg.verify|verify} messages.
+                 * @param message BamlTyGenericArg message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml.cffi.v1.IBamlTyGenericArg, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified BamlTyGenericArg message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyGenericArg.verify|verify} messages.
+                 * @param message BamlTyGenericArg message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyGenericArg, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a BamlTyGenericArg message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns BamlTyGenericArg
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyGenericArg;
+
+                /**
+                 * Decodes a BamlTyGenericArg message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns BamlTyGenericArg
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyGenericArg;
+
+                /**
+                 * Verifies a BamlTyGenericArg message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a BamlTyGenericArg message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns BamlTyGenericArg
+                 */
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyGenericArg;
+
+                /**
+                 * Creates a plain object from a BamlTyGenericArg message. Also converts values to other types if specified.
+                 * @param message BamlTyGenericArg
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml.cffi.v1.BamlTyGenericArg, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this BamlTyGenericArg to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for BamlTyGenericArg
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
@@ -1415,7 +1497,7 @@ export namespace baml {
             interface IBamlValueList {
 
                 /** BamlValueList itemType */
-                itemType?: (baml.cffi.v1.IBamlFieldType|null);
+                itemType?: (baml.cffi.v1.IBamlTy|null);
 
                 /** BamlValueList items */
                 items?: (baml.cffi.v1.IBamlOutboundValue[]|null);
@@ -1431,7 +1513,7 @@ export namespace baml {
                 constructor(properties?: baml.cffi.v1.IBamlValueList);
 
                 /** BamlValueList itemType. */
-                public itemType?: (baml.cffi.v1.IBamlFieldType|null);
+                public itemType?: (baml.cffi.v1.IBamlTy|null);
 
                 /** BamlValueList items. */
                 public items: baml.cffi.v1.IBamlOutboundValue[];
@@ -1621,10 +1703,10 @@ export namespace baml {
             interface IBamlValueMap {
 
                 /** BamlValueMap keyType */
-                keyType?: (baml.cffi.v1.IBamlFieldType|null);
+                keyType?: (baml.cffi.v1.IBamlTy|null);
 
                 /** BamlValueMap valueType */
-                valueType?: (baml.cffi.v1.IBamlFieldType|null);
+                valueType?: (baml.cffi.v1.IBamlTy|null);
 
                 /** BamlValueMap entries */
                 entries?: (baml.cffi.v1.IBamlOutboundMapEntry[]|null);
@@ -1640,10 +1722,10 @@ export namespace baml {
                 constructor(properties?: baml.cffi.v1.IBamlValueMap);
 
                 /** BamlValueMap keyType. */
-                public keyType?: (baml.cffi.v1.IBamlFieldType|null);
+                public keyType?: (baml.cffi.v1.IBamlTy|null);
 
                 /** BamlValueMap valueType. */
-                public valueType?: (baml.cffi.v1.IBamlFieldType|null);
+                public valueType?: (baml.cffi.v1.IBamlTy|null);
 
                 /** BamlValueMap entries. */
                 public entries: baml.cffi.v1.IBamlOutboundMapEntry[];
@@ -1730,7 +1812,7 @@ export namespace baml {
             interface IBamlValueClass {
 
                 /** BamlValueClass name */
-                name?: (baml.cffi.v1.IBamlTypeName|null);
+                name?: (baml.cffi.v1.IBamlTyName|null);
 
                 /** BamlValueClass fields */
                 fields?: (baml.cffi.v1.IBamlOutboundMapEntry[]|null);
@@ -1746,7 +1828,7 @@ export namespace baml {
                 constructor(properties?: baml.cffi.v1.IBamlValueClass);
 
                 /** BamlValueClass name. */
-                public name?: (baml.cffi.v1.IBamlTypeName|null);
+                public name?: (baml.cffi.v1.IBamlTyName|null);
 
                 /** BamlValueClass fields. */
                 public fields: baml.cffi.v1.IBamlOutboundMapEntry[];
@@ -1833,7 +1915,7 @@ export namespace baml {
             interface IBamlValueEnum {
 
                 /** BamlValueEnum name */
-                name?: (baml.cffi.v1.IBamlTypeName|null);
+                name?: (baml.cffi.v1.IBamlTyName|null);
 
                 /** BamlValueEnum value */
                 value?: (string|null);
@@ -1852,7 +1934,7 @@ export namespace baml {
                 constructor(properties?: baml.cffi.v1.IBamlValueEnum);
 
                 /** BamlValueEnum name. */
-                public name?: (baml.cffi.v1.IBamlTypeName|null);
+                public name?: (baml.cffi.v1.IBamlTyName|null);
 
                 /** BamlValueEnum value. */
                 public value: string;
@@ -1942,7 +2024,7 @@ export namespace baml {
             interface IBamlValueUnionVariant {
 
                 /** BamlValueUnionVariant name */
-                name?: (baml.cffi.v1.IBamlTypeName|null);
+                name?: (baml.cffi.v1.IBamlTyName|null);
 
                 /** BamlValueUnionVariant isOptional */
                 isOptional?: (boolean|null);
@@ -1951,7 +2033,7 @@ export namespace baml {
                 isSinglePattern?: (boolean|null);
 
                 /** BamlValueUnionVariant selfType */
-                selfType?: (baml.cffi.v1.IBamlFieldType|null);
+                selfType?: (baml.cffi.v1.IBamlTy|null);
 
                 /** BamlValueUnionVariant valueOptionName */
                 valueOptionName?: (string|null);
@@ -1970,7 +2052,7 @@ export namespace baml {
                 constructor(properties?: baml.cffi.v1.IBamlValueUnionVariant);
 
                 /** BamlValueUnionVariant name. */
-                public name?: (baml.cffi.v1.IBamlTypeName|null);
+                public name?: (baml.cffi.v1.IBamlTyName|null);
 
                 /** BamlValueUnionVariant isOptional. */
                 public isOptional: boolean;
@@ -1979,7 +2061,7 @@ export namespace baml {
                 public isSinglePattern: boolean;
 
                 /** BamlValueUnionVariant selfType. */
-                public selfType?: (baml.cffi.v1.IBamlFieldType|null);
+                public selfType?: (baml.cffi.v1.IBamlTy|null);
 
                 /** BamlValueUnionVariant valueOptionName. */
                 public valueOptionName: string;
@@ -2059,115 +2141,6 @@ export namespace baml {
 
                 /**
                  * Gets the default type url for BamlValueUnionVariant
-                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns The default type url
-                 */
-                public static getTypeUrl(typeUrlPrefix?: string): string;
-            }
-
-            /** Properties of a BamlValueChecked. */
-            interface IBamlValueChecked {
-
-                /** BamlValueChecked name */
-                name?: (baml.cffi.v1.IBamlTypeName|null);
-
-                /** BamlValueChecked value */
-                value?: (baml.cffi.v1.IBamlOutboundValue|null);
-
-                /** BamlValueChecked checks */
-                checks?: (baml.cffi.v1.IBamlCheckValue[]|null);
-            }
-
-            /** Represents a BamlValueChecked. */
-            class BamlValueChecked implements IBamlValueChecked {
-
-                /**
-                 * Constructs a new BamlValueChecked.
-                 * @param [properties] Properties to set
-                 */
-                constructor(properties?: baml.cffi.v1.IBamlValueChecked);
-
-                /** BamlValueChecked name. */
-                public name?: (baml.cffi.v1.IBamlTypeName|null);
-
-                /** BamlValueChecked value. */
-                public value?: (baml.cffi.v1.IBamlOutboundValue|null);
-
-                /** BamlValueChecked checks. */
-                public checks: baml.cffi.v1.IBamlCheckValue[];
-
-                /**
-                 * Creates a new BamlValueChecked instance using the specified properties.
-                 * @param [properties] Properties to set
-                 * @returns BamlValueChecked instance
-                 */
-                public static create(properties?: baml.cffi.v1.IBamlValueChecked): baml.cffi.v1.BamlValueChecked;
-
-                /**
-                 * Encodes the specified BamlValueChecked message. Does not implicitly {@link baml.cffi.v1.BamlValueChecked.verify|verify} messages.
-                 * @param message BamlValueChecked message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encode(message: baml.cffi.v1.IBamlValueChecked, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Encodes the specified BamlValueChecked message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlValueChecked.verify|verify} messages.
-                 * @param message BamlValueChecked message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlValueChecked, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Decodes a BamlValueChecked message from the specified reader or buffer.
-                 * @param reader Reader or buffer to decode from
-                 * @param [length] Message length if known beforehand
-                 * @returns BamlValueChecked
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlValueChecked;
-
-                /**
-                 * Decodes a BamlValueChecked message from the specified reader or buffer, length delimited.
-                 * @param reader Reader or buffer to decode from
-                 * @returns BamlValueChecked
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlValueChecked;
-
-                /**
-                 * Verifies a BamlValueChecked message.
-                 * @param message Plain object to verify
-                 * @returns `null` if valid, otherwise the reason why it is not
-                 */
-                public static verify(message: { [k: string]: any }): (string|null);
-
-                /**
-                 * Creates a BamlValueChecked message from a plain object. Also converts values to their respective internal types.
-                 * @param object Plain object
-                 * @returns BamlValueChecked
-                 */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlValueChecked;
-
-                /**
-                 * Creates a plain object from a BamlValueChecked message. Also converts values to other types if specified.
-                 * @param message BamlValueChecked
-                 * @param [options] Conversion options
-                 * @returns Plain object
-                 */
-                public static toObject(message: baml.cffi.v1.BamlValueChecked, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-                /**
-                 * Converts this BamlValueChecked to JSON.
-                 * @returns JSON object
-                 */
-                public toJSON(): { [k: string]: any };
-
-                /**
-                 * Gets the default type url for BamlValueChecked
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
@@ -2835,936 +2808,924 @@ export namespace baml {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldType. */
-            interface IBamlFieldType {
+            /** Properties of a BamlTy. */
+            interface IBamlTy {
 
-                /** BamlFieldType stringType */
-                stringType?: (baml.cffi.v1.IBamlFieldTypeString|null);
+                /** BamlTy stringType */
+                stringType?: (baml.cffi.v1.IBamlTyString|null);
 
-                /** BamlFieldType intType */
-                intType?: (baml.cffi.v1.IBamlFieldTypeInt|null);
+                /** BamlTy intType */
+                intType?: (baml.cffi.v1.IBamlTyInt|null);
 
-                /** BamlFieldType floatType */
-                floatType?: (baml.cffi.v1.IBamlFieldTypeFloat|null);
+                /** BamlTy floatType */
+                floatType?: (baml.cffi.v1.IBamlTyFloat|null);
 
-                /** BamlFieldType boolType */
-                boolType?: (baml.cffi.v1.IBamlFieldTypeBool|null);
+                /** BamlTy boolType */
+                boolType?: (baml.cffi.v1.IBamlTyBool|null);
 
-                /** BamlFieldType nullType */
-                nullType?: (baml.cffi.v1.IBamlFieldTypeNull|null);
+                /** BamlTy nullType */
+                nullType?: (baml.cffi.v1.IBamlTyNull|null);
 
-                /** BamlFieldType literalType */
-                literalType?: (baml.cffi.v1.IBamlFieldTypeLiteral|null);
+                /** BamlTy literalType */
+                literalType?: (baml.cffi.v1.IBamlTyLiteral|null);
 
-                /** BamlFieldType mediaType */
-                mediaType?: (baml.cffi.v1.IBamlFieldTypeMedia|null);
+                /** BamlTy mediaType */
+                mediaType?: (baml.cffi.v1.IBamlTyMedia|null);
 
-                /** BamlFieldType enumType */
-                enumType?: (baml.cffi.v1.IBamlFieldTypeEnum|null);
+                /** BamlTy enumType */
+                enumType?: (baml.cffi.v1.IBamlTyEnum|null);
 
-                /** BamlFieldType classType */
-                classType?: (baml.cffi.v1.IBamlFieldTypeClass|null);
+                /** BamlTy classType */
+                classType?: (baml.cffi.v1.IBamlTyClass|null);
 
-                /** BamlFieldType typeAliasType */
-                typeAliasType?: (baml.cffi.v1.IBamlFieldTypeTypeAlias|null);
+                /** BamlTy typeAliasType */
+                typeAliasType?: (baml.cffi.v1.IBamlTyTypeAlias|null);
 
-                /** BamlFieldType listType */
-                listType?: (baml.cffi.v1.IBamlFieldTypeList|null);
+                /** BamlTy listType */
+                listType?: (baml.cffi.v1.IBamlTyList|null);
 
-                /** BamlFieldType mapType */
-                mapType?: (baml.cffi.v1.IBamlFieldTypeMap|null);
+                /** BamlTy mapType */
+                mapType?: (baml.cffi.v1.IBamlTyMap|null);
 
-                /** BamlFieldType unionVariantType */
-                unionVariantType?: (baml.cffi.v1.IBamlFieldTypeUnionVariant|null);
+                /** BamlTy unionVariantType */
+                unionVariantType?: (baml.cffi.v1.IBamlTyUnionVariant|null);
 
-                /** BamlFieldType optionalType */
-                optionalType?: (baml.cffi.v1.IBamlFieldTypeOptional|null);
+                /** BamlTy optionalType */
+                optionalType?: (baml.cffi.v1.IBamlTyOptional|null);
 
-                /** BamlFieldType checkedType */
-                checkedType?: (baml.cffi.v1.IBamlFieldTypeChecked|null);
+                /** BamlTy anyType */
+                anyType?: (baml.cffi.v1.IBamlTyAny|null);
 
-                /** BamlFieldType streamStateType */
-                streamStateType?: (baml.cffi.v1.IBamlFieldTypeStreamState|null);
+                /** BamlTy uint8arrayType */
+                uint8arrayType?: (baml.cffi.v1.IBamlTyUint8Array|null);
 
-                /** BamlFieldType anyType */
-                anyType?: (baml.cffi.v1.IBamlFieldTypeAny|null);
-
-                /** BamlFieldType uint8arrayType */
-                uint8arrayType?: (baml.cffi.v1.IBamlFieldTypeUint8Array|null);
-
-                /** BamlFieldType unknownType */
-                unknownType?: (baml.cffi.v1.IBamlFieldTypeUnknown|null);
+                /** BamlTy unknownType */
+                unknownType?: (baml.cffi.v1.IBamlTyUnknown|null);
             }
 
-            /** Represents a BamlFieldType. */
-            class BamlFieldType implements IBamlFieldType {
+            /** Represents a BamlTy. */
+            class BamlTy implements IBamlTy {
 
                 /**
-                 * Constructs a new BamlFieldType.
+                 * Constructs a new BamlTy.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldType);
+                constructor(properties?: baml.cffi.v1.IBamlTy);
 
-                /** BamlFieldType stringType. */
-                public stringType?: (baml.cffi.v1.IBamlFieldTypeString|null);
+                /** BamlTy stringType. */
+                public stringType?: (baml.cffi.v1.IBamlTyString|null);
 
-                /** BamlFieldType intType. */
-                public intType?: (baml.cffi.v1.IBamlFieldTypeInt|null);
+                /** BamlTy intType. */
+                public intType?: (baml.cffi.v1.IBamlTyInt|null);
 
-                /** BamlFieldType floatType. */
-                public floatType?: (baml.cffi.v1.IBamlFieldTypeFloat|null);
+                /** BamlTy floatType. */
+                public floatType?: (baml.cffi.v1.IBamlTyFloat|null);
 
-                /** BamlFieldType boolType. */
-                public boolType?: (baml.cffi.v1.IBamlFieldTypeBool|null);
+                /** BamlTy boolType. */
+                public boolType?: (baml.cffi.v1.IBamlTyBool|null);
 
-                /** BamlFieldType nullType. */
-                public nullType?: (baml.cffi.v1.IBamlFieldTypeNull|null);
+                /** BamlTy nullType. */
+                public nullType?: (baml.cffi.v1.IBamlTyNull|null);
 
-                /** BamlFieldType literalType. */
-                public literalType?: (baml.cffi.v1.IBamlFieldTypeLiteral|null);
+                /** BamlTy literalType. */
+                public literalType?: (baml.cffi.v1.IBamlTyLiteral|null);
 
-                /** BamlFieldType mediaType. */
-                public mediaType?: (baml.cffi.v1.IBamlFieldTypeMedia|null);
+                /** BamlTy mediaType. */
+                public mediaType?: (baml.cffi.v1.IBamlTyMedia|null);
 
-                /** BamlFieldType enumType. */
-                public enumType?: (baml.cffi.v1.IBamlFieldTypeEnum|null);
+                /** BamlTy enumType. */
+                public enumType?: (baml.cffi.v1.IBamlTyEnum|null);
 
-                /** BamlFieldType classType. */
-                public classType?: (baml.cffi.v1.IBamlFieldTypeClass|null);
+                /** BamlTy classType. */
+                public classType?: (baml.cffi.v1.IBamlTyClass|null);
 
-                /** BamlFieldType typeAliasType. */
-                public typeAliasType?: (baml.cffi.v1.IBamlFieldTypeTypeAlias|null);
+                /** BamlTy typeAliasType. */
+                public typeAliasType?: (baml.cffi.v1.IBamlTyTypeAlias|null);
 
-                /** BamlFieldType listType. */
-                public listType?: (baml.cffi.v1.IBamlFieldTypeList|null);
+                /** BamlTy listType. */
+                public listType?: (baml.cffi.v1.IBamlTyList|null);
 
-                /** BamlFieldType mapType. */
-                public mapType?: (baml.cffi.v1.IBamlFieldTypeMap|null);
+                /** BamlTy mapType. */
+                public mapType?: (baml.cffi.v1.IBamlTyMap|null);
 
-                /** BamlFieldType unionVariantType. */
-                public unionVariantType?: (baml.cffi.v1.IBamlFieldTypeUnionVariant|null);
+                /** BamlTy unionVariantType. */
+                public unionVariantType?: (baml.cffi.v1.IBamlTyUnionVariant|null);
 
-                /** BamlFieldType optionalType. */
-                public optionalType?: (baml.cffi.v1.IBamlFieldTypeOptional|null);
+                /** BamlTy optionalType. */
+                public optionalType?: (baml.cffi.v1.IBamlTyOptional|null);
 
-                /** BamlFieldType checkedType. */
-                public checkedType?: (baml.cffi.v1.IBamlFieldTypeChecked|null);
+                /** BamlTy anyType. */
+                public anyType?: (baml.cffi.v1.IBamlTyAny|null);
 
-                /** BamlFieldType streamStateType. */
-                public streamStateType?: (baml.cffi.v1.IBamlFieldTypeStreamState|null);
+                /** BamlTy uint8arrayType. */
+                public uint8arrayType?: (baml.cffi.v1.IBamlTyUint8Array|null);
 
-                /** BamlFieldType anyType. */
-                public anyType?: (baml.cffi.v1.IBamlFieldTypeAny|null);
+                /** BamlTy unknownType. */
+                public unknownType?: (baml.cffi.v1.IBamlTyUnknown|null);
 
-                /** BamlFieldType uint8arrayType. */
-                public uint8arrayType?: (baml.cffi.v1.IBamlFieldTypeUint8Array|null);
-
-                /** BamlFieldType unknownType. */
-                public unknownType?: (baml.cffi.v1.IBamlFieldTypeUnknown|null);
-
-                /** BamlFieldType type. */
-                public type?: ("stringType"|"intType"|"floatType"|"boolType"|"nullType"|"literalType"|"mediaType"|"enumType"|"classType"|"typeAliasType"|"listType"|"mapType"|"unionVariantType"|"optionalType"|"checkedType"|"streamStateType"|"anyType"|"uint8arrayType"|"unknownType");
+                /** BamlTy type. */
+                public type?: ("stringType"|"intType"|"floatType"|"boolType"|"nullType"|"literalType"|"mediaType"|"enumType"|"classType"|"typeAliasType"|"listType"|"mapType"|"unionVariantType"|"optionalType"|"anyType"|"uint8arrayType"|"unknownType");
 
                 /**
-                 * Creates a new BamlFieldType instance using the specified properties.
+                 * Creates a new BamlTy instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldType instance
+                 * @returns BamlTy instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldType): baml.cffi.v1.BamlFieldType;
+                public static create(properties?: baml.cffi.v1.IBamlTy): baml.cffi.v1.BamlTy;
 
                 /**
-                 * Encodes the specified BamlFieldType message. Does not implicitly {@link baml.cffi.v1.BamlFieldType.verify|verify} messages.
-                 * @param message BamlFieldType message or plain object to encode
+                 * Encodes the specified BamlTy message. Does not implicitly {@link baml.cffi.v1.BamlTy.verify|verify} messages.
+                 * @param message BamlTy message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldType, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTy, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldType message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldType.verify|verify} messages.
-                 * @param message BamlFieldType message or plain object to encode
+                 * Encodes the specified BamlTy message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTy.verify|verify} messages.
+                 * @param message BamlTy message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldType, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTy, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldType message from the specified reader or buffer.
+                 * Decodes a BamlTy message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldType
+                 * @returns BamlTy
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldType;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTy;
 
                 /**
-                 * Decodes a BamlFieldType message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTy message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldType
+                 * @returns BamlTy
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldType;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTy;
 
                 /**
-                 * Verifies a BamlFieldType message.
+                 * Verifies a BamlTy message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldType message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTy message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldType
+                 * @returns BamlTy
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldType;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTy;
 
                 /**
-                 * Creates a plain object from a BamlFieldType message. Also converts values to other types if specified.
-                 * @param message BamlFieldType
+                 * Creates a plain object from a BamlTy message. Also converts values to other types if specified.
+                 * @param message BamlTy
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldType, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTy, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldType to JSON.
+                 * Converts this BamlTy to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldType
+                 * Gets the default type url for BamlTy
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeString. */
-            interface IBamlFieldTypeString {
+            /** Properties of a BamlTyString. */
+            interface IBamlTyString {
             }
 
-            /** Represents a BamlFieldTypeString. */
-            class BamlFieldTypeString implements IBamlFieldTypeString {
+            /** Represents a BamlTyString. */
+            class BamlTyString implements IBamlTyString {
 
                 /**
-                 * Constructs a new BamlFieldTypeString.
+                 * Constructs a new BamlTyString.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeString);
+                constructor(properties?: baml.cffi.v1.IBamlTyString);
 
                 /**
-                 * Creates a new BamlFieldTypeString instance using the specified properties.
+                 * Creates a new BamlTyString instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeString instance
+                 * @returns BamlTyString instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeString): baml.cffi.v1.BamlFieldTypeString;
+                public static create(properties?: baml.cffi.v1.IBamlTyString): baml.cffi.v1.BamlTyString;
 
                 /**
-                 * Encodes the specified BamlFieldTypeString message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeString.verify|verify} messages.
-                 * @param message BamlFieldTypeString message or plain object to encode
+                 * Encodes the specified BamlTyString message. Does not implicitly {@link baml.cffi.v1.BamlTyString.verify|verify} messages.
+                 * @param message BamlTyString message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeString, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyString, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeString message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeString.verify|verify} messages.
-                 * @param message BamlFieldTypeString message or plain object to encode
+                 * Encodes the specified BamlTyString message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyString.verify|verify} messages.
+                 * @param message BamlTyString message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeString, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyString, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeString message from the specified reader or buffer.
+                 * Decodes a BamlTyString message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeString
+                 * @returns BamlTyString
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeString;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyString;
 
                 /**
-                 * Decodes a BamlFieldTypeString message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyString message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeString
+                 * @returns BamlTyString
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeString;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyString;
 
                 /**
-                 * Verifies a BamlFieldTypeString message.
+                 * Verifies a BamlTyString message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeString message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyString message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeString
+                 * @returns BamlTyString
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeString;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyString;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeString message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeString
+                 * Creates a plain object from a BamlTyString message. Also converts values to other types if specified.
+                 * @param message BamlTyString
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeString, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyString, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeString to JSON.
+                 * Converts this BamlTyString to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeString
+                 * Gets the default type url for BamlTyString
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeInt. */
-            interface IBamlFieldTypeInt {
+            /** Properties of a BamlTyInt. */
+            interface IBamlTyInt {
             }
 
-            /** Represents a BamlFieldTypeInt. */
-            class BamlFieldTypeInt implements IBamlFieldTypeInt {
+            /** Represents a BamlTyInt. */
+            class BamlTyInt implements IBamlTyInt {
 
                 /**
-                 * Constructs a new BamlFieldTypeInt.
+                 * Constructs a new BamlTyInt.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeInt);
+                constructor(properties?: baml.cffi.v1.IBamlTyInt);
 
                 /**
-                 * Creates a new BamlFieldTypeInt instance using the specified properties.
+                 * Creates a new BamlTyInt instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeInt instance
+                 * @returns BamlTyInt instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeInt): baml.cffi.v1.BamlFieldTypeInt;
+                public static create(properties?: baml.cffi.v1.IBamlTyInt): baml.cffi.v1.BamlTyInt;
 
                 /**
-                 * Encodes the specified BamlFieldTypeInt message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeInt.verify|verify} messages.
-                 * @param message BamlFieldTypeInt message or plain object to encode
+                 * Encodes the specified BamlTyInt message. Does not implicitly {@link baml.cffi.v1.BamlTyInt.verify|verify} messages.
+                 * @param message BamlTyInt message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeInt, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyInt, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeInt message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeInt.verify|verify} messages.
-                 * @param message BamlFieldTypeInt message or plain object to encode
+                 * Encodes the specified BamlTyInt message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyInt.verify|verify} messages.
+                 * @param message BamlTyInt message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeInt, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyInt, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeInt message from the specified reader or buffer.
+                 * Decodes a BamlTyInt message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeInt
+                 * @returns BamlTyInt
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeInt;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyInt;
 
                 /**
-                 * Decodes a BamlFieldTypeInt message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyInt message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeInt
+                 * @returns BamlTyInt
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeInt;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyInt;
 
                 /**
-                 * Verifies a BamlFieldTypeInt message.
+                 * Verifies a BamlTyInt message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeInt message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyInt message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeInt
+                 * @returns BamlTyInt
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeInt;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyInt;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeInt message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeInt
+                 * Creates a plain object from a BamlTyInt message. Also converts values to other types if specified.
+                 * @param message BamlTyInt
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeInt, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyInt, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeInt to JSON.
+                 * Converts this BamlTyInt to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeInt
+                 * Gets the default type url for BamlTyInt
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeFloat. */
-            interface IBamlFieldTypeFloat {
+            /** Properties of a BamlTyFloat. */
+            interface IBamlTyFloat {
             }
 
-            /** Represents a BamlFieldTypeFloat. */
-            class BamlFieldTypeFloat implements IBamlFieldTypeFloat {
+            /** Represents a BamlTyFloat. */
+            class BamlTyFloat implements IBamlTyFloat {
 
                 /**
-                 * Constructs a new BamlFieldTypeFloat.
+                 * Constructs a new BamlTyFloat.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeFloat);
+                constructor(properties?: baml.cffi.v1.IBamlTyFloat);
 
                 /**
-                 * Creates a new BamlFieldTypeFloat instance using the specified properties.
+                 * Creates a new BamlTyFloat instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeFloat instance
+                 * @returns BamlTyFloat instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeFloat): baml.cffi.v1.BamlFieldTypeFloat;
+                public static create(properties?: baml.cffi.v1.IBamlTyFloat): baml.cffi.v1.BamlTyFloat;
 
                 /**
-                 * Encodes the specified BamlFieldTypeFloat message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeFloat.verify|verify} messages.
-                 * @param message BamlFieldTypeFloat message or plain object to encode
+                 * Encodes the specified BamlTyFloat message. Does not implicitly {@link baml.cffi.v1.BamlTyFloat.verify|verify} messages.
+                 * @param message BamlTyFloat message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeFloat, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyFloat, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeFloat message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeFloat.verify|verify} messages.
-                 * @param message BamlFieldTypeFloat message or plain object to encode
+                 * Encodes the specified BamlTyFloat message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyFloat.verify|verify} messages.
+                 * @param message BamlTyFloat message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeFloat, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyFloat, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeFloat message from the specified reader or buffer.
+                 * Decodes a BamlTyFloat message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeFloat
+                 * @returns BamlTyFloat
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeFloat;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyFloat;
 
                 /**
-                 * Decodes a BamlFieldTypeFloat message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyFloat message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeFloat
+                 * @returns BamlTyFloat
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeFloat;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyFloat;
 
                 /**
-                 * Verifies a BamlFieldTypeFloat message.
+                 * Verifies a BamlTyFloat message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeFloat message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyFloat message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeFloat
+                 * @returns BamlTyFloat
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeFloat;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyFloat;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeFloat message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeFloat
+                 * Creates a plain object from a BamlTyFloat message. Also converts values to other types if specified.
+                 * @param message BamlTyFloat
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeFloat, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyFloat, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeFloat to JSON.
+                 * Converts this BamlTyFloat to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeFloat
+                 * Gets the default type url for BamlTyFloat
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeBool. */
-            interface IBamlFieldTypeBool {
+            /** Properties of a BamlTyBool. */
+            interface IBamlTyBool {
             }
 
-            /** Represents a BamlFieldTypeBool. */
-            class BamlFieldTypeBool implements IBamlFieldTypeBool {
+            /** Represents a BamlTyBool. */
+            class BamlTyBool implements IBamlTyBool {
 
                 /**
-                 * Constructs a new BamlFieldTypeBool.
+                 * Constructs a new BamlTyBool.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeBool);
+                constructor(properties?: baml.cffi.v1.IBamlTyBool);
 
                 /**
-                 * Creates a new BamlFieldTypeBool instance using the specified properties.
+                 * Creates a new BamlTyBool instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeBool instance
+                 * @returns BamlTyBool instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeBool): baml.cffi.v1.BamlFieldTypeBool;
+                public static create(properties?: baml.cffi.v1.IBamlTyBool): baml.cffi.v1.BamlTyBool;
 
                 /**
-                 * Encodes the specified BamlFieldTypeBool message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeBool.verify|verify} messages.
-                 * @param message BamlFieldTypeBool message or plain object to encode
+                 * Encodes the specified BamlTyBool message. Does not implicitly {@link baml.cffi.v1.BamlTyBool.verify|verify} messages.
+                 * @param message BamlTyBool message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeBool, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyBool, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeBool message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeBool.verify|verify} messages.
-                 * @param message BamlFieldTypeBool message or plain object to encode
+                 * Encodes the specified BamlTyBool message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyBool.verify|verify} messages.
+                 * @param message BamlTyBool message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeBool, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyBool, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeBool message from the specified reader or buffer.
+                 * Decodes a BamlTyBool message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeBool
+                 * @returns BamlTyBool
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeBool;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyBool;
 
                 /**
-                 * Decodes a BamlFieldTypeBool message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyBool message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeBool
+                 * @returns BamlTyBool
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeBool;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyBool;
 
                 /**
-                 * Verifies a BamlFieldTypeBool message.
+                 * Verifies a BamlTyBool message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeBool message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyBool message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeBool
+                 * @returns BamlTyBool
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeBool;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyBool;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeBool message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeBool
+                 * Creates a plain object from a BamlTyBool message. Also converts values to other types if specified.
+                 * @param message BamlTyBool
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeBool, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyBool, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeBool to JSON.
+                 * Converts this BamlTyBool to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeBool
+                 * Gets the default type url for BamlTyBool
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeNull. */
-            interface IBamlFieldTypeNull {
+            /** Properties of a BamlTyNull. */
+            interface IBamlTyNull {
             }
 
-            /** Represents a BamlFieldTypeNull. */
-            class BamlFieldTypeNull implements IBamlFieldTypeNull {
+            /** Represents a BamlTyNull. */
+            class BamlTyNull implements IBamlTyNull {
 
                 /**
-                 * Constructs a new BamlFieldTypeNull.
+                 * Constructs a new BamlTyNull.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeNull);
+                constructor(properties?: baml.cffi.v1.IBamlTyNull);
 
                 /**
-                 * Creates a new BamlFieldTypeNull instance using the specified properties.
+                 * Creates a new BamlTyNull instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeNull instance
+                 * @returns BamlTyNull instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeNull): baml.cffi.v1.BamlFieldTypeNull;
+                public static create(properties?: baml.cffi.v1.IBamlTyNull): baml.cffi.v1.BamlTyNull;
 
                 /**
-                 * Encodes the specified BamlFieldTypeNull message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeNull.verify|verify} messages.
-                 * @param message BamlFieldTypeNull message or plain object to encode
+                 * Encodes the specified BamlTyNull message. Does not implicitly {@link baml.cffi.v1.BamlTyNull.verify|verify} messages.
+                 * @param message BamlTyNull message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeNull, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyNull, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeNull message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeNull.verify|verify} messages.
-                 * @param message BamlFieldTypeNull message or plain object to encode
+                 * Encodes the specified BamlTyNull message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyNull.verify|verify} messages.
+                 * @param message BamlTyNull message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeNull, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyNull, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeNull message from the specified reader or buffer.
+                 * Decodes a BamlTyNull message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeNull
+                 * @returns BamlTyNull
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeNull;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyNull;
 
                 /**
-                 * Decodes a BamlFieldTypeNull message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyNull message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeNull
+                 * @returns BamlTyNull
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeNull;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyNull;
 
                 /**
-                 * Verifies a BamlFieldTypeNull message.
+                 * Verifies a BamlTyNull message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeNull message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyNull message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeNull
+                 * @returns BamlTyNull
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeNull;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyNull;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeNull message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeNull
+                 * Creates a plain object from a BamlTyNull message. Also converts values to other types if specified.
+                 * @param message BamlTyNull
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeNull, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyNull, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeNull to JSON.
+                 * Converts this BamlTyNull to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeNull
+                 * Gets the default type url for BamlTyNull
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeUint8Array. */
-            interface IBamlFieldTypeUint8Array {
+            /** Properties of a BamlTyUint8Array. */
+            interface IBamlTyUint8Array {
             }
 
-            /** Represents a BamlFieldTypeUint8Array. */
-            class BamlFieldTypeUint8Array implements IBamlFieldTypeUint8Array {
+            /** Represents a BamlTyUint8Array. */
+            class BamlTyUint8Array implements IBamlTyUint8Array {
 
                 /**
-                 * Constructs a new BamlFieldTypeUint8Array.
+                 * Constructs a new BamlTyUint8Array.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeUint8Array);
+                constructor(properties?: baml.cffi.v1.IBamlTyUint8Array);
 
                 /**
-                 * Creates a new BamlFieldTypeUint8Array instance using the specified properties.
+                 * Creates a new BamlTyUint8Array instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeUint8Array instance
+                 * @returns BamlTyUint8Array instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeUint8Array): baml.cffi.v1.BamlFieldTypeUint8Array;
+                public static create(properties?: baml.cffi.v1.IBamlTyUint8Array): baml.cffi.v1.BamlTyUint8Array;
 
                 /**
-                 * Encodes the specified BamlFieldTypeUint8Array message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeUint8Array.verify|verify} messages.
-                 * @param message BamlFieldTypeUint8Array message or plain object to encode
+                 * Encodes the specified BamlTyUint8Array message. Does not implicitly {@link baml.cffi.v1.BamlTyUint8Array.verify|verify} messages.
+                 * @param message BamlTyUint8Array message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeUint8Array, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyUint8Array, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeUint8Array message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeUint8Array.verify|verify} messages.
-                 * @param message BamlFieldTypeUint8Array message or plain object to encode
+                 * Encodes the specified BamlTyUint8Array message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyUint8Array.verify|verify} messages.
+                 * @param message BamlTyUint8Array message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeUint8Array, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyUint8Array, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeUint8Array message from the specified reader or buffer.
+                 * Decodes a BamlTyUint8Array message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeUint8Array
+                 * @returns BamlTyUint8Array
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeUint8Array;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyUint8Array;
 
                 /**
-                 * Decodes a BamlFieldTypeUint8Array message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyUint8Array message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeUint8Array
+                 * @returns BamlTyUint8Array
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeUint8Array;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyUint8Array;
 
                 /**
-                 * Verifies a BamlFieldTypeUint8Array message.
+                 * Verifies a BamlTyUint8Array message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeUint8Array message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyUint8Array message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeUint8Array
+                 * @returns BamlTyUint8Array
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeUint8Array;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyUint8Array;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeUint8Array message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeUint8Array
+                 * Creates a plain object from a BamlTyUint8Array message. Also converts values to other types if specified.
+                 * @param message BamlTyUint8Array
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeUint8Array, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyUint8Array, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeUint8Array to JSON.
+                 * Converts this BamlTyUint8Array to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeUint8Array
+                 * Gets the default type url for BamlTyUint8Array
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeAny. */
-            interface IBamlFieldTypeAny {
+            /** Properties of a BamlTyAny. */
+            interface IBamlTyAny {
             }
 
-            /** Represents a BamlFieldTypeAny. */
-            class BamlFieldTypeAny implements IBamlFieldTypeAny {
+            /** Represents a BamlTyAny. */
+            class BamlTyAny implements IBamlTyAny {
 
                 /**
-                 * Constructs a new BamlFieldTypeAny.
+                 * Constructs a new BamlTyAny.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeAny);
+                constructor(properties?: baml.cffi.v1.IBamlTyAny);
 
                 /**
-                 * Creates a new BamlFieldTypeAny instance using the specified properties.
+                 * Creates a new BamlTyAny instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeAny instance
+                 * @returns BamlTyAny instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeAny): baml.cffi.v1.BamlFieldTypeAny;
+                public static create(properties?: baml.cffi.v1.IBamlTyAny): baml.cffi.v1.BamlTyAny;
 
                 /**
-                 * Encodes the specified BamlFieldTypeAny message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeAny.verify|verify} messages.
-                 * @param message BamlFieldTypeAny message or plain object to encode
+                 * Encodes the specified BamlTyAny message. Does not implicitly {@link baml.cffi.v1.BamlTyAny.verify|verify} messages.
+                 * @param message BamlTyAny message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeAny, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyAny, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeAny message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeAny.verify|verify} messages.
-                 * @param message BamlFieldTypeAny message or plain object to encode
+                 * Encodes the specified BamlTyAny message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyAny.verify|verify} messages.
+                 * @param message BamlTyAny message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeAny, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyAny, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeAny message from the specified reader or buffer.
+                 * Decodes a BamlTyAny message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeAny
+                 * @returns BamlTyAny
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeAny;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyAny;
 
                 /**
-                 * Decodes a BamlFieldTypeAny message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyAny message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeAny
+                 * @returns BamlTyAny
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeAny;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyAny;
 
                 /**
-                 * Verifies a BamlFieldTypeAny message.
+                 * Verifies a BamlTyAny message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeAny message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyAny message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeAny
+                 * @returns BamlTyAny
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeAny;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyAny;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeAny message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeAny
+                 * Creates a plain object from a BamlTyAny message. Also converts values to other types if specified.
+                 * @param message BamlTyAny
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeAny, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyAny, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeAny to JSON.
+                 * Converts this BamlTyAny to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeAny
+                 * Gets the default type url for BamlTyAny
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeUnknown. */
-            interface IBamlFieldTypeUnknown {
+            /** Properties of a BamlTyUnknown. */
+            interface IBamlTyUnknown {
             }
 
-            /** Represents a BamlFieldTypeUnknown. */
-            class BamlFieldTypeUnknown implements IBamlFieldTypeUnknown {
+            /** Represents a BamlTyUnknown. */
+            class BamlTyUnknown implements IBamlTyUnknown {
 
                 /**
-                 * Constructs a new BamlFieldTypeUnknown.
+                 * Constructs a new BamlTyUnknown.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeUnknown);
+                constructor(properties?: baml.cffi.v1.IBamlTyUnknown);
 
                 /**
-                 * Creates a new BamlFieldTypeUnknown instance using the specified properties.
+                 * Creates a new BamlTyUnknown instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeUnknown instance
+                 * @returns BamlTyUnknown instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeUnknown): baml.cffi.v1.BamlFieldTypeUnknown;
+                public static create(properties?: baml.cffi.v1.IBamlTyUnknown): baml.cffi.v1.BamlTyUnknown;
 
                 /**
-                 * Encodes the specified BamlFieldTypeUnknown message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeUnknown.verify|verify} messages.
-                 * @param message BamlFieldTypeUnknown message or plain object to encode
+                 * Encodes the specified BamlTyUnknown message. Does not implicitly {@link baml.cffi.v1.BamlTyUnknown.verify|verify} messages.
+                 * @param message BamlTyUnknown message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeUnknown, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyUnknown, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeUnknown message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeUnknown.verify|verify} messages.
-                 * @param message BamlFieldTypeUnknown message or plain object to encode
+                 * Encodes the specified BamlTyUnknown message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyUnknown.verify|verify} messages.
+                 * @param message BamlTyUnknown message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeUnknown, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyUnknown, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeUnknown message from the specified reader or buffer.
+                 * Decodes a BamlTyUnknown message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeUnknown
+                 * @returns BamlTyUnknown
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeUnknown;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyUnknown;
 
                 /**
-                 * Decodes a BamlFieldTypeUnknown message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyUnknown message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeUnknown
+                 * @returns BamlTyUnknown
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeUnknown;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyUnknown;
 
                 /**
-                 * Verifies a BamlFieldTypeUnknown message.
+                 * Verifies a BamlTyUnknown message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeUnknown message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyUnknown message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeUnknown
+                 * @returns BamlTyUnknown
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeUnknown;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyUnknown;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeUnknown message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeUnknown
+                 * Creates a plain object from a BamlTyUnknown message. Also converts values to other types if specified.
+                 * @param message BamlTyUnknown
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeUnknown, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyUnknown, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeUnknown to JSON.
+                 * Converts this BamlTyUnknown to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeUnknown
+                 * Gets the default type url for BamlTyUnknown
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
@@ -4062,1422 +4023,894 @@ export namespace baml {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeLiteral. */
-            interface IBamlFieldTypeLiteral {
+            /** Properties of a BamlTyLiteral. */
+            interface IBamlTyLiteral {
 
-                /** BamlFieldTypeLiteral stringLiteral */
+                /** BamlTyLiteral stringLiteral */
                 stringLiteral?: (baml.cffi.v1.IBamlLiteralString|null);
 
-                /** BamlFieldTypeLiteral intLiteral */
+                /** BamlTyLiteral intLiteral */
                 intLiteral?: (baml.cffi.v1.IBamlLiteralInt|null);
 
-                /** BamlFieldTypeLiteral boolLiteral */
+                /** BamlTyLiteral boolLiteral */
                 boolLiteral?: (baml.cffi.v1.IBamlLiteralBool|null);
             }
 
-            /** Represents a BamlFieldTypeLiteral. */
-            class BamlFieldTypeLiteral implements IBamlFieldTypeLiteral {
+            /** Represents a BamlTyLiteral. */
+            class BamlTyLiteral implements IBamlTyLiteral {
 
                 /**
-                 * Constructs a new BamlFieldTypeLiteral.
+                 * Constructs a new BamlTyLiteral.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeLiteral);
+                constructor(properties?: baml.cffi.v1.IBamlTyLiteral);
 
-                /** BamlFieldTypeLiteral stringLiteral. */
+                /** BamlTyLiteral stringLiteral. */
                 public stringLiteral?: (baml.cffi.v1.IBamlLiteralString|null);
 
-                /** BamlFieldTypeLiteral intLiteral. */
+                /** BamlTyLiteral intLiteral. */
                 public intLiteral?: (baml.cffi.v1.IBamlLiteralInt|null);
 
-                /** BamlFieldTypeLiteral boolLiteral. */
+                /** BamlTyLiteral boolLiteral. */
                 public boolLiteral?: (baml.cffi.v1.IBamlLiteralBool|null);
 
-                /** BamlFieldTypeLiteral literal. */
+                /** BamlTyLiteral literal. */
                 public literal?: ("stringLiteral"|"intLiteral"|"boolLiteral");
 
                 /**
-                 * Creates a new BamlFieldTypeLiteral instance using the specified properties.
+                 * Creates a new BamlTyLiteral instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeLiteral instance
+                 * @returns BamlTyLiteral instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeLiteral): baml.cffi.v1.BamlFieldTypeLiteral;
+                public static create(properties?: baml.cffi.v1.IBamlTyLiteral): baml.cffi.v1.BamlTyLiteral;
 
                 /**
-                 * Encodes the specified BamlFieldTypeLiteral message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeLiteral.verify|verify} messages.
-                 * @param message BamlFieldTypeLiteral message or plain object to encode
+                 * Encodes the specified BamlTyLiteral message. Does not implicitly {@link baml.cffi.v1.BamlTyLiteral.verify|verify} messages.
+                 * @param message BamlTyLiteral message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeLiteral, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyLiteral, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeLiteral message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeLiteral.verify|verify} messages.
-                 * @param message BamlFieldTypeLiteral message or plain object to encode
+                 * Encodes the specified BamlTyLiteral message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyLiteral.verify|verify} messages.
+                 * @param message BamlTyLiteral message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeLiteral, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyLiteral, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeLiteral message from the specified reader or buffer.
+                 * Decodes a BamlTyLiteral message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeLiteral
+                 * @returns BamlTyLiteral
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeLiteral;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyLiteral;
 
                 /**
-                 * Decodes a BamlFieldTypeLiteral message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyLiteral message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeLiteral
+                 * @returns BamlTyLiteral
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeLiteral;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyLiteral;
 
                 /**
-                 * Verifies a BamlFieldTypeLiteral message.
+                 * Verifies a BamlTyLiteral message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeLiteral message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyLiteral message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeLiteral
+                 * @returns BamlTyLiteral
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeLiteral;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyLiteral;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeLiteral message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeLiteral
+                 * Creates a plain object from a BamlTyLiteral message. Also converts values to other types if specified.
+                 * @param message BamlTyLiteral
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeLiteral, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyLiteral, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeLiteral to JSON.
+                 * Converts this BamlTyLiteral to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeLiteral
+                 * Gets the default type url for BamlTyLiteral
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeMedia. */
-            interface IBamlFieldTypeMedia {
+            /** Properties of a BamlTyMedia. */
+            interface IBamlTyMedia {
 
-                /** BamlFieldTypeMedia media */
+                /** BamlTyMedia media */
                 media?: (baml.cffi.v1.MediaTypeEnum|null);
             }
 
-            /** Represents a BamlFieldTypeMedia. */
-            class BamlFieldTypeMedia implements IBamlFieldTypeMedia {
+            /** Represents a BamlTyMedia. */
+            class BamlTyMedia implements IBamlTyMedia {
 
                 /**
-                 * Constructs a new BamlFieldTypeMedia.
+                 * Constructs a new BamlTyMedia.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeMedia);
+                constructor(properties?: baml.cffi.v1.IBamlTyMedia);
 
-                /** BamlFieldTypeMedia media. */
+                /** BamlTyMedia media. */
                 public media: baml.cffi.v1.MediaTypeEnum;
 
                 /**
-                 * Creates a new BamlFieldTypeMedia instance using the specified properties.
+                 * Creates a new BamlTyMedia instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeMedia instance
+                 * @returns BamlTyMedia instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeMedia): baml.cffi.v1.BamlFieldTypeMedia;
+                public static create(properties?: baml.cffi.v1.IBamlTyMedia): baml.cffi.v1.BamlTyMedia;
 
                 /**
-                 * Encodes the specified BamlFieldTypeMedia message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeMedia.verify|verify} messages.
-                 * @param message BamlFieldTypeMedia message or plain object to encode
+                 * Encodes the specified BamlTyMedia message. Does not implicitly {@link baml.cffi.v1.BamlTyMedia.verify|verify} messages.
+                 * @param message BamlTyMedia message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeMedia, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyMedia, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeMedia message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeMedia.verify|verify} messages.
-                 * @param message BamlFieldTypeMedia message or plain object to encode
+                 * Encodes the specified BamlTyMedia message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyMedia.verify|verify} messages.
+                 * @param message BamlTyMedia message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeMedia, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyMedia, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeMedia message from the specified reader or buffer.
+                 * Decodes a BamlTyMedia message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeMedia
+                 * @returns BamlTyMedia
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeMedia;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyMedia;
 
                 /**
-                 * Decodes a BamlFieldTypeMedia message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyMedia message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeMedia
+                 * @returns BamlTyMedia
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeMedia;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyMedia;
 
                 /**
-                 * Verifies a BamlFieldTypeMedia message.
+                 * Verifies a BamlTyMedia message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeMedia message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyMedia message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeMedia
+                 * @returns BamlTyMedia
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeMedia;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyMedia;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeMedia message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeMedia
+                 * Creates a plain object from a BamlTyMedia message. Also converts values to other types if specified.
+                 * @param message BamlTyMedia
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeMedia, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyMedia, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeMedia to JSON.
+                 * Converts this BamlTyMedia to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeMedia
+                 * Gets the default type url for BamlTyMedia
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeEnum. */
-            interface IBamlFieldTypeEnum {
+            /** Properties of a BamlTyEnum. */
+            interface IBamlTyEnum {
 
-                /** BamlFieldTypeEnum name */
+                /** BamlTyEnum name */
                 name?: (string|null);
             }
 
-            /** Represents a BamlFieldTypeEnum. */
-            class BamlFieldTypeEnum implements IBamlFieldTypeEnum {
+            /** Represents a BamlTyEnum. */
+            class BamlTyEnum implements IBamlTyEnum {
 
                 /**
-                 * Constructs a new BamlFieldTypeEnum.
+                 * Constructs a new BamlTyEnum.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeEnum);
+                constructor(properties?: baml.cffi.v1.IBamlTyEnum);
 
-                /** BamlFieldTypeEnum name. */
+                /** BamlTyEnum name. */
                 public name: string;
 
                 /**
-                 * Creates a new BamlFieldTypeEnum instance using the specified properties.
+                 * Creates a new BamlTyEnum instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeEnum instance
+                 * @returns BamlTyEnum instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeEnum): baml.cffi.v1.BamlFieldTypeEnum;
+                public static create(properties?: baml.cffi.v1.IBamlTyEnum): baml.cffi.v1.BamlTyEnum;
 
                 /**
-                 * Encodes the specified BamlFieldTypeEnum message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeEnum.verify|verify} messages.
-                 * @param message BamlFieldTypeEnum message or plain object to encode
+                 * Encodes the specified BamlTyEnum message. Does not implicitly {@link baml.cffi.v1.BamlTyEnum.verify|verify} messages.
+                 * @param message BamlTyEnum message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeEnum, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyEnum, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeEnum message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeEnum.verify|verify} messages.
-                 * @param message BamlFieldTypeEnum message or plain object to encode
+                 * Encodes the specified BamlTyEnum message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyEnum.verify|verify} messages.
+                 * @param message BamlTyEnum message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeEnum, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyEnum, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeEnum message from the specified reader or buffer.
+                 * Decodes a BamlTyEnum message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeEnum
+                 * @returns BamlTyEnum
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeEnum;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyEnum;
 
                 /**
-                 * Decodes a BamlFieldTypeEnum message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyEnum message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeEnum
+                 * @returns BamlTyEnum
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeEnum;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyEnum;
 
                 /**
-                 * Verifies a BamlFieldTypeEnum message.
+                 * Verifies a BamlTyEnum message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeEnum message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyEnum message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeEnum
+                 * @returns BamlTyEnum
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeEnum;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyEnum;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeEnum message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeEnum
+                 * Creates a plain object from a BamlTyEnum message. Also converts values to other types if specified.
+                 * @param message BamlTyEnum
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeEnum, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyEnum, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeEnum to JSON.
+                 * Converts this BamlTyEnum to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeEnum
+                 * Gets the default type url for BamlTyEnum
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeClass. */
-            interface IBamlFieldTypeClass {
+            /** Properties of a BamlTyClass. */
+            interface IBamlTyClass {
 
-                /** BamlFieldTypeClass name */
-                name?: (baml.cffi.v1.IBamlTypeName|null);
+                /** BamlTyClass name */
+                name?: (baml.cffi.v1.IBamlTyName|null);
             }
 
-            /** Represents a BamlFieldTypeClass. */
-            class BamlFieldTypeClass implements IBamlFieldTypeClass {
+            /** Represents a BamlTyClass. */
+            class BamlTyClass implements IBamlTyClass {
 
                 /**
-                 * Constructs a new BamlFieldTypeClass.
+                 * Constructs a new BamlTyClass.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeClass);
+                constructor(properties?: baml.cffi.v1.IBamlTyClass);
 
-                /** BamlFieldTypeClass name. */
-                public name?: (baml.cffi.v1.IBamlTypeName|null);
+                /** BamlTyClass name. */
+                public name?: (baml.cffi.v1.IBamlTyName|null);
 
                 /**
-                 * Creates a new BamlFieldTypeClass instance using the specified properties.
+                 * Creates a new BamlTyClass instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeClass instance
+                 * @returns BamlTyClass instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeClass): baml.cffi.v1.BamlFieldTypeClass;
+                public static create(properties?: baml.cffi.v1.IBamlTyClass): baml.cffi.v1.BamlTyClass;
 
                 /**
-                 * Encodes the specified BamlFieldTypeClass message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeClass.verify|verify} messages.
-                 * @param message BamlFieldTypeClass message or plain object to encode
+                 * Encodes the specified BamlTyClass message. Does not implicitly {@link baml.cffi.v1.BamlTyClass.verify|verify} messages.
+                 * @param message BamlTyClass message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeClass, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyClass, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeClass message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeClass.verify|verify} messages.
-                 * @param message BamlFieldTypeClass message or plain object to encode
+                 * Encodes the specified BamlTyClass message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyClass.verify|verify} messages.
+                 * @param message BamlTyClass message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeClass, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyClass, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeClass message from the specified reader or buffer.
+                 * Decodes a BamlTyClass message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeClass
+                 * @returns BamlTyClass
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeClass;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyClass;
 
                 /**
-                 * Decodes a BamlFieldTypeClass message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyClass message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeClass
+                 * @returns BamlTyClass
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeClass;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyClass;
 
                 /**
-                 * Verifies a BamlFieldTypeClass message.
+                 * Verifies a BamlTyClass message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeClass message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyClass message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeClass
+                 * @returns BamlTyClass
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeClass;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyClass;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeClass message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeClass
+                 * Creates a plain object from a BamlTyClass message. Also converts values to other types if specified.
+                 * @param message BamlTyClass
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeClass, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyClass, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeClass to JSON.
+                 * Converts this BamlTyClass to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeClass
+                 * Gets the default type url for BamlTyClass
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeTypeAlias. */
-            interface IBamlFieldTypeTypeAlias {
+            /** Properties of a BamlTyTypeAlias. */
+            interface IBamlTyTypeAlias {
 
-                /** BamlFieldTypeTypeAlias name */
-                name?: (baml.cffi.v1.IBamlTypeName|null);
+                /** BamlTyTypeAlias name */
+                name?: (baml.cffi.v1.IBamlTyName|null);
             }
 
-            /** Represents a BamlFieldTypeTypeAlias. */
-            class BamlFieldTypeTypeAlias implements IBamlFieldTypeTypeAlias {
+            /** Represents a BamlTyTypeAlias. */
+            class BamlTyTypeAlias implements IBamlTyTypeAlias {
 
                 /**
-                 * Constructs a new BamlFieldTypeTypeAlias.
+                 * Constructs a new BamlTyTypeAlias.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeTypeAlias);
+                constructor(properties?: baml.cffi.v1.IBamlTyTypeAlias);
 
-                /** BamlFieldTypeTypeAlias name. */
-                public name?: (baml.cffi.v1.IBamlTypeName|null);
+                /** BamlTyTypeAlias name. */
+                public name?: (baml.cffi.v1.IBamlTyName|null);
 
                 /**
-                 * Creates a new BamlFieldTypeTypeAlias instance using the specified properties.
+                 * Creates a new BamlTyTypeAlias instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeTypeAlias instance
+                 * @returns BamlTyTypeAlias instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeTypeAlias): baml.cffi.v1.BamlFieldTypeTypeAlias;
+                public static create(properties?: baml.cffi.v1.IBamlTyTypeAlias): baml.cffi.v1.BamlTyTypeAlias;
 
                 /**
-                 * Encodes the specified BamlFieldTypeTypeAlias message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeTypeAlias.verify|verify} messages.
-                 * @param message BamlFieldTypeTypeAlias message or plain object to encode
+                 * Encodes the specified BamlTyTypeAlias message. Does not implicitly {@link baml.cffi.v1.BamlTyTypeAlias.verify|verify} messages.
+                 * @param message BamlTyTypeAlias message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeTypeAlias, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyTypeAlias, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeTypeAlias message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeTypeAlias.verify|verify} messages.
-                 * @param message BamlFieldTypeTypeAlias message or plain object to encode
+                 * Encodes the specified BamlTyTypeAlias message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyTypeAlias.verify|verify} messages.
+                 * @param message BamlTyTypeAlias message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeTypeAlias, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyTypeAlias, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeTypeAlias message from the specified reader or buffer.
+                 * Decodes a BamlTyTypeAlias message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeTypeAlias
+                 * @returns BamlTyTypeAlias
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeTypeAlias;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyTypeAlias;
 
                 /**
-                 * Decodes a BamlFieldTypeTypeAlias message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyTypeAlias message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeTypeAlias
+                 * @returns BamlTyTypeAlias
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeTypeAlias;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyTypeAlias;
 
                 /**
-                 * Verifies a BamlFieldTypeTypeAlias message.
+                 * Verifies a BamlTyTypeAlias message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeTypeAlias message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyTypeAlias message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeTypeAlias
+                 * @returns BamlTyTypeAlias
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeTypeAlias;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyTypeAlias;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeTypeAlias message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeTypeAlias
+                 * Creates a plain object from a BamlTyTypeAlias message. Also converts values to other types if specified.
+                 * @param message BamlTyTypeAlias
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeTypeAlias, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyTypeAlias, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeTypeAlias to JSON.
+                 * Converts this BamlTyTypeAlias to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeTypeAlias
+                 * Gets the default type url for BamlTyTypeAlias
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeList. */
-            interface IBamlFieldTypeList {
+            /** Properties of a BamlTyList. */
+            interface IBamlTyList {
 
-                /** BamlFieldTypeList itemType */
-                itemType?: (baml.cffi.v1.IBamlFieldType|null);
+                /** BamlTyList itemType */
+                itemType?: (baml.cffi.v1.IBamlTy|null);
             }
 
-            /** Represents a BamlFieldTypeList. */
-            class BamlFieldTypeList implements IBamlFieldTypeList {
+            /** Represents a BamlTyList. */
+            class BamlTyList implements IBamlTyList {
 
                 /**
-                 * Constructs a new BamlFieldTypeList.
+                 * Constructs a new BamlTyList.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeList);
+                constructor(properties?: baml.cffi.v1.IBamlTyList);
 
-                /** BamlFieldTypeList itemType. */
-                public itemType?: (baml.cffi.v1.IBamlFieldType|null);
+                /** BamlTyList itemType. */
+                public itemType?: (baml.cffi.v1.IBamlTy|null);
 
                 /**
-                 * Creates a new BamlFieldTypeList instance using the specified properties.
+                 * Creates a new BamlTyList instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeList instance
+                 * @returns BamlTyList instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeList): baml.cffi.v1.BamlFieldTypeList;
+                public static create(properties?: baml.cffi.v1.IBamlTyList): baml.cffi.v1.BamlTyList;
 
                 /**
-                 * Encodes the specified BamlFieldTypeList message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeList.verify|verify} messages.
-                 * @param message BamlFieldTypeList message or plain object to encode
+                 * Encodes the specified BamlTyList message. Does not implicitly {@link baml.cffi.v1.BamlTyList.verify|verify} messages.
+                 * @param message BamlTyList message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeList, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyList, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeList message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeList.verify|verify} messages.
-                 * @param message BamlFieldTypeList message or plain object to encode
+                 * Encodes the specified BamlTyList message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyList.verify|verify} messages.
+                 * @param message BamlTyList message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeList, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyList, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeList message from the specified reader or buffer.
+                 * Decodes a BamlTyList message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeList
+                 * @returns BamlTyList
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeList;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyList;
 
                 /**
-                 * Decodes a BamlFieldTypeList message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyList message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeList
+                 * @returns BamlTyList
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeList;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyList;
 
                 /**
-                 * Verifies a BamlFieldTypeList message.
+                 * Verifies a BamlTyList message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeList message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyList message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeList
+                 * @returns BamlTyList
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeList;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyList;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeList message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeList
+                 * Creates a plain object from a BamlTyList message. Also converts values to other types if specified.
+                 * @param message BamlTyList
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeList, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyList, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeList to JSON.
+                 * Converts this BamlTyList to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeList
+                 * Gets the default type url for BamlTyList
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeMap. */
-            interface IBamlFieldTypeMap {
+            /** Properties of a BamlTyMap. */
+            interface IBamlTyMap {
 
-                /** BamlFieldTypeMap keyType */
-                keyType?: (baml.cffi.v1.IBamlFieldType|null);
+                /** BamlTyMap keyType */
+                keyType?: (baml.cffi.v1.IBamlTy|null);
 
-                /** BamlFieldTypeMap valueType */
-                valueType?: (baml.cffi.v1.IBamlFieldType|null);
+                /** BamlTyMap valueType */
+                valueType?: (baml.cffi.v1.IBamlTy|null);
             }
 
-            /** Represents a BamlFieldTypeMap. */
-            class BamlFieldTypeMap implements IBamlFieldTypeMap {
+            /** Represents a BamlTyMap. */
+            class BamlTyMap implements IBamlTyMap {
 
                 /**
-                 * Constructs a new BamlFieldTypeMap.
+                 * Constructs a new BamlTyMap.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeMap);
+                constructor(properties?: baml.cffi.v1.IBamlTyMap);
 
-                /** BamlFieldTypeMap keyType. */
-                public keyType?: (baml.cffi.v1.IBamlFieldType|null);
+                /** BamlTyMap keyType. */
+                public keyType?: (baml.cffi.v1.IBamlTy|null);
 
-                /** BamlFieldTypeMap valueType. */
-                public valueType?: (baml.cffi.v1.IBamlFieldType|null);
+                /** BamlTyMap valueType. */
+                public valueType?: (baml.cffi.v1.IBamlTy|null);
 
                 /**
-                 * Creates a new BamlFieldTypeMap instance using the specified properties.
+                 * Creates a new BamlTyMap instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeMap instance
+                 * @returns BamlTyMap instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeMap): baml.cffi.v1.BamlFieldTypeMap;
+                public static create(properties?: baml.cffi.v1.IBamlTyMap): baml.cffi.v1.BamlTyMap;
 
                 /**
-                 * Encodes the specified BamlFieldTypeMap message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeMap.verify|verify} messages.
-                 * @param message BamlFieldTypeMap message or plain object to encode
+                 * Encodes the specified BamlTyMap message. Does not implicitly {@link baml.cffi.v1.BamlTyMap.verify|verify} messages.
+                 * @param message BamlTyMap message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeMap, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyMap, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeMap message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeMap.verify|verify} messages.
-                 * @param message BamlFieldTypeMap message or plain object to encode
+                 * Encodes the specified BamlTyMap message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyMap.verify|verify} messages.
+                 * @param message BamlTyMap message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeMap, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyMap, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeMap message from the specified reader or buffer.
+                 * Decodes a BamlTyMap message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeMap
+                 * @returns BamlTyMap
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeMap;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyMap;
 
                 /**
-                 * Decodes a BamlFieldTypeMap message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyMap message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeMap
+                 * @returns BamlTyMap
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeMap;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyMap;
 
                 /**
-                 * Verifies a BamlFieldTypeMap message.
+                 * Verifies a BamlTyMap message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeMap message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyMap message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeMap
+                 * @returns BamlTyMap
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeMap;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyMap;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeMap message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeMap
+                 * Creates a plain object from a BamlTyMap message. Also converts values to other types if specified.
+                 * @param message BamlTyMap
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeMap, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyMap, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeMap to JSON.
+                 * Converts this BamlTyMap to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeMap
+                 * Gets the default type url for BamlTyMap
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeUnionVariant. */
-            interface IBamlFieldTypeUnionVariant {
+            /** Properties of a BamlTyUnionVariant. */
+            interface IBamlTyUnionVariant {
 
-                /** BamlFieldTypeUnionVariant name */
-                name?: (baml.cffi.v1.IBamlTypeName|null);
+                /** BamlTyUnionVariant name */
+                name?: (baml.cffi.v1.IBamlTyName|null);
             }
 
-            /** Represents a BamlFieldTypeUnionVariant. */
-            class BamlFieldTypeUnionVariant implements IBamlFieldTypeUnionVariant {
+            /** Represents a BamlTyUnionVariant. */
+            class BamlTyUnionVariant implements IBamlTyUnionVariant {
 
                 /**
-                 * Constructs a new BamlFieldTypeUnionVariant.
+                 * Constructs a new BamlTyUnionVariant.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeUnionVariant);
+                constructor(properties?: baml.cffi.v1.IBamlTyUnionVariant);
 
-                /** BamlFieldTypeUnionVariant name. */
-                public name?: (baml.cffi.v1.IBamlTypeName|null);
+                /** BamlTyUnionVariant name. */
+                public name?: (baml.cffi.v1.IBamlTyName|null);
 
                 /**
-                 * Creates a new BamlFieldTypeUnionVariant instance using the specified properties.
+                 * Creates a new BamlTyUnionVariant instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeUnionVariant instance
+                 * @returns BamlTyUnionVariant instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeUnionVariant): baml.cffi.v1.BamlFieldTypeUnionVariant;
+                public static create(properties?: baml.cffi.v1.IBamlTyUnionVariant): baml.cffi.v1.BamlTyUnionVariant;
 
                 /**
-                 * Encodes the specified BamlFieldTypeUnionVariant message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeUnionVariant.verify|verify} messages.
-                 * @param message BamlFieldTypeUnionVariant message or plain object to encode
+                 * Encodes the specified BamlTyUnionVariant message. Does not implicitly {@link baml.cffi.v1.BamlTyUnionVariant.verify|verify} messages.
+                 * @param message BamlTyUnionVariant message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeUnionVariant, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyUnionVariant, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeUnionVariant message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeUnionVariant.verify|verify} messages.
-                 * @param message BamlFieldTypeUnionVariant message or plain object to encode
+                 * Encodes the specified BamlTyUnionVariant message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyUnionVariant.verify|verify} messages.
+                 * @param message BamlTyUnionVariant message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeUnionVariant, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyUnionVariant, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeUnionVariant message from the specified reader or buffer.
+                 * Decodes a BamlTyUnionVariant message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeUnionVariant
+                 * @returns BamlTyUnionVariant
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeUnionVariant;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyUnionVariant;
 
                 /**
-                 * Decodes a BamlFieldTypeUnionVariant message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyUnionVariant message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeUnionVariant
+                 * @returns BamlTyUnionVariant
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeUnionVariant;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyUnionVariant;
 
                 /**
-                 * Verifies a BamlFieldTypeUnionVariant message.
+                 * Verifies a BamlTyUnionVariant message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeUnionVariant message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyUnionVariant message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeUnionVariant
+                 * @returns BamlTyUnionVariant
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeUnionVariant;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyUnionVariant;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeUnionVariant message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeUnionVariant
+                 * Creates a plain object from a BamlTyUnionVariant message. Also converts values to other types if specified.
+                 * @param message BamlTyUnionVariant
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeUnionVariant, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyUnionVariant, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeUnionVariant to JSON.
+                 * Converts this BamlTyUnionVariant to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeUnionVariant
+                 * Gets the default type url for BamlTyUnionVariant
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of a BamlFieldTypeOptional. */
-            interface IBamlFieldTypeOptional {
+            /** Properties of a BamlTyOptional. */
+            interface IBamlTyOptional {
 
-                /** BamlFieldTypeOptional value */
-                value?: (baml.cffi.v1.IBamlFieldType|null);
+                /** BamlTyOptional value */
+                value?: (baml.cffi.v1.IBamlTy|null);
             }
 
-            /** Represents a BamlFieldTypeOptional. */
-            class BamlFieldTypeOptional implements IBamlFieldTypeOptional {
+            /** Represents a BamlTyOptional. */
+            class BamlTyOptional implements IBamlTyOptional {
 
                 /**
-                 * Constructs a new BamlFieldTypeOptional.
+                 * Constructs a new BamlTyOptional.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeOptional);
+                constructor(properties?: baml.cffi.v1.IBamlTyOptional);
 
-                /** BamlFieldTypeOptional value. */
-                public value?: (baml.cffi.v1.IBamlFieldType|null);
+                /** BamlTyOptional value. */
+                public value?: (baml.cffi.v1.IBamlTy|null);
 
                 /**
-                 * Creates a new BamlFieldTypeOptional instance using the specified properties.
+                 * Creates a new BamlTyOptional instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns BamlFieldTypeOptional instance
+                 * @returns BamlTyOptional instance
                  */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeOptional): baml.cffi.v1.BamlFieldTypeOptional;
+                public static create(properties?: baml.cffi.v1.IBamlTyOptional): baml.cffi.v1.BamlTyOptional;
 
                 /**
-                 * Encodes the specified BamlFieldTypeOptional message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeOptional.verify|verify} messages.
-                 * @param message BamlFieldTypeOptional message or plain object to encode
+                 * Encodes the specified BamlTyOptional message. Does not implicitly {@link baml.cffi.v1.BamlTyOptional.verify|verify} messages.
+                 * @param message BamlTyOptional message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeOptional, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml.cffi.v1.IBamlTyOptional, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified BamlFieldTypeOptional message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeOptional.verify|verify} messages.
-                 * @param message BamlFieldTypeOptional message or plain object to encode
+                 * Encodes the specified BamlTyOptional message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlTyOptional.verify|verify} messages.
+                 * @param message BamlTyOptional message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeOptional, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml.cffi.v1.IBamlTyOptional, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes a BamlFieldTypeOptional message from the specified reader or buffer.
+                 * Decodes a BamlTyOptional message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeOptional
+                 * @returns BamlTyOptional
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeOptional;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlTyOptional;
 
                 /**
-                 * Decodes a BamlFieldTypeOptional message from the specified reader or buffer, length delimited.
+                 * Decodes a BamlTyOptional message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeOptional
+                 * @returns BamlTyOptional
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeOptional;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlTyOptional;
 
                 /**
-                 * Verifies a BamlFieldTypeOptional message.
+                 * Verifies a BamlTyOptional message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates a BamlFieldTypeOptional message from a plain object. Also converts values to their respective internal types.
+                 * Creates a BamlTyOptional message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns BamlFieldTypeOptional
+                 * @returns BamlTyOptional
                  */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeOptional;
+                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlTyOptional;
 
                 /**
-                 * Creates a plain object from a BamlFieldTypeOptional message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeOptional
+                 * Creates a plain object from a BamlTyOptional message. Also converts values to other types if specified.
+                 * @param message BamlTyOptional
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeOptional, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml.cffi.v1.BamlTyOptional, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this BamlFieldTypeOptional to JSON.
+                 * Converts this BamlTyOptional to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for BamlFieldTypeOptional
-                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns The default type url
-                 */
-                public static getTypeUrl(typeUrlPrefix?: string): string;
-            }
-
-            /** Properties of a BamlFieldTypeChecked. */
-            interface IBamlFieldTypeChecked {
-
-                /** BamlFieldTypeChecked value */
-                value?: (baml.cffi.v1.IBamlFieldType|null);
-
-                /** BamlFieldTypeChecked checks */
-                checks?: (baml.cffi.v1.IBamlCheckType[]|null);
-            }
-
-            /** Represents a BamlFieldTypeChecked. */
-            class BamlFieldTypeChecked implements IBamlFieldTypeChecked {
-
-                /**
-                 * Constructs a new BamlFieldTypeChecked.
-                 * @param [properties] Properties to set
-                 */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeChecked);
-
-                /** BamlFieldTypeChecked value. */
-                public value?: (baml.cffi.v1.IBamlFieldType|null);
-
-                /** BamlFieldTypeChecked checks. */
-                public checks: baml.cffi.v1.IBamlCheckType[];
-
-                /**
-                 * Creates a new BamlFieldTypeChecked instance using the specified properties.
-                 * @param [properties] Properties to set
-                 * @returns BamlFieldTypeChecked instance
-                 */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeChecked): baml.cffi.v1.BamlFieldTypeChecked;
-
-                /**
-                 * Encodes the specified BamlFieldTypeChecked message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeChecked.verify|verify} messages.
-                 * @param message BamlFieldTypeChecked message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeChecked, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Encodes the specified BamlFieldTypeChecked message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeChecked.verify|verify} messages.
-                 * @param message BamlFieldTypeChecked message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeChecked, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Decodes a BamlFieldTypeChecked message from the specified reader or buffer.
-                 * @param reader Reader or buffer to decode from
-                 * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeChecked
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeChecked;
-
-                /**
-                 * Decodes a BamlFieldTypeChecked message from the specified reader or buffer, length delimited.
-                 * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeChecked
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeChecked;
-
-                /**
-                 * Verifies a BamlFieldTypeChecked message.
-                 * @param message Plain object to verify
-                 * @returns `null` if valid, otherwise the reason why it is not
-                 */
-                public static verify(message: { [k: string]: any }): (string|null);
-
-                /**
-                 * Creates a BamlFieldTypeChecked message from a plain object. Also converts values to their respective internal types.
-                 * @param object Plain object
-                 * @returns BamlFieldTypeChecked
-                 */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeChecked;
-
-                /**
-                 * Creates a plain object from a BamlFieldTypeChecked message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeChecked
-                 * @param [options] Conversion options
-                 * @returns Plain object
-                 */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeChecked, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-                /**
-                 * Converts this BamlFieldTypeChecked to JSON.
-                 * @returns JSON object
-                 */
-                public toJSON(): { [k: string]: any };
-
-                /**
-                 * Gets the default type url for BamlFieldTypeChecked
-                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns The default type url
-                 */
-                public static getTypeUrl(typeUrlPrefix?: string): string;
-            }
-
-            /** Properties of a BamlFieldTypeStreamState. */
-            interface IBamlFieldTypeStreamState {
-
-                /** BamlFieldTypeStreamState value */
-                value?: (baml.cffi.v1.IBamlFieldType|null);
-            }
-
-            /** Represents a BamlFieldTypeStreamState. */
-            class BamlFieldTypeStreamState implements IBamlFieldTypeStreamState {
-
-                /**
-                 * Constructs a new BamlFieldTypeStreamState.
-                 * @param [properties] Properties to set
-                 */
-                constructor(properties?: baml.cffi.v1.IBamlFieldTypeStreamState);
-
-                /** BamlFieldTypeStreamState value. */
-                public value?: (baml.cffi.v1.IBamlFieldType|null);
-
-                /**
-                 * Creates a new BamlFieldTypeStreamState instance using the specified properties.
-                 * @param [properties] Properties to set
-                 * @returns BamlFieldTypeStreamState instance
-                 */
-                public static create(properties?: baml.cffi.v1.IBamlFieldTypeStreamState): baml.cffi.v1.BamlFieldTypeStreamState;
-
-                /**
-                 * Encodes the specified BamlFieldTypeStreamState message. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeStreamState.verify|verify} messages.
-                 * @param message BamlFieldTypeStreamState message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encode(message: baml.cffi.v1.IBamlFieldTypeStreamState, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Encodes the specified BamlFieldTypeStreamState message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlFieldTypeStreamState.verify|verify} messages.
-                 * @param message BamlFieldTypeStreamState message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlFieldTypeStreamState, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Decodes a BamlFieldTypeStreamState message from the specified reader or buffer.
-                 * @param reader Reader or buffer to decode from
-                 * @param [length] Message length if known beforehand
-                 * @returns BamlFieldTypeStreamState
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlFieldTypeStreamState;
-
-                /**
-                 * Decodes a BamlFieldTypeStreamState message from the specified reader or buffer, length delimited.
-                 * @param reader Reader or buffer to decode from
-                 * @returns BamlFieldTypeStreamState
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlFieldTypeStreamState;
-
-                /**
-                 * Verifies a BamlFieldTypeStreamState message.
-                 * @param message Plain object to verify
-                 * @returns `null` if valid, otherwise the reason why it is not
-                 */
-                public static verify(message: { [k: string]: any }): (string|null);
-
-                /**
-                 * Creates a BamlFieldTypeStreamState message from a plain object. Also converts values to their respective internal types.
-                 * @param object Plain object
-                 * @returns BamlFieldTypeStreamState
-                 */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlFieldTypeStreamState;
-
-                /**
-                 * Creates a plain object from a BamlFieldTypeStreamState message. Also converts values to other types if specified.
-                 * @param message BamlFieldTypeStreamState
-                 * @param [options] Conversion options
-                 * @returns Plain object
-                 */
-                public static toObject(message: baml.cffi.v1.BamlFieldTypeStreamState, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-                /**
-                 * Converts this BamlFieldTypeStreamState to JSON.
-                 * @returns JSON object
-                 */
-                public toJSON(): { [k: string]: any };
-
-                /**
-                 * Gets the default type url for BamlFieldTypeStreamState
-                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns The default type url
-                 */
-                public static getTypeUrl(typeUrlPrefix?: string): string;
-            }
-
-            /** Properties of a BamlCheckType. */
-            interface IBamlCheckType {
-
-                /** BamlCheckType name */
-                name?: (string|null);
-            }
-
-            /** Represents a BamlCheckType. */
-            class BamlCheckType implements IBamlCheckType {
-
-                /**
-                 * Constructs a new BamlCheckType.
-                 * @param [properties] Properties to set
-                 */
-                constructor(properties?: baml.cffi.v1.IBamlCheckType);
-
-                /** BamlCheckType name. */
-                public name: string;
-
-                /**
-                 * Creates a new BamlCheckType instance using the specified properties.
-                 * @param [properties] Properties to set
-                 * @returns BamlCheckType instance
-                 */
-                public static create(properties?: baml.cffi.v1.IBamlCheckType): baml.cffi.v1.BamlCheckType;
-
-                /**
-                 * Encodes the specified BamlCheckType message. Does not implicitly {@link baml.cffi.v1.BamlCheckType.verify|verify} messages.
-                 * @param message BamlCheckType message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encode(message: baml.cffi.v1.IBamlCheckType, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Encodes the specified BamlCheckType message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlCheckType.verify|verify} messages.
-                 * @param message BamlCheckType message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlCheckType, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Decodes a BamlCheckType message from the specified reader or buffer.
-                 * @param reader Reader or buffer to decode from
-                 * @param [length] Message length if known beforehand
-                 * @returns BamlCheckType
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlCheckType;
-
-                /**
-                 * Decodes a BamlCheckType message from the specified reader or buffer, length delimited.
-                 * @param reader Reader or buffer to decode from
-                 * @returns BamlCheckType
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlCheckType;
-
-                /**
-                 * Verifies a BamlCheckType message.
-                 * @param message Plain object to verify
-                 * @returns `null` if valid, otherwise the reason why it is not
-                 */
-                public static verify(message: { [k: string]: any }): (string|null);
-
-                /**
-                 * Creates a BamlCheckType message from a plain object. Also converts values to their respective internal types.
-                 * @param object Plain object
-                 * @returns BamlCheckType
-                 */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlCheckType;
-
-                /**
-                 * Creates a plain object from a BamlCheckType message. Also converts values to other types if specified.
-                 * @param message BamlCheckType
-                 * @param [options] Conversion options
-                 * @returns Plain object
-                 */
-                public static toObject(message: baml.cffi.v1.BamlCheckType, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-                /**
-                 * Converts this BamlCheckType to JSON.
-                 * @returns JSON object
-                 */
-                public toJSON(): { [k: string]: any };
-
-                /**
-                 * Gets the default type url for BamlCheckType
-                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns The default type url
-                 */
-                public static getTypeUrl(typeUrlPrefix?: string): string;
-            }
-
-            /** Properties of a BamlCheckValue. */
-            interface IBamlCheckValue {
-
-                /** BamlCheckValue name */
-                name?: (string|null);
-
-                /** BamlCheckValue expression */
-                expression?: (string|null);
-
-                /** BamlCheckValue status */
-                status?: (string|null);
-
-                /** BamlCheckValue value */
-                value?: (baml.cffi.v1.IBamlOutboundValue|null);
-            }
-
-            /** Represents a BamlCheckValue. */
-            class BamlCheckValue implements IBamlCheckValue {
-
-                /**
-                 * Constructs a new BamlCheckValue.
-                 * @param [properties] Properties to set
-                 */
-                constructor(properties?: baml.cffi.v1.IBamlCheckValue);
-
-                /** BamlCheckValue name. */
-                public name: string;
-
-                /** BamlCheckValue expression. */
-                public expression: string;
-
-                /** BamlCheckValue status. */
-                public status: string;
-
-                /** BamlCheckValue value. */
-                public value?: (baml.cffi.v1.IBamlOutboundValue|null);
-
-                /**
-                 * Creates a new BamlCheckValue instance using the specified properties.
-                 * @param [properties] Properties to set
-                 * @returns BamlCheckValue instance
-                 */
-                public static create(properties?: baml.cffi.v1.IBamlCheckValue): baml.cffi.v1.BamlCheckValue;
-
-                /**
-                 * Encodes the specified BamlCheckValue message. Does not implicitly {@link baml.cffi.v1.BamlCheckValue.verify|verify} messages.
-                 * @param message BamlCheckValue message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encode(message: baml.cffi.v1.IBamlCheckValue, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Encodes the specified BamlCheckValue message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlCheckValue.verify|verify} messages.
-                 * @param message BamlCheckValue message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlCheckValue, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Decodes a BamlCheckValue message from the specified reader or buffer.
-                 * @param reader Reader or buffer to decode from
-                 * @param [length] Message length if known beforehand
-                 * @returns BamlCheckValue
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlCheckValue;
-
-                /**
-                 * Decodes a BamlCheckValue message from the specified reader or buffer, length delimited.
-                 * @param reader Reader or buffer to decode from
-                 * @returns BamlCheckValue
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlCheckValue;
-
-                /**
-                 * Verifies a BamlCheckValue message.
-                 * @param message Plain object to verify
-                 * @returns `null` if valid, otherwise the reason why it is not
-                 */
-                public static verify(message: { [k: string]: any }): (string|null);
-
-                /**
-                 * Creates a BamlCheckValue message from a plain object. Also converts values to their respective internal types.
-                 * @param object Plain object
-                 * @returns BamlCheckValue
-                 */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlCheckValue;
-
-                /**
-                 * Creates a plain object from a BamlCheckValue message. Also converts values to other types if specified.
-                 * @param message BamlCheckValue
-                 * @param [options] Conversion options
-                 * @returns Plain object
-                 */
-                public static toObject(message: baml.cffi.v1.BamlCheckValue, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-                /**
-                 * Converts this BamlCheckValue to JSON.
-                 * @returns JSON object
-                 */
-                public toJSON(): { [k: string]: any };
-
-                /**
-                 * Gets the default type url for BamlCheckValue
-                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns The default type url
-                 */
-                public static getTypeUrl(typeUrlPrefix?: string): string;
-            }
-
-            /** BamlStreamState enum. */
-            enum BamlStreamState {
-                PENDING = 0,
-                STARTED = 1,
-                DONE = 2
-            }
-
-            /** Properties of a BamlValueStreamingState. */
-            interface IBamlValueStreamingState {
-
-                /** BamlValueStreamingState value */
-                value?: (baml.cffi.v1.IBamlOutboundValue|null);
-
-                /** BamlValueStreamingState state */
-                state?: (baml.cffi.v1.BamlStreamState|null);
-
-                /** BamlValueStreamingState name */
-                name?: (baml.cffi.v1.IBamlTypeName|null);
-            }
-
-            /** Represents a BamlValueStreamingState. */
-            class BamlValueStreamingState implements IBamlValueStreamingState {
-
-                /**
-                 * Constructs a new BamlValueStreamingState.
-                 * @param [properties] Properties to set
-                 */
-                constructor(properties?: baml.cffi.v1.IBamlValueStreamingState);
-
-                /** BamlValueStreamingState value. */
-                public value?: (baml.cffi.v1.IBamlOutboundValue|null);
-
-                /** BamlValueStreamingState state. */
-                public state: baml.cffi.v1.BamlStreamState;
-
-                /** BamlValueStreamingState name. */
-                public name?: (baml.cffi.v1.IBamlTypeName|null);
-
-                /**
-                 * Creates a new BamlValueStreamingState instance using the specified properties.
-                 * @param [properties] Properties to set
-                 * @returns BamlValueStreamingState instance
-                 */
-                public static create(properties?: baml.cffi.v1.IBamlValueStreamingState): baml.cffi.v1.BamlValueStreamingState;
-
-                /**
-                 * Encodes the specified BamlValueStreamingState message. Does not implicitly {@link baml.cffi.v1.BamlValueStreamingState.verify|verify} messages.
-                 * @param message BamlValueStreamingState message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encode(message: baml.cffi.v1.IBamlValueStreamingState, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Encodes the specified BamlValueStreamingState message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlValueStreamingState.verify|verify} messages.
-                 * @param message BamlValueStreamingState message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encodeDelimited(message: baml.cffi.v1.IBamlValueStreamingState, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Decodes a BamlValueStreamingState message from the specified reader or buffer.
-                 * @param reader Reader or buffer to decode from
-                 * @param [length] Message length if known beforehand
-                 * @returns BamlValueStreamingState
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml.cffi.v1.BamlValueStreamingState;
-
-                /**
-                 * Decodes a BamlValueStreamingState message from the specified reader or buffer, length delimited.
-                 * @param reader Reader or buffer to decode from
-                 * @returns BamlValueStreamingState
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml.cffi.v1.BamlValueStreamingState;
-
-                /**
-                 * Verifies a BamlValueStreamingState message.
-                 * @param message Plain object to verify
-                 * @returns `null` if valid, otherwise the reason why it is not
-                 */
-                public static verify(message: { [k: string]: any }): (string|null);
-
-                /**
-                 * Creates a BamlValueStreamingState message from a plain object. Also converts values to their respective internal types.
-                 * @param object Plain object
-                 * @returns BamlValueStreamingState
-                 */
-                public static fromObject(object: { [k: string]: any }): baml.cffi.v1.BamlValueStreamingState;
-
-                /**
-                 * Creates a plain object from a BamlValueStreamingState message. Also converts values to other types if specified.
-                 * @param message BamlValueStreamingState
-                 * @param [options] Conversion options
-                 * @returns Plain object
-                 */
-                public static toObject(message: baml.cffi.v1.BamlValueStreamingState, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-                /**
-                 * Converts this BamlValueStreamingState to JSON.
-                 * @returns JSON object
-                 */
-                public toJSON(): { [k: string]: any };
-
-                /**
-                 * Gets the default type url for BamlValueStreamingState
+                 * Gets the default type url for BamlTyOptional
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */

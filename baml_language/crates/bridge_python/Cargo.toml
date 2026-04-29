@@ -6,7 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [lib]
-name = "baml_py"
+name = "baml_core"
 crate-type = [ "cdylib" ]
 
 [dependencies]

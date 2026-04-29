@@ -16,6 +16,7 @@ bundle-http = [ "dep:reqwest" ]
 baml_type = { workspace = true }
 bex_heap = { workspace = true }
 bex_resource_types = { workspace = true }
+sys_glob = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 futures = { workspace = true }
@@ -31,6 +32,7 @@ tokio = { workspace = true, features = [
   "io-std",
   "time",
 ] }
+walkdir = { workspace = true }
 
 [lints]
 workspace = true

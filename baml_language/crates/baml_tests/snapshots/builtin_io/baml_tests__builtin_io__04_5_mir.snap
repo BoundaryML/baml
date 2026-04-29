@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4063
 ---
 === MIR2 ===
 fn user.Append() -> int {
@@ -271,6 +270,24 @@ fn user.ReadChunkBytes() -> uint8array {
     }
 
     bb4: {
+        return;
+    }
+}
+
+fn user.ReadDir() -> baml.fs.DirEntry[] {
+    // Locals:
+    let _0: baml.fs.DirEntry[] // _0 // return
+    let _1: future<baml.fs.DirEntry[]>
+
+    bb0: {
+        _1 = dispatch_future const fn baml.fs.read_dir(const "some/path") -> bb1;
+    }
+
+    bb1: {
+        _0 = await _1 -> [bb2];
+    }
+
+    bb2: {
         return;
     }
 }

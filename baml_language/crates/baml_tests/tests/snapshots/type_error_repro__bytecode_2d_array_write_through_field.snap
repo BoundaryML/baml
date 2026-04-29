@@ -15,7 +15,7 @@ function Grid.set(self: null, row: int, col: int, val: string) -> null {
 }
 
 function main() -> null {
-    alloc_instance Grid
+    alloc_instance user.Grid
     load_const "a"
     load_const "b"
     alloc_array 2

@@ -118,7 +118,7 @@ function user.auth.AuthThrowEnum(x: int) -> string  [expr] {
   {  } match (x) { 0 => throw Role.Guest, _ => "ok" }
 }
 function user.auth.AuthThrowsRootError(x: int) -> string  [expr] {
-  {  } match (x) { 0 => throw user.auth.Error { code: 403, message: "forbidden" }, _ => "ok" }
+  {  } match (x) { 0 => throw root.Error { code: 403, message: "forbidden" }, _ => "ok" }
 }
 function user.auth.AuthUsesLlmConfig(cfg: root.llm.Config) -> string  [expr] {
   {  } cfg.model
@@ -203,7 +203,7 @@ function user.llm.LlmThrowsRootEnum(x: int) -> string  [expr] {
   {  } match (x) { 0 => throw root.Status.Failed, _ => "ok" }
 }
 function user.llm.LlmThrowsRootError(x: int) -> string  [expr] {
-  {  } match (x) { 0 => throw user.llm.Error { code: 404, message: "not found" }, _ => "ok" }
+  {  } match (x) { 0 => throw root.Error { code: 404, message: "not found" }, _ => "ok" }
 }
 function user.llm.LlmUsesAuthConfig(cfg: root.auth.Config) -> string  [expr] {
   {  } cfg.provider

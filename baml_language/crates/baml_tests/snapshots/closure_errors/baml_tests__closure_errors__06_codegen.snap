@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 6990
 ---
 function user.Counter.increment(self: null) -> int {
     load_var self
@@ -34,7 +33,7 @@ function user.Formatter.format(self: null, text: string) -> string {
 }
 
 function user.takes_unbound(f: (Employee) -> string throws never) -> string {
-    alloc_instance Employee
+    alloc_instance user.Employee
     load_const "X"
     init_field .first
     load_const "Y"
@@ -45,7 +44,7 @@ function user.takes_unbound(f: (Employee) -> string throws never) -> string {
 }
 
 function user.test_err_bound_for_unbound() -> string {
-    alloc_instance Employee
+    alloc_instance user.Employee
     load_const "Alice"
     init_field .first
     load_const "Smith"
@@ -56,7 +55,7 @@ function user.test_err_bound_for_unbound() -> string {
 }
 
 function user.test_err_bound_type_mismatch() -> int {
-    alloc_instance Counter
+    alloc_instance user.Counter
     load_const 0
     init_field .value
     store_var c
@@ -65,7 +64,7 @@ function user.test_err_bound_type_mismatch() -> int {
 }
 
 function user.test_err_extra_arg() -> string {
-    alloc_instance Formatter
+    alloc_instance user.Formatter
     load_const ">> "
     init_field .prefix
     store_var fmt

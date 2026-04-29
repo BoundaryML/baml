@@ -96,6 +96,14 @@ impl<T> io::IoClassLlmClient for T {
         client: io::owned::llm::Client,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
+        // `client.name` is the bare BAML identifier (`StubClient`); the
+        // synthesized `$new` function picks up the file's pkg + ns prefix
+        // later, landing as e.g. `user.lorem.StubClient$new`. Try the
+        // unqualified and `user.`-prefixed forms first, then fall back to
+        // a suffix scan over `.{name}$new` for clients declared inside a
+        // user namespace (`ns_<x>/`). Ambiguity surfaces as a hard error
+        // — clients are required to be unique within a package, so two
+        // matches mean a synthesis bug.
         let resolve_fn_name = format!("{}$new", client.name);
         let global_index = ctx
             .function_global_indices
@@ -104,6 +112,23 @@ impl<T> io::IoClassLlmClient for T {
                 ctx.function_global_indices
                     .get(&format!("user.{resolve_fn_name}"))
             });
+        let global_index = match global_index {
+            Some(idx) => Some(idx),
+            None => {
+                let suffix = format!(".{resolve_fn_name}");
+                let mut matches = ctx
+                    .function_global_indices
+                    .iter()
+                    .filter(|(k, _)| k.ends_with(&suffix));
+                let first = matches.next();
+                if matches.next().is_some() {
+                    return SysOpOutput::err(OpErrorKind::Other(format!(
+                        "Client resolve function {resolve_fn_name} matches multiple namespaced entries"
+                    )));
+                }
+                first.map(|(_, idx)| idx)
+            }
+        };
         let Some(global_index) = global_index else {
             return SysOpOutput::err(OpErrorKind::Other(format!(
                 "Client resolve function not found: {resolve_fn_name}"
@@ -312,14 +337,31 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
     }
 }
 
-/// Look up an LLM function by name, trying the bare name first then "user.{name}".
+/// Look up an LLM function by name, trying the bare name first, then
+/// `user.{name}`, then a suffix scan over `.{name}` to handle functions
+/// declared inside a user namespace (e.g. `ns_lorem/`) — the synthesized
+/// companion passes the bare BAML identifier, not the FQN, so without
+/// the suffix scan a namespaced LLM function fails to resolve. Two
+/// matches mean a synthesis bug; surface that as a hard error.
 fn lookup_llm_function<'a>(
     function_name: &str,
     llm_functions: &'a std::collections::HashMap<String, LlmFunctionInfo>,
 ) -> Option<&'a LlmFunctionInfo> {
-    llm_functions
-        .get(function_name)
-        .or_else(|| llm_functions.get(&format!("user.{function_name}")))
+    if let Some(info) = llm_functions.get(function_name) {
+        return Some(info);
+    }
+    if let Some(info) = llm_functions.get(&format!("user.{function_name}")) {
+        return Some(info);
+    }
+    let suffix = format!(".{function_name}");
+    let mut matches = llm_functions.iter().filter(|(k, _)| k.ends_with(&suffix));
+    let first = matches.next()?;
+    if matches.next().is_some() {
+        // Ambiguous — let the caller treat this as "not found" so the
+        // existing error path surfaces. Cleaner than silently picking one.
+        return None;
+    }
+    Some(first.1)
 }
 
 /// Blanket impl — all types get real `StreamAccumulator` behavior via `sys_llm` delegation.
@@ -815,6 +857,27 @@ impl io::IoNamespaceFs for DefaultIoOps {
     ) -> SysOpOutput<i64> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
+
+    fn read_dir(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<io::owned::fs::DirEntry>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn mkdir(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _options: io::owned::fs::MkdirOptions,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
 }
 
 impl io::IoClassHttpResponse for DefaultIoOps {
@@ -963,6 +1026,42 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _ms: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoClassGlobGlob for DefaultIoOps {
+    fn scan(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _glob: io::owned::glob::Glob,
+        _root: BexExternalValue,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<String>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn matches(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _glob: io::owned::glob::Glob,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoNamespaceGlob for DefaultIoOps {
+    fn new(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _pattern: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::glob::Glob> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
@@ -1131,9 +1230,21 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_fs_file_write_bytes = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_fs_file_write_bytes(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_read_dir = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_read_dir(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_mkdir = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_mkdir(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -1143,6 +1254,39 @@ impl IoSysOpsBuilder {
     #[must_use]
     pub fn with_fs<T: io::IoNamespaceFs + Default + Send + Sync + 'static>(self) -> Self {
         self.with_fs_instance(Arc::new(T::default()))
+    }
+
+    /// Override the `glob` namespace (including `glob.Glob` methods) with a pre-built instance.
+    #[must_use]
+    pub fn with_glob_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceGlob + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_glob_new = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_glob_new(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_glob_glob_scan = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_glob_glob_scan(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_glob_glob_matches = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_glob_glob_matches(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the `glob` namespace with a default-constructible type.
+    #[must_use]
+    pub fn with_glob<T: io::IoNamespaceGlob + Default + Send + Sync + 'static>(self) -> Self {
+        self.with_glob_instance(Arc::new(T::default()))
     }
 
     /// Override the `http` namespace (including `http.Response` methods) with a pre-built instance.

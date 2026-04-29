@@ -178,7 +178,7 @@ fn user.edge_type_then_object() -> int {
     let _1: EdgeFoo
 
     bb0: {
-        _1 = EdgeFoo { const 1_i64 };
+        _1 = user.EdgeFoo { const 1_i64 };
         _0 = copy _1.0;
         goto -> bb1;
     }
@@ -719,7 +719,7 @@ fn user.let_statements() -> int {
     let _3: int
 
     bb0: {
-        _1 = Point { const 1_i64, const 2_i64 };
+        _1 = user.Point { const 1_i64, const 2_i64 };
         _2 = copy _1.0;
         _3 = copy _1.1;
         _0 = copy _2 + copy _3;

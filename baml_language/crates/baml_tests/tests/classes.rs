@@ -26,7 +26,7 @@ async fn class_constructor() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> Point {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 1
         init_field .x
         load_const 2
@@ -38,7 +38,7 @@ async fn class_constructor() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::instance(
-            "Point",
+            "user.Point",
             indexmap! {
                 "x" => BexExternalValue::Int(1),
                 "y" => BexExternalValue::Int(2),
@@ -64,7 +64,7 @@ async fn class_constructor_return_directly() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> Point {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 1
         init_field .x
         load_const 2
@@ -76,7 +76,7 @@ async fn class_constructor_return_directly() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::instance(
-            "Point",
+            "user.Point",
             indexmap! {
                 "x" => BexExternalValue::Int(1),
                 "y" => BexExternalValue::Int(2),
@@ -106,7 +106,7 @@ async fn constructor_with_preceding_variables() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance MyClass
+        alloc_instance user.MyClass
         load_const 100
         init_field .x
         load_const 200
@@ -187,8 +187,8 @@ async fn nested_construction_field_access() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Outer
-        alloc_instance Inner
+        alloc_instance user.Outer
+        alloc_instance user.Inner
         load_const 10
         init_field .x
         load_const 20
@@ -229,8 +229,8 @@ async fn nested_construction_inner_field_access() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Outer
-        alloc_instance Inner
+        alloc_instance user.Outer
+        alloc_instance user.Inner
         load_const 10
         init_field .x
         load_const 20
@@ -267,8 +267,8 @@ async fn nested_field_read() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Outer
-        alloc_instance Inner
+        alloc_instance user.Outer
+        alloc_instance user.Inner
         load_const 42
         init_field .value
         init_field .inner
@@ -302,8 +302,8 @@ async fn nested_field_read_separate_construction() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Outer
-        alloc_instance Inner
+        alloc_instance user.Outer
+        alloc_instance user.Inner
         load_const 42
         init_field .value
         init_field .inner
@@ -342,8 +342,8 @@ async fn nested_constructor_with_preceding_variables() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Outer
-        alloc_instance Inner
+        alloc_instance user.Outer
+        alloc_instance user.Inner
         load_const 100
         init_field .val
         init_field .inner
@@ -395,7 +395,7 @@ async fn spread_before_named_fields() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function default_point() -> Point {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 0
         init_field .x
         load_const 0
@@ -410,7 +410,7 @@ async fn spread_before_named_fields() {
     function main() -> Point {
         call user.default_point
         store_var _2
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 1
         init_field .x
         load_const 2
@@ -428,7 +428,7 @@ async fn spread_before_named_fields() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::instance(
-            "Point",
+            "user.Point",
             indexmap! {
                 "x" => BexExternalValue::Int(1),
                 "y" => BexExternalValue::Int(2),
@@ -463,7 +463,7 @@ async fn spread_after_named_fields() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function default_point() -> Point {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 0
         init_field .x
         load_const 0
@@ -478,7 +478,7 @@ async fn spread_after_named_fields() {
     function main() -> Point {
         call user.default_point
         store_var _2
-        alloc_instance Point
+        alloc_instance user.Point
         load_var _2
         load_field .0
         init_field .x
@@ -498,7 +498,7 @@ async fn spread_after_named_fields() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::instance(
-            "Point",
+            "user.Point",
             indexmap! {
                 "x" => BexExternalValue::Int(0),
                 "y" => BexExternalValue::Int(0),
@@ -541,7 +541,7 @@ async fn multiple_spreads() {
         pop 1
         call user.xy_one
         store_var _3
-        alloc_instance Point
+        alloc_instance user.Point
         load_var _3
         load_field .0
         init_field .x
@@ -558,7 +558,7 @@ async fn multiple_spreads() {
     }
 
     function x_one() -> Point {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 1
         init_field .x
         load_const 0
@@ -571,7 +571,7 @@ async fn multiple_spreads() {
     }
 
     function xy_one() -> Point {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 1
         init_field .x
         load_const 1
@@ -587,7 +587,7 @@ async fn multiple_spreads() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::instance(
-            "Point",
+            "user.Point",
             indexmap! {
                 "x" => BexExternalValue::Int(1),
                 "y" => BexExternalValue::Int(1),
@@ -623,7 +623,7 @@ async fn spread_does_not_break_locals() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function default_point() -> Point {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 0
         init_field .x
         load_const 0
@@ -668,7 +668,7 @@ async fn field_assignment() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Data
+        alloc_instance user.Data
         load_const 0
         init_field .value
         store_var d
@@ -702,7 +702,7 @@ async fn field_compound_assignment() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Counter
+        alloc_instance user.Counter
         load_const 5
         init_field .value
         store_var c
@@ -742,8 +742,8 @@ async fn nested_field_assignment() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Outer
-        alloc_instance Inner
+        alloc_instance user.Outer
+        alloc_instance user.Inner
         load_const 0
         init_field .value
         init_field .inner
@@ -783,8 +783,8 @@ async fn nested_field_compound_assignment() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Outer
-        alloc_instance Inner
+        alloc_instance user.Outer
+        alloc_instance user.Inner
         load_const 5
         init_field .value
         init_field .inner
@@ -834,7 +834,7 @@ async fn method_call() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function Number.add(self: null, other: Number) -> Number {
-        alloc_instance Number
+        alloc_instance user.Number
         load_var self
         load_field .value
         load_var other
@@ -845,10 +845,10 @@ async fn method_call() {
     }
 
     function main() -> int {
-        alloc_instance Number
+        alloc_instance user.Number
         load_const 1
         init_field .value
-        alloc_instance Number
+        alloc_instance user.Number
         load_const 2
         init_field .value
         call user.Number.add
@@ -896,12 +896,12 @@ async fn mutable_self_method() {
     }
 
     function main() -> int {
-        alloc_instance Number
+        alloc_instance user.Number
         load_const 1
         init_field .value
         store_var a
         load_var a
-        alloc_instance Number
+        alloc_instance user.Number
         load_const 2
         init_field .value
         call user.Number.add

@@ -3,7 +3,7 @@ source: crates/baml_tests/tests/type_error_repro.rs
 expression: output.bytecode
 ---
 function main() -> null {
-    alloc_instance Container
+    alloc_instance user.Container
     load_const "a"
     load_const "b"
     load_const "c"

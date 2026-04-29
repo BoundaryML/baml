@@ -25,7 +25,7 @@ function user.Fn$stream() -> baml.llm.Stream<string, null | string> throws never
   baml.llm.stream_llm_function(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "Fn", map {  }) : baml.llm.Stream<string, null | string>
 }
 function user.Fn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> throws never {
-  baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }.__make_stream(sse, "Fn") : unknown
+  baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }.__make_stream(sse, "Fn") : baml.llm.Stream<string, null | string>
 }
 class user.TopLevelClass$stream {
   a: null | string

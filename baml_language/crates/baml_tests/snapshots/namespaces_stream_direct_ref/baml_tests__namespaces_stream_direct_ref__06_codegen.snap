@@ -15,7 +15,7 @@ function user.RootUsesOwnStream(c: Config$stream) -> string {
     return
 }
 
-function user.llm.LlmUsesOwnStream(r: Response$stream) -> string {
+function user.llm.LlmUsesOwnStream(r: llm.Response$stream) -> string {
     load_var r
     load_const "text"
     load_map_element

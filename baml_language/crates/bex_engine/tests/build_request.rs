@@ -1548,7 +1548,7 @@ function get_body() -> string {
         serde_json::json!({
             "model": "claude-sonnet-4-20250514",
             "anthropic_version": "vertex-2023-10-16",
-            "max_tokens": 4096,
+            "max_tokens": 8192,
             "messages": [
                 {"role": "user", "content": [{"type": "text", "text": "Hi"}]},
                 {"role": "assistant", "content": [{"type": "text", "text": "Hello!"}]},
@@ -1585,7 +1585,7 @@ function get_body() -> string {
         serde_json::json!({
             "model": "claude-sonnet-4-20250514",
             "anthropic_version": "vertex-2023-10-16",
-            "max_tokens": 4096,
+            "max_tokens": 8192,
             "system": [{"type": "text", "text": "You are helpful."}],
             "messages": [
                 {"role": "user", "content": [{"type": "text", "text": "Hi"}]}

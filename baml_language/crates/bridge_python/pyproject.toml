@@ -1,5 +1,5 @@
 [project]
-name = "baml-py"
+name = "baml"
 version = "0.0.0"
 description = "BAML python bindings (new system, bex_engine)"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
@@ -15,6 +15,7 @@ dev = [
     "pytest-asyncio>=0.21",
     "maturin>=1.0,<2.0",
     "grpcio-tools>=1.50",
+    "pydantic>=2",
 ]
 
 [build-system]
@@ -23,7 +24,9 @@ build-backend = "maturin"
 
 [tool.maturin]
 python-source = "python_src"
+module-name = "baml.baml_core.baml_core"
 features = ["pyo3/extension-module"]
+include = [{ path = "python_src/baml/py.typed", format = ["sdist", "wheel"] }]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

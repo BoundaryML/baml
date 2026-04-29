@@ -67,7 +67,7 @@ reason = "Use thiserror for proper error types in library crates."
 [[namespaces]]
 name = "baml"
 approved_prefixes = ["compiler", "builtins", "builtins2", "codegen", "compiler2", "lsp2"]
-test_crate_exceptions = ["baml_tests", "baml_codegen_tests"]
+test_crate_exceptions = ["baml_tests"]
 embed_crates = ["tools_onionskin", "bex_project"]
 
 # baml-specific dependency rules

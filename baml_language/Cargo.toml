@@ -29,7 +29,6 @@ baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
 baml_codegen_python = { path = "crates/baml_codegen_python" }
-baml_codegen_tests = { path = "crates/baml_codegen_tests" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
@@ -44,6 +43,7 @@ baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_project = { path = "crates/bex_project" }
 bex_engine = { path = "crates/bex_engine" }
+sys_glob = { path = "crates/sys_glob" }
 sys_llm = { path = "crates/sys_llm" }
 sys_ops = { path = "crates/sys_ops" }
 sys_types = { path = "crates/sys_types" }
@@ -152,6 +152,7 @@ salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18
   "inventory",
 ] }
 serde = { version = "1.0.197", features = [ "derive" ] }
+serde-wasm-bindgen = "0.6"
 serde_json = { version = "1.0.113", features = [ "preserve_order" ] }
 similar = { version = "2.4.0", features = [ "inline" ] }
 smol_str = { version = "0.3" }

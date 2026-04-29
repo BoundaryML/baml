@@ -88,12 +88,12 @@ async fn any_value_to_string() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        alloc_instance Person
+        alloc_instance user.Person
         load_const "Alice"
         init_field .name
         load_const 25
         init_field .age
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 10
         init_field .x
         load_const 20
@@ -117,10 +117,10 @@ async fn any_value_to_string() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"Person {
+            r#"user.Person {
     name: "Alice"
     age: 25
-    location: Point {
+    location: user.Point {
         x: 10
         y: 20
     }

@@ -13,7 +13,7 @@ function Scores.set(self: null, key: string, val: int) -> null {
 }
 
 function main() -> null {
-    alloc_instance Scores
+    alloc_instance user.Scores
     alloc_map 0
     init_field .data
     load_const "alice"

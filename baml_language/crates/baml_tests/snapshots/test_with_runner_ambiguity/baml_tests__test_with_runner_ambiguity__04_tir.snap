@@ -1,12 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 37171
 ---
 === TIR2 ===
 class user.MyRunner {
   threshold: float
 }
-function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_25(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("simple runner", () -> void { ... }, my_runner) : void
       () -> void { ... } : () -> void throws unknown
@@ -28,11 +27,11 @@ function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
   !! 384..393: unresolved name: my_runner
   !! 512..527: unresolved name: Quorum
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
 class user.MyRunner$stream {
   threshold: null | float

@@ -298,6 +298,10 @@ impl<'a> Parser<'a> {
         self.current().is_none()
     }
 
+    fn at_end_raw(&self) -> bool {
+        self.current_raw().is_none()
+    }
+
     /// Check if current token matches the given kind
     fn at(&self, kind: TokenKind) -> bool {
         self.current().map(|t| t.kind == kind).unwrap_or(false)
@@ -1351,9 +1355,12 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::STRING_LITERAL, |p| {
             p.bump(); // Opening quote
 
-            // Collect all tokens until closing quote
+            // Collect all tokens until closing quote.
+            // Use at_end_raw / at_raw / bump_raw throughout so that `*/`
+            // and `//` inside the string are kept as literal content instead
+            // of being mis-recognised as comment delimiters.
             let mut loop_counter = 0;
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 loop_counter += 1;
                 if loop_counter > 100_000 {
                     p.error_unexpected_token("String parsing exceeded iteration limit".to_string());
@@ -1362,27 +1369,19 @@ impl<'a> Parser<'a> {
 
                 if p.at_raw(TokenKind::Backslash) {
                     p.bump_raw(); // Consume backslash
-                    if let Some(directly_after) = p.tokens.get(p.current)
-                        && directly_after.kind == TokenKind::Quote
-                    {
-                        p.bump_raw(); // Consume quote without ending string
+                    if p.current < p.tokens.len() {
+                        p.bump_raw(); // Consume the escaped character (whatever it is)
                     }
                     continue;
                 }
 
-                // Check if next token is the closing quote
-                // Use at_raw to avoid skipping // as comments - we want the actual next token
                 if p.at_raw(TokenKind::Quote) {
                     p.bump_raw(); // Consume closing quote
                     return;
                 }
-                // Not a quote - consume as string content
-                // Use bump_raw() to avoid treating // as comments inside strings
                 p.bump_raw();
             }
 
-            // If we get here, we reached EOF without finding closing quote
-            // eprintln!("[PARSE_STRING] Reached EOF without closing quote");
             p.error_unexpected_token("Unclosed string literal".to_string());
         });
 
@@ -1417,7 +1416,7 @@ impl<'a> Parser<'a> {
 
             // Collect all tokens until closing quote (same logic as parse_string).
             let mut loop_counter = 0;
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 loop_counter += 1;
                 if loop_counter > 100_000 {
                     p.error_unexpected_token(
@@ -1428,10 +1427,8 @@ impl<'a> Parser<'a> {
 
                 if p.at_raw(TokenKind::Backslash) {
                     p.bump_raw(); // Consume backslash
-                    if let Some(directly_after) = p.tokens.get(p.current)
-                        && directly_after.kind == TokenKind::Quote
-                    {
-                        p.bump_raw(); // Consume escaped quote
+                    if p.current < p.tokens.len() {
+                        p.bump_raw(); // Consume the escaped character (whatever it is)
                     }
                     continue;
                 }
@@ -1502,7 +1499,7 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            if self.at_end() {
+            if self.at_end_raw() {
                 self.error_unexpected_token(format!(
                     "Unclosed raw string (expected \"{}\")",
                     "#".repeat(opening_hashes)
@@ -1515,9 +1512,9 @@ impl<'a> Parser<'a> {
                 let closing_hashes = self.count_consecutive_hashes_after_quote();
                 if closing_hashes == opening_hashes {
                     // Found matching closing delimiter
-                    self.bump(); // Closing "
+                    self.bump_raw(); // Closing "
                     for _ in 0..closing_hashes {
-                        self.bump(); // #
+                        self.bump_raw(); // #
                     }
                     break;
                 }
@@ -1558,12 +1555,12 @@ impl<'a> Parser<'a> {
     /// Parse a Jinja expression: {{ ... }}
     fn parse_jinja_expression(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::TEMPLATE_INTERPOLATION, |p| {
-            p.bump(); // {
-            p.bump(); // {
+            p.bump_raw(); // {
+            p.bump_raw(); // {
 
             // Collect tokens until we find }}
             let mut depth = 1;
-            while !p.at_end() && depth > 0 {
+            while !p.at_end_raw() && depth > 0 {
                 if p.at_raw(TokenKind::Quote)
                     && p.count_consecutive_hashes_after_quote() == opening_hashes
                 {
@@ -1581,8 +1578,8 @@ impl<'a> Parser<'a> {
                 {
                     depth -= 1;
                     if depth == 0 {
-                        p.bump(); // }
-                        p.bump(); // }
+                        p.bump_raw(); // }
+                        p.bump_raw(); // }
                         break;
                     }
                     p.bump_raw();
@@ -1601,11 +1598,11 @@ impl<'a> Parser<'a> {
     /// Parse a Jinja statement: {% ... %}
     fn parse_jinja_statement(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::TEMPLATE_CONTROL, |p| {
-            p.bump(); // {
-            p.bump(); // %
+            p.bump_raw(); // {
+            p.bump_raw(); // %
 
             // Collect tokens until we find %}
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 if p.at_raw(TokenKind::Quote)
                     && p.count_consecutive_hashes_after_quote() == opening_hashes
                 {
@@ -1615,8 +1612,8 @@ impl<'a> Parser<'a> {
                 if p.at_raw(TokenKind::Percent)
                     && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
                 {
-                    p.bump(); // %
-                    p.bump(); // }
+                    p.bump_raw(); // %
+                    p.bump_raw(); // }
                     break;
                 }
                 p.bump_raw();
@@ -1627,11 +1624,11 @@ impl<'a> Parser<'a> {
     /// Parse a Jinja comment: {# ... #}
     fn parse_jinja_comment(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::TEMPLATE_COMMENT, |p| {
-            p.bump(); // {
-            p.bump(); // #
+            p.bump_raw(); // {
+            p.bump_raw(); // #
 
             // Collect tokens until we find #}
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 if p.at_raw(TokenKind::Quote)
                     && p.count_consecutive_hashes_after_quote() == opening_hashes
                 {
@@ -1641,8 +1638,8 @@ impl<'a> Parser<'a> {
                 if p.at_raw(TokenKind::Hash)
                     && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
                 {
-                    p.bump(); // #
-                    p.bump(); // }
+                    p.bump_raw(); // #
+                    p.bump_raw(); // }
                     break;
                 }
                 p.bump_raw();
@@ -1656,7 +1653,7 @@ impl<'a> Parser<'a> {
     fn parse_prompt_text(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::PROMPT_TEXT, |p| {
             // Collect tokens until we hit a Jinja construct or closing delimiter
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 // Check for closing delimiter
                 if p.at_raw(TokenKind::Quote) {
                     let closing_hashes = p.count_consecutive_hashes_after_quote();
@@ -5204,6 +5201,31 @@ class Response {
             .collect();
 
         assert_eq!(attrs.len(), 1, "expected method block attribute");
+    }
+
+    #[test]
+    fn raw_string_keeps_comment_markers_as_text() {
+        for marker in ["//", "*/"] {
+            let source = format!(
+                r##"
+function Demo() -> string {{
+  #"{marker}"#
+}}
+"##
+            );
+
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+
+            let raw_string = root
+                .descendants()
+                .find(|n| n.kind() == SyntaxKind::RAW_STRING_LITERAL)
+                .expect("expected raw string literal");
+            assert!(
+                raw_string.text().to_string().contains(marker),
+                "raw string should retain marker {marker:?}: {raw_string:?}"
+            );
+        }
     }
 
     #[test]

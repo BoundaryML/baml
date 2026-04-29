@@ -15,7 +15,7 @@ function user.Container.unwrap(self: null) -> void {
 }
 
 function user.Factory.create(value: void) -> Factory {
-    alloc_instance Factory
+    alloc_instance user.Factory
     load_var value
     init_field .data
     return
@@ -44,14 +44,14 @@ function user.Holder.get_data(self: null) -> void {
 }
 
 function user.Maker.from_string(params: string) -> Maker {
-    alloc_instance Maker
+    alloc_instance user.Maker
     load_var params
     init_field .data
     return
 }
 
 function user.Maker.from_value(params: void) -> Maker {
-    alloc_instance Maker
+    alloc_instance user.Maker
     load_var params
     init_field .data
     return
@@ -94,7 +94,7 @@ function user.Pair.get_second(self: null) -> void {
 }
 
 function user.Pair.swap(self: null) -> Pair {
-    alloc_instance Pair
+    alloc_instance user.Pair
     load_var self
     load_field .second
     init_field .first
@@ -118,14 +118,14 @@ function user.Stack.peek(self: null) -> void {
 }
 
 function user.Wrapper.of(value: void) -> Wrapper {
-    alloc_instance Wrapper
+    alloc_instance user.Wrapper
     load_var value
     init_field .data
     return
 }
 
 function user.use_box() -> int {
-    alloc_instance Box
+    alloc_instance user.Box
     load_const 42
     init_field .value
     call user.Box.get
@@ -140,7 +140,7 @@ function user.use_factory() -> int {
 }
 
 function user.use_holder() -> int {
-    alloc_instance Holder
+    alloc_instance user.Holder
     load_const "hello"
     init_field .data
     call user.Holder.get_data
@@ -154,7 +154,7 @@ function user.use_maker_static() -> Maker {
 }
 
 function user.use_maybe_box() -> int {
-    alloc_instance MaybeBox
+    alloc_instance user.MaybeBox
     load_const null
     init_field .value
     load_const 0
@@ -163,8 +163,8 @@ function user.use_maybe_box() -> int {
 }
 
 function user.use_nested() -> int {
-    alloc_instance Container
-    alloc_instance Box
+    alloc_instance user.Container
+    alloc_instance user.Box
     load_const 10
     init_field .value
     init_field .inner
@@ -173,7 +173,7 @@ function user.use_nested() -> int {
 }
 
 function user.use_pair() -> string {
-    alloc_instance Pair
+    alloc_instance user.Pair
     load_const 1
     init_field .first
     load_const "two"
@@ -183,7 +183,7 @@ function user.use_pair() -> string {
 }
 
 function user.use_pair_swap() -> Pair {
-    alloc_instance Pair
+    alloc_instance user.Pair
     load_const 1
     init_field .first
     load_const "two"
@@ -193,7 +193,7 @@ function user.use_pair_swap() -> Pair {
 }
 
 function user.use_stack() -> string {
-    alloc_instance Stack
+    alloc_instance user.Stack
     load_const "a"
     load_const "b"
     load_const "c"
@@ -210,28 +210,28 @@ function user.use_wrapper() -> Wrapper {
 }
 
 function user.wrong_arity_extra() -> Box {
-    alloc_instance Box
+    alloc_instance user.Box
     load_const 42
     init_field .value
     return
 }
 
 function user.wrong_arity_missing() -> Box {
-    alloc_instance Box
+    alloc_instance user.Box
     load_const 42
     init_field .value
     return
 }
 
 function user.wrong_arity_on_non_generic() -> Plain {
-    alloc_instance Plain
+    alloc_instance user.Plain
     load_const "hello"
     init_field .name
     return
 }
 
 function user.wrong_arity_partial() -> Pair {
-    alloc_instance Pair
+    alloc_instance user.Pair
     load_const 1
     init_field .first
     load_const "two"

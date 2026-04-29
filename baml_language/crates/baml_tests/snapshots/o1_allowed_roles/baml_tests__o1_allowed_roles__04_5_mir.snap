@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 fn user.Gpt4oClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: void
+    let _1: baml.llm.PrimitiveClientOptions
     let _2: map<void, void>
     let _3: map<void, void>
     let _4: map<void, void>
@@ -27,7 +27,7 @@ fn user.Gpt4oClient$new() -> null {
 fn user.O1Client$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: void
+    let _1: baml.llm.PrimitiveClientOptions
     let _2: map<void, void>
     let _3: map<void, void>
     let _4: map<void, void>
@@ -49,7 +49,7 @@ fn user.O1Client$new() -> null {
 fn user.O1MiniClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: void
+    let _1: baml.llm.PrimitiveClientOptions
     let _2: map<void, void>
     let _3: map<void, void>
     let _4: map<void, void>
@@ -71,7 +71,7 @@ fn user.O1MiniClient$new() -> null {
 fn user.O1WithExplicitRoles$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: void
+    let _1: baml.llm.PrimitiveClientOptions
     let _2: string[]
     let _3: map<void, void>
     let _4: map<void, void>

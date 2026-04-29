@@ -66,10 +66,21 @@ function user.Fn$parse(json: string) -> string {
 }
 
 function user.Fn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+    alloc_instance baml.llm.Client
+    load_const "openai/gpt-4o"
+    init_field .name
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    init_field .client_type
+    alloc_array 0
+    init_field .sub_clients
+    load_const null
+    init_field .retry
+    load_const 0
+    init_field .counter
     load_var sse
     load_const "Fn"
-    load_const null
-    call_indirect
+    call baml.llm.Client.__make_stream
     return
 }
 
