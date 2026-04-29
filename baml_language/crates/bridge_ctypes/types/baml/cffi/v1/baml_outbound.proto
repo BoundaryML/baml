@@ -25,7 +25,7 @@ message BamlOutboundValue {
     bool bool_value = 6;
     BamlValueClass class_value = 7;
     BamlValueEnum enum_value = 8;
-    BamlFieldTypeLiteral literal_value = 9;
+    BamlTyLiteral literal_value = 9;
     BamlValueList list_value = 11;
     BamlValueMap map_value = 12;
     BamlValueUnionVariant union_variant_value = 13;
@@ -36,26 +36,23 @@ message BamlOutboundValue {
   }
 }
 
-enum BamlTypeNamespace {
-  INTERNAL = 0;
-  TYPES = 1;
-  STREAM_TYPES = 2;
-  STREAM_STATE_TYPES = 3;
-  CHECKED_TYPES = 4;
-}
-
 // wrapper for the name of a type
-message BamlTypeName {
-  BamlTypeNamespace namespace = 1;
+message BamlTyName {
   // the name of the type
   string name = 2;
+  repeated BamlTyGenericArg generic_args = 3;
+}
+
+message BamlTyGenericArg {
+  string name = 1;
+  BamlTy ty = 2;
 }
 
 message BamlValueNull {}
 
 // Each variant as a message.
 message BamlValueList {
-  BamlFieldType item_type = 1;
+  BamlTy item_type = 1;
   repeated BamlOutboundValue items = 2;
 }
 
@@ -66,28 +63,28 @@ message BamlOutboundMapEntry {
 }
 
 message BamlValueMap {
-  BamlFieldType key_type = 1;
-  BamlFieldType value_type = 2;
+  BamlTy key_type = 1;
+  BamlTy value_type = 2;
   repeated BamlOutboundMapEntry entries = 3;
 }
 
 message BamlValueClass {
-  BamlTypeName name = 1;
+  BamlTyName name = 1;
   repeated BamlOutboundMapEntry fields = 2;
 }
 
 message BamlValueEnum {
-  BamlTypeName name = 1;
+  BamlTyName name = 1;
   string value = 2;
   bool is_dynamic = 3;
 }
 
-// For the Rust variant `Union(Vec<BamlFieldType>, Box<BamlOutboundValue>)`
+// For the Rust variant `Union(Vec<BamlTy>, Box<BamlOutboundValue>)`
 message BamlValueUnionVariant {
-  BamlTypeName name = 1;
+  BamlTyName name = 1;
   bool is_optional = 2;
   bool is_single_pattern = 3;
-  BamlFieldType self_type = 4;
+  BamlTy self_type = 4;
   string value_option_name = 5;
   BamlOutboundValue value = 6;
 }
@@ -148,43 +145,41 @@ message BamlValuePromptAstSimpleMultiple {
 }
 
 // -----------------------------------------------------------------------------
-// BamlFieldType definition
+// BamlTy definition
 // -----------------------------------------------------------------------------
 
-// The wrapper message for BamlFieldType.
-message BamlFieldType {
+// The wrapper message for BamlTy.
+message BamlTy {
   oneof type {
-    BamlFieldTypeString string_type = 1;
-    BamlFieldTypeInt int_type = 2;
-    BamlFieldTypeFloat float_type = 3;
-    BamlFieldTypeBool bool_type = 4;
-    BamlFieldTypeNull null_type = 5;
-    BamlFieldTypeLiteral literal_type = 6;
-    BamlFieldTypeMedia media_type = 7;
-    BamlFieldTypeEnum enum_type = 8;
-    BamlFieldTypeClass class_type = 9;
-    BamlFieldTypeTypeAlias type_alias_type = 10;
-    BamlFieldTypeList list_type = 11;
-    BamlFieldTypeMap map_type = 12;
-    BamlFieldTypeUnionVariant union_variant_type = 14;
-    BamlFieldTypeOptional optional_type = 15;
-    BamlFieldTypeChecked checked_type = 16;
-    BamlFieldTypeStreamState stream_state_type = 17;
-    BamlFieldTypeAny any_type = 18;
-    BamlFieldTypeUint8Array uint8array_type = 19;
-    BamlFieldTypeUnknown unknown_type = 20;
+    BamlTyString string_type = 1;
+    BamlTyInt int_type = 2;
+    BamlTyFloat float_type = 3;
+    BamlTyBool bool_type = 4;
+    BamlTyNull null_type = 5;
+    BamlTyLiteral literal_type = 6;
+    BamlTyMedia media_type = 7;
+    BamlTyEnum enum_type = 8;
+    BamlTyClass class_type = 9;
+    BamlTyTypeAlias type_alias_type = 10;
+    BamlTyList list_type = 11;
+    BamlTyMap map_type = 12;
+    BamlTyUnionVariant union_variant_type = 14;
+    BamlTyOptional optional_type = 15;
+    BamlTyAny any_type = 18;
+    BamlTyUint8Array uint8array_type = 19;
+    BamlTyUnknown unknown_type = 20;
   }
 }
 
 // Simple marker messages for primitive types.
-message BamlFieldTypeString {}
-message BamlFieldTypeInt {}
-message BamlFieldTypeFloat {}
-message BamlFieldTypeBool {}
-message BamlFieldTypeNull {}
-message BamlFieldTypeUint8Array {}
-message BamlFieldTypeAny {}
-message BamlFieldTypeUnknown {}
+message BamlTyString {}
+message BamlTyInt {}
+message BamlTyFloat {}
+message BamlTyBool {}
+message BamlTyNull {}
+message BamlTyUint8Array {}
+message BamlTyAny {}
+message BamlTyUnknown {}
 
 // Literal: wraps a literal oneof.
 message BamlLiteralString {
@@ -199,7 +194,7 @@ message BamlLiteralBool {
   bool value = 1;
 }
 
-message BamlFieldTypeLiteral {
+message BamlTyLiteral {
   oneof literal {
     BamlLiteralString string_literal = 1;
     BamlLiteralInt int_literal = 2;
@@ -208,60 +203,35 @@ message BamlFieldTypeLiteral {
 }
 
 // For Media, reuse the BamlMediaType message.
-message BamlFieldTypeMedia {
+message BamlTyMedia {
   MediaTypeEnum media = 1;
 }
 
-message BamlFieldTypeEnum {
+message BamlTyEnum {
   string name = 1;
 }
 
-message BamlFieldTypeClass {
-  BamlTypeName name = 1;
+message BamlTyClass {
+  BamlTyName name = 1;
 }
 
-message BamlFieldTypeTypeAlias {
-  BamlTypeName name = 1;
+message BamlTyTypeAlias {
+  BamlTyName name = 1;
 }
 
-message BamlFieldTypeList {
-  BamlFieldType item_type = 1;
+message BamlTyList {
+  BamlTy item_type = 1;
 }
 
-message BamlFieldTypeMap {
-  BamlFieldType key_type = 1;
-  BamlFieldType value_type = 2;
+message BamlTyMap {
+  BamlTy key_type = 1;
+  BamlTy value_type = 2;
 }
 
-message BamlFieldTypeUnionVariant {
-  BamlTypeName name = 1;
+message BamlTyUnionVariant {
+  BamlTyName name = 1;
 }
 
-message BamlFieldTypeOptional {
-  BamlFieldType value = 1;
+message BamlTyOptional {
+  BamlTy value = 1;
 }
-
-message BamlFieldTypeChecked {
-  BamlFieldType value = 1;
-  repeated BamlCheckType checks = 2;
-}
-
-message BamlFieldTypeStreamState {
-  BamlFieldType value = 1;
-}
-
-// -----------------------------------------------------------------------------
-// BamlCheck definitions
-// -----------------------------------------------------------------------------
-
-message BamlCheckType {
-  string name = 1;
-}
-
-message BamlCheckValue {
-  string name = 1;
-  string expression = 2;
-  string status = 3;
-  BamlOutboundValue value = 4;
-}
-
