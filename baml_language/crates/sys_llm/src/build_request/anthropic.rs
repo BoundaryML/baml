@@ -71,7 +71,7 @@ struct RequestBody {
 /// 8 192 is a safe middle ground: large enough for most structured outputs,
 /// small enough to avoid non-streaming timeout errors from the Anthropic SDK
 /// (which rejects requests estimated to take >10 minutes).
-const DEFAULT_MAX_TOKENS: i64 = 8_192;
+pub(super) const DEFAULT_MAX_TOKENS: i64 = 8_192;
 
 // ============================================================================
 // Request builder
