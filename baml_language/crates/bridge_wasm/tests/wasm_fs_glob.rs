@@ -374,7 +374,10 @@ fn string_list(value: BamlOutboundValue) -> Vec<String> {
 const FS_GLOB_SOURCE: &str = r#"
 function MkdirRecursive() -> bool {
   baml.fs.mkdir("/generated/nested", baml.fs.MkdirOptions { recursive: true });
-  baml.fs.exists("/generated/nested")
+  // Assert the parent was created too. Without this the test would still
+  // pass if the bridge created only the leaf and silently dropped the
+  // recursive parent-creation behavior.
+  baml.fs.exists("/generated") && baml.fs.exists("/generated/nested")
 }
 
 function MkdirRecursiveExistingFile() -> null {
