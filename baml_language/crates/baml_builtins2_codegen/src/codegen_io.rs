@@ -2069,14 +2069,29 @@ fn emit_adapter_impl(
 }
 
 /// Generate the expression that converts `__val: BexExternalValue` to the method's return type.
+///
+/// Top-level entry: looks up handle classes in `tree` and supports `Null`
+/// (returning unit). Recursive calls into containers pass `tree = None` and
+/// override the error suffix so messages reflect the nesting context.
 fn emit_result_conversion(
     builtin: &NativeBuiltin,
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
     paths: &CodegenPaths,
 ) -> TokenStream {
-    // Check if return type maps to a handle.
-    if let BamlType::Named(name) = &builtin.return_type {
+    emit_result_conversion_for_ty(&builtin.return_type, Some(tree), class_ns_map, paths, "")
+}
+
+fn emit_result_conversion_for_ty(
+    ty: &BamlType,
+    tree: Option<&BTreeMap<String, IoNamespaceNode>>,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+    ctx: &str,
+) -> TokenStream {
+    // Handle-class shortcut: only at the top level (lists/maps of handles
+    // aren't supported).
+    if let (Some(tree), BamlType::Named(name)) = (tree, ty) {
         if let Some(ns) = class_ns_map.get(name.as_str()) {
             if let Some(node) = tree.get(ns) {
                 if node.classes.contains_key(name.as_str()) {
@@ -2087,155 +2102,66 @@ fn emit_result_conversion(
         }
     }
 
-    match &builtin.return_type {
-        BamlType::String => quote! {
-            match __val {
-                BexExternalValue::String(s) => Ok(s),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected string, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Int => quote! {
-            match __val {
-                BexExternalValue::Int(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected int, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Float => quote! {
-            match __val {
-                BexExternalValue::Float(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected float, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Bool => quote! {
-            match __val {
-                BexExternalValue::Bool(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected bool, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Null => quote! { Ok(()) },
-        BamlType::Optional(inner) => {
-            let inner_conv = emit_result_conversion_inner(inner, class_ns_map, paths);
-            quote! {
-                match __val {
-                    BexExternalValue::Null => Ok(None),
-                    other => {
-                        let __val = other;
-                        Ok(Some({ #inner_conv }?))
-                    }
-                }
-            }
-        }
-        BamlType::Uint8Array => quote! {
-            match __val {
-                BexExternalValue::Uint8Array(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected uint8array, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Named(name) => match name.as_str() {
-            "type" => quote! {
-                match __val {
-                    BexExternalValue::Adt(
-                        bex_external_types::BexExternalAdt::Type(ty),
-                    ) => Ok(ty),
-                    other => Err(RuntimeIoError::Other(
-                        format!("expected type, got {}", other.type_name()),
-                    )),
-                }
-            },
-            _ => {
-                if class_ns_map.contains_key(name.as_str()) {
-                    let ns = &class_ns_map[name.as_str()];
-                    let owned = &paths.owned;
-                    let ns_ident = format_ident!("{}", ns);
-                    let name_ident = format_ident!("{}", name);
-                    quote! {
-                        #owned::#ns_ident::#name_ident::from_external(__val)
-                            .map_err(|e| RuntimeIoError::Other(format!("{e:?}")))
-                    }
-                } else {
-                    quote! { Ok(__val) }
-                }
-            }
-        },
-        BamlType::List(inner) => {
-            let inner_conv = emit_result_conversion_inner(inner, class_ns_map, paths);
-            quote! {
-                match __val {
-                    BexExternalValue::Array { items, .. } => {
-                        items.into_iter()
-                            .map(|__val| { #inner_conv })
-                            .collect::<Result<Vec<_>, _>>()
-                    }
-                    other => Err(RuntimeIoError::Other(
-                        format!("expected array, got {}", other.type_name()),
-                    )),
-                }
-            }
-        }
-        _ => quote! { Ok(__val) },
-    }
-}
-
-/// Per-element result conversion for list inner types.
-/// Used by the `BamlType::List` arm of `emit_result_conversion`.
-fn emit_result_conversion_inner(
-    ty: &BamlType,
-    class_ns_map: &BTreeMap<String, String>,
-    paths: &CodegenPaths,
-) -> TokenStream {
     match ty {
-        BamlType::String => quote! {
-            match __val {
-                BexExternalValue::String(s) => Ok(s),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected string in list, got {}", other.type_name()),
-                )),
+        BamlType::String => {
+            let msg = format!("expected string{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::String(s) => Ok(s),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
-        BamlType::Int => quote! {
-            match __val {
-                BexExternalValue::Int(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected int in list, got {}", other.type_name()),
-                )),
+        }
+        BamlType::Int => {
+            let msg = format!("expected int{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Int(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
-        BamlType::Bool => quote! {
-            match __val {
-                BexExternalValue::Bool(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected bool in list, got {}", other.type_name()),
-                )),
+        }
+        BamlType::Float => {
+            let msg = format!("expected float{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Float(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
-        BamlType::Float => quote! {
-            match __val {
-                BexExternalValue::Float(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected float in list, got {}", other.type_name()),
-                )),
+        }
+        BamlType::Bool => {
+            let msg = format!("expected bool{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Bool(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
-        BamlType::Uint8Array => quote! {
-            match __val {
-                BexExternalValue::Uint8Array(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected uint8array in list, got {}", other.type_name()),
-                )),
+        }
+        BamlType::Uint8Array => {
+            let msg = format!("expected uint8array{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Uint8Array(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
+        }
+        // `Null` as a return type means unit; only meaningful at the top level.
+        BamlType::Null if tree.is_some() => quote! { Ok(()) },
         BamlType::Optional(inner) => {
-            let inner_conv = emit_result_conversion_inner(inner, class_ns_map, paths);
+            let inner_conv = emit_result_conversion_for_ty(inner, None, class_ns_map, paths, ctx);
             quote! {
                 match __val {
                     BexExternalValue::Null => Ok(None),
@@ -2247,7 +2173,9 @@ fn emit_result_conversion_inner(
             }
         }
         BamlType::List(inner) => {
-            let inner_conv = emit_result_conversion_inner(inner, class_ns_map, paths);
+            let inner_conv =
+                emit_result_conversion_for_ty(inner, None, class_ns_map, paths, " in list");
+            let msg = format!("expected array{ctx}, got {{}}");
             quote! {
                 match __val {
                     BexExternalValue::Array { items, .. } => {
@@ -2256,13 +2184,15 @@ fn emit_result_conversion_inner(
                             .collect::<Result<Vec<_>, _>>()
                     }
                     other => Err(RuntimeIoError::Other(
-                        format!("expected array in list, got {}", other.type_name()),
+                        format!(#msg, other.type_name()),
                     )),
                 }
             }
         }
         BamlType::Map(key, value) if matches!(key.as_ref(), BamlType::String) => {
-            let value_conv = emit_result_conversion_inner(value, class_ns_map, paths);
+            let value_conv =
+                emit_result_conversion_for_ty(value, None, class_ns_map, paths, " in map");
+            let msg = format!("expected map{ctx}, got {{}}");
             quote! {
                 match __val {
                     BexExternalValue::Map { entries, .. } => {
@@ -2271,22 +2201,25 @@ fn emit_result_conversion_inner(
                             .collect::<Result<indexmap::IndexMap<_, _>, _>>()
                     }
                     other => Err(RuntimeIoError::Other(
-                        format!("expected map in list, got {}", other.type_name()),
+                        format!(#msg, other.type_name()),
                     )),
                 }
             }
         }
         BamlType::Named(name) => match name.as_str() {
-            "type" => quote! {
-                match __val {
-                    BexExternalValue::Adt(
-                        bex_external_types::BexExternalAdt::Type(ty),
-                    ) => Ok(ty),
-                    other => Err(RuntimeIoError::Other(
-                        format!("expected type in list, got {}", other.type_name()),
-                    )),
+            "type" => {
+                let msg = format!("expected type{ctx}, got {{}}");
+                quote! {
+                    match __val {
+                        BexExternalValue::Adt(
+                            bex_external_types::BexExternalAdt::Type(ty),
+                        ) => Ok(ty),
+                        other => Err(RuntimeIoError::Other(
+                            format!(#msg, other.type_name()),
+                        )),
+                    }
                 }
-            },
+            }
             _ => {
                 if let Some(ns) = class_ns_map.get(name.as_str()) {
                     let owned = &paths.owned;
