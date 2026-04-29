@@ -66,7 +66,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
     let mut out: Vec<(LeafPath, EmittedSymbol, SortKey)> = Vec::new();
 
     for (key, symbol) in entries {
-        let leaf = route(key);
+        let leaf = route(key, symbol);
         let bare = key.bare_name().to_string();
 
         match symbol {
@@ -142,7 +142,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
             }
             Symbol::Function(f) => {
                 let sort_key = origin_key(&f.origin);
-                expand_function(&leaf, key, &bare, f, &sort_key, &mut out);
+                expand_function(&leaf, key, f, &sort_key, &mut out);
             }
         }
     }
@@ -150,24 +150,24 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
     out
 }
 
-/// Fan out a `Symbol::Function` into its base sync/async bindings
-/// plus two bindings per companion (sync + async). Per §5 the ≤6
-/// emitted bindings share the parent's sort key and are pushed
-/// contiguously in the fixed intra-parent order: base sync → base
-/// async → companions in declaration order, each sync then async.
+/// Fan out a `Symbol::Function` into its sync and async bindings.
+/// Companions arrive as their own pool entries (keyed on the suffixed
+/// name) and flow through this same path; they share the parent's span
+/// so `group_and_sort` keeps them contiguous within the leaf.
 fn expand_function(
     leaf: &LeafPath,
     key: &Name,
-    bare: &str,
     f: &baml_codegen_types::Function,
     sort_key: &SortKey,
     out: &mut Vec<(LeafPath, EmittedSymbol, SortKey)>,
 ) {
-    // Base sync + async. The FQN is just the codegen-facing `Name`'s
-    // Display form: `<pkg>.<ns…>.<bare>`. No translation — emit fully
-    // qualifies all symbols, so `pkg = "user"` lands on the wire as
-    // `"user.…"` end-to-end.
+    // The FQN is just the codegen-facing `Name`'s Display form:
+    // `<pkg>.<ns…>.<bare>`. No translation — emit fully qualifies all
+    // symbols, so `pkg = "user"` lands on the wire as `"user.…"` end-to-
+    // end. The Python LHS strips the `$<suffix>` form into the
+    // companion's bare identifier (`__<suffix>` or `_stream`).
     let fqn_root = key.to_string();
+    let bare = bare_callable_name(key.name.as_str());
     let func_generic_params: Vec<String> = f
         .generic_params
         .iter()
@@ -178,16 +178,7 @@ fn expand_function(
         &fqn_root,
         &f.arguments,
         &f.return_type,
-        &f.companions,
-        |py_name, fqn, mode, params, arg_tys, return_ty, is_companion| {
-            // Companions inherit no TypeVars — their signatures are the
-            // erased post-call shape (raw bytes / parsed result), per
-            // 13a §4.4.
-            let generic_params = if is_companion {
-                Vec::new()
-            } else {
-                func_generic_params.clone()
-            };
+        |py_name, fqn, mode, params, arg_tys, return_ty| {
             out.push((
                 leaf.clone(),
                 EmittedSymbol::Function(PyFunction {
@@ -197,7 +188,7 @@ fn expand_function(
                     param_names: params,
                     arg_tys,
                     return_ty,
-                    generic_params,
+                    generic_params: func_generic_params.clone(),
                 }),
                 sort_key.clone(),
             ));
@@ -205,22 +196,28 @@ fn expand_function(
     );
 }
 
-/// Fan out one source-declared method (and its companions) into one
-/// `PyMethodBinding` per emitted line. Sorted before fan-out so the
-/// sibling order (sync → async → companion sync → companion async)
-/// matches free-function expansion exactly.
+/// Fan out source-declared methods (parents and companions) into one
+/// `PyMethodBinding` per emitted line. Methods are sorted by `(file,
+/// span, name)` so a parent and its companions — which share the parent's
+/// span — cluster together with the parent first (the parent name is a
+/// prefix of every companion name and `$` < any alphanumeric).
 fn expand_methods(
     methods: &[baml_codegen_types::Function],
     class_fqn_root: &str,
     kind: MethodKind,
 ) -> Vec<PyMethodBinding> {
     let mut sorted: Vec<&baml_codegen_types::Function> = methods.iter().collect();
-    sorted.sort_by(|a, b| origin_key(&a.origin).cmp(&origin_key(&b.origin)));
+    sorted.sort_by(|a, b| {
+        origin_key(&a.origin)
+            .cmp(&origin_key(&b.origin))
+            .then_with(|| a.name.as_str().cmp(b.name.as_str()))
+    });
 
     let mut out: Vec<PyMethodBinding> = Vec::new();
     for m in sorted {
-        let bare = m.name.as_str();
-        let fqn_root = format!("{class_fqn_root}.{bare}");
+        let m_name = m.name.as_str();
+        let bare = bare_callable_name(m_name);
+        let fqn_root = format!("{class_fqn_root}.{m_name}");
         let method_generic_params: Vec<String> = m
             .generic_params
             .iter()
@@ -231,8 +228,7 @@ fn expand_methods(
             &fqn_root,
             &m.arguments,
             &m.return_type,
-            &m.companions,
-            |py_name, fqn, mode, params, arg_tys, return_ty, is_companion| {
+            |py_name, fqn, mode, params, arg_tys, return_ty| {
                 let param_names = match kind {
                     MethodKind::Static => params,
                     MethodKind::Instance => {
@@ -242,11 +238,6 @@ fn expand_methods(
                         with_self
                     }
                 };
-                let generic_params = if is_companion {
-                    Vec::new()
-                } else {
-                    method_generic_params.clone()
-                };
                 out.push(PyMethodBinding {
                     py_name,
                     baml_fqn: fqn,
@@ -255,7 +246,7 @@ fn expand_methods(
                     kind,
                     arg_tys,
                     return_ty,
-                    generic_params,
+                    generic_params: method_generic_params.clone(),
                 });
             },
         );
@@ -263,81 +254,63 @@ fn expand_methods(
     out
 }
 
-/// Shared fan-out for free functions and methods. Calls `emit` once
-/// for each of: base sync, base async, then for each companion sync
-/// and async (in declaration order). The `emit` closure receives the
-/// per-line py-name, FQN, mode, parameter names, parameter types, and
-/// return type; the caller adapts those into the appropriate emitted-
-/// symbol struct.
+/// Translate a callable's BAML name (which may carry a `$<suffix>` for
+/// companions) into the Python-side bare identifier used as the LHS of
+/// the sync binding (the async sibling appends `_async`).
+///
+/// - Plain name `foo` → `foo`.
+/// - `foo$stream` → `foo_stream` (only companion that uses single
+///   underscore — matches the longstanding free-function rule).
+/// - `foo$<other>` → `foo__<other>`.
+fn bare_callable_name(name: &str) -> String {
+    match name.find('$') {
+        None => name.to_string(),
+        Some(i) => {
+            let parent = &name[..i];
+            let suffix = &name[i + 1..];
+            if suffix == "stream" {
+                format!("{parent}_stream")
+            } else {
+                format!("{parent}__{suffix}")
+            }
+        }
+    }
+}
+
+/// Shared fan-out for free functions and methods. Calls `emit` twice:
+/// once for the sync binding and once for the async binding. Companions
+/// arrive as their own callable; the suffix-aware `bare` value is
+/// computed up front by the caller via `bare_callable_name`.
 fn expand_callable<F>(
-    bare: &str,
+    bare: String,
     fqn_root: &str,
     arguments: &[baml_codegen_types::FunctionArgument],
     return_type: &Ty,
-    companions: &[(String, baml_codegen_types::Function)],
     mut emit: F,
 ) where
-    F: FnMut(String, String, SyncAsync, Vec<String>, Vec<Ty>, Ty, bool),
+    F: FnMut(String, String, SyncAsync, Vec<String>, Vec<Ty>, Ty),
 {
-    let base_params: Vec<String> = arguments
+    let params: Vec<String> = arguments
         .iter()
         .map(|a| a.name.as_str().to_string())
         .collect();
-    let base_tys: Vec<Ty> = arguments.iter().map(|a| a.ty.clone()).collect();
+    let tys: Vec<Ty> = arguments.iter().map(|a| a.ty.clone()).collect();
     emit(
-        bare.to_string(),
+        bare.clone(),
         fqn_root.to_string(),
         SyncAsync::Sync,
-        base_params.clone(),
-        base_tys.clone(),
+        params.clone(),
+        tys.clone(),
         return_type.clone(),
-        false,
     );
     emit(
         format!("{bare}_async"),
         fqn_root.to_string(),
         SyncAsync::Async,
-        base_params,
-        base_tys,
+        params,
+        tys,
         return_type.clone(),
-        false,
     );
-
-    for (suffix, inner) in companions {
-        let (py_sync, py_async) = if suffix == "stream" {
-            (format!("{bare}_stream"), format!("{bare}_stream_async"))
-        } else {
-            (
-                format!("{bare}__{suffix}"),
-                format!("{bare}__{suffix}_async"),
-            )
-        };
-        let companion_fqn = format!("{fqn_root}${suffix}");
-        let companion_params: Vec<String> = inner
-            .arguments
-            .iter()
-            .map(|a| a.name.as_str().to_string())
-            .collect();
-        let companion_tys: Vec<Ty> = inner.arguments.iter().map(|a| a.ty.clone()).collect();
-        emit(
-            py_sync,
-            companion_fqn.clone(),
-            SyncAsync::Sync,
-            companion_params.clone(),
-            companion_tys.clone(),
-            inner.return_type.clone(),
-            true,
-        );
-        emit(
-            py_async,
-            companion_fqn,
-            SyncAsync::Async,
-            companion_params,
-            companion_tys,
-            inner.return_type.clone(),
-            true,
-        );
-    }
 }
 
 fn origin_key(origin: &baml_codegen_types::Origin) -> SortKey {

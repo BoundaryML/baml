@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 import pydantic
 
 from baml.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
-from .baml_core import BamlHandle
+from .baml_py import BamlHandle
 from .errors import BamlError
 
 

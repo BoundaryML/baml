@@ -37,9 +37,6 @@ pub struct Function {
     // TODO: add other APIs here that impact code-gen
     pub watchers: Vec<(baml_base::Name, super::Ty)>,
 
-    /// Companion functions attached to this function (e.g. `build_request`, `parse`).
-    pub companions: Vec<(String, Function)>,
-
     /// Source-origin info: the defining `.baml` file and byte span start.
     /// Used by the emitter to order symbols deterministically within a leaf.
     pub origin: Origin,
@@ -125,9 +122,6 @@ impl Function {
             .map(|args| args.ty.validate())
             .collect::<Result<Vec<_>, _>>()?;
         self.return_type.validate()?;
-        for (_, companion) in &self.companions {
-            companion.validate()?;
-        }
 
         Ok(())
     }
@@ -137,11 +131,6 @@ impl Function {
             .iter()
             .flat_map(|args| args.ty.walk_all_unions().into_iter())
             .chain(self.return_type.walk_all_unions())
-            .chain(
-                self.companions
-                    .iter()
-                    .flat_map(|(_, c)| c.walk_all_unions().into_iter()),
-            )
             .collect()
     }
 }

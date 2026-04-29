@@ -44,8 +44,8 @@ pub fn to_source_code(
     // Every symbol in the pool routes to exactly one leaf. Dedup via
     // `BTreeSet` so leaf and directory enumeration below is stable.
     let mut leaves: BTreeSet<LeafPath> = BTreeSet::new();
-    for key in pool.keys() {
-        leaves.insert(route(key));
+    for (key, symbol) in pool.iter() {
+        leaves.insert(route(key, symbol));
     }
 
     // `baml/` always exists (hosts `_inlinedbaml.py`), even if no
@@ -348,18 +348,40 @@ mod tests {
             }],
             return_type: Ty::Int,
             watchers: vec![],
-            companions: vec![],
             origin: origin(file, span),
         }
     }
 
-    fn func_sym(bare: &str, file: &str, span: u32, companions: Vec<(&str, Function)>) -> Symbol {
-        let mut f = bare_func(bare, file, span);
-        f.companions = companions
-            .into_iter()
-            .map(|(s, f)| (s.to_string(), f))
-            .collect();
-        Symbol::Function(f)
+    fn func_sym(bare: &str, file: &str, span: u32) -> Symbol {
+        Symbol::Function(bare_func(bare, file, span))
+    }
+
+    /// Insert a parent function plus its companions into `pool` as
+    /// independent `Symbol::Function` entries, mirroring how
+    /// `build_symbol_pool` produces them after the 14b refactor.
+    fn insert_parent_with_companions(
+        pool: &mut SymbolPool,
+        pkg: &str,
+        ns: &[&str],
+        bare: &str,
+        file: &str,
+        span: u32,
+        companions: Vec<(&str, Function)>,
+    ) {
+        let parent_key = cg_name(pkg, ns, bare);
+        pool.insert(
+            parent_key.clone(),
+            Symbol::Function(bare_func(bare, file, span)),
+        );
+        for (suffix, mut companion) in companions {
+            let comp_name = format!("{bare}${suffix}");
+            companion.name = BaseName::new(&comp_name);
+            // Companions inherit the parent's span so they cluster at sort.
+            companion.origin.source_file_path = file.to_string();
+            companion.origin.span_start = span;
+            let comp_key = cg_name(pkg, ns, &comp_name);
+            pool.insert(comp_key, Symbol::Function(companion));
+        }
     }
 
     #[test]
@@ -434,7 +456,7 @@ mod tests {
     fn function_fans_out_sync_and_async() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["lorem"], "extract_resume");
-        pool.insert(n, func_sym("extract_resume", "x.baml", 0, vec![]));
+        pool.insert(n, func_sym("extract_resume", "x.baml", 0));
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
@@ -454,11 +476,15 @@ mod tests {
     #[test]
     fn function_with_stream_companion() {
         let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &["lorem"], "extract_resume");
         let companion = bare_func("extract_resume", "x.baml", 0);
-        pool.insert(
-            n,
-            func_sym("extract_resume", "x.baml", 0, vec![("stream", companion)]),
+        insert_parent_with_companions(
+            &mut pool,
+            "user",
+            &["lorem"],
+            "extract_resume",
+            "x.baml",
+            0,
+            vec![("stream", companion)],
         );
 
         let out = to_source_code(&pool, &[]);
@@ -480,16 +506,15 @@ mod tests {
     #[test]
     fn function_with_build_request_companion_uses_double_underscore() {
         let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &["lorem"], "extract_resume");
         let companion = bare_func("extract_resume", "x.baml", 0);
-        pool.insert(
-            n,
-            func_sym(
-                "extract_resume",
-                "x.baml",
-                0,
-                vec![("build_request", companion)],
-            ),
+        insert_parent_with_companions(
+            &mut pool,
+            "user",
+            &["lorem"],
+            "extract_resume",
+            "x.baml",
+            0,
+            vec![("build_request", companion)],
         );
 
         let out = to_source_code(&pool, &[]);
@@ -620,7 +645,7 @@ mod tests {
         let c = cg_name("user", &["lorem"], "Resume");
         pool.insert(c.clone(), class(c));
         let f = cg_name("user", &["lorem"], "extract_resume");
-        pool.insert(f, func_sym("extract_resume", "x.baml", 100, vec![]));
+        pool.insert(f, func_sym("extract_resume", "x.baml", 100));
         // ipsum leaf: class only → no factory import.
         let c2 = cg_name("user", &["ipsum"], "Tag");
         pool.insert(c2.clone(), class(c2));
@@ -985,14 +1010,8 @@ mod tests {
         );
     }
 
-    fn func_with_args(
-        bare: &str,
-        args: &[&str],
-        file: &str,
-        span: u32,
-        companions: Vec<(&str, Function)>,
-    ) -> Symbol {
-        Symbol::Function(Function {
+    fn make_func(bare: &str, args: &[&str], file: &str, span: u32) -> Function {
+        Function {
             generic_params: Vec::new(),
             name: BaseName::new(bare),
             docstring: None,
@@ -1006,39 +1025,50 @@ mod tests {
                 .collect(),
             return_type: Ty::Int,
             watchers: vec![],
-            companions: companions
-                .into_iter()
-                .map(|(s, f)| (s.to_string(), f))
-                .collect(),
             origin: origin(file, span),
-        })
+        }
     }
 
-    fn companion_func(args: &[&str]) -> Function {
-        Function {
-            generic_params: Vec::new(),
-            name: BaseName::new("inner"),
-            docstring: None,
-            arguments: args
-                .iter()
-                .map(|n| FunctionArgument {
-                    name: BaseName::new(*n),
-                    docstring: None,
-                    ty: Ty::String,
-                })
-                .collect(),
-            return_type: Ty::Int,
-            watchers: vec![],
-            companions: vec![],
-            origin: origin("x.baml", 0),
+    /// Insert a parent function that takes args, no companions.
+    fn insert_parent_only(
+        pool: &mut SymbolPool,
+        pkg: &str,
+        ns: &[&str],
+        bare: &str,
+        args: &[&str],
+        file: &str,
+        span: u32,
+    ) {
+        let key = cg_name(pkg, ns, bare);
+        pool.insert(key, Symbol::Function(make_func(bare, args, file, span)));
+    }
+
+    /// Insert parent + companions as independent pool entries. Each
+    /// companion is described by `(suffix, args)`; the companion shares
+    /// the parent's span so they cluster contiguously after sorting.
+    fn insert_parent_with_companion_args(
+        pool: &mut SymbolPool,
+        pkg: &str,
+        ns: &[&str],
+        bare: &str,
+        parent_args: &[&str],
+        companions: &[(&str, &[&str])],
+        file: &str,
+        span: u32,
+    ) {
+        insert_parent_only(pool, pkg, ns, bare, parent_args, file, span);
+        for (suffix, comp_args) in companions {
+            let comp_name = format!("{bare}${suffix}");
+            let comp = make_func(&comp_name, comp_args, file, span);
+            let key = cg_name(pkg, ns, &comp_name);
+            pool.insert(key, Symbol::Function(comp));
         }
     }
 
     #[test]
     fn function_zero_args_renders_empty_param_list() {
         let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &["lorem"], "ping");
-        pool.insert(n, func_with_args("ping", &[], "x.baml", 0, vec![]));
+        insert_parent_only(&mut pool, "user", &["lorem"], "ping", &[], "x.baml", 0);
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
@@ -1052,10 +1082,14 @@ mod tests {
     #[test]
     fn function_multi_arg_param_names_in_order() {
         let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &["lorem"], "make");
-        pool.insert(
-            n,
-            func_with_args("make", &["a", "b", "c"], "x.baml", 0, vec![]),
+        insert_parent_only(
+            &mut pool,
+            "user",
+            &["lorem"],
+            "make",
+            &["a", "b", "c"],
+            "x.baml",
+            0,
         );
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
@@ -1071,16 +1105,15 @@ mod tests {
     fn companion_param_names_come_from_inner_not_parent() {
         // Parent has args [a, b]; companion has its own [text].
         let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &["lorem"], "extract");
-        pool.insert(
-            n,
-            func_with_args(
-                "extract",
-                &["a", "b"],
-                "x.baml",
-                0,
-                vec![("build_request", companion_func(&["text"]))],
-            ),
+        insert_parent_with_companion_args(
+            &mut pool,
+            "user",
+            &["lorem"],
+            "extract",
+            &["a", "b"],
+            &[("build_request", &["text"])],
+            "x.baml",
+            0,
         );
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
@@ -1098,22 +1131,21 @@ mod tests {
     }
 
     #[test]
-    fn multiple_companions_render_in_declaration_order() {
+    fn multiple_companions_render_alongside_parent() {
         let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &["lorem"], "extract");
-        pool.insert(
-            n,
-            func_with_args(
-                "extract",
-                &["t"],
-                "x.baml",
-                0,
-                vec![
-                    ("stream", companion_func(&["t"])),
-                    ("build_request", companion_func(&["t"])),
-                    ("parse", companion_func(&["raw"])),
-                ],
-            ),
+        insert_parent_with_companion_args(
+            &mut pool,
+            "user",
+            &["lorem"],
+            "extract",
+            &["t"],
+            &[
+                ("stream", &["t"]),
+                ("build_request", &["t"]),
+                ("parse", &["raw"]),
+            ],
+            "x.baml",
+            0,
         );
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
@@ -1127,17 +1159,19 @@ mod tests {
         ] {
             assert!(leaf.contains(needle), "missing {needle} in:\n{leaf}");
         }
-        // Declaration order in a single fan-out block: parent → stream
-        // → build_request → parse, with sync before async at each.
+        // Pool entries are sorted by Name; `$` (0x24) sorts before any
+        // alphabetic char, so the parent comes first; among companions,
+        // lexicographic suffix order: `$build_request` < `$parse` <
+        // `$stream`. Each entry emits sync before async.
         let order = [
             "extract       = _define_function",
             "extract_async = _define_function",
-            "extract_stream       = _define_function",
-            "extract_stream_async = _define_function",
             "extract__build_request       = _define_function",
             "extract__build_request_async = _define_function",
             "extract__parse       = _define_function",
             "extract__parse_async = _define_function",
+            "extract_stream       = _define_function",
+            "extract_stream_async = _define_function",
         ];
         let mut last = 0usize;
         for needle in order {
@@ -1152,7 +1186,7 @@ mod tests {
         }
         // No blank line between fan-out siblings.
         let s = leaf.find("extract       = _define_function").unwrap();
-        let e = leaf.find("extract__parse_async").unwrap();
+        let e = leaf.find("extract_stream_async").unwrap();
         let block = &leaf[s..e];
         assert!(
             !block.contains("\n\n"),
@@ -1163,8 +1197,15 @@ mod tests {
     #[test]
     fn vendor_function_fqn_uses_vendor_pkg() {
         let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("aws", &["s3"], "create_bucket");
-        pool.insert(n, func_with_args("create_bucket", &[], "x.baml", 0, vec![]));
+        insert_parent_only(
+            &mut pool,
+            "aws",
+            &["s3"],
+            "create_bucket",
+            &[],
+            "x.baml",
+            0,
+        );
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
         assert!(leaf.contains(
@@ -1175,8 +1216,15 @@ mod tests {
     #[test]
     fn baml_pkg_function_fqn_keeps_baml_prefix() {
         let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("baml", &["http"], "fetch");
-        pool.insert(n, func_with_args("fetch", &["url"], "x.baml", 0, vec![]));
+        insert_parent_only(
+            &mut pool,
+            "baml",
+            &["http"],
+            "fetch",
+            &["url"],
+            "x.baml",
+            0,
+        );
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("baml/http/__init__.py")];
         assert!(leaf.contains(
@@ -1187,8 +1235,7 @@ mod tests {
     #[test]
     fn root_no_namespace_function_fqn_drops_segment() {
         let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &[], "ping");
-        pool.insert(n, func_with_args("ping", &[], "x.baml", 0, vec![]));
+        insert_parent_only(&mut pool, "user", &[], "ping", &[], "x.baml", 0);
         let out = to_source_code(&pool, &[]);
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
@@ -1256,7 +1303,6 @@ mod tests {
                 .collect(),
             return_type: Ty::Int,
             watchers: vec![],
-            companions: vec![],
             origin: origin(file, span),
         }
     }
@@ -1548,7 +1594,6 @@ mod tests {
                 }],
                 return_type: Ty::Class(resume, vec![]),
                 watchers: vec![],
-                companions: vec![],
                 origin: origin("x.baml", 100),
             }),
         );
@@ -1575,27 +1620,32 @@ mod tests {
         // `return_type` from the companion's own `Function`, not the
         // parent. Verify with a `$parse`-shaped companion that takes
         // a different argument and returns a different type than the
-        // parent.
+        // parent. Post-14b: parent and companion live as independent
+        // `Symbol::Function` entries in the pool.
         let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &["lorem"], "extract_resume");
+        let parent_key = cg_name("user", &["lorem"], "extract_resume");
+        let companion_key = cg_name("user", &["lorem"], "extract_resume$parse");
         let resume = cg_name("user", &["lorem"], "Resume");
         pool.insert(resume.clone(), class(resume.clone()));
-        let companion = Function {
-            generic_params: Vec::new(),
-            name: BaseName::new("inner"),
-            docstring: None,
-            arguments: vec![FunctionArgument {
-                name: BaseName::new("json"),
-                docstring: None,
-                ty: Ty::String,
-            }],
-            return_type: Ty::Class(resume.clone(), vec![]),
-            watchers: vec![],
-            companions: vec![],
-            origin: origin("x.baml", 0),
-        };
         pool.insert(
-            n,
+            companion_key,
+            Symbol::Function(Function {
+                generic_params: Vec::new(),
+                name: BaseName::new("extract_resume$parse"),
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("json"),
+                    docstring: None,
+                    ty: Ty::String,
+                }],
+                return_type: Ty::Class(resume.clone(), vec![]),
+                watchers: vec![],
+                // Companions share the parent's span so they cluster.
+                origin: origin("x.baml", 100),
+            }),
+        );
+        pool.insert(
+            parent_key,
             Symbol::Function(Function {
                 generic_params: Vec::new(),
                 name: BaseName::new("extract_resume"),
@@ -1607,7 +1657,6 @@ mod tests {
                 }],
                 return_type: Ty::Class(resume, vec![]),
                 watchers: vec![],
-                companions: vec![("parse".to_string(), companion)],
                 origin: origin("x.baml", 100),
             }),
         );
@@ -1769,7 +1818,7 @@ mod tests {
         // Add a function — typing now required (signatures may use
         // `typing.Optional` / `typing.List` / etc., per 12d §7).
         let f = cg_name("user", &["lorem"], "ping");
-        pool.insert(f, func_sym("ping", "x.baml", 100, vec![]));
+        pool.insert(f, func_sym("ping", "x.baml", 100));
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(leaf.contains("import typing"));
@@ -1779,7 +1828,7 @@ mod tests {
     fn pyi_no_factory_imports_anywhere() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["lorem"], "extract_resume");
-        pool.insert(n, func_sym("extract_resume", "x.baml", 100, vec![]));
+        pool.insert(n, func_sym("extract_resume", "x.baml", 100));
 
         let out = to_source_code(&pool, &[]);
         for (path, content) in &out {
@@ -2110,7 +2159,6 @@ mod tests {
                 }],
                 return_type: Ty::Enum(sentiment),
                 watchers: vec![],
-                companions: vec![],
                 origin: origin("x.baml", 100),
             }),
         );
@@ -2132,16 +2180,15 @@ mod tests {
     #[test]
     fn pyi_function_fan_out_siblings_tightly_packed() {
         let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &["lorem"], "extract");
-        pool.insert(
-            n,
-            func_with_args(
-                "extract",
-                &["t"],
-                "x.baml",
-                0,
-                vec![("stream", companion_func(&["t"]))],
-            ),
+        insert_parent_with_companion_args(
+            &mut pool,
+            "user",
+            &["lorem"],
+            "extract",
+            &["t"],
+            &[("stream", &["t"])],
+            "x.baml",
+            0,
         );
 
         let out = to_source_code(&pool, &[]);
@@ -2277,7 +2324,6 @@ mod tests {
                 }],
                 return_type: Ty::TypeVar(BaseName::new("T")),
                 watchers: vec![],
-                companions: vec![],
                 origin: origin("echo.baml", 0),
             }),
         );

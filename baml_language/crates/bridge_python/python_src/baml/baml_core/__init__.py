@@ -12,7 +12,7 @@ import atexit
 import importlib
 from typing import Any, Awaitable, Callable, Dict, List, Literal, Sequence, Union
 
-from .baml_core import (
+from .baml_py import (
     AbortController,
     BamlHandle,
     BamlRuntime,
@@ -27,7 +27,7 @@ from .baml_core import (
     get_runtime as _rust_get_runtime,
     get_version,
 )
-from .baml_core import (
+from .baml_py import (
     BamlCancelledError,
     BamlClientError,
     BamlError,

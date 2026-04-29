@@ -17,7 +17,7 @@ use crate::{
         method::{MethodKind, PyMethodBinding},
     },
     py_string,
-    routing::{LeafPath, route},
+    routing::{LeafPath, route_class_ref},
     translate_ty::{TranslateCtx, translate_ty},
 };
 
@@ -250,7 +250,7 @@ impl LeafBody {
 fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
     match ty {
         Ty::Class(name, args) => {
-            let routed = route(name);
+            let routed = route_class_ref(name);
             if routed != *current && !routed.segments.is_empty() {
                 out.insert(routed.segments[0].clone());
             }
@@ -259,7 +259,7 @@ fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
             }
         }
         Ty::Enum(name) | Ty::TypeAlias(name) => {
-            let routed = route(name);
+            let routed = route_class_ref(name);
             if routed != *current && !routed.segments.is_empty() {
                 out.insert(routed.segments[0].clone());
             }

@@ -60,7 +60,7 @@ jobs:
         working-directory: baml_language
 
       - name: "Run snapshot tests with insta"
-        run: cargo insta test --workspace --all-features --unreferenced reject --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended
+        run: cargo insta test --workspace --all-features --unreferenced reject
         working-directory: baml_language
 
       - name: "Check documentation"
@@ -528,8 +528,8 @@ jobs:
 
       - name: "Run snapshot tests"
         run: |
-          cargo insta test --workspace --all-features --unreferenced=reject --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended
-          cargo insta test --workspace --all-features --review --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended
+          cargo insta test --workspace --all-features --unreferenced=reject
+          cargo insta test --workspace --all-features --review
         working-directory: baml_language
 
       - name: "Check for snapshot changes"

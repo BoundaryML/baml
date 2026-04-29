@@ -10,7 +10,7 @@ use baml_codegen_types::{Name, Ty};
 
 use crate::{
     py_string,
-    routing::{LeafPath, route},
+    routing::{LeafPath, route_class_ref},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,14 +102,15 @@ fn render_name_ref_or_self_ref(name: &Name, ctx: &TranslateCtx) -> String {
 fn should_quote_self_ref(name: &Name, ctx: &TranslateCtx) -> bool {
     match &ctx.self_ref {
         Some(self_ref) => {
-            route(name) == self_ref.routed_leaf && name.bare_name() == self_ref.bare_name
+            route_class_ref(name) == self_ref.routed_leaf
+                && name.bare_name() == self_ref.bare_name
         }
         None => false,
     }
 }
 
 fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> String {
-    let routed_leaf = route(name);
+    let routed_leaf = route_class_ref(name);
     if routed_leaf == ctx.current_leaf || routed_leaf.segments.is_empty() {
         name.bare_name().to_string()
     } else {
