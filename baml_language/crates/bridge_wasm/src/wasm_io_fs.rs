@@ -384,10 +384,24 @@ impl io::IoNamespaceFs for WasmIoFs {
 
         match self.vfs().vfs_create_dir(&path) {
             Ok(()) => SysOpOutput::ok(()),
-            Err(e) => match self.vfs().vfs_exists(&path) {
-                Ok(true) => SysOpOutput::ok(()),
-                _ => SysOpOutput::err(js_err(&e)),
-            },
+            Err(e) => {
+                // Idempotency: only swallow the create error if the path
+                // already exists *as a directory* (e.g. an external concurrent
+                // mutator beat us to it). If something else exists at that
+                // path — a regular file, a symlink, anything non-directory —
+                // this is a real failure and we propagate. The previous code
+                // checked `vfs_exists` and returned Ok on any existing entry,
+                // turning real `mkdir` failures into silent success when
+                // something happened to occupy the path.
+                //
+                // Long-term: the JS VFS contract should grow `createDir(path,
+                // { recursive: bool })` so the host handles this atomically
+                // and we don't need this many round-trips at all.
+                match self.vfs().vfs_metadata(&path) {
+                    Ok(meta) if meta.file_type == "directory" => SysOpOutput::ok(()),
+                    _ => SysOpOutput::err(js_err(&e)),
+                }
+            }
         }
     }
 }
