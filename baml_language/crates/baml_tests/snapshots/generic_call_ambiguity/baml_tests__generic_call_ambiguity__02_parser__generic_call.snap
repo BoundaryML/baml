@@ -84,6 +84,84 @@ SOURCE_FILE
               R_PAREN ")"
           R_BRACKET "]"
         R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "literal_arg"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR
+            WORD "f"
+            GENERIC_ARGS
+              LESS "<"
+              TYPE_EXPR
+                STRING_LITERAL "assistant"
+                  QUOTE """
+                  WORD "assistant"
+                  QUOTE """
+              COMMA ","
+              TYPE_EXPR "string"
+                WORD "string"
+              GREATER ">"
+          CALL_ARGS
+            L_PAREN "("
+            STRING_LITERAL "a"
+              QUOTE """
+              WORD "a"
+              QUOTE """
+            COMMA ","
+            STRING_LITERAL "b"
+              QUOTE """
+              WORD "b"
+              QUOTE """
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "paren_union_arg"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR
+            WORD "f"
+            GENERIC_ARGS
+              LESS "<"
+              TYPE_EXPR
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR "int | string"
+                    WORD "int"
+                    PIPE "|"
+                    WORD "string"
+                R_PAREN ")"
+              COMMA ","
+              TYPE_EXPR "string"
+                WORD "string"
+              GREATER ">"
+          CALL_ARGS
+            L_PAREN "("
+            INTEGER_LITERAL "0"
+            COMMA ","
+            STRING_LITERAL "b"
+              QUOTE """
+              WORD "b"
+              QUOTE """
+            R_PAREN ")"
+        R_BRACE "}"
 
 === ERRORS ===
 None

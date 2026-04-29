@@ -3952,9 +3952,19 @@ impl<'a> Parser<'a> {
                         return Self::is_generic_args_follow(self.peek(i + 1).map(|t| t.kind));
                     }
                 }
-                // Tokens that can legally appear inside a type-argument list:
-                // identifiers, dotted paths, list/optional/union modifiers,
-                // and literal-typed values used in literal unions.
+                // Tokens that can legally appear inside a type-argument
+                // list. Mirror the start tokens accepted by `parse_type` /
+                // `parse_type_primary`:
+                // - `Word` / `Dot` for type names and qualified paths
+                // - `Comma` between args
+                // - `LBracket` / `RBracket` for array suffix `T[]`
+                // - `Question` for optional `T?`
+                // - `Pipe` for unions `A | B`
+                // - `IntegerLiteral` / `FloatLiteral` for literal-union members
+                // - `Quote` / `Hash` for string-literal types (`"a"`,
+                //   `#"raw"#`)
+                // - `LParen` / `RParen` for parenthesized union types
+                //   (`(int | string)`)
                 TokenKind::Word
                 | TokenKind::Dot
                 | TokenKind::Comma
@@ -3963,9 +3973,13 @@ impl<'a> Parser<'a> {
                 | TokenKind::Question
                 | TokenKind::Pipe
                 | TokenKind::IntegerLiteral
-                | TokenKind::FloatLiteral => {}
-                // Anything else — operators, braces, parens, EOF-ish tokens —
-                // can't appear in a type, so this `<` is a comparison.
+                | TokenKind::FloatLiteral
+                | TokenKind::Quote
+                | TokenKind::Hash
+                | TokenKind::LParen
+                | TokenKind::RParen => {}
+                // Anything else — operators, braces, EOF-ish tokens — can't
+                // appear in a type, so this `<` is a comparison.
                 _ => return false,
             }
             i += 1;

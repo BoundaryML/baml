@@ -33,3 +33,13 @@ function user.GenericCallInArray(k: int, v: string) -> string[] throws never {
     [f(k, v)] : string[]
   }
 }
+function user.literal_arg() -> string throws never {
+  { : string | "b"
+    f<K, V>("a", "b") : string | "b"
+  }
+}
+function user.paren_union_arg() -> string throws never {
+  { : string | "b"
+    f<K, V>(0, "b") : string | "b"
+  }
+}

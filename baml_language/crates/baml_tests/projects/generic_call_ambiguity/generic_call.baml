@@ -15,3 +15,14 @@ function f<K, V>(k: K, v: V) -> V {
 function GenericCallInArray(k: int, v: string) -> string[] {
     [f<int, string>(k, v)]
 }
+
+// Generic args can also start with non-Word tokens — string-literal types
+// and parenthesized union types. These previously fell back to comparison
+// because the lookahead allowlist only covered Word/Dot/etc.
+function literal_arg() -> string {
+    f<"assistant", string>("a", "b")
+}
+
+function paren_union_arg() -> string {
+    f<(int | string), string>(0, "b")
+}

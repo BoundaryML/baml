@@ -20,3 +20,9 @@ function user.GenericCallInArray(k: int, v: string) -> string[]  [expr] {
 function user.f(k: user.K, v: user.V) -> user.V  [expr] {
   {  } v
 }
+function user.literal_arg() -> string  [expr] {
+  {  } f("a", "b")
+}
+function user.paren_union_arg() -> string  [expr] {
+  {  } f(0, "b")
+}

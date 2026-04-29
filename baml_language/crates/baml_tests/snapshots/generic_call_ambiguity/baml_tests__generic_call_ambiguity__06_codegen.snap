@@ -47,6 +47,20 @@ function user.f(k: void, v: void) -> void {
     return
 }
 
+function user.literal_arg() -> string {
+    load_const "a"
+    load_const "b"
+    call user.f
+    return
+}
+
+function user.paren_union_arg() -> string {
+    load_const 0
+    load_const "b"
+    call user.f
+    return
+}
+
 function user.y() -> int {
     load_const 0
     return
