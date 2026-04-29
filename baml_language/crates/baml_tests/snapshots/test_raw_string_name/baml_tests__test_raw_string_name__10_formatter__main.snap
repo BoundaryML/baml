@@ -1,5 +1,18 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== STRONG AST ERROR ===
-Expected token/node of kind STRING_LITERAL, but found RAW_STRING_LITERAL at main.baml:3:6
+// Raw string literals as test names should work.
+
+test #"raw string name"# {
+    assert.is_true(true)
+}
+
+test #"has "quotes" inside"# {
+    assert.is_true(true)
+}
+
+testset #"raw testset name"# {
+    test #"nested raw name"# {
+        assert.is_true(true)
+    }
+}

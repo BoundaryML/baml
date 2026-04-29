@@ -3908,35 +3908,70 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Check if < starts generic arguments rather than a comparison
-    /// Generic args: foo<Type>, foo<A, B>
-    /// Comparison: a < b
+    /// Check if `<` starts generic arguments rather than a comparison.
+    ///
+    /// TypeScript-style disambiguation: scan ahead to balance `<...>`,
+    /// allowing only tokens that could appear inside a type-argument list,
+    /// and commit to generic only if the token after the closing `>` is one
+    /// that can't follow a comparison expression — `(`, `{`, or `.`.
+    ///
+    /// Examples:
+    ///   - `f<K, V>(x)`        → `>` followed by `(` → generic call
+    ///   - `Box<int> { ... }`  → `>` followed by `{` → generic constructor
+    ///   - `Wrapper<T>.of(x)`  → `>` followed by `.` → generic-qualified path
+    ///   - `[a < b, c > d]`    → `>` followed by `d` (Word) → comparisons
+    ///   - `a < b()`           → contains `(` inside → comparison
     fn looks_like_generic_args(&self) -> bool {
         if !self.at(TokenKind::Less) {
             return false;
         }
 
-        // Look ahead to see if it's a type name followed by > or ,
-        if let Some(token_after_less) = self.peek(1) {
-            // Must be a word (type name)
-            if token_after_less.kind == TokenKind::Word {
-                // Check what comes after the word
-                if let Some(token_after_word) = self.peek(2) {
-                    // Generic args end with > or have comma for multiple args
-                    if token_after_word.kind == TokenKind::Greater
-                        || token_after_word.kind == TokenKind::Comma
-                    {
-                        return true;
-                    }
-                    // Could also have nested generics: Foo<Bar<T>>
-                    if token_after_word.kind == TokenKind::Less {
-                        return true;
+        let mut depth: i32 = 1;
+        let mut i: usize = 1;
+        loop {
+            let Some(tok) = self.peek(i) else {
+                return false;
+            };
+            match tok.kind {
+                TokenKind::Less => depth += 1,
+                TokenKind::Greater => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Self::is_generic_args_follow(self.peek(i + 1).map(|t| t.kind));
                     }
                 }
+                // `>>` closes two levels at once.
+                TokenKind::GreaterGreater => {
+                    depth -= 2;
+                    if depth <= 0 {
+                        return Self::is_generic_args_follow(self.peek(i + 1).map(|t| t.kind));
+                    }
+                }
+                // Tokens that can legally appear inside a type-argument list:
+                // identifiers, dotted paths, list/optional/union modifiers,
+                // and literal-typed values used in literal unions.
+                TokenKind::Word
+                | TokenKind::Dot
+                | TokenKind::Comma
+                | TokenKind::LBracket
+                | TokenKind::RBracket
+                | TokenKind::Question
+                | TokenKind::Pipe
+                | TokenKind::IntegerLiteral
+                | TokenKind::FloatLiteral => {}
+                // Anything else — operators, braces, parens, EOF-ish tokens —
+                // can't appear in a type, so this `<` is a comparison.
+                _ => return false,
             }
+            i += 1;
         }
+    }
 
-        false
+    fn is_generic_args_follow(kind: Option<TokenKind>) -> bool {
+        matches!(
+            kind,
+            Some(TokenKind::LParen | TokenKind::LBrace | TokenKind::Dot)
+        )
     }
 
     /// Parse generic arguments: <Type1, Type2, ...>

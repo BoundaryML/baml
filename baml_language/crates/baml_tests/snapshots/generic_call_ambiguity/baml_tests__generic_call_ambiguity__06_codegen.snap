@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.ArrayOfComparisons(a: int, b: int, c: int, d: int) -> bool[] {
+    load_var a
+    load_var b
+    cmp_op <
+    load_var c
+    load_var d
+    cmp_op >
+    alloc_array 2
+    return
+}
+
+function user.ArrayOfComparisonsParenthesized(a: int, b: int, c: int, d: int) -> bool[] {
+    load_var a
+    load_var b
+    cmp_op <
+    load_var c
+    load_var d
+    cmp_op >
+    alloc_array 2
+    return
+}
+
+function user.GenericCallInArray(k: int, v: string) -> string[] {
+    load_var k
+    load_var v
+    call user.f
+    alloc_array 1
+    return
+}
+
+function user.f(k: void, v: void) -> void {
+    load_var v
+    return
+}

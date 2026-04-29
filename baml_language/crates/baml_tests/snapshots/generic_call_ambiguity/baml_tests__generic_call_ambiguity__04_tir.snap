@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.ArrayOfComparisons(a: int, b: int, c: int, d: int) -> bool[] throws never {
+  { : bool[]
+    [a < b, c > d] : bool[]
+  }
+}
+function user.ArrayOfComparisonsParenthesized(a: int, b: int, c: int, d: int) -> bool[] throws never {
+  { : bool[]
+    [a < b, c > d] : bool[]
+  }
+}
+function user.f<K, V>(k: K, v: V) -> V throws never {
+  { : V
+    v : V
+  }
+}
+function user.GenericCallInArray(k: int, v: string) -> string[] throws never {
+  { : string[]
+    [f(k, v)] : string[]
+  }
+}
