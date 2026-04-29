@@ -195,6 +195,32 @@ fn collect_scan_paths(
     only_files: bool,
     out: &mut Vec<String>,
 ) -> Result<(), String> {
+    // Prefer the rich `readDirEntries` method so we get name + type info in
+    // one JS round-trip per directory. Hosts that haven't implemented it
+    // surface an error from the binding; in that case fall back to the
+    // legacy readDir + per-entry metadata loop.
+    if let Ok(entries) = vfs.vfs_read_dir_entries(path) {
+        for v in entries.iter() {
+            let entry: crate::wasm_fs::WasmVfsDirEntry = serde_wasm_bindgen::from_value(v)
+                .map_err(|e| format!("readDirEntries returned invalid entry: {e}"))?;
+            if !dot && entry.name.starts_with('.') {
+                continue;
+            }
+            let full_path = join_path(path, &entry.name);
+            match entry.file_type.as_str() {
+                "file" => out.push(full_path),
+                "directory" => {
+                    if !only_files {
+                        out.push(full_path.clone());
+                    }
+                    collect_scan_paths(vfs, &full_path, dot, only_files, out)?;
+                }
+                _ => {}
+            }
+        }
+        return Ok(());
+    }
+
     let entries = vfs.vfs_read_dir(path).map_err(|e| js_err(&e))?;
     for entry in entries.iter() {
         let name = entry

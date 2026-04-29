@@ -42,6 +42,15 @@ fn mock_vfs(files: &[(&str, &str)], dirs: &[&str]) -> JsValue {
 
     js_sys::Reflect::set(&obj, &JsValue::from_str("_files"), &files_obj).unwrap();
     js_sys::Reflect::set(&obj, &JsValue::from_str("_dirs"), &dirs_arr).unwrap();
+    // Tests that need to mark specific paths as symlinks set
+    // `vfs._symlinks[path] = true` after the mock is built. Default empty
+    // so non-symlink tests see is_symlink=false everywhere.
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("_symlinks"),
+        &js_sys::Object::new(),
+    )
+    .unwrap();
 
     // readDir(path) -> string[]
     js_sys::Reflect::set(
@@ -65,6 +74,51 @@ fn mock_vfs(files: &[(&str, &str)], dirs: &[&str]) -> JsValue {
                 if (dirs[j].startsWith(prefix)) {
                     var rest = dirs[j].slice(prefix.length);
                     if (rest.indexOf('/') === -1 && rest.length > 0) result.push(rest);
+                }
+            }
+            return result;
+            "#,
+        ),
+    )
+    .unwrap();
+
+    // readDirEntries(path) -> Array<{ name, fileType, isSymlink }>
+    // Rich form preferred by baml.fs.read_dir / baml.glob.scan; one
+    // round-trip per directory instead of N+1.
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("readDirEntries"),
+        &js_sys::Function::new_with_args(
+            "path",
+            r#"
+            var result = [];
+            var files = this._files;
+            var dirs = this._dirs;
+            var symlinks = this._symlinks || {};
+            var prefix = path.endsWith('/') ? path : path + '/';
+            var keys = Object.keys(files);
+            for (var i = 0; i < keys.length; i++) {
+                if (keys[i].startsWith(prefix)) {
+                    var rest = keys[i].slice(prefix.length);
+                    if (rest.indexOf('/') === -1) {
+                        result.push({
+                            name: rest,
+                            file_type: 'file',
+                            is_symlink: !!symlinks[keys[i]],
+                        });
+                    }
+                }
+            }
+            for (var j = 0; j < dirs.length; j++) {
+                if (dirs[j].startsWith(prefix)) {
+                    var rest2 = dirs[j].slice(prefix.length);
+                    if (rest2.indexOf('/') === -1 && rest2.length > 0) {
+                        result.push({
+                            name: rest2,
+                            file_type: 'directory',
+                            is_symlink: !!symlinks[dirs[j]],
+                        });
+                    }
                 }
             }
             return result;
@@ -254,7 +308,22 @@ fn open_project(runtime: &BamlWasmRuntime, source: &str) {
 }
 
 fn runtime(files: &[(&str, &str)], dirs: &[&str], source: &str) -> BamlWasmRuntime {
+    runtime_with_symlinks(files, dirs, &[], source)
+}
+
+fn runtime_with_symlinks(
+    files: &[(&str, &str)],
+    dirs: &[&str],
+    symlinks: &[&str],
+    source: &str,
+) -> BamlWasmRuntime {
     let vfs = mock_vfs(files, dirs);
+    if !symlinks.is_empty() {
+        let map = js_sys::Reflect::get(&vfs, &JsValue::from_str("_symlinks")).unwrap();
+        for path in symlinks {
+            js_sys::Reflect::set(&map, &JsValue::from_str(path), &JsValue::TRUE).unwrap();
+        }
+    }
     let callbacks = callbacks();
     let runtime = BamlWasmRuntime::create(callbacks.unchecked_ref(), vfs.unchecked_into()).unwrap();
     open_project(&runtime, source);
@@ -315,6 +384,18 @@ function MkdirRecursiveExistingFile() -> null {
 function ReadDirNames() -> string[] {
   let entries = baml.fs.read_dir("/workspace/data");
   entries.map((entry) -> { entry.name })
+}
+
+function ReadDirSymlinkFlags() -> bool[] {
+  let entries = baml.fs.read_dir("/workspace/data");
+  entries.map((entry) -> { entry.is_symlink })
+}
+
+function ReadDirNamesAndSymlinks() -> string[] {
+  let entries = baml.fs.read_dir("/workspace/data");
+  entries.map((entry) -> {
+    if (entry.is_symlink) { "L:" + entry.name } else { "F:" + entry.name }
+  })
 }
 
 function GlobMatchesTxt() -> bool {
@@ -395,6 +476,27 @@ async fn wasm_runtime_read_dir_returns_entries() {
     assert_eq!(
         names,
         vec![".hidden.txt", "a.txt", "b.rs", "dir.txt", "sub"]
+    );
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_read_dir_surfaces_symlink_flag() {
+    // Mark `/workspace/data/a.txt` as a symlink in the mock VFS. The new
+    // readDirEntries path returns the flag in one round-trip; baml.fs.read_dir
+    // must propagate it through to the DirEntry.is_symlink field. Previously
+    // is_symlink was hard-coded to false in the WASM bridge.
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let symlinks = vec!["/workspace/data/a.txt"];
+    let runtime = runtime_with_symlinks(&files, &dirs, &symlinks, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 9, "ReadDirNamesAndSymlinks").await;
+    let mut tagged = string_list(result);
+    tagged.sort();
+    // a.txt is the only entry tagged as a symlink.
+    assert_eq!(
+        tagged,
+        vec!["F:.hidden.txt", "F:b.rs", "F:dir.txt", "F:sub", "L:a.txt",]
     );
 }
 

@@ -1909,6 +1909,7 @@ dependencies = [
  "prost",
  "reqwest",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "sys_glob",
  "sys_ops",

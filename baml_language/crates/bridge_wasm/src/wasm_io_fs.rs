@@ -291,17 +291,47 @@ impl io::IoNamespaceFs for WasmIoFs {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<owned::fs::DirEntry>> {
+        // Try the rich `readDirEntries` JS method first — one round-trip
+        // returns names + types + symlink info for the whole directory. Hosts
+        // that haven't implemented it yet error here, and we fall back to the
+        // legacy `readDir` (string[]) path that probes `metadata` per entry.
+        match self.vfs().vfs_read_dir_entries(&path) {
+            Ok(arr) => {
+                let mut entries = Vec::with_capacity(arr.length() as usize);
+                for v in arr.iter() {
+                    let entry: crate::wasm_fs::WasmVfsDirEntry =
+                        match serde_wasm_bindgen::from_value(v) {
+                            Ok(e) => e,
+                            Err(e) => {
+                                return SysOpOutput::err(OpErrorKind::Other(format!(
+                                    "readDirEntries returned invalid entry: {e}"
+                                )));
+                            }
+                        };
+                    entries.push(owned::fs::DirEntry {
+                        is_dir: entry.file_type == "directory",
+                        is_file: entry.file_type == "file",
+                        name: entry.name,
+                        is_symlink: entry.is_symlink,
+                    });
+                }
+                return SysOpOutput::ok(entries);
+            }
+            Err(_) => { /* fall through to legacy path */ }
+        }
+
         match self.vfs().vfs_read_dir(&path) {
             Ok(arr) => {
-                let mut entries = Vec::new();
+                let mut entries = Vec::with_capacity(arr.length() as usize);
                 for v in arr.iter() {
                     let Some(name) = v.as_string() else {
                         return SysOpOutput::err(OpErrorKind::Other(
                             "readDir entry is not a string".into(),
                         ));
                     };
-                    // WasmVfs.readDir returns string[] of entry names.
-                    // Probe metadata to distinguish files from directories.
+                    // Legacy readDir doesn't expose type info. Probe metadata
+                    // per entry. Hosts that care about read_dir performance
+                    // should implement `readDirEntries`.
                     let full = join_path(&path, &name);
                     let (is_dir, is_file) = match self.vfs().vfs_metadata(&full) {
                         Ok(meta) => (meta.file_type == "directory", meta.file_type == "file"),

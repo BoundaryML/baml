@@ -30,6 +30,7 @@ lsp-server = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
+serde-wasm-bindgen = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tsify = { workspace = true }
