@@ -1898,7 +1898,9 @@ dependencies = [
  "prost",
  "reqwest",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
+ "sys_glob",
  "sys_ops",
  "sys_types",
  "thiserror 2.0.18",
@@ -7322,6 +7324,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sys_glob"
+version = "0.0.0-beta"
+dependencies = [
+ "regex",
+]
+
+[[package]]
 name = "sys_llm"
 version = "0.0.0-beta"
 dependencies = [
@@ -7376,9 +7385,11 @@ dependencies = [
  "indexmap 2.13.0",
  "reqwest",
  "serde_json",
+ "sys_glob",
  "sys_ops",
  "sys_types",
  "tokio",
+ "walkdir",
 ]
 
 [[package]]

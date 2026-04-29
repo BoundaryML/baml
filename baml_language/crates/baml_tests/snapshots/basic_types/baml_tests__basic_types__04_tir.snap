@@ -102,7 +102,7 @@ function user.GetUser$stream(id: int) -> baml.llm.Stream<user.User, null | user.
   baml.llm.stream_llm_function(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "GetUser", map { "id": id }) : baml.llm.Stream<user.User, null | user.User$stream>
 }
 function user.GetUser$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<user.User, null | user.User$stream> throws never {
-  baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }.__make_stream(sse, "GetUser") : unknown
+  baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }.__make_stream(sse, "GetUser") : baml.llm.Stream<user.User, null | user.User$stream>
 }
 function user.GetStatus$stream() -> baml.llm.Stream<user.Status, null | user.Status> throws never {
   baml.llm.stream_llm_function(GPT4, "GetStatus", map {  }) : baml.llm.Stream<user.Status, null | user.Status>

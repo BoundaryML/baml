@@ -25,7 +25,7 @@ function user.Foo(x: int) -> int {
 }
 
 function user.GreetBaz(n: string) -> string {
-    alloc_instance Baz
+    alloc_instance user.Baz
     load_var n
     init_field .name
     call user.Baz.Greeting

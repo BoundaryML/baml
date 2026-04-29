@@ -161,7 +161,7 @@ fn user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.Prompt
 fn user.TestClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: void
+    let _1: baml.llm.PrimitiveClientOptions
     let _2: map<void, void>
     let _3: map<void, void>
     let _4: map<void, void>

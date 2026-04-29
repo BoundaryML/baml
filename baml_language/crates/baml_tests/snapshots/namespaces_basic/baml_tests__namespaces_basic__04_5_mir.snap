@@ -10,7 +10,7 @@ fn user.GetResponse(cfg: Config) -> llm.Response {
 
     bb0: {
         _2 = copy _1.1;
-        _0 = Response { const "hello", copy _2 };
+        _0 = user.llm.Response { const "hello", copy _2 };
         goto -> bb1;
     }
 
@@ -27,7 +27,7 @@ fn user.llm.MakeResponse(cfg: Config) -> llm.Response {
 
     bb0: {
         _2 = copy _1.1;
-        _0 = Response { const "ok", copy _2 };
+        _0 = user.llm.Response { const "ok", copy _2 };
         goto -> bb1;
     }
 

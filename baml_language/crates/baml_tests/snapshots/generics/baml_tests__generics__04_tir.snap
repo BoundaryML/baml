@@ -239,7 +239,7 @@ class user.Todo {
 }
 function user.GetTodo() -> user.Todo throws never {
   { : unknown
-    <missing>(HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." }) : unknown
+    <missing>(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." }) : unknown
   }
   !! 165..185: unresolved name: HttpMethod
 }

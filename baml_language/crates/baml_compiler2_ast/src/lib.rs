@@ -1080,7 +1080,7 @@ retry_policy MyRetry {
         };
 
         assert_eq!(
-            type_name.as_ref().map(smol_str::SmolStr::as_str),
+            type_name.as_ref().map(ToString::to_string).as_deref(),
             Some("RetryPolicy"),
             "expected type_name to be RetryPolicy"
         );

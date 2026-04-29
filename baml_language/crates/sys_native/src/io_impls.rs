@@ -448,6 +448,56 @@ impl io::IoNamespaceFs for NativeSysOps {
     ) -> SysOpOutput<i64> {
         SysOpOutput::async_op(async move { write_path(&path, &content).await })
     }
+
+    fn read_dir(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<owned::fs::DirEntry>> {
+        SysOpOutput::async_op(async move {
+            let mut rd = tokio::fs::read_dir(&path).await.map_err(|e| {
+                OpErrorKind::Other(format!("Failed to read directory '{path}': {e}"))
+            })?;
+            let mut entries = Vec::new();
+            while let Some(entry) = rd.next_entry().await.map_err(|e| {
+                OpErrorKind::Other(format!("Failed to read directory entry in '{path}': {e}"))
+            })? {
+                let ft = entry.file_type().await.map_err(|e| {
+                    OpErrorKind::Other(format!(
+                        "Failed to get file type for '{}': {e}",
+                        entry.file_name().to_string_lossy()
+                    ))
+                })?;
+                entries.push(owned::fs::DirEntry {
+                    name: entry.file_name().to_string_lossy().into_owned(),
+                    is_dir: ft.is_dir(),
+                    is_file: ft.is_file(),
+                    is_symlink: ft.is_symlink(),
+                });
+            }
+            Ok(entries)
+        })
+    }
+
+    fn mkdir(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        options: owned::fs::MkdirOptions,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            if options.recursive {
+                tokio::fs::create_dir_all(&path).await
+            } else {
+                tokio::fs::create_dir(&path).await
+            }
+            .map_err(|e| OpErrorKind::Other(format!("Failed to create directory '{path}': {e}")))
+        })
+    }
 }
 
 // Auto-creates missing parent dirs, matching Bun's `Bun.write` behavior.
@@ -466,6 +516,187 @@ async fn write_path(path: &str, data: &[u8]) -> Result<i64, OpErrorKind> {
         .map_err(|e| OpErrorKind::Other(format!("Failed to write file '{path}': {e}")))?;
     i64::try_from(data.len())
         .map_err(|_| OpErrorKind::Other(format!("Write size {} exceeds i64::MAX", data.len())))
+}
+
+// ============================================================================
+// Glob
+// ============================================================================
+
+use sys_glob::GlobPattern;
+
+type GlobHandle = GlobPattern;
+
+fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, OpErrorKind> {
+    glob._handle
+        .clone()
+        .downcast::<GlobHandle>()
+        .map_err(|_| OpErrorKind::Other("Invalid glob handle type".into()))
+}
+
+impl io::IoNamespaceGlob for NativeSysOps {
+    fn new(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        pattern: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::glob::Glob> {
+        match GlobPattern::new(&pattern) {
+            Ok(gp) => {
+                let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(gp);
+                SysOpOutput::ok(owned::glob::Glob { _handle: handle })
+            }
+            Err(e) => SysOpOutput::err(OpErrorKind::Other(e)),
+        }
+    }
+}
+
+impl io::IoClassGlobGlob for NativeSysOps {
+    fn scan(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        glob: owned::glob::Glob,
+        root: BexExternalValue,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<String>> {
+        SysOpOutput::async_op(async move {
+            let handle = downcast_glob_handle(&glob)?;
+
+            let (cwd, dot, absolute, follow_symlinks, throw_on_broken, only_files) = match &root {
+                BexExternalValue::String(s) => (s.clone(), false, false, false, false, true),
+                BexExternalValue::Instance { fields, .. } => {
+                    let get_string = |key: &str, default: &str| {
+                        fields
+                            .get(key)
+                            .and_then(BexExternalValue::as_string)
+                            .unwrap_or_else(|| default.to_string())
+                    };
+                    let get_bool = |key: &str, default: bool| {
+                        fields
+                            .get(key)
+                            .and_then(BexExternalValue::as_bool)
+                            .unwrap_or(default)
+                    };
+                    let cwd = get_string("cwd", ".");
+                    let dot = get_bool("dot", false);
+                    let absolute = get_bool("absolute", false);
+                    let follow_symlinks = get_bool("follow_symlinks", false);
+                    let throw_on_broken = get_bool("throw_error_on_broken_symlink", false);
+                    let only_files = get_bool("only_files", true);
+                    (
+                        cwd,
+                        dot,
+                        absolute,
+                        follow_symlinks,
+                        throw_on_broken,
+                        only_files,
+                    )
+                }
+                _ => {
+                    return Err(OpErrorKind::Other(
+                        "scan argument must be a string or ScanOptions".into(),
+                    ));
+                }
+            };
+
+            let cwd_path = std::path::Path::new(&cwd);
+            let abs_cwd = if cwd_path.is_absolute() {
+                cwd_path.to_path_buf()
+            } else {
+                std::env::current_dir()
+                    .map_err(|e| OpErrorKind::Other(format!("Failed to get cwd: {e}")))?
+                    .join(cwd_path)
+            };
+
+            // Prune dot directories during the walk when `dot=false` so we
+            // never descend into trees like `.git/`. The previous post-walk
+            // filter still discarded those entries but only after walkdir
+            // had paid the I/O to enumerate them. Depth 0 is always kept so
+            // the user can scan a dot-prefixed root they explicitly point
+            // at (e.g. `Glob.scan(".config")`).
+            let walker = walkdir::WalkDir::new(&abs_cwd)
+                .follow_links(follow_symlinks)
+                .into_iter()
+                .filter_entry(move |entry| {
+                    dot || entry.depth() == 0
+                        || !entry.file_name().to_string_lossy().starts_with('.')
+                });
+
+            let mut results = Vec::new();
+            for entry in walker {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(e) => {
+                        // Classify: broken symlink vs. other I/O error. A broken
+                        // symlink surfaces as NotFound on a path whose lstat
+                        // identifies it as a symlink. The `throw_on_broken`
+                        // option is scoped to broken symlinks only — every
+                        // other walk error (permission denied, transient I/O,
+                        // symlink loop) is a real failure and propagates
+                        // regardless. Silently swallowing real errors hides
+                        // problems users want to know about.
+                        let is_broken_symlink = e
+                            .io_error()
+                            .is_some_and(|io_err| io_err.kind() == std::io::ErrorKind::NotFound)
+                            && e.path()
+                                .and_then(|p| std::fs::symlink_metadata(p).ok())
+                                .is_some_and(|m| m.file_type().is_symlink());
+
+                        if is_broken_symlink {
+                            if throw_on_broken {
+                                return Err(OpErrorKind::Other(format!("Broken symlink: {e}")));
+                            }
+                            continue;
+                        }
+                        return Err(OpErrorKind::Other(format!("Walk error: {e}")));
+                    }
+                };
+
+                // Skip the root itself
+                if entry.depth() == 0 {
+                    continue;
+                }
+
+                let ft = entry.file_type();
+                if only_files && !ft.is_file() {
+                    continue;
+                }
+
+                let rel = entry.path().strip_prefix(&abs_cwd).unwrap_or(entry.path());
+                let rel_str = rel.to_string_lossy().replace('\\', "/");
+                let abs_str = entry.path().to_string_lossy().replace('\\', "/");
+
+                // Dot filtering is handled by `filter_entry` above; no need
+                // to re-check here.
+
+                if !handle.is_match_entry(&rel_str, &abs_str) {
+                    continue;
+                }
+
+                if absolute {
+                    results.push(abs_str);
+                } else {
+                    results.push(rel_str);
+                }
+            }
+            Ok(results)
+        })
+    }
+
+    fn matches(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        glob: owned::glob::Glob,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        match downcast_glob_handle(&glob) {
+            Ok(handle) => SysOpOutput::ok(handle.is_match(&path)),
+            Err(e) => SysOpOutput::err(e),
+        }
+    }
 }
 
 // ============================================================================

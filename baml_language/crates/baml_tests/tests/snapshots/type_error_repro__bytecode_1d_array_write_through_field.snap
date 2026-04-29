@@ -13,7 +13,7 @@ function Container.set(self: null, idx: int, val: string) -> null {
 }
 
 function main() -> null {
-    alloc_instance Container
+    alloc_instance user.Container
     load_const "a"
     load_const "b"
     load_const "c"

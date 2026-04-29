@@ -736,9 +736,9 @@ fn build_resolution_map(
                 let span_text = &file_text[span_start..span_end];
 
                 // Classify the constructor type name.
-                if let Some(name) = type_name {
-                    let name_str = name.as_str();
-                    if let Some(offset) = span_text.find(name_str) {
+                if let Some(path) = type_name {
+                    let name_str = path.to_string();
+                    if let Some(offset) = span_text.find(&name_str) {
                         let name_start = span_start + offset;
                         let name_end = name_start + name_str.len();
                         let name_range = TextRange::new(

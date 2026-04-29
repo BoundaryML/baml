@@ -4,7 +4,7 @@
 //! walks block expressions, etc. Produces `ExprBody` (semantic data) and `AstSourceMap`
 //! (parallel span storage) in one pass.
 
-use baml_base::Name;
+use baml_base::{Name, TypePath};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 use la_arena::Arena;
 use rowan::ast::AstNode;
@@ -1995,11 +1995,10 @@ impl LoweringContext {
         let mut position = 0;
         let mut type_name = None;
 
-        // Look for the optional type name (first WORD or path before the brace).
-        // The type name may be:
-        //   - A simple WORD token: `MyClass { ... }`
-        //   - A qualified path node: `baml.errors.DevOther { ... }` (parsed as PATH_EXPR)
-        // For qualified paths, extract the final segment as the class name.
+        // Look for the optional type name (first WORD or path before the brace):
+        //   - A simple WORD token: `MyClass { ... }` → `TypePath::bare`.
+        //   - A qualified path node: `baml.errors.DevOther { ... }` (parsed as
+        //     PATH_EXPR) → `TypePath` of all the WORD segments.
         'outer: for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => {
@@ -2007,25 +2006,19 @@ impl LoweringContext {
                         break;
                     }
                     if is_ident_token(token.kind()) && type_name.is_none() {
-                        type_name = Some(Name::new(token.text()));
+                        type_name = Some(TypePath::bare(Name::new(token.text())));
                     }
                 }
                 rowan::NodeOrToken::Node(child_node) => {
-                    // A child node before L_BRACE is the type name path (e.g. PATH_EXPR).
-                    // Walk its tokens to find the last WORD — that's the class name.
-                    let mut last_word: Option<Name> = None;
-                    for token in child_node
+                    let segments: Vec<Name> = child_node
                         .children_with_tokens()
                         .filter_map(rowan::NodeOrToken::into_token)
-                    {
-                        if is_ident_token(token.kind()) {
-                            last_word = Some(Name::new(token.text()));
-                        }
+                        .filter(|t| is_ident_token(t.kind()))
+                        .map(|t| Name::new(t.text()))
+                        .collect();
+                    if !segments.is_empty() {
+                        type_name = Some(TypePath::new(segments));
                     }
-                    if let Some(name) = last_word {
-                        type_name = Some(name);
-                    }
-                    // After handling the path node, stop scanning for more pre-brace items.
                     break 'outer;
                 }
             }

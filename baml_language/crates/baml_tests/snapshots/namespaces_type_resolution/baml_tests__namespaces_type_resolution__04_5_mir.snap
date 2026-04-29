@@ -23,7 +23,7 @@ fn user.RootConstruct(key: string) -> Config {
     let _1: string // key // param
 
     bb0: {
-        _0 = Config { copy _1, const "prod" };
+        _0 = user.Config { copy _1, const "prod" };
         goto -> bb1;
     }
 
@@ -134,7 +134,7 @@ fn user.RootThrowClass(x: int) -> string {
     }
 
     bb3: {
-        _2 = Error { const 500_i64, const "root error" };
+        _2 = user.Error { const 500_i64, const "root error" };
         throw copy _2;
     }
 }
@@ -272,7 +272,7 @@ fn user.auth.AuthConstruct(provider: string) -> auth.Config {
     let _1: string // provider // param
 
     bb0: {
-        _0 = Config { copy _1, const "s3cret" };
+        _0 = user.auth.Config { copy _1, const "s3cret" };
         goto -> bb1;
     }
 
@@ -351,7 +351,7 @@ fn user.auth.AuthMakeToken(v: string) -> auth.Token {
     let _1: string // v // param
 
     bb0: {
-        _0 = Token { copy _1, const user.auth.Role.User };
+        _0 = user.auth.Token { copy _1, const user.auth.Role.User };
         goto -> bb1;
     }
 
@@ -486,7 +486,7 @@ fn user.auth.AuthThrowClass(x: int) -> string {
     }
 
     bb3: {
-        _2 = Error { const "auth failed", const true };
+        _2 = user.auth.Error { const "auth failed", const true };
         throw copy _2;
     }
 }
@@ -518,7 +518,7 @@ fn user.auth.AuthThrowsRootError(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: auth.Error
+    let _2: Error
 
     bb0: {
         switch copy _1 [0: bb3, otherwise: bb1];
@@ -534,7 +534,7 @@ fn user.auth.AuthThrowsRootError(x: int) -> string {
     }
 
     bb3: {
-        _2 = Error { const 403_i64, const "forbidden" };
+        _2 = user.Error { const 403_i64, const "forbidden" };
         throw copy _2;
     }
 }
@@ -648,7 +648,7 @@ fn user.llm.LlmConstruct(model: string) -> llm.Config {
     let _1: string // model // param
 
     bb0: {
-        _0 = Config { copy _1, const 0.7_f64 };
+        _0 = user.llm.Config { copy _1, const 0.7_f64 };
         goto -> bb1;
     }
 
@@ -781,7 +781,7 @@ fn user.llm.LlmResponseConstruct(text: string) -> llm.Response {
     let _1: string // text // param
 
     bb0: {
-        _0 = Response { copy _1, const 42_i64 };
+        _0 = user.llm.Response { copy _1, const 42_i64 };
         goto -> bb1;
     }
 
@@ -810,7 +810,7 @@ fn user.llm.LlmThrowClass(x: int) -> string {
     }
 
     bb3: {
-        _2 = Error { const "llm failed", const true };
+        _2 = user.llm.Error { const "llm failed", const true };
         throw copy _2;
     }
 }
@@ -865,7 +865,7 @@ fn user.llm.LlmThrowsRootError(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: llm.Error
+    let _2: Error
 
     bb0: {
         switch copy _1 [0: bb3, otherwise: bb1];
@@ -881,7 +881,7 @@ fn user.llm.LlmThrowsRootError(x: int) -> string {
     }
 
     bb3: {
-        _2 = Error { const 404_i64, const "not found" };
+        _2 = user.Error { const 404_i64, const "not found" };
         throw copy _2;
     }
 }
@@ -1010,7 +1010,7 @@ fn user.llm.openai.OpenAIConstruct(key: string) -> llm.openai.Client {
     let _1: string // key // param
 
     bb0: {
-        _0 = Client { copy _1, const "org-123" };
+        _0 = user.llm.openai.Client { copy _1, const "org-123" };
         goto -> bb1;
     }
 
@@ -1264,7 +1264,7 @@ fn user.llm.openai.OpenAIThrowClass(x: int) -> string {
     }
 
     bb3: {
-        _2 = Error { const 429_i64, const "rate limited" };
+        _2 = user.llm.openai.Error { const 429_i64, const "rate limited" };
         throw copy _2;
     }
 }

@@ -51,6 +51,8 @@ mod wasm_env;
 mod wasm_fs;
 mod wasm_http;
 mod wasm_io;
+mod wasm_io_fs;
+mod wasm_io_glob;
 mod wasm_lsp;
 mod wasm_playground;
 mod wasm_sys;
@@ -60,6 +62,7 @@ pub use error::BridgeError;
 use js_sys::Function;
 use prost::Message;
 use wasm_bindgen::prelude::*;
+pub use wasm_lsp::LspNotification;
 
 static LOGGER_INIT: std::sync::Once = std::sync::Once::new();
 
@@ -188,11 +191,23 @@ impl BamlWasmRuntime {
         let make_request_fn = callbacks.make_request();
         let playground_send_notification_fn = callbacks.playground_send_notification();
 
+        // Wrap wasm_vfs in Arc so it can be shared across the VFS filesystem,
+        // the fs IO namespace, and the glob IO namespace without cloning the
+        // underlying JS value.
+        #[allow(clippy::arc_with_non_send_sync)]
+        let wasm_vfs_arc = std::sync::Arc::new(wasm_vfs);
+
         let sys_ops = sys_ops::SysOpsBuilder::new()
             .with_http_instance(std::sync::Arc::new(wasm_http::WasmHttp::new(fetch_fn)))
             .with_env_instance(std::sync::Arc::new(wasm_env::WasmEnv::new(env_vars_fn)))
             .with_io_instance(std::sync::Arc::new(wasm_io::WasmIo::new(input_fn)))
             .with_sys_instance(std::sync::Arc::new(wasm_sys::WasmSys::new()))
+            .with_fs_instance(std::sync::Arc::new(wasm_io_fs::WasmIoFs::new(
+                std::sync::Arc::clone(&wasm_vfs_arc),
+            )))
+            .with_glob_instance(std::sync::Arc::new(wasm_io_glob::WasmIoGlob::new(
+                std::sync::Arc::clone(&wasm_vfs_arc),
+            )))
             .build();
         let sys_ops = std::sync::Arc::new(sys_ops);
         let sys_op_factory = std::sync::Arc::new(move |_path: &vfs::VfsPath| sys_ops.clone());
@@ -202,7 +217,7 @@ impl BamlWasmRuntime {
             wasm_playground::WasmPlaygroundSender::new(playground_send_notification_fn.clone());
         let event_sink = wasm_playground::WasmEventSink::new(playground_send_notification_fn);
 
-        let vfs = wasm_fs::WasmFs::new(wasm_vfs);
+        let vfs = wasm_fs::WasmFs::new(wasm_vfs_arc);
         let vfs = std::sync::Arc::new(vfs);
 
         let bex = bex_project::new_lsp(

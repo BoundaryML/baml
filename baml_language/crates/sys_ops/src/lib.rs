@@ -857,6 +857,27 @@ impl io::IoNamespaceFs for DefaultIoOps {
     ) -> SysOpOutput<i64> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
+
+    fn read_dir(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<io::owned::fs::DirEntry>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn mkdir(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _options: io::owned::fs::MkdirOptions,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
 }
 
 impl io::IoClassHttpResponse for DefaultIoOps {
@@ -1005,6 +1026,42 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _ms: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoClassGlobGlob for DefaultIoOps {
+    fn scan(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _glob: io::owned::glob::Glob,
+        _root: BexExternalValue,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<String>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn matches(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _glob: io::owned::glob::Glob,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoNamespaceGlob for DefaultIoOps {
+    fn new(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _pattern: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::glob::Glob> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
@@ -1173,9 +1230,21 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_fs_file_write_bytes = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_fs_file_write_bytes(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_read_dir = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_read_dir(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_mkdir = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_mkdir(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -1185,6 +1254,39 @@ impl IoSysOpsBuilder {
     #[must_use]
     pub fn with_fs<T: io::IoNamespaceFs + Default + Send + Sync + 'static>(self) -> Self {
         self.with_fs_instance(Arc::new(T::default()))
+    }
+
+    /// Override the `glob` namespace (including `glob.Glob` methods) with a pre-built instance.
+    #[must_use]
+    pub fn with_glob_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceGlob + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_glob_new = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_glob_new(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_glob_glob_scan = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_glob_glob_scan(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_glob_glob_matches = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_glob_glob_matches(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the `glob` namespace with a default-constructible type.
+    #[must_use]
+    pub fn with_glob<T: io::IoNamespaceGlob + Default + Send + Sync + 'static>(self) -> Self {
+        self.with_glob_instance(Arc::new(T::default()))
     }
 
     /// Override the `http` namespace (including `http.Response` methods) with a pre-built instance.

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 28455
 ---
 function user.ConditionalLogic(age: int) -> string {
     load_var age
@@ -206,7 +205,7 @@ function user.edge_semicolon_forces_boundary(bar: () -> int[] throws never) -> i
 }
 
 function user.edge_type_then_object() -> int {
-    alloc_instance EdgeFoo
+    alloc_instance user.EdgeFoo
     load_const 1
     init_field .x
     load_field .x
@@ -269,7 +268,7 @@ function user.let_no_semicolons() -> int {
 }
 
 function user.let_statements() -> int {
-    alloc_instance Point
+    alloc_instance user.Point
     load_const 1
     init_field .x
     load_const 2

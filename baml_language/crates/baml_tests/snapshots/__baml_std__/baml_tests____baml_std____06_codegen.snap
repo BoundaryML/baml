@@ -194,10 +194,16 @@ function baml.fs.File.write_bytes(self: null, data: uint8array) -> int {
 function baml.fs.exists(path: string) -> bool {
 }
 
+function baml.fs.mkdir(path: string, options: baml.fs.MkdirOptions) -> null {
+}
+
 function baml.fs.open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> baml.fs.File {
 }
 
 function baml.fs.read(path: string) -> string {
+}
+
+function baml.fs.read_dir(path: string) -> baml.fs.DirEntry[] {
 }
 
 function baml.fs.remove(path: string) -> null {
@@ -210,6 +216,15 @@ function baml.fs.write(path: string, content: string) -> int {
 }
 
 function baml.fs.write_bytes(path: string, content: uint8array) -> int {
+}
+
+function baml.glob.Glob.matches(self: null, path: string) -> bool {
+}
+
+function baml.glob.Glob.scan(self: null, root: string | baml.glob.ScanOptions) -> string[] {
+}
+
+function baml.glob.new(pattern: string) -> baml.glob.Glob {
 }
 
 function baml.http.Response.bytes(self: null) -> uint8array {
@@ -274,7 +289,7 @@ function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, fun
     dispatch_future baml.llm.StreamCache.new
     await
     store_var cache
-    alloc_instance Stream
+    alloc_instance baml.llm.Stream
     load_var primitive
     init_field ._client
     load_var acc
@@ -288,7 +303,7 @@ function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, fun
 
 function baml.llm.Client.build_attempt(self: null) -> baml.llm.OrchestrationStep[] {
     load_var self
-    alloc_instance PlannerState
+    alloc_instance baml.llm.PlannerState
     alloc_array 0
     init_field .rr_client_names
     call baml.llm.Client.build_attempt_with_state
@@ -414,7 +429,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
     load_var self
     call baml.llm.Client.to_primitive_client
     store_var primitive
-    alloc_instance OrchestrationStep
+    alloc_instance baml.llm.OrchestrationStep
     load_var primitive
     init_field .primitive_client
     load_const 0
@@ -427,7 +442,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
 
 function baml.llm.Client.build_plan(self: null) -> baml.llm.OrchestrationStep[] {
     load_var self
-    alloc_instance PlannerState
+    alloc_instance baml.llm.PlannerState
     alloc_array 0
     init_field .rr_client_names
     call baml.llm.Client.build_plan_with_state
@@ -541,7 +556,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.l
 
   L11:
     load_var result
-    alloc_instance OrchestrationStep
+    alloc_instance baml.llm.OrchestrationStep
     load_var _26
     load_var __for_idx
     load_array_element
@@ -611,7 +626,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     jump L15
 
   L3:
-    alloc_instance DevOther
+    alloc_instance baml.errors.DevOther
     load_const "RoundRobin client has no sub-clients"
     init_field .message
     throw
@@ -632,7 +647,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     jump L7
 
   L6:
-    alloc_instance DevOther
+    alloc_instance baml.errors.DevOther
     load_const "All orchestration steps failed"
     init_field .message
     throw
@@ -713,7 +728,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     pop 1
 
   L12:
-    alloc_instance DevOther
+    alloc_instance baml.errors.DevOther
     load_const "HTTP request failed: "
     load_var error_body
     bin_op +
@@ -803,7 +818,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     jump L10
 
   L3:
-    alloc_instance DevOther
+    alloc_instance baml.errors.DevOther
     load_const "RoundRobin client has no sub-clients"
     init_field .message
     throw
@@ -824,7 +839,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     jump L7
 
   L6:
-    alloc_instance DevOther
+    alloc_instance baml.errors.DevOther
     load_const "All orchestration steps failed"
     init_field .message
     throw
@@ -928,7 +943,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     jump L4
 
   L3:
-    alloc_instance DevOther
+    alloc_instance baml.errors.DevOther
     load_const "All orchestration steps failed"
     init_field .message
     throw
@@ -1036,7 +1051,7 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
     jump L4
 
   L3:
-    alloc_instance DevOther
+    alloc_instance baml.errors.DevOther
     load_const "All orchestration steps failed"
     init_field .message
     throw
@@ -1290,7 +1305,7 @@ function baml.llm.Stream.final(self: null) -> void {
     return
 
   L6:
-    load_const null /* unknown class: LlmClientError */
+    load_const null /* unknown class: root.errors.LlmClientError */
     load_const "Streaming finished without finish_reason"
     init_field .0
     throw
@@ -1368,11 +1383,11 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
     dispatch_future baml.http.SseStream.close
     await
     pop 1
-    alloc_instance StreamFinished
+    alloc_instance baml.stream.StreamFinished
     jump L9
 
   L8:
-    alloc_instance StreamFinished
+    alloc_instance baml.stream.StreamFinished
 
   L9:
     return
@@ -1446,7 +1461,7 @@ function baml.llm.call_llm_function(client: baml.llm.Client, function_name: stri
     await
     store_var jinja_string
     load_var client
-    alloc_instance ExecutionContext
+    alloc_instance baml.llm.ExecutionContext
     load_var jinja_string
     init_field .jinja_string
     load_var args
@@ -1524,7 +1539,7 @@ function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: st
     await
     store_var jinja_string
     load_var client
-    alloc_instance ExecutionContext
+    alloc_instance baml.llm.ExecutionContext
     load_var jinja_string
     init_field .jinja_string
     load_var args

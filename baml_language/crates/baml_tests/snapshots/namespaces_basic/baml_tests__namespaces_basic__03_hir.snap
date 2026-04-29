@@ -7,7 +7,7 @@ class user.Config {
   model: string
 }
 function user.GetResponse(cfg: user.Config) -> root.llm.Response  [expr] {
-  {  } Response { text: "hello", model: cfg.model }
+  {  } root.llm.Response { text: "hello", model: cfg.model }
 }
 class user.llm.Response {
   text: string
