@@ -1,4 +1,8 @@
-#!/usr/bin/env -S uv run --script
+/**
+ * BEP CLI Script - embedded as a string constant.
+ * The __BEP_API_BASE__ placeholder is replaced at export time.
+ */
+export const BEP_SCRIPT = `#!/usr/bin/env -S uv run --script
 # /// script
 # dependencies = ["httpx"]
 # ///
@@ -63,7 +67,7 @@ def parse_bep_ref(ref: str) -> tuple[int | None, str | None]:
         return int(ref), None
     
     # Try BEP-XXX format
-    m = re.match(r"(?:BEP-)?(\d+)", ref, re.IGNORECASE)
+    m = re.match(r"(?:BEP-)?(\\d+)", ref, re.IGNORECASE)
     if m:
         return int(m.group(1)), None
     
@@ -83,7 +87,7 @@ def find_local_bep(ref: str) -> Path | None:
             continue
         
         # Parse folder name: BEP-XXX-slug
-        m = re.match(r"BEP-(\d+|\?)(?:-(.+))?", folder.name)
+        m = re.match(r"BEP-(\\d+|\\?)(?:-(.+))?", folder.name)
         if not m:
             continue
         
@@ -194,7 +198,7 @@ def cmd_pull(args: argparse.Namespace) -> int:
         updated = new_files & existing_files
         
         if added or removed:
-            print(f"\nChanges:")
+            print(f"\\nChanges:")
             if added:
                 print(f"  + {len(added)} new files")
                 for f in sorted(added)[:5]:
@@ -210,12 +214,12 @@ def cmd_pull(args: argparse.Namespace) -> int:
             if updated:
                 print(f"  ~ {len(updated)} files to update")
         else:
-            print("\nNo changes detected.")
+            print("\\nNo changes detected.")
             if not args.force:
                 return 0
         
         if not args.yes:
-            response_input = input("\nApply changes? [y/N]: ").strip().lower()
+            response_input = input("\\nApply changes? [y/N]: ").strip().lower()
             if response_input not in ("y", "yes"):
                 print("Aborted.")
                 return 0
@@ -251,7 +255,7 @@ def cmd_pull(args: argparse.Namespace) -> int:
             target_path.parent.mkdir(parents=True, exist_ok=True)
             target_path.write_bytes(zf.read(name))
         
-        print(f"\nExtracted to {ALL_BEPS_DIR}")
+        print(f"\\nExtracted to {ALL_BEPS_DIR}")
         return 0
 
 
@@ -343,9 +347,9 @@ def cmd_new(args: argparse.Namespace) -> int:
 
 A concise explanation (3–8 sentences) of what this proposal does and what it enables for BAML users.
 
-```baml
+\\\`\\\`\\\`baml
 // Example code showing the feature
-```
+\\\`\\\`\\\`
 
 ## Prior Art
 
@@ -357,9 +361,9 @@ The detailed technical design. This is the heart of the BEP.
 
 ### Syntax
 
-```baml
+\\\`\\\`\\\`baml
 // Example BAML syntax
-```
+\\\`\\\`\\\`
 
 ### Semantics
 
@@ -380,7 +384,7 @@ Unresolved decisions, future work.
     (folder_path / "pages").mkdir()
     
     print(f"Created {folder_path}")
-    print(f"\nNext steps:")
+    print(f"\\nNext steps:")
     print(f"  1. Edit {folder_path}/README.md")
     print(f"  2. Run: ./bep diff {slug}")
     print(f"  3. Run: ./bep push {slug}")
@@ -408,18 +412,18 @@ def cmd_diff(args: argparse.Namespace) -> int:
     # For new BEPs (BEP-?-*), there's nothing to diff against
     if bep_number is None:
         print(f"New BEP: {local_folder.name}")
-        print("\nContent to be created:")
+        print("\\nContent to be created:")
         print("-" * 40)
         if args.full:
             print(local_bep["readme"])
         else:
-            lines = local_bep["readme"].split("\n")[:20]
-            print("\n".join(lines))
-            if len(local_bep["readme"].split("\n")) > 20:
+            lines = local_bep["readme"].split("\\n")[:20]
+            print("\\n".join(lines))
+            if len(local_bep["readme"].split("\\n")) > 20:
                 print(f"... ({len(local_bep['readme'].split(chr(10)))} total lines)")
         
         if local_bep["pages"]:
-            print(f"\nPages: {len(local_bep['pages'])}")
+            print(f"\\nPages: {len(local_bep['pages'])}")
             for page in local_bep["pages"]:
                 print(f"  - {page['slug']}.md")
         
@@ -528,7 +532,7 @@ def cmd_push(args: argparse.Namespace) -> int:
     pages = []
     for page in local_bep["pages"]:
         # Extract title from first heading or use slug
-        title_match = re.search(r"^#\s+(.+)$", page["content"], re.MULTILINE)
+        title_match = re.search(r"^#\\s+(.+)$", page["content"], re.MULTILINE)
         title = title_match.group(1).strip() if title_match else page["slug"].title()
         pages.append({
             "slug": page["slug"],
@@ -586,7 +590,7 @@ def cmd_push(args: argparse.Namespace) -> int:
             response.raise_for_status()
             result = response.json()
             
-            print(f"\n✓ Created {result.get('formattedId', 'BEP')}")
+            print(f"\\n✓ Created {result.get('formattedId', 'BEP')}")
             print(f"  URL: {result.get('url', '')}")
             
             # Update local meta.json with the new number
@@ -633,7 +637,7 @@ def cmd_push(args: argparse.Namespace) -> int:
             response.raise_for_status()
             result = response.json()
             
-            print(f"\n✓ Updated {format_bep_number(bep_number)}")
+            print(f"\\n✓ Updated {format_bep_number(bep_number)}")
             print(f"  Version: {result.get('versionNumber', '?')} ({result.get('versionAction', '')})")
             if result.get("pagesCreated"):
                 print(f"  Pages created: {result['pagesCreated']}")
@@ -748,3 +752,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+`;

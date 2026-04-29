@@ -5,18 +5,8 @@
  * Status is prominently featured to give more weight to mature proposals.
  */
 
-import { readFileSync } from "fs";
-import { join } from "path";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Static Files (read from disk at runtime)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const STATIC_DIR = join(__dirname, "../../static");
-
-function readStaticFile(relativePath: string): string {
-  return readFileSync(join(STATIC_DIR, relativePath), "utf-8");
-}
+import { BEP_SCRIPT } from "./static/bep-script";
+import { BEP_SKILL } from "./static/bep-skill";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -617,18 +607,17 @@ Downloads all BEPs as a ZIP archive. No authentication required.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Load the BEP skill file for Claude Code.
+ * Get the BEP skill content for Claude Code.
  */
-export function loadBepSkill(): string {
-  return readStaticFile("skills/bep.md");
+export function getBepSkill(): string {
+  return BEP_SKILL;
 }
 
 /**
- * Load the BEP CLI script, replacing the API base URL placeholder.
+ * Get the BEP CLI script content, replacing the API base URL placeholder.
  */
-export function loadBepScript(apiBaseUrl: string): string {
-  const script = readStaticFile("bep");
-  return script.replace(/__BEP_API_BASE__/g, apiBaseUrl);
+export function getBepScript(apiBaseUrl: string): string {
+  return BEP_SCRIPT.replace(/__BEP_API_BASE__/g, apiBaseUrl);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -662,13 +651,13 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
   // BEP skill for Claude Code
   files.push({
     path: "skills/bep.md",
-    content: loadBepSkill(),
+    content: getBepSkill(),
   });
 
   // BEP CLI script
   files.push({
     path: "bep",
-    content: loadBepScript(apiBaseUrl),
+    content: getBepScript(apiBaseUrl),
   });
 
   // Individual BEP folders: BEP-<NUMBER>-<slug>/
