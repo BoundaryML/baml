@@ -134,3 +134,24 @@ async fn any_value_to_string() {
         ))
     );
 }
+
+#[tokio::test]
+async fn float_to_string_preserves_decimal() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let a = baml.unstable.string(1.0);
+            let b = baml.unstable.string(0.0);
+            let c = baml.unstable.string(-1.0);
+            let d = baml.unstable.string(3.14);
+            let e = baml.unstable.string(2);
+            a + " " + b + " " + c + " " + d + " " + e
+        }
+    "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("1.0 0.0 -1.0 3.14 2".to_string()))
+    );
+}

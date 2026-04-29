@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use bex_vm_types::types::{Object, Value};
+use bex_vm_types::types::{Object, Value, format_float};
 
 use super::{BamlNamespaceUnstable, PackageBamlImpl};
 use crate::{
@@ -28,7 +28,7 @@ fn format_value_recursive(
     match value {
         Value::Null => Ok("null".to_string()),
         Value::Int(i) => Ok(i.to_string()),
-        Value::Float(f) => Ok(f.to_string()),
+        Value::Float(f) => Ok(format_float(*f)),
         Value::Bool(b) => Ok(b.to_string()),
 
         Value::Object(obj_idx) => match vm.get_object(*obj_idx) {
