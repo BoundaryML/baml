@@ -151,7 +151,7 @@ impl ScanArgs {
     fn from_root(root: &BexExternalValue) -> Result<Self, String> {
         match root {
             BexExternalValue::String(cwd) => Ok(Self {
-                cwd: cwd.clone(),
+                cwd: normalize_cwd(cwd),
                 dot: false,
                 absolute: false,
                 only_files: true,
@@ -165,7 +165,7 @@ impl ScanArgs {
                 let _throw_on_broken =
                     get_bool_field(fields, "throw_error_on_broken_symlink", false)?;
                 Ok(Self {
-                    cwd,
+                    cwd: normalize_cwd(&cwd),
                     dot,
                     absolute,
                     only_files,
@@ -173,6 +173,20 @@ impl ScanArgs {
             }
             _ => Err("scan argument must be a string or ScanOptions".into()),
         }
+    }
+}
+
+/// WASM has no process-cwd concept, so a relative `cwd` like `.` or `""`
+/// has no natural anchor. The pragmatic interpretation: treat them as the
+/// VFS root (`/`). Without this, `Glob.scan(ScanOptions { cwd: ".", absolute:
+/// true })` would silently return paths that aren't absolute, and the
+/// underlying VFS calls (`readDir(".")`) would also miss any host that
+/// serves paths under `/`.
+fn normalize_cwd(cwd: &str) -> String {
+    if cwd == "." || cwd.is_empty() {
+        "/".to_string()
+    } else {
+        cwd.to_string()
     }
 }
 
@@ -319,6 +333,11 @@ fn absolute_path(root: &str, path: &str) -> String {
             format!("{root}/{path}")
         }
     } else {
-        path
+        // Unreachable in practice — `ScanArgs::from_root` normalizes `.`
+        // and `""` to `/`, so the only way we'd get here is a relative
+        // cwd like `foo/bar` that the caller built directly. There's no
+        // process cwd in WASM to resolve it against; anchor to the VFS
+        // root rather than silently returning a non-absolute path.
+        format!("/{path}")
     }
 }

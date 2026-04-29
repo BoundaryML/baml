@@ -413,6 +413,11 @@ function GlobScanAbsoluteOptions() -> string[] {
   glob.scan(baml.glob.ScanOptions { cwd: "/workspace/data", absolute: true })
 }
 
+function GlobScanDotCwdAbsolute() -> string[] {
+  let glob = baml.glob.new("workspace/data/*.txt");
+  glob.scan(baml.glob.ScanOptions { cwd: ".", absolute: true })
+}
+
 function GlobScanDotOptions() -> string[] {
   let glob = baml.glob.new("**/*.txt");
   glob.scan(baml.glob.ScanOptions { cwd: "/workspace/data", dot: true })
@@ -535,6 +540,24 @@ async fn wasm_runtime_glob_scan_absolute_options() {
         paths,
         vec!["/workspace/data/a.txt", "/workspace/data/sub/c.txt"]
     );
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_glob_scan_dot_cwd_absolute() {
+    // `cwd: "."` has no process-cwd in WASM; it must be normalized to the
+    // VFS root so that `absolute: true` produces actual absolute paths
+    // (previously this silently returned relative-looking strings).
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 10, "GlobScanDotCwdAbsolute").await;
+    let mut paths = string_list(result);
+    paths.sort();
+    assert_eq!(paths, vec!["/workspace/data/a.txt"]);
+    for p in &paths {
+        assert!(p.starts_with('/'), "expected absolute path, got: {p}");
+    }
 }
 
 #[wasm_bindgen_test]
