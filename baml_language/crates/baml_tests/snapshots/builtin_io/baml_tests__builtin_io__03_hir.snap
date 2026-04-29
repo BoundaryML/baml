@@ -81,17 +81,23 @@ function user.MultipleConnections() -> string  [expr] {
   { let s1 = baml.net.connect("server1:80"); let s2 = baml.net.connect("server2:80"); let data1 = s1.read(); let data2 = s2.read() } data1 Add data2
 }
 function user.ChainCommands() -> string  [expr] {
-  { let result1 = baml.sys.shell("pwd"); let result2 = baml.sys.shell("whoami") } result1.stdout Add " - " Add result2.stdout
+  { let result1 = baml.sys.shell("pwd", null); let result2 = baml.sys.shell("whoami", null) } result1.stdout Add " - " Add result2.stdout
 }
 function user.CheckExitCode() -> int  [expr] {
-  {  } baml.sys.shell("exit 42").exit_code
+  {  } baml.sys.shell("exit 42", null).exit_code
 }
 function user.CheckOk() -> bool  [expr] {
-  {  } baml.sys.shell("echo test").ok()
+  {  } baml.sys.shell("echo test", null).ok()
+}
+function user.ExecCommand() -> string  [expr] {
+  {  } baml.sys.exec("echo", ["hello"], null).stdout
+}
+function user.ExecWithOptions() -> string  [expr] {
+  {  } baml.sys.exec("pwd", null, baml.sys.ProcessOptions { cwd: "/tmp" }).stdout
 }
 function user.RunCommand() -> string  [expr] {
-  {  } baml.sys.shell("echo hello").stdout
+  {  } baml.sys.shell("echo hello", null).stdout
 }
 function user.RunCommandWithVar() -> string  [expr] {
-  { let cmd = "ls -la" } baml.sys.shell(cmd).stdout
+  { let cmd = "ls -la" } baml.sys.shell(cmd, null).stdout
 }

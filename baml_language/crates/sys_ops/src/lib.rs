@@ -64,6 +64,7 @@ pub mod io {
     unused_imports,
     unused_variables,
     clippy::all,
+    clippy::redundant_closure_for_method_calls,
     clippy::used_underscore_binding,
     clippy::used_underscore_items
 )]
@@ -1010,15 +1011,29 @@ impl io::IoNamespaceIo for DefaultIoOps {
 }
 
 impl io::IoNamespaceSys for DefaultIoOps {
+    fn exec(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _program: String,
+        _args: Option<Vec<String>>,
+        _options: Option<io::owned::sys::ProcessOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::ShellOutput> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
     fn shell(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _command: String,
+        _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ShellOutput> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
+
     fn sleep(
         &self,
         _h: &Arc<BexHeap>,
@@ -1386,6 +1401,12 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceSys + Send + Sync + 'static>,
     ) -> Self {
+        self.inner.baml_sys_exec = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_exec(heap, permit, args, ctx, call_id)
+            })
+        };
         self.inner.baml_sys_shell = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {

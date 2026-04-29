@@ -51,10 +51,12 @@ function user.AskNoPrompt() -> string {
 
 function user.ChainCommands() -> string {
     load_const "pwd"
+    load_const null
     dispatch_future baml.sys.shell
     await
     store_var result1
     load_const "whoami"
+    load_const null
     dispatch_future baml.sys.shell
     await
     store_var result2
@@ -70,6 +72,7 @@ function user.ChainCommands() -> string {
 
 function user.CheckExitCode() -> int {
     load_const "exit 42"
+    load_const null
     dispatch_future baml.sys.shell
     await
     load_field .exit_code
@@ -78,6 +81,7 @@ function user.CheckExitCode() -> int {
 
 function user.CheckOk() -> bool {
     load_const "echo test"
+    load_const null
     dispatch_future baml.sys.shell
     await
     call baml.sys.ShellOutput.ok
@@ -116,6 +120,35 @@ function user.ConnectReadAndClose() -> string {
     await
     pop 1
     load_var data
+    return
+}
+
+function user.ExecCommand() -> string {
+    load_const "echo"
+    load_const "hello"
+    alloc_array 1
+    load_const null
+    dispatch_future baml.sys.exec
+    await
+    load_field .stdout
+    return
+}
+
+function user.ExecWithOptions() -> string {
+    load_const "pwd"
+    load_const null
+    alloc_instance baml.sys.ProcessOptions
+    load_const "/tmp"
+    init_field .cwd
+    load_const null
+    init_field .env
+    load_const null
+    init_field .timeout_ms
+    load_const null
+    init_field .stdin
+    dispatch_future baml.sys.exec
+    await
+    load_field .stdout
     return
 }
 
@@ -322,6 +355,7 @@ function user.Remove() -> null {
 
 function user.RunCommand() -> string {
     load_const "echo hello"
+    load_const null
     dispatch_future baml.sys.shell
     await
     load_field .stdout
@@ -330,6 +364,7 @@ function user.RunCommand() -> string {
 
 function user.RunCommandWithVar() -> string {
     load_const "ls -la"
+    load_const null
     dispatch_future baml.sys.shell
     await
     load_field .stdout

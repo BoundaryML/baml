@@ -209,7 +209,10 @@ async fn resolve_credentials(
 
     // 6. gcloud CLI.
     if io
-        .sys_shell("gcloud auth print-access-token --quiet 2>/dev/null".to_string())
+        .sys_shell(
+            "gcloud auth print-access-token --quiet 2>/dev/null".to_string(),
+            None,
+        )
         .await
         .is_ok_and(|out| !out.stdout.trim().is_empty())
     {
@@ -238,7 +241,7 @@ async fn token_from_credentials(
         ResolvedCredentials::Adc => token_from_adc(io).await,
         ResolvedCredentials::GcloudCli => {
             let output = io
-                .sys_shell("gcloud auth print-access-token --quiet".to_string())
+                .sys_shell("gcloud auth print-access-token --quiet".to_string(), None)
                 .await
                 .map_err(|e| {
                     BuildRequestError::AuthorizationFailed(format!(
@@ -275,7 +278,10 @@ async fn project_id_from_credentials(
         }
         ResolvedCredentials::GcloudCli => {
             if let Ok(output) = io
-                .sys_shell("gcloud config get-value project 2>/dev/null".to_string())
+                .sys_shell(
+                    "gcloud config get-value project 2>/dev/null".to_string(),
+                    None,
+                )
                 .await
             {
                 let pid = output.stdout.trim().to_string();
@@ -349,7 +355,10 @@ async fn project_id_from_credentials(
     // gcloud CLI (if we haven't already tried it).
     if !matches!(creds, ResolvedCredentials::GcloudCli) {
         if let Ok(output) = io
-            .sys_shell("gcloud config get-value project 2>/dev/null".to_string())
+            .sys_shell(
+                "gcloud config get-value project 2>/dev/null".to_string(),
+                None,
+            )
             .await
         {
             let pid = output.stdout.trim().to_string();
@@ -1234,6 +1243,7 @@ mod tests {
         fn sys_shell(
             &self,
             _: String,
+            _options: Option<sys_types::generated::owned::sys::ProcessOptions>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -1329,6 +1339,7 @@ mod tests {
         fn sys_shell(
             &self,
             _: String,
+            _options: Option<sys_types::generated::owned::sys::ProcessOptions>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -1434,6 +1445,7 @@ mod tests {
         fn sys_shell(
             &self,
             _: String,
+            _options: Option<sys_types::generated::owned::sys::ProcessOptions>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -1591,6 +1603,7 @@ mod tests {
         fn sys_shell(
             &self,
             _: String,
+            _options: Option<sys_types::generated::owned::sys::ProcessOptions>,
         ) -> Pin<
             Box<
                 dyn Future<

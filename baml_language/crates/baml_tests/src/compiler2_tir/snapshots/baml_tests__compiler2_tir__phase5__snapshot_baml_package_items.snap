@@ -107,8 +107,10 @@ namespace baml.stream:
   class StreamFinished { methods: [] }
   class StreamNoYield { methods: [] }
 namespace baml.sys:
+  class ProcessOptions { methods: [] }
   class ShellOutput { methods: [ok] }
   function argv
+  function exec
   function now_ms
   function panic
   function shell

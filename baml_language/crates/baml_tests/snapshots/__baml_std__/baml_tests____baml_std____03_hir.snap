@@ -431,18 +431,25 @@ class baml.stream.StreamNoYield {
 }
 
 --- <builtin>/baml/ns_sys/sys.baml ---
+class baml.sys.ProcessOptions {
+  cwd: string?
+  env: map<string, string>?
+  timeout_ms: int?
+  stdin: string?
+}
 class baml.sys.ShellOutput {
   stdout: string
   stderr: string
   exit_code: int
 }
 function baml.sys.argv() -> string[]  [builtin]
+function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.now_ms() -> int  [builtin]
 function baml.sys.ok(self: ?) -> bool  [expr] {
   {  } self.exit_code Eq 0
 }
 function baml.sys.panic(message: string) -> never  [builtin]
-function baml.sys.shell(command: string) -> baml.sys.ShellOutput  [builtin]
+function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.sleep(ms: int) -> null  [builtin]
 
 --- <builtin>/baml/ns_unstable/unstable.baml ---

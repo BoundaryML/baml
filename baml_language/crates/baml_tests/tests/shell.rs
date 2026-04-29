@@ -8,7 +8,7 @@ async fn shell_echo() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("echo 'Hello From Shell!'").stdout
+                baml.sys.shell("echo 'Hello From Shell!'", null).stdout
             }
         "#
     );
@@ -16,6 +16,7 @@ async fn shell_echo() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const "echo 'Hello From Shell!'"
+        load_const null
         dispatch_future baml.sys.shell
         await
         load_field .stdout
@@ -33,7 +34,7 @@ async fn shell_with_pipe() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("echo 'hello world' | tr 'a-z' 'A-Z'").stdout
+                baml.sys.shell("echo 'hello world' | tr 'a-z' 'A-Z'", null).stdout
             }
         "#
     );
@@ -41,6 +42,7 @@ async fn shell_with_pipe() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const "echo 'hello world' | tr 'a-z' 'A-Z'"
+        load_const null
         dispatch_future baml.sys.shell
         await
         load_field .stdout
@@ -58,7 +60,7 @@ async fn shell_failing_command() {
     let output = baml_test!(
         r#"
             function main() -> int {
-                baml.sys.shell("exit 1").exit_code
+                baml.sys.shell("exit 1", null).exit_code
             }
         "#
     );
@@ -66,6 +68,7 @@ async fn shell_failing_command() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
         load_const "exit 1"
+        load_const null
         dispatch_future baml.sys.shell
         await
         load_field .exit_code
@@ -83,7 +86,7 @@ async fn shell_nonexistent_command() {
     let output = baml_test!(
         r#"
             function main() -> int {
-                baml.sys.shell("nonexistent_command_12345").exit_code
+                baml.sys.shell("nonexistent_command_12345", null).exit_code
             }
         "#
     );
@@ -91,6 +94,7 @@ async fn shell_nonexistent_command() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
         load_const "nonexistent_command_12345"
+        load_const null
         dispatch_future baml.sys.shell
         await
         load_field .exit_code
@@ -107,7 +111,7 @@ async fn shell_with_variable() {
         r#"
             function main() -> string {
                 let cmd = "echo 'dynamic'";
-                baml.sys.shell(cmd).stdout
+                baml.sys.shell(cmd, null).stdout
             }
         "#
     );
@@ -115,6 +119,7 @@ async fn shell_with_variable() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const "echo 'dynamic'"
+        load_const null
         dispatch_future baml.sys.shell
         await
         load_field .stdout
@@ -132,7 +137,7 @@ async fn shell_stderr() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("echo 'error output' >&2").stderr
+                baml.sys.shell("echo 'error output' >&2", null).stderr
             }
         "#
     );
@@ -148,7 +153,7 @@ async fn shell_ok_method() {
     let output = baml_test!(
         r#"
             function main() -> bool {
-                baml.sys.shell("echo hi").ok()
+                baml.sys.shell("echo hi", null).ok()
             }
         "#
     );
@@ -157,9 +162,129 @@ async fn shell_ok_method() {
     let output2 = baml_test!(
         r#"
             function main() -> bool {
-                baml.sys.shell("exit 1").ok()
+                baml.sys.shell("exit 1", null).ok()
             }
         "#
     );
     assert_eq!(output2.result, Ok(BexExternalValue::Bool(false)));
+}
+
+// === exec() tests ===
+
+#[tokio::test]
+async fn exec_echo() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                baml.sys.exec("echo", ["Hello From Exec!"], null).stdout
+            }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Hello From Exec!\n".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn exec_failing() {
+    // `false` exits with code 1 — should NOT throw
+    let output = baml_test!(
+        r#"
+            function main() -> int {
+                baml.sys.exec("false", null, null).exit_code
+            }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn exec_with_args() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                baml.sys.exec("printf", ["%s %s", "hello", "world"], null).stdout
+            }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hello world".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn exec_stderr() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                baml.sys.exec("sh", ["-c", "echo err >&2"], null).stderr
+            }
+        "#
+    );
+    assert!(output.result.is_ok());
+    if let Ok(BexExternalValue::String(stderr)) = &output.result {
+        assert!(stderr.contains("err"));
+    }
+}
+
+// === ProcessOptions tests ===
+
+#[tokio::test]
+async fn exec_with_cwd() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                baml.sys.exec("pwd", null, baml.sys.ProcessOptions { cwd: "/tmp" }).stdout
+            }
+        "#
+    );
+    assert!(output.result.is_ok());
+    if let Ok(BexExternalValue::String(stdout)) = &output.result {
+        assert!(stdout.trim().contains("tmp"));
+    }
+}
+
+#[tokio::test]
+async fn exec_with_stdin() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                baml.sys.exec("cat", null, baml.sys.ProcessOptions { stdin: "hello from stdin" }).stdout
+            }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hello from stdin".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn exec_with_timeout() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                baml.sys.exec("sleep", ["10"], baml.sys.ProcessOptions { timeout_ms: 100 }).stdout
+            }
+        "#
+    );
+    // Should timeout and throw (not return ShellOutput)
+    assert!(output.result.is_err());
+}
+
+#[tokio::test]
+async fn shell_with_options() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                baml.sys.shell("pwd", baml.sys.ProcessOptions { cwd: "/tmp" }).stdout
+            }
+        "#
+    );
+    assert!(output.result.is_ok());
+    if let Ok(BexExternalValue::String(stdout)) = &output.result {
+        assert!(stdout.trim().contains("tmp"));
+    }
 }

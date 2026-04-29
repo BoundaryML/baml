@@ -938,6 +938,12 @@ class baml.stream.StreamNoYield$stream {
 }
 
 --- <builtin>/baml/ns_sys/sys.baml ---
+class baml.sys.ProcessOptions {
+  cwd: string?
+  env: map<string, string>?
+  timeout_ms: int?
+  stdin: string?
+}
 class baml.sys.ShellOutput {
   stdout: string
   stderr: string
@@ -947,6 +953,12 @@ function baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool throws neve
   { : bool
     self.exit_code == 0 : bool
   }
+}
+class baml.sys.ProcessOptions$stream {
+  cwd: null | string
+  env: null | map<string, string>
+  timeout_ms: null | int
+  stdin: null | string
 }
 class baml.sys.ShellOutput$stream {
   stdout: null | string

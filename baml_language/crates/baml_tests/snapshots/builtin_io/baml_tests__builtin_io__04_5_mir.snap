@@ -844,7 +844,7 @@ fn user.ChainCommands() -> string {
     let _7: string
 
     bb0: {
-        _2 = dispatch_future const fn baml.sys.shell(const "pwd") -> bb1;
+        _2 = dispatch_future const fn baml.sys.shell(const "pwd", const null) -> bb1;
     }
 
     bb1: {
@@ -852,7 +852,7 @@ fn user.ChainCommands() -> string {
     }
 
     bb2: {
-        _4 = dispatch_future const fn baml.sys.shell(const "whoami") -> bb3;
+        _4 = dispatch_future const fn baml.sys.shell(const "whoami", const null) -> bb3;
     }
 
     bb3: {
@@ -879,7 +879,7 @@ fn user.CheckExitCode() -> int {
     let _2: future<baml.sys.ShellOutput>
 
     bb0: {
-        _2 = dispatch_future const fn baml.sys.shell(const "exit 42") -> bb1;
+        _2 = dispatch_future const fn baml.sys.shell(const "exit 42", const null) -> bb1;
     }
 
     bb1: {
@@ -903,7 +903,7 @@ fn user.CheckOk() -> bool {
     let _2: future<baml.sys.ShellOutput>
 
     bb0: {
-        _2 = dispatch_future const fn baml.sys.shell(const "echo test") -> bb1;
+        _2 = dispatch_future const fn baml.sys.shell(const "echo test", const null) -> bb1;
     }
 
     bb1: {
@@ -919,6 +919,58 @@ fn user.CheckOk() -> bool {
     }
 }
 
+fn user.ExecCommand() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.sys.ShellOutput
+    let _2: string[]
+    let _3: future<baml.sys.ShellOutput>
+
+    bb0: {
+        _2 = [const "hello"];
+        _3 = dispatch_future const fn baml.sys.exec(const "echo", copy _2, const null) -> bb1;
+    }
+
+    bb1: {
+        _1 = await _3 -> [bb2];
+    }
+
+    bb2: {
+        _0 = copy _1.0;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.ExecWithOptions() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.sys.ShellOutput
+    let _2: baml.sys.ProcessOptions
+    let _3: future<baml.sys.ShellOutput>
+
+    bb0: {
+        _2 = baml.sys.ProcessOptions { const "/tmp", const null, const null, const null };
+        _3 = dispatch_future const fn baml.sys.exec(const "pwd", const null, copy _2) -> bb1;
+    }
+
+    bb1: {
+        _1 = await _3 -> [bb2];
+    }
+
+    bb2: {
+        _0 = copy _1.0;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
 fn user.RunCommand() -> string {
     // Locals:
     let _0: string // _0 // return
@@ -926,7 +978,7 @@ fn user.RunCommand() -> string {
     let _2: future<baml.sys.ShellOutput>
 
     bb0: {
-        _2 = dispatch_future const fn baml.sys.shell(const "echo hello") -> bb1;
+        _2 = dispatch_future const fn baml.sys.shell(const "echo hello", const null) -> bb1;
     }
 
     bb1: {
@@ -954,7 +1006,7 @@ fn user.RunCommandWithVar() -> string {
     bb0: {
         _1 = const "ls -la";
         _3 = copy _1;
-        _4 = dispatch_future const fn baml.sys.shell(copy _3) -> bb1;
+        _4 = dispatch_future const fn baml.sys.shell(copy _3, const null) -> bb1;
     }
 
     bb1: {

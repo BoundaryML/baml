@@ -167,29 +167,39 @@ function user.ConnectReadAndClose() -> string throws never {
 }
 function user.RunCommand() -> string throws never {
   { : string
-    baml.sys.shell("echo hello").stdout : string
+    baml.sys.shell("echo hello", null).stdout : string
   }
 }
 function user.RunCommandWithVar() -> string throws never {
   { : string
     let cmd = "ls -la" : "ls -la" -> string
-    baml.sys.shell(cmd).stdout : string
+    baml.sys.shell(cmd, null).stdout : string
   }
 }
 function user.ChainCommands() -> string throws never {
   { : string
-    let result1 = baml.sys.shell("pwd") : baml.sys.ShellOutput
-    let result2 = baml.sys.shell("whoami") : baml.sys.ShellOutput
+    let result1 = baml.sys.shell("pwd", null) : baml.sys.ShellOutput
+    let result2 = baml.sys.shell("whoami", null) : baml.sys.ShellOutput
     result1.stdout + " - " + result2.stdout : string
   }
 }
 function user.CheckExitCode() -> int throws never {
   { : int
-    baml.sys.shell("exit 42").exit_code : int
+    baml.sys.shell("exit 42", null).exit_code : int
   }
 }
 function user.CheckOk() -> bool throws never {
   { : bool
-    baml.sys.shell("echo test").ok() : bool
+    baml.sys.shell("echo test", null).ok() : bool
+  }
+}
+function user.ExecCommand() -> string throws never {
+  { : string
+    baml.sys.exec("echo", ["hello"], null).stdout : string
+  }
+}
+function user.ExecWithOptions() -> string throws never {
+  { : string
+    baml.sys.exec("pwd", null, baml.sys.ProcessOptions { cwd: "/tmp" }).stdout : string
   }
 }

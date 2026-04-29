@@ -2209,6 +2209,8 @@ fn baml.net.Socket.read = builtin(io)
 
 fn baml.sys.argv = builtin(vm)
 
+fn baml.sys.exec = builtin(io)
+
 fn baml.sys.now_ms = builtin(vm)
 
 fn baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool {

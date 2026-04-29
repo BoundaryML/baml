@@ -21,11 +21,24 @@ impl WasmSys {
 }
 
 impl IoNamespaceSys for WasmSys {
+    fn exec(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _program: String,
+        _args: Option<Vec<String>>,
+        _options: Option<io::owned::sys::ProcessOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::ShellOutput> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
     fn shell(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _command: String,
+        _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ShellOutput> {
         SysOpOutput::err(OpErrorKind::Unsupported)

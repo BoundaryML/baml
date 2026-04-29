@@ -1,3 +1,10 @@
+class ProcessOptions {
+  cwd string?
+  env map<string, string>?
+  timeout_ms int?
+  stdin string?
+}
+
 class ShellOutput {
   stdout string
   stderr string
@@ -8,7 +15,11 @@ class ShellOutput {
   }
 }
 
-function shell(command: string) -> ShellOutput throws root.errors.Io {
+function exec(program: string, args: string[]?, options: ProcessOptions?) -> ShellOutput throws root.errors.Io | root.errors.Timeout {
+  $rust_io_function
+}
+
+function shell(command: string, options: ProcessOptions?) -> ShellOutput throws root.errors.Io | root.errors.Timeout {
   $rust_io_function
 }
 

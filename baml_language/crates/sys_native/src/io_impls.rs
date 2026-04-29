@@ -703,30 +703,117 @@ impl io::IoClassGlobGlob for NativeSysOps {
 // System
 // ============================================================================
 
+/// Shared helper: apply `ProcessOptions` to a `tokio::process::Command`, run
+/// it, and collect its output. Both `exec()` and `shell()` use this.
+async fn run_process(
+    cmd: &mut tokio::process::Command,
+    options: Option<owned::sys::ProcessOptions>,
+    label: &str,
+) -> Result<owned::sys::ShellOutput, OpErrorKind> {
+    use std::process::Stdio;
+
+    use tokio::io::AsyncWriteExt as _;
+
+    if let Some(ref opts) = options {
+        if let Some(ref cwd) = opts.cwd {
+            cmd.current_dir(cwd);
+        }
+        if let Some(ref env) = opts.env {
+            cmd.env_clear();
+            cmd.envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        }
+        if opts.stdin.is_some() {
+            cmd.stdin(Stdio::piped());
+        }
+    }
+
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| OpErrorKind::Io {
+        message: format!("Failed to spawn '{label}': {e}"),
+    })?;
+
+    // Write stdin if provided
+    if let Some(ref opts) = options {
+        if let Some(ref stdin_data) = opts.stdin {
+            if let Some(mut stdin_pipe) = child.stdin.take() {
+                let _ = stdin_pipe.write_all(stdin_data.as_bytes()).await;
+                // Drop stdin_pipe to close the pipe (child gets EOF)
+            }
+        }
+    }
+
+    // Apply timeout if specified
+    let timeout_ms = options.as_ref().and_then(|o| o.timeout_ms);
+    let output = if let Some(ms) = timeout_ms {
+        let duration = std::time::Duration::from_millis(ms.max(0).cast_unsigned());
+        // Spawn the wait in a separate task so we can kill regardless of ownership
+        let task_child = child;
+        let wait_task = tokio::spawn(async move { task_child.wait_with_output().await });
+        match tokio::time::timeout(duration, wait_task).await {
+            Ok(Ok(result)) => result.map_err(|e| OpErrorKind::Io {
+                message: format!("Failed to wait on '{label}': {e}"),
+            })?,
+            Ok(Err(join_err)) => {
+                return Err(OpErrorKind::Io {
+                    message: format!("Task join error waiting on '{label}': {join_err}"),
+                });
+            }
+            Err(_elapsed) => {
+                return Err(OpErrorKind::Timeout {
+                    message: format!("Command '{label}' timed out after {ms}ms"),
+                    duration,
+                });
+            }
+        }
+    } else {
+        child
+            .wait_with_output()
+            .await
+            .map_err(|e| OpErrorKind::Io {
+                message: format!("Failed to wait on '{label}': {e}"),
+            })?
+    };
+
+    let exit_code = i64::from(output.status.code().unwrap_or(-1));
+    Ok(owned::sys::ShellOutput {
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        exit_code,
+    })
+}
+
 impl io::IoNamespaceSys for NativeSysOps {
+    fn exec(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        program: String,
+        args: Option<Vec<String>>,
+        options: Option<owned::sys::ProcessOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::sys::ShellOutput> {
+        SysOpOutput::async_op(async move {
+            let mut cmd = tokio::process::Command::new(&program);
+            if let Some(ref a) = args {
+                cmd.args(a);
+            }
+            run_process(&mut cmd, options, &program).await
+        })
+    }
+
     fn shell(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         command: String,
+        options: Option<owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ShellOutput> {
         SysOpOutput::async_op(async move {
-            let output = tokio::process::Command::new("sh")
-                .arg("-c")
-                .arg(&command)
-                .output()
-                .await
-                .map_err(|e| OpErrorKind::Io {
-                    message: format!("Failed to execute command '{command}': {e}"),
-                })?;
-
-            let exit_code = i64::from(output.status.code().unwrap_or(-1));
-            Ok(owned::sys::ShellOutput {
-                stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-                exit_code,
-            })
+            let mut cmd = tokio::process::Command::new("sh");
+            cmd.arg("-c").arg(&command);
+            run_process(&mut cmd, options, &command).await
         })
     }
 
