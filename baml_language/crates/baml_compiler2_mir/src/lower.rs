@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use baml_base::Name;
+use baml_base::{Name, TypePath};
 use baml_type::{MediaKind, Ty, TyAttr, TypeName};
 use indexmap::IndexMap;
 
@@ -3214,7 +3214,7 @@ impl LoweringContext<'_> {
     fn lower_object(
         &mut self,
         expr_id: AstExprId,
-        type_name: Option<&Name>,
+        type_name: Option<&TypePath>,
         fields: &[(Name, AstExprId)],
         spreads: &[baml_compiler2_ast::SpreadField],
         dest: Place,
