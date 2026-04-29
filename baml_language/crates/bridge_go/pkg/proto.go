@@ -39,6 +39,8 @@ func goToInboundValue(v any) (*pb.InboundValue, error) {
 		return &pb.InboundValue{Value: &pb.InboundValue_FloatValue{FloatValue: val}}, nil
 	case bool:
 		return &pb.InboundValue{Value: &pb.InboundValue_BoolValue{BoolValue: val}}, nil
+	case []byte:
+		return &pb.InboundValue{Value: &pb.InboundValue_Uint8ArrayValue{Uint8ArrayValue: val}}, nil
 	case []any:
 		var items []*pb.InboundValue
 		for _, item := range val {
@@ -102,6 +104,8 @@ func outboundToGo(val *pb.BamlOutboundValue) (any, error) {
 		return v.FloatValue, nil
 	case *pb.BamlOutboundValue_BoolValue:
 		return v.BoolValue, nil
+	case *pb.BamlOutboundValue_Uint8ArrayValue:
+		return v.Uint8ArrayValue, nil
 	case *pb.BamlOutboundValue_EnumValue:
 		name := ""
 		if v.EnumValue.Name != nil {
@@ -156,11 +160,11 @@ func outboundToGo(val *pb.BamlOutboundValue) (any, error) {
 	case *pb.BamlOutboundValue_LiteralValue:
 		lit := v.LiteralValue
 		switch l := lit.Literal.(type) {
-		case *pb.BamlFieldTypeLiteral_StringLiteral:
+		case *pb.BamlTyLiteral_StringLiteral:
 			return l.StringLiteral.Value, nil
-		case *pb.BamlFieldTypeLiteral_IntLiteral:
+		case *pb.BamlTyLiteral_IntLiteral:
 			return l.IntLiteral.Value, nil
-		case *pb.BamlFieldTypeLiteral_BoolLiteral:
+		case *pb.BamlTyLiteral_BoolLiteral:
 			return l.BoolLiteral.Value, nil
 		default:
 			return nil, fmt.Errorf("unknown literal type: %T", lit.Literal)
