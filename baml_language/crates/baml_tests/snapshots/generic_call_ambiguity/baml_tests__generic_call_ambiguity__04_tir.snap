@@ -12,6 +12,17 @@ function user.ArrayOfComparisonsParenthesized(a: int, b: int, c: int, d: int) ->
     [a < b, c > d] : bool[]
   }
 }
+function user.ArrayCompareThenCall(f: int, x: int) -> int[] throws never {
+  { : int[]
+    [f < x, y()] : int[]
+  }
+  !! 1110..1115: type mismatch: expected int, got bool
+}
+function user.y() -> int throws never {
+  { : 0
+    0 : 0
+  }
+}
 function user.f<K, V>(k: K, v: V) -> V throws never {
   { : V
     v : V

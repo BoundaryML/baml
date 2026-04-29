@@ -109,6 +109,61 @@ SOURCE_FILE
             R_PAREN ")"
           R_BRACKET "]"
         R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ArrayCompareThenCall"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int[]"
+      WORD "int"
+      L_BRACKET "["
+      R_BRACKET "]"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        ARRAY_LITERAL
+          L_BRACKET "["
+          BINARY_EXPR "f < x"
+            WORD "f"
+            LESS "<"
+            WORD "x"
+          COMMA ","
+          CALL_EXPR
+            WORD "y"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          R_BRACKET "]"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "y"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    0
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "0"
+        R_BRACE "}"
 
 === ERRORS ===
 None

@@ -1,6 +1,17 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.ArrayCompareThenCall(f: int, x: int) -> int[] {
+    call user.y
+    store_var _4
+    load_var f
+    load_var x
+    cmp_op <
+    load_var _4
+    alloc_array 2
+    return
+}
+
 function user.ArrayOfComparisons(a: int, b: int, c: int, d: int) -> bool[] {
     load_var a
     load_var b
@@ -33,5 +44,10 @@ function user.GenericCallInArray(k: int, v: string) -> string[] {
 
 function user.f(k: void, v: void) -> void {
     load_var v
+    return
+}
+
+function user.y() -> int {
+    load_const 0
     return
 }

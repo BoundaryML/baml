@@ -2,4 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-No errors found.
+  [type] Error: type mismatch: expected int, got bool
+    ╭─[ array_compare.baml:24:6 ]
+    │
+ 24 │     [f < x, y()]
+    │      ──┬──  
+    │        ╰──── type mismatch: expected int, got bool
+    │ 
+    │ Note: Error code: E0001
+────╯

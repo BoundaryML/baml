@@ -15,3 +15,15 @@ function ArrayOfComparisons(a: int, b: int, c: int, d: int) -> bool[] {
 function ArrayOfComparisonsParenthesized(a: int, b: int, c: int, d: int) -> bool[] {
     [(a < b), (c > d)]
 }
+
+// Mixed: comparison followed by a real function call inside an array.
+// `[f < x, y()]` should parse as two elements: `f < x` (comparison) and
+// `y()` (call). The `<` looks generic-y but the `(` after `y` is inside
+// the angle scan, so the heuristic falls back to comparison.
+function ArrayCompareThenCall(f: int, x: int) -> int[] {
+    [f < x, y()]
+}
+
+function y() -> int {
+    0
+}
