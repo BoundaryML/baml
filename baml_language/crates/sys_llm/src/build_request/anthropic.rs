@@ -65,34 +65,13 @@ struct RequestBody {
     extra: serde_json::Map<String, serde_json::Value>,
 }
 
-// ============================================================================
-// Default max_tokens by model name
-// ============================================================================
-
-/// Returns a sensible default `max_tokens` based on the model identifier.
+/// Default `max_tokens` when the user does not specify one.
 ///
-/// The Anthropic API requires `max_tokens` and has no server-side default, so
-/// we pick one that matches each model family's documented max output limit.
-fn default_max_tokens_for_model(model: &str) -> i64 {
-    // Opus 4.6+ support up to 128k output tokens.
-    if model.contains("opus-4-6") || model.contains("opus-4-7") {
-        return 128_000;
-    }
-    // Sonnet 4.x and Haiku 4.5 support up to 64k output tokens.
-    if model.contains("sonnet-4") || model.contains("haiku-4-5") {
-        return 64_000;
-    }
-    // Opus 4.0 and 4.1 support up to 32k output tokens.
-    if model.contains("opus-4") {
-        return 32_000;
-    }
-    // Claude 3.5 models supported up to 8192 output tokens.
-    if model.contains("3-5") {
-        return 8_192;
-    }
-    // Fallback for Claude 3 and any unknown models.
-    4_096
-}
+/// The Anthropic API requires `max_tokens` and has no server-side default.
+/// 8 192 is a safe middle ground: large enough for most structured outputs,
+/// small enough to avoid non-streaming timeout errors from the Anthropic SDK
+/// (which rejects requests estimated to take >10 minutes).
+const DEFAULT_MAX_TOKENS: i64 = 8_192;
 
 // ============================================================================
 // Request builder
@@ -107,13 +86,12 @@ pub(crate) fn build_request(
     headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert("anthropic-version".to_string(), "2023-06-01".to_string());
 
-    // Body — use the user-provided max_tokens, or fall back to a model-aware default.
+    // Body — use the user-provided max_tokens, or fall back to a safe default.
     let max_tokens = match &client.provider_options {
         Some(crate::baml_std::ProviderOptions::Anthropic(opts)) => opts.max_tokens,
         _ => None,
     };
-    let max_tokens =
-        Some(max_tokens.unwrap_or_else(|| default_max_tokens_for_model(&client.model)));
+    let max_tokens = Some(max_tokens.unwrap_or(DEFAULT_MAX_TOKENS));
     let body_str = build_anthropic_body_str(&client.model, prompt, max_tokens, &client.extra_body)?;
 
     Ok(crate::baml_std::HttpRequest {
@@ -763,104 +741,7 @@ mod tests {
     }
 
     // ========================================================================
-    // default_max_tokens_for_model tests
-    // ========================================================================
-
-    #[test]
-    fn default_max_tokens_opus_4_7() {
-        assert_eq!(
-            default_max_tokens_for_model("claude-opus-4-7-20260301"),
-            128_000
-        );
-    }
-
-    #[test]
-    fn default_max_tokens_opus_4_6() {
-        assert_eq!(
-            default_max_tokens_for_model("claude-opus-4-6-20251001"),
-            128_000
-        );
-    }
-
-    #[test]
-    fn default_max_tokens_sonnet_4_6() {
-        assert_eq!(
-            default_max_tokens_for_model("claude-sonnet-4-6-20260101"),
-            64_000
-        );
-    }
-
-    #[test]
-    fn default_max_tokens_sonnet_4_5() {
-        assert_eq!(
-            default_max_tokens_for_model("claude-sonnet-4-5-20250929"),
-            64_000
-        );
-    }
-
-    #[test]
-    fn default_max_tokens_sonnet_4() {
-        assert_eq!(
-            default_max_tokens_for_model("claude-sonnet-4-20250514"),
-            64_000
-        );
-    }
-
-    #[test]
-    fn default_max_tokens_haiku_4_5() {
-        assert_eq!(
-            default_max_tokens_for_model("claude-haiku-4-5-20251001"),
-            64_000
-        );
-    }
-
-    #[test]
-    fn default_max_tokens_opus_4_1() {
-        assert_eq!(
-            default_max_tokens_for_model("claude-opus-4-1-20250805"),
-            32_000
-        );
-    }
-
-    #[test]
-    fn default_max_tokens_opus_4() {
-        assert_eq!(
-            default_max_tokens_for_model("claude-opus-4-20250514"),
-            32_000
-        );
-    }
-
-    #[test]
-    fn default_max_tokens_claude_3_5_sonnet() {
-        assert_eq!(
-            default_max_tokens_for_model("claude-3-5-sonnet-20241022"),
-            8_192
-        );
-    }
-
-    #[test]
-    fn default_max_tokens_claude_3_5_haiku() {
-        assert_eq!(
-            default_max_tokens_for_model("claude-3-5-haiku-20241022"),
-            8_192
-        );
-    }
-
-    #[test]
-    fn default_max_tokens_claude_3_opus() {
-        assert_eq!(
-            default_max_tokens_for_model("claude-3-opus-20240229"),
-            4_096
-        );
-    }
-
-    #[test]
-    fn default_max_tokens_unknown_model() {
-        assert_eq!(default_max_tokens_for_model("some-unknown-model"), 4_096);
-    }
-
-    // ========================================================================
-    // Integration test: default max_tokens applied when not set by user
+    // default max_tokens tests
     // ========================================================================
 
     fn make_client_without_max_tokens(model: &str) -> crate::baml_std::PrimitiveClient {
@@ -885,7 +766,7 @@ mod tests {
         let prompt = msg("user", "Hello");
         let result = build_request(&client, &prompt).unwrap();
         let body: serde_json::Value = serde_json::from_str(&result.body).unwrap();
-        assert_eq!(body["max_tokens"], serde_json::json!(64_000));
+        assert_eq!(body["max_tokens"], serde_json::json!(8192));
     }
 
     #[test]
@@ -897,7 +778,7 @@ mod tests {
         let prompt = msg("user", "Hello");
         let result = build_request(&client, &prompt).unwrap();
         let body: serde_json::Value = serde_json::from_str(&result.body).unwrap();
-        // make_client sets max_tokens: Some(4096), so it should stay 4096 not 64000
+        // make_client sets max_tokens: Some(4096), so it should stay 4096
         assert_eq!(body["max_tokens"], serde_json::json!(4096));
     }
 
