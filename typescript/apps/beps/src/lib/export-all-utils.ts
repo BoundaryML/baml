@@ -5,6 +5,9 @@
  * Status is prominently featured to give more weight to mature proposals.
  */
 
+import { BEP_SCRIPT } from "./static/bep-script";
+import { BEP_SKILL } from "./static/bep-skill";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,6 +43,7 @@ export interface ExportAllData {
 export interface ExportAllFile {
   path: string;
   content: string;
+  unixPermissions?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -600,6 +604,24 @@ Downloads all BEPs as a ZIP archive. No authentication required.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Static File Loaders
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Get the BEP skill content for Claude Code.
+ */
+export function getBepSkill(): string {
+  return BEP_SKILL;
+}
+
+/**
+ * Get the BEP CLI script content, replacing the API base URL placeholder.
+ */
+export function getBepScript(apiBaseUrl: string): string {
+  return BEP_SCRIPT.replace(/__BEP_API_BASE__/g, apiBaseUrl);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Generate All Files
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -625,6 +647,19 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
   files.push({
     path: "NEW-BEP/INSTRUCTIONS.md",
     content: generateNewBepInstructions(nextNumber, apiBaseUrl, goodReferenceBeps),
+  });
+
+  // BEP skill for Claude Code
+  files.push({
+    path: "skills/bep.md",
+    content: getBepSkill(),
+  });
+
+  // BEP CLI script (executable)
+  files.push({
+    path: "bep",
+    content: getBepScript(apiBaseUrl),
+    unixPermissions: 0o755,
   });
 
   // Individual BEP folders: BEP-<NUMBER>-<slug>/
@@ -654,3 +689,4 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
 
   return files;
 }
+
