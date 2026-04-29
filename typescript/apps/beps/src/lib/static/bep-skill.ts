@@ -13,7 +13,7 @@ You are working in a BEP (BAML Enhancement Proposal) repository. Use the \`./bep
 
 ## CLI Reference
 
-\`\`\`
+\`\`\`bash
 ./bep pull              # Fetch all BEPs from server, diff, prompt to apply
 ./bep list              # List local BEPs (--status STATUS, --json)
 ./bep new "Title"       # Scaffold BEP-?-slug/ locally

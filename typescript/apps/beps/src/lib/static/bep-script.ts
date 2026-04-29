@@ -4,6 +4,7 @@
  */
 export const BEP_SCRIPT = `#!/usr/bin/env -S uv run --script
 # /// script
+# requires-python = ">=3.10"
 # dependencies = ["httpx"]
 # ///
 """
@@ -97,9 +98,7 @@ def find_local_bep(ref: str) -> Path | None:
         
         if num is not None and folder_num == num:
             return folder
-        if slug is not None and slug.lower() in folder_slug.lower():
-            return folder
-        if slug is not None and slug.lower() in folder.name.lower():
+        if slug is not None and slug.lower() == folder_slug.lower():
             return folder
     
     return None
@@ -251,7 +250,12 @@ def cmd_pull(args: argparse.Namespace) -> int:
             if rel_path == "bep":
                 continue
             
-            target_path = ALL_BEPS_DIR / rel_path
+            # Validate path to prevent directory traversal attacks
+            target_path = (ALL_BEPS_DIR / rel_path).resolve()
+            if not target_path.is_relative_to(ALL_BEPS_DIR.resolve()):
+                print(f"Error: Unsafe path in archive: {rel_path}", file=sys.stderr)
+                return 1
+            
             target_path.parent.mkdir(parents=True, exist_ok=True)
             target_path.write_bytes(zf.read(name))
         
@@ -623,9 +627,8 @@ def cmd_push(args: argparse.Namespace) -> int:
             "content": readme_content,
             "editNote": args.note or "Updated via CLI",
             "versionMode": "new" if args.new_version else "current",
+            "pages": pages,  # Always send pages, even if empty (to allow clearing)
         }
-        if pages:
-            payload["pages"] = pages
         
         try:
             response = httpx.put(

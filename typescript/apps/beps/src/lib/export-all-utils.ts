@@ -43,6 +43,7 @@ export interface ExportAllData {
 export interface ExportAllFile {
   path: string;
   content: string;
+  unixPermissions?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -654,10 +655,11 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
     content: getBepSkill(),
   });
 
-  // BEP CLI script
+  // BEP CLI script (executable)
   files.push({
     path: "bep",
     content: getBepScript(apiBaseUrl),
+    unixPermissions: 0o755,
   });
 
   // Individual BEP folders: BEP-<NUMBER>-<slug>/

@@ -63,20 +63,26 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   for (const file of files) {
+    const fileOptions = file.unixPermissions
+      ? { unixPermissions: file.unixPermissions }
+      : undefined;
     const parts = file.path.split("/");
     if (parts.length > 1) {
       const folderPath = parts.slice(0, -1).join("/");
       const fileName = parts[parts.length - 1];
       const nestedFolder = folder.folder(folderPath);
       if (nestedFolder) {
-        nestedFolder.file(fileName, file.content);
+        nestedFolder.file(fileName, file.content, fileOptions);
       }
     } else {
-      folder.file(file.path, file.content);
+      folder.file(file.path, file.content, fileOptions);
     }
   }
 
-  const zipContent = await zip.generateAsync({ type: "arraybuffer" });
+  const zipContent = await zip.generateAsync({
+    type: "arraybuffer",
+    platform: "UNIX",
+  });
 
   const date = new Date().toISOString().split("T")[0];
   const filename = `all-beps-${date}.zip`;
