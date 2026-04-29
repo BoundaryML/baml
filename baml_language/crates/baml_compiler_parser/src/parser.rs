@@ -1362,10 +1362,8 @@ impl<'a> Parser<'a> {
 
                 if p.at_raw(TokenKind::Backslash) {
                     p.bump_raw(); // Consume backslash
-                    if let Some(directly_after) = p.tokens.get(p.current)
-                        && directly_after.kind == TokenKind::Quote
-                    {
-                        p.bump_raw(); // Consume quote without ending string
+                    if p.current < p.tokens.len() {
+                        p.bump_raw(); // Consume the escaped character (whatever it is)
                     }
                     continue;
                 }
@@ -1428,10 +1426,8 @@ impl<'a> Parser<'a> {
 
                 if p.at_raw(TokenKind::Backslash) {
                     p.bump_raw(); // Consume backslash
-                    if let Some(directly_after) = p.tokens.get(p.current)
-                        && directly_after.kind == TokenKind::Quote
-                    {
-                        p.bump_raw(); // Consume escaped quote
+                    if p.current < p.tokens.len() {
+                        p.bump_raw(); // Consume the escaped character (whatever it is)
                     }
                     continue;
                 }

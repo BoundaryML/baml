@@ -32,6 +32,19 @@ function json_body() -> string {
 // Raw strings must NOT unescape — they should round-trip byte-for-byte.
 function raw_keeps_backslash_n() -> string { #"a\nb"# }
 function raw_keeps_quote() -> string { ##"""##  }
+
+// Escaped backslash at string boundary — the minimal repro for the \\-before-closing-quote bug.
+function lone_backslash() -> string { "\\" }
+function lone_backslash_length() -> int { "\\".length() }
+function double_backslash() -> string { "\\\\" }
+function double_backslash_length() -> int { "\\\\".length() }
+function trailing_double_backslash() -> string { "a\\\\" }
+function trailing_double_backslash_length() -> int { "a\\\\".length() }
+function replace_backslash() -> string { "a\\b\\c".replaceAll("\\", "/") }
+
+// Raw strings with backslash sequences — must preserve them verbatim.
+function raw_double_backslash() -> string { #"\\"# }
+function raw_quad_backslash() -> string { #"\\\\"# }
 "####;
 
     macro_rules! run_str {
@@ -92,5 +105,79 @@ function raw_keeps_quote() -> string { ##"""##  }
         // backslashes and quotes verbatim or the workaround breaks too.
         assert_eq!(run_str!("raw_keeps_backslash_n"), "a\\nb");
         assert_eq!(run_str!("raw_keeps_quote"), "\"");
+    }
+
+    // ── Escaped backslash at string boundary ────────────────────────────
+
+    #[tokio::test]
+    async fn escaped_backslash_at_string_boundary() {
+        // "\\" must parse as a single backslash character.
+        assert_eq!(run_str!("lone_backslash"), "\\");
+        // "\\\\" must parse as two backslashes.
+        assert_eq!(run_str!("double_backslash"), "\\\\");
+        // "a\\\\" must parse as 'a' followed by two backslashes.
+        assert_eq!(run_str!("trailing_double_backslash"), "a\\\\");
+    }
+
+    #[tokio::test]
+    async fn escaped_backslash_boundary_lengths() {
+        assert_eq!(run_int!("lone_backslash_length"), 1);
+        assert_eq!(run_int!("double_backslash_length"), 2);
+        assert_eq!(run_int!("trailing_double_backslash_length"), 3);
+    }
+
+    #[tokio::test]
+    async fn replace_all_with_backslash_arguments() {
+        // replaceAll("\\", "/") should replace each backslash with a forward slash.
+        assert_eq!(run_str!("replace_backslash"), "a/b/c");
+    }
+
+    // ── Raw strings preserve backslash sequences verbatim ───────────────
+
+    #[tokio::test]
+    async fn raw_strings_preserve_backslash_sequences() {
+        // #"\\"# contains two literal characters: \ and \
+        assert_eq!(run_str!("raw_double_backslash"), "\\\\");
+        // #"\\\\"# contains four literal characters: \ \ \ \
+        assert_eq!(run_str!("raw_quad_backslash"), "\\\\\\\\");
+    }
+
+    // ── Negative tests: invalid strings must still produce errors ───────
+
+    #[test]
+    fn invalid_strings_still_produce_errors() {
+        use baml_compiler_diagnostics::Severity;
+        use baml_project::{collect_diagnostics, testing::setup_test_db};
+
+        let cases = [
+            // Unterminated string — no closing quote at all
+            (
+                r#"function f() -> string { "hello }"#,
+                "unterminated string",
+            ),
+            // Backslash at EOF — backslash escapes nothing, string never closes
+            (r#"function f() -> string { "hello\"#, "backslash at EOF"),
+            // Escaped quote with no closing quote — \" eats the quote
+            (
+                r#"function f() -> string { "hello\"}"#,
+                "escaped quote eats closing quote",
+            ),
+        ];
+
+        for (source, label) in &cases {
+            let db = setup_test_db(source);
+            let project = db.get_project().expect("project must be set");
+            let all_files = db.get_source_files();
+            let diagnostics = collect_diagnostics(&db, project, &all_files);
+            let has_error = diagnostics
+                .iter()
+                .any(|d| matches!(d.severity, Severity::Error));
+            assert!(
+                has_error,
+                "Expected compilation error for case '{}', but got none.\nDiagnostics: {:?}",
+                label,
+                diagnostics.iter().map(|d| &d.message).collect::<Vec<_>>()
+            );
+        }
     }
 }
