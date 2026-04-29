@@ -220,107 +220,131 @@ SOURCE_FILE
 
 === ERRORS ===
 Error: Expected ')', found '}'
-    ╭─[ main.baml:15:2 ]
+    ╭─[ main.baml:13:1 ]
     │
- 15 │ // Extra closing paren after a complete call: `f(1, "two"))`
-    │  ┬  
-    │  ╰── Expected ')', found '}'
+ 13 │ }
+    │ ┬  
+    │ ╰── Expected ')', found '}'
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected expression, found ')'
-    ╭─[ main.baml:19:1 ]
+    ╭─[ main.baml:17:16 ]
     │
- 19 │ 
-    │ ┬  
-    │ ╰── Expected expression, found ')'
+ 17 │     f(1, "two"))
+    │                ┬  
+    │                ╰── Expected expression, found ')'
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected expression, found ','
-    ╭─[ main.baml:22:16 ]
+    ╭─[ main.baml:22:10 ]
     │
  22 │     f<int, string(1, "two")
-    │                ┬  
-    │                ╰── Expected expression, found ','
+    │          ┬  
+    │          ╰── Expected expression, found ','
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Unmatched '>' in type expression (found 1 extra)
-    ╭─[ main.baml:27:25 ]
+    ╭─[ main.baml:27:19 ]
     │
  27 │     f<int, string>>(1, "two")
-    │                         ┬  
-    │                         ╰── Unmatched '>' in type expression (found 1 extra)
+    │                   ┬  
+    │                   ╰── Unmatched '>' in type expression (found 1 extra)
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected ')', found ']'
-    ╭─[ main.baml:35:2 ]
+    ╭─[ main.baml:32:11 ]
     │
- 35 │ // Unclosed bracket in array literal.
-    │  ┬  
-    │  ╰── Expected ')', found ']'
+ 32 │     (1 + 2]
+    │           ┬  
+    │           ╰── Expected ')', found ']'
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected expression, found ']'
-    ╭─[ main.baml:35:2 ]
+    ╭─[ main.baml:32:11 ]
     │
- 35 │ // Unclosed bracket in array literal.
-    │  ┬  
-    │  ╰── Expected expression, found ']'
+ 32 │     (1 + 2]
+    │           ┬  
+    │           ╰── Expected expression, found ']'
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected expression, found '}'
-    ╭─[ main.baml:40:4 ]
+    ╭─[ main.baml:38:1 ]
     │
- 40 │ // Mixed: unclosed angle inside an unclosed call.
-    │    ┬  
-    │    ╰── Expected expression, found '}'
+ 38 │ }
+    │ ┬  
+    │ ╰── Expected expression, found '}'
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected expression, found function
-    ╭─[ main.baml:41:7 ]
+    ╭─[ main.baml:41:1 ]
     │
  41 │ function NestedUnclosed() -> string {
-    │       ────┬───  
-    │           ╰───── Expected expression, found function
+    │ ────┬───  
+    │     ╰───── Expected expression, found function
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected expression, found '->'
-    ╭─[ main.baml:41:33 ]
+    ╭─[ main.baml:41:27 ]
     │
  41 │ function NestedUnclosed() -> string {
-    │                                 ─┬  
-    │                                  ╰── Expected expression, found '->'
+    │                           ─┬  
+    │                            ╰── Expected expression, found '->'
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected expression, found ','
-    ╭─[ main.baml:42:16 ]
+    ╭─[ main.baml:42:10 ]
     │
  42 │     f<int, string(1, "two"
-    │                ┬  
-    │                ╰── Expected expression, found ','
+    │          ┬  
+    │          ╰── Expected expression, found ','
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected ')', found '}'
+    ╭─[ main.baml:43:1 ]
+    │
+ 43 │ }
+    │ ┬  
+    │ ╰── Expected ')', found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
 
 Error: Expected ']', found EOF
+    ╭─[ main.baml:43:2 ]
+    │
+ 43 │ }
+    │  ┬  
+    │  ╰── Expected ']', found EOF
+    │ 
+    │ Note: Error code: E0010
+────╯
 
 Error: Expected '}', found EOF
+    ╭─[ main.baml:43:2 ]
+    │
+ 43 │ }
+    │  ┬  
+    │  ╰── Expected '}', found EOF
+    │ 
+    │ Note: Error code: E0010
+────╯
