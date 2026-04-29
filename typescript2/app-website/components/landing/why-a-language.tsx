@@ -42,7 +42,7 @@ export function WhyALanguage() {
           borderLeft: `1px solid ${BORDER}`,
           borderRight: `1px solid ${BORDER}`,
           borderBottom: `1px solid ${BORDER}`,
-          padding: '120px 48px',
+          padding: '40px 48px 120px',
         }}
       >
         <div className="mx-auto flex w-full max-w-[900px] flex-col items-center text-center">

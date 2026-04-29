@@ -2,10 +2,12 @@
 
 import {
   AnimatePresence,
+  type MotionValue,
   motion,
   useMotionValueEvent,
   useReducedMotion,
   useScroll,
+  useTransform,
 } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -574,6 +576,38 @@ function StepPills({ activeStep }: { activeStep: number }) {
   );
 }
 
+// ── Per-step body text streamer ───────────────────────────────────────────────
+
+function TypingText({
+  text,
+  progress,
+}: {
+  text: string;
+  progress: MotionValue<number>;
+}) {
+  const [chars, setChars] = useState(0);
+
+  useEffect(() => {
+    const update = () => {
+      const v = progress.get();
+      const next = Math.max(0, Math.min(text.length, Math.round(v * text.length)));
+      setChars(next);
+    };
+    update();
+    const unsub = progress.on('change', update);
+    return unsub;
+  }, [progress, text.length]);
+
+  return (
+    <>
+      <span>{text.slice(0, chars)}</span>
+      <span aria-hidden style={{ opacity: 0 }}>
+        {text.slice(chars)}
+      </span>
+    </>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function IncrementalAdoption() {
@@ -583,6 +617,36 @@ export function IncrementalAdoption() {
     offset: ['start start', 'end end'],
   });
   const [activeStep, setActiveStep] = useState(0);
+
+  // Per-step body typewriter progress (0 = empty, 1 = fully typed).
+  // Each step types in just before its active range and types out just before
+  // the next step takes over, giving the "characters streaming" effect.
+  const step0Progress = useTransform(
+    scrollYProgress,
+    [0, 0.08, 0.12, 0.22],
+    [1, 1, 1, 0],
+  );
+  const step1Progress = useTransform(
+    scrollYProgress,
+    [0.22, 0.32, 0.38, 0.48],
+    [0, 1, 1, 0],
+  );
+  const step2Progress = useTransform(
+    scrollYProgress,
+    [0.48, 0.58, 0.64, 0.74],
+    [0, 1, 1, 0],
+  );
+  const step3Progress = useTransform(
+    scrollYProgress,
+    [0.74, 0.86, 1],
+    [0, 1, 1],
+  );
+  const stepProgresses = [
+    step0Progress,
+    step1Progress,
+    step2Progress,
+    step3Progress,
+  ];
 
   useMotionValueEvent(scrollYProgress, 'change', (latest) => {
     let idx = 0;
@@ -643,10 +707,89 @@ export function IncrementalAdoption() {
           margin: '0 auto',
           padding: '0 32px 0 48px',
           display: 'grid',
-          gridTemplateColumns: '60% 40%',
+          gridTemplateColumns: '40% 60%',
           gap: 48,
         }}
       >
+        <div>
+          {STEPS.map((s, i) => {
+            const isActive = i === activeStep;
+            const STACK_TOP_BASE = 80;
+            const STACK_TAB_HEIGHT = 56;
+            const stickyTop = STACK_TOP_BASE + i * STACK_TAB_HEIGHT;
+            return (
+              <section
+                key={`step-text-${i}`}
+                style={{
+                  minHeight: '80vh',
+                  paddingLeft: 24,
+                  paddingBottom: 32,
+                }}
+              >
+                <div
+                  style={{
+                    position: 'sticky',
+                    top: stickyTop,
+                    background: BG,
+                    paddingTop: 14,
+                    paddingBottom: 14,
+                    paddingRight: 16,
+                    zIndex: STEPS.length - i,
+                    borderTop: `1px solid ${BORDER}`,
+                    transition: 'opacity 350ms ease',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'baseline',
+                      gap: 16,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 500,
+                        letterSpacing: '0.14em',
+                        textTransform: 'uppercase',
+                        color: isActive ? ACCENT : '#8A8580',
+                        flexShrink: 0,
+                        transition: 'color 350ms ease',
+                      }}
+                    >
+                      Step {String(i + 1).padStart(2, '0')}
+                    </div>
+                    <h3
+                      style={{
+                        fontSize: 'clamp(1.25rem, 2vw, 1.65rem)',
+                        fontWeight: 600,
+                        lineHeight: 1.15,
+                        letterSpacing: '-0.02em',
+                        margin: 0,
+                        color: isActive ? INK : MUTED,
+                        transition: 'color 350ms ease',
+                      }}
+                    >
+                      {s.heading}
+                    </h3>
+                  </div>
+                </div>
+                <p
+                  style={{
+                    marginTop: 20,
+                    fontSize: 16,
+                    lineHeight: 1.6,
+                    color: MUTED,
+                    maxWidth: 440,
+                  }}
+                >
+                  <TypingText text={s.body} progress={stepProgresses[i]} />
+                </p>
+              </section>
+            );
+          })}
+        </div>
+
         <div
           style={{
             position: 'sticky',
@@ -656,56 +799,6 @@ export function IncrementalAdoption() {
           }}
         >
           <StickyPanel activeStep={activeStep} />
-        </div>
-
-        <div>
-          {STEPS.map((s, i) => (
-            <section
-              key={`step-text-${i}`}
-              style={{
-                minHeight: '100vh',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                paddingRight: 24,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 500,
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  color: '#8A8580',
-                  marginBottom: 12,
-                }}
-              >
-                Step {String(i + 1).padStart(2, '0')}
-              </div>
-              <h3
-                style={{
-                  fontSize: 'clamp(1.6rem, 2.5vw, 2.25rem)',
-                  fontWeight: 600,
-                  lineHeight: 1.08,
-                  letterSpacing: '-0.03em',
-                  margin: 0,
-                }}
-              >
-                {s.heading}
-              </h3>
-              <p
-                style={{
-                  marginTop: 16,
-                  fontSize: 16,
-                  lineHeight: 1.6,
-                  color: MUTED,
-                  maxWidth: 440,
-                }}
-              >
-                {s.body}
-              </p>
-            </section>
-          ))}
         </div>
       </div>
 

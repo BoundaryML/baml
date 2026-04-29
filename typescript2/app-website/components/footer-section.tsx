@@ -56,19 +56,21 @@ export function FooterSection() {
           </div>
         </div>
       </div>
-      <div className="w-full h-48 md:h-64 relative z-0">
-        <div className="absolute inset-0 bg-gradient-to-t from-transparent to-background z-10 from-40%" />
-        <div className="absolute inset-0 mx-6">
-          <FlickeringGrid
-            className="h-full w-full"
-            color="#6B7280"
-            flickerChance={0.1}
-            fontSize={fontSize}
-            gridGap={tablet ? 2 : 3}
-            maxOpacity={0.3}
-            squareSize={2}
-            text={'Boundary'}
-          />
+      <div className="relative w-full h-[120vh] z-0">
+        <div className="sticky top-0 h-screen w-full overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-t from-transparent to-background z-10 from-40%" />
+          <div className="absolute inset-0 mx-6">
+            <FlickeringGrid
+              className="h-full w-full"
+              color="#6B7280"
+              flickerChance={0.1}
+              fontSize={fontSize}
+              gridGap={tablet ? 2 : 3}
+              maxOpacity={0.3}
+              squareSize={2}
+              text={'Boundary'}
+            />
+          </div>
         </div>
       </div>
     </footer>
