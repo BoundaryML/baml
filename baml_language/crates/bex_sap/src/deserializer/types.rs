@@ -292,7 +292,7 @@ impl<N: TypeIdent> std::fmt::Display for BamlValueWithFlags<'_, '_, '_, N> {
                 write!(f, "{}", i.value)?;
             }
             BamlValue::Float(fl) => {
-                write!(f, "{}", fl.value)?;
+                write!(f, "{}", bex_vm_types::format_float(fl.value))?;
             }
             BamlValue::Bool(b) => {
                 write!(f, "{}", b.value)?;
