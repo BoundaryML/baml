@@ -127,27 +127,23 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        CALL_EXPR
-          PATH_EXPR
-            WORD "f"
-            GENERIC_ARGS
-              LESS "<"
-              TYPE_EXPR "int"
-                WORD "int"
-              COMMA ","
-              TYPE_EXPR "string"
-                WORD "string"
-              GREATER ">"
-            GREATER ">"
-          CALL_ARGS
+        BINARY_EXPR "f<int"
+          WORD "f"
+          LESS "<"
+          WORD "int"
+        COMMA ","
+        BINARY_EXPR
+          WORD "string"
+          GREATER_GREATER ">>"
+          PAREN_EXPR "(1"
             L_PAREN "("
             INTEGER_LITERAL "1"
-            COMMA ","
-            STRING_LITERAL "two"
-              QUOTE """
-              WORD "two"
-              QUOTE """
-            R_PAREN ")"
+        COMMA ","
+        STRING_LITERAL "two"
+          QUOTE """
+          WORD "two"
+          QUOTE """
+        R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -249,12 +245,42 @@ Error: Expected expression, found ','
     │ Note: Error code: E0010
 ────╯
 
-Error: Unmatched '>' in type expression (found 1 extra)
-    ╭─[ main.baml:27:19 ]
+Error: Expected expression, found ','
+    ╭─[ main.baml:27:10 ]
     │
  27 │     f<int, string>>(1, "two")
-    │                   ┬  
-    │                   ╰── Unmatched '>' in type expression (found 1 extra)
+    │          ┬  
+    │          ╰── Expected expression, found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found ','
+    ╭─[ main.baml:27:22 ]
+    │
+ 27 │     f<int, string>>(1, "two")
+    │                      ┬  
+    │                      ╰── Expected ')', found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ','
+    ╭─[ main.baml:27:22 ]
+    │
+ 27 │     f<int, string>>(1, "two")
+    │                      ┬  
+    │                      ╰── Expected expression, found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ')'
+    ╭─[ main.baml:27:29 ]
+    │
+ 27 │     f<int, string>>(1, "two")
+    │                             ┬  
+    │                             ╰── Expected expression, found ')'
     │ 
     │ Note: Error code: E0010
 ────╯

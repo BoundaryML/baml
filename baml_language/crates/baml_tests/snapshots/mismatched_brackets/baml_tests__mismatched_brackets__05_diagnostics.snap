@@ -52,12 +52,62 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0003
 ────╯
 
-  [parse] Error: Unmatched '>' in type expression (found 1 extra)
-    ╭─[ main.baml:27:19 ]
+  [type] Error: unresolved name: int
+    ╭─[ main.baml:27:7 ]
     │
  27 │     f<int, string>>(1, "two")
-    │                   ┬  
-    │                   ╰── Unmatched '>' in type expression (found 1 extra)
+    │       ─┬─  
+    │        ╰─── unresolved name: int
+    │ 
+    │ Note: Error code: E0003
+────╯
+
+  [parse] Error: Expected expression, found ','
+    ╭─[ main.baml:27:10 ]
+    │
+ 27 │     f<int, string>>(1, "two")
+    │          ┬  
+    │          ╰── Expected expression, found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [type] Error: unresolved name: string
+    ╭─[ main.baml:27:12 ]
+    │
+ 27 │     f<int, string>>(1, "two")
+    │            ───┬──  
+    │               ╰──── unresolved name: string
+    │ 
+    │ Note: Error code: E0003
+────╯
+
+  [parse] Error: Expected ')', found ','
+    ╭─[ main.baml:27:22 ]
+    │
+ 27 │     f<int, string>>(1, "two")
+    │                      ┬  
+    │                      ╰── Expected ')', found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected expression, found ','
+    ╭─[ main.baml:27:22 ]
+    │
+ 27 │     f<int, string>>(1, "two")
+    │                      ┬  
+    │                      ╰── Expected expression, found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected expression, found ')'
+    ╭─[ main.baml:27:29 ]
+    │
+ 27 │     f<int, string>>(1, "two")
+    │                             ┬  
+    │                             ╰── Expected expression, found ')'
     │ 
     │ Note: Error code: E0010
 ────╯

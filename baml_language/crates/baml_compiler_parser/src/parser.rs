@@ -3940,10 +3940,15 @@ impl<'a> Parser<'a> {
                         return Self::is_generic_args_follow(self.peek(i + 1).map(|t| t.kind));
                     }
                 }
-                // `>>` closes two levels at once.
+                // `>>` closes two levels at once. Only treat it as a dual
+                // closer when there are actually two levels open — otherwise
+                // it's a shift/comparison sequence (e.g. `a < b >> c`).
                 TokenKind::GreaterGreater => {
+                    if depth < 2 {
+                        return false;
+                    }
                     depth -= 2;
-                    if depth <= 0 {
+                    if depth == 0 {
                         return Self::is_generic_args_follow(self.peek(i + 1).map(|t| t.kind));
                     }
                 }

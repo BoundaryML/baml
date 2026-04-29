@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
 function user.ExtraCloseAngle() -> string  [expr] {
-  {  } f(1, "two")
+  { f Lt int; string Shr 1 } "two"
 }
 function user.ExtraCloseParen() -> string  [expr] {
   {  } f(1, "two")

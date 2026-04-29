@@ -403,8 +403,7 @@ impl PathExpr {
             len += usize::from(dot.span().len()) + usize::from(word.span().len());
         }
         if let Some(ref ga) = self.generic_args {
-            // Account for `<Type1, Type2>` width based on its source span.
-            len += usize::from(ga.close_angle.span().end() - ga.open_angle.span().start());
+            len += ga.formatted_single_line_width();
         }
         Some(len)
     }
@@ -1002,10 +1001,20 @@ impl Printable for IfExpr {
         // (Baml allows `if cond { ... }`), but emitting them keeps formatter
         // output consistent with the canonical form.
         let needs_parens = !matches!(*self.condition, Expression::Paren(_));
+        let cond_shape = if needs_parens {
+            // Reserve room for the synthetic `( )` so a barely-fitting
+            // condition doesn't push the line past the width budget once
+            // we wrap parens around it.
+            let mut s = shape.clone();
+            s.width = s.width.saturating_sub(2);
+            s
+        } else {
+            shape.clone()
+        };
         if needs_parens {
             printer.print_str("(");
         }
-        printer.print(&*self.condition, shape.clone());
+        printer.print(&*self.condition, cond_shape);
         if needs_parens {
             printer.print_str(")");
         }
@@ -3356,6 +3365,28 @@ impl FromCST for GenericArgs {
             args,
             close_angle,
         })
+    }
+}
+
+impl GenericArgs {
+    /// Width that the formatter would emit on a single line, ignoring any
+    /// internal trivia in the source. Used by single-line-width estimators
+    /// upstream to decide whether a host expression fits on one line.
+    ///
+    /// Format is `<T1, T2, T3>`: 2 chars for `<>`, plus each type argument's
+    /// source-text width, plus `, ` (2 chars) between arguments. Source
+    /// types may contain whitespace, but for typical cases this is a tight
+    /// upper bound and tracks what the printer actually emits.
+    pub(crate) fn formatted_single_line_width(&self) -> usize {
+        let mut len: usize = 2; // `<` and `>`
+        for (i, (ty, _)) in self.args.iter().enumerate() {
+            let arg_span = ty.rightmost_token().end() - ty.leftmost_token().start();
+            len += usize::from(arg_span);
+            if i + 1 < self.args.len() {
+                len += 2; // `, `
+            }
+        }
+        len
     }
 }
 

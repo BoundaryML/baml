@@ -720,6 +720,11 @@ impl PrintMultiLine for ForIteratorArgs {
                 printer.print_raw_token(&let_stmt.keyword);
                 printer.print_str(" ");
                 printer.print_raw_token(&let_stmt.name);
+                if let Some((colon, ty)) = &let_stmt.type_annotation {
+                    printer.print_raw_token(colon);
+                    printer.print_str(" ");
+                    printer.print(ty, inner_shape.clone());
+                }
             }
             ForBinding::Bare(word) => {
                 printer.print_raw_token(word);
@@ -771,6 +776,16 @@ impl ForIteratorArgs {
                 printer.print_raw_token(&let_stmt.keyword);
                 printer.print_str(" ");
                 printer.print_raw_token(&let_stmt.name);
+                if let Some((colon, ty)) = &let_stmt.type_annotation {
+                    printer.print_raw_token(colon);
+                    printer.print_str(" ");
+                    if printer
+                        .print(ty, Shape::unlimited_single_line())
+                        .multi_lined
+                    {
+                        return None;
+                    }
+                }
             }
             ForBinding::Bare(word) => {
                 printer.print_raw_token(word);

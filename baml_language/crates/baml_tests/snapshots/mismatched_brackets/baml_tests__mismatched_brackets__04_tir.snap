@@ -26,9 +26,13 @@ function user.UnclosedGeneric() -> string throws never {
   !! 676..682: unresolved name: string
 }
 function user.ExtraCloseAngle() -> string throws never {
-  { : string | "two"
-    f<K, V>(1, "two") : string | "two"
+  { : "two"
+    f < int : bool
+    string >> 1 : int
+    "two" : "two"
   }
+  !! 776..779: unresolved name: int
+  !! 781..787: unresolved name: string
 }
 function user.MismatchedParenBracket() -> int throws never {
   { : 3
