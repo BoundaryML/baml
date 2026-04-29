@@ -89,11 +89,17 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                     expand_methods(&c.static_methods, &class_fqn_root, MethodKind::Static);
                 let instance_methods =
                     expand_methods(&c.instance_methods, &class_fqn_root, MethodKind::Instance);
+                let generic_params = c
+                    .generic_params
+                    .iter()
+                    .map(|n| n.as_str().to_string())
+                    .collect();
                 out.push((
                     leaf,
                     EmittedSymbol::Class(PyClass {
                         py_name: bare,
                         source: key.clone(),
+                        generic_params,
                         properties,
                         static_methods,
                         instance_methods,
@@ -162,13 +168,26 @@ fn expand_function(
     // qualifies all symbols, so `pkg = "user"` lands on the wire as
     // `"user.…"` end-to-end.
     let fqn_root = key.to_string();
+    let func_generic_params: Vec<String> = f
+        .generic_params
+        .iter()
+        .map(|n| n.as_str().to_string())
+        .collect();
     expand_callable(
         bare,
         &fqn_root,
         &f.arguments,
         &f.return_type,
         &f.companions,
-        |py_name, fqn, mode, params, arg_tys, return_ty| {
+        |py_name, fqn, mode, params, arg_tys, return_ty, is_companion| {
+            // Companions inherit no TypeVars — their signatures are the
+            // erased post-call shape (raw bytes / parsed result), per
+            // 13a §4.4.
+            let generic_params = if is_companion {
+                Vec::new()
+            } else {
+                func_generic_params.clone()
+            };
             out.push((
                 leaf.clone(),
                 EmittedSymbol::Function(PyFunction {
@@ -178,6 +197,7 @@ fn expand_function(
                     param_names: params,
                     arg_tys,
                     return_ty,
+                    generic_params,
                 }),
                 sort_key.clone(),
             ));
@@ -201,13 +221,18 @@ fn expand_methods(
     for m in sorted {
         let bare = m.name.as_str();
         let fqn_root = format!("{class_fqn_root}.{bare}");
+        let method_generic_params: Vec<String> = m
+            .generic_params
+            .iter()
+            .map(|n| n.as_str().to_string())
+            .collect();
         expand_callable(
             bare,
             &fqn_root,
             &m.arguments,
             &m.return_type,
             &m.companions,
-            |py_name, fqn, mode, params, arg_tys, return_ty| {
+            |py_name, fqn, mode, params, arg_tys, return_ty, is_companion| {
                 let param_names = match kind {
                     MethodKind::Static => params,
                     MethodKind::Instance => {
@@ -217,6 +242,11 @@ fn expand_methods(
                         with_self
                     }
                 };
+                let generic_params = if is_companion {
+                    Vec::new()
+                } else {
+                    method_generic_params.clone()
+                };
                 out.push(PyMethodBinding {
                     py_name,
                     baml_fqn: fqn,
@@ -225,6 +255,7 @@ fn expand_methods(
                     kind,
                     arg_tys,
                     return_ty,
+                    generic_params,
                 });
             },
         );
@@ -246,7 +277,7 @@ fn expand_callable<F>(
     companions: &[(String, baml_codegen_types::Function)],
     mut emit: F,
 ) where
-    F: FnMut(String, String, SyncAsync, Vec<String>, Vec<Ty>, Ty),
+    F: FnMut(String, String, SyncAsync, Vec<String>, Vec<Ty>, Ty, bool),
 {
     let base_params: Vec<String> = arguments
         .iter()
@@ -260,6 +291,7 @@ fn expand_callable<F>(
         base_params.clone(),
         base_tys.clone(),
         return_type.clone(),
+        false,
     );
     emit(
         format!("{bare}_async"),
@@ -268,6 +300,7 @@ fn expand_callable<F>(
         base_params,
         base_tys,
         return_type.clone(),
+        false,
     );
 
     for (suffix, inner) in companions {
@@ -293,6 +326,7 @@ fn expand_callable<F>(
             companion_params.clone(),
             companion_tys.clone(),
             inner.return_type.clone(),
+            true,
         );
         emit(
             py_async,
@@ -301,6 +335,7 @@ fn expand_callable<F>(
             companion_params,
             companion_tys,
             inner.return_type.clone(),
+            true,
         );
     }
 }

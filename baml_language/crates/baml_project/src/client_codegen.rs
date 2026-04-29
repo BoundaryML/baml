@@ -133,14 +133,12 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 
         // Classes
         for class in item_tree.classes.values() {
-            if !class.generic_params.is_empty() {
-                continue;
-            }
             let cg_name = cg::Name {
                 pkg: pkg.clone(),
                 namespace_path: ns_path.clone(),
                 name: class.name.clone(),
             };
+            let class_generic_params: Vec<Name> = class.generic_params.clone();
             let properties = class
                 .fields
                 .iter()
@@ -150,7 +148,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                         field.type_expr.as_ref(),
                         pkg_items,
                         &pkg_info.namespace_path,
-                        &[],
+                        &class_generic_params,
                         alias_map,
                         recursive_aliases,
                     )?;
@@ -171,9 +169,6 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 let Some(method) = item_tree.functions.get(method_id) else {
                     continue;
                 };
-                if !method.generic_params.is_empty() {
-                    continue;
-                }
 
                 let method_name_str = method.name.as_str();
                 let (bare_name, companion_suffix) = match split_companion(method_name_str) {
@@ -191,6 +186,12 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     MethodKind::Static
                 };
 
+                // Combined generics in scope inside the method body: the
+                // class's TypeVars plus the method's own. Order matches
+                // declaration: class-level first, method-level second.
+                let mut method_scope_generics: Vec<Name> = class_generic_params.clone();
+                method_scope_generics.extend(method.generic_params.iter().cloned());
+
                 let arguments: Vec<cg::FunctionArgument> = method
                     .params
                     .iter()
@@ -201,7 +202,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                             param.type_expr.as_ref(),
                             pkg_items,
                             &pkg_info.namespace_path,
-                            &[],
+                            &method_scope_generics,
                             alias_map,
                             recursive_aliases,
                         )?;
@@ -218,7 +219,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     method.return_type.as_ref(),
                     pkg_items,
                     &pkg_info.namespace_path,
-                    &[],
+                    &method_scope_generics,
                     alias_map,
                     recursive_aliases,
                 )
@@ -226,6 +227,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 
                 let cg_method = cg::Function {
                     name: method.name.clone(),
+                    generic_params: method.generic_params.clone(),
                     docstring: None,
                     arguments,
                     return_type,
@@ -250,6 +252,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 cg_name.clone(),
                 cg::Symbol::Class(cg::Class {
                     name: cg_name,
+                    generic_params: class_generic_params,
                     docstring: None,
                     properties,
                     static_methods: Vec::new(),
@@ -337,9 +340,6 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             if method_ids.contains(id) {
                 continue;
             }
-            if !func.generic_params.is_empty() {
-                continue;
-            }
 
             let func_name_str = func.name.as_str();
 
@@ -356,6 +356,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 continue;
             }
 
+            let func_generic_params: Vec<Name> = func.generic_params.clone();
             let arguments: Vec<cg::FunctionArgument> = func
                 .params
                 .iter()
@@ -365,7 +366,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                         param.type_expr.as_ref(),
                         pkg_items,
                         &pkg_info.namespace_path,
-                        &[],
+                        &func_generic_params,
                         alias_map,
                         recursive_aliases,
                     )?;
@@ -382,7 +383,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 func.return_type.as_ref(),
                 pkg_items,
                 &pkg_info.namespace_path,
-                &[],
+                &func_generic_params,
                 alias_map,
                 recursive_aliases,
             )
@@ -390,6 +391,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 
             let cg_func = cg::Function {
                 name: func.name.clone(),
+                generic_params: func_generic_params,
                 docstring: None,
                 arguments,
                 return_type,
@@ -562,7 +564,13 @@ fn convert_tir_leaf(
         TirTy::Primitive(PrimitiveType::Pdf, _) => cg::Ty::Media(baml_db::MediaKind::Pdf),
 
         // Named types — preserve full QualifiedTypeName via name_from_qtn.
-        TirTy::Class(qtn, _, _) => cg::Ty::Class(name_from_qtn(qtn)),
+        TirTy::Class(qtn, type_args, _) => cg::Ty::Class(
+            name_from_qtn(qtn),
+            type_args
+                .iter()
+                .map(|t| convert_tir_to_codegen_ty(t, alias_map, recursive_aliases))
+                .collect(),
+        ),
         TirTy::Enum(qtn, _) => cg::Ty::Enum(name_from_qtn(qtn)),
         TirTy::EnumVariant(qtn, _variant, _) => cg::Ty::Enum(name_from_qtn(qtn)),
 
@@ -616,12 +624,14 @@ fn convert_tir_leaf(
             ret: Box::new(convert_tir_to_codegen_ty(ret, alias_map, recursive_aliases)),
         },
 
+        // Type variable — codegen-side `Ty::TypeVar` mirrors TIR.
+        TirTy::TypeVar(name, _) => cg::Ty::TypeVar(name.clone()),
+
         // Bottom / sentinel / error recovery — map to Unit.
         TirTy::Void { .. }
         | TirTy::Never { .. }
         | TirTy::Unknown { .. }
         | TirTy::Error { .. }
-        | TirTy::TypeVar(..)
         | TirTy::RustType { .. }
         | TirTy::Type { .. } => cg::Ty::Unit,
     }

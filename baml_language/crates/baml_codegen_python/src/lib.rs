@@ -300,6 +300,7 @@ mod tests {
 
     fn class_at(name: Name, file: &str, span: u32) -> Symbol {
         Symbol::Class(Class {
+            generic_params: Vec::new(),
             name,
             docstring: None,
             properties: vec![ClassProperty {
@@ -337,6 +338,7 @@ mod tests {
 
     fn bare_func(bare: &str, file: &str, span: u32) -> Function {
         Function {
+            generic_params: Vec::new(),
             name: BaseName::new(bare),
             docstring: None,
             arguments: vec![FunctionArgument {
@@ -727,6 +729,7 @@ mod tests {
 
     fn class_with_props(name: Name, props: Vec<(&str, Ty)>, file: &str, span: u32) -> Symbol {
         Symbol::Class(Class {
+            generic_params: Vec::new(),
             name,
             docstring: None,
             properties: props
@@ -913,7 +916,7 @@ mod tests {
                 vec![
                     ("summary", Ty::Optional(Box::new(Ty::String))),
                     // Non-stream FQN -> resolves to baml_sdk.lorem.Resume
-                    ("origin", Ty::Class(non_stream)),
+                    ("origin", Ty::Class(non_stream, vec![])),
                 ],
                 "x.baml",
                 0,
@@ -990,6 +993,7 @@ mod tests {
         companions: Vec<(&str, Function)>,
     ) -> Symbol {
         Symbol::Function(Function {
+            generic_params: Vec::new(),
             name: BaseName::new(bare),
             docstring: None,
             arguments: args
@@ -1012,6 +1016,7 @@ mod tests {
 
     fn companion_func(args: &[&str]) -> Function {
         Function {
+            generic_params: Vec::new(),
             name: BaseName::new("inner"),
             docstring: None,
             arguments: args
@@ -1226,6 +1231,7 @@ mod tests {
         span: u32,
     ) -> Symbol {
         Symbol::Class(Class {
+            generic_params: Vec::new(),
             name,
             docstring: None,
             properties: vec![],
@@ -1237,6 +1243,7 @@ mod tests {
 
     fn method_func(bare: &str, args: &[&str], file: &str, span: u32) -> Function {
         Function {
+            generic_params: Vec::new(),
             name: BaseName::new(bare),
             docstring: None,
             arguments: args
@@ -1531,6 +1538,7 @@ mod tests {
         pool.insert(
             n,
             Symbol::Function(Function {
+                generic_params: Vec::new(),
                 name: BaseName::new("extract_resume"),
                 docstring: None,
                 arguments: vec![FunctionArgument {
@@ -1538,7 +1546,7 @@ mod tests {
                     docstring: None,
                     ty: Ty::String,
                 }],
-                return_type: Ty::Class(resume),
+                return_type: Ty::Class(resume, vec![]),
                 watchers: vec![],
                 companions: vec![],
                 origin: origin("x.baml", 100),
@@ -1573,6 +1581,7 @@ mod tests {
         let resume = cg_name("user", &["lorem"], "Resume");
         pool.insert(resume.clone(), class(resume.clone()));
         let companion = Function {
+            generic_params: Vec::new(),
             name: BaseName::new("inner"),
             docstring: None,
             arguments: vec![FunctionArgument {
@@ -1580,7 +1589,7 @@ mod tests {
                 docstring: None,
                 ty: Ty::String,
             }],
-            return_type: Ty::Class(resume.clone()),
+            return_type: Ty::Class(resume.clone(), vec![]),
             watchers: vec![],
             companions: vec![],
             origin: origin("x.baml", 0),
@@ -1588,6 +1597,7 @@ mod tests {
         pool.insert(
             n,
             Symbol::Function(Function {
+                generic_params: Vec::new(),
                 name: BaseName::new("extract_resume"),
                 docstring: None,
                 arguments: vec![FunctionArgument {
@@ -1595,7 +1605,7 @@ mod tests {
                     docstring: None,
                     ty: Ty::String,
                 }],
-                return_type: Ty::Class(resume),
+                return_type: Ty::Class(resume, vec![]),
                 watchers: vec![],
                 companions: vec![("parse".to_string(), companion)],
                 origin: origin("x.baml", 100),
@@ -1848,7 +1858,12 @@ mod tests {
         pool.insert(response.clone(), class(response.clone()));
         pool.insert(
             envelope.clone(),
-            class_with_props(envelope, vec![("resp", Ty::Class(response))], "x.baml", 0),
+            class_with_props(
+                envelope,
+                vec![("resp", Ty::Class(response, vec![]))],
+                "x.baml",
+                0,
+            ),
         );
         let out = to_source_code(&pool, &[]);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
@@ -1869,7 +1884,12 @@ mod tests {
         pool.insert(bucket.clone(), class(bucket.clone()));
         pool.insert(
             envelope.clone(),
-            class_with_props(envelope, vec![("b", Ty::Class(bucket))], "x.baml", 0),
+            class_with_props(
+                envelope,
+                vec![("b", Ty::Class(bucket, vec![]))],
+                "x.baml",
+                0,
+            ),
         );
         let out = to_source_code(&pool, &[]);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
@@ -1893,7 +1913,12 @@ mod tests {
         );
         pool.insert(
             stream.clone(),
-            class_with_props(stream, vec![("origin", Ty::Class(non_stream))], "x.baml", 0),
+            class_with_props(
+                stream,
+                vec![("origin", Ty::Class(non_stream, vec![]))],
+                "x.baml",
+                0,
+            ),
         );
         let out = to_source_code(&pool, &[]);
         let py = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
@@ -1914,7 +1939,7 @@ mod tests {
             stream_bucket.clone(),
             class_with_props(
                 stream_bucket,
-                vec![("resp", Ty::Class(response))],
+                vec![("resp", Ty::Class(response, vec![]))],
                 "x.baml",
                 0,
             ),
@@ -1958,8 +1983,8 @@ mod tests {
                 resume,
                 vec![
                     ("s", Ty::Enum(sentiment)),
-                    ("b", Ty::Class(bucket)),
-                    ("r", Ty::Class(response)),
+                    ("b", Ty::Class(bucket, vec![])),
+                    ("r", Ty::Class(response, vec![])),
                 ],
                 "x.baml",
                 0,
@@ -1994,7 +2019,10 @@ mod tests {
             resume.clone(),
             class_with_props(
                 resume,
-                vec![("a", Ty::Class(s3_bucket)), ("b", Ty::Class(gcs_object))],
+                vec![
+                    ("a", Ty::Class(s3_bucket, vec![])),
+                    ("b", Ty::Class(gcs_object, vec![])),
+                ],
                 "x.baml",
                 0,
             ),
@@ -2018,7 +2046,7 @@ mod tests {
         pool.insert(resume.clone(), class(resume.clone()));
         pool.insert(
             other.clone(),
-            class_with_props(other, vec![("r", Ty::Class(resume))], "x.baml", 100),
+            class_with_props(other, vec![("r", Ty::Class(resume, vec![]))], "x.baml", 100),
         );
         let out = to_source_code(&pool, &[]);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
@@ -2072,6 +2100,7 @@ mod tests {
         pool.insert(
             func,
             Symbol::Function(Function {
+                generic_params: Vec::new(),
                 name: BaseName::new("classify"),
                 docstring: None,
                 arguments: vec![FunctionArgument {
@@ -2139,6 +2168,132 @@ mod tests {
         assert!(
             !block.contains("\n\n"),
             "fan-out signatures should be tightly packed:\n{block}"
+        );
+    }
+
+    /// 13a §4.1, §4.2, §4.5 — a generic class lands as a Pydantic
+    /// `Generic[T]` subclass with a leaf-level `T = typing.TypeVar(…)`
+    /// declaration at the top of the leaf, before the first body.
+    #[test]
+    fn generic_class_emits_typevar_and_generic_base() {
+        let mut pool: SymbolPool = HashMap::new();
+        let box_name = cg_name("user", &["lorem"], "Box");
+        let crate_name = cg_name("user", &["lorem"], "Crate");
+
+        pool.insert(
+            box_name.clone(),
+            Symbol::Class(Class {
+                name: box_name,
+                generic_params: vec![BaseName::new("T")],
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("item"),
+                    docstring: None,
+                    ty: Ty::TypeVar(BaseName::new("T")),
+                }],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("box.baml", 0),
+            }),
+        );
+        pool.insert(
+            crate_name.clone(),
+            Symbol::Class(Class {
+                name: crate_name,
+                generic_params: vec![BaseName::new("T")],
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("contents"),
+                    docstring: None,
+                    ty: Ty::List(Box::new(Ty::Class(
+                        cg_name("user", &["lorem"], "Box"),
+                        vec![Ty::TypeVar(BaseName::new("T"))],
+                    ))),
+                }],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("box.baml", 100),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains("T = typing.TypeVar(\"T\")"),
+            "missing TypeVar declaration:\n{leaf}",
+        );
+        assert!(
+            leaf.contains("class Box(pydantic.BaseModel, typing.Generic[T]):"),
+            "missing Generic[T] base on Box:\n{leaf}",
+        );
+        assert!(
+            leaf.contains("    item: T"),
+            "missing T-typed field on Box:\n{leaf}",
+        );
+        assert!(
+            leaf.contains("class Crate(pydantic.BaseModel, typing.Generic[T]):"),
+            "missing Generic[T] base on Crate:\n{leaf}",
+        );
+        assert!(
+            leaf.contains("    contents: typing.List[Box[T]]"),
+            "missing nested generic ref Box[T]:\n{leaf}",
+        );
+
+        // TypeVar declaration appears once.
+        assert_eq!(
+            leaf.matches("T = typing.TypeVar(\"T\")").count(),
+            1,
+            "TypeVar should be declared exactly once:\n{leaf}"
+        );
+
+        // The .pyi mirrors the same generic shape.
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            pyi.contains("T = typing.TypeVar(\"T\")"),
+            "pyi missing TypeVar:\n{pyi}",
+        );
+        assert!(
+            pyi.contains("class Box(pydantic.BaseModel, typing.Generic[T]): ..."),
+            "pyi missing Generic[T] on Box:\n{pyi}",
+        );
+    }
+
+    /// 13a §4.4 — a generic free function emits its `TypeVar`s at the leaf
+    /// and the .pyi signature uses bare `TypeVar` identifiers.
+    #[test]
+    fn generic_function_emits_typevar_at_leaf() {
+        let mut pool: SymbolPool = HashMap::new();
+        let key = cg_name("user", &["lorem"], "echo");
+        pool.insert(
+            key,
+            Symbol::Function(Function {
+                name: BaseName::new("echo"),
+                generic_params: vec![BaseName::new("T")],
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: Ty::TypeVar(BaseName::new("T")),
+                }],
+                return_type: Ty::TypeVar(BaseName::new("T")),
+                watchers: vec![],
+                companions: vec![],
+                origin: origin("echo.baml", 0),
+            }),
+        );
+        let out = to_source_code(&pool, &[]);
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            pyi.contains("T = typing.TypeVar(\"T\")"),
+            "pyi missing TypeVar:\n{pyi}",
+        );
+        assert!(
+            pyi.contains("def echo(value: T) -> T: ..."),
+            "pyi missing typed echo signature:\n{pyi}",
+        );
+        assert!(
+            pyi.contains("async def echo_async(value: T) -> T: ..."),
+            "pyi missing async echo signature:\n{pyi}",
         );
     }
 }

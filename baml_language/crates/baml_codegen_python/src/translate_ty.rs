@@ -46,8 +46,18 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
         Ty::Media(MediaKind::Video) => "baml.media.Video".to_string(),
         Ty::Media(MediaKind::Pdf) => "baml.media.Pdf".to_string(),
         Ty::Media(MediaKind::Generic) => "typing.Any".to_string(),
-        Ty::Class(name) | Ty::TypeAlias(name) => render_name_ref_or_self_ref(name, ctx),
+        Ty::Class(name, args) => {
+            let head = render_name_ref_or_self_ref(name, ctx);
+            if args.is_empty() {
+                head
+            } else {
+                let arg_strs: Vec<String> = args.iter().map(|a| translate_ty(a, ctx)).collect();
+                format!("{head}[{}]", arg_strs.join(", "))
+            }
+        }
+        Ty::TypeAlias(name) => render_name_ref_or_self_ref(name, ctx),
         Ty::Enum(name) => render_name_ref(name, ctx),
+        Ty::TypeVar(name) => name.as_str().to_string(),
         Ty::Optional(inner) => format!("typing.Optional[{}]", translate_ty(inner, ctx)),
         Ty::List(inner) => format!("typing.List[{}]", translate_ty(inner, ctx)),
         Ty::Map { key, value } => {
@@ -178,9 +188,10 @@ mod tests {
             | Ty::Literal(_)
             | Ty::Uint8Array
             | Ty::Media(_)
-            | Ty::Class(_)
+            | Ty::Class(_, _)
             | Ty::Enum(_)
             | Ty::TypeAlias(_)
+            | Ty::TypeVar(_)
             | Ty::Optional(_)
             | Ty::List(_)
             | Ty::Map { .. }
@@ -323,73 +334,73 @@ mod tests {
             },
             Case {
                 label: "class same leaf root namespace",
-                ty: Ty::Class(name("user", &["lorem"], "Resume")),
+                ty: Ty::Class(name("user", &["lorem"], "Resume"), vec![]),
                 ctx: ctx(&["lorem"]),
                 expected: "Resume",
             },
             Case {
                 label: "class cross leaf root namespace",
-                ty: Ty::Class(name("user", &["lorem"], "Resume")),
+                ty: Ty::Class(name("user", &["lorem"], "Resume"), vec![]),
                 ctx: ctx(&["ipsum"]),
                 expected: "lorem.Resume",
             },
             Case {
                 label: "class same leaf root init",
-                ty: Ty::Class(name("user", &[], "Foo")),
+                ty: Ty::Class(name("user", &[], "Foo"), vec![]),
                 ctx: ctx(&[]),
                 expected: "Foo",
             },
             Case {
                 label: "class root init from namespaced leaf",
-                ty: Ty::Class(name("user", &[], "Foo")),
+                ty: Ty::Class(name("user", &[], "Foo"), vec![]),
                 ctx: ctx(&["lorem"]),
                 expected: "Foo",
             },
             Case {
                 label: "class vendor cross leaf",
-                ty: Ty::Class(name("aws", &["s3"], "Bucket")),
+                ty: Ty::Class(name("aws", &["s3"], "Bucket"), vec![]),
                 ctx: ctx(&["lorem"]),
                 expected: "vendor.aws.s3.Bucket",
             },
             Case {
                 label: "class vendor same leaf",
-                ty: Ty::Class(name("aws", &["s3"], "Bucket")),
+                ty: Ty::Class(name("aws", &["s3"], "Bucket"), vec![]),
                 ctx: ctx(&["vendor", "aws", "s3"]),
                 expected: "Bucket",
             },
             Case {
                 label: "class vendor other vendor leaf",
-                ty: Ty::Class(name("aws", &["s3"], "Bucket")),
+                ty: Ty::Class(name("aws", &["s3"], "Bucket"), vec![]),
                 ctx: ctx(&["vendor", "aws", "ec2"]),
                 expected: "vendor.aws.s3.Bucket",
             },
             Case {
                 label: "class stdlib cross leaf",
-                ty: Ty::Class(name("baml", &["http"], "Response")),
+                ty: Ty::Class(name("baml", &["http"], "Response"), vec![]),
                 ctx: ctx(&["lorem"]),
                 expected: "baml.http.Response",
             },
             Case {
                 label: "class stdlib same leaf",
-                ty: Ty::Class(name("baml", &["http"], "Response")),
+                ty: Ty::Class(name("baml", &["http"], "Response"), vec![]),
                 ctx: ctx(&["baml", "http"]),
                 expected: "Response",
             },
             Case {
                 label: "class stream from non stream leaf",
-                ty: Ty::Class(name("user", &["lorem"], "Resume$stream")),
+                ty: Ty::Class(name("user", &["lorem"], "Resume$stream"), vec![]),
                 ctx: ctx(&["lorem"]),
                 expected: "stream_types.lorem.Resume",
             },
             Case {
                 label: "class stream same leaf",
-                ty: Ty::Class(name("user", &["lorem"], "Resume$stream")),
+                ty: Ty::Class(name("user", &["lorem"], "Resume$stream"), vec![]),
                 ctx: ctx(&["stream_types", "lorem"]),
                 expected: "Resume",
             },
             Case {
                 label: "class non stream from stream leaf",
-                ty: Ty::Class(name("user", &["lorem"], "Resume")),
+                ty: Ty::Class(name("user", &["lorem"], "Resume"), vec![]),
                 ctx: ctx(&["stream_types", "lorem"]),
                 expected: "lorem.Resume",
             },
@@ -442,7 +453,7 @@ mod tests {
                 label: "map enum to class",
                 ty: Ty::Map {
                     key: Box::new(Ty::Enum(name("user", &["ipsum"], "Sentiment"))),
-                    value: Box::new(Ty::Class(name("user", &["lorem"], "Resume"))),
+                    value: Box::new(Ty::Class(name("user", &["lorem"], "Resume"), vec![])),
                 },
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Dict[ipsum.Sentiment, Resume]",
@@ -461,11 +472,10 @@ mod tests {
             },
             Case {
                 label: "optional list same leaf class",
-                ty: Ty::Optional(Box::new(Ty::List(Box::new(Ty::Class(name(
-                    "user",
-                    &["lorem"],
-                    "Resume",
-                )))))),
+                ty: Ty::Optional(Box::new(Ty::List(Box::new(Ty::Class(
+                    name("user", &["lorem"], "Resume"),
+                    vec![],
+                ))))),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Optional[typing.List[Resume]]",
             },
@@ -479,11 +489,10 @@ mod tests {
                 label: "map vendor list",
                 ty: Ty::Map {
                     key: Box::new(Ty::String),
-                    value: Box::new(Ty::List(Box::new(Ty::Class(name(
-                        "aws",
-                        &["s3"],
-                        "Bucket",
-                    ))))),
+                    value: Box::new(Ty::List(Box::new(Ty::Class(
+                        name("aws", &["s3"], "Bucket"),
+                        vec![],
+                    )))),
                 },
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Dict[str, typing.List[vendor.aws.s3.Bucket]]",
@@ -518,8 +527,8 @@ mod tests {
             Case {
                 label: "union stream and non stream classes",
                 ty: Ty::Union(vec![
-                    Ty::Class(name("user", &["lorem"], "Resume")),
-                    Ty::Class(name("user", &["lorem"], "Resume$stream")),
+                    Ty::Class(name("user", &["lorem"], "Resume"), vec![]),
+                    Ty::Class(name("user", &["lorem"], "Resume$stream"), vec![]),
                 ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Union[Resume, stream_types.lorem.Resume]",
@@ -553,7 +562,10 @@ mod tests {
             },
             Case {
                 label: "recursive alias leaves other refs unquoted",
-                ty: Ty::List(Box::new(Ty::Class(name("user", &["util"], "Other")))),
+                ty: Ty::List(Box::new(Ty::Class(
+                    name("user", &["util"], "Other"),
+                    vec![],
+                ))),
                 ctx: ctx_with_self(&["util"], &["util"], "RecList"),
                 expected: "typing.List[Other]",
             },
@@ -571,13 +583,16 @@ mod tests {
             },
             Case {
                 label: "optional stdlib class",
-                ty: Ty::Optional(Box::new(Ty::Class(name("baml", &["http"], "Response")))),
+                ty: Ty::Optional(Box::new(Ty::Class(
+                    name("baml", &["http"], "Response"),
+                    vec![],
+                ))),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Optional[baml.http.Response]",
             },
             Case {
                 label: "list vendor class",
-                ty: Ty::List(Box::new(Ty::Class(name("aws", &["s3"], "Bucket")))),
+                ty: Ty::List(Box::new(Ty::Class(name("aws", &["s3"], "Bucket"), vec![]))),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.List[vendor.aws.s3.Bucket]",
             },
@@ -585,7 +600,7 @@ mod tests {
                 label: "map enum to stream vendor class",
                 ty: Ty::Map {
                     key: Box::new(Ty::Enum(name("user", &["ipsum"], "Sentiment"))),
-                    value: Box::new(Ty::Class(name("aws", &["s3"], "Bucket$stream"))),
+                    value: Box::new(Ty::Class(name("aws", &["s3"], "Bucket$stream"), vec![])),
                 },
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Dict[ipsum.Sentiment, stream_types.vendor.aws.s3.Bucket]",
@@ -593,12 +608,73 @@ mod tests {
             Case {
                 label: "union across placements",
                 ty: Ty::Union(vec![
-                    Ty::Class(name("user", &["lorem"], "Resume")),
-                    Ty::Class(name("aws", &["s3"], "Bucket")),
-                    Ty::Class(name("baml", &["http"], "Response")),
+                    Ty::Class(name("user", &["lorem"], "Resume"), vec![]),
+                    Ty::Class(name("aws", &["s3"], "Bucket"), vec![]),
+                    Ty::Class(name("baml", &["http"], "Response"), vec![]),
                 ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Union[Resume, vendor.aws.s3.Bucket, baml.http.Response]",
+            },
+            // Generics — `13a` §3.1, §3.2, §3.4.
+            Case {
+                label: "generic class same leaf concrete int",
+                ty: Ty::Class(name("user", &["lorem"], "Box"), vec![Ty::Int]),
+                ctx: ctx(&["lorem"]),
+                expected: "Box[int]",
+            },
+            Case {
+                label: "generic class cross leaf concrete int",
+                ty: Ty::Class(name("user", &["lorem"], "Box"), vec![Ty::Int]),
+                ctx: ctx(&["ipsum"]),
+                expected: "lorem.Box[int]",
+            },
+            Case {
+                label: "generic class with list arg",
+                ty: Ty::Class(
+                    name("user", &["lorem"], "Box"),
+                    vec![Ty::List(Box::new(Ty::Int))],
+                ),
+                ctx: ctx(&["lorem"]),
+                expected: "Box[typing.List[int]]",
+            },
+            Case {
+                label: "generic class nested generic arg",
+                ty: Ty::Class(
+                    name("user", &["lorem"], "Box"),
+                    vec![Ty::Class(name("user", &["lorem"], "Box"), vec![Ty::Int])],
+                ),
+                ctx: ctx(&["lorem"]),
+                expected: "Box[Box[int]]",
+            },
+            Case {
+                label: "generic class stream from non-stream leaf",
+                ty: Ty::Class(name("user", &["lorem"], "Box$stream"), vec![Ty::Int]),
+                ctx: ctx(&["lorem"]),
+                expected: "stream_types.lorem.Box[int]",
+            },
+            Case {
+                label: "generic class with typevar arg",
+                ty: Ty::Class(
+                    name("user", &["lorem"], "Box"),
+                    vec![Ty::TypeVar(baml_base::Name::new("T"))],
+                ),
+                ctx: ctx(&["lorem"]),
+                expected: "Box[T]",
+            },
+            Case {
+                label: "bare typevar",
+                ty: Ty::TypeVar(baml_base::Name::new("T")),
+                ctx: ctx(&["lorem"]),
+                expected: "T",
+            },
+            Case {
+                label: "map with typevar key and value",
+                ty: Ty::Map {
+                    key: Box::new(Ty::String),
+                    value: Box::new(Ty::TypeVar(baml_base::Name::new("V"))),
+                },
+                ctx: ctx(&["lorem"]),
+                expected: "typing.Dict[str, V]",
             },
         ];
 

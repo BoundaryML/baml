@@ -197,14 +197,48 @@ impl LeafBody {
     /// signatures may use `typing.Optional` / `typing.List` / etc.
     /// Class field types are not mirrored into the `.pyi` (12d §3.1),
     /// so a property-only class on its own does not require `typing`.
+    /// Generic classes pull in `typing` for the `typing.Generic[T]`
+    /// base and the leaf-level `typing.TypeVar("T")` declarations.
     pub(crate) fn needs_typing_pyi(&self) -> bool {
         self.symbols.iter().any(|(s, _)| match s {
             EmittedSymbol::Function(_) | EmittedSymbol::TypeAlias(_) => true,
             EmittedSymbol::Class(c) => {
-                !c.static_methods.is_empty() || !c.instance_methods.is_empty()
+                !c.static_methods.is_empty()
+                    || !c.instance_methods.is_empty()
+                    || !c.generic_params.is_empty()
             }
             EmittedSymbol::Enum(_) => false,
         })
+    }
+
+    /// Union of `TypeVar` identifiers declared by any generic definition
+    /// routed to this leaf — classes, functions, and methods. Each name
+    /// appears once; the result is alphabetic so emission order is
+    /// deterministic. Per `13a` §4.2, the leaf renderer turns each entry
+    /// into a `T = typing.TypeVar("T")` line at the top of the file.
+    pub(crate) fn generic_typevars(&self) -> Vec<String> {
+        let mut set: BTreeSet<String> = BTreeSet::new();
+        for (sym, _) in &self.symbols {
+            match sym {
+                EmittedSymbol::Class(c) => {
+                    for n in &c.generic_params {
+                        set.insert(n.clone());
+                    }
+                    for m in c.static_methods.iter().chain(&c.instance_methods) {
+                        for n in &m.generic_params {
+                            set.insert(n.clone());
+                        }
+                    }
+                }
+                EmittedSymbol::Function(f) => {
+                    for n in &f.generic_params {
+                        set.insert(n.clone());
+                    }
+                }
+                EmittedSymbol::Enum(_) | EmittedSymbol::TypeAlias(_) => {}
+            }
+        }
+        set.into_iter().collect()
     }
 }
 
@@ -215,7 +249,16 @@ impl LeafBody {
 /// references as a bare name without prefix.
 fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
     match ty {
-        Ty::Class(name) | Ty::Enum(name) | Ty::TypeAlias(name) => {
+        Ty::Class(name, args) => {
+            let routed = route(name);
+            if routed != *current && !routed.segments.is_empty() {
+                out.insert(routed.segments[0].clone());
+            }
+            for a in args {
+                collect_cross_leaf(a, current, out);
+            }
+        }
+        Ty::Enum(name) | Ty::TypeAlias(name) => {
             let routed = route(name);
             if routed != *current && !routed.segments.is_empty() {
                 out.insert(routed.segments[0].clone());
@@ -245,6 +288,7 @@ fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
         | Ty::Literal(_)
         | Ty::Uint8Array
         | Ty::Media(_)
+        | Ty::TypeVar(_)
         | Ty::BuiltinUnknown
         | Ty::Unit
         | Ty::BamlOptions => {}
@@ -297,6 +341,22 @@ fn symbol_kind_ord(sym: &EmittedSymbol) -> u8 {
     }
 }
 
+/// Render the base-class list for a class definition. Non-generic
+/// classes render as just `pydantic.BaseModel`; generic classes append
+/// `, typing.Generic[T, …]` per `13a` §4.1. The list mirrors itself
+/// across `.py` and `.pyi` so a class's interface declaration is
+/// consistent.
+fn render_class_bases(generic_params: &[String]) -> String {
+    if generic_params.is_empty() {
+        "pydantic.BaseModel".to_string()
+    } else {
+        format!(
+            "pydantic.BaseModel, typing.Generic[{}]",
+            generic_params.join(", ")
+        )
+    }
+}
+
 /// Render a single symbol into one or more Python source lines.
 fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> Vec<String> {
     let ctx = TranslateCtx {
@@ -308,7 +368,8 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> Vec<String> {
         EmittedSymbol::Class(c) => {
             let total_method_lines = c.static_methods.len() + c.instance_methods.len();
             let mut lines = Vec::with_capacity(2 + c.properties.len() + total_method_lines + 2);
-            lines.push(format!("class {}(pydantic.BaseModel):", c.py_name));
+            let bases = render_class_bases(&c.generic_params);
+            lines.push(format!("class {}({bases}):", c.py_name));
             lines.push("    model_config = pydantic.ConfigDict(extra=\"forbid\")".to_string());
             for prop in &c.properties {
                 lines.push(format!(
@@ -587,6 +648,19 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         }
     }
 
+    // Per-leaf TypeVar declarations (13a §4.2). One `T = typing.TypeVar("T")`
+    // line per TypeVar declared by any generic definition routed here.
+    // Alphabetic order, deterministic. The block sits between the import
+    // section and the first symbol body, separated by the same two-blank
+    // gap used elsewhere.
+    let typevars = body.generic_typevars();
+    if !typevars.is_empty() {
+        out.push_str("\n\n");
+        for tv in &typevars {
+            writeln!(out, "{tv} = typing.TypeVar(\"{tv}\")").unwrap();
+        }
+    }
+
     // Two blank lines before the first symbol group.
     out.push_str("\n\n");
 
@@ -644,11 +718,12 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> Vec<String> {
     match s {
         EmittedSymbol::Class(c) => {
             let total = c.static_methods.len() + c.instance_methods.len();
+            let bases = render_class_bases(&c.generic_params);
             if total == 0 {
-                vec![format!("class {}(pydantic.BaseModel): ...", c.py_name)]
+                vec![format!("class {}({bases}): ...", c.py_name)]
             } else {
                 let mut lines = Vec::with_capacity(1 + total * 2);
-                lines.push(format!("class {}(pydantic.BaseModel):", c.py_name));
+                lines.push(format!("class {}({bases}):", c.py_name));
                 push_method_signatures_pyi(&mut lines, &c.static_methods, &ctx);
                 if !c.static_methods.is_empty() && !c.instance_methods.is_empty() {
                     lines.push(String::new());
@@ -813,6 +888,17 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         let dots = ".".repeat(body.leaf.segments.len() + 1);
         for seg in &cross_leaf_segments {
             writeln!(out, "    from {dots} import {seg}").unwrap();
+        }
+    }
+
+    // Per-leaf TypeVar declarations (13a §4.2). The `.pyi` re-declares
+    // them because stubs don't import from sibling `.py` files —
+    // self-contained for static checkers.
+    let typevars = body.generic_typevars();
+    if !typevars.is_empty() {
+        out.push_str("\n\n");
+        for tv in &typevars {
+            writeln!(out, "{tv} = typing.TypeVar(\"{tv}\")").unwrap();
         }
     }
 
