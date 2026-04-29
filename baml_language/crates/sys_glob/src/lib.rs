@@ -35,7 +35,7 @@ impl GlobPattern {
         // Negation is `!` followed by an inner pattern; classify by the inner
         // pattern's shape, not the leading `!`.
         let inner = pattern.strip_prefix('!').unwrap_or(pattern);
-        let target = if inner.starts_with('/') {
+        let target = if is_absolute(inner) {
             MatchTarget::Absolute
         } else if inner.starts_with("./") {
             MatchTarget::DotRelative
@@ -77,6 +77,22 @@ impl GlobPattern {
         let matched = self.re.is_match(path);
         if self.negated { !matched } else { matched }
     }
+}
+
+/// Whether a glob pattern is rooted at the filesystem root.
+///
+/// POSIX absolute paths start with `/`. Windows absolute paths use a
+/// drive-letter prefix like `C:/...` — `sys_native::Glob.scan` normalizes
+/// backslashes to forward slashes before matching, so we only need to handle
+/// the forward-slash form here. Without this, a Windows pattern like
+/// `C:/foo/**/*.txt` would be classified as `Relative` and tested against the
+/// entry's relative path, never matching anything.
+fn is_absolute(pattern: &str) -> bool {
+    if pattern.starts_with('/') {
+        return true;
+    }
+    let b = pattern.as_bytes();
+    b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && b[2] == b'/'
 }
 
 fn glob_to_regex(glob: &str) -> Result<(Regex, bool), String> {
@@ -294,6 +310,38 @@ mod tests {
             GlobPattern::new("!/abs/*.ts").unwrap().target(),
             MatchTarget::Absolute
         );
+        // Windows drive-letter prefixed paths are absolute too. The scan
+        // walker normalizes backslashes to forward slashes before matching,
+        // so we only need the forward-slash form here.
+        assert_eq!(
+            GlobPattern::new("C:/Users/foo/**/*.txt").unwrap().target(),
+            MatchTarget::Absolute
+        );
+        assert_eq!(
+            GlobPattern::new("z:/tmp/file").unwrap().target(),
+            MatchTarget::Absolute
+        );
+        assert_eq!(
+            GlobPattern::new("!C:/abs/*.ts").unwrap().target(),
+            MatchTarget::Absolute
+        );
+        // Bare `C:` (no slash) or `:foo` are not absolute.
+        assert_eq!(
+            GlobPattern::new("C:foo").unwrap().target(),
+            MatchTarget::Relative
+        );
+        assert_eq!(
+            GlobPattern::new("1:/foo").unwrap().target(),
+            MatchTarget::Relative
+        );
+    }
+
+    #[test]
+    fn match_entry_absolute_handles_windows_drive_letter() {
+        let g = GlobPattern::new("C:/scan/**/*.txt").unwrap();
+        assert!(g.is_match_entry("file.txt", "C:/scan/file.txt"));
+        assert!(g.is_match_entry("sub/file.txt", "C:/scan/sub/file.txt"));
+        assert!(!g.is_match_entry("file.rs", "C:/scan/file.rs"));
     }
 
     #[test]
