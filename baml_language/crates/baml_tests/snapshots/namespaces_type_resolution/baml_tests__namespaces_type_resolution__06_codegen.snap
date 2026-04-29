@@ -137,13 +137,13 @@ function user.RootUsesNestedClient(c: llm.openai.Client) -> string {
     return
 }
 
-function user.auth.AuthAliasParam(t: void) -> string {
+function user.auth.AuthAliasParam(t: auth.Token) -> string {
     load_var t
     load_field .0
     return
 }
 
-function user.auth.AuthConstruct(provider: string) -> Config {
+function user.auth.AuthConstruct(provider: string) -> auth.Config {
     alloc_instance user.auth.Config
     load_var provider
     init_field .provider
@@ -152,7 +152,7 @@ function user.auth.AuthConstruct(provider: string) -> Config {
     return
 }
 
-function user.auth.AuthEnumMatch(r: void) -> string {
+function user.auth.AuthEnumMatch(r: auth.Role) -> string {
     load_var r
     discriminant
     load_const Role.Admin
@@ -183,18 +183,18 @@ function user.auth.AuthEnumMatch(r: void) -> string {
     return
 }
 
-function user.auth.AuthEnumReturn() -> void {
+function user.auth.AuthEnumReturn() -> auth.Role {
     load_const user.auth.Role.Admin
     alloc_variant user.auth.Role
     return
 }
 
-function user.auth.AuthIdentity(cfg: Config) -> Config {
+function user.auth.AuthIdentity(cfg: auth.Config) -> auth.Config {
     load_var cfg
     return
 }
 
-function user.auth.AuthMakeToken(v: string) -> void {
+function user.auth.AuthMakeToken(v: string) -> auth.Token {
     alloc_instance user.auth.Token
     load_var v
     init_field .value
@@ -266,13 +266,13 @@ function user.auth.AuthMatchesRootStatus(s: Status) -> string {
     return
 }
 
-function user.auth.AuthMixedConfigs(auth_cfg: Config, root_cfg: Config, llm_cfg: llm.Config) -> string {
+function user.auth.AuthMixedConfigs(auth_cfg: auth.Config, root_cfg: Config, llm_cfg: llm.Config) -> string {
     load_var auth_cfg
     load_field .0
     return
 }
 
-function user.auth.AuthMixedErrors(auth_err: Error, root_err: Error, llm_err: llm.Error) -> string {
+function user.auth.AuthMixedErrors(auth_err: auth.Error, root_err: Error, llm_err: llm.Error) -> string {
     load_var auth_err
     load_field .0
     return
@@ -371,13 +371,13 @@ function user.auth.AuthUsesRootStatus() -> Status {
     return
 }
 
-function user.llm.LlmAliasParam(cfg: Config) -> string {
+function user.llm.LlmAliasParam(cfg: llm.Config) -> string {
     load_var cfg
     load_field .0
     return
 }
 
-function user.llm.LlmConstruct(model: string) -> Config {
+function user.llm.LlmConstruct(model: string) -> llm.Config {
     alloc_instance user.llm.Config
     load_var model
     init_field .model
@@ -386,7 +386,7 @@ function user.llm.LlmConstruct(model: string) -> Config {
     return
 }
 
-function user.llm.LlmEnumMatch(s: Status) -> string {
+function user.llm.LlmEnumMatch(s: llm.Status) -> string {
     load_var s
     discriminant
     load_const Status.Ready
@@ -417,13 +417,13 @@ function user.llm.LlmEnumMatch(s: Status) -> string {
     return
 }
 
-function user.llm.LlmEnumReturn() -> Status {
+function user.llm.LlmEnumReturn() -> llm.Status {
     load_const user.llm.Status.Ready
     alloc_variant user.llm.Status
     return
 }
 
-function user.llm.LlmIdentity(cfg: Config) -> Config {
+function user.llm.LlmIdentity(cfg: llm.Config) -> llm.Config {
     load_var cfg
     return
 }
@@ -459,13 +459,13 @@ function user.llm.LlmMatchesRootStatus(s: Status) -> string {
     return
 }
 
-function user.llm.LlmMixedConfigs(llm_cfg: Config, root_cfg: Config, auth_cfg: auth.Config) -> string {
+function user.llm.LlmMixedConfigs(llm_cfg: llm.Config, root_cfg: Config, auth_cfg: auth.Config) -> string {
     load_var llm_cfg
     load_field .0
     return
 }
 
-function user.llm.LlmResponseConstruct(text: string) -> void {
+function user.llm.LlmResponseConstruct(text: string) -> llm.Response {
     alloc_instance user.llm.Response
     load_var text
     init_field .text
@@ -596,7 +596,7 @@ function user.llm.LlmUsesRootStatus() -> Status {
     return
 }
 
-function user.llm.openai.OpenAIConstruct(key: string) -> void {
+function user.llm.openai.OpenAIConstruct(key: string) -> llm.openai.Client {
     alloc_instance user.llm.openai.Client
     load_var key
     init_field .api_key
@@ -605,7 +605,7 @@ function user.llm.openai.OpenAIConstruct(key: string) -> void {
     return
 }
 
-function user.llm.openai.OpenAIEnumMatch(m: void) -> string {
+function user.llm.openai.OpenAIEnumMatch(m: llm.openai.Model) -> string {
     load_var m
     discriminant
     load_const Model.GPT4o
@@ -636,13 +636,13 @@ function user.llm.openai.OpenAIEnumMatch(m: void) -> string {
     return
 }
 
-function user.llm.openai.OpenAIEnumReturn() -> void {
+function user.llm.openai.OpenAIEnumReturn() -> llm.openai.Model {
     load_const user.llm.openai.Model.GPT4o
     alloc_variant user.llm.openai.Model
     return
 }
 
-function user.llm.openai.OpenAIIdentity(c: void) -> void {
+function user.llm.openai.OpenAIIdentity(c: llm.openai.Client) -> llm.openai.Client {
     load_var c
     return
 }
@@ -740,13 +740,13 @@ function user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
     return
 }
 
-function user.llm.openai.OpenAIMixedErrors(openai_err: Error, root_err: Error, llm_err: llm.Error, auth_err: auth.Error) -> string {
+function user.llm.openai.OpenAIMixedErrors(openai_err: llm.openai.Error, root_err: Error, llm_err: llm.Error, auth_err: auth.Error) -> string {
     load_var openai_err
     load_field .1
     return
 }
 
-function user.llm.openai.OpenAIMixedModels(openai_model: void, llm_model: llm.Model) -> string {
+function user.llm.openai.OpenAIMixedModels(openai_model: llm.openai.Model, llm_model: llm.Model) -> string {
     load_var openai_model
     discriminant
     load_const Model.GPT4o

@@ -492,6 +492,12 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 30
+    env:
+      # Disable Python + pipx tools: mise 2025.12.12 downloads a broken
+      # freethreaded Python build that's missing a lib/ directory.
+      # Rig test scripts use system Python via uv (the standalone uv binary
+      # mise installs handles its own Python via `uv run`).
+      MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
       - uses: actions/checkout@v4
         with:
@@ -512,6 +518,13 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-insta
+
+      - name: "Install mise"
+        uses: jdx/mise-action@v2
+        # Pinning to old version because newer versions time out on the npm backend,
+        # see https://github.com/jdx/mise/discussions/7630
+        with:
+          version: 2025.12.12
 
       - name: "Run snapshot tests"
         run: |

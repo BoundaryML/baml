@@ -117,10 +117,10 @@ async fn any_value_to_string() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"Person {
+            r#"user.Person {
     name: "Alice"
     age: 25
-    location: Point {
+    location: user.Point {
         x: 10
         y: 20
     }

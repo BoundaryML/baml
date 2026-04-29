@@ -345,7 +345,6 @@ dependencies = [
  "basic-toml",
  "memchr",
  "proc-macro2",
- "pulldown-cmark",
  "quote",
  "rustc-hash 2.1.1",
  "serde",
@@ -1096,19 +1095,8 @@ version = "0.0.0-beta"
 dependencies = [
  "askama",
  "baml_base",
- "baml_codegen_tests",
  "baml_codegen_types",
  "pretty_assertions",
-]
-
-[[package]]
-name = "baml_codegen_tests"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "baml_codegen_types",
- "insta",
- "paste",
 ]
 
 [[package]]
@@ -1625,6 +1613,7 @@ dependencies = [
  "baml_fmt",
  "baml_lsp2_actions",
  "baml_project",
+ "baml_type",
  "baml_workspace",
  "bex_engine",
  "bex_events",
@@ -6036,17 +6025,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95067976aca6421a523e491fce939a3e65249bac4b977adee0ee9771568e8aa3"
 
 [[package]]
-name = "pulldown-cmark"
-version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c3a14896dfa883796f1cb410461aef38810ea05f2b2c33c5aded3649095fdad"
-dependencies = [
- "bitflags 2.11.0",
- "memchr",
- "unicase",
-]
-
-[[package]]
 name = "pxfm"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6478,57 +6456,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "rig_python_empty"
+name = "rig_basic_type_shapes"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
- "baml_codegen_tests",
  "baml_codegen_types",
+ "baml_db",
+ "baml_project",
+ "baml_workspace",
 ]
 
 [[package]]
-name = "rig_python_literal_types"
+name = "rig_llm_functions"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_python",
- "baml_codegen_tests",
  "baml_codegen_types",
-]
-
-[[package]]
-name = "rig_python_map_types"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_python",
- "baml_codegen_tests",
- "baml_codegen_types",
-]
-
-[[package]]
-name = "rig_python_mixed_complex_types"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_python",
- "baml_codegen_tests",
- "baml_codegen_types",
-]
-
-[[package]]
-name = "rig_python_semantic_streaming"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_python",
- "baml_codegen_tests",
- "baml_codegen_types",
-]
-
-[[package]]
-name = "rig_python_union_types_extended"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_python",
- "baml_codegen_tests",
- "baml_codegen_types",
+ "baml_db",
+ "baml_project",
+ "baml_workspace",
 ]
 
 [[package]]
@@ -7870,13 +7816,6 @@ dependencies = [
  "salsa",
  "similar",
  "text-size",
-]
-
-[[package]]
-name = "tools_rig"
-version = "0.0.0-beta"
-dependencies = [
- "baml_codegen_tests",
 ]
 
 [[package]]

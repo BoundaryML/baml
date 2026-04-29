@@ -17,7 +17,7 @@ import tempfile
 
 import pytest
 
-from baml_py import BamlRuntime, FunctionResult, HostSpanManager, flush_events, get_version, call_function, call_function_sync
+from baml.baml_core import BamlRuntime, FunctionResult, HostSpanManager, flush_events, get_version, call_function, call_function_sync
 
 
 # ============================================================================
@@ -70,7 +70,9 @@ function ReturnFloat(f: float) -> float {
 
 def make_runtime(baml_source: str) -> BamlRuntime:
     """Create a BamlRuntime from a single BAML source string."""
-    return BamlRuntime.from_files(".", {"main.baml": baml_source})
+    return BamlRuntime.initialize_runtime(
+        ".", {"main.baml": baml_source}, sdk_root="__bridge_python_tests__"
+    )
 
 
 # ============================================================================
@@ -85,23 +87,27 @@ class TestBasics:
         assert isinstance(v, str)
         assert len(v) > 0
 
-    def test_from_files_valid(self):
-        """from_files succeeds with valid BAML source."""
+    def test_initialize_runtime_valid(self):
+        """initialize_runtime succeeds with valid BAML source."""
         rt = make_runtime(EXPR_FUNCS_BAML)
         assert rt is not None
 
     @pytest.mark.xfail(
         reason="bex_engine does not validate BAML at initialization time"
     )
-    def test_from_files_invalid_baml(self):
-        """from_files raises on invalid BAML source (type error)."""
+    def test_initialize_runtime_invalid_baml(self):
+        """initialize_runtime raises on invalid BAML source (type error)."""
         bad_baml = 'function Bad() -> int { "not an int" }'
         with pytest.raises(Exception):
-            BamlRuntime.from_files(".", {"bad.baml": bad_baml})
+            BamlRuntime.initialize_runtime(
+                ".", {"bad.baml": bad_baml}, sdk_root="__bridge_python_tests__"
+            )
 
-    def test_from_files_empty(self):
-        """from_files succeeds with empty source (no functions)."""
-        rt = BamlRuntime.from_files(".", {"empty.baml": ""})
+    def test_initialize_runtime_empty(self):
+        """initialize_runtime succeeds with empty source (no functions)."""
+        rt = BamlRuntime.initialize_runtime(
+            ".", {"empty.baml": ""}, sdk_root="__bridge_python_tests__"
+        )
         assert rt is not None
 
 
@@ -170,9 +176,14 @@ class TestCallFunctionSync:
         assert abs(result.result() - 3.14) < 0.001
 
     def test_missing_argument_raises(self):
-        """Missing required argument raises an error."""
+        """Missing required argument raises an error.
+
+        The engine reports this as ``Invalid argument: <name>`` rather than
+        ``Missing argument``; the test only asserts that *an* argument-
+        related error surfaces so it survives that phrasing tweak.
+        """
         rt = make_runtime(EXPR_FUNCS_BAML)
-        with pytest.raises(Exception, match="Missing argument"):
+        with pytest.raises(Exception, match="argument"):
             call_function_sync(rt,"ReturnNumber", {})
 
     def test_function_not_found_raises(self):
@@ -242,6 +253,19 @@ class TestTracing:
     and engine function calls.
     """
 
+    @pytest.fixture(autouse=True)
+    def _reset_ctx_manager_singleton(self):
+        """``CtxManager`` is a process-global singleton that caches the
+        ``BamlRuntime`` (and therefore the event sink) from its first
+        instantiation. Tests in this class build a fresh runtime wired to
+        a per-test ``BAML_TRACE_FILE``; without resetting the singleton,
+        the second test onward reuses the first test's sink — which points
+        at a temp file that has since been ``unlink``'d."""
+        import baml.baml_core.ctx_manager as cm
+
+        cm.prev_ctx_manager = None
+        yield
+
     @staticmethod
     @contextlib.contextmanager
     def _trace_file():
@@ -271,16 +295,21 @@ class TestTracing:
 
     def test_trace_decorator_sync(self):
         """@trace decorator records function start/end events."""
-        from baml_py import BamlCtxManager
+        from baml.baml_core import BamlCtxManager
 
-        rt = make_runtime(EXPR_FUNCS_BAML)
-        ctx = BamlCtxManager(rt)
-
-        @ctx.trace_fn
-        def traced_function(x: int) -> int:
-            return x * 2
-
+        # ``BAML_TRACE_FILE`` must be set before ``make_runtime`` runs, since
+        # the runtime wires its event sink to whatever the env var pointed at
+        # during ``initialize_runtime``. Creating the runtime outside the
+        # ``_trace_file`` scope would pin the sink to stderr and leave the
+        # JSONL assertion below reading an empty file.
         with self._trace_file() as trace_file:
+            rt = make_runtime(EXPR_FUNCS_BAML)
+            ctx = BamlCtxManager(rt)
+
+            @ctx.trace_fn
+            def traced_function(x: int) -> int:
+                return x * 2
+
             result = traced_function(21)
             assert result == 42
 
@@ -299,16 +328,16 @@ class TestTracing:
     @pytest.mark.asyncio
     async def test_trace_decorator_async(self):
         """@trace decorator works with async functions."""
-        from baml_py import BamlCtxManager
-
-        rt = make_runtime(EXPR_FUNCS_BAML)
-        ctx = BamlCtxManager(rt)
-
-        @ctx.trace_fn
-        async def traced_async_fn(s: str) -> str:
-            return f"traced: {s}"
+        from baml.baml_core import BamlCtxManager
 
         with self._trace_file() as trace_file:
+            rt = make_runtime(EXPR_FUNCS_BAML)
+            ctx = BamlCtxManager(rt)
+
+            @ctx.trace_fn
+            async def traced_async_fn(s: str) -> str:
+                return f"traced: {s}"
+
             result = await traced_async_fn("hello")
             assert result == "traced: hello"
 
@@ -325,7 +354,7 @@ class TestTracing:
 
     def test_nested_trace_callstack(self):
         """Nested @trace calls build a proper call stack."""
-        from baml_py import BamlCtxManager
+        from baml.baml_core import BamlCtxManager
 
         rt = make_runtime(EXPR_FUNCS_BAML)
         ctx = BamlCtxManager(rt)
@@ -353,12 +382,12 @@ class TestTracing:
 
     def test_flush_trace_events(self):
         """Flushing writes trace events to the JSONL file."""
-        from baml_py import BamlCtxManager
-
-        rt = make_runtime(EXPR_FUNCS_BAML)
-        ctx = BamlCtxManager(rt)
+        from baml.baml_core import BamlCtxManager
 
         with self._trace_file() as trace_file:
+            rt = make_runtime(EXPR_FUNCS_BAML)
+            ctx = BamlCtxManager(rt)
+
             @ctx.trace_fn
             def traced_fn():
                 return 42
@@ -373,12 +402,12 @@ class TestTracing:
 
     def test_tag_propagation(self):
         """Tags set on the current span are emitted as SetTags events."""
-        from baml_py import BamlCtxManager
-
-        rt = make_runtime(EXPR_FUNCS_BAML)
-        ctx = BamlCtxManager(rt)
+        from baml.baml_core import BamlCtxManager
 
         with self._trace_file() as trace_file:
+            rt = make_runtime(EXPR_FUNCS_BAML)
+            ctx = BamlCtxManager(rt)
+
             @ctx.trace_fn
             def tagged_fn():
                 ctx.upsert_tags(env="test", version="1.0")

@@ -38,7 +38,7 @@ async fn class_constructor() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::instance(
-            "Point",
+            "user.Point",
             indexmap! {
                 "x" => BexExternalValue::Int(1),
                 "y" => BexExternalValue::Int(2),
@@ -76,7 +76,7 @@ async fn class_constructor_return_directly() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::instance(
-            "Point",
+            "user.Point",
             indexmap! {
                 "x" => BexExternalValue::Int(1),
                 "y" => BexExternalValue::Int(2),
@@ -428,7 +428,7 @@ async fn spread_before_named_fields() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::instance(
-            "Point",
+            "user.Point",
             indexmap! {
                 "x" => BexExternalValue::Int(1),
                 "y" => BexExternalValue::Int(2),
@@ -498,7 +498,7 @@ async fn spread_after_named_fields() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::instance(
-            "Point",
+            "user.Point",
             indexmap! {
                 "x" => BexExternalValue::Int(0),
                 "y" => BexExternalValue::Int(0),
@@ -587,7 +587,7 @@ async fn multiple_spreads() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::instance(
-            "Point",
+            "user.Point",
             indexmap! {
                 "x" => BexExternalValue::Int(1),
                 "y" => BexExternalValue::Int(1),

@@ -3,11 +3,11 @@
 //! Union / Optional / Null invariance guaranteed
 
 mod errors;
-mod objects;
+mod symbols;
 mod ty;
 
 pub use errors::*;
-pub use objects::*;
+pub use symbols::*;
 pub use ty::*;
 
 /// Macro to define an askama template function with less boilerplate.

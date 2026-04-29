@@ -106,6 +106,8 @@ pub struct Class {
     pub methods: Vec<LocalItemId<FunctionMarker>>,
     /// Block-level attributes (@@description, @@alias, etc.).
     pub attributes: Vec<Attribute>,
+    /// Full source span of the class declaration.
+    pub span: TextRange,
 }
 
 /// An enum variant stored in the `ItemTree`.
@@ -123,6 +125,8 @@ pub struct Enum {
     pub variants: Vec<EnumVariant>,
     /// Block-level attributes (@@description, @@alias, etc.).
     pub attributes: Vec<Attribute>,
+    /// Full source span of the enum declaration.
+    pub span: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -130,6 +134,8 @@ pub struct TypeAlias {
     pub name: Name,
     /// The type expression on the RHS of the alias, if present.
     pub type_expr: Option<ast::SpannedTypeExpr>,
+    /// Full source span of the type alias declaration.
+    pub span: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -349,6 +355,7 @@ impl ItemTree {
                 fields,
                 methods: Vec::new(),
                 attributes: c.attributes.iter().map(Attribute::from).collect(),
+                span: c.span,
             },
         );
         id
@@ -381,6 +388,7 @@ impl ItemTree {
                 name: e.name.clone(),
                 variants,
                 attributes: e.attributes.iter().map(Attribute::from).collect(),
+                span: e.span,
             },
         );
         id
@@ -424,6 +432,7 @@ impl ItemTree {
             TypeAlias {
                 name: ta.name.clone(),
                 type_expr: ta.type_expr.clone(),
+                span: ta.span,
             },
         );
         id

@@ -2682,8 +2682,6 @@ $root.baml = (function() {
                  * @property {baml.cffi.v1.IBamlValueList|null} [listValue] BamlOutboundValue listValue
                  * @property {baml.cffi.v1.IBamlValueMap|null} [mapValue] BamlOutboundValue mapValue
                  * @property {baml.cffi.v1.IBamlValueUnionVariant|null} [unionVariantValue] BamlOutboundValue unionVariantValue
-                 * @property {baml.cffi.v1.IBamlValueChecked|null} [checkedValue] BamlOutboundValue checkedValue
-                 * @property {baml.cffi.v1.IBamlValueStreamingState|null} [streamingStateValue] BamlOutboundValue streamingStateValue
                  * @property {baml.cffi.v1.IBamlHandle|null} [handleValue] BamlOutboundValue handleValue
                  * @property {baml.cffi.v1.IBamlValueMedia|null} [mediaValue] BamlOutboundValue mediaValue
                  * @property {baml.cffi.v1.IBamlValuePromptAst|null} [promptAstValue] BamlOutboundValue promptAstValue
@@ -2794,22 +2792,6 @@ $root.baml = (function() {
                 BamlOutboundValue.prototype.unionVariantValue = null;
 
                 /**
-                 * BamlOutboundValue checkedValue.
-                 * @member {baml.cffi.v1.IBamlValueChecked|null|undefined} checkedValue
-                 * @memberof baml.cffi.v1.BamlOutboundValue
-                 * @instance
-                 */
-                BamlOutboundValue.prototype.checkedValue = null;
-
-                /**
-                 * BamlOutboundValue streamingStateValue.
-                 * @member {baml.cffi.v1.IBamlValueStreamingState|null|undefined} streamingStateValue
-                 * @memberof baml.cffi.v1.BamlOutboundValue
-                 * @instance
-                 */
-                BamlOutboundValue.prototype.streamingStateValue = null;
-
-                /**
                  * BamlOutboundValue handleValue.
                  * @member {baml.cffi.v1.IBamlHandle|null|undefined} handleValue
                  * @memberof baml.cffi.v1.BamlOutboundValue
@@ -2846,12 +2828,12 @@ $root.baml = (function() {
 
                 /**
                  * BamlOutboundValue value.
-                 * @member {"nullValue"|"stringValue"|"intValue"|"floatValue"|"boolValue"|"classValue"|"enumValue"|"literalValue"|"listValue"|"mapValue"|"unionVariantValue"|"checkedValue"|"streamingStateValue"|"handleValue"|"mediaValue"|"promptAstValue"|"uint8arrayValue"|undefined} value
+                 * @member {"nullValue"|"stringValue"|"intValue"|"floatValue"|"boolValue"|"classValue"|"enumValue"|"literalValue"|"listValue"|"mapValue"|"unionVariantValue"|"handleValue"|"mediaValue"|"promptAstValue"|"uint8arrayValue"|undefined} value
                  * @memberof baml.cffi.v1.BamlOutboundValue
                  * @instance
                  */
                 Object.defineProperty(BamlOutboundValue.prototype, "value", {
-                    get: $util.oneOfGetter($oneOfFields = ["nullValue", "stringValue", "intValue", "floatValue", "boolValue", "classValue", "enumValue", "literalValue", "listValue", "mapValue", "unionVariantValue", "checkedValue", "streamingStateValue", "handleValue", "mediaValue", "promptAstValue", "uint8arrayValue"]),
+                    get: $util.oneOfGetter($oneOfFields = ["nullValue", "stringValue", "intValue", "floatValue", "boolValue", "classValue", "enumValue", "literalValue", "listValue", "mapValue", "unionVariantValue", "handleValue", "mediaValue", "promptAstValue", "uint8arrayValue"]),
                     set: $util.oneOfSetter($oneOfFields)
                 });
 
@@ -2901,10 +2883,6 @@ $root.baml = (function() {
                         $root.baml.cffi.v1.BamlValueMap.encode(message.mapValue, writer.uint32(/* id 12, wireType 2 =*/98).fork()).ldelim();
                     if (message.unionVariantValue != null && Object.hasOwnProperty.call(message, "unionVariantValue"))
                         $root.baml.cffi.v1.BamlValueUnionVariant.encode(message.unionVariantValue, writer.uint32(/* id 13, wireType 2 =*/106).fork()).ldelim();
-                    if (message.checkedValue != null && Object.hasOwnProperty.call(message, "checkedValue"))
-                        $root.baml.cffi.v1.BamlValueChecked.encode(message.checkedValue, writer.uint32(/* id 14, wireType 2 =*/114).fork()).ldelim();
-                    if (message.streamingStateValue != null && Object.hasOwnProperty.call(message, "streamingStateValue"))
-                        $root.baml.cffi.v1.BamlValueStreamingState.encode(message.streamingStateValue, writer.uint32(/* id 15, wireType 2 =*/122).fork()).ldelim();
                     if (message.handleValue != null && Object.hasOwnProperty.call(message, "handleValue"))
                         $root.baml.cffi.v1.BamlHandle.encode(message.handleValue, writer.uint32(/* id 16, wireType 2 =*/130).fork()).ldelim();
                     if (message.mediaValue != null && Object.hasOwnProperty.call(message, "mediaValue"))
@@ -2991,14 +2969,6 @@ $root.baml = (function() {
                             }
                         case 13: {
                                 message.unionVariantValue = $root.baml.cffi.v1.BamlValueUnionVariant.decode(reader, reader.uint32());
-                                break;
-                            }
-                        case 14: {
-                                message.checkedValue = $root.baml.cffi.v1.BamlValueChecked.decode(reader, reader.uint32());
-                                break;
-                            }
-                        case 15: {
-                                message.streamingStateValue = $root.baml.cffi.v1.BamlValueStreamingState.decode(reader, reader.uint32());
                                 break;
                             }
                         case 16: {
@@ -3149,26 +3119,6 @@ $root.baml = (function() {
                                 return "unionVariantValue." + error;
                         }
                     }
-                    if (message.checkedValue != null && message.hasOwnProperty("checkedValue")) {
-                        if (properties.value === 1)
-                            return "value: multiple values";
-                        properties.value = 1;
-                        {
-                            var error = $root.baml.cffi.v1.BamlValueChecked.verify(message.checkedValue);
-                            if (error)
-                                return "checkedValue." + error;
-                        }
-                    }
-                    if (message.streamingStateValue != null && message.hasOwnProperty("streamingStateValue")) {
-                        if (properties.value === 1)
-                            return "value: multiple values";
-                        properties.value = 1;
-                        {
-                            var error = $root.baml.cffi.v1.BamlValueStreamingState.verify(message.streamingStateValue);
-                            if (error)
-                                return "streamingStateValue." + error;
-                        }
-                    }
                     if (message.handleValue != null && message.hasOwnProperty("handleValue")) {
                         if (properties.value === 1)
                             return "value: multiple values";
@@ -3271,16 +3221,6 @@ $root.baml = (function() {
                             throw TypeError(".baml.cffi.v1.BamlOutboundValue.unionVariantValue: object expected");
                         message.unionVariantValue = $root.baml.cffi.v1.BamlValueUnionVariant.fromObject(object.unionVariantValue);
                     }
-                    if (object.checkedValue != null) {
-                        if (typeof object.checkedValue !== "object")
-                            throw TypeError(".baml.cffi.v1.BamlOutboundValue.checkedValue: object expected");
-                        message.checkedValue = $root.baml.cffi.v1.BamlValueChecked.fromObject(object.checkedValue);
-                    }
-                    if (object.streamingStateValue != null) {
-                        if (typeof object.streamingStateValue !== "object")
-                            throw TypeError(".baml.cffi.v1.BamlOutboundValue.streamingStateValue: object expected");
-                        message.streamingStateValue = $root.baml.cffi.v1.BamlValueStreamingState.fromObject(object.streamingStateValue);
-                    }
                     if (object.handleValue != null) {
                         if (typeof object.handleValue !== "object")
                             throw TypeError(".baml.cffi.v1.BamlOutboundValue.handleValue: object expected");
@@ -3374,16 +3314,6 @@ $root.baml = (function() {
                         object.unionVariantValue = $root.baml.cffi.v1.BamlValueUnionVariant.toObject(message.unionVariantValue, options);
                         if (options.oneofs)
                             object.value = "unionVariantValue";
-                    }
-                    if (message.checkedValue != null && message.hasOwnProperty("checkedValue")) {
-                        object.checkedValue = $root.baml.cffi.v1.BamlValueChecked.toObject(message.checkedValue, options);
-                        if (options.oneofs)
-                            object.value = "checkedValue";
-                    }
-                    if (message.streamingStateValue != null && message.hasOwnProperty("streamingStateValue")) {
-                        object.streamingStateValue = $root.baml.cffi.v1.BamlValueStreamingState.toObject(message.streamingStateValue, options);
-                        if (options.oneofs)
-                            object.value = "streamingStateValue";
                     }
                     if (message.handleValue != null && message.hasOwnProperty("handleValue")) {
                         object.handleValue = $root.baml.cffi.v1.BamlHandle.toObject(message.handleValue, options);
@@ -5516,290 +5446,6 @@ $root.baml = (function() {
                 };
 
                 return BamlValueUnionVariant;
-            })();
-
-            v1.BamlValueChecked = (function() {
-
-                /**
-                 * Properties of a BamlValueChecked.
-                 * @memberof baml.cffi.v1
-                 * @interface IBamlValueChecked
-                 * @property {baml.cffi.v1.IBamlTypeName|null} [name] BamlValueChecked name
-                 * @property {baml.cffi.v1.IBamlOutboundValue|null} [value] BamlValueChecked value
-                 * @property {Array.<baml.cffi.v1.IBamlCheckValue>|null} [checks] BamlValueChecked checks
-                 */
-
-                /**
-                 * Constructs a new BamlValueChecked.
-                 * @memberof baml.cffi.v1
-                 * @classdesc Represents a BamlValueChecked.
-                 * @implements IBamlValueChecked
-                 * @constructor
-                 * @param {baml.cffi.v1.IBamlValueChecked=} [properties] Properties to set
-                 */
-                function BamlValueChecked(properties) {
-                    this.checks = [];
-                    if (properties)
-                        for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
-                                this[keys[i]] = properties[keys[i]];
-                }
-
-                /**
-                 * BamlValueChecked name.
-                 * @member {baml.cffi.v1.IBamlTypeName|null|undefined} name
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @instance
-                 */
-                BamlValueChecked.prototype.name = null;
-
-                /**
-                 * BamlValueChecked value.
-                 * @member {baml.cffi.v1.IBamlOutboundValue|null|undefined} value
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @instance
-                 */
-                BamlValueChecked.prototype.value = null;
-
-                /**
-                 * BamlValueChecked checks.
-                 * @member {Array.<baml.cffi.v1.IBamlCheckValue>} checks
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @instance
-                 */
-                BamlValueChecked.prototype.checks = $util.emptyArray;
-
-                /**
-                 * Creates a new BamlValueChecked instance using the specified properties.
-                 * @function create
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @static
-                 * @param {baml.cffi.v1.IBamlValueChecked=} [properties] Properties to set
-                 * @returns {baml.cffi.v1.BamlValueChecked} BamlValueChecked instance
-                 */
-                BamlValueChecked.create = function create(properties) {
-                    return new BamlValueChecked(properties);
-                };
-
-                /**
-                 * Encodes the specified BamlValueChecked message. Does not implicitly {@link baml.cffi.v1.BamlValueChecked.verify|verify} messages.
-                 * @function encode
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @static
-                 * @param {baml.cffi.v1.IBamlValueChecked} message BamlValueChecked message or plain object to encode
-                 * @param {$protobuf.Writer} [writer] Writer to encode to
-                 * @returns {$protobuf.Writer} Writer
-                 */
-                BamlValueChecked.encode = function encode(message, writer) {
-                    if (!writer)
-                        writer = $Writer.create();
-                    if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                        $root.baml.cffi.v1.BamlTypeName.encode(message.name, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
-                    if (message.value != null && Object.hasOwnProperty.call(message, "value"))
-                        $root.baml.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
-                    if (message.checks != null && message.checks.length)
-                        for (var i = 0; i < message.checks.length; ++i)
-                            $root.baml.cffi.v1.BamlCheckValue.encode(message.checks[i], writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
-                    return writer;
-                };
-
-                /**
-                 * Encodes the specified BamlValueChecked message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlValueChecked.verify|verify} messages.
-                 * @function encodeDelimited
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @static
-                 * @param {baml.cffi.v1.IBamlValueChecked} message BamlValueChecked message or plain object to encode
-                 * @param {$protobuf.Writer} [writer] Writer to encode to
-                 * @returns {$protobuf.Writer} Writer
-                 */
-                BamlValueChecked.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
-                };
-
-                /**
-                 * Decodes a BamlValueChecked message from the specified reader or buffer.
-                 * @function decode
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @static
-                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-                 * @param {number} [length] Message length if known beforehand
-                 * @returns {baml.cffi.v1.BamlValueChecked} BamlValueChecked
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                BamlValueChecked.decode = function decode(reader, length, error) {
-                    if (!(reader instanceof $Reader))
-                        reader = $Reader.create(reader);
-                    var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml.cffi.v1.BamlValueChecked();
-                    while (reader.pos < end) {
-                        var tag = reader.uint32();
-                        if (tag === error)
-                            break;
-                        switch (tag >>> 3) {
-                        case 1: {
-                                message.name = $root.baml.cffi.v1.BamlTypeName.decode(reader, reader.uint32());
-                                break;
-                            }
-                        case 2: {
-                                message.value = $root.baml.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32());
-                                break;
-                            }
-                        case 3: {
-                                if (!(message.checks && message.checks.length))
-                                    message.checks = [];
-                                message.checks.push($root.baml.cffi.v1.BamlCheckValue.decode(reader, reader.uint32()));
-                                break;
-                            }
-                        default:
-                            reader.skipType(tag & 7);
-                            break;
-                        }
-                    }
-                    return message;
-                };
-
-                /**
-                 * Decodes a BamlValueChecked message from the specified reader or buffer, length delimited.
-                 * @function decodeDelimited
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @static
-                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-                 * @returns {baml.cffi.v1.BamlValueChecked} BamlValueChecked
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                BamlValueChecked.decodeDelimited = function decodeDelimited(reader) {
-                    if (!(reader instanceof $Reader))
-                        reader = new $Reader(reader);
-                    return this.decode(reader, reader.uint32());
-                };
-
-                /**
-                 * Verifies a BamlValueChecked message.
-                 * @function verify
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @static
-                 * @param {Object.<string,*>} message Plain object to verify
-                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
-                 */
-                BamlValueChecked.verify = function verify(message) {
-                    if (typeof message !== "object" || message === null)
-                        return "object expected";
-                    if (message.name != null && message.hasOwnProperty("name")) {
-                        var error = $root.baml.cffi.v1.BamlTypeName.verify(message.name);
-                        if (error)
-                            return "name." + error;
-                    }
-                    if (message.value != null && message.hasOwnProperty("value")) {
-                        var error = $root.baml.cffi.v1.BamlOutboundValue.verify(message.value);
-                        if (error)
-                            return "value." + error;
-                    }
-                    if (message.checks != null && message.hasOwnProperty("checks")) {
-                        if (!Array.isArray(message.checks))
-                            return "checks: array expected";
-                        for (var i = 0; i < message.checks.length; ++i) {
-                            var error = $root.baml.cffi.v1.BamlCheckValue.verify(message.checks[i]);
-                            if (error)
-                                return "checks." + error;
-                        }
-                    }
-                    return null;
-                };
-
-                /**
-                 * Creates a BamlValueChecked message from a plain object. Also converts values to their respective internal types.
-                 * @function fromObject
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @static
-                 * @param {Object.<string,*>} object Plain object
-                 * @returns {baml.cffi.v1.BamlValueChecked} BamlValueChecked
-                 */
-                BamlValueChecked.fromObject = function fromObject(object) {
-                    if (object instanceof $root.baml.cffi.v1.BamlValueChecked)
-                        return object;
-                    var message = new $root.baml.cffi.v1.BamlValueChecked();
-                    if (object.name != null) {
-                        if (typeof object.name !== "object")
-                            throw TypeError(".baml.cffi.v1.BamlValueChecked.name: object expected");
-                        message.name = $root.baml.cffi.v1.BamlTypeName.fromObject(object.name);
-                    }
-                    if (object.value != null) {
-                        if (typeof object.value !== "object")
-                            throw TypeError(".baml.cffi.v1.BamlValueChecked.value: object expected");
-                        message.value = $root.baml.cffi.v1.BamlOutboundValue.fromObject(object.value);
-                    }
-                    if (object.checks) {
-                        if (!Array.isArray(object.checks))
-                            throw TypeError(".baml.cffi.v1.BamlValueChecked.checks: array expected");
-                        message.checks = [];
-                        for (var i = 0; i < object.checks.length; ++i) {
-                            if (typeof object.checks[i] !== "object")
-                                throw TypeError(".baml.cffi.v1.BamlValueChecked.checks: object expected");
-                            message.checks[i] = $root.baml.cffi.v1.BamlCheckValue.fromObject(object.checks[i]);
-                        }
-                    }
-                    return message;
-                };
-
-                /**
-                 * Creates a plain object from a BamlValueChecked message. Also converts values to other types if specified.
-                 * @function toObject
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @static
-                 * @param {baml.cffi.v1.BamlValueChecked} message BamlValueChecked
-                 * @param {$protobuf.IConversionOptions} [options] Conversion options
-                 * @returns {Object.<string,*>} Plain object
-                 */
-                BamlValueChecked.toObject = function toObject(message, options) {
-                    if (!options)
-                        options = {};
-                    var object = {};
-                    if (options.arrays || options.defaults)
-                        object.checks = [];
-                    if (options.defaults) {
-                        object.name = null;
-                        object.value = null;
-                    }
-                    if (message.name != null && message.hasOwnProperty("name"))
-                        object.name = $root.baml.cffi.v1.BamlTypeName.toObject(message.name, options);
-                    if (message.value != null && message.hasOwnProperty("value"))
-                        object.value = $root.baml.cffi.v1.BamlOutboundValue.toObject(message.value, options);
-                    if (message.checks && message.checks.length) {
-                        object.checks = [];
-                        for (var j = 0; j < message.checks.length; ++j)
-                            object.checks[j] = $root.baml.cffi.v1.BamlCheckValue.toObject(message.checks[j], options);
-                    }
-                    return object;
-                };
-
-                /**
-                 * Converts this BamlValueChecked to JSON.
-                 * @function toJSON
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @instance
-                 * @returns {Object.<string,*>} JSON object
-                 */
-                BamlValueChecked.prototype.toJSON = function toJSON() {
-                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-                };
-
-                /**
-                 * Gets the default type url for BamlValueChecked
-                 * @function getTypeUrl
-                 * @memberof baml.cffi.v1.BamlValueChecked
-                 * @static
-                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns {string} The default type url
-                 */
-                BamlValueChecked.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
-                    if (typeUrlPrefix === undefined) {
-                        typeUrlPrefix = "type.googleapis.com";
-                    }
-                    return typeUrlPrefix + "/baml.cffi.v1.BamlValueChecked";
-                };
-
-                return BamlValueChecked;
             })();
 
             /**
@@ -13391,308 +13037,6 @@ $root.baml = (function() {
                 };
 
                 return BamlCheckValue;
-            })();
-
-            /**
-             * BamlStreamState enum.
-             * @name baml.cffi.v1.BamlStreamState
-             * @enum {number}
-             * @property {number} PENDING=0 PENDING value
-             * @property {number} STARTED=1 STARTED value
-             * @property {number} DONE=2 DONE value
-             */
-            v1.BamlStreamState = (function() {
-                var valuesById = {}, values = Object.create(valuesById);
-                values[valuesById[0] = "PENDING"] = 0;
-                values[valuesById[1] = "STARTED"] = 1;
-                values[valuesById[2] = "DONE"] = 2;
-                return values;
-            })();
-
-            v1.BamlValueStreamingState = (function() {
-
-                /**
-                 * Properties of a BamlValueStreamingState.
-                 * @memberof baml.cffi.v1
-                 * @interface IBamlValueStreamingState
-                 * @property {baml.cffi.v1.IBamlOutboundValue|null} [value] BamlValueStreamingState value
-                 * @property {baml.cffi.v1.BamlStreamState|null} [state] BamlValueStreamingState state
-                 * @property {baml.cffi.v1.IBamlTypeName|null} [name] BamlValueStreamingState name
-                 */
-
-                /**
-                 * Constructs a new BamlValueStreamingState.
-                 * @memberof baml.cffi.v1
-                 * @classdesc Represents a BamlValueStreamingState.
-                 * @implements IBamlValueStreamingState
-                 * @constructor
-                 * @param {baml.cffi.v1.IBamlValueStreamingState=} [properties] Properties to set
-                 */
-                function BamlValueStreamingState(properties) {
-                    if (properties)
-                        for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null)
-                                this[keys[i]] = properties[keys[i]];
-                }
-
-                /**
-                 * BamlValueStreamingState value.
-                 * @member {baml.cffi.v1.IBamlOutboundValue|null|undefined} value
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @instance
-                 */
-                BamlValueStreamingState.prototype.value = null;
-
-                /**
-                 * BamlValueStreamingState state.
-                 * @member {baml.cffi.v1.BamlStreamState} state
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @instance
-                 */
-                BamlValueStreamingState.prototype.state = 0;
-
-                /**
-                 * BamlValueStreamingState name.
-                 * @member {baml.cffi.v1.IBamlTypeName|null|undefined} name
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @instance
-                 */
-                BamlValueStreamingState.prototype.name = null;
-
-                /**
-                 * Creates a new BamlValueStreamingState instance using the specified properties.
-                 * @function create
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @static
-                 * @param {baml.cffi.v1.IBamlValueStreamingState=} [properties] Properties to set
-                 * @returns {baml.cffi.v1.BamlValueStreamingState} BamlValueStreamingState instance
-                 */
-                BamlValueStreamingState.create = function create(properties) {
-                    return new BamlValueStreamingState(properties);
-                };
-
-                /**
-                 * Encodes the specified BamlValueStreamingState message. Does not implicitly {@link baml.cffi.v1.BamlValueStreamingState.verify|verify} messages.
-                 * @function encode
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @static
-                 * @param {baml.cffi.v1.IBamlValueStreamingState} message BamlValueStreamingState message or plain object to encode
-                 * @param {$protobuf.Writer} [writer] Writer to encode to
-                 * @returns {$protobuf.Writer} Writer
-                 */
-                BamlValueStreamingState.encode = function encode(message, writer) {
-                    if (!writer)
-                        writer = $Writer.create();
-                    if (message.value != null && Object.hasOwnProperty.call(message, "value"))
-                        $root.baml.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
-                    if (message.state != null && Object.hasOwnProperty.call(message, "state"))
-                        writer.uint32(/* id 2, wireType 0 =*/16).int32(message.state);
-                    if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                        $root.baml.cffi.v1.BamlTypeName.encode(message.name, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
-                    return writer;
-                };
-
-                /**
-                 * Encodes the specified BamlValueStreamingState message, length delimited. Does not implicitly {@link baml.cffi.v1.BamlValueStreamingState.verify|verify} messages.
-                 * @function encodeDelimited
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @static
-                 * @param {baml.cffi.v1.IBamlValueStreamingState} message BamlValueStreamingState message or plain object to encode
-                 * @param {$protobuf.Writer} [writer] Writer to encode to
-                 * @returns {$protobuf.Writer} Writer
-                 */
-                BamlValueStreamingState.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
-                };
-
-                /**
-                 * Decodes a BamlValueStreamingState message from the specified reader or buffer.
-                 * @function decode
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @static
-                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-                 * @param {number} [length] Message length if known beforehand
-                 * @returns {baml.cffi.v1.BamlValueStreamingState} BamlValueStreamingState
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                BamlValueStreamingState.decode = function decode(reader, length, error) {
-                    if (!(reader instanceof $Reader))
-                        reader = $Reader.create(reader);
-                    var end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml.cffi.v1.BamlValueStreamingState();
-                    while (reader.pos < end) {
-                        var tag = reader.uint32();
-                        if (tag === error)
-                            break;
-                        switch (tag >>> 3) {
-                        case 1: {
-                                message.value = $root.baml.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32());
-                                break;
-                            }
-                        case 2: {
-                                message.state = reader.int32();
-                                break;
-                            }
-                        case 3: {
-                                message.name = $root.baml.cffi.v1.BamlTypeName.decode(reader, reader.uint32());
-                                break;
-                            }
-                        default:
-                            reader.skipType(tag & 7);
-                            break;
-                        }
-                    }
-                    return message;
-                };
-
-                /**
-                 * Decodes a BamlValueStreamingState message from the specified reader or buffer, length delimited.
-                 * @function decodeDelimited
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @static
-                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-                 * @returns {baml.cffi.v1.BamlValueStreamingState} BamlValueStreamingState
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                BamlValueStreamingState.decodeDelimited = function decodeDelimited(reader) {
-                    if (!(reader instanceof $Reader))
-                        reader = new $Reader(reader);
-                    return this.decode(reader, reader.uint32());
-                };
-
-                /**
-                 * Verifies a BamlValueStreamingState message.
-                 * @function verify
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @static
-                 * @param {Object.<string,*>} message Plain object to verify
-                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
-                 */
-                BamlValueStreamingState.verify = function verify(message) {
-                    if (typeof message !== "object" || message === null)
-                        return "object expected";
-                    if (message.value != null && message.hasOwnProperty("value")) {
-                        var error = $root.baml.cffi.v1.BamlOutboundValue.verify(message.value);
-                        if (error)
-                            return "value." + error;
-                    }
-                    if (message.state != null && message.hasOwnProperty("state"))
-                        switch (message.state) {
-                        default:
-                            return "state: enum value expected";
-                        case 0:
-                        case 1:
-                        case 2:
-                            break;
-                        }
-                    if (message.name != null && message.hasOwnProperty("name")) {
-                        var error = $root.baml.cffi.v1.BamlTypeName.verify(message.name);
-                        if (error)
-                            return "name." + error;
-                    }
-                    return null;
-                };
-
-                /**
-                 * Creates a BamlValueStreamingState message from a plain object. Also converts values to their respective internal types.
-                 * @function fromObject
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @static
-                 * @param {Object.<string,*>} object Plain object
-                 * @returns {baml.cffi.v1.BamlValueStreamingState} BamlValueStreamingState
-                 */
-                BamlValueStreamingState.fromObject = function fromObject(object) {
-                    if (object instanceof $root.baml.cffi.v1.BamlValueStreamingState)
-                        return object;
-                    var message = new $root.baml.cffi.v1.BamlValueStreamingState();
-                    if (object.value != null) {
-                        if (typeof object.value !== "object")
-                            throw TypeError(".baml.cffi.v1.BamlValueStreamingState.value: object expected");
-                        message.value = $root.baml.cffi.v1.BamlOutboundValue.fromObject(object.value);
-                    }
-                    switch (object.state) {
-                    default:
-                        if (typeof object.state === "number") {
-                            message.state = object.state;
-                            break;
-                        }
-                        break;
-                    case "PENDING":
-                    case 0:
-                        message.state = 0;
-                        break;
-                    case "STARTED":
-                    case 1:
-                        message.state = 1;
-                        break;
-                    case "DONE":
-                    case 2:
-                        message.state = 2;
-                        break;
-                    }
-                    if (object.name != null) {
-                        if (typeof object.name !== "object")
-                            throw TypeError(".baml.cffi.v1.BamlValueStreamingState.name: object expected");
-                        message.name = $root.baml.cffi.v1.BamlTypeName.fromObject(object.name);
-                    }
-                    return message;
-                };
-
-                /**
-                 * Creates a plain object from a BamlValueStreamingState message. Also converts values to other types if specified.
-                 * @function toObject
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @static
-                 * @param {baml.cffi.v1.BamlValueStreamingState} message BamlValueStreamingState
-                 * @param {$protobuf.IConversionOptions} [options] Conversion options
-                 * @returns {Object.<string,*>} Plain object
-                 */
-                BamlValueStreamingState.toObject = function toObject(message, options) {
-                    if (!options)
-                        options = {};
-                    var object = {};
-                    if (options.defaults) {
-                        object.value = null;
-                        object.state = options.enums === String ? "PENDING" : 0;
-                        object.name = null;
-                    }
-                    if (message.value != null && message.hasOwnProperty("value"))
-                        object.value = $root.baml.cffi.v1.BamlOutboundValue.toObject(message.value, options);
-                    if (message.state != null && message.hasOwnProperty("state"))
-                        object.state = options.enums === String ? $root.baml.cffi.v1.BamlStreamState[message.state] === undefined ? message.state : $root.baml.cffi.v1.BamlStreamState[message.state] : message.state;
-                    if (message.name != null && message.hasOwnProperty("name"))
-                        object.name = $root.baml.cffi.v1.BamlTypeName.toObject(message.name, options);
-                    return object;
-                };
-
-                /**
-                 * Converts this BamlValueStreamingState to JSON.
-                 * @function toJSON
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @instance
-                 * @returns {Object.<string,*>} JSON object
-                 */
-                BamlValueStreamingState.prototype.toJSON = function toJSON() {
-                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-                };
-
-                /**
-                 * Gets the default type url for BamlValueStreamingState
-                 * @function getTypeUrl
-                 * @memberof baml.cffi.v1.BamlValueStreamingState
-                 * @static
-                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns {string} The default type url
-                 */
-                BamlValueStreamingState.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
-                    if (typeUrlPrefix === undefined) {
-                        typeUrlPrefix = "type.googleapis.com";
-                    }
-                    return typeUrlPrefix + "/baml.cffi.v1.BamlValueStreamingState";
-                };
-
-                return BamlValueStreamingState;
             })();
 
             return v1;
