@@ -1,0 +1,46 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.f<K, V>(k: K, v: V) -> V throws never {
+  { : V
+    v : V
+  }
+}
+function user.UnclosedCall() -> string throws never {
+  { : string | "two"
+    f<K, V>(1, "two") : string | "two"
+  }
+}
+function user.ExtraCloseParen() -> string throws never {
+  { : string | "two"
+    f<K, V>(1, "two") : string | "two"
+  }
+}
+function user.UnclosedGeneric() -> string throws never {
+  { : unknown
+    f < int : bool
+    string(1, "two") : unknown
+  }
+  !! 671..674: unresolved name: int
+  !! 676..682: unresolved name: string
+}
+function user.ExtraCloseAngle() -> string throws never {
+  { : string | "two"
+    f<K, V>(1, "two") : string | "two"
+  }
+}
+function user.MismatchedParenBracket() -> int throws never {
+  { : 3
+    1 + 2 : 3
+  }
+}
+function user.UnclosedArray() -> int[] throws never {
+  { : int[]
+    [1, 2, 3, NestedUnclosed(), string, { 1 stmts + tail }] : int[]
+  }
+  !! 1048..1062: unresolved name: NestedUnclosed
+  !! 1068..1074: unresolved name: string
+  !! 1083..1086: unresolved name: int
+  !! 1088..1094: unresolved name: string
+}
