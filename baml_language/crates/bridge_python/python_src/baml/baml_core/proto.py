@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import enum
 import importlib
-from typing import Any, Dict, Optional
+import typing
+from typing import Any, Dict, List, Optional
 
 import pydantic
 
@@ -41,6 +42,20 @@ def _handle_from_handle_backed(value: Any) -> Optional[BamlHandle]:
     if isinstance(handle, BamlHandle):
         return handle
     return None
+
+
+def _base_class_for_fqn(cls: type) -> type:
+    """Return the unparameterized origin of a Pydantic generic class.
+
+    `Box[int]` is a runtime subclass produced by Pydantic v2's
+    `__class_getitem__`; its FQN on the wire is the base `Box`'s, not the
+    parameterization (`13b` §2.1). For non-generic classes this is a
+    no-op — `cls` already names the class we want.
+    """
+    meta = getattr(cls, "__pydantic_generic_metadata__", None)
+    if meta and meta.get("origin"):
+        return meta["origin"]
+    return cls
 
 
 def _derive_baml_fqn(cls: type) -> str:
@@ -143,7 +158,7 @@ def _set_inbound_value(inbound_value, value: Any, *, kwarg_name: str) -> None:
         return
     if isinstance(value, enum.Enum):
         ev = inbound_value.enum_value
-        ev.name = _derive_baml_fqn(type(value))
+        ev.name = _derive_baml_fqn(_base_class_for_fqn(type(value)))
         ev.value = value.name
         return
 
@@ -157,9 +172,19 @@ def _set_inbound_value(inbound_value, value: Any, *, kwarg_name: str) -> None:
 
     if isinstance(value, pydantic.BaseModel):
         cv = inbound_value.class_value
-        cv.name = _derive_baml_fqn(type(value))
-        field_dict = value.model_dump()
-        for k, v in field_dict.items():
+        # Pydantic generic subclasses (`Box[int]`) keep `__module__` from
+        # the base, but we still want the *base* `Box`'s FQN on the wire —
+        # `13b` §2.1. The Rust-side type checker already knows the
+        # declared parameter type from the function signature.
+        cv.name = _derive_baml_fqn(_base_class_for_fqn(type(value)))
+        # Walk fields by attribute access (Pydantic v2's `__iter__`
+        # yields `(name, value)` without recursive serialization).
+        # `model_dump()` would flatten nested Pydantic instances into
+        # dicts and lose the type info — the Rust-side coercer would
+        # then see them as `Map` instead of `Instance`, so a
+        # `Box<Box<int>>` round-trip collapses into bare dicts at the
+        # second level.
+        for k, v in dict(value).items():
             _set_inbound_map_entry(cv.fields.add(), k, v, kwarg_name=kwarg_name)
         return
 
@@ -215,11 +240,120 @@ def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
 # ---------------------------------------------------------------------------
 
 
+def _is_pydantic_generic(cls: type) -> bool:
+    """Whether `cls` was declared as `class C(BaseModel, Generic[T, …])`.
+
+    Pydantic stores the declared TypeVars on `__pydantic_generic_metadata__
+    ["parameters"]`; non-generic models have an empty tuple there.
+    """
+    meta = getattr(cls, "__pydantic_generic_metadata__", None)
+    if meta is None:
+        return False
+    params = meta.get("parameters") or ()
+    return len(params) > 0
+
+
+_MEDIA_KIND_SUBPATHS = {
+    baml_outbound_pb2.MediaTypeEnum.IMAGE: "baml.media.Image",
+    baml_outbound_pb2.MediaTypeEnum.AUDIO: "baml.media.Audio",
+    baml_outbound_pb2.MediaTypeEnum.VIDEO: "baml.media.Video",
+    baml_outbound_pb2.MediaTypeEnum.PDF: "baml.media.Pdf",
+}
+
+
+def _baml_ty_to_python_type(baml_ty) -> Any:
+    """Walk a `BamlTy` proto and return the corresponding Python type.
+
+    Runtime mirror of codegen-time `translate_ty` (`13a` §3): same BAML→
+    Python mapping, but produces a `type` object (used for
+    `cls[args]` parameterization) rather than a source string. The two
+    share the mapping table — keep them in sync when adding new
+    `BamlTy` variants. See `13b` §3.3.
+    """
+    which = baml_ty.WhichOneof("type")
+    if which is None:
+        return typing.Any
+    if which == "string_type":
+        return str
+    if which == "int_type":
+        return int
+    if which == "float_type":
+        return float
+    if which == "bool_type":
+        return bool
+    if which == "null_type":
+        return type(None)
+    if which == "uint8array_type":
+        return bytes
+    if which == "any_type" or which == "unknown_type":
+        return typing.Any
+    if which == "literal_type":
+        inner = _decode_literal(baml_ty.literal_type)
+        return typing.Literal[inner]  # type: ignore[valid-type]
+    if which == "media_type":
+        subpath = _MEDIA_KIND_SUBPATHS.get(baml_ty.media_type.media)
+        if subpath is None:
+            return typing.Any
+        cls = _resolve_under_sdk_root(subpath)
+        return cls if cls is not None else typing.Any
+    if which == "class_type":
+        from . import _resolve_type
+        cls = _resolve_type(baml_ty.class_type.name.name)
+        return _parameterize(cls, baml_ty.class_type.name.generic_args)
+    if which == "enum_type":
+        from . import _resolve_type
+        return _resolve_type(baml_ty.enum_type.name)
+    if which == "type_alias_type":
+        from . import _resolve_type
+        cls = _resolve_type(baml_ty.type_alias_type.name.name)
+        return _parameterize(cls, baml_ty.type_alias_type.name.generic_args)
+    if which == "list_type":
+        return List[_baml_ty_to_python_type(baml_ty.list_type.item_type)]  # type: ignore[valid-type]
+    if which == "map_type":
+        return Dict[  # type: ignore[valid-type]
+            _baml_ty_to_python_type(baml_ty.map_type.key_type),
+            _baml_ty_to_python_type(baml_ty.map_type.value_type),
+        ]
+    if which == "optional_type":
+        return Optional[_baml_ty_to_python_type(baml_ty.optional_type.value)]  # type: ignore[valid-type]
+    if which == "union_variant_type":
+        from . import _resolve_type
+        cls = _resolve_type(baml_ty.union_variant_type.name.name)
+        return _parameterize(cls, baml_ty.union_variant_type.name.generic_args)
+    raise BamlError(f"Unsupported BamlTy variant {which!r} in generic arg")
+
+
+def _parameterize(cls: type, generic_args) -> type:
+    """Apply BAML generic args to a Python class via `cls[arg_types…]`.
+
+    No-op when `generic_args` is empty (the rollout-safe path: works
+    before the Rust producer is updated to populate them — `13b` §3.5).
+    Falls back to the unparameterized class on any `TypeError` /
+    `AttributeError`, e.g. arity mismatch or non-generic class. Pydantic
+    caches `cls[args]` after the first call, so steady-state cost is a
+    dict lookup.
+    """
+    if not generic_args:
+        return cls
+    if not _is_pydantic_generic(cls):
+        return cls
+    py_args = tuple(_baml_ty_to_python_type(g.ty) for g in generic_args)
+    try:
+        if len(py_args) == 1:
+            return cls[py_args[0]]
+        return cls[py_args]
+    except (TypeError, AttributeError):
+        return cls
+
+
 def _decode_class(class_value) -> Any:
     """Resolve a `BamlValueClass` to a typed Pydantic model instance.
 
     Children are decoded first, so `model_validate` receives an
     already-typed field dict — validation mostly acts as a shape check.
+    Generic classes parameterize before validation so static-checker
+    annotations (`Box[int]`) line up with the runtime instance —
+    `13b` §3.4.
     """
     field_dict = {
         entry.key: _decode_value_holder(entry.value)
@@ -244,8 +378,9 @@ def _decode_class(class_value) -> Any:
             f"BEX emitted class_value for handle-backed class {fqn!r}"
         )
 
+    parameterized = _parameterize(cls, class_value.name.generic_args)
     if issubclass(cls, pydantic.BaseModel):
-        return cls.model_validate(field_dict)
+        return parameterized.model_validate(field_dict)
     # Not a BaseModel — shouldn't happen for a well-formed SDK; fall back
     # to a plain dict so callers aren't silently lied to.
     return field_dict

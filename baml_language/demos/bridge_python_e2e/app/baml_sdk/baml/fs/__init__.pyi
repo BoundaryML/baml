@@ -30,6 +30,14 @@ class File(pydantic.BaseModel):
     async def write_bytes_async(self, data: bytes) -> int: ...
 
 
+class DirEntry(pydantic.BaseModel): ...
+
+
+class MkdirOptions(pydantic.BaseModel): ...
+
+
 __all__ = [
     "File",
+    "DirEntry",
+    "MkdirOptions",
 ]

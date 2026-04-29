@@ -6,11 +6,15 @@ import pydantic
 
 if typing.TYPE_CHECKING:
     from .. import baml
+    from .. import stream_types
 
 from baml.baml_core import (
     define_function as _define_function,
     define_instance_method as _define_instance_method,
 )
+
+
+T = typing.TypeVar("T")
 
 
 ExtractResume       = _define_function("user.lorem.ExtractResume", "sync",  ["text"])
@@ -61,6 +65,14 @@ class Resume(pydantic.BaseModel):
     transform_async = _define_instance_method("user.lorem.Resume.transform", "async", ["self"])
 
 
+class Box(pydantic.BaseModel, typing.Generic[T]):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    item: T
+
+    repackage       = _define_instance_method("user.lorem.Box.repackage", "sync",  ["self"])
+    repackage_async = _define_instance_method("user.lorem.Box.repackage", "async", ["self"])
+
+
 __all__ = [
     "ExtractResume",
     "ExtractResume_async",
@@ -80,4 +92,5 @@ __all__ = [
     "Sentiment",
     "PhoneNumber",
     "Resume",
+    "Box",
 ]

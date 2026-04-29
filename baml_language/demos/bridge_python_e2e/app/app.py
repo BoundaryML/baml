@@ -13,6 +13,7 @@ import json
 from baml_sdk.baml.http import Request
 from baml_sdk.lorem import (
     Address,
+    Box,
     ExtractResume__build_request,
     ExtractResume__build_request_async,
     PhoneNumber,
@@ -89,5 +90,53 @@ assert isinstance(req_async, Request)
 assert "Hopper" in req_async.body
 
 print()
+
+# ---------------------------------------------------------------------------
+# Generics: 13a generates `class Box(BaseModel, Generic[T])`; 13b
+# round-trips a parameterized instance through the engine. The
+# inbound encoder uses the *base* FQN ("user.lorem.Box") regardless of
+# parameterization; the outbound decoder calls `_parameterize` so the
+# returned instance lines up with the static-checker annotation.
+# ---------------------------------------------------------------------------
+
+box_int = Box[int](item=5)
+print("--- Box[int] before ---")
+print(box_int)
+
+box_int_after = box_int.repackage()
+print("--- Box[int] after ---")
+print(box_int_after)
+
+assert isinstance(box_int_after, Box)
+assert box_int_after.item == 5
+
+# Generic-of-generic: Box[Box[int]]. Tests that the inbound encoder
+# walks the nested Pydantic model (the inner Box[int] hits the
+# BaseModel branch via `_set_inbound_value` recursion) and that the
+# outbound decoder rebuilds the inner Box before validating the outer.
+inner = Box[int](item=42)
+outer = Box[Box[int]](item=inner)
+print("--- Box[Box[int]] before ---")
+print(outer)
+
+outer_after = outer.repackage()
+print("--- Box[Box[int]] after ---")
+print(outer_after)
+
+assert isinstance(outer_after, Box)
+assert isinstance(outer_after.item, Box), (
+    f"expected nested Box, got {type(outer_after.item).__name__}: {outer_after.item!r}"
+)
+assert outer_after.item.item == 42
+
+# Async sibling — same shape, just to prove the async factory threads
+# generics through too.
+outer_after_async = asyncio.run(outer.repackage_async())
+assert isinstance(outer_after_async, Box)
+assert isinstance(outer_after_async.item, Box)
+assert outer_after_async.item.item == 42
+
+print()
 print("OK — round-trip succeeded for: Optional, List<Class>, Map, Enum, "
-      "nested-Class, sync+async, plus LLM `__build_request` companion.")
+      "nested-Class, sync+async, plus LLM `__build_request` companion, "
+      "plus Box<T> and Box<Box<int>> generics.")
