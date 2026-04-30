@@ -457,14 +457,22 @@ fn resolve_named_object<'a>(
     objects: &'a indexmap::IndexMap<String, HeapPtr>,
     name: &str,
 ) -> Option<&'a HeapPtr> {
-    objects.get(name).or_else(|| {
-        if name.contains('.') {
-            None
-        } else {
-            let user_name = format!("user.{name}");
-            objects.get(&user_name)
-        }
-    })
+    // Direct hit (engine FQN, e.g., "user.lorem.MyLorem" or
+    // "baml.http.Response").
+    if let Some(found) = objects.get(name) {
+        return Some(found);
+    }
+    // MIR's `qtn_to_type_name` strips the `user.` prefix from
+    // `display_name` for user-package types, so an `Instance` arriving
+    // from `coerce_arg_to_declared_type` may carry `lorem.MyLorem` while
+    // the engine registered `user.lorem.MyLorem`. Try the `user.`
+    // prefix as a fallback before giving up. Builtin/vendor types keep
+    // their full FQN so this only fires for user-package classes.
+    let user_qualified = format!("user.{name}");
+    if let Some(found) = objects.get(&user_qualified) {
+        return Some(found);
+    }
+    None
 }
 
 /// Check if a value matches a declared type.

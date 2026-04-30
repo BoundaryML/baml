@@ -1567,14 +1567,7 @@ fn format_value(value: &BexExternalValue) -> String {
     match value {
         BexExternalValue::Null => "null".to_string(),
         BexExternalValue::Int(i) => i.to_string(),
-        BexExternalValue::Float(f) => {
-            let s = f.to_string();
-            if s.contains('.') || !f.is_finite() {
-                s
-            } else {
-                format!("{s}.0")
-            }
-        }
+        BexExternalValue::Float(f) => bex_vm_types::format_float(*f),
         BexExternalValue::Bool(b) => b.to_string(),
         BexExternalValue::String(s) => format!("{s:?}"),
         BexExternalValue::Array { items, .. } => {

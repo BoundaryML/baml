@@ -13,21 +13,21 @@ source: crates/baml_tests/src/generated_tests.rs
 ───╯
 
   [type] Error: type mismatch: expected string, got 42
-   ╭─[ main.baml:7:8 ]
+   ╭─[ main.baml:7:6 ]
    │
  7 │ test 42 {
-   │        ─┬  
-   │         ╰── type mismatch: expected string, got 42
+   │      ─┬  
+   │       ╰── type mismatch: expected string, got 42
    │ 
    │ Note: Error code: E0001
 ───╯
 
   [type] Error: type mismatch: expected string, got int
-    ╭─[ main.baml:13:13 ]
+    ╭─[ main.baml:13:11 ]
     │
  13 │     test (5 + i) {
-    │             ──┬──  
-    │               ╰──── type mismatch: expected string, got int
+    │           ──┬──  
+    │             ╰──── type mismatch: expected string, got int
     │ 
     │ Note: Error code: E0001
 ────╯

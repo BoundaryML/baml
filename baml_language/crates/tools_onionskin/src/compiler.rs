@@ -4953,7 +4953,7 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
     match value {
         Value::Null => "null".to_string(),
         Value::Int(i) => i.to_string(),
-        Value::Float(f) => f.to_string(),
+        Value::Float(f) => bex_vm_types::format_float(*f),
         Value::Bool(b) => b.to_string(),
         Value::Object(idx) => {
             let obj = vm.get_object(*idx);

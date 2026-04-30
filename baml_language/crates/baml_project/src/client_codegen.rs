@@ -39,6 +39,7 @@ fn name_from_qtn(qtn: &QualifiedTypeName) -> cg::Name {
 /// If `name` contains a `$`, return `(parent_part, suffix_after_dollar)`.
 /// For example `"ExtractResume$build_request"` → `Some(("ExtractResume", "build_request"))`.
 /// If there's no `$`, returns `None`.
+#[cfg(test)]
 fn split_companion(name: &str) -> Option<(&str, &str)> {
     let pos = name.find('$')?;
     Some((&name[..pos], &name[pos + 1..]))
@@ -54,21 +55,6 @@ fn split_companion(name: &str) -> Option<(&str, &str)> {
 /// extracts classes/enums/type aliases/functions/methods, resolves their
 /// types, and converts to codegen types.
 pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
-    struct PendingFunction {
-        pkg: Name,
-        ns_path: Vec<Name>,
-        bare_name: Name,
-        companion_suffix: Option<String>,
-        func: cg::Function,
-    }
-
-    struct ParentEntry {
-        pkg: Name,
-        ns_path: Vec<Name>,
-        bare_name: Name,
-        func: cg::Function,
-    }
-
     enum MethodKind {
         Static,
         Instance,
@@ -77,8 +63,6 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
     struct PendingMethod {
         /// Pool key of the owning class.
         parent_key: cg::Name,
-        bare_name: Name,
-        companion_suffix: Option<String>,
         kind: MethodKind,
         func: cg::Function,
     }
@@ -96,7 +80,6 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         ),
     > = HashMap::new();
 
-    let mut pending_functions: Vec<PendingFunction> = Vec::new();
     let mut pending_methods: Vec<PendingMethod> = Vec::new();
 
     for source_file in compiler2_all_files(db) {
@@ -133,14 +116,12 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 
         // Classes
         for class in item_tree.classes.values() {
-            if !class.generic_params.is_empty() {
-                continue;
-            }
             let cg_name = cg::Name {
                 pkg: pkg.clone(),
                 namespace_path: ns_path.clone(),
                 name: class.name.clone(),
             };
+            let class_generic_params: Vec<Name> = class.generic_params.clone();
             let properties = class
                 .fields
                 .iter()
@@ -150,7 +131,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                         field.type_expr.as_ref(),
                         pkg_items,
                         &pkg_info.namespace_path,
-                        &[],
+                        &class_generic_params,
                         alias_map,
                         recursive_aliases,
                     )?;
@@ -162,23 +143,15 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 })
                 .collect();
 
-            // Methods — lower each into a `cg::Function` and queue up for
-            // the post-walk attach pass. Static vs. instance is dispatched
-            // structurally on whether the first parameter is named `self`.
-            // Companions of methods (e.g. `$build_request`) flow through the
-            // same pending list and reattach via the second-pass logic.
+            // Methods — lower each into a `cg::Function`. Static vs.
+            // instance is dispatched structurally on whether the first
+            // parameter is named `self`. Companion methods (e.g.
+            // `$build_request`) are independent `Function` entries that
+            // sit alongside their parent method in the same vec; their
+            // shared span keeps them adjacent after sorting.
             for method_id in &class.methods {
                 let Some(method) = item_tree.functions.get(method_id) else {
                     continue;
-                };
-                if !method.generic_params.is_empty() {
-                    continue;
-                }
-
-                let method_name_str = method.name.as_str();
-                let (bare_name, companion_suffix) = match split_companion(method_name_str) {
-                    Some((parent, suffix)) => (Name::new(parent), Some(suffix.to_string())),
-                    None => (method.name.clone(), None),
                 };
 
                 let is_instance = method
@@ -191,6 +164,12 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     MethodKind::Static
                 };
 
+                // Combined generics in scope inside the method body: the
+                // class's TypeVars plus the method's own. Order matches
+                // declaration: class-level first, method-level second.
+                let mut method_scope_generics: Vec<Name> = class_generic_params.clone();
+                method_scope_generics.extend(method.generic_params.iter().cloned());
+
                 let arguments: Vec<cg::FunctionArgument> = method
                     .params
                     .iter()
@@ -201,7 +180,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                             param.type_expr.as_ref(),
                             pkg_items,
                             &pkg_info.namespace_path,
-                            &[],
+                            &method_scope_generics,
                             alias_map,
                             recursive_aliases,
                         )?;
@@ -218,7 +197,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     method.return_type.as_ref(),
                     pkg_items,
                     &pkg_info.namespace_path,
-                    &[],
+                    &method_scope_generics,
                     alias_map,
                     recursive_aliases,
                 )
@@ -226,11 +205,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 
                 let cg_method = cg::Function {
                     name: method.name.clone(),
+                    generic_params: method.generic_params.clone(),
                     docstring: None,
                     arguments,
                     return_type,
                     watchers: Vec::new(),
-                    companions: Vec::new(),
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
                         span_start: u32::from(method.span.start()),
@@ -239,8 +218,6 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 
                 pending_methods.push(PendingMethod {
                     parent_key: cg_name.clone(),
-                    bare_name,
-                    companion_suffix,
                     kind,
                     func: cg_method,
                 });
@@ -250,6 +227,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 cg_name.clone(),
                 cg::Symbol::Class(cg::Class {
                     name: cg_name,
+                    generic_params: class_generic_params,
                     docstring: None,
                     properties,
                     static_methods: Vec::new(),
@@ -332,30 +310,24 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         }
 
         // Top-level functions — methods are skipped via `method_ids` so they
-        // don't double-emit.
+        // don't double-emit. Companion functions (names containing `$`) flow
+        // through as their own pool entries; parent and companion alike are
+        // inserted directly, keyed on the suffixed name.
         for (id, func) in &item_tree.functions {
             if method_ids.contains(id) {
                 continue;
             }
-            if !func.generic_params.is_empty() {
-                continue;
-            }
 
             let func_name_str = func.name.as_str();
-
-            let (bare_name, companion_suffix) = match split_companion(func_name_str) {
-                Some((parent, suffix)) => (Name::new(parent), Some(suffix.to_string())),
-                None => (func.name.clone(), None),
-            };
+            let is_companion = func_name_str.contains('$');
 
             // For parent functions, require declarative LLM meta.
             // Companion functions inherit validity from their parent.
-            if companion_suffix.is_none()
-                && !matches!(&func.declarative_meta, Some(DeclarativeMeta::Llm(_)))
-            {
+            if !is_companion && !matches!(&func.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
                 continue;
             }
 
+            let func_generic_params: Vec<Name> = func.generic_params.clone();
             let arguments: Vec<cg::FunctionArgument> = func
                 .params
                 .iter()
@@ -365,7 +337,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                         param.type_expr.as_ref(),
                         pkg_items,
                         &pkg_info.namespace_path,
-                        &[],
+                        &func_generic_params,
                         alias_map,
                         recursive_aliases,
                     )?;
@@ -382,7 +354,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 func.return_type.as_ref(),
                 pkg_items,
                 &pkg_info.namespace_path,
-                &[],
+                &func_generic_params,
                 alias_map,
                 recursive_aliases,
             )
@@ -390,96 +362,31 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 
             let cg_func = cg::Function {
                 name: func.name.clone(),
+                generic_params: func_generic_params,
                 docstring: None,
                 arguments,
                 return_type,
                 watchers: Vec::new(),
-                companions: Vec::new(),
                 origin: Origin {
                     source_file_path: source_file_path.clone(),
                     span_start: u32::from(func.span.start()),
                 },
             };
 
-            pending_functions.push(PendingFunction {
+            let cg_name = cg::Name {
                 pkg: pkg.clone(),
-                ns_path: ns_path.clone(),
-                bare_name,
-                companion_suffix,
-                func: cg_func,
-            });
+                namespace_path: ns_path.clone(),
+                name: func.name.clone(),
+            };
+            pool.insert(cg_name, cg::Symbol::Function(cg_func));
         }
     }
 
-    // Second pass: build a map of parent functions, then attach companions.
-    let mut parents: Vec<ParentEntry> = Vec::new();
-    let mut companions: Vec<PendingFunction> = Vec::new();
-
-    for pf in pending_functions {
-        if pf.companion_suffix.is_none() {
-            parents.push(ParentEntry {
-                pkg: pf.pkg,
-                ns_path: pf.ns_path,
-                bare_name: pf.bare_name,
-                func: pf.func,
-            });
-        } else {
-            companions.push(pf);
-        }
-    }
-
-    // Attach companions to parents.
-    for companion in companions {
-        let suffix = companion.companion_suffix.as_deref().unwrap();
-        if let Some(parent_entry) = parents.iter_mut().find(|p| {
-            p.pkg == companion.pkg
-                && p.ns_path == companion.ns_path
-                && p.bare_name == companion.bare_name
-        }) {
-            parent_entry
-                .func
-                .companions
-                .push((suffix.to_string(), companion.func));
-        }
-        // If no parent found, the companion is silently dropped (shouldn't happen in valid code).
-    }
-
-    // Insert parent functions (with companions attached) into the pool.
-    for parent in parents {
-        let cg_name = cg::Name {
-            pkg: parent.pkg,
-            namespace_path: parent.ns_path,
-            name: parent.bare_name,
-        };
-        pool.insert(cg_name, cg::Symbol::Function(parent.func));
-    }
-
-    // Method attach pass — analogous to the function companion pass above.
-    // Group parents and companions, splice companions into their parent
-    // method's `companions` vec, then push the assembled methods into the
-    // owning class's `static_methods` / `instance_methods` vec.
-    let mut method_parents: Vec<PendingMethod> = Vec::new();
-    let mut method_companions: Vec<PendingMethod> = Vec::new();
+    // Methods land on the owning class's `static_methods` /
+    // `instance_methods` vec. Companion methods sit alongside their parents
+    // in the same vec; span-based ordering at fan-out time keeps them
+    // contiguous.
     for pm in pending_methods {
-        if pm.companion_suffix.is_none() {
-            method_parents.push(pm);
-        } else {
-            method_companions.push(pm);
-        }
-    }
-    for companion in method_companions {
-        let suffix = companion.companion_suffix.as_deref().unwrap();
-        if let Some(parent) = method_parents
-            .iter_mut()
-            .find(|p| p.parent_key == companion.parent_key && p.bare_name == companion.bare_name)
-        {
-            parent
-                .func
-                .companions
-                .push((suffix.to_string(), companion.func));
-        }
-    }
-    for pm in method_parents {
         if let Some(cg::Symbol::Class(class)) = pool.get_mut(&pm.parent_key) {
             match pm.kind {
                 MethodKind::Static => class.static_methods.push(pm.func),
@@ -562,7 +469,13 @@ fn convert_tir_leaf(
         TirTy::Primitive(PrimitiveType::Pdf, _) => cg::Ty::Media(baml_db::MediaKind::Pdf),
 
         // Named types — preserve full QualifiedTypeName via name_from_qtn.
-        TirTy::Class(qtn, _, _) => cg::Ty::Class(name_from_qtn(qtn)),
+        TirTy::Class(qtn, type_args, _) => cg::Ty::Class(
+            name_from_qtn(qtn),
+            type_args
+                .iter()
+                .map(|t| convert_tir_to_codegen_ty(t, alias_map, recursive_aliases))
+                .collect(),
+        ),
         TirTy::Enum(qtn, _) => cg::Ty::Enum(name_from_qtn(qtn)),
         TirTy::EnumVariant(qtn, _variant, _) => cg::Ty::Enum(name_from_qtn(qtn)),
 
@@ -616,12 +529,14 @@ fn convert_tir_leaf(
             ret: Box::new(convert_tir_to_codegen_ty(ret, alias_map, recursive_aliases)),
         },
 
+        // Type variable — codegen-side `Ty::TypeVar` mirrors TIR.
+        TirTy::TypeVar(name, _) => cg::Ty::TypeVar(name.clone()),
+
         // Bottom / sentinel / error recovery — map to Unit.
         TirTy::Void { .. }
         | TirTy::Never { .. }
         | TirTy::Unknown { .. }
         | TirTy::Error { .. }
-        | TirTy::TypeVar(..)
         | TirTy::RustType { .. }
         | TirTy::Type { .. } => cg::Ty::Unit,
     }
@@ -774,12 +689,13 @@ mod tests {
 
     // ── Integration tests using ProjectDatabase ─────────────────────────────
 
-    /// Verifies that companions are attached to their parent function.
-    /// A BAML declarative function causes `$build_request`, `$render_prompt`, and `$parse`
-    /// companion functions to be synthesized by the companion expander.
-    /// `build_symbol_pool` should collect them as `companions` on the parent function.
+    /// Verifies that companions land in the pool as their own
+    /// `Symbol::Function` entries keyed on the suffixed name. A BAML
+    /// declarative function causes `$build_request`, `$render_prompt`,
+    /// and `$parse` companion functions to be synthesized by the
+    /// companion expander.
     #[test]
-    fn test_companions_attached_to_parent() {
+    fn test_companions_inserted_as_independent_pool_entries() {
         let root = Path::new("/tmp/bep030_companions");
         let mut db = ProjectDatabase::new();
         db.set_project_root(root);
@@ -790,38 +706,23 @@ mod tests {
 
         let pool = build_symbol_pool(&db);
 
-        // Find ExtractResume in the pool.
-        let extract_key = pool.keys().find(|k| k.name.as_str() == "ExtractResume");
-        assert!(extract_key.is_some(), "ExtractResume must be in the pool");
-
-        let maybe_func = extract_key.and_then(|k| pool.get(k)).and_then(|obj| {
-            if let cg::Symbol::Function(f) = obj {
-                Some(f)
-            } else {
-                None
-            }
-        });
-        assert!(
-            maybe_func.is_some(),
-            "ExtractResume must be a Function object"
-        );
-
-        let func = maybe_func.unwrap();
-        let companion_names: Vec<&str> = func.companions.iter().map(|(s, _)| s.as_str()).collect();
-
-        // Should have build_request, render_prompt, parse companions.
-        assert!(
-            companion_names.contains(&"build_request"),
-            "build_request companion expected; got: {companion_names:?}"
-        );
-        assert!(
-            companion_names.contains(&"render_prompt"),
-            "render_prompt companion expected; got: {companion_names:?}"
-        );
-        assert!(
-            companion_names.contains(&"parse"),
-            "parse companion expected; got: {companion_names:?}"
-        );
+        // The parent and each companion must be present as their own
+        // `Symbol::Function` entry, keyed on the suffixed name.
+        for expected in [
+            "ExtractResume",
+            "ExtractResume$build_request",
+            "ExtractResume$render_prompt",
+            "ExtractResume$parse",
+        ] {
+            let key = pool
+                .keys()
+                .find(|k| k.name.as_str() == expected)
+                .unwrap_or_else(|| panic!("{expected} must be in the pool"));
+            assert!(
+                matches!(pool.get(key), Some(cg::Symbol::Function(_))),
+                "{expected} must be a Function symbol",
+            );
+        }
     }
 
     /// Verifies that user-package classes with static and instance methods

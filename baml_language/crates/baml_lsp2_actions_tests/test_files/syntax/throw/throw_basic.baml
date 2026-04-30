@@ -19,32 +19,32 @@ function ThrowVariable(msg: string) -> string {
 //----
 //- diagnostics
 // Warning: unreachable code: 1 statement(s) after diverging statement
-//    ╭─[ throw_throw_basic.baml:3:2 ]
+//    ╭─[ throw_throw_basic.baml:2:35 ]
 //    │
-//  3 │ ╭─▶   throw "something went wrong"
-//  4 │ ├─▶   "unreachable"
-//    │ │                     
-//    │ ╰───────────────────── unreachable code: 1 statement(s) after diverging statement
+//  2 │ ╭─▶ function ThrowString() -> string {
+//  3 │ ├─▶   throw "something went wrong"
+//    │ │                                    
+//    │ ╰──────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
 // Warning: unreachable code: 1 statement(s) after diverging statement
-//     ╭─[ throw_throw_basic.baml:9:2 ]
-//     │
-//   9 │ ╭─▶   throw 42
-//  10 │ ├─▶   0
-//     │ │         
-//     │ ╰───────── unreachable code: 1 statement(s) after diverging statement
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
+//    ╭─[ throw_throw_basic.baml:8:29 ]
+//    │
+//  8 │ ╭─▶ function ThrowInt() -> int {
+//  9 │ ├─▶   throw 42
+//    │ │                
+//    │ ╰──────────────── unreachable code: 1 statement(s) after diverging statement
+//    │     
+//    │     Note: Error code: E0001
+// ───╯
 // Warning: unreachable code: 1 statement(s) after diverging statement
-//     ╭─[ throw_throw_basic.baml:15:2 ]
+//     ╭─[ throw_throw_basic.baml:14:48 ]
 //     │
-//  15 │ ╭─▶   throw msg
-//  16 │ ├─▶   "unreachable"
-//     │ │                     
-//     │ ╰───────────────────── unreachable code: 1 statement(s) after diverging statement
+//  14 │ ╭─▶ function ThrowVariable(msg: string) -> string {
+//  15 │ ├─▶   throw msg
+//     │ │                 
+//     │ ╰───────────────── unreachable code: 1 statement(s) after diverging statement
 //     │     
 //     │     Note: Error code: E0001
 // ────╯

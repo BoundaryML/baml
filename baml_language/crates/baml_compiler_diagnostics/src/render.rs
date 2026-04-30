@@ -197,6 +197,34 @@ pub fn render_diagnostics(
         .join("\n")
 }
 
+/// Translate a byte offset into a character offset within `text`.
+///
+/// Ariadne's `Source` indexes by characters (codepoints), but our `Span`
+/// values come from `text_size::TextRange` and use byte offsets. For ASCII
+/// the two coincide; for files with multi-byte UTF-8 (e.g. em-dashes) they
+/// don't, and ariadne would otherwise render at the wrong line/column or
+/// fail to render at all when a byte offset is past the char-count of the
+/// source.
+fn byte_to_char(text: &str, byte_offset: usize) -> usize {
+    let cap = byte_offset.min(text.len());
+    text[..cap].chars().count()
+}
+
+fn translate_span(span: Span, sources: &HashMap<FileId, String>) -> Span {
+    let Some(source) = sources.get(&span.file_id) else {
+        return span;
+    };
+    let start = byte_to_char(source, span.range.start().into());
+    let end = byte_to_char(source, span.range.end().into()).max(start);
+    Span {
+        file_id: span.file_id,
+        range: text_size::TextRange::new(
+            text_size::TextSize::new(u32::try_from(start).unwrap_or(u32::MAX)),
+            text_size::TextSize::new(u32::try_from(end).unwrap_or(u32::MAX)),
+        ),
+    }
+}
+
 /// Render a diagnostic using Ariadne (pretty CLI output).
 fn render_ariadne(
     diagnostic: &Diagnostic,
@@ -223,16 +251,18 @@ fn render_ariadne(
                 range: text_size::TextRange::new(0.into(), 0.into()),
             })
     });
+    let primary_span = translate_span(primary_span, sources);
 
     // Build the report
     let mut builder = Report::build(report_kind, primary_span).with_message(&diagnostic.message);
 
     // Add labels for each annotation
     for annotation in &diagnostic.annotations {
+        let span = translate_span(annotation.span, sources);
         let label = if let Some(msg) = &annotation.message {
-            Label::new(annotation.span).with_message(msg)
+            Label::new(span).with_message(msg)
         } else {
-            Label::new(annotation.span)
+            Label::new(span)
         };
         builder = builder.with_label(label);
     }

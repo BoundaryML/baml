@@ -1127,13 +1127,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Constant::Float(v) => {
                 let idx = self.add_constant(ConstValue::Float(*v));
                 let inst = self.emit(Instruction::LoadConst(idx));
-                let s = v.to_string();
-                let display = if s.contains('.') || !v.is_finite() {
-                    s
-                } else {
-                    format!("{s}.0")
-                };
-                self.set_operand(inst, OperandMeta::Const(display));
+                self.set_operand(inst, OperandMeta::Const(bex_vm_types::format_float(*v)));
             }
             Constant::String(s) => {
                 let display = Self::display_string_operand(s);

@@ -7,7 +7,14 @@ import pydantic
 if typing.TYPE_CHECKING:
     from ... import baml
 
-from baml.baml_core import define_instance_method as _define_instance_method
+from baml.baml_core import (
+    define_instance_method as _define_instance_method,
+    define_static_method as _define_static_method,
+)
+
+
+S = typing.TypeVar("S")
+T = typing.TypeVar("T")
 
 
 class OrchestrationStep(pydantic.BaseModel):
@@ -78,6 +85,21 @@ class Client(pydantic.BaseModel):
 
     build_plan_with_state       = _define_instance_method("baml.llm.Client.build_plan_with_state", "sync",  ["self", "planner_state"])
     build_plan_with_state_async = _define_instance_method("baml.llm.Client.build_plan_with_state", "async", ["self", "planner_state"])
+
+    execute_stream       = _define_instance_method("baml.llm.Client.execute_stream", "sync",  ["self", "context", "inherited_delay_ms"])
+    execute_stream_async = _define_instance_method("baml.llm.Client.execute_stream", "async", ["self", "context", "inherited_delay_ms"])
+
+    execute_once_stream       = _define_instance_method("baml.llm.Client.execute_once_stream", "sync",  ["self", "context", "active_delay_ms"])
+    execute_once_stream_async = _define_instance_method("baml.llm.Client.execute_once_stream", "async", ["self", "context", "active_delay_ms"])
+
+    __make_stream       = _define_instance_method("baml.llm.Client.__make_stream", "sync",  ["self", "sse", "function_name"])
+    __make_stream_async = _define_instance_method("baml.llm.Client.__make_stream", "async", ["self", "sse", "function_name"])
+
+    execute_oneshot       = _define_instance_method("baml.llm.Client.execute_oneshot", "sync",  ["self", "context", "inherited_delay_ms"])
+    execute_oneshot_async = _define_instance_method("baml.llm.Client.execute_oneshot", "async", ["self", "context", "inherited_delay_ms"])
+
+    execute_once_oneshot       = _define_instance_method("baml.llm.Client.execute_once_oneshot", "sync",  ["self", "context", "active_delay_ms"])
+    execute_once_oneshot_async = _define_instance_method("baml.llm.Client.execute_once_oneshot", "async", ["self", "context", "active_delay_ms"])
 
 
 class MediaUrlHandler(pydantic.BaseModel):
@@ -168,6 +190,28 @@ class StreamAccumulator(pydantic.BaseModel):
     output_tokens_async = _define_instance_method("baml.llm.StreamAccumulator.output_tokens", "async", ["self"])
 
 
+class StreamCache(pydantic.BaseModel, typing.Generic[T, S]):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    _data: None
+
+    new       = staticmethod(_define_static_method("baml.llm.StreamCache.new", "sync",  ["target", "streaming"]))
+    new_async = staticmethod(_define_static_method("baml.llm.StreamCache.new", "async", ["target", "streaming"]))
+
+
+class Stream(pydantic.BaseModel, typing.Generic[T, S]):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    _client: PrimitiveClient
+    _acc: StreamAccumulator
+    _sse: baml.http.SseStream
+    _cache: StreamCache[T, S]
+
+    next       = _define_instance_method("baml.llm.Stream.next", "sync",  ["self"])
+    next_async = _define_instance_method("baml.llm.Stream.next", "async", ["self"])
+
+    final       = _define_instance_method("baml.llm.Stream.final", "sync",  ["self"])
+    final_async = _define_instance_method("baml.llm.Stream.final", "async", ["self"])
+
+
 class PrimitiveClient(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     name: str
@@ -192,6 +236,9 @@ class PrimitiveClient(pydantic.BaseModel):
     validate_finish_reason       = _define_instance_method("baml.llm.PrimitiveClient.validate_finish_reason", "sync",  ["self", "finish_reason"])
     validate_finish_reason_async = _define_instance_method("baml.llm.PrimitiveClient.validate_finish_reason", "async", ["self", "finish_reason"])
 
+    parse       = _define_instance_method("baml.llm.PrimitiveClient.parse", "sync",  ["self", "http_response_body", "type_def"])
+    parse_async = _define_instance_method("baml.llm.PrimitiveClient.parse", "async", ["self", "http_response_body", "type_def"])
+
 
 __all__ = [
     "OrchestrationStep",
@@ -208,5 +255,7 @@ __all__ = [
     "VertexAiOptions",
     "BedrockOptions",
     "StreamAccumulator",
+    "StreamCache",
+    "Stream",
     "PrimitiveClient",
 ]

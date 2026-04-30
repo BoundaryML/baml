@@ -41,3 +41,14 @@ class Resume {
     }
   }
 }
+
+// Generic container — exercises 13a's codegen for `Generic[T]` and 13b's
+// outbound parameterization. `repackage` returns the same shape so the
+// engine round-trips an instance whose declared type is generic.
+class Box<T> {
+  item T
+
+  function repackage(self) -> Box<T> {
+    Box<T> { item: self.item }
+  }
+}

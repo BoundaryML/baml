@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.ExtraCloseAngle() -> string  [expr] {
+  { f Lt int; string Shr 1 } "two"
+}
+function user.ExtraCloseParen() -> string  [expr] {
+  {  } f(1, "two")
+}
+function user.MismatchedParenBracket() -> int  [expr] {
+  {  } 1 Add 2
+}
+function user.UnclosedArray() -> int[]  [expr] {
+  {  } [1, 2, 3, NestedUnclosed(), string, { f Lt int } string(1, "two")]
+}
+function user.UnclosedCall() -> string  [expr] {
+  {  } f(1, "two")
+}
+function user.UnclosedGeneric() -> string  [expr] {
+  { f Lt int } string(1, "two")
+}
+function user.f(k: user.K, v: user.V) -> user.V  [expr] {
+  {  } v
+}
