@@ -90,10 +90,10 @@ export default function WhyPage() {
               Why The F*** Did We Make a Language?
             </h1>
             <p className="max-w-2xl text-lg text-muted-foreground">
-              BAML is the first language designed with LLMs in mind—cognitive
-              functions that make AI as reliable as the rest of your stack.
-              Because building AI applications shouldn't feel like defusing a
-              bomb. Here's the story of why we built it and why you'll love it.
+              BAML is a statically-typed, expression-oriented language with
+              first-class LLM functions. It supplies typed prompt boundaries for
+              structured-output LLM work. Here's the story of why we built it
+              and why you'll love it.
             </p>
             <div className="flex gap-4">
               <Button asChild>

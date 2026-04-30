@@ -1,11 +1,11 @@
 import { MinimalCodeSnippet } from './minimal-code-snippet';
 
 const DEFAULT_BULLETS = [
-  'Incrementally adoptable',
-  'Type-safety of TypeScript and Rust',
-  'Type-safe exceptions',
-  'LLMs as operators',
-  'Really good agentic tooling',
+  'First-class LLM functions',
+  'Typed prompt boundaries',
+  'Structured LLM outputs',
+  'testset / test / assert.* blocks',
+  'Expression-first style',
 ];
 
 const DEFAULT_CODE = `class Receipt {
@@ -31,16 +31,16 @@ interface MinimalHeroProps {
 }
 
 export function MinimalHero({
-  headline = 'BAML is a modern programming language built natively for LLMs.',
-  lead = 'BAML runs in Python, TypeScript, and Ruby runtimes. It brings type-safety, structured outputs, and agentic tooling to every LLM call — so developers can build reliable AI applications.',
+  headline = 'BAML is a statically-typed, expression-oriented language with first-class LLM functions.',
+  lead = 'Define a class, write a Jinja-templated prompt, and get a typed result. BAML supplies typed prompt boundaries for structured-output LLM work in Python, TypeScript, and Ruby.',
   bullets = DEFAULT_BULLETS,
   code = DEFAULT_CODE,
 }: MinimalHeroProps) {
   return (
     <article
       style={{
-        fontFamily: 'var(--font-sans), system-ui, sans-serif',
         color: '#1A1612',
+        fontFamily: 'var(--font-sans), system-ui, sans-serif',
         maxWidth: 760,
       }}
     >
@@ -48,8 +48,8 @@ export function MinimalHero({
         style={{
           fontSize: 'clamp(2.25rem, 4.5vw, 3.5rem)',
           fontWeight: 600,
-          lineHeight: 1.06,
           letterSpacing: '-0.025em',
+          lineHeight: 1.06,
           margin: 0,
         }}
       >
@@ -58,10 +58,10 @@ export function MinimalHero({
 
       <p
         style={{
-          marginTop: 32,
+          color: '#2A2520',
           fontSize: 18,
           lineHeight: 1.55,
-          color: '#2A2520',
+          marginTop: 32,
         }}
       >
         {lead}
@@ -69,22 +69,22 @@ export function MinimalHero({
 
       <ul
         style={{
-          marginTop: 32,
-          padding: 0,
-          listStyle: 'none',
+          color: '#1A1612',
           display: 'flex',
           flexDirection: 'column',
-          gap: 14,
           fontSize: 17,
-          color: '#1A1612',
+          gap: 14,
+          listStyle: 'none',
+          marginTop: 32,
+          padding: 0,
         }}
       >
         {bullets.map((b) => (
           <li
             key={b}
             style={{
-              display: 'flex',
               alignItems: 'baseline',
+              display: 'flex',
               gap: 12,
             }}
           >
@@ -92,7 +92,7 @@ export function MinimalHero({
               aria-hidden
               style={{ color: '#8A8580', fontVariantNumeric: 'tabular-nums' }}
             >
-              —
+              -
             </span>
             <span>{b}</span>
           </li>

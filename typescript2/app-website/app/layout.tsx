@@ -8,17 +8,18 @@ import { GeistSans } from 'geist/font/sans';
 import { Caveat, Instrument_Serif } from 'next/font/google';
 
 const instrumentSerif = Instrument_Serif({
-  subsets: ['latin'],
-  weight: '400',
   style: ['normal', 'italic'],
+  subsets: ['latin'],
   variable: '--font-serif',
+  weight: '400',
 });
 
 const caveat = Caveat({
   subsets: ['latin'],
-  weight: ['400', '500'],
   variable: '--font-caveat',
+  weight: ['400', '500'],
 });
+
 import type { Viewport } from 'next';
 import { Suspense } from 'react';
 import { AnalyticsProvider } from '@/context/analytics';
@@ -37,7 +38,7 @@ export const metadata: Metadata = {
     },
   },
   description:
-    'BAML is the first language designed with LLMs in mind. Cognitive coding for AI—code that agents write, software that humans trust.',
+    'BAML is a statically-typed, expression-oriented language with first-class LLM functions.',
   icons: {
     icon: '/favico.ico',
   },
@@ -48,7 +49,7 @@ export const metadata: Metadata = {
   ),
   openGraph: {
     description:
-      'BAML is the first language designed with LLMs in mind. Cognitive coding for AI—code that agents write, software that humans trust.',
+      'BAML is a statically-typed, expression-oriented language with first-class LLM functions.',
     locale: 'en_US',
     siteName: 'BAML',
     title: 'BAML',
@@ -59,10 +60,9 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     creator: '@boundaryml',
-    description:
-      'Code that agents write. Software that humans trust. The first language designed with LLMs in mind.',
+    description: 'Typed prompt boundaries for structured-output LLM work.',
     site: '@boundaryml',
-    title: 'BAML | The language for AI in the future',
+    title: 'BAML | First-class LLM functions',
   },
 };
 

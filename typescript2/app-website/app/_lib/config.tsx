@@ -104,58 +104,58 @@ export const siteConfig = {
     {
       id: 1,
       image: '/Device-6.png',
-      text: 'Build AI applications with type safety and reliability.',
+      text: 'Build structured-output LLM boundaries with typed results.',
     },
     {
       id: 2,
       image: '/Device-7.png',
-      text: 'Generate TypeScript types automatically from your BAML schemas.',
+      text: 'Declare the return type once and let it drive parsing.',
     },
     {
       id: 3,
       image: '/Device-8.png',
-      text: 'Debug faster with compile-time error checking and runtime validation.',
+      text: 'Use accurate compile diagnostics for prompt and type mismatches.',
     },
     {
       id: 4,
       image: '/Device-1.png',
-      text: 'Collaborate with your team on AI interfaces seamlessly.',
+      text: 'Keep tests, prompts, schemas, and clients in one .baml file.',
     },
   ],
   bentoSection: {
     description:
-      'Cognitive functions for AI: type-safe interfaces, generated types, and validation—built for the future of software.',
+      'BAML supplies typed prompt boundaries: define a class, write a Jinja-templated prompt, get a typed result.',
     items: [
       {
         content: <FirstBentoAnimation />,
         description:
-          'Define AI interfaces with confidence. Write BAML schemas that generate TypeScript types automatically.',
+          'An LLM function is a function with a named client and prompt in its body. The return type drives structured-output parsing.',
         id: 1,
-        title: 'Type-Safe AI Interfaces',
+        title: 'First-Class LLM Functions',
       },
       {
         content: <SecondBentoAnimation />,
         description:
-          'Get type-safe, validated responses from any LLM. Support for JSON, XML, YAML, and more output formats.',
+          'Define a class, write a Jinja prompt, and get a typed result. The intended use case works.',
         id: 2,
-        title: 'Structured Outputs',
+        title: 'Structured LLM Outputs',
       },
       {
         content: <ThirdBentoAnimation />,
         description:
-          'Test your AI functions in CI/CD pipelines to ensure they are working as expected.',
+          'testset / test / assert.* blocks are fast, low-ceremony, and read like documentation.',
         id: 3,
-        title: 'Test Your AI Functions in CI/CD',
+        title: 'Tests Live With Prompts',
       },
       {
         content: <FourthBentoAnimation once={false} />,
         description:
-          'Automatically retry failed requests and provide fallback responses when errors occur.',
+          'Use throw classes and typed catch as the error idiom. catch_all is exhaustive; panics stay special.',
         id: 4,
-        title: 'Automatic Retry and Fallback',
+        title: 'Typed Catch',
       },
     ],
-    title: 'Built for the Future of AI',
+    title: 'Built for typed prompt boundaries',
   },
   companyShowcase: {
     companyLogos: [
@@ -189,32 +189,32 @@ export const siteConfig = {
       text: 'Book a meeting with us',
     },
     id: 'cta',
-    subtext: 'Start with cognitive coding in minutes',
-    title: 'Software that humans trust',
+    subtext: 'Start with first-class LLM functions in minutes',
+    title: 'Typed prompt boundaries',
   },
   description:
-    'BAML is the first language designed with LLMs in mind. Cognitive coding for AI—code that agents write, software that humans trust.',
+    'BAML is a statically-typed, expression-oriented language with first-class LLM functions.',
   faqSection: {
     description:
       "Answers to common questions about BAML and its features. If you have any other questions, please don't hesitate to contact us.",
     faQitems: [
       {
         answer:
-          'BAML is the first language designed with LLMs in mind. It enables cognitive coding: cognitive functions that encapsulate LLM capabilities in classic programming functions. Code that agents write. Software that humans trust. You get schema definition, TypeScript type generation, and runtime validation so AI fits the same toolchain as the rest of your stack.',
+          'BAML is a statically-typed, expression-oriented language with first-class LLM functions. Files use the .baml extension, and an LLM function is a function with a named client and Jinja-templated prompt in its body.',
         id: 1,
         question: 'What is BAML?',
       },
       {
         answer:
-          'BAML works by letting you define cognitive functions—AI interfaces as first-class language constructs. These compile to native code in your language of choice and generate TypeScript types and runtime validation, ensuring type safety and reliability throughout your AI application.',
+          'BAML supplies typed prompt boundaries. Define a class, write a Jinja prompt, and get a typed result. The return type drives structured-output parsing, and the generated clients let you call that LLM function from your existing app.',
         id: 2,
         question: 'How does BAML work?',
       },
       {
         answer:
-          'Yes, BAML is designed with security in mind. Your AI schemas and API keys are protected, and the platform provides input validation and output sanitization to ensure secure AI interactions.',
+          'BAML keeps provider configuration in named client<llm> blocks and your application secrets in your normal runtime environment. The site and generated code do not require a custom database or hosted prompt store.',
         id: 3,
-        question: 'Is my data secure?',
+        question: 'How does BAML handle provider configuration?',
       },
       {
         answer:
@@ -224,31 +224,31 @@ export const siteConfig = {
       },
       {
         answer:
-          'Yes, the VS Code extension and core BAML functionality are completely free to use. You can define schemas, generate types, and build AI applications at no cost. Premium features are available with paid plans.',
+          'Yes. The core language, generated clients, testset blocks, and local developer workflow are open source.',
         id: 5,
         question: 'Is BAML free to use?',
       },
       {
         answer:
-          'BAML is perfect for building AI applications that integrate with OpenAI, Anthropic, and other AI providers. It provides type-safe interfaces and automatic validation to ensure your AI interactions are reliable.',
+          'BAML is strongest at structured-output LLM boundaries: extraction, classification, typed deserialization, and chained LLM functions. The cliff is steep when you leave that boundary and try to make it a general agentic orchestration language.',
         id: 6,
-        question: 'How can I integrate with AI providers?',
+        question: 'When does BAML shine?',
       },
       {
         answer:
-          'BAML supports multiple AI providers including OpenAI, Anthropic, Google, and others. You can easily define schemas for different providers and switch between them while maintaining type safety.',
+          'Use named client<llm> blocks to configure providers and models, then reference that client from an LLM function body.',
         id: 7,
         question: 'Which AI providers does BAML support?',
       },
       {
         answer:
-          'Yes! BAML schemas can be shared across your entire team. When team members check out the code, they automatically get access to the same BAML configuration and generated types.',
+          'Yes. Put .baml files in baml_src/ and check them into the repo. The schema, prompt, testset blocks, and generated clients move with the codebase.',
         id: 8,
         question: 'Can my entire team use the same BAML schemas?',
       },
       {
         answer:
-          'Create a baml.config.json file in your repository with your BAML schemas. When team members check out the code, they automatically get access to the same configuration and generated types.',
+          'Use baml_src/ for project files. For larger projects, opt into namespaces with an ns_ directory prefix.',
         id: 9,
         question: 'How do I share BAML configuration with my team?',
       },
@@ -257,7 +257,7 @@ export const siteConfig = {
   },
   featureSection: {
     description:
-      'From idea to production—define, test, call, and deploy cognitive functions.',
+      'From idea to production: define, test, parse, and call first-class LLM functions.',
     items: [
       {
         content: (
@@ -386,7 +386,7 @@ export const siteConfig = {
       //   title: '4. Iterate & Test',
       // },
     ],
-    title: 'Complete workflow for cognitive coding',
+    title: 'Complete workflow for first-class LLM functions',
   },
   footerLinks: [
     {
@@ -477,12 +477,12 @@ export const siteConfig = {
   ],
   growthSection: {
     description:
-      'Where type safety meets AI development—designed to protect your AI applications and empower your development.',
+      'Where typed prompt boundaries meet existing Python, TypeScript, and Ruby code.',
     items: [
       {
         // content: <SecurityShieldBackground />,
         description:
-          'Build AI applications without leaving your editor. Keep your focus on code while maintaining type safety throughout your AI development process.',
+          'Write .baml files in your repo. Keep schema, prompt, and tests next to the code that calls them.',
         id: 1,
         title: 'Seamless Workflow Integration',
       },
@@ -493,12 +493,12 @@ export const siteConfig = {
           </div>
         ),
         description:
-          'Works with VS Code, JetBrains IDEs, Cursor, and other editors. Compatible with all major AI providers and development environments.',
+          'Use generated clients from Python, TypeScript, Ruby, and Go while the .baml file remains the source of truth.',
         id: 2,
-        title: 'Universal Compatibility',
+        title: 'Generated Clients',
       },
     ],
-    title: 'Built for the Future of AI',
+    title: 'Built for structured-output AI boundaries',
   },
   hero: {
     badge: 'Free During Beta',
@@ -516,8 +516,8 @@ export const siteConfig = {
       },
     },
     description:
-      'Cognitive coding: LLM capabilities as classic functions. Code that agents write. Software that humans trust.',
-    title: 'The language for cognitive coding',
+      'BAML supplies typed prompt boundaries for structured-output LLM work.',
+    title: 'First-class LLM functions',
   },
   keywords: [
     'AI Development',
@@ -545,7 +545,7 @@ export const siteConfig = {
   },
   pricing: {
     description:
-      'Start for free and upgrade as your team grows. No credit card required.',
+      'Start with local .baml files and generated clients. Upgrade when your team needs shared workflows.',
     pricingItems: [
       {
         buttonColor: 'bg-accent text-primary',
@@ -553,9 +553,9 @@ export const siteConfig = {
         description: 'Perfect for individual developers',
         features: [
           'CLI & Editor extension access',
-          'Unlimited BAML schemas',
-          'TypeScript type generation',
-          'Basic schema validation',
+          'Unlimited .baml files',
+          'Generated Python, TypeScript, Ruby, and Go clients',
+          'testset / test / assert.* blocks',
           'Local development',
           'Single developer',
           'Open source',
@@ -574,14 +574,14 @@ export const siteConfig = {
         buttonText: 'Start Trial',
         description: 'Ideal for development teams',
         features: [
-          'Advanced type generation',
-          'Runtime validation',
-          'Unlimited schemas',
+          'Generated clients',
+          'Structured-output parsing',
+          'Unlimited .baml files',
           'Team collaboration',
           'Unlimited developers',
-          'Private schemas',
+          'Private projects',
           'Custom transformations',
-          'Advanced validation',
+          'Typed prompt boundaries',
           'Priority support',
           'Custom integrations',
           'Enterprise features',
@@ -615,20 +615,20 @@ export const siteConfig = {
         yearlyPrice: 'Custom',
       },
     ],
-    title: 'Simple, transparent pricing',
+    title: 'Pricing for typed LLM boundaries',
   },
   storyPage: {
     mission:
-      'We believe AI needs a language of its own—not strings and APIs, but cognitive functions that fit the way software is built. Code that agents write. Software that humans trust.',
+      'BAML is a statically-typed, expression-oriented language with first-class LLM functions: typed prompt boundaries that fit the way software is built.',
     timeline: [
       {
         body: 'C and Unix gave us languages for the machine and the system.',
-        era: '1970s–80s',
+        era: '1970s-80s',
         label: 'C, Unix',
       },
       {
         body: 'Java and JavaScript gave us languages for the network and the web.',
-        era: '1990s–2000s',
+        era: '1990s-2000s',
         label: 'Java, JavaScript',
       },
       {
@@ -637,32 +637,32 @@ export const siteConfig = {
         label: 'TypeScript',
       },
       {
-        body: 'Python became the language of AI — but it was never designed for it.',
+        body: 'Python became the language of AI, but it was never designed for it.',
         era: '2020s',
         label: 'Python',
       },
       {
-        body: 'LLMs are a new kind of compute. We\u2019re still gluing them in with strings and hope. BAML is the first language designed with LLMs in mind.',
+        body: 'LLMs are a new kind of compute. BAML supplies typed prompt boundaries for structured-output LLM work.',
         era: 'Now',
         label: 'BAML',
       },
     ],
     title: 'Our story',
     whyItMatters:
-      'Cognitive coding means LLM capabilities become first-class functions: same repo, same toolchain, same reliability you expect from the rest of your stack. That\u2019s how we get to software that humans trust.',
+      'First-class LLM functions keep schema, prompt, model choice, tests, and generated clients in one place.',
   },
   storySection: {
     ctaHref: '/#story',
     ctaText: 'Explore the timeline',
     teaser:
-      'Every era of computing got a language that fit. C for the machine. Java and JavaScript for the network. TypeScript for scale. Now LLMs are a new kind of compute—and we\u2019re still gluing them in with strings. BAML is the first language designed with LLMs in mind.',
+      'Every era of computing got a language that fit. C for the machine. Java and JavaScript for the network. TypeScript for scale. Now LLMs need typed prompt boundaries and first-class LLM functions.',
     timeline: [
-      { era: '1970s–80s', label: 'C, Unix' },
-      { era: '1990s–2000s', label: 'Java, JavaScript' },
+      { era: '1970s-80s', label: 'C, Unix' },
+      { era: '1990s-2000s', label: 'Java, JavaScript' },
       { era: '2010s', label: 'TypeScript' },
       { era: 'Now', label: 'BAML' },
     ],
-    title: 'A language for the future of AI',
+    title: 'A language for structured-output AI boundaries',
   },
   testimonials: [
     {

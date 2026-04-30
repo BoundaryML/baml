@@ -1,80 +1,79 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { cn } from '@/lib/utils';
 import { CheckIcon } from '@radix-ui/react-icons';
 import { motion } from 'framer-motion';
 import { Loader } from 'lucide-react';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 
 type Interval = 'month' | 'year';
 
-export const toHumanPrice = (price: number, decimals: number = 2) => {
+export const toHumanPrice = (price: number, decimals = 2) => {
   return Number(price / 100).toFixed(decimals);
 };
 const demoPrices = [
   {
+    description: 'Local .baml files for individual developers',
+    features: [
+      'First-class LLM functions',
+      'Jinja-templated prompts',
+      'Generated clients',
+      'testset blocks',
+    ],
     id: 'price_1',
-    name: 'Basic',
-    description: 'A basic plan for startups and individual users',
-    features: [
-      'AI-powered analytics',
-      'Basic support',
-      '5 projects limit',
-      'Access to basic AI tools',
-    ],
-    monthlyPrice: 1000,
-    yearlyPrice: 10000,
     isMostPopular: false,
+    monthlyPrice: 0,
+    name: 'Open Source',
+    yearlyPrice: 0,
   },
   {
-    id: 'price_2',
-    name: 'Premium',
-    description: 'A premium plan for growing businesses',
+    description: 'Shared typed prompt boundaries for teams',
     features: [
-      'Advanced AI insights',
+      'Structured-output parsing',
+      'Team projects',
+      'Typed catch patterns',
+      'Generated Python and TypeScript clients',
       'Priority support',
-      'Unlimited projects',
-      'Access to all AI tools',
-      'Custom integrations',
     ],
-    monthlyPrice: 2000,
-    yearlyPrice: 20000,
+    id: 'price_2',
     isMostPopular: true,
+    monthlyPrice: 2000,
+    name: 'Team',
+    yearlyPrice: 20000,
   },
   {
-    id: 'price_5',
-    name: 'Enterprise',
-    description:
-      'An enterprise plan with advanced features for large organizations',
+    description: 'Structured-output AI boundaries for large organizations',
     features: [
-      'Custom AI solutions',
+      'Provider configuration review',
       '24/7 dedicated support',
       'Unlimited projects',
-      'Access to all AI tools',
+      'Schema-aware parser support',
       'Custom integrations',
       'Data security and compliance',
     ],
-    monthlyPrice: 5000,
-    yearlyPrice: 50000,
+    id: 'price_5',
     isMostPopular: false,
+    monthlyPrice: 5000,
+    name: 'Enterprise',
+    yearlyPrice: 50000,
   },
   {
-    id: 'price_6',
-    name: 'Ultimate',
-    description: 'The ultimate plan with all features for industry leaders',
+    description: 'For teams pushing BAML in the wild',
     features: [
-      'Bespoke AI development',
+      'Friction notes and RFC loop',
       'White-glove support',
       'Unlimited projects',
-      'Priority access to new AI tools',
+      'Priority language feedback',
       'Custom integrations',
       'Highest data security and compliance',
     ],
-    monthlyPrice: 8000,
-    yearlyPrice: 80000,
+    id: 'price_6',
     isMostPopular: false,
+    monthlyPrice: 8000,
+    name: 'Design Partner',
+    yearlyPrice: 80000,
   },
 ];
 
@@ -99,13 +98,13 @@ export default function PricingSection() {
           </h4>
 
           <h2 className="text-5xl font-bold tracking-tight text-black dark:text-white sm:text-6xl">
-            Simple pricing for everyone.
+            Pricing for typed LLM boundaries.
           </h2>
 
           <p className="mt-6 text-xl leading-8 text-black/80 dark:text-white">
-            Choose an <strong>affordable plan</strong> that&apos;s packed with
-            the best features for engaging your audience, creating customer
-            loyalty, and driving sales.
+            Start with first-class LLM functions locally. Upgrade when your team
+            needs shared workflows around .baml files, generated clients, and
+            structured-output parsing.
           </p>
         </div>
 
@@ -125,7 +124,6 @@ export default function PricingSection() {
         <div className="mx-auto grid w-full justify-center sm:grid-cols-2 lg:grid-cols-4 flex-col gap-4">
           {demoPrices.map((price, idx) => (
             <div
-              key={price.id}
               className={cn(
                 'relative flex max-w-[400px] flex-col gap-8 rounded-2xl border p-4 text-black dark:text-white overflow-hidden',
                 {
@@ -133,6 +131,7 @@ export default function PricingSection() {
                     price.isMostPopular,
                 },
               )}
+              key={price.id}
             >
               <div className="flex items-center">
                 <div className="ml-4">
@@ -146,25 +145,25 @@ export default function PricingSection() {
               </div>
 
               <motion.div
-                key={`${price.id}-${interval}`}
-                initial="initial"
                 animate="animate"
+                className="flex flex-row gap-1"
+                initial="initial"
+                key={`${price.id}-${interval}`}
+                transition={{
+                  delay: 0.1 + idx * 0.05,
+                  duration: 0.4,
+                  ease: [0.21, 0.47, 0.32, 0.98],
+                }}
                 variants={{
-                  initial: {
-                    opacity: 0,
-                    y: 12,
-                  },
                   animate: {
                     opacity: 1,
                     y: 0,
                   },
+                  initial: {
+                    opacity: 0,
+                    y: 12,
+                  },
                 }}
-                transition={{
-                  duration: 0.4,
-                  delay: 0.1 + idx * 0.05,
-                  ease: [0.21, 0.47, 0.32, 0.98],
-                }}
-                className="flex flex-row gap-1"
               >
                 <span className="text-4xl font-bold text-black dark:text-white">
                   $
@@ -197,10 +196,10 @@ export default function PricingSection() {
               <hr className="m-0 h-px w-full border-none bg-gradient-to-r from-neutral-200/0 via-neutral-500/30 to-neutral-200/0" />
               {price.features && price.features.length > 0 && (
                 <ul className="flex flex-col gap-2 font-normal">
-                  {price.features.map((feature: any, idx: any) => (
+                  {price.features.map((feature: string) => (
                     <li
-                      key={idx}
                       className="flex items-center gap-3 text-xs font-medium text-black dark:text-white"
+                      key={feature}
                     >
                       <CheckIcon className="h-5 w-5 shrink-0 rounded-full bg-green-400 p-[2px] text-black dark:text-white" />
                       <span className="flex">{feature}</span>

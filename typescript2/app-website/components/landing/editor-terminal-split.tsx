@@ -82,46 +82,46 @@ export function EditorTerminalSplit({
       ref={containerRef}
       style={{
         display: 'flex',
-        flexDirection: 'column',
         flex: 1,
+        flexDirection: 'column',
         minHeight: 0,
       }}
     >
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>{editor}</div>
       <div
-        role="separator"
+        aria-label="Resize terminal: drag to adjust, double-click to reset"
         aria-orientation="horizontal"
-        aria-label="Resize terminal — drag to adjust, double-click to reset"
+        onDoubleClick={onDoubleClick}
         onMouseDown={(e) => {
           e.preventDefault();
           beginDrag();
         }}
         onTouchStart={() => beginDrag()}
-        onDoubleClick={onDoubleClick}
+        role="separator"
         style={{
-          height: 8,
-          flexShrink: 0,
-          cursor: 'row-resize',
-          background: dragging ? '#C9C3FF' : '#0E0B14',
-          borderTop: '1px solid #D9D3C4',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          display: 'flex',
           alignItems: 'center',
+          background: dragging ? '#C9C3FF' : '#0E0B14',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          borderTop: '1px solid #D9D3C4',
+          cursor: 'row-resize',
+          display: 'flex',
+          flexShrink: 0,
+          height: 8,
           justifyContent: 'center',
-          transition: dragging ? 'none' : 'background-color 120ms ease',
           touchAction: 'none',
+          transition: dragging ? 'none' : 'background-color 120ms ease',
         }}
       >
         <div
           style={{
-            width: 36,
-            height: 2,
-            borderRadius: 1,
             background: dragging ? '#0E0B14' : 'rgba(232,227,219,0.45)',
+            borderRadius: 1,
+            height: 2,
+            width: 36,
           }}
         />
       </div>
-      <div style={{ height: terminalHeight, flexShrink: 0, minHeight: 0 }}>
+      <div style={{ flexShrink: 0, height: terminalHeight, minHeight: 0 }}>
         {terminal}
       </div>
     </div>

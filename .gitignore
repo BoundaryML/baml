@@ -186,3 +186,4 @@ rpi/
 
 # Riptide artifacts (cloud-synced)
 .humanlayer/tasks/
+.codeboarding/.codeboardingignore

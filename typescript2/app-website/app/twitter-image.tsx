@@ -13,7 +13,7 @@ export default function Image() {
   const baseLayout = BaseLayout({
     children: (
       <Title
-        subtitle="Code that agents write. Software that humans trust."
+        subtitle="Typed prompt boundaries for structured-output LLM work."
         title="BAML"
       />
     ),
