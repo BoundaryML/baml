@@ -495,15 +495,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           const pending = pendingCallsRef.current.get(data.id);
           if (pending) {
             pendingCallsRef.current.delete(data.id);
-            // Worker sends JSON-encoded string; WebSocketRuntimePort sends
-            // pre-decoded BamlJsValue (which may itself be a string).
-            // Try to parse, but fall back to the raw value so pre-decoded
-            // payloads (including top-level strings) resolve correctly.
-            let resolved = data.result;
-            if (typeof data.result === 'string') {
-              try { resolved = JSON.parse(data.result); } catch { /* use raw */ }
-            }
-            pending.resolve(resolved);
+            pending.resolve(data.result);
           }
           break;
         }

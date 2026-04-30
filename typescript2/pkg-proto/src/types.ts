@@ -48,6 +48,12 @@ export type BamlJsPromptAst = {
   | { content_type: 'multiple'; value: BamlJsPromptAst[] }
 );
 
+export type PlainHandleDescriptor = {
+  handle_key: bigint;
+  handle_type: number;
+  type_name: string;
+};
+
 /** Implemented by objects that need custom BAML serialization. */
 export interface BamlSerializable {
   toBaml(): InboundValue;

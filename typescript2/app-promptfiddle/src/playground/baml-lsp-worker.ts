@@ -148,16 +148,6 @@ function getOrCreateBash(): Bash {
   return bashInstance;
 }
 
-/** JSON replacer that encodes Uint8Array as tagged base64 for safe serialization. */
-function jsonReplacer(_key: string, value: unknown): unknown {
-  if (value instanceof Uint8Array) {
-    let binary = '';
-    for (let i = 0; i < value.length; i++) binary += String.fromCharCode(value[i]);
-    return { $baml: { type: '$bytes' }, base64: btoa(binary) };
-  }
-  return value;
-}
-
 /** Shell result shape expected by the Rust WASM bridge. */
 interface ShellResult {
   stdout: string;
@@ -737,7 +727,7 @@ self.onmessage = async (event: MessageEvent) => {
         const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
           const h = new BamlHandle(key.toString(), handleType);
           handles.push(h);
-          return h;
+          return { handle_key: key, handle_type: handleType, type_name: typeName };
         });
         const existing = liveHandles.get(msg.id);
         if (existing) {
@@ -748,8 +738,7 @@ self.onmessage = async (event: MessageEvent) => {
         } else {
           liveHandles.delete(msg.id);
         }
-        const result = JSON.stringify(decoded, jsonReplacer, 2);
-        postOut({ type: "callFunctionResult", id: msg.id, result });
+        postOut({ type: "callFunctionResult", id: msg.id, result: decoded });
       } catch (e) {
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
         let errorMessage: string;
@@ -867,7 +856,7 @@ self.onmessage = async (event: MessageEvent) => {
         const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
           const h = new BamlHandle(key.toString(), handleType);
           handles.push(h);
-          return h;
+          return { handle_key: key, handle_type: handleType, type_name: typeName };
         });
         const existing = liveHandles.get(msg.id);
         if (existing) {
@@ -878,11 +867,7 @@ self.onmessage = async (event: MessageEvent) => {
         } else {
           liveHandles.delete(msg.id);
         }
-        postOut({
-          type: "callFunctionResult",
-          id: msg.id,
-          result: JSON.stringify(decoded, jsonReplacer, 2),
-        });
+        postOut({ type: "callFunctionResult", id: msg.id, result: decoded });
       } catch (e: any) {
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
         let errorMessage: string;

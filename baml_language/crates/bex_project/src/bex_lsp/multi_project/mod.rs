@@ -7,6 +7,7 @@ mod wasm_helpers;
 use std::collections::HashMap;
 
 use ::std::sync::Arc;
+pub use wasm_helpers::BackgroundSpawner;
 
 /// Factory that creates [`sys_ops::SysOps`] for a given project root.
 type SysOpFactory =
@@ -54,6 +55,8 @@ struct BexMulitProject {
 
     /// The VFS path to the project root.
     fs: crate::fs::BamlVFS,
+
+    spawner: BackgroundSpawner,
 }
 
 pub trait LspClientSenderTrait {
@@ -173,6 +176,7 @@ impl BexMulitProject {
         playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
         fs: crate::fs::BamlVFS,
         event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
+        spawner: BackgroundSpawner,
     ) -> Self {
         Self {
             projects: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
@@ -186,6 +190,7 @@ impl BexMulitProject {
             position_encoding: PositionEncoding::UTF8,
             workspace_roots: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             fs,
+            spawner,
         }
     }
 
@@ -607,7 +612,7 @@ impl BexMulitProject {
         let call_id = sys_types::CallId::next();
 
         // Spawn async collection task
-        wasm_helpers::run_async_in_background(async move {
+        self.spawner.spawn(async move {
             match engine
                 .collect_tests(&package, call_id, cancel.clone())
                 .await
@@ -807,7 +812,7 @@ impl BexMulitProject {
         let project = project_root_str.to_string();
         let name = testset_name.to_string();
 
-        wasm_helpers::run_async_in_background(async move {
+        self.spawner.spawn(async move {
             let ctx = bex_engine::FunctionCallContextBuilder::new(call_id)
                 .with_cancel_token(cancel.clone())
                 .build();
@@ -1098,6 +1103,14 @@ pub fn new_lsp(
     playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
     fs: crate::fs::BamlVFS,
     event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
+    spawner: BackgroundSpawner,
 ) -> impl crate::bex_lsp::BexLsp {
-    BexMulitProject::new(sys_op_factory, sender, playground_sender, fs, event_sink)
+    BexMulitProject::new(
+        sys_op_factory,
+        sender,
+        playground_sender,
+        fs,
+        event_sink,
+        spawner,
+    )
 }

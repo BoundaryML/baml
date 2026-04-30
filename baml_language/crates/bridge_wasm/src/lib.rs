@@ -251,6 +251,7 @@ impl BamlWasmRuntime {
             std::sync::Arc::new(playground),
             bex_project::BamlVFS::new(vfs),
             Some(std::sync::Arc::new(event_sink)),
+            bex_project::BackgroundSpawner::new(),
         );
 
         Ok(BamlWasmRuntime { bex: Box::new(bex) })
