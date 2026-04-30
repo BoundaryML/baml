@@ -122,9 +122,7 @@ pub fn external_to_baml_value(
             if let Some(converted) = bex_project::try_convert_rust_data(arc) {
                 return external_to_baml_value(&converted, options);
             }
-            return Err(CtypesError::InternalError(
-                "RustData cannot be serialized over FFI".to_string(),
-            ));
+            Some(BamlValueVariant::StringValue("<native handle>".to_string()))
         }
 
         // All opaque types → insert into handle table, encode as BamlHandle.
