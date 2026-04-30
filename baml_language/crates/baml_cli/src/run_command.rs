@@ -3355,6 +3355,56 @@ hidden = "--function $init_test"
         (tmp, args)
     }
 
+    #[test]
+    fn run_does_not_mutate_unformatted_project_sources() {
+        let (tmp, mut args) = e2e_project("function main()->string {\n\"ok\"\n}\n");
+        let baml_path = tmp.path().join("baml_src").join("main.baml");
+        let original = std::fs::read_to_string(&baml_path).unwrap();
+        args.function = Some(s("main"));
+
+        let exit = args.run().expect("run should not hard-fail");
+
+        assert!(matches!(exit, crate::ExitCode::Success));
+        assert_eq!(std::fs::read_to_string(&baml_path).unwrap(), original);
+    }
+
+    #[test]
+    fn standalone_run_does_not_mutate_unformatted_source() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("hello.baml");
+        let original = "function main()->string {\n\"hello\"\n}\n";
+        std::fs::write(&file, original).unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.target = Some(file.to_string_lossy().into_owned());
+
+        let exit = args.run().expect("run should not hard-fail");
+
+        assert!(matches!(exit, crate::ExitCode::Success));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
+    }
+
+    #[test]
+    fn expression_run_does_not_mutate_project_sources_for_format_hints() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("baml.toml"), "").unwrap();
+        let src = tmp.path().join("baml_src");
+        std::fs::create_dir_all(&src).unwrap();
+        let file = src.join("foo.baml");
+        let original = "class Foo { x int }\n";
+        std::fs::write(&file, original).unwrap();
+
+        let mut args = run_args();
+        args.from = tmp.path().to_path_buf();
+        args.expression = Some(s("Foo { x: 1 }"));
+
+        let exit = args.run().expect("run should not hard-fail");
+
+        assert!(matches!(exit, crate::ExitCode::Success));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
+    }
+
     /// `--function FN` runs the named function end-to-end.
     #[test]
     fn test_run_function_flag_e2e() {
