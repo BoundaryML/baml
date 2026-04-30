@@ -1,5 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== STRONG AST ERROR ===
-An element at closures.baml:33:10 was a token when it should have been a node.

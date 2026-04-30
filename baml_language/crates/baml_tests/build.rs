@@ -270,18 +270,45 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
         None
     };
 
+    // All tiers get lexer and parser
     let lexer_tests: TokenStream = project.files.iter().map(generate_lexer_test).collect();
-
     let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
 
-    let hir_test = generate_hir_test(project, stdlib_package_filter);
-    let tir_test = generate_tir_test(project, stdlib_package_filter);
-    let mir_test = generate_mir_test(project, stdlib_package_filter);
-    let diagnostics_test = generate_diagnostics_test(project);
-    let codegen_test = generate_codegen_test(project, stdlib_package_filter);
+    // Tier-specific phases
+    let (hir_test, tir_test, mir_test, diagnostics_test, codegen_test, formatter_tests) =
+        match project.tier {
+            Tier::BrokenSyntax => {
+                // Tier 1: lexer + parser only — no higher phases
+                (
+                    quote! {},
+                    quote! {},
+                    quote! {},
+                    quote! {},
+                    quote! {},
+                    quote! {},
+                )
+            }
+            Tier::DiagnosticErrors => {
+                // Tier 2: HIR, TIR, diagnostics, formatter — no MIR, no codegen
+                let hir = generate_hir_test(project, stdlib_package_filter);
+                let tir = generate_tir_test(project, stdlib_package_filter);
+                let diag = generate_diagnostics_test(project);
+                let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
+                (hir, tir, quote! {}, diag, quote! {}, fmt)
+            }
+            Tier::Compiles | Tier::Passing | Tier::PassingLlm => {
+                // Tier 3+: all compiler phases
+                let hir = generate_hir_test(project, stdlib_package_filter);
+                let tir = generate_tir_test(project, stdlib_package_filter);
+                let mir = generate_mir_test(project, stdlib_package_filter);
+                let diag = generate_diagnostics_test(project);
+                let cg = generate_codegen_test(project, stdlib_package_filter);
+                let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
+                (hir, tir, mir, diag, cg, fmt)
+            }
+        };
 
-    let formatter_tests: TokenStream = project.files.iter().map(generate_formatter_test).collect();
-
+    // parser_-prefixed tests: only for parser_ projects regardless of tier
     let parser_specific_tests = if project.name.starts_with("parser_") {
         let incremental_tests: TokenStream = project
             .files
@@ -612,7 +639,6 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
         fn test_04_5_mir() {
             use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
             use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
-            use baml_project::collect_compiler2_diagnostics;
 
             let mut db = ProjectDatabase::new();
             let _root = db.set_project_root(std::path::Path::new("."));
@@ -623,26 +649,18 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
             let mut output = String::new();
             writeln!(output, "=== MIR2 ===").unwrap();
 
-            // Skip MIR lowering when there are diagnostic errors — the AST/HIR
-            // may be incomplete and lowering can panic on malformed input.
-            let diagnostics = collect_compiler2_diagnostics(&db);
-            let has_errors = diagnostics.iter().any(|d| d.severity == baml_compiler_diagnostics::Severity::Error);
-            if has_errors {
-                writeln!(output, "Skipped: project has diagnostic errors").unwrap();
-            } else {
-                for source_file in &source_files {
-                    let item_tree = file_item_tree(&db, *source_file);
-                    let mut functions: Vec<_> = item_tree.functions.iter().collect();
-                    functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
-                    for (local_id, _func_data) in functions {
-                        let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
-                        let mir = lower_function(&db, func_loc, OptLevel::Two);
-                        writeln!(output, "{}", display_function(&mir)).unwrap();
-                    }
+            for source_file in &source_files {
+                let item_tree = file_item_tree(&db, *source_file);
+                let mut functions: Vec<_> = item_tree.functions.iter().collect();
+                functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
+                for (local_id, _func_data) in functions {
+                    let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
+                    let mir = lower_function(&db, func_loc, OptLevel::Two);
+                    writeln!(output, "{}", display_function(&mir)).unwrap();
                 }
-
-                #stdlib_section
             }
+
+            #stdlib_section
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_5_mir", output);
@@ -763,44 +781,37 @@ fn generate_codegen_test(
 
             #file_loaders
 
-            let mut output = String::new();
-
             let options = baml_compiler2_emit::CompileOptions { emit_test_cases: false };
-            match baml_compiler2_emit::generate_project_bytecode(&db, &options) {
-                Ok(program) => {
-                    let mut func_names: Vec<_> = program.function_indices.keys()
-                        .filter(#filter_expr)
-                        .collect();
-                    func_names.sort();
+            let program = baml_compiler2_emit::generate_project_bytecode(&db, &options)
+                .expect("codegen should succeed for Tier 3+ projects");
 
-                    let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
-                        .iter()
-                        .map(|name| {
-                            let idx = *program.function_indices.get(*name).unwrap();
-                            match program.objects.get(idx) {
-                                Some(bex_vm_types::Object::Function(func)) => {
-                                    ((*name).clone(), func.as_ref())
-                                }
-                                other => {
-                                    panic!(
-                                        "function_indices entry '{}' (idx={}) is not a Function: {:?}",
-                                        name, idx, other.map(std::mem::discriminant)
-                                    );
-                                }
-                            }
-                        })
-                        .collect();
+            let mut func_names: Vec<_> = program.function_indices.keys()
+                .filter(#filter_expr)
+                .collect();
+            func_names.sort();
 
-                    output = bex_vm::debug::display_program(
-                        &functions,
-                        bex_vm::debug::BytecodeFormat::Textual,
-                    );
-                }
-                Err(err) => {
-                    writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").unwrap();
-                    writeln!(output, "Error: {:?}", err).unwrap();
-                }
-            }
+            let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
+                .iter()
+                .map(|name| {
+                    let idx = *program.function_indices.get(*name).unwrap();
+                    match program.objects.get(idx) {
+                        Some(bex_vm_types::Object::Function(func)) => {
+                            ((*name).clone(), func.as_ref())
+                        }
+                        other => {
+                            panic!(
+                                "function_indices entry '{}' (idx={}) is not a Function: {:?}",
+                                name, idx, other.map(std::mem::discriminant)
+                            );
+                        }
+                    }
+                })
+                .collect();
+
+            let output = bex_vm::debug::display_program(
+                &functions,
+                bex_vm::debug::BytecodeFormat::Textual,
+            );
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("06_codegen", output);
