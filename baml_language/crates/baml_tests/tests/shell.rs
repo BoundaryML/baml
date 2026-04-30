@@ -356,16 +356,20 @@ async fn shell_with_options() {
 #[tokio::test]
 #[cfg(target_os = "windows")]
 async fn shell_with_options() {
+    // Use `cmd /c cd` so the inner cmd.exe prints the inherited cwd. This works
+    // regardless of whether the outer shell resolves to PowerShell or cmd.exe:
+    // PowerShell's bare `cd` is `Set-Location` and prints nothing, so we
+    // delegate the "print cwd" job to a cmd.exe subprocess in both cases.
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("cd", baml.sys.ProcessOptions { cwd: "C:\\Windows\\Temp" }).stdout.to_string()
+                baml.sys.shell("cmd /c cd", baml.sys.ProcessOptions { cwd: "C:\\Windows\\Temp" }).stdout.to_string()
             }
         "#
     );
     assert!(output.result.is_ok());
     if let Ok(BexExternalValue::String(stdout)) = &output.result {
-        assert!(stdout.trim().contains("Temp"));
+        assert!(stdout.trim().to_lowercase().contains("temp"));
     }
 }
 
