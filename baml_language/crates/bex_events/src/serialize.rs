@@ -331,7 +331,6 @@ fn bex_value_to_json_impl(value: &BexExternalValue, depth: usize) -> serde_json:
     if depth > MAX_SERIALIZATION_DEPTH {
         return serde_json::Value::String("...".into());
     }
-
     match value {
         BexExternalValue::Null => serde_json::Value::Null,
         BexExternalValue::Bool(b) => serde_json::Value::Bool(*b),

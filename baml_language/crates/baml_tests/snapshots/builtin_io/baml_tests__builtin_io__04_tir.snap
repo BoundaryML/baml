@@ -166,20 +166,44 @@ function user.ConnectReadAndClose() -> string throws never {
   }
 }
 function user.RunCommand() -> string throws never {
-  { : string
-    baml.sys.shell("echo hello") : string
+  { : uint8array
+    baml.sys.shell("echo hello", null).stdout : uint8array
   }
+  !! 79..125: type mismatch: expected string, got uint8array
 }
 function user.RunCommandWithVar() -> string throws never {
-  { : string
+  { : uint8array
     let cmd = "ls -la" : "ls -la" -> string
-    baml.sys.shell(cmd) : string
+    baml.sys.shell(cmd, null).stdout : uint8array
   }
+  !! 193..230: type mismatch: expected string, got uint8array
 }
 function user.ChainCommands() -> string throws never {
   { : string
-    let result1 = baml.sys.shell("pwd") : string
-    let result2 = baml.sys.shell("whoami") : string
-    result1 + " - " + result2 : string
+    let result1 = baml.sys.shell("pwd", null) : baml.sys.ShellOutput
+    let result2 = baml.sys.shell("whoami", null) : baml.sys.ShellOutput
+    result1.stdout + " - " + result2.stdout : string
   }
+}
+function user.CheckExitCode() -> int throws never {
+  { : int
+    baml.sys.shell("exit 42", null).exit_code : int
+  }
+}
+function user.CheckOk() -> bool throws never {
+  { : bool
+    baml.sys.shell("echo test", null).ok() : bool
+  }
+}
+function user.ExecCommand() -> string throws never {
+  { : uint8array
+    baml.sys.exec("echo", ["hello"], null).stdout : uint8array
+  }
+  !! 607..657: type mismatch: expected string, got uint8array
+}
+function user.ExecWithOptions() -> string throws never {
+  { : uint8array
+    baml.sys.exec("pwd", null, baml.sys.ProcessOptions { cwd: "/tmp" }).stdout : uint8array
+  }
+  !! 699..778: type mismatch: expected string, got uint8array
 }

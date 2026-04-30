@@ -85,6 +85,9 @@ function baml.String.toLowerCase(self: null) -> string {
 function baml.String.toUpperCase(self: null) -> string {
 }
 
+function baml.String.to_bytes(self: null) -> uint8array {
+}
+
 function baml.String.trim(self: null) -> string {
 }
 
@@ -131,6 +134,9 @@ function baml.Uint8Array.to_base64(self: null) -> string {
 }
 
 function baml.Uint8Array.to_hex(self: null) -> string {
+}
+
+function baml.Uint8Array.to_string(self: null) -> string {
 }
 
 function baml.Uint8Array.zeroes(size: int) -> uint8array {
@@ -1647,7 +1653,18 @@ function baml.net.Socket.read(self: null) -> string {
 function baml.net.connect(addr: string) -> baml.net.Socket {
 }
 
+function baml.sys.ShellOutput.ok(self: null) -> bool {
+    load_var self
+    load_field .exit_code
+    load_const 0
+    cmp_op ==
+    return
+}
+
 function baml.sys.argv() -> string[] {
+}
+
+function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput {
 }
 
 function baml.sys.now_ms() -> int {
@@ -1656,7 +1673,7 @@ function baml.sys.now_ms() -> int {
 function baml.sys.panic(message: string) -> void {
 }
 
-function baml.sys.shell(command: string) -> string {
+function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput {
 }
 
 function baml.sys.sleep(ms: int) -> null {
