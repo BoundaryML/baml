@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { SiteBanner } from '@/components/site-banner';
 import { ThemeProvider } from '@/components/theme-provider';
 import { cn } from '@/lib/utils';
 import './globals.css';
@@ -91,6 +92,7 @@ export default function RootLayout(props: { children: React.ReactNode }) {
               defaultTheme="light"
               enableSystem={false}
             >
+              <SiteBanner />
               {props.children}
             </ThemeProvider>
           </AnalyticsProvider>
