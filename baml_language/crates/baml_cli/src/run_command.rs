@@ -1157,7 +1157,7 @@ impl RunArgs {
 // Reserved verbs & namespace helpers
 // ============================================================================
 
-const FORMAT_HINT: &str = "[INFO] Your code is unformatted, but will continue to run. You can fix this whenever you'd like by running `baml format`.";
+const FORMAT_HINT: &str = "[INFO] Your code is unformatted, but will continue to run. You can fix this whenever you'd like by running `baml fmt`.";
 
 fn source_needs_format_hint(source: &str) -> bool {
     let options = baml_fmt::FormatOptions::default();
@@ -1705,7 +1705,7 @@ mod tests {
     fn format_hint_text_matches_ticket() {
         assert_eq!(
             FORMAT_HINT,
-            "[INFO] Your code is unformatted, but will continue to run. You can fix this whenever you'd like by running `baml format`."
+            "[INFO] Your code is unformatted, but will continue to run. You can fix this whenever you'd like by running `baml fmt`."
         );
     }
 
