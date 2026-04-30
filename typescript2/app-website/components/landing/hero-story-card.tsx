@@ -31,7 +31,7 @@ export function HeroStoryCard() {
         />
         <div className="relative z-10 p-6 sm:p-8 flex flex-col min-h-[280px] sm:min-h-[360px]">
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-4">
-            A language for the future of AI
+            Structured-output AI boundaries
           </p>
           {/* Timeline */}
           <div className="flex flex-col gap-4 flex-1">
@@ -59,7 +59,7 @@ export function HeroStoryCard() {
           </div>
           <div className="mt-6 pt-6 border-t border-border">
             <p className="text-sm text-muted-foreground mb-4">
-              Code that agents write. Software that humans trust.
+              First-class LLM functions, in your repo.
             </p>
             <Button asChild className="w-full sm:w-auto" variant="secondary">
               <Link href={ctaHref}>{ctaText}</Link>

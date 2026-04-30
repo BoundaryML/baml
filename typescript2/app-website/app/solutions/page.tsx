@@ -1,24 +1,26 @@
-import { Navbar } from '@/components/navbar';
-import { FooterSection } from '@/components/footer-section';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import Link from 'next/link';
 import {
+  ArrowRight,
   Bot,
-  Workflow,
+  CheckCircle,
   FileCode,
+  LineChart,
   Shield,
   TestTube,
-  LineChart,
-  ArrowRight,
-  CheckCircle,
+  Workflow,
 } from 'lucide-react';
+import Link from 'next/link';
+import { FooterSection } from '@/components/footer-section';
+import { Navbar } from '@/components/navbar';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
 const solutions = [
   {
-    id: 'agents',
-    icon: Bot,
-    title: 'AI Agents',
+    caseStudy: {
+      company: 'TechFlow Inc.',
+      result:
+        'Reduced support ticket resolution time by 75% with autonomous agents',
+    },
     description:
       'Build autonomous AI agents that can reason, plan, and execute complex tasks reliably',
     features: [
@@ -27,22 +29,22 @@ const solutions = [
       'State management and memory',
       'Tool integration framework',
     ],
+    icon: Bot,
+    id: 'agents',
+    title: 'AI Agents',
     useCases: [
       'Customer support automation',
       'Code generation and review',
       'Research and analysis agents',
       'Task automation systems',
     ],
-    caseStudy: {
-      company: 'TechFlow Inc.',
-      result:
-        'Reduced support ticket resolution time by 75% with autonomous agents',
-    },
   },
   {
-    id: 'workflows',
-    icon: Workflow,
-    title: 'AI Workflows',
+    caseStudy: {
+      company: 'ContentCo',
+      result:
+        'Automated 90% of content production workflow with zero type errors',
+    },
     description:
       'Orchestrate complex multi-step AI processes with guaranteed type safety at every step',
     features: [
@@ -51,22 +53,21 @@ const solutions = [
       'Error handling and retries',
       'Parallel execution',
     ],
+    icon: Workflow,
+    id: 'workflows',
+    title: 'AI Workflows',
     useCases: [
       'Document processing pipelines',
       'Content generation workflows',
       'Data extraction and transformation',
       'Multi-model orchestration',
     ],
-    caseStudy: {
-      company: 'ContentCo',
-      result:
-        'Automated 90% of content production workflow with zero type errors',
-    },
   },
   {
-    id: 'prompt-management',
-    icon: FileCode,
-    title: 'Prompt Management',
+    caseStudy: {
+      company: 'AI Startup',
+      result: 'Improved prompt performance by 40% through systematic testing',
+    },
     description:
       'Version control, test, and optimize your prompts with engineering best practices',
     features: [
@@ -75,21 +76,22 @@ const solutions = [
       'Performance analytics',
       'Collaborative editing',
     ],
+    icon: FileCode,
+    id: 'prompt-management',
+    title: 'Prompt Management',
     useCases: [
       'Prompt optimization',
       'Multi-variant testing',
       'Cross-team collaboration',
       'Prompt library management',
     ],
-    caseStudy: {
-      company: 'AI Startup',
-      result: 'Improved prompt performance by 40% through systematic testing',
-    },
   },
   {
-    id: 'production-reliability',
-    icon: Shield,
-    title: 'Production Reliability',
+    caseStudy: {
+      company: 'FinanceApp',
+      result:
+        '99.9% uptime with automatic error recovery and zero data corruption',
+    },
     description:
       'Deploy AI with confidence using enterprise-grade monitoring, testing, and safeguards',
     features: [
@@ -98,22 +100,21 @@ const solutions = [
       'Rate limiting and quotas',
       'Comprehensive logging',
     ],
+    icon: Shield,
+    id: 'production-reliability',
+    title: 'Production Reliability',
     useCases: [
       'Mission-critical AI systems',
       'Financial applications',
       'Healthcare AI',
       'Enterprise deployments',
     ],
-    caseStudy: {
-      company: 'FinanceApp',
-      result:
-        '99.9% uptime with automatic error recovery and zero data corruption',
-    },
   },
   {
-    id: 'proof-of-concepts',
-    icon: TestTube,
-    title: 'Rapid Prototyping',
+    caseStudy: {
+      company: 'Innovation Labs',
+      result: 'Built and deployed 5 AI prototypes in a single sprint',
+    },
     description:
       "Go from idea to working prototype in hours, not weeks, with BAML's development tools",
     features: [
@@ -122,21 +123,21 @@ const solutions = [
       'Instant type generation',
       'One-click deployment',
     ],
+    icon: TestTube,
+    id: 'proof-of-concepts',
+    title: 'Rapid Prototyping',
     useCases: [
       'POC development',
       'Hackathon projects',
       'Client demos',
       'Feature validation',
     ],
-    caseStudy: {
-      company: 'Innovation Labs',
-      result: 'Built and deployed 5 AI prototypes in a single sprint',
-    },
   },
   {
-    id: 'benchmarking',
-    icon: LineChart,
-    title: 'AI Benchmarking',
+    caseStudy: {
+      company: 'Enterprise Co',
+      result: 'Reduced AI costs by 60% through systematic benchmarking',
+    },
     description:
       'Measure and compare AI model performance with standardized testing frameworks',
     features: [
@@ -145,16 +146,15 @@ const solutions = [
       'Model comparison tools',
       'Cost analysis',
     ],
+    icon: LineChart,
+    id: 'benchmarking',
+    title: 'AI Benchmarking',
     useCases: [
       'Model selection',
       'Performance optimization',
       'Cost-benefit analysis',
       'Regression testing',
     ],
-    caseStudy: {
-      company: 'Enterprise Co',
-      result: 'Reduced AI costs by 60% through systematic benchmarking',
-    },
   },
 ];
 
@@ -170,15 +170,14 @@ export default function SolutionsPage() {
               Solutions for Every AI Use Case
             </h1>
             <p className="max-w-2xl text-lg text-muted-foreground">
-              From autonomous agents to production workflows, BAML—the language
-              for AI—gives you the foundation for building reliable AI at any
-              scale.
+              From autonomous agents to production workflows, BAML gives you the
+              foundation for building reliable AI at any scale.
             </p>
             <div className="flex gap-4">
               <Button asChild>
                 <Link href="/docs/solutions">Explore Solutions</Link>
               </Button>
-              <Button variant="outline" asChild>
+              <Button asChild variant="outline">
                 <Link href="/play">Try Examples</Link>
               </Button>
             </div>
@@ -191,10 +190,10 @@ export default function SolutionsPage() {
             <div className="space-y-20">
               {solutions.map((solution, index) => (
                 <div
-                  key={solution.id}
                   className={`grid lg:grid-cols-2 gap-12 items-center ${
                     index % 2 === 1 ? 'lg:flex-row-reverse' : ''
                   }`}
+                  key={solution.id}
                 >
                   <div className={index % 2 === 1 ? 'lg:order-2' : ''}>
                     <div className="flex items-center gap-3 mb-6">
@@ -212,8 +211,8 @@ export default function SolutionsPage() {
                       <ul className="space-y-2">
                         {solution.features.map((feature) => (
                           <li
-                            key={feature}
                             className="flex items-center gap-2 text-sm"
+                            key={feature}
                           >
                             <CheckCircle className="h-4 w-4 text-primary" />
                             <span>{feature}</span>
@@ -244,7 +243,7 @@ export default function SolutionsPage() {
                       <h3 className="font-semibold mb-4">Common Use Cases</h3>
                       <div className="space-y-3">
                         {solution.useCases.map((useCase) => (
-                          <div key={useCase} className="flex items-start gap-3">
+                          <div className="flex items-start gap-3" key={useCase}>
                             <div className="h-2 w-2 rounded-full bg-primary mt-1.5 flex-shrink-0" />
                             <p className="text-sm text-muted-foreground">
                               {useCase}
@@ -315,7 +314,7 @@ export default function SolutionsPage() {
                       View Demo Repository
                     </Link>
                   </Button>
-                  <Button variant="outline" asChild>
+                  <Button asChild variant="outline">
                     <Link href="/play">Try in Playground</Link>
                   </Button>
                 </div>
@@ -335,10 +334,10 @@ export default function SolutionsPage() {
               required.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" asChild>
+              <Button asChild size="lg">
                 <Link href="/docs/getting-started">Get Started Free</Link>
               </Button>
-              <Button size="lg" variant="outline" asChild>
+              <Button asChild size="lg" variant="outline">
                 <Link href="https://cal.com/boundaryml/30min">
                   Talk to an Expert
                 </Link>

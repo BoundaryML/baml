@@ -172,109 +172,109 @@ type Step = {
 
 const STEPS: Step[] = [
   {
-    heading: 'Every agent codebase starts here.',
-    body: "A string prompt. Manual JSON parsing. No types, no retries, no guarantees. Works until it doesn't.",
     blocks: [
       {
-        key: 's1-py',
-        code: STEP_1_PY,
-        lang: 'python',
-        filename: 'main.py',
         annotations: [
           {
-            text: 'string prompts.\nJSON.loads and hope.',
-            lineNumber: 11,
             column: 26,
+            lineNumber: 11,
+            text: 'string prompts.\nJSON.loads and hope.',
           },
           {
-            text: 'silent failure when\nJSON is malformed',
-            lineNumber: 22,
             column: 16,
+            lineNumber: 22,
+            text: 'silent failure when\nJSON is malformed',
           },
         ],
+        code: STEP_1_PY,
+        filename: 'main.py',
+        key: 's1-py',
+        lang: 'python',
       },
     ],
+    body: "A string prompt. Manual JSON parsing. No types, no retries, no guarantees. Works until it doesn't.",
+    heading: 'Every agent codebase starts here.',
   },
   {
-    heading: 'Types help. But the prompt is still a string.',
-    body: 'Pydantic validates after the model responds. If the JSON is wrong, you find out at runtime. The model is still guessing at what you want.',
     blocks: [
       {
-        key: 's2-py',
-        code: STEP_2_PY,
-        lang: 'python',
-        filename: 'main.py',
         annotations: [
           {
-            text: 'types — on your side',
-            lineNumber: 11,
             column: 22,
+            lineNumber: 11,
+            text: 'types, on your side',
           },
           {
-            text: 'but the model still\ngets a string.',
-            lineNumber: 23,
             column: 28,
+            lineNumber: 23,
+            text: 'but the model still\ngets a string.',
           },
         ],
+        code: STEP_2_PY,
+        filename: 'main.py',
+        key: 's2-py',
+        lang: 'python',
       },
     ],
+    body: 'Pydantic validates after the model responds. If the JSON is wrong, you find out at runtime. The model is still guessing at what you want.',
+    heading: 'Types help. But the prompt is still a string.',
   },
   {
+    blocks: [
+      {
+        annotations: [
+          {
+            column: 28,
+            lineNumber: 18,
+            text: 'BAML injects the schema.\nthe model knows what to return.',
+          },
+        ],
+        code: STEP_3_BAML,
+        filename: 'triage.baml',
+        key: 's3-baml',
+        lang: 'baml',
+      },
+      {
+        annotations: [
+          {
+            column: 28,
+            lineNumber: 4,
+            text: 'your existing app,\nmostly unchanged',
+          },
+        ],
+        code: STEP_3_PY,
+        filename: 'main.py',
+        key: 's3-py',
+        lang: 'python',
+      },
+    ],
+    body: 'Schema, prompt, and model choice in one place. Your Python app stays Python. BAML handles the LLM boundary.',
     heading:
       'Define the schema and prompt once. Call it from your existing code.',
-    body: 'Schema, prompt, and model choice — all in one place. Your Python app stays Python. BAML handles the LLM boundary.',
-    blocks: [
-      {
-        key: 's3-baml',
-        code: STEP_3_BAML,
-        lang: 'baml',
-        filename: 'triage.baml',
-        annotations: [
-          {
-            text: 'BAML injects the schema.\nthe model knows what to return.',
-            lineNumber: 18,
-            column: 28,
-          },
-        ],
-      },
-      {
-        key: 's3-py',
-        code: STEP_3_PY,
-        lang: 'python',
-        filename: 'main.py',
-        annotations: [
-          {
-            text: 'your existing app,\nmostly unchanged',
-            lineNumber: 4,
-            column: 28,
-          },
-        ],
-      },
-    ],
   },
   {
-    heading: "This is why it's a language.",
-    body: 'Retries, streaming, tests, multi-language codegen — compiler-level, not library-level. One file, every client, every guarantee.',
     blocks: [
       {
-        key: 's4-baml',
-        code: STEP_4_BAML,
-        lang: 'baml',
-        filename: 'triage.baml',
         annotations: [
           {
-            text: 'declarative retries.\nnot a library wrapper.',
-            lineNumber: 18,
             column: 24,
+            lineNumber: 18,
+            text: 'declarative retries.\nnot a library wrapper.',
           },
           {
-            text: 'tests live with the prompt.\nrun them in the playground or CI.',
-            lineNumber: 23,
             column: 18,
+            lineNumber: 23,
+            text: 'tests live with the prompt.\nrun them in the playground or CI.',
           },
         ],
+        code: STEP_4_BAML,
+        filename: 'triage.baml',
+        key: 's4-baml',
+        lang: 'baml',
       },
     ],
+    body: 'Retries, streaming, tests, and multi-language codegen at compiler level, not library level. One file, every client, every guarantee.',
+    heading: 'Yeah, we built a whole language.',
   },
 ];
 
@@ -296,8 +296,8 @@ function useHighlighted(inputs: HighlightInput[]): string[] {
           '@/lib/mdx/shiki-grammars'
         );
         const highlighter = await createHighlighter({
-          themes: ['github-light'],
           langs: ['python', bamlJinjaTextmate, bamlTextmate],
+          themes: ['github-light'],
         });
         const results = inputs.map((i) =>
           highlighter.codeToHtml(i.code, {
@@ -328,60 +328,55 @@ function escapeHtml(s: string): string {
 
 // ── Code block — renders Shiki HTML with a shared style ──────────────────────
 
-function CodeBlock({
-  html,
-  filename,
-}: {
-  html: string;
-  filename: string;
-}) {
+function CodeBlock({ html, filename }: { html: string; filename: string }) {
   return (
     <div
       style={{
-        borderRadius: 8,
-        border: `1px solid ${BORDER}`,
         background: '#FBF8F1',
-        boxShadow: '0 1px 0 rgba(0,0,0,0.02), 0 6px 24px -16px rgba(0,0,0,0.18)',
+        border: `1px solid ${BORDER}`,
+        borderRadius: 8,
+        boxShadow:
+          '0 1px 0 rgba(0,0,0,0.02), 0 6px 24px -16px rgba(0,0,0,0.18)',
         overflow: 'hidden',
         width: '100%',
       }}
     >
       <div
         style={{
-          display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          padding: '8px 12px',
-          height: TAB_HEIGHT,
-          boxSizing: 'border-box',
+          background: '#F3EFE3',
           borderBottom: `1px solid ${BORDER}`,
+          boxSizing: 'border-box',
+          color: MUTED,
+          display: 'flex',
           fontFamily: MONO,
           fontSize: 11,
+          gap: 8,
+          height: TAB_HEIGHT,
           letterSpacing: '0.04em',
-          color: MUTED,
-          background: '#F3EFE3',
+          padding: '8px 12px',
         }}
       >
         <span
           style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
             background: '#E6DFCC',
+            borderRadius: '50%',
+            height: 8,
+            width: 8,
           }}
         />
         {filename}
       </div>
       <div
         className="adoption-code"
+        dangerouslySetInnerHTML={{ __html: html }}
         style={{
           fontFamily: MONO,
           fontSize: 12.5,
           lineHeight: `${LINE_HEIGHT}px`,
-          padding: `${CODE_PAD_TOP}px ${CODE_PAD_LEFT}px`,
           overflow: 'auto',
+          padding: `${CODE_PAD_TOP}px ${CODE_PAD_LEFT}px`,
         }}
-        dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>
   );
@@ -396,62 +391,62 @@ function AnnotatedBlock({ html, block }: { html: string; block: BlockSpec }) {
   return (
     <div
       style={{
-        position: 'relative',
+        columnGap: GAP,
         display: 'grid',
         gridTemplateColumns: '1.6fr 1fr',
-        columnGap: GAP,
-        width: '100%',
+        position: 'relative',
         transform,
         transformOrigin: 'top left',
+        width: '100%',
       }}
     >
-      <div style={{ position: 'relative', minWidth: 0, width: '100%' }}>
-        <CodeBlock html={html} filename={block.filename} />
+      <div style={{ minWidth: 0, position: 'relative', width: '100%' }}>
+        <CodeBlock filename={block.filename} html={html} />
         {/* Line highlights — one per annotation */}
         {block.annotations.map((a, i) => (
           <motion.div
-            key={`${block.key}-hl-${i}`}
-            initial={{ opacity: 0, scaleX: 0.98 }}
             animate={{ opacity: 1, scaleX: 1 }}
-            transition={{ duration: 0.35, delay: 0.15 + i * 0.08 }}
+            initial={{ opacity: 0, scaleX: 0.98 }}
+            key={`${block.key}-hl-${i}`}
             style={{
-              position: 'absolute',
-              left: 1,
-              right: 1,
-              top: lineCenterY(a.lineNumber) - LINE_HEIGHT / 2,
-              height: LINE_HEIGHT,
               background: 'rgba(124, 58, 237, 0.14)',
               borderLeft: `2px solid ${ACCENT}`,
-              transformOrigin: 'left center',
+              height: LINE_HEIGHT,
+              left: 1,
               pointerEvents: 'none',
+              position: 'absolute',
+              right: 1,
+              top: lineCenterY(a.lineNumber) - LINE_HEIGHT / 2,
+              transformOrigin: 'left center',
             }}
+            transition={{ delay: 0.15 + i * 0.08, duration: 0.35 }}
           />
         ))}
       </div>
       <div style={{ position: 'relative' }}>
         {block.annotations.map((a, i) => (
           <motion.div
-            key={`${block.key}-${i}`}
-            initial={{ opacity: 0, x: -4 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.35, delay: 0.25 + i * 0.08 }}
+            initial={{ opacity: 0, x: -4 }}
+            key={`${block.key}-${i}`}
             style={{
-              position: 'absolute',
-              top: lineCenterY(a.lineNumber),
-              left: 12,
-              right: 0,
-              transform: 'translateY(-50%)',
-              fontFamily: HAND,
-              fontStyle: 'normal',
-              fontSize: 14,
-              fontWeight: 400,
-              lineHeight: 1.4,
-              letterSpacing: '0.01em',
               color: ACCENT,
+              fontFamily: HAND,
+              fontSize: 14,
+              fontStyle: 'normal',
+              fontWeight: 400,
+              left: 12,
+              letterSpacing: '0.01em',
+              lineHeight: 1.4,
               opacity: 0.85,
-              whiteSpace: 'pre-line',
               pointerEvents: 'none',
+              position: 'absolute',
+              right: 0,
+              top: lineCenterY(a.lineNumber),
+              transform: 'translateY(-50%)',
+              whiteSpace: 'pre-line',
             }}
+            transition={{ delay: 0.25 + i * 0.08, duration: 0.35 }}
           >
             {a.text}
           </motion.div>
@@ -486,35 +481,35 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
   return (
     <div
       style={{
-        position: 'relative',
-        width: '100%',
         height: '100%',
         minHeight: 520,
+        position: 'relative',
+        width: '100%',
       }}
     >
       <AnimatePresence initial={false} mode="popLayout">
         <motion.div
-          key={`step-${activeStep}`}
-          initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={fadeT}
+          initial={{ opacity: 0 }}
+          key={`step-${activeStep}`}
           style={{
-            position: 'absolute',
-            inset: 0,
             display: 'flex',
             flexDirection: 'column',
             gap: 12,
+            inset: 0,
+            position: 'absolute',
           }}
+          transition={fadeT}
         >
           {STEPS[activeStep].blocks.map((b) => (
             <div
               key={b.key}
               style={{
+                display: 'flex',
                 flex:
                   STEPS[activeStep].blocks.length > 1 ? '1 1 0' : '0 0 auto',
                 minHeight: 0,
-                display: 'flex',
               }}
             >
               <AnnotatedBlock block={b} html={blockHtmlByKey[b.key]} />
@@ -523,11 +518,11 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
           {activeStep === 3 && (
             <div
               style={{
-                marginTop: 8,
-                fontFamily: 'var(--font-serif)',
-                fontStyle: 'italic',
-                fontSize: 14,
                 color: MUTED,
+                fontFamily: 'var(--font-serif)',
+                fontSize: 14,
+                fontStyle: 'italic',
+                marginTop: 8,
                 textAlign: 'center',
               }}
             >
@@ -547,13 +542,13 @@ function StepPills({ activeStep }: { activeStep: number }) {
   return (
     <div
       style={{
-        position: 'absolute',
         bottom: -32,
-        left: 0,
-        right: 0,
         display: 'flex',
-        justifyContent: 'center',
         gap: 8,
+        justifyContent: 'center',
+        left: 0,
+        position: 'absolute',
+        right: 0,
       }}
     >
       {STEPS.map((_, i) => {
@@ -562,12 +557,12 @@ function StepPills({ activeStep }: { activeStep: number }) {
           <span
             key={`pill-${i}`}
             style={{
-              width: active ? 22 : 10,
-              height: 6,
-              borderRadius: 999,
               background: active ? ACCENT : 'transparent',
               border: `1px solid ${active ? ACCENT : BORDER}`,
+              borderRadius: 999,
+              height: 6,
               transition: 'width 200ms ease, background-color 200ms ease',
+              width: active ? 22 : 10,
             }}
           />
         );
@@ -590,7 +585,10 @@ function TypingText({
   useEffect(() => {
     const update = () => {
       const v = progress.get();
-      const next = Math.max(0, Math.min(text.length, Math.round(v * text.length)));
+      const next = Math.max(
+        0,
+        Math.min(text.length, Math.round(v * text.length)),
+      );
       setChars(next);
     };
     update();
@@ -613,8 +611,8 @@ function TypingText({
 export function IncrementalAdoption() {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
-    target: ref,
     offset: ['start start', 'end end'],
+    target: ref,
   });
   const [activeStep, setActiveStep] = useState(0);
 
@@ -659,8 +657,8 @@ export function IncrementalAdoption() {
 
   return (
     <section
-      ref={ref}
       aria-label="Incremental BAML adoption"
+      ref={ref}
       style={{
         background: BG,
         color: INK,
@@ -670,20 +668,20 @@ export function IncrementalAdoption() {
     >
       <div
         style={{
-          maxWidth: 1200,
           margin: '0 auto',
-          padding: '0 32px 0 48px',
           marginBottom: 40,
+          maxWidth: 1200,
+          padding: '0 32px 0 48px',
         }}
       >
         <p
           style={{
+            color: '#8A8580',
             fontSize: 13,
             fontWeight: 500,
             letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: '#8A8580',
             margin: 0,
+            textTransform: 'uppercase',
           }}
         >
           Adopt BAML gradually
@@ -692,8 +690,8 @@ export function IncrementalAdoption() {
           style={{
             fontSize: 'clamp(2rem, 4vw, 3rem)',
             fontWeight: 600,
-            lineHeight: 1.05,
             letterSpacing: '-0.03em',
+            lineHeight: 1.05,
             margin: '12px 0 0',
           }}
         >
@@ -703,12 +701,12 @@ export function IncrementalAdoption() {
 
       <div
         style={{
-          maxWidth: 1200,
-          margin: '0 auto',
-          padding: '0 32px 0 48px',
           display: 'grid',
-          gridTemplateColumns: '40% 60%',
           gap: 48,
+          gridTemplateColumns: '40% 60%',
+          margin: '0 auto',
+          maxWidth: 1200,
+          padding: '0 32px 0 48px',
         }}
       >
         <div>
@@ -722,38 +720,38 @@ export function IncrementalAdoption() {
                 key={`step-text-${i}`}
                 style={{
                   minHeight: '80vh',
-                  paddingLeft: 24,
                   paddingBottom: 32,
+                  paddingLeft: 24,
                 }}
               >
                 <div
                   style={{
-                    position: 'sticky',
-                    top: stickyTop,
                     background: BG,
-                    paddingTop: 14,
+                    borderTop: `1px solid ${BORDER}`,
                     paddingBottom: 14,
                     paddingRight: 16,
-                    zIndex: STEPS.length - i,
-                    borderTop: `1px solid ${BORDER}`,
+                    paddingTop: 14,
+                    position: 'sticky',
+                    top: stickyTop,
                     transition: 'opacity 350ms ease',
+                    zIndex: STEPS.length - i,
                   }}
                 >
                   <div
                     style={{
-                      display: 'flex',
                       alignItems: 'baseline',
+                      display: 'flex',
                       gap: 16,
                     }}
                   >
                     <div
                       style={{
+                        color: isActive ? ACCENT : '#8A8580',
+                        flexShrink: 0,
                         fontSize: 11,
                         fontWeight: 500,
                         letterSpacing: '0.14em',
                         textTransform: 'uppercase',
-                        color: isActive ? ACCENT : '#8A8580',
-                        flexShrink: 0,
                         transition: 'color 350ms ease',
                       }}
                     >
@@ -761,12 +759,12 @@ export function IncrementalAdoption() {
                     </div>
                     <h3
                       style={{
+                        color: isActive ? INK : MUTED,
                         fontSize: 'clamp(1.25rem, 2vw, 1.65rem)',
                         fontWeight: 600,
-                        lineHeight: 1.15,
                         letterSpacing: '-0.02em',
+                        lineHeight: 1.15,
                         margin: 0,
-                        color: isActive ? INK : MUTED,
                         transition: 'color 350ms ease',
                       }}
                     >
@@ -776,14 +774,14 @@ export function IncrementalAdoption() {
                 </div>
                 <p
                   style={{
-                    marginTop: 20,
+                    color: MUTED,
                     fontSize: 16,
                     lineHeight: 1.6,
-                    color: MUTED,
+                    marginTop: 20,
                     maxWidth: 440,
                   }}
                 >
-                  <TypingText text={s.body} progress={stepProgresses[i]} />
+                  <TypingText progress={stepProgresses[i]} text={s.body} />
                 </p>
               </section>
             );
@@ -792,10 +790,10 @@ export function IncrementalAdoption() {
 
         <div
           style={{
-            position: 'sticky',
-            top: 'calc(var(--navigation-height, 56px) + 32px)',
             alignSelf: 'start',
             height: 'min(640px, 82vh)',
+            position: 'sticky',
+            top: 'calc(var(--navigation-height, 56px) + 32px)',
           }}
         >
           <StickyPanel activeStep={activeStep} />

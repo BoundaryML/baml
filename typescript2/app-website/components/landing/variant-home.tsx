@@ -1,59 +1,83 @@
 'use client';
 
-import Link from 'next/link';
-import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 
 const BamlPlayground = dynamic(
   () => import('@/playground/BamlPlayground').then((m) => m.BamlPlayground),
   {
-    ssr: false,
     loading: () => (
       <div className="flex items-center justify-center min-h-[400px] text-muted-foreground text-sm">
         Loading playground...
       </div>
     ),
+    ssr: false,
   },
 );
-import { ScriptCopyBtn } from '../magicui/script-copy-btn';
+
 import Marquee from '../magicui/marquee';
+import { ScriptCopyBtn } from '../magicui/script-copy-btn';
 import { Navbar } from '../navbar';
-import { PlaygroundTerminal } from './playground-terminal';
 import { EditorTerminalSplit } from './editor-terminal-split';
+import { PlaygroundTerminal } from './playground-terminal';
 
 const TRUST_LOGOS: { alt: string; src: string; heightPx: number }[] = [
-  { alt: 'SAP', src: '/testimonials/logos/sapLogo.png', heightPx: 36 },
-  { alt: 'AWS', src: '/testimonials/logos/aws.png', heightPx: 36 },
-  { alt: 'AMD', src: '/testimonials/logos/amd.png', heightPx: 36 },
-  { alt: 'Cisco', src: '/testimonials/logos/cisco.png', heightPx: 36 },
-  { alt: 'EY', src: '/EY.svg', heightPx: 44 },
-  { alt: 'Product Hunt', src: '/testimonials/logos/product-hunt.png', heightPx: 36 },
-  { alt: 'Aer Compliance', src: '/testimonials/logos/aer.png', heightPx: 36 },
-  { alt: 'PMMI', src: '/testimonials/logos/pmmi.png', heightPx: 36 },
-  { alt: 'Cerebral Valley', src: '/testimonials/logos/cerebral.png', heightPx: 36 },
-  { alt: 'DoorDash', src: '/Doordash Logo.svg', heightPx: 32 },
+  { alt: 'SAP', heightPx: 36, src: '/testimonials/logos/sapLogo.png' },
+  { alt: 'AWS', heightPx: 36, src: '/testimonials/logos/aws.png' },
+  { alt: 'AMD', heightPx: 36, src: '/testimonials/logos/amd.png' },
+  { alt: 'Cisco', heightPx: 36, src: '/testimonials/logos/cisco.png' },
+  { alt: 'EY', heightPx: 44, src: '/EY.svg' },
+  {
+    alt: 'Product Hunt',
+    heightPx: 36,
+    src: '/testimonials/logos/product-hunt.png',
+  },
+  { alt: 'Aer Compliance', heightPx: 36, src: '/testimonials/logos/aer.png' },
+  { alt: 'PMMI', heightPx: 36, src: '/testimonials/logos/pmmi.png' },
+  {
+    alt: 'Cerebral Valley',
+    heightPx: 36,
+    src: '/testimonials/logos/cerebral.png',
+  },
+  { alt: 'DoorDash', heightPx: 32, src: '/Doordash Logo.svg' },
 ];
 
 const TrustMarquee = () => (
   <div style={{ marginTop: '56px', width: '100%' }}>
-    <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8580', marginBottom: '12px' }}>
+    <p
+      style={{
+        color: '#8A8580',
+        fontSize: '11px',
+        fontWeight: 500,
+        letterSpacing: '0.08em',
+        marginBottom: '12px',
+        textTransform: 'uppercase',
+      }}
+    >
       Trusted by developers at
     </p>
     <div
       className="relative w-full overflow-hidden"
       style={{
-        maskImage: 'linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%)',
-        WebkitMaskImage: 'linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%)',
+        maskImage:
+          'linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%)',
+        WebkitMaskImage:
+          'linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%)',
       }}
     >
       <Marquee className="[--duration:40s] [--gap:4rem] py-2">
         {TRUST_LOGOS.map((logo) => (
-          <div key={logo.alt} className="flex h-12 flex-shrink-0 items-center justify-center">
+          <div
+            className="flex h-12 flex-shrink-0 items-center justify-center"
+            key={logo.alt}
+          >
             <img
-              src={logo.src}
               alt={logo.alt}
-              style={{ height: `${logo.heightPx}px` }}
               className="w-auto object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
+              src={logo.src}
+              style={{ height: `${logo.heightPx}px` }}
             />
           </div>
         ))}
@@ -62,7 +86,22 @@ const TrustMarquee = () => (
   </div>
 );
 
-const ROTATING_WORDS = ['harnessing', 'writing', 'building', 'running', 'evaluating', 'debugging', 'orchestrating', 'shipping', 'testing', 'training', 'deploying', 'scaling', 'securing', 'streaming'];
+const ROTATING_WORDS = [
+  'harnessing',
+  'writing',
+  'building',
+  'running',
+  'evaluating',
+  'debugging',
+  'orchestrating',
+  'shipping',
+  'testing',
+  'training',
+  'deploying',
+  'scaling',
+  'securing',
+  'streaming',
+];
 const HOLD_MS = 2200;
 const TRANSITION_MS = 400;
 
@@ -108,17 +147,19 @@ const RotatingWord = () => {
 
   return (
     <span
-      aria-live="polite"
       aria-atomic="true"
+      aria-live="polite"
       style={{
+        color: '#6D28D9',
         display: 'inline-block',
         fontFamily: 'var(--font-serif)',
         fontStyle: 'italic',
         fontWeight: 500,
-        color: '#6D28D9',
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0)' : 'translateY(6px)',
-        transition: reduced ? 'none' : `opacity ${TRANSITION_MS}ms cubic-bezier(0.4,0,0.2,1), transform ${TRANSITION_MS}ms cubic-bezier(0.4,0,0.2,1)`,
+        transition: reduced
+          ? 'none'
+          : `opacity ${TRANSITION_MS}ms cubic-bezier(0.4,0,0.2,1), transform ${TRANSITION_MS}ms cubic-bezier(0.4,0,0.2,1)`,
       }}
     >
       {ROTATING_WORDS[index]}
@@ -127,48 +168,248 @@ const RotatingWord = () => {
 };
 
 const customStyles = {
-  root: {
-    '--bg': '#ffffff',
-    '--fg': '#1A1612',
-    '--border': '#D9D3C4',
-    '--accent': '#6D28D9',
-    '--accent-hover': '#5B21B6',
-    '--secondary': '#6D28D9',
-    '--syn-purple': '#8B5CF6',
-    '--syn-green': '#059669',
-    '--syn-teal': '#0D9488',
-    '--syn-string': '#B45309',
-    '--syn-comment': '#78716C',
-  } as React.CSSProperties,
-  container: {
+  botanicalAccent: {
+    color: '#6D28D9',
+    opacity: 0.6,
+  },
+  cm: { color: '#78716C' },
+  codeContentArea: {
+    backgroundColor: '#FAFAF9',
+    display: 'flex',
+  },
+  codeScroll: {
+    overflowX: 'auto' as const,
+    padding: '16px',
     width: '100%',
-    maxWidth: '1600px',
-    margin: '0 auto',
+  },
+  codeWindow: {
+    backgroundColor: '#FAFAF9',
+    border: '1px solid #D9D3C4',
+    borderRadius: '6px',
+    boxShadow: '0 20px 40px rgba(0,0,0,0.05)',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  codeWindowAccent: {
+    backgroundColor: '#FAFAF9',
+    border: '1px solid #6D28D9',
+    borderRadius: '6px',
+    boxShadow: 'none',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  codeWindowNoShadow: {
+    backgroundColor: '#FAFAF9',
+    border: '1px solid #D9D3C4',
+    borderRadius: '6px',
+    boxShadow: 'none',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  container: {
+    backgroundColor: '#ffffff',
     borderLeft: '1px solid #D9D3C4',
     borderRight: '1px solid #D9D3C4',
-    minHeight: '100vh',
+    color: '#1A1612',
     display: 'flex',
     flexDirection: 'column',
-    backgroundColor: '#ffffff',
-    color: '#1A1612',
     fontSize: '14px',
     lineHeight: '1.5',
+    margin: '0 auto',
+    maxWidth: '1600px',
+    minHeight: '100vh',
+    width: '100%',
   } as React.CSSProperties,
-  nav: {
-    display: 'grid',
-    gridTemplateColumns: 'auto 1fr auto auto auto',
+  ctaContainer: {
     alignItems: 'center',
-    columnGap: '16px',
-    padding: '16px 24px',
-    fontSize: '15px',
-    letterSpacing: '0.05em',
-    textTransform: 'uppercase',
-    borderBottom: '1px solid #D9D3C4',
+    display: 'flex',
+    gap: '12px',
+    marginTop: '2rem',
+  },
+  ctaLink: {
+    alignItems: 'center',
+    color: 'inherit',
+    cursor: 'pointer',
+    display: 'inline-flex',
+    fontSize: '18px',
+    fontWeight: 500,
+    textDecoration: 'none',
+    transition: 'color 0.2s ease',
   } as React.CSSProperties,
+  ctaLinkSvg: {
+    marginLeft: '12px',
+    transition: 'transform 0.2s ease',
+  },
+  dotGreen: {
+    backgroundColor: '#27C93F',
+    border: '1px solid rgba(0,0,0,0.1)',
+    borderRadius: '50%',
+    display: 'inline-block',
+    height: '10px',
+    width: '10px',
+  },
+  dotRed: {
+    backgroundColor: '#FF5F56',
+    border: '1px solid rgba(0,0,0,0.1)',
+    borderRadius: '50%',
+    display: 'inline-block',
+    height: '10px',
+    width: '10px',
+  },
+  dotYellow: {
+    backgroundColor: '#FFBD2E',
+    border: '1px solid rgba(0,0,0,0.1)',
+    borderRadius: '50%',
+    display: 'inline-block',
+    height: '10px',
+    width: '10px',
+  },
+  exhibitGrid: {
+    borderTop: '1px solid #D9D3C4',
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+  },
+  exhibitHeader: {
+    alignItems: 'baseline',
+    display: 'grid',
+    gridTemplateColumns: '1fr auto',
+    padding: '40px 48px 20px',
+  },
+  exhibitPanel: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    padding: '48px',
+  },
+  exhibitPanelLeft: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRight: '1px solid #D9D3C4',
+    padding: '48px',
+  },
+  exhibitTitle: {
+    fontSize: '2rem',
+    fontWeight: 500,
+  } as React.CSSProperties,
+  featureIndex: {
+    borderTop: '2px solid #1A1612',
+    display: 'flex',
+    flexDirection: 'column' as const,
+  },
+  fn: { color: '#0D9488' },
+  h1: {
+    color: '#1A1612',
+    fontSize: 'clamp(2rem, 4.5vw, 3.5rem)',
+    fontWeight: 600,
+    letterSpacing: '-0.03em',
+    lineHeight: '1.02',
+    marginBottom: '1.5rem',
+  } as React.CSSProperties,
+  h2: {
+    fontSize: 'clamp(2rem, 4vw, 3.5rem)',
+    fontWeight: 500,
+    letterSpacing: '-0.02em',
+    lineHeight: '1.2',
+  } as React.CSSProperties,
+  hero: {
+    borderBottom: '1px solid #D9D3C4',
+    display: 'grid',
+    gridTemplateColumns: '496px 1fr',
+    minHeight: '720px',
+  } as React.CSSProperties,
+  heroLeft: {
+    borderRight: '1px solid #D9D3C4',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    justifyContent: 'space-between',
+    padding: '48px 48px 0',
+  },
+  heroMeta: {
+    alignItems: 'center',
+    display: 'flex',
+    fontSize: '12px',
+    justifyContent: 'space-between',
+    marginBottom: '4rem',
+    textTransform: 'uppercase' as const,
+  },
+  heroMetaBottom: {
+    alignItems: 'center',
+    display: 'flex',
+    fontSize: '12px',
+    justifyContent: 'space-between',
+    marginBottom: 0,
+    marginTop: '4rem',
+    textTransform: 'uppercase' as const,
+  },
+  heroRight: {
+    alignItems: 'stretch',
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    display: 'flex',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    padding: 0,
+  } as React.CSSProperties,
+  indexMeta: {
+    color: '#6D28D9',
+    fontSize: '12px',
+    textAlign: 'right' as const,
+  },
+  indexNum: {
+    color: '#78716C',
+    fontSize: '12px',
+  },
+  indexRow: {
+    alignItems: 'baseline',
+    borderBottom: '1px solid #D9D3C4',
+    cursor: 'default',
+    display: 'grid',
+    gridTemplateColumns: '60px 1fr 100px',
+    padding: '16px 0',
+    transition: 'background-color 0.2s ease',
+  },
+  indexTitle: {
+    fontSize: '18px',
+    fontWeight: 500,
+  },
+  kw: { color: '#8B5CF6', fontWeight: 500 },
+  lineNumbers: {
+    backgroundColor: '#F5F5F4',
+    borderRight: '1px solid #D9D3C4',
+    color: '#A8A29E',
+    fontSize: '13px',
+    lineHeight: '1.5',
+    padding: '16px 12px',
+    textAlign: 'right' as const,
+    userSelect: 'none' as const,
+  },
+  lineNumbersAccent: {
+    backgroundColor: '#F5F5F4',
+    borderRight: '1px solid #6D28D9',
+    color: '#6D28D9',
+    fontSize: '13px',
+    lineHeight: '1.5',
+    padding: '16px 12px',
+    textAlign: 'right' as const,
+    userSelect: 'none' as const,
+  },
   logo: {
     fontWeight: 600,
     padding: '0 16px',
     paddingLeft: 0,
+  } as React.CSSProperties,
+  nav: {
+    alignItems: 'center',
+    borderBottom: '1px solid #D9D3C4',
+    columnGap: '16px',
+    display: 'grid',
+    fontSize: '15px',
+    gridTemplateColumns: 'auto 1fr auto auto auto',
+    letterSpacing: '0.05em',
+    padding: '16px 24px',
+    textTransform: 'uppercase',
   } as React.CSSProperties,
   navDiv: {
     padding: '0 16px',
@@ -177,280 +418,80 @@ const customStyles = {
     padding: '0 16px',
     textAlign: 'right' as const,
   },
+  p: {
+    color: '#5C5852',
+    fontSize: '17px',
+    fontWeight: 400,
+    lineHeight: '1.6',
+    marginBottom: '1rem',
+    maxWidth: '480px',
+  },
+  panelHeader: {
+    color: '#6D28D9',
+    display: 'flex',
+    fontSize: '12px',
+    justifyContent: 'space-between',
+    marginBottom: '24px',
+    textTransform: 'uppercase' as const,
+  },
+  pre: {
+    color: '#1A1612',
+    fontFamily:
+      "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+    fontSize: '13px',
+    margin: 0,
+  },
   refMark: {
     color: '#6D28D9',
     fontWeight: 'normal' as const,
   },
-  hero: {
-    display: 'grid',
-    gridTemplateColumns: '496px 1fr',
-    minHeight: '720px',
+  root: {
+    '--accent': '#6D28D9',
+    '--accent-hover': '#5B21B6',
+    '--bg': '#ffffff',
+    '--border': '#D9D3C4',
+    '--fg': '#1A1612',
+    '--secondary': '#6D28D9',
+    '--syn-comment': '#78716C',
+    '--syn-green': '#059669',
+    '--syn-purple': '#8B5CF6',
+    '--syn-string': '#B45309',
+    '--syn-teal': '#0D9488',
+  } as React.CSSProperties,
+  st: { color: '#B45309' },
+  statementP: {
+    fontSize: 'clamp(1.1rem, 2vw, 1.6rem)',
+    fontWeight: 300,
+    lineHeight: '1.4',
+    marginBottom: '0.5rem',
+  } as React.CSSProperties,
+  statementSection: {
     borderBottom: '1px solid #D9D3C4',
-  } as React.CSSProperties,
-  heroLeft: {
-    padding: '48px 48px 0',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    justifyContent: 'space-between',
-    borderRight: '1px solid #D9D3C4',
+    padding: '48px 48px',
   },
-  heroMeta: {
-    fontSize: '12px',
-    textTransform: 'uppercase' as const,
-    marginBottom: '4rem',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  statementText: {
+    margin: '0 auto 48px',
+    maxWidth: '700px',
+    textAlign: 'center' as const,
   },
-  heroMetaBottom: {
-    fontSize: '12px',
-    textTransform: 'uppercase' as const,
-    marginTop: '4rem',
-    marginBottom: 0,
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  h1: {
-    fontSize: 'clamp(2rem, 4.5vw, 3.5rem)',
-    fontWeight: 600,
-    lineHeight: '1.02',
-    letterSpacing: '-0.03em',
-    color: '#1A1612',
-    marginBottom: '1.5rem',
-  } as React.CSSProperties,
-  h2: {
-    fontSize: 'clamp(2rem, 4vw, 3.5rem)',
-    fontWeight: 500,
-    lineHeight: '1.2',
-    letterSpacing: '-0.02em',
-  } as React.CSSProperties,
-  p: {
-    fontSize: '17px',
-    fontWeight: 400,
-    lineHeight: '1.6',
-    color: '#5C5852',
-    maxWidth: '480px',
-    marginBottom: '1rem',
-  },
-  ctaContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    marginTop: '2rem',
-    gap: '12px',
-  },
-  ctaLink: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    fontSize: '18px',
-    fontWeight: 500,
-    textDecoration: 'none',
-    color: 'inherit',
-    cursor: 'pointer',
-    transition: 'color 0.2s ease',
-  } as React.CSSProperties,
-  ctaLinkSvg: {
-    marginLeft: '12px',
-    transition: 'transform 0.2s ease',
-  },
-  botanicalAccent: {
-    color: '#6D28D9',
-    opacity: 0.6,
-  },
-  heroRight: {
-    padding: 0,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    display: 'flex',
-    alignItems: 'stretch',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  } as React.CSSProperties,
-  codeWindow: {
-    width: '100%',
-    backgroundColor: '#FAFAF9',
-    border: '1px solid #D9D3C4',
-    boxShadow: '0 20px 40px rgba(0,0,0,0.05)',
-    borderRadius: '6px',
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column' as const,
-  },
-  codeWindowNoShadow: {
-    width: '100%',
-    backgroundColor: '#FAFAF9',
-    border: '1px solid #D9D3C4',
-    boxShadow: 'none',
-    borderRadius: '6px',
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column' as const,
-  },
-  codeWindowAccent: {
-    width: '100%',
-    backgroundColor: '#FAFAF9',
-    border: '1px solid #6D28D9',
-    boxShadow: 'none',
-    borderRadius: '6px',
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column' as const,
-  },
+  ty: { color: '#059669' },
   windowChrome: {
+    alignItems: 'center',
+    backgroundColor: '#F5F5F4',
+    borderBottom: '1px solid #D9D3C4',
     display: 'grid',
     gridTemplateColumns: '80px 1fr 80px',
-    alignItems: 'center',
     padding: '12px 16px',
-    borderBottom: '1px solid #D9D3C4',
-    backgroundColor: '#F5F5F4',
   },
   windowDots: {
     display: 'flex',
     gap: '6px',
   },
-  dotRed: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    border: '1px solid rgba(0,0,0,0.1)',
-    backgroundColor: '#FF5F56',
-    display: 'inline-block',
-  },
-  dotYellow: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    border: '1px solid rgba(0,0,0,0.1)',
-    backgroundColor: '#FFBD2E',
-    display: 'inline-block',
-  },
-  dotGreen: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    border: '1px solid rgba(0,0,0,0.1)',
-    backgroundColor: '#27C93F',
-    display: 'inline-block',
-  },
   windowTab: {
-    textAlign: 'center' as const,
-    fontSize: '12px',
     color: '#57534E',
-  },
-  codeContentArea: {
-    display: 'flex',
-    backgroundColor: '#FAFAF9',
-  },
-  lineNumbers: {
-    padding: '16px 12px',
-    textAlign: 'right' as const,
-    color: '#A8A29E',
-    fontSize: '13px',
-    userSelect: 'none' as const,
-    borderRight: '1px solid #D9D3C4',
-    backgroundColor: '#F5F5F4',
-    lineHeight: '1.5',
-  },
-  lineNumbersAccent: {
-    padding: '16px 12px',
-    textAlign: 'right' as const,
-    color: '#6D28D9',
-    fontSize: '13px',
-    userSelect: 'none' as const,
-    borderRight: '1px solid #6D28D9',
-    backgroundColor: '#F5F5F4',
-    lineHeight: '1.5',
-  },
-  codeScroll: {
-    padding: '16px',
-    overflowX: 'auto' as const,
-    width: '100%',
-  },
-  pre: {
-    margin: 0,
-    fontFamily:
-      "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-    fontSize: '13px',
-    color: '#1A1612',
-  },
-  statementSection: {
-    padding: '48px 48px',
-    borderBottom: '1px solid #D9D3C4',
-  },
-  statementText: {
-    maxWidth: '700px',
-    margin: '0 auto 48px',
+    fontSize: '12px',
     textAlign: 'center' as const,
   },
-  statementP: {
-    fontSize: 'clamp(1.1rem, 2vw, 1.6rem)',
-    lineHeight: '1.4',
-    fontWeight: 300,
-    marginBottom: '0.5rem',
-  } as React.CSSProperties,
-  featureIndex: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    borderTop: '2px solid #1A1612',
-  },
-  indexRow: {
-    display: 'grid',
-    gridTemplateColumns: '60px 1fr 100px',
-    padding: '16px 0',
-    borderBottom: '1px solid #D9D3C4',
-    alignItems: 'baseline',
-    transition: 'background-color 0.2s ease',
-    cursor: 'default',
-  },
-  indexNum: {
-    fontSize: '12px',
-    color: '#78716C',
-  },
-  indexTitle: {
-    fontSize: '18px',
-    fontWeight: 500,
-  },
-  indexMeta: {
-    textAlign: 'right' as const,
-    fontSize: '12px',
-    color: '#6D28D9',
-  },
-  exhibitHeader: {
-    display: 'grid',
-    gridTemplateColumns: '1fr auto',
-    padding: '40px 48px 20px',
-    alignItems: 'baseline',
-  },
-  exhibitTitle: {
-    fontSize: '2rem',
-    fontWeight: 500,
-  } as React.CSSProperties,
-  exhibitGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    borderTop: '1px solid #D9D3C4',
-  },
-  exhibitPanel: {
-    padding: '48px',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  exhibitPanelLeft: {
-    padding: '48px',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRight: '1px solid #D9D3C4',
-  },
-  panelHeader: {
-    fontSize: '12px',
-    textTransform: 'uppercase' as const,
-    marginBottom: '24px',
-    color: '#6D28D9',
-    display: 'flex',
-    justifyContent: 'space-between',
-  },
-  kw: { color: '#8B5CF6', fontWeight: 500 },
-  fn: { color: '#0D9488' },
-  ty: { color: '#059669' },
-  st: { color: '#B45309' },
-  cm: { color: '#78716C' },
 };
 
 const WindowDots = () => (
@@ -479,12 +520,13 @@ const HeroCodeWindow = () => (
           <code>
             <span style={customStyles.kw}>class</span>{' '}
             <span style={customStyles.ty}>Receipt</span> {'{'}
-            {'\n'} total <span style={customStyles.ty}>float</span> @description(
-            <span style={customStyles.st}>"Final amount paid"</span>)
-            {'\n'} items <span style={customStyles.ty}>Item[]</span>
-            {'\n'} date <span style={customStyles.ty}>string</span> @description(
-            <span style={customStyles.st}>"YYYY-MM-DD"</span>)
-            {'\n'}
+            {'\n'} total <span style={customStyles.ty}>float</span>{' '}
+            @description(
+            <span style={customStyles.st}>"Final amount paid"</span>){'\n'}{' '}
+            items <span style={customStyles.ty}>Item[]</span>
+            {'\n'} date <span style={customStyles.ty}>string</span>{' '}
+            @description(
+            <span style={customStyles.st}>"YYYY-MM-DD"</span>){'\n'}
             {'}'}
             {'\n'}
             {'\n'}
@@ -514,10 +556,25 @@ const humanCommand = 'Check our docs (you should really try Claude)';
 const humanDocsHref =
   'https://docs.boundaryml.com/guide/introduction/what-is-baml';
 
-const installOptions: { id: InstallPath; label: string; icon?: string; command: string }[] = [
-  { id: 'claude', label: 'Claude', icon: '/Claude Color SVG.svg', command: 'curl -fsSL http://baml.dev/agent | claude' },
-  { id: 'codex', label: 'Codex', icon: '/Codex Color.svg', command: 'curl -fsSL http://baml.dev/agent | codex' },
-  { id: 'human', label: 'Human', command: humanCommand },
+const installOptions: {
+  id: InstallPath;
+  label: string;
+  icon?: string;
+  command: string;
+}[] = [
+  {
+    command: 'curl -fsSL http://baml.dev/agent | claude',
+    icon: '/Claude Color SVG.svg',
+    id: 'claude',
+    label: 'Claude',
+  },
+  {
+    command: 'curl -fsSL http://baml.dev/agent | codex',
+    icon: '/Codex Color.svg',
+    id: 'codex',
+    label: 'Codex',
+  },
+  { command: humanCommand, id: 'human', label: 'Human' },
 ];
 
 const HeroSection = () => {
@@ -526,48 +583,73 @@ const HeroSection = () => {
   const selected = installOptions.find((o) => o.id === installPath)!;
 
   return (
-    <section
-      className="hero-responsive"
-      style={customStyles.hero}
-    >
+    <section className="hero-responsive" style={customStyles.hero}>
       <div style={customStyles.heroLeft}>
         <div>
           <h1 style={customStyles.h1}>
             The language
-            <br />for <RotatingWord />
-            <br />AI.
+            <br />
+            for <RotatingWord />
+            <br />
+            AI.
           </h1>
+          <p style={customStyles.p}>
+            BAML is a statically-typed, expression-oriented language for typed
+            prompt boundaries and structured-output AI.
+          </p>
+          <p style={customStyles.p}>
+            Define a class, write a Jinja-templated prompt, and get a typed
+            result.
+          </p>
           <div style={customStyles.ctaContainer}>
             <div className="w-full max-w-xl">
-              <p style={{ fontSize: '18px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8580', marginBottom: '20px' }}>
+              <p
+                style={{
+                  color: '#8A8580',
+                  fontSize: '18px',
+                  fontWeight: 500,
+                  letterSpacing: '0.08em',
+                  marginBottom: '20px',
+                  textTransform: 'uppercase',
+                }}
+              >
                 Install BAML
               </p>
-              <div style={{ width: '100%', maxWidth: 512 }}>
+              <div style={{ maxWidth: 512, width: '100%' }}>
                 <ScriptCopyBtn
                   className="block w-full max-w-none"
                   codeLanguage="bash"
                   commandMap={{ bash: selected.command } as const}
                   darkTheme="none"
                   lightTheme="none"
-                  linkHref={
-                    installPath === 'human' ? humanDocsHref : undefined
-                  }
+                  linkHref={installPath === 'human' ? humanDocsHref : undefined}
                   showMultiplePackageOptions={false}
                 />
               </div>
               <div className="mt-3 flex gap-2">
                 {installOptions.map((opt) => (
                   <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setInstallPath(opt.id)}
                     className="rounded-md px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
-                    style={installPath === opt.id
-                      ? { background: '#1A1612', color: '#fff', border: '1px solid #1A1612' }
-                      : { background: 'transparent', color: '#5C5852', border: '1px solid #D9D3C4' }
+                    key={opt.id}
+                    onClick={() => setInstallPath(opt.id)}
+                    style={
+                      installPath === opt.id
+                        ? {
+                            background: '#1A1612',
+                            border: '1px solid #1A1612',
+                            color: '#fff',
+                          }
+                        : {
+                            background: 'transparent',
+                            border: '1px solid #D9D3C4',
+                            color: '#5C5852',
+                          }
                     }
+                    type="button"
                   >
-                    {opt.icon && <img src={opt.icon} alt={opt.label} className="size-4" />}
+                    {opt.icon && (
+                      <img alt={opt.label} className="size-4" src={opt.icon} />
+                    )}
                     {opt.label}
                   </button>
                 ))}
@@ -587,14 +669,14 @@ const HeroSection = () => {
             terminal={<PlaygroundTerminal />}
           />
           <Link
-            href="/how-the-playground-works"
             className="group text-[#5C5852] hover:text-[#A78BFA] no-underline transition-colors duration-500 ease-out"
+            href="/how-the-playground-works"
             style={{
-              padding: '12px 24px',
-              fontSize: '13px',
-              borderTop: '1px solid #D9D3C4',
               backgroundColor: '#ffffff',
+              borderTop: '1px solid #D9D3C4',
               flexShrink: 0,
+              fontSize: '13px',
+              padding: '12px 24px',
             }}
           >
             <span className="bg-gradient-to-r from-[#A78BFA] to-[#A78BFA] bg-no-repeat [background-position:0_100%] bg-[length:0%_1px] group-hover:bg-[length:100%_1px] transition-[background-size] duration-500 ease-out">
@@ -609,10 +691,30 @@ const HeroSection = () => {
 
 const FeatureIndex = () => {
   const features = [
-    { num: '01', title: 'Typescript-inspired type system', meta: 'Core', version: '1.0' },
-    { num: '02', title: 'Type-safe non-viral errors', meta: 'Core', version: '1.1' },
-    { num: '03', title: 'Semantic grep & parsing', meta: 'Runtime', version: '2.0' },
-    { num: '04', title: 'Universal runtime (Python, Rust, JS)', meta: 'System', version: '3.0' },
+    {
+      meta: 'Core',
+      num: '01',
+      title: 'Typescript-inspired type system',
+      version: '1.0',
+    },
+    {
+      meta: 'Core',
+      num: '02',
+      title: 'Type-safe non-viral errors',
+      version: '1.1',
+    },
+    {
+      meta: 'Runtime',
+      num: '03',
+      title: 'Semantic grep & parsing',
+      version: '2.0',
+    },
+    {
+      meta: 'System',
+      num: '04',
+      title: 'Universal runtime (Python, Rust, JS)',
+      version: '3.0',
+    },
   ];
 
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
@@ -621,15 +723,15 @@ const FeatureIndex = () => {
     <div style={customStyles.featureIndex}>
       {features.map((f, i) => (
         <div
-          key={f.num}
           className="index-row-responsive"
+          key={f.num}
+          onMouseEnter={() => setHoveredRow(i)}
+          onMouseLeave={() => setHoveredRow(null)}
           style={{
             ...customStyles.indexRow,
             backgroundColor:
               hoveredRow === i ? 'rgba(255,255,255,0.4)' : 'transparent',
           }}
-          onMouseEnter={() => setHoveredRow(i)}
-          onMouseLeave={() => setHoveredRow(null)}
         >
           <span style={customStyles.indexNum}>{f.num}</span>
           <span style={customStyles.indexTitle}>{f.title}</span>
@@ -669,12 +771,12 @@ const LegacyCodeWindow = () => (
           <code>
             <span style={customStyles.kw}>import</span> {'{ OpenAI }'}{' '}
             <span style={customStyles.kw}>from</span>{' '}
-            <span style={customStyles.st}>'openai'</span>;
+            <span style={customStyles.st}>'openai'</span>
+            {';'}
             {'\n'}
             <span style={customStyles.kw}>import</span> {'{ z }'}{' '}
             <span style={customStyles.kw}>from</span>{' '}
-            <span style={customStyles.st}>'zod'</span>;
-            {'\n'}
+            <span style={customStyles.st}>'zod'</span>;{'\n'}
             {'\n'}
             <span style={customStyles.kw}>const</span> schema = z.object({'{'}
             {'\n'} intent: z.enum([
@@ -690,19 +792,19 @@ const LegacyCodeWindow = () => (
             <span style={customStyles.ty}>string</span>) {'{'}
             {'\n'}{' '}
             <span style={customStyles.cm}>
-              // Manual prompt construction
+              {'// Manual prompt construction'}
             </span>
             {'\n'}{' '}
             <span style={customStyles.cm}>
-              // Complex error handling needed
+              {'// Complex error handling needed'}
             </span>
             {'\n'}{' '}
             <span style={customStyles.cm}>
-              // JSON parsing logic required
+              {'// JSON parsing logic required'}
             </span>
             {'\n'}{' '}
             <span style={customStyles.cm}>
-              // ... 50 lines of boilerplate ...
+              {'// ... 50 lines of boilerplate ...'}
             </span>
             {'\n'}
             {'}'}
@@ -756,10 +858,7 @@ const ExhibitSection = () => (
     <div style={customStyles.exhibitHeader}>
       <h2 style={customStyles.exhibitTitle}>Typescript → BAML</h2>
     </div>
-    <div
-      className="exhibit-grid-responsive"
-      style={customStyles.exhibitGrid}
-    >
+    <div className="exhibit-grid-responsive" style={customStyles.exhibitGrid}>
       <div style={customStyles.exhibitPanelLeft}>
         <div style={customStyles.panelHeader}>
           <span>Legacy Implementation</span>
@@ -808,5 +907,3 @@ export function VariantHome() {
     </div>
   );
 }
-
-

@@ -83,7 +83,7 @@ export const VSCodeMock: React.FC<VSCodeMockProps> = ({
           <span className="w-3 h-3 rounded-full bg-[#28c940]" />
         </div>
         <span className={clsx('text-xs', subtle)}>
-          {activeFile.filename} — {activeFile.language} — Visual Studio Code
+          {activeFile.filename} / {activeFile.language} / Visual Studio Code
         </span>
       </div>
 

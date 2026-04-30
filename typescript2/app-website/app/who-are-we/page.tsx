@@ -124,10 +124,11 @@ export default function WhoAreWePage() {
             </h1>
             <div className="space-y-6">
               <p className="text-xl md:text-2xl text-muted-foreground">
-                We believe AI needs its own language—the first designed with
-                LLMs in mind. So we're building it:{' '}
+                We believe structured-output LLM work needs typed prompt
+                boundaries. So we're building BAML:{' '}
                 <span className="text-foreground font-semibold">
-                  cognitive coding for the future of software
+                  a statically-typed, expression-oriented language with
+                  first-class LLM functions
                 </span>
                 .
               </p>

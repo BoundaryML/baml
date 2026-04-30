@@ -36,8 +36,7 @@ export function PlaygroundTerminal() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [history]);
 
-  const append = (lines: Line[]) =>
-    setHistory((prev) => [...prev, ...lines]);
+  const append = (lines: Line[]) => setHistory((prev) => [...prev, ...lines]);
 
   const runPlayground = () => {
     setRunning(true);
@@ -49,7 +48,7 @@ export function PlaygroundTerminal() {
       append([
         {
           kind: 'out',
-          text: `  ✓ dispatched. results render in the playground above.`,
+          text: '  ✓ dispatched. results render in the playground above.',
         },
       ]);
       setRunning(false);
@@ -115,24 +114,24 @@ export function PlaygroundTerminal() {
       style={{
         background: '#0E0B14',
         color: '#E8E3DB',
+        cursor: 'text',
+        display: 'flex',
+        flexDirection: 'column',
         fontFamily:
           '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: 12,
-        lineHeight: 1.55,
-        display: 'flex',
-        flexDirection: 'column',
         height: '100%',
-        cursor: 'text',
+        lineHeight: 1.55,
       }}
     >
       <div
         style={{
-          display: 'flex',
           alignItems: 'center',
+          background: '#15101F',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex',
           gap: 8,
           padding: '8px 12px',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          background: '#15101F',
         }}
       >
         <span style={dotStyle('#FF5F57')} />
@@ -140,13 +139,13 @@ export function PlaygroundTerminal() {
         <span style={dotStyle('#28C840')} />
         <span
           style={{
-            marginLeft: 8,
-            fontSize: 11,
             color: 'rgba(232,227,219,0.55)',
+            fontSize: 11,
             letterSpacing: '0.04em',
+            marginLeft: 8,
           }}
         >
-          baml — zsh
+          baml / zsh
         </span>
       </div>
 
@@ -164,7 +163,6 @@ export function PlaygroundTerminal() {
             // biome-ignore lint/suspicious/noArrayIndexKey: history is append-only
             key={i}
             style={{
-              whiteSpace: 'pre-wrap',
               color:
                 line.kind === 'err'
                   ? 'rgba(232,227,219,0.72)'
@@ -173,6 +171,7 @@ export function PlaygroundTerminal() {
                     : line.kind === 'info'
                       ? 'rgba(232,227,219,0.65)'
                       : '#C9C3FF',
+              whiteSpace: 'pre-wrap',
             }}
           >
             {line.text}
@@ -181,33 +180,33 @@ export function PlaygroundTerminal() {
 
         <form
           onSubmit={handleSubmit}
-          style={{ display: 'flex', alignItems: 'center', marginTop: 4 }}
+          style={{ alignItems: 'center', display: 'flex', marginTop: 4 }}
         >
           <span style={{ color: '#A78BFA', flexShrink: 0 }}>
             {PROMPT_USER}@{PROMPT_HOST}
           </span>
           <span style={{ color: '#E8E3DB', margin: '0 6px' }}>%</span>
           <input
-            ref={inputRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={handleKeyDown}
-            spellCheck={false}
+            aria-label="terminal input"
             autoCapitalize="off"
             autoComplete="off"
             autoCorrect="off"
             disabled={running}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={handleKeyDown}
+            ref={inputRef}
+            spellCheck={false}
             style={{
-              flex: 1,
               background: 'transparent',
               border: 'none',
-              outline: 'none',
+              caretColor: '#A78BFA',
               color: '#E8E3DB',
+              flex: 1,
               fontFamily: 'inherit',
               fontSize: 'inherit',
-              caretColor: '#A78BFA',
+              outline: 'none',
             }}
-            aria-label="terminal input"
+            value={draft}
           />
         </form>
       </div>
@@ -217,10 +216,10 @@ export function PlaygroundTerminal() {
 
 function dotStyle(color: string): React.CSSProperties {
   return {
-    width: 10,
-    height: 10,
-    borderRadius: '50%',
     background: color,
+    borderRadius: '50%',
     display: 'inline-block',
+    height: 10,
+    width: 10,
   };
 }

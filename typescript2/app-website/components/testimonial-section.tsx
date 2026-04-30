@@ -16,11 +16,11 @@ export function TestimonialSection() {
         <h2
           className="text-center text-balance"
           style={{
+            color: '#1A1612',
             fontSize: 'clamp(2rem, 4.5vw, 3.5rem)',
             fontWeight: 600,
-            lineHeight: 1.02,
             letterSpacing: '-0.03em',
-            color: '#1A1612',
+            lineHeight: 1.02,
             margin: 0,
           }}
         >
@@ -30,14 +30,14 @@ export function TestimonialSection() {
         <p
           className="text-center text-balance"
           style={{
-            fontFamily: 'var(--font-serif), "Instrument Serif", Georgia, serif',
-            fontStyle: 'italic',
-            fontSize: 18,
             color: '#5C5852',
+            fontFamily: 'var(--font-serif), "Instrument Serif", Georgia, serif',
+            fontSize: 18,
+            fontStyle: 'italic',
             margin: '16px 0 0',
           }}
         >
-          Code that agents write. Software that humans trust.
+          Typed prompt boundaries for structured-output LLM work.
         </p>
       </SectionHeader>
       <SocialProofTestimonials testimonials={testimonials} />
