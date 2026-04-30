@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use baml_base::Name;
+use baml_base::{Name, TypePath};
 use la_arena::{Arena, Idx};
 use text_size::TextRange;
 
@@ -574,7 +574,7 @@ pub enum Expr {
         args: Vec<ExprId>,
     },
     Object {
-        type_name: Option<Name>,
+        type_name: Option<TypePath>,
         fields: Vec<(Name, ExprId)>,
         spreads: Vec<SpreadField>,
     },

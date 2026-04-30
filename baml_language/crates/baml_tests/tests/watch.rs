@@ -234,7 +234,7 @@ async fn watch_alias() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 0
         init_field .x
         load_const 0
@@ -276,7 +276,7 @@ async fn watch_alias_nested_scope() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 0
         init_field .x
         load_const 0
@@ -324,7 +324,7 @@ async fn watch_scope_exit() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 0
         init_field .x
         load_const 0
@@ -1308,7 +1308,7 @@ async fn watch_function_call_modifications() {
     }
 
     function main() -> int {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 0
         init_field .x
         load_const 0
@@ -1360,23 +1360,23 @@ async fn watch_nested_object_added() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Vec2D
-        alloc_instance Point
-        alloc_instance Value
+        alloc_instance user.Vec2D
+        alloc_instance user.Point
+        alloc_instance user.Value
         load_const 0
         init_field .value
         init_field .x
-        alloc_instance Value
+        alloc_instance user.Value
         load_const 0
         init_field .value
         init_field .y
         init_field .p
-        alloc_instance Point
-        alloc_instance Value
+        alloc_instance user.Point
+        alloc_instance user.Value
         load_const 0
         init_field .value
         init_field .x
-        alloc_instance Value
+        alloc_instance user.Value
         load_const 0
         init_field .value
         init_field .y
@@ -1385,12 +1385,12 @@ async fn watch_nested_object_added() {
         load_const "vec"
         load_const null
         watch vec
-        alloc_instance Point
-        alloc_instance Value
+        alloc_instance user.Point
+        alloc_instance user.Value
         load_const 1
         init_field .value
         init_field .x
-        alloc_instance Value
+        alloc_instance user.Value
         load_const 1
         init_field .value
         init_field .y
@@ -1440,23 +1440,23 @@ async fn watch_nested_object_removed() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Vec2D
-        alloc_instance Point
-        alloc_instance Value
+        alloc_instance user.Vec2D
+        alloc_instance user.Point
+        alloc_instance user.Value
         load_const 0
         init_field .value
         init_field .x
-        alloc_instance Value
+        alloc_instance user.Value
         load_const 0
         init_field .value
         init_field .y
         init_field .p
-        alloc_instance Point
-        alloc_instance Value
+        alloc_instance user.Point
+        alloc_instance user.Value
         load_const 0
         init_field .value
         init_field .x
-        alloc_instance Value
+        alloc_instance user.Value
         load_const 0
         init_field .value
         init_field .y
@@ -1469,12 +1469,12 @@ async fn watch_nested_object_removed() {
         load_field .p
         store_var p
         load_var vec
-        alloc_instance Point
-        alloc_instance Value
+        alloc_instance user.Point
+        alloc_instance user.Value
         load_const 1
         init_field .value
         init_field .x
-        alloc_instance Value
+        alloc_instance user.Value
         load_const 1
         init_field .value
         init_field .y
@@ -1537,31 +1537,31 @@ async fn watch_cyclic_graph() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Vertex
-        load_const 1
-        init_field .edges
+        alloc_instance user.Vertex
         alloc_array 0
+        init_field .edges
+        load_const 1
         init_field .value
         store_var v1
-        alloc_instance Vertex
-        load_const 2
-        init_field .edges
+        alloc_instance user.Vertex
         alloc_array 0
+        init_field .edges
+        load_const 2
         init_field .value
         store_var v2
         load_const "v2"
         load_const null
         watch v2
-        alloc_instance Vertex
-        load_const 3
-        init_field .edges
+        alloc_instance user.Vertex
         alloc_array 0
+        init_field .edges
+        load_const 3
         init_field .value
         store_var v3
-        alloc_instance Vertex
-        load_const 4
-        init_field .edges
+        alloc_instance user.Vertex
         alloc_array 0
+        init_field .edges
+        load_const 4
         init_field .value
         store_var v4
         load_const "v4"

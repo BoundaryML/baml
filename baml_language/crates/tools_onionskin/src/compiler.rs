@@ -497,7 +497,10 @@ fn expr_desc_spans<'db>(
         Expr::Object {
             type_name, fields, ..
         } => {
-            let tn = type_name.as_ref().map(|n| n.as_str()).unwrap_or("_");
+            let tn = type_name
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| "_".to_string());
             spans.push(DetailSpan::Code(format!("{tn} {{ ")));
             for (i, (name, val)) in fields.iter().enumerate() {
                 if i > 0 {
@@ -2007,7 +2010,10 @@ impl CompilerRunner {
                 Expr::Object {
                     type_name, fields, ..
                 } => {
-                    let tn = type_name.as_ref().map(|n| n.as_str()).unwrap_or("_");
+                    let tn = type_name
+                        .as_ref()
+                        .map(ToString::to_string)
+                        .unwrap_or_else(|| "_".to_string());
                     format!("{tn} {{ {} fields }}", fields.len())
                 }
                 Expr::Array { elements } => format!("[{} items]", elements.len()),
@@ -4947,7 +4953,7 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
     match value {
         Value::Null => "null".to_string(),
         Value::Int(i) => i.to_string(),
-        Value::Float(f) => f.to_string(),
+        Value::Float(f) => bex_vm_types::format_float(*f),
         Value::Bool(b) => b.to_string(),
         Value::Object(idx) => {
             let obj = vm.get_object(*idx);

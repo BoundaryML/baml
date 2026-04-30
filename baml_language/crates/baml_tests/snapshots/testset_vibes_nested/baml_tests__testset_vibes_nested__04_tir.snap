@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 function user.GPT4o$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "GPT4o", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
+  baml.llm.PrimitiveClient { name: "GPT4o", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 class user.Sentiment {
   feeling: string
@@ -69,7 +69,7 @@ function user.ClassifySentiment2$build_request_stream(text: string) -> baml.http
 function user.ClassifySentiment2$parse(json: string) -> string throws never {
   baml.llm.parse<T>("ClassifySentiment2", json) : string
 }
-function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_25(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test_set("test", (testset: testing.TestCollector) -> void { ... }, null) : void
       (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws unknown
@@ -85,17 +85,17 @@ function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
     null : null
   }
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
-lambda user.$init_test_24 {
+lambda user.$init_test_25 {
 }
 class user.Sentiment$stream {
   feeling: null | string

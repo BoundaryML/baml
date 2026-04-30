@@ -549,11 +549,34 @@ impl std::fmt::Display for Value {
         match self {
             Value::Null => write!(f, "null"),
             Value::Int(int) => write!(f, "{int}"),
-            Value::Float(float) => write!(f, "{float}"),
+            Value::Float(float) => write!(f, "{}", format_float(*float)),
             Value::Bool(bool) => write!(f, "{bool}"),
             Value::Object(ptr) => write!(f, "{ptr}"),
         }
     }
+}
+
+/// Format an f64 to string, following JS/TS conventions for special values
+/// and preserving `.0` for whole-number floats.
+///
+/// - `1.0` → `"1.0"` (not `"1"` — preserves float identity)
+/// - `3.14` → `"3.14"`
+/// - `f64::INFINITY` → `"Infinity"` (JS-style)
+/// - `f64::NEG_INFINITY` → `"-Infinity"` (JS-style)
+/// - `f64::NAN` → `"NaN"` (JS-style)
+pub fn format_float(f: f64) -> String {
+    if f.is_nan() {
+        return "NaN".to_string();
+    }
+    if f.is_infinite() {
+        return if f.is_sign_positive() {
+            "Infinity".to_string()
+        } else {
+            "-Infinity".to_string()
+        };
+    }
+    let s = f.to_string();
+    if s.contains('.') { s } else { format!("{s}.0") }
 }
 
 // Error class / instance enums — generated from `errors.baml` class definitions.
@@ -996,5 +1019,30 @@ impl From<&Future> for FutureType {
             Future::Pending(_) => Self::Pending,
             Future::Ready(_) => Self::Ready,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_float;
+
+    #[test]
+    fn test_format_float() {
+        // Whole-number floats must include ".0"
+        assert_eq!(format_float(0.0), "0.0");
+        assert_eq!(format_float(1.0), "1.0");
+        assert_eq!(format_float(-1.0), "-1.0");
+        assert_eq!(format_float(100.0), "100.0");
+        assert_eq!(format_float(999_999_999_999_999.0), "999999999999999.0");
+
+        // Fractional floats unchanged
+        assert_eq!(format_float(2.5), "2.5");
+        assert_eq!(format_float(0.1), "0.1");
+        assert_eq!(format_float(-0.001), "-0.001");
+
+        // Non-finite values: JS-style names, no ".0"
+        assert_eq!(format_float(f64::INFINITY), "Infinity");
+        assert_eq!(format_float(f64::NEG_INFINITY), "-Infinity");
+        assert_eq!(format_float(f64::NAN), "NaN");
     }
 }

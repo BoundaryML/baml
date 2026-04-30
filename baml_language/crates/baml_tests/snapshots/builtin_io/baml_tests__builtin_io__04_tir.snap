@@ -122,6 +122,11 @@ function user.Size() -> int throws never {
     baml.fs.size("data.bin") : int
   }
 }
+function user.ReadDir() -> baml.fs.DirEntry[] throws never {
+  { : baml.fs.DirEntry[]
+    baml.fs.read_dir("some/path") : baml.fs.DirEntry[]
+  }
+}
 function user.AskName() -> string throws never {
   { : string
     baml.io.input("What is your name? ") : string

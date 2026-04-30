@@ -828,6 +828,7 @@ fn format_literal_ast(lit: &ast::Literal) -> String {
 
 #[cfg(test)]
 mod tests {
+    use baml_base::TypePath;
     use la_arena::Arena;
 
     use super::*;
@@ -1283,7 +1284,7 @@ mod tests {
         let body = make_ast_body(|exprs, stmts, _, _| {
             let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let obj = exprs.alloc(ast::Expr::Object {
-                type_name: Some("MyResponse".into()),
+                type_name: Some(TypePath::bare("MyResponse".into())),
                 fields: vec![("ok".into(), field_val)],
                 spreads: vec![],
             });
@@ -1344,7 +1345,7 @@ mod tests {
         let body = make_ast_body(|exprs, stmts, _, _| {
             let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let obj_true = exprs.alloc(ast::Expr::Object {
-                type_name: Some("Result".into()),
+                type_name: Some(TypePath::bare("Result".into())),
                 fields: vec![],
                 spreads: vec![],
             });
@@ -1356,7 +1357,7 @@ mod tests {
 
             let err_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(false)));
             let obj_false = exprs.alloc(ast::Expr::Object {
-                type_name: Some("Result".into()),
+                type_name: Some(TypePath::bare("Result".into())),
                 fields: vec![("err".into(), err_val)],
                 spreads: vec![],
             });
@@ -1395,7 +1396,7 @@ mod tests {
 
         let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
         let obj = exprs.alloc(ast::Expr::Object {
-            type_name: Some("Resp".into()),
+            type_name: Some(TypePath::bare("Resp".into())),
             fields: vec![("ok".into(), field_val)],
             spreads: vec![],
         });

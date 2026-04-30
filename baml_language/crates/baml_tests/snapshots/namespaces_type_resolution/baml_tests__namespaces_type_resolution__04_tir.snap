@@ -224,7 +224,7 @@ function user.auth.AuthThrowsRootError(x: int) -> string throws never {
   { : "ok"
     match (x : int) : "ok"
       0 =>
-        throw Error { code: 403, message: "forbidden" } : never
+        throw root.Error { code: 403, message: "forbidden" } : never
       _ =>
         "ok" : "ok"
   }
@@ -388,7 +388,7 @@ function user.llm.LlmThrowsRootError(x: int) -> string throws never {
   { : "ok"
     match (x : int) : "ok"
       0 =>
-        throw Error { code: 404, message: "not found" } : never
+        throw root.Error { code: 404, message: "not found" } : never
       _ =>
         "ok" : "ok"
   }

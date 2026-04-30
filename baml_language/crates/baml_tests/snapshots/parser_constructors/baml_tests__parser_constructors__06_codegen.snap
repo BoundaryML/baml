@@ -61,7 +61,7 @@ function user.mixedArray() -> (int | string)[] {
 }
 
 function user.point() -> Point {
-    alloc_instance Point
+    alloc_instance user.Point
     load_const 1
     init_field .x
     load_const 2
@@ -70,17 +70,17 @@ function user.point() -> Point {
 }
 
 function user.pointArray() -> Point[] {
-    alloc_instance Point
+    alloc_instance user.Point
     load_const 1
     init_field .x
     load_const 2
     init_field .y
-    alloc_instance Point
+    alloc_instance user.Point
     load_const 3
     init_field .x
     load_const 4
     init_field .y
-    alloc_instance Point
+    alloc_instance user.Point
     load_const 5
     init_field .x
     load_const 6
@@ -107,14 +107,14 @@ function user.stringValues() -> map<string, string> {
 }
 
 function user.vec2d() -> Vec2D {
-    alloc_instance Vec2D
-    alloc_instance Point
+    alloc_instance user.Vec2D
+    alloc_instance user.Point
     load_const 1
     init_field .x
     load_const 2
     init_field .y
     init_field .p
-    alloc_instance Point
+    alloc_instance user.Point
     load_const 3
     init_field .x
     load_const 4

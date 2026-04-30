@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4217
 ---
 function user.Append() -> int {
     load_const "log.txt"
@@ -202,6 +201,13 @@ function user.ReadChunkBytes() -> uint8array {
     await
     load_const 4096
     dispatch_future baml.fs.File.read_bytes
+    await
+    return
+}
+
+function user.ReadDir() -> baml.fs.DirEntry[] {
+    load_const "some/path"
+    dispatch_future baml.fs.read_dir
     await
     return
 }

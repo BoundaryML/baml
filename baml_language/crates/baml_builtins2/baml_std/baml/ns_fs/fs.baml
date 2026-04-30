@@ -61,3 +61,22 @@ function write(path: string, content: string) -> int throws root.errors.Io {
 function write_bytes(path: string, content: uint8array) -> int throws root.errors.Io {
   $rust_io_function
 }
+
+class DirEntry {
+  name string
+  is_dir bool
+  is_file bool
+  is_symlink bool
+}
+
+class MkdirOptions {
+  recursive bool
+}
+
+function read_dir(path: string) -> DirEntry[] throws root.errors.Io {
+  $rust_io_function
+}
+
+function mkdir(path: string, options: MkdirOptions) -> null throws root.errors.Io {
+  $rust_io_function
+}

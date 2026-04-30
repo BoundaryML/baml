@@ -22,33 +22,6 @@ fn stabilize(s: &str, root: &str) -> String {
 }
 
 #[tokio::test]
-async fn fs_open_only() {
-    let (_tmp, root) = tmp(indexmap! { "hello.txt" => "Hello from BAML!" });
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> int {{
-                let file = baml.fs.open("{root}/hello.txt", "r");
-                42
-            }}
-        "#
-    ));
-
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
-    function main() -> int {
-        load_const "{TMPDIR}/hello.txt"
-        load_const "r"
-        dispatch_future baml.fs.open
-        await
-        store_var file
-        load_const 42
-        return
-    }
-    "#);
-    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
-}
-
-#[tokio::test]
 async fn fs_open_and_read() {
     let (_tmp, root) = tmp(indexmap! { "hello.txt" => "Hello from BAML!" });
 
@@ -930,5 +903,299 @@ async fn fs_open_w_creates_parent_dirs() {
     assert_eq!(
         std::fs::read_to_string(format!("{root}/nested/dir/new.txt")).unwrap(),
         "nested"
+    );
+}
+
+// ============================================================================
+// read_dir tests
+// ============================================================================
+
+#[tokio::test]
+async fn fs_read_dir_returns_entries() {
+    let (_tmp, root) = tmp(indexmap! {
+        "a.txt" => "aaa",
+        "b.txt" => "bbb",
+    });
+    std::fs::create_dir(format!("{root}/subdir")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}")
+            }}
+        "#
+    ));
+
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array, got: {:?}", output.result);
+    };
+    assert_eq!(items.len(), 3);
+    let mut names: Vec<String> = items
+        .iter()
+        .map(|item| {
+            let BexExternalValue::Instance { fields, .. } = item else {
+                panic!("expected instance, got: {item:?}");
+            };
+            let BexExternalValue::String(name) = &fields["name"] else {
+                panic!("expected string name");
+            };
+            name.clone()
+        })
+        .collect();
+    names.sort();
+    assert_eq!(names, vec!["a.txt", "b.txt", "subdir"]);
+}
+
+#[tokio::test]
+async fn fs_read_dir_type_flags() {
+    let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
+    std::fs::create_dir(format!("{root}/dir")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}")
+            }}
+        "#
+    ));
+
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array, got: {:?}", output.result);
+    };
+    assert_eq!(items.len(), 2);
+    for item in items {
+        let BexExternalValue::Instance { fields, .. } = item else {
+            panic!("expected instance");
+        };
+        let BexExternalValue::String(name) = &fields["name"] else {
+            panic!("expected string name");
+        };
+        let BexExternalValue::Bool(is_dir) = &fields["is_dir"] else {
+            panic!("expected bool is_dir");
+        };
+        let BexExternalValue::Bool(is_file) = &fields["is_file"] else {
+            panic!("expected bool is_file");
+        };
+        let BexExternalValue::Bool(is_symlink) = &fields["is_symlink"] else {
+            panic!("expected bool is_symlink");
+        };
+        match name.as_str() {
+            "file.txt" => {
+                assert!(!is_dir, "file.txt should not be a dir");
+                assert!(is_file, "file.txt should be a file");
+                assert!(!is_symlink, "file.txt should not be a symlink");
+            }
+            "dir" => {
+                assert!(is_dir, "dir should be a dir");
+                assert!(!is_file, "dir should not be a file");
+                assert!(!is_symlink, "dir should not be a symlink");
+            }
+            _ => panic!("unexpected entry: {name}"),
+        }
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_read_dir_reports_symlink_flag() {
+    let (_tmp, root) = tmp(indexmap! { "target.txt" => "content" });
+    std::os::unix::fs::symlink(format!("{root}/target.txt"), format!("{root}/link.txt")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}")
+            }}
+        "#
+    ));
+
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array, got: {:?}", output.result);
+    };
+    let link = items
+        .iter()
+        .find_map(|item| {
+            let BexExternalValue::Instance { fields, .. } = item else {
+                return None;
+            };
+            match &fields["name"] {
+                BexExternalValue::String(name) if name == "link.txt" => Some(fields),
+                _ => None,
+            }
+        })
+        .expect("expected link.txt entry");
+
+    assert_eq!(link["is_symlink"], BexExternalValue::Bool(true));
+}
+
+#[tokio::test]
+async fn fs_read_dir_nonexistent_errors() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}/no_such_dir")
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+}
+
+#[tokio::test]
+async fn fs_read_dir_empty_dir() {
+    let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir(format!("{root}/empty")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}/empty")
+            }}
+        "#
+    ));
+
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array, got: {:?}", output.result);
+    };
+    assert_eq!(items.len(), 0);
+}
+
+// ============================================================================
+// mkdir tests
+// ============================================================================
+
+#[tokio::test]
+async fn fs_mkdir_creates_directory() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.mkdir("{root}/newdir", baml.fs.MkdirOptions {{ recursive: false }})
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
+    assert!(
+        std::path::Path::new(&format!("{root}/newdir")).is_dir(),
+        "expected {root}/newdir to be a directory"
+    );
+}
+
+#[tokio::test]
+async fn fs_mkdir_recursive_creates_parents() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.mkdir("{root}/a/b/c", baml.fs.MkdirOptions {{ recursive: true }})
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
+    assert!(
+        std::path::Path::new(&format!("{root}/a/b/c")).is_dir(),
+        "expected {root}/a/b/c to be a directory"
+    );
+}
+
+#[tokio::test]
+async fn fs_mkdir_non_recursive_errors_when_parent_missing() {
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.mkdir("{root}/no/parent", baml.fs.MkdirOptions {{ recursive: false }})
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+}
+
+#[tokio::test]
+async fn fs_mkdir_recursive_is_idempotent() {
+    let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir(format!("{root}/existing")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.mkdir("{root}/existing", baml.fs.MkdirOptions {{ recursive: true }})
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
+}
+
+#[tokio::test]
+async fn fs_mkdir_non_recursive_errors_when_dir_exists() {
+    // BEP-037: non-recursive mkdir on a path that already exists must error.
+    let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir(format!("{root}/existing")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.mkdir("{root}/existing", baml.fs.MkdirOptions {{ recursive: false }})
+            }}
+        "#
+    ));
+
+    assert!(
+        output.result.is_err(),
+        "expected error creating an already-existing dir, got: {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn fs_mkdir_recursive_errors_when_leaf_is_file() {
+    // BEP-037: even with recursive=true, mkdir must error if the leaf path
+    // exists as a regular file. Idempotency only applies when the leaf is
+    // already a directory.
+    let (_tmp, root) = tmp(indexmap! { "leaf.txt" => "im a file" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.mkdir("{root}/leaf.txt", baml.fs.MkdirOptions {{ recursive: true }})
+            }}
+        "#
+    ));
+
+    assert!(
+        output.result.is_err(),
+        "expected error: leaf path exists as a file, got: {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn fs_read_dir_on_file_errors() {
+    // BEP-037: read_dir on a path that exists but isn't a directory must
+    // throw Io. Without this, callers couldn't distinguish "empty dir" from
+    // "you pointed at a file".
+    let (_tmp, root) = tmp(indexmap! { "not_a_dir.txt" => "x" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}/not_a_dir.txt")
+            }}
+        "#
+    ));
+
+    assert!(
+        output.result.is_err(),
+        "expected error reading_dir on a regular file, got: {:?}",
+        output.result
     );
 }

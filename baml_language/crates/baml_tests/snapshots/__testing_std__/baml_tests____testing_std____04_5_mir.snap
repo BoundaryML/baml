@@ -143,7 +143,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     bb13: {
         _13 = [];
         _14 = [];
-        _12 = TestCollector { copy _2, copy _13, copy _14 };
+        _12 = testing.TestCollector { copy _2, copy _13, copy _14 };
         _16 = copy _8.1;
         _17 = copy _12;
         _15 = call copy _16(copy _17) -> [bb14];
@@ -159,7 +159,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
         _22 = copy _12;
         _23 = {  };
         _24 = copy _18;
-        _21 = TestRegistry { copy _22, copy _23, copy _24 };
+        _21 = testing.TestRegistry { copy _22, copy _23, copy _24 };
         _26 = copy _1.1;
         _27 = copy _21;
         _25 = call const fn baml.Map.set(copy _26, copy _2, copy _27) -> [bb16];
@@ -238,7 +238,7 @@ fn testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestReg
 
     bb0: {
         _2 = {  };
-        _0 = TestRegistry { copy _1, copy _2, const 0_i64 };
+        _0 = testing.TestRegistry { copy _1, copy _2, const 0_i64 };
         goto -> bb1;
     }
 
@@ -257,7 +257,7 @@ fn testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     bb0: {
         _2 = [];
         _3 = [];
-        _0 = TestCollector { copy _1, copy _2, copy _3 };
+        _0 = testing.TestCollector { copy _1, copy _2, copy _3 };
         goto -> bb1;
     }
 
@@ -366,7 +366,7 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     bb9: {
         _34 = copy _1.1;
         _36 = copy _25;
-        _35 = TestRegistration { copy _36, copy _3, copy _4 };
+        _35 = testing.TestRegistration { copy _36, copy _3, copy _4 };
         _33 = call const fn baml.Array.push(copy _34, copy _35) -> [bb10];
     }
 
@@ -510,7 +510,7 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     bb9: {
         _34 = copy _1.2;
         _36 = copy _25;
-        _35 = TestSetRegistration { copy _36, copy _3, copy _4 };
+        _35 = testing.TestSetRegistration { copy _36, copy _3, copy _4 };
         _33 = call const fn baml.Array.push(copy _34, copy _35) -> [bb10];
     }
 
@@ -629,7 +629,7 @@ fn .<lambda(run_test, 0)>() -> null {
     }
 
     bb2: {
-        _2 = RunReport { const "pass", const 0_i64 };
+        _2 = testing.RunReport { const "pass", const 0_i64 };
         goto -> bb5;
     }
 
@@ -638,7 +638,7 @@ fn .<lambda(run_test, 0)>() -> null {
     }
 
     bb4: {
-        _2 = RunReport { const "fail", const 0_i64 };
+        _2 = testing.RunReport { const "fail", const 0_i64 };
         goto -> bb5;
     }
 
@@ -651,9 +651,9 @@ fn .<lambda(run_test, 0)>() -> null {
     bb6: {
         _12 = copy _1;
         _10 = copy _11 - copy _12;
-        _8 = RunReport { copy _9, copy _10 };
+        _8 = testing.RunReport { copy _9, copy _10 };
         _7 = [copy _8];
-        _0 = TestReport { copy _6, copy _7 };
+        _0 = testing.TestReport { copy _6, copy _7 };
         goto -> bb7;
     }
 
@@ -906,7 +906,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
 
     bb9: {
         _30 = copy _17.0;
-        _29 = SerializedTest { const "lazyTestSet", copy _30 };
+        _29 = testing.SerializedTest { const "lazyTestSet", copy _30 };
         _18 = call const fn baml.Array.push(copy _2, copy _29) -> [bb12];
     }
 
@@ -918,7 +918,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
 
     bb11: {
         _27 = copy _23.2;
-        _24 = SerializedTestSet { copy _25, copy _26, copy _27 };
+        _24 = testing.SerializedTestSet { copy _25, copy _26, copy _27 };
         _18 = call const fn baml.Array.push(copy _2, copy _24) -> [bb12];
     }
 
@@ -932,7 +932,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
         fresh_cell(_8);
         _8 = copy _7;
         _11 = copy _8.0;
-        _10 = SerializedTest { const "test", copy _11 };
+        _10 = testing.SerializedTest { const "test", copy _11 };
         _9 = call const fn baml.Array.push(copy _2, copy _10) -> [bb14];
     }
 

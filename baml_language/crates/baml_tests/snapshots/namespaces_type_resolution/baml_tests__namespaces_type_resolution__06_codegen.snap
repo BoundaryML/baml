@@ -8,7 +8,7 @@ function user.RootAliasParam(cfg: Config) -> string {
 }
 
 function user.RootConstruct(key: string) -> Config {
-    alloc_instance Config
+    alloc_instance user.Config
     load_var key
     init_field .key
     load_const "prod"
@@ -76,7 +76,7 @@ function user.RootThrowClass(x: int) -> string {
     return
 
   L1:
-    alloc_instance Error
+    alloc_instance user.Error
     load_const 500
     init_field .code
     load_const "root error"
@@ -144,11 +144,11 @@ function user.auth.AuthAliasParam(t: auth.Token) -> string {
 }
 
 function user.auth.AuthConstruct(provider: string) -> auth.Config {
-    alloc_instance Config
+    alloc_instance user.auth.Config
     load_var provider
-    init_field .key
+    init_field .provider
     load_const "s3cret"
-    init_field .env
+    init_field .secret
     return
 }
 
@@ -195,7 +195,7 @@ function user.auth.AuthIdentity(cfg: auth.Config) -> auth.Config {
 }
 
 function user.auth.AuthMakeToken(v: string) -> auth.Token {
-    alloc_instance Token
+    alloc_instance user.auth.Token
     load_var v
     init_field .value
     load_const user.auth.Role.User
@@ -290,11 +290,11 @@ function user.auth.AuthThrowClass(x: int) -> string {
     return
 
   L1:
-    alloc_instance Error
+    alloc_instance user.auth.Error
     load_const "auth failed"
-    init_field .code
+    init_field .realm
     load_const true
-    init_field .message
+    init_field .expired
     throw
 }
 
@@ -327,7 +327,7 @@ function user.auth.AuthThrowsRootError(x: int) -> string {
     return
 
   L1:
-    alloc_instance Error
+    alloc_instance user.Error
     load_const 403
     init_field .code
     load_const "forbidden"
@@ -378,11 +378,11 @@ function user.llm.LlmAliasParam(cfg: llm.Config) -> string {
 }
 
 function user.llm.LlmConstruct(model: string) -> llm.Config {
-    alloc_instance Config
+    alloc_instance user.llm.Config
     load_var model
-    init_field .key
+    init_field .model
     load_const 0.7
-    init_field .env
+    init_field .temperature
     return
 }
 
@@ -466,7 +466,7 @@ function user.llm.LlmMixedConfigs(llm_cfg: llm.Config, root_cfg: Config, auth_cf
 }
 
 function user.llm.LlmResponseConstruct(text: string) -> llm.Response {
-    alloc_instance Response
+    alloc_instance user.llm.Response
     load_var text
     init_field .text
     load_const 42
@@ -486,11 +486,11 @@ function user.llm.LlmThrowClass(x: int) -> string {
     return
 
   L1:
-    alloc_instance Error
+    alloc_instance user.llm.Error
     load_const "llm failed"
-    init_field .code
+    init_field .reason
     load_const true
-    init_field .message
+    init_field .retryable
     throw
 }
 
@@ -540,7 +540,7 @@ function user.llm.LlmThrowsRootError(x: int) -> string {
     return
 
   L1:
-    alloc_instance Error
+    alloc_instance user.Error
     load_const 404
     init_field .code
     load_const "not found"
@@ -597,7 +597,7 @@ function user.llm.LlmUsesRootStatus() -> Status {
 }
 
 function user.llm.openai.OpenAIConstruct(key: string) -> llm.openai.Client {
-    alloc_instance Client
+    alloc_instance user.llm.openai.Client
     load_var key
     init_field .api_key
     load_const "org-123"
@@ -789,11 +789,11 @@ function user.llm.openai.OpenAIThrowClass(x: int) -> string {
     return
 
   L1:
-    alloc_instance Error
+    alloc_instance user.llm.openai.Error
     load_const 429
-    init_field .code
+    init_field .status_code
     load_const "rate limited"
-    init_field .message
+    init_field .body
     throw
 }
 

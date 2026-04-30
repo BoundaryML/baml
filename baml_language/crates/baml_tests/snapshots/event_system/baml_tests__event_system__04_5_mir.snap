@@ -154,7 +154,7 @@ fn user.test_logging() -> void {
     let _6: map<string, unknown>
 
     bb0: {
-        _1 = User { const 123_i64, const "Alice", const "alice@example.com" };
+        _1 = user.User { const 123_i64, const "Alice", const "alice@example.com" };
         _2 = { const "message": const "Starting process" };
         intrinsic log_debug(copy _2);
         goto -> bb1;

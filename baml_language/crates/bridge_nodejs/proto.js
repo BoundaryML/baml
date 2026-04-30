@@ -96,6 +96,8 @@ function decodeValueHolder(holder) {
         return holder.floatValue;
     if (holder.boolValue != null)
         return holder.boolValue;
+    if (holder.uint8arrayValue != null)
+        return holder.uint8arrayValue;
     if (holder.classValue) {
         const obj = Object.create(null);
         for (const entry of holder.classValue.fields || []) {

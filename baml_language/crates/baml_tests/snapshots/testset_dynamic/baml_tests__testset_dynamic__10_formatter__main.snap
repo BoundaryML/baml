@@ -1,5 +1,28 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== STRONG AST ERROR ===
-An element at main.baml:6:8 was a node when it should have been a token.
+// Dynamic test generation — for loops and if conditions containing test/testset.
+
+testset "dynamic tests" {
+    let cases = ["hello", "world", "foo"];
+
+    for (case in cases) {
+        test "check case" {
+            assert.not_null(case)
+        }
+    }
+}
+
+testset "conditional tests" {
+    let run_slow = false;
+
+    test "always runs" {
+        assert.is_true(true)
+    }
+
+    if (run_slow) {
+        test "only when slow" {
+            assert.is_true(true)
+        }
+    }
+}

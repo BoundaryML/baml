@@ -81,6 +81,7 @@ function decodeValueHolder(holder: baml.cffi.v1.IBamlOutboundValue): unknown {
     if (holder.intValue != null) return Number(holder.intValue);
     if (holder.floatValue != null) return holder.floatValue;
     if (holder.boolValue != null) return holder.boolValue;
+    if (holder.uint8arrayValue != null) return holder.uint8arrayValue;
     if (holder.classValue) {
         const obj: Record<string, unknown> = Object.create(null);
         for (const entry of holder.classValue.fields || []) {

@@ -28,7 +28,7 @@ pub use types::{
     EnumVariant, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, Instance,
     MediaValue, Object, ObjectType, PanicClass, PendingFuture, Program, PromptAst, RetryPolicyMeta,
     SysOp, SysOpErrorCategory, SysOpPanicCategory, TestArgValue, TestCase, Value, Variant,
-    sys_op_for_path, type_tags,
+    format_float, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.

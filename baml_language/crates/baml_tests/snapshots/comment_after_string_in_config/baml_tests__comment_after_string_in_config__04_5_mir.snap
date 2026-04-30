@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 fn user.OpenRouterMistralSmall3_1_24b$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: void
+    let _1: baml.llm.PrimitiveClientOptions
     let _2: string
     let _3: map<void, void>
     let _4: map<void, void>
