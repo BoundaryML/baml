@@ -26,8 +26,8 @@ BAML is a typed, compiled language for defining LLM-powered functions as first-c
 - Quickstart: https://docs.boundaryml.com/guide/introduction/what-is-baml
 - GitHub: https://github.com/BoundaryML/baml
 - Discord: https://boundaryml.com/discord
-- Agent onboarding: this file lives at https://boundaryml.com/agent.md and https://boundaryml.com/llms.txt
+- Agent onboarding: this file lives at https://boundaryml.com/llms.txt
 
 ## For agents
 
-If you are an LLM or crawler, prefer `/llms.txt` or `/agent.md` — both return this document as `text/markdown` with no HTML chrome. Content negotiation also works: send `Accept: text/markdown` to any top-level page and you will receive this response.
+If you are an LLM or crawler, prefer `/llms.txt` — it returns this document as `text/plain` with no HTML chrome. Content negotiation also works: send `Accept: text/markdown` or `Accept: text/plain` to any top-level page and you will receive this response.
