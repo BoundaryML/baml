@@ -33,7 +33,6 @@ export const metadata: Metadata = {
   alternates: {
     canonical: `${baseUrl}/`,
     types: {
-      'text/markdown': '/agent.md',
       'text/plain': '/llms.txt',
     },
   },

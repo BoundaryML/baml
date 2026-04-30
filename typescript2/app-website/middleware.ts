@@ -14,7 +14,7 @@ export function middleware(req: NextRequest) {
 
   if (result.isAgent) {
     const url = req.nextUrl.clone();
-    url.pathname = '/agent.md';
+    url.pathname = '/llms.txt';
     const res = NextResponse.rewrite(url);
     res.headers.set('Vary', 'Accept, User-Agent');
     res.headers.set('X-Agent-Mode', result.reason);
@@ -28,6 +28,6 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|_next|_vercel|agent|agent\\.md|llms\\.txt|relay-JkOu|favicon|robots\\.txt|sitemap|.*\\..*).*)',
+    '/((?!api|_next|_vercel|agent|llms\\.txt|relay-JkOu|favicon|robots\\.txt|sitemap|.*\\..*).*)',
   ],
 };

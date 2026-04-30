@@ -69,10 +69,6 @@ export default async function AgentPage() {
           }}
         >
           raw:{' '}
-          <a href="/agent.md" style={{ color: ACCENT }}>
-            /agent.md
-          </a>{' '}
-          ·{' '}
           <a href="/llms.txt" style={{ color: ACCENT }}>
             /llms.txt
           </a>
