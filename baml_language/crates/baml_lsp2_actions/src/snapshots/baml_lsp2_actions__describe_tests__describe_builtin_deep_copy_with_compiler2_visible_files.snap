@@ -1,0 +1,7 @@
+---
+source: crates/baml_lsp2_actions/src/describe_tests.rs
+assertion_line: 116
+expression: "project.format_description(&descs[0])"
+---
+── function ── core.baml:2
+shape: function deep_copy(value: T) -> T
