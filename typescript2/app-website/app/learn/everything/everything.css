@@ -21,20 +21,21 @@
 }
 
 .learn-baml-logo {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
   margin-bottom: 30px;
-  padding: 12px;
-  background: linear-gradient(135deg, #ff6ec7 0%, #c77dff 100%);
-  color: white;
-  border-radius: 8px;
+  padding: 0 0 12px;
+  color: #1A1612;
   font-weight: 600;
-  font-size: 16px;
+  font-size: 20px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: color 140ms ease;
 }
 
-.learn-baml-star {
-  font-size: 20px;
+.learn-baml-logo:hover {
+  color: #6D28D9;
 }
 
 .learn-baml-nav-section {

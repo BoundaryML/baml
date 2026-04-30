@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
   Sheet,
   SheetContent,
@@ -8,8 +9,27 @@ import TableOfContents from './TableOfContents';
 
 export default function Header() {
   return (
-    <div className="w-full h-16 p-5 bg-purple-500 flex flex-row">
-      <h1 className="flex-1">Learn BAML</h1>
+    <div
+      className="w-full h-16 px-6 flex flex-row items-center"
+      style={{
+        background: '#ffffff',
+        borderBottom: '1px solid #D9D3C4',
+      }}
+    >
+      <Link
+        href="/"
+        className="flex-1"
+        style={{
+          fontWeight: 600,
+          fontSize: 18,
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+          color: '#1A1612',
+          textDecoration: 'none',
+        }}
+      >
+        Boundary
+      </Link>
       <div className="flex flex-row gap-2">
         <ContentsSheet />
       </div>

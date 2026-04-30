@@ -283,13 +283,21 @@ const STEPS: Step[] = [
   },
 ];
 
-// ── Shiki hook ────────────────────────────────────────────────────────────────
+// ── Shiki tokenizer hook ─────────────────────────────────────────────────────
 
 type HighlightInput = { code: string; lang: 'python' | 'baml' };
+type CodeToken = { content: string; color?: string };
+type CodeTokens = CodeToken[][];
 
-function useHighlighted(inputs: HighlightInput[]): string[] {
-  const [out, setOut] = useState<string[]>(() =>
-    inputs.map((i) => `<pre><code>${escapeHtml(i.code)}</code></pre>`),
+const LINE_NUM_WIDTH = 40;
+const CODE_BG = '#FDFBF6';
+const GUTTER_BG = '#F5F1E5';
+
+function useTokenized(inputs: HighlightInput[]): CodeTokens[] {
+  const [out, setOut] = useState<CodeTokens[]>(() =>
+    inputs.map((i) =>
+      i.code.split('\n').map((line) => [{ content: line }] as CodeToken[]),
+    ),
   );
 
   useEffect(() => {
@@ -304,15 +312,18 @@ function useHighlighted(inputs: HighlightInput[]): string[] {
           langs: ['python', bamlJinjaTextmate, bamlTextmate],
           themes: ['github-light'],
         });
-        const results = inputs.map((i) =>
-          highlighter.codeToHtml(i.code, {
-            lang: i.lang,
+        const results: CodeTokens[] = inputs.map((i) => {
+          const r = highlighter.codeToTokens(i.code, {
+            lang: i.lang as any,
             theme: 'github-light',
-          }),
-        );
+          });
+          return r.tokens.map((line) =>
+            line.map((t) => ({ content: t.content, color: t.color })),
+          );
+        });
         if (!cancelled) setOut(results);
       } catch {
-        /* fall back to plain pre */
+        /* fall back to plain text — initial state already covers it */
       }
     })();
     return () => {
@@ -324,72 +335,165 @@ function useHighlighted(inputs: HighlightInput[]): string[] {
   return out;
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
-}
+// ── Code block — editor-like surface with line numbers and per-token colors ──
 
-// ── Code block — renders Shiki HTML with a shared style ──────────────────────
-
-function CodeBlock({ html, filename }: { html: string; filename: string }) {
+function CodeBlock({
+  tokens,
+  filename,
+}: {
+  tokens: CodeTokens;
+  filename: string;
+}) {
   return (
     <div
       style={{
-        background: '#FBF8F1',
+        background: CODE_BG,
         border: `1px solid ${BORDER}`,
         borderRadius: 8,
         boxShadow:
-          '0 1px 0 rgba(0,0,0,0.02), 0 6px 24px -16px rgba(0,0,0,0.18)',
+          '0 1px 0 rgba(0,0,0,0.02), 0 8px 28px -18px rgba(0,0,0,0.22)',
         overflow: 'hidden',
         width: '100%',
       }}
     >
+      {/* Window chrome: traffic lights + filename tab */}
       <div
         style={{
           alignItems: 'center',
-          background: '#F3EFE3',
+          background: GUTTER_BG,
           borderBottom: `1px solid ${BORDER}`,
           boxSizing: 'border-box',
           color: MUTED,
-          display: 'flex',
-          fontFamily: MONO,
-          fontSize: 11,
-          gap: 8,
+          display: 'grid',
+          gridTemplateColumns: '60px 1fr 60px',
           height: TAB_HEIGHT,
-          letterSpacing: '0.04em',
-          padding: '8px 12px',
+          padding: '0 12px',
         }}
       >
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span
+            style={{
+              background: '#E5A8A8',
+              border: '1px solid rgba(0,0,0,0.06)',
+              borderRadius: '50%',
+              height: 10,
+              width: 10,
+            }}
+          />
+          <span
+            style={{
+              background: '#E5C58A',
+              border: '1px solid rgba(0,0,0,0.06)',
+              borderRadius: '50%',
+              height: 10,
+              width: 10,
+            }}
+          />
+          <span
+            style={{
+              background: '#A8D0A0',
+              border: '1px solid rgba(0,0,0,0.06)',
+              borderRadius: '50%',
+              height: 10,
+              width: 10,
+            }}
+          />
+        </div>
         <span
           style={{
-            background: '#E6DFCC',
-            borderRadius: '50%',
-            height: 8,
-            width: 8,
+            fontFamily: MONO,
+            fontSize: 11,
+            letterSpacing: '0.04em',
+            color: MUTED,
+            textAlign: 'center',
           }}
-        />
-        {filename}
+        >
+          {filename}
+        </span>
+        <span />
       </div>
+
+      {/* Editor body: line numbers gutter + code */}
       <div
         className="adoption-code"
-        dangerouslySetInnerHTML={{ __html: html }}
         style={{
+          display: 'flex',
           fontFamily: MONO,
-          fontSize: 12.5,
+          fontSize: 13.5,
           lineHeight: `${LINE_HEIGHT}px`,
-          overflow: 'auto',
-          padding: `${CODE_PAD_TOP}px ${CODE_PAD_LEFT}px`,
+          background: CODE_BG,
         }}
-      />
+      >
+        <div
+          aria-hidden
+          style={{
+            width: LINE_NUM_WIDTH,
+            flexShrink: 0,
+            background: GUTTER_BG,
+            borderRight: `1px solid ${BORDER}`,
+            color: '#B8B0A0',
+            textAlign: 'right',
+            padding: `${CODE_PAD_TOP}px 8px`,
+            userSelect: 'none',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {tokens.map((_, i) => (
+            <div key={`ln-${i}`} style={{ height: LINE_HEIGHT }}>
+              {i + 1}
+            </div>
+          ))}
+        </div>
+        <pre
+          style={{
+            margin: 0,
+            padding: `${CODE_PAD_TOP}px ${CODE_PAD_LEFT}px`,
+            flex: 1,
+            minWidth: 0,
+            color: INK,
+            background: 'transparent',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            overflowWrap: 'anywhere',
+            tabSize: 4,
+          }}
+        >
+          <code style={{ fontFamily: MONO, background: 'transparent' }}>
+            {tokens.map((line, i) => (
+              <div
+                key={`l-${i}`}
+                style={{ minHeight: LINE_HEIGHT }}
+              >
+                {line.length === 0 ? (
+                  <span>&#8203;</span>
+                ) : (
+                  line.map((tok, j) => (
+                    <span
+                      key={`t-${i}-${j}`}
+                      style={{ color: tok.color || INK }}
+                    >
+                      {tok.content}
+                    </span>
+                  ))
+                )}
+              </div>
+            ))}
+          </code>
+        </pre>
+      </div>
     </div>
   );
 }
 
 // ── Annotated block: code on the left, caption gutter on the right ───────────
 
-function AnnotatedBlock({ html, block }: { html: string; block: BlockSpec }) {
+function AnnotatedBlock({
+  tokens,
+  block,
+}: {
+  tokens: CodeTokens;
+  block: BlockSpec;
+}) {
   const GAP = 16;
   const transform = block.scale ? `scale(${block.scale})` : undefined;
 
@@ -398,7 +502,7 @@ function AnnotatedBlock({ html, block }: { html: string; block: BlockSpec }) {
       style={{
         columnGap: GAP,
         display: 'grid',
-        gridTemplateColumns: '1.6fr 1fr',
+        gridTemplateColumns: '3.4fr 1fr',
         position: 'relative',
         transform,
         transformOrigin: 'top left',
@@ -406,7 +510,7 @@ function AnnotatedBlock({ html, block }: { html: string; block: BlockSpec }) {
       }}
     >
       <div style={{ minWidth: 0, position: 'relative', width: '100%' }}>
-        <CodeBlock filename={block.filename} html={html} />
+        <CodeBlock filename={block.filename} tokens={tokens} />
         {/* Line highlights — one per annotation */}
         {block.annotations.map((a, i) => (
           <motion.div
@@ -465,7 +569,7 @@ function AnnotatedBlock({ html, block }: { html: string; block: BlockSpec }) {
 
 function StickyPanel({ activeStep }: { activeStep: number }) {
   const reduced = useReducedMotion();
-  const [html1, html2, htmlBaml3, htmlPy3, htmlBaml4] = useHighlighted([
+  const [tok1, tok2, tokBaml3, tokPy3, tokBaml4] = useTokenized([
     { code: STEP_1_PY, lang: 'python' },
     { code: STEP_2_PY, lang: 'python' },
     { code: STEP_3_BAML, lang: 'baml' },
@@ -475,12 +579,12 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
 
   const fadeT = reduced ? { duration: 0 } : { duration: 0.35 };
 
-  const blockHtmlByKey: Record<string, string> = {
-    's1-py': html1,
-    's2-py': html2,
-    's3-baml': htmlBaml3,
-    's3-py': htmlPy3,
-    's4-baml': htmlBaml4,
+  const blockTokensByKey: Record<string, CodeTokens> = {
+    's1-py': tok1,
+    's2-py': tok2,
+    's3-baml': tokBaml3,
+    's3-py': tokPy3,
+    's4-baml': tokBaml4,
   };
 
   return (
@@ -511,13 +615,12 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
             <div
               key={b.key}
               style={{
-                display: 'flex',
-                flex:
-                  STEPS[activeStep].blocks.length > 1 ? '1 1 0' : '0 0 auto',
+                flex: '0 0 auto',
                 minHeight: 0,
+                width: '100%',
               }}
             >
-              <AnnotatedBlock block={b} html={blockHtmlByKey[b.key]} />
+              <AnnotatedBlock block={b} tokens={blockTokensByKey[b.key]} />
             </div>
           ))}
           {activeStep === 3 && (
@@ -538,40 +641,6 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
         </motion.div>
       </AnimatePresence>
 
-      <StepPills activeStep={activeStep} />
-    </div>
-  );
-}
-
-function StepPills({ activeStep }: { activeStep: number }) {
-  return (
-    <div
-      style={{
-        bottom: -32,
-        display: 'flex',
-        gap: 8,
-        justifyContent: 'center',
-        left: 0,
-        position: 'absolute',
-        right: 0,
-      }}
-    >
-      {STEPS.map((_, i) => {
-        const active = i === activeStep;
-        return (
-          <span
-            key={`pill-${i}`}
-            style={{
-              background: active ? ACCENT : 'transparent',
-              border: `1px solid ${active ? ACCENT : BORDER}`,
-              borderRadius: 999,
-              height: 6,
-              transition: 'width 200ms ease, background-color 200ms ease',
-              width: active ? 22 : 10,
-            }}
-          />
-        );
-      })}
     </div>
   );
 }
@@ -622,27 +691,27 @@ export function IncrementalAdoption() {
   const [activeStep, setActiveStep] = useState(0);
 
   // Per-step body typewriter progress (0 = empty, 1 = fully typed).
-  // Each step types in just before its active range and types out just before
-  // the next step takes over, giving the "characters streaming" effect.
+  // Type-in/out windows are short; the bulk of each step's scroll budget
+  // is the fully-typed "hold" so readers actually have time to read.
   const step0Progress = useTransform(
     scrollYProgress,
-    [0, 0.08, 0.12, 0.22],
+    [0, 0.001, 0.18, 0.22],
     [1, 1, 1, 0],
   );
   const step1Progress = useTransform(
     scrollYProgress,
-    [0.22, 0.32, 0.38, 0.48],
+    [0.22, 0.26, 0.44, 0.48],
     [0, 1, 1, 0],
   );
   const step2Progress = useTransform(
     scrollYProgress,
-    [0.48, 0.58, 0.64, 0.74],
+    [0.48, 0.52, 0.70, 0.74],
     [0, 1, 1, 0],
   );
   const step3Progress = useTransform(
     scrollYProgress,
-    [0.74, 0.84, 0.9, 1],
-    [0, 1, 1, 0],
+    [0.74, 0.78, 1],
+    [0, 1, 1],
   );
   const stepProgresses = [
     step0Progress,
@@ -675,7 +744,7 @@ export function IncrementalAdoption() {
         style={{
           margin: '0 auto',
           marginBottom: 40,
-          maxWidth: 1200,
+          maxWidth: 1360,
           padding: '0 32px 0 48px',
         }}
       >
@@ -707,11 +776,11 @@ export function IncrementalAdoption() {
       <div
         style={{
           display: 'grid',
-          gap: 48,
-          gridTemplateColumns: '40% 60%',
+          gap: 40,
+          gridTemplateColumns: '28% 72%',
           margin: '0 auto',
-          maxWidth: 1200,
-          padding: '0 32px 0 48px',
+          maxWidth: 1360,
+          padding: '0 24px 0 32px',
         }}
       >
         <div>
@@ -776,18 +845,35 @@ export function IncrementalAdoption() {
                       {s.heading}
                     </h3>
                   </div>
+                  <motion.div
+                    initial={false}
+                    animate={{
+                      maxHeight: isActive ? 320 : 0,
+                      opacity: isActive ? 1 : 0,
+                      marginTop: isActive ? 20 : 0,
+                    }}
+                    transition={{
+                      maxHeight: { duration: 0.5, ease: [0.22, 0.61, 0.36, 1] },
+                      opacity: {
+                        duration: 0.3,
+                        ease: 'easeInOut',
+                        delay: isActive ? 0.1 : 0,
+                      },
+                      marginTop: { duration: 0.5, ease: [0.22, 0.61, 0.36, 1] },
+                    }}
+                    style={{
+                      overflow: 'hidden',
+                      fontSize: 16,
+                      lineHeight: 1.6,
+                      color: MUTED,
+                      maxWidth: 440,
+                    }}
+                  >
+                    <p style={{ margin: 0 }}>
+                      <TypingText text={s.body} progress={stepProgresses[i]} />
+                    </p>
+                  </motion.div>
                 </div>
-                <p
-                  style={{
-                    color: MUTED,
-                    fontSize: 16,
-                    lineHeight: 1.6,
-                    marginTop: 20,
-                    maxWidth: 440,
-                  }}
-                >
-                  <TypingText progress={stepProgresses[i]} text={s.body} />
-                </p>
               </section>
             );
           })}
@@ -796,7 +882,8 @@ export function IncrementalAdoption() {
         <div
           style={{
             alignSelf: 'start',
-            height: 'min(640px, 82vh)',
+            height: 'min(760px, 88vh)',
+            overflow: 'hidden',
             position: 'sticky',
             top: 'calc(var(--navigation-height, 56px) + 32px)',
           }}
@@ -805,10 +892,6 @@ export function IncrementalAdoption() {
         </div>
       </div>
 
-      <style>{`
-        .adoption-code pre { margin: 0; background: transparent !important; }
-        .adoption-code code { background: transparent !important; font-family: ${MONO} !important; }
-      `}</style>
     </section>
   );
 }

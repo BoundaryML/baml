@@ -8,20 +8,20 @@ const ERROR = 'ERROR';
 const SUCCESS = 'SUCCESS';
 const formStates = [INIT, SUBMITTING, ERROR, SUCCESS] as const;
 const formStyles = {
-  buttonColor: '#000000',
+  buttonColor: '#1A1612',
   buttonFont: 'Inter',
   buttonFontColor: '#ffffff',
   buttonFontSizePx: 14,
   buttonText: 'Subscribe',
   formFont: 'Inter',
-  formFontColor: '#000000',
+  formFontColor: '#1A1612',
   formFontSizePx: 14,
   formStyle: 'inline',
   id: 'cm3d7widq01su6gng1mc5iuvz',
   name: 'Default',
   placeholderText: 'Enter your email',
   successFont: 'Inter',
-  successFontColor: '#000000',
+  successFontColor: '#1A1612',
   successFontSizePx: 16,
   successMessage: 'Get hyped for the latest BAML news!',
   userGroup: '',
@@ -172,9 +172,9 @@ export function NewsletterForm() {
               required={true}
               style={{
                 background: '#FFFFFF',
-                border: '1px solid #D1D5DB',
+                border: '1px solid #D9D3C4',
                 borderRadius: '6px',
-                boxShadow: 'rgba(0, 0, 0, 0.05) 0px 1px 2px',
+                boxShadow: 'none',
                 boxSizing: 'border-box',
                 color: formStyles.formFontColor,
                 fontFamily: `'${formStyles.formFont}', sans-serif`,
@@ -182,7 +182,7 @@ export function NewsletterForm() {
                 margin: isInline ? '0px 10px 0px 0px' : '0px 0px 10px',
                 maxWidth: '300px',
                 minWidth: '100px',
-                padding: '8px 12px',
+                padding: '9px 12px',
                 width: '100%',
               }}
               type="text"

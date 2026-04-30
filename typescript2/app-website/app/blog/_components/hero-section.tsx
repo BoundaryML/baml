@@ -6,69 +6,135 @@ interface HeroSectionProps {
   onCategoryChange: (category: string) => void;
 }
 
+const INK = '#1A1612';
+const MUTED = '#5C5852';
+const BORDER = '#D9D3C4';
+const ACCENT = '#6D28D9';
+const EYEBROW = '#8A8580';
+
 export function HeroSection({
   selectedCategory,
   onCategoryChange,
 }: HeroSectionProps) {
   return (
-    <section className="relative w-full py-12 px-6 md:p-16 lg:py-24">
-      <div className="mx-auto max-w-7xl">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
-          {/* Left side - Title and description */}
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <h1 className="bg-gradient-to-br dark:from-white from-black from-30% dark:to-white/40 to-black/40 bg-clip-text py-4 sm:py-6 text-5xl font-medium leading-none tracking-tighter text-transparent text-balance sm:text-5xl md:text-6xl lg:text-6xl xl:text-7xl translate-y-[-1rem] animate-fade-in opacity-0 [--animation-delay:200ms]">
-                BAML Thoughts
-              </h1>
-              <p className="text-xl text-muted-foreground max-w-lg">
-                Insights, tutorials, and updates from the BAML team. Stay ahead
-                with the latest in AI development.
-              </p>
-            </div>
+    <section
+      style={{
+        width: '100%',
+        padding: '96px 48px 64px',
+        borderBottom: `1px solid ${BORDER}`,
+      }}
+    >
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)',
+            gap: 64,
+            alignItems: 'start',
+          }}
+          className="blog-hero-grid"
+        >
+          {/* Left: title + newsletter */}
+          <div>
+            <p
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                color: EYEBROW,
+                margin: 0,
+              }}
+            >
+              Notes from the team
+            </p>
+            <h1
+              style={{
+                fontSize: 'clamp(2.5rem, 5vw, 4rem)',
+                fontWeight: 600,
+                lineHeight: 1.02,
+                letterSpacing: '-0.03em',
+                margin: '20px 0 0',
+                color: INK,
+              }}
+            >
+              BAML{' '}
+              <span
+                style={{
+                  fontFamily: 'var(--font-serif)',
+                  fontStyle: 'italic',
+                  fontWeight: 500,
+                  color: ACCENT,
+                }}
+              >
+                thoughts
+              </span>
+              .
+            </h1>
+            <p
+              style={{
+                fontSize: 18,
+                lineHeight: 1.6,
+                color: MUTED,
+                margin: '24px 0 0',
+                maxWidth: 540,
+              }}
+            >
+              Insights, tutorials, and updates from the BAML team. Stay ahead
+              with the latest in AI development.
+            </p>
 
-            {/* Newsletter subscription */}
-            <div className="space-y-4 pt-4">
-              {/* <h3 className="text-lg font-semibold">Stay in the loop</h3> */}
-              <div className="max-w-md">
-                <NewsletterForm />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Get the latest posts delivered to your inbox
+            <div style={{ marginTop: 36, maxWidth: 480 }}>
+              <NewsletterForm />
+              <p
+                style={{
+                  fontSize: 12,
+                  letterSpacing: '0.04em',
+                  color: EYEBROW,
+                  margin: '12px 0 0',
+                }}
+              >
+                Get the latest posts delivered to your inbox.
               </p>
             </div>
           </div>
 
-          {/* Right side - Category filters */}
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Browse by category</h3>
+          {/* Right: categories */}
+          <div
+            style={{
+              borderLeft: `1px solid ${BORDER}`,
+              paddingLeft: 32,
+            }}
+            className="blog-hero-side"
+          >
+            <p
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: EYEBROW,
+                margin: 0,
+              }}
+            >
+              Browse by category
+            </p>
+            <div style={{ marginTop: 20 }}>
               <CategoryFilter
                 onCategoryChange={onCategoryChange}
                 selectedCategory={selectedCategory}
               />
             </div>
-
-            {/* Quick stats or featured content */}
-            {/* <div className="bg-muted/50 rounded-lg p-6 space-y-4">
-              <h4 className="font-medium">Latest from BAML</h4>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total posts</span>
-                  <span className="font-medium">50+</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Categories</span>
-                  <span className="font-medium">6</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Monthly readers</span>
-                  <span className="font-medium">10K+</span>
-                </div>
-              </div>
-            </div> */}
           </div>
         </div>
       </div>
+
+      <style>{`
+        @media (max-width: 900px) {
+          .blog-hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
+          .blog-hero-side { border-left: none !important; padding-left: 0 !important; border-top: 1px solid ${BORDER}; padding-top: 32px; }
+        }
+      `}</style>
     </section>
   );
 }

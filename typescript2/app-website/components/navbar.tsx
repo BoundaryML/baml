@@ -79,12 +79,12 @@ export function Navbar() {
       <Link href="/" style={navStyles.logo}>
         Boundary
       </Link>
-      <div style={navStyles.navDiv}>
+      <div style={navStyles.navDiv} className="nav-links">
         {siteConfig.nav.links.map((link) => (
           <Link
             key={link.id}
             href={link.href}
-            className="mr-6 text-[13px] tracking-[0.15em] uppercase text-muted-foreground hover:text-[#6D28D9] transition-colors"
+            className="nav-link"
           >
             {link.name}
           </Link>
@@ -93,29 +93,61 @@ export function Navbar() {
           href="https://docs.boundaryml.com/?utm_source=marketing-site&utm_medium=navbar-docs"
           target="_blank"
           rel="noopener noreferrer"
-          className="mr-6 text-[13px] tracking-[0.15em] uppercase text-muted-foreground hover:text-[#6D28D9] transition-colors"
+          className="nav-link"
         >
           Docs
         </Link>
       </div>
       <NavStars />
       <AgentModeToggle />
-      <Link
-        href="https://docs.boundaryml.com/home"
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          ...navStyles.navItem,
-          color: '#e8d5ff',
-          backgroundColor: '#6d28d9',
-          border: '2px solid #a78bfa',
-          borderRadius: '8px',
-          padding: '6px 14px',
-        }}
-        className="hover:opacity-90 transition-opacity"
-      >
-        Learn BAML
-      </Link>
+      <LearnBamlLink />
+      <style>{`
+        .nav-link {
+          display: inline-flex;
+          align-items: center;
+          margin-right: 4px;
+          padding: 6px 12px;
+          border-radius: 8px;
+          font-size: 13px;
+          letter-spacing: 0.15em;
+          text-transform: uppercase;
+          color: #5C5852;
+          background-color: transparent;
+          transition: background-color 140ms ease, color 140ms ease;
+        }
+        .nav-link:hover {
+          background-color: #F0ECE0;
+          color: #1A1612;
+        }
+      `}</style>
     </nav>
+  );
+}
+
+function LearnBamlLink() {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <Link
+      href="https://docs.boundaryml.com/home"
+      target="_blank"
+      rel="noopener noreferrer"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        ...navStyles.navItem,
+        color: hovered ? '#4C1D95' : '#6D28D9',
+        background: hovered
+          ? 'linear-gradient(135deg, #DDD0F7 0%, #C4B5FD 100%)'
+          : 'linear-gradient(135deg, #F5EFFE 0%, #E9DDFB 100%)',
+        border: `1px solid ${hovered ? '#A78BFA' : '#D8C8F5'}`,
+        borderRadius: 8,
+        padding: '6px 14px',
+        transition:
+          'background 850ms ease, color 850ms ease, border-color 850ms ease',
+      }}
+    >
+      Learn BAML
+    </Link>
   );
 }

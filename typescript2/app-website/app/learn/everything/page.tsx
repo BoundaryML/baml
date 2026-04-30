@@ -48,10 +48,9 @@ export default async function EverythingPage() {
   return (
     <div className="learn-baml-container">
       <nav className="learn-baml-sidebar">
-        <div className="learn-baml-logo">
-          <span className="learn-baml-star">⭐</span>
-          <span>BAML Language Tour</span>
-        </div>
+        <a href="/" className="learn-baml-logo">
+          Boundary
+        </a>
 
         {navigation.map((navSection) => (
           <div className="learn-baml-nav-section" key={navSection.chapter}>

@@ -51,7 +51,13 @@ export default async function PodcastPage() {
   const fetched = await fetchPodcastEpisodes();
   const podcastEpisodes = fetched.length > 0 ? fetched : fallbackEpisodes;
   return (
-    <div className="max-w-7xl mx-auto border-x relative">
+    <div
+      className="mx-auto relative"
+      style={{
+        maxWidth: 1600,
+        background: '#ffffff',
+      }}
+    >
       <Navbar />
       <main className="flex flex-col items-center justify-center min-h-screen w-full">
         <HeroSection />
@@ -78,21 +84,42 @@ export default async function PodcastPage() {
             </p>
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center">
               {podcastPlatforms.map((platform) => (
-                <Button
-                  asChild
-                  className="w-full sm:w-auto"
+                <Link
                   key={platform.name}
+                  href={platform.url}
+                  className="editorial-btn"
                 >
-                  <Link
-                    className="flex items-center gap-2 justify-center"
-                    href={platform.url}
-                  >
-                    <span>{platform.icon}</span>
-                    Subscribe on {platform.name}
-                  </Link>
-                </Button>
+                  <span>{platform.icon}</span>
+                  Subscribe on {platform.name}
+                </Link>
               ))}
             </div>
+            <style>{`
+              .editorial-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 10px;
+                padding: 12px 22px;
+                border-radius: 8px;
+                background: #ffffff;
+                color: #1A1612;
+                border: 1px solid #D9D3C4;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0.01em;
+                text-decoration: none;
+                transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, transform 200ms ease;
+              }
+              .editorial-btn:hover {
+                background: #FBF8F1;
+                border-color: #6D28D9;
+                color: #6D28D9;
+                transform: translateY(-1px);
+              }
+              @media (max-width: 640px) {
+                .editorial-btn { width: 100%; justify-content: center; }
+              }
+            `}</style>
           </div>
         </section>
 

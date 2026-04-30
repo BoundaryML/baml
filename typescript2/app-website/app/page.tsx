@@ -1,6 +1,7 @@
 import { FooterSection } from '@/components/footer-section';
 import { VariantHome } from '@/components/landing/variant-home';
 import { IncrementalAdoption } from '@/components/landing/incremental-adoption';
+import { LanguageFanout } from '@/components/landing/language-fanout';
 import { StoryTimeline } from '@/components/landing/story-timeline';
 import { WhyALanguage } from '@/components/landing/why-a-language';
 import { BuiltForTheFuture } from '@/components/landing/built-for-the-future';
@@ -32,10 +33,24 @@ export default async function Page() {
       {/* Incremental adoption — sticky scroll explainer */}
       <IncrementalAdoption />
 
+      {/* One file → every language fanout */}
+      <LanguageFanout />
+
       {/* Built for the Future of AI — bento grid in editorial theme */}
       {/* <BuiltForTheFuture /> */}
 
-      <div className="relative z-10 mx-auto flex w-full max-w-[100rem] flex-col items-center gap-12 border-x border-border bg-background sm:gap-20">
+      {/* Divider between language fanout and testimonials */}
+      <div
+        aria-hidden
+        style={{
+          width: '100%',
+          maxWidth: '100rem',
+          margin: '0 auto',
+          borderTop: '1px solid #D9D3C4',
+        }}
+      />
+
+      <div className="relative z-10 mx-auto flex w-full max-w-[100rem] flex-col items-center gap-12 bg-background sm:gap-20">
         <TestimonialSection />
         <FooterSection />
       </div>
