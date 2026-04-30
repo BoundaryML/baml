@@ -1552,6 +1552,7 @@ dependencies = [
  "bex_external_types",
  "bex_vm_types",
  "indexmap 2.13.0",
+ "log",
  "serde",
  "serde_json",
  "sys_types",

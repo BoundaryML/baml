@@ -495,7 +495,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           const pending = pendingCallsRef.current.get(data.id);
           if (pending) {
             pendingCallsRef.current.delete(data.id);
-            pending.resolve(data.result);
+            pending.resolve(JSON.parse(data.result));
           }
           break;
         }

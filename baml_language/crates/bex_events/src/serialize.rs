@@ -221,7 +221,7 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
     serde_json::to_string(&event_json).unwrap_or_else(|e| {
         #[allow(clippy::print_stderr)]
         {
-            eprintln!("Failed to serialize trace event: {e}");
+            log::info!("Failed to serialize trace event: {e}");
         }
         String::new()
     })
@@ -331,7 +331,6 @@ fn bex_value_to_json_impl(value: &BexExternalValue, depth: usize) -> serde_json:
     if depth > MAX_SERIALIZATION_DEPTH {
         return serde_json::Value::String("...".into());
     }
-
     match value {
         BexExternalValue::Null => serde_json::Value::Null,
         BexExternalValue::Bool(b) => serde_json::Value::Bool(*b),

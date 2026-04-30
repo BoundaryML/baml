@@ -197,13 +197,8 @@ impl BexEngine {
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
-            Object::RustData(arc) => {
-                bex_external_types::try_convert_rust_data(arc).ok_or_else(|| {
-                    EngineError::CannotConvert {
-                        type_name: "rust_data".to_string(),
-                    }
-                })
-            }
+            Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
+                .unwrap_or_else(|| BexExternalValue::RustData(arc.clone()))),
             Object::Closure(_) => Err(EngineError::CannotConvert {
                 type_name: "closure".to_string(),
             }),

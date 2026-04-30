@@ -54,23 +54,19 @@ export default function nextConfig(phase) {
         asyncWebAssembly: true,
       };
 
-      // just-bash/browser bundle still contains dynamic requires of a few
-      // Node.js built-ins (gzip/gunzip commands — dead code in browser).
-      // Webpack 5 doesn't handle the "node:" URI scheme by default, so we
-      // rewrite "node:X" → "X" and then let resolve.fallback stub them out.
+      // just-bash/browser bundle still references a few Node.js built-ins
+      // (gzip/gunzip commands — dead code in browser). Webpack 5 treats
+      // "node:X" as an unhandled URI scheme and bails before resolve runs.
+      // Rewrite node:-prefixed imports to bare names so resolve.fallback
+      // can map them to empty modules.
       config.plugins.push(
-        new webpack.NormalModuleReplacementPlugin(
-          /^node:/,
-          (resource) => {
-            resource.request = resource.request.replace(/^node:/, '');
-          },
-        ),
+        new webpack.NormalModuleReplacementPlugin(/^node:/, (resource) => {
+          resource.request = resource.request.replace(/^node:/, '');
+        })
       );
       config.resolve.fallback = {
         ...config.resolve.fallback,
         zlib: false,
-        async_hooks: false,
-        module: false,
       };
 
       return config;
