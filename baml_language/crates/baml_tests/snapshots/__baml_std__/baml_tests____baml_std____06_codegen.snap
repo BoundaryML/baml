@@ -85,6 +85,9 @@ function baml.String.toLowerCase(self: null) -> string {
 function baml.String.toUpperCase(self: null) -> string {
 }
 
+function baml.String.to_bytes(self: null) -> uint8array {
+}
+
 function baml.String.trim(self: null) -> string {
 }
 
@@ -131,6 +134,9 @@ function baml.Uint8Array.to_base64(self: null) -> string {
 }
 
 function baml.Uint8Array.to_hex(self: null) -> string {
+}
+
+function baml.Uint8Array.to_string(self: null) -> string {
 }
 
 function baml.Uint8Array.zeroes(size: int) -> uint8array {
@@ -1653,12 +1659,6 @@ function baml.sys.ShellOutput.ok(self: null) -> bool {
     load_const 0
     cmp_op ==
     return
-}
-
-function baml.sys.ShellOutput.stderr_bytes(self: null) -> uint8array {
-}
-
-function baml.sys.ShellOutput.stdout_bytes(self: null) -> uint8array {
 }
 
 function baml.sys.argv() -> string[] {

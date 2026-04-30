@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use js_sys::{Function, Promise, Reflect, Uint8Array};
-use sys_ops::io::{self, IoClassSysShellOutput, IoNamespaceSys};
+use sys_ops::io::{self, IoNamespaceSys};
 use sys_types::{BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput};
 use wasm_bindgen::{JsCast, prelude::*};
 use wasm_bindgen_futures::JsFuture;
@@ -28,23 +28,9 @@ impl WasmSys {
     }
 }
 
-/// Unpack a JS result object `{ stdout, stderr, exit_code, stdout_bytes, stderr_bytes }`
+/// Unpack a JS result object `{ exit_code, stdout_bytes, stderr_bytes }`
 /// into an `owned::sys::ShellOutput`.
 fn unpack_shell_result(obj: &JsValue) -> Result<io::owned::sys::ShellOutput, OpErrorKind> {
-    let stdout = Reflect::get(obj, &"stdout".into())
-        .map_err(|e| OpErrorKind::Io {
-            message: format!("missing stdout: {e:?}"),
-        })?
-        .as_string()
-        .unwrap_or_default();
-
-    let stderr = Reflect::get(obj, &"stderr".into())
-        .map_err(|e| OpErrorKind::Io {
-            message: format!("missing stderr: {e:?}"),
-        })?
-        .as_string()
-        .unwrap_or_default();
-
     let exit_code_f64 = Reflect::get(obj, &"exit_code".into())
         .map_err(|e| OpErrorKind::Io {
             message: format!("missing exit_code: {e:?}"),
@@ -54,25 +40,22 @@ fn unpack_shell_result(obj: &JsValue) -> Result<io::owned::sys::ShellOutput, OpE
     #[allow(clippy::cast_possible_truncation)]
     let exit_code = exit_code_f64 as i64;
 
-    let stdout_bytes_js = Reflect::get(obj, &"stdout_bytes".into())
+    let stdout = Reflect::get(obj, &"stdout_bytes".into())
         .ok()
         .and_then(|v| v.dyn_into::<Uint8Array>().ok())
         .map(|a| a.to_vec())
         .unwrap_or_default();
 
-    let stderr_bytes_js = Reflect::get(obj, &"stderr_bytes".into())
+    let stderr = Reflect::get(obj, &"stderr_bytes".into())
         .ok()
         .and_then(|v| v.dyn_into::<Uint8Array>().ok())
         .map(|a| a.to_vec())
         .unwrap_or_default();
-
-    let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new((stdout_bytes_js, stderr_bytes_js));
 
     Ok(io::owned::sys::ShellOutput {
         stdout,
         stderr,
         exit_code,
-        _output: handle,
     })
 }
 
@@ -193,37 +176,5 @@ impl IoNamespaceSys for WasmSys {
             let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
             Ok(())
         }))
-    }
-}
-
-impl IoClassSysShellOutput for WasmSys {
-    fn stdout_bytes(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        shelloutput: io::owned::sys::ShellOutput,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        match shelloutput._output.downcast_ref::<(Vec<u8>, Vec<u8>)>() {
-            Some(pair) => SysOpOutput::ok(pair.0.clone()),
-            None => SysOpOutput::err(OpErrorKind::Io {
-                message: "ShellOutput._output is not (Vec<u8>, Vec<u8>)".into(),
-            }),
-        }
-    }
-
-    fn stderr_bytes(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        shelloutput: io::owned::sys::ShellOutput,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        match shelloutput._output.downcast_ref::<(Vec<u8>, Vec<u8>)>() {
-            Some(pair) => SysOpOutput::ok(pair.1.clone()),
-            None => SysOpOutput::err(OpErrorKind::Io {
-                message: "ShellOutput._output is not (Vec<u8>, Vec<u8>)".into(),
-            }),
-        }
     }
 }

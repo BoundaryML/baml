@@ -8,7 +8,7 @@ async fn shell_echo() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("echo 'Hello From Shell!'", null).stdout
+                baml.sys.shell("echo 'Hello From Shell!'", null).stdout.to_string()
             }
         "#
     );
@@ -20,6 +20,7 @@ async fn shell_echo() {
         dispatch_future baml.sys.shell
         await
         load_field .stdout
+        call baml.Uint8Array.to_string
         return
     }
     "#);
@@ -34,7 +35,7 @@ async fn shell_with_pipe() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("echo 'hello world' | tr 'a-z' 'A-Z'", null).stdout
+                baml.sys.shell("echo 'hello world' | tr 'a-z' 'A-Z'", null).stdout.to_string()
             }
         "#
     );
@@ -46,6 +47,7 @@ async fn shell_with_pipe() {
         dispatch_future baml.sys.shell
         await
         load_field .stdout
+        call baml.Uint8Array.to_string
         return
     }
     "#);
@@ -111,7 +113,7 @@ async fn shell_with_variable() {
         r#"
             function main() -> string {
                 let cmd = "echo 'dynamic'";
-                baml.sys.shell(cmd, null).stdout
+                baml.sys.shell(cmd, null).stdout.to_string()
             }
         "#
     );
@@ -123,6 +125,7 @@ async fn shell_with_variable() {
         dispatch_future baml.sys.shell
         await
         load_field .stdout
+        call baml.Uint8Array.to_string
         return
     }
     "#);
@@ -137,7 +140,7 @@ async fn shell_stderr() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("echo 'error output' >&2", null).stderr
+                baml.sys.shell("echo 'error output' >&2", null).stderr.to_string()
             }
         "#
     );
@@ -176,7 +179,7 @@ async fn exec_echo() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("echo", ["Hello From Exec!"], null).stdout
+                baml.sys.exec("echo", ["Hello From Exec!"], null).stdout.to_string()
             }
         "#
     );
@@ -204,7 +207,7 @@ async fn exec_with_args() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("printf", ["%s %s", "hello", "world"], null).stdout
+                baml.sys.exec("printf", ["%s %s", "hello", "world"], null).stdout.to_string()
             }
         "#
     );
@@ -219,7 +222,7 @@ async fn exec_stderr() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("sh", ["-c", "echo err >&2"], null).stderr
+                baml.sys.exec("sh", ["-c", "echo err >&2"], null).stderr.to_string()
             }
         "#
     );
@@ -236,7 +239,7 @@ async fn exec_with_cwd() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("pwd", null, baml.sys.ProcessOptions { cwd: "/tmp" }).stdout
+                baml.sys.exec("pwd", null, baml.sys.ProcessOptions { cwd: "/tmp" }).stdout.to_string()
             }
         "#
     );
@@ -251,7 +254,7 @@ async fn exec_with_stdin() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("cat", null, baml.sys.ProcessOptions { stdin: "hello from stdin" }).stdout
+                baml.sys.exec("cat", null, baml.sys.ProcessOptions { stdin: "hello from stdin" }).stdout.to_string()
             }
         "#
     );
@@ -266,7 +269,7 @@ async fn exec_with_timeout() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("sleep", ["10"], baml.sys.ProcessOptions { timeout_ms: 100 }).stdout
+                baml.sys.exec("sleep", ["10"], baml.sys.ProcessOptions { timeout_ms: 100 }).stdout.to_string()
             }
         "#
     );
@@ -279,7 +282,7 @@ async fn shell_with_options() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("pwd", baml.sys.ProcessOptions { cwd: "/tmp" }).stdout
+                baml.sys.shell("pwd", baml.sys.ProcessOptions { cwd: "/tmp" }).stdout.to_string()
             }
         "#
     );
@@ -289,14 +292,14 @@ async fn shell_with_options() {
     }
 }
 
-// === stdout_bytes() / stderr_bytes() tests ===
+// === stdout / stderr as uint8array field tests ===
 
 #[tokio::test]
 async fn shell_stdout_bytes() {
     let output = baml_test!(
         r#"
             function main() -> uint8array {
-                baml.sys.shell("echo hello", null).stdout_bytes()
+                baml.sys.shell("echo hello", null).stdout
             }
         "#
     );
@@ -314,7 +317,7 @@ async fn shell_stderr_bytes() {
     let output = baml_test!(
         r#"
             function main() -> uint8array {
-                baml.sys.shell("echo err >&2", null).stderr_bytes()
+                baml.sys.shell("echo err >&2", null).stderr
             }
         "#
     );

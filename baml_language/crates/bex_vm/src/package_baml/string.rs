@@ -73,4 +73,8 @@ impl BamlClassString for PackageBamlImpl {
     fn replace_all(string: &str, search: &str, replacement: &str) -> String {
         string.replace(search, replacement)
     }
+
+    fn to_bytes(string: &str) -> Vec<u8> {
+        string.as_bytes().to_vec()
+    }
 }

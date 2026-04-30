@@ -1045,28 +1045,6 @@ impl io::IoNamespaceSys for DefaultIoOps {
     }
 }
 
-impl io::IoClassSysShellOutput for DefaultIoOps {
-    fn stdout_bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _shelloutput: io::owned::sys::ShellOutput,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-
-    fn stderr_bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _shelloutput: io::owned::sys::ShellOutput,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-}
-
 impl io::IoClassGlobGlob for DefaultIoOps {
     fn scan(
         &self,
@@ -1423,18 +1401,6 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceSys + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_sys_shelloutput_stdout_bytes = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_shelloutput_stdout_bytes(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys_shelloutput_stderr_bytes = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_shelloutput_stderr_bytes(heap, permit, args, ctx, call_id)
-            })
-        };
         self.inner.baml_sys_exec = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {

@@ -438,10 +438,9 @@ class baml.sys.ProcessOptions {
   stdin: string?
 }
 class baml.sys.ShellOutput {
-  stdout: string
-  stderr: string
+  stdout: uint8array
+  stderr: uint8array
   exit_code: int
-  _output: $rust_type
 }
 function baml.sys.argv() -> string[]  [builtin]
 function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
@@ -452,8 +451,6 @@ function baml.sys.ok(self: ?) -> bool  [expr] {
 function baml.sys.panic(message: string) -> never  [builtin]
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.sleep(ms: int) -> null  [builtin]
-function baml.sys.stderr_bytes(self: ?) -> uint8array  [builtin]
-function baml.sys.stdout_bytes(self: ?) -> uint8array  [builtin]
 
 --- <builtin>/baml/ns_unstable/unstable.baml ---
 function baml.unstable.string(value: baml.unstable.T) -> string  [builtin]
@@ -474,6 +471,7 @@ function baml.startsWith(self: ?, prefix: string) -> bool  [builtin]
 function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
 function baml.toLowerCase(self: ?) -> string  [builtin]
 function baml.toUpperCase(self: ?) -> string  [builtin]
+function baml.to_bytes(self: ?) -> uint8array  [builtin]
 function baml.trim(self: ?) -> string  [builtin]
 
 --- <builtin>/baml/uint8array.baml ---
@@ -494,4 +492,5 @@ function baml.sort(self: ?) -> null  [builtin]
 function baml.to_array(self: ?) -> int[]  [builtin]
 function baml.to_base64(self: ?) -> string  [builtin]
 function baml.to_hex(self: ?) -> string  [builtin]
+function baml.to_string(self: ?) -> string  [builtin]
 function baml.zeroes(size: int) -> uint8array  [builtin]

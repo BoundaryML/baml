@@ -148,6 +148,16 @@ function getOrCreateBash(): Bash {
   return bashInstance;
 }
 
+/** JSON replacer that encodes Uint8Array as tagged base64 for safe serialization. */
+function jsonReplacer(_key: string, value: unknown): unknown {
+  if (value instanceof Uint8Array) {
+    let binary = '';
+    for (let i = 0; i < value.length; i++) binary += String.fromCharCode(value[i]);
+    return { $baml: { type: '$bytes' }, base64: btoa(binary) };
+  }
+  return value;
+}
+
 /** Shell result shape expected by the Rust WASM bridge. */
 interface ShellResult {
   stdout: string;
@@ -738,7 +748,7 @@ self.onmessage = async (event: MessageEvent) => {
         } else {
           liveHandles.delete(msg.id);
         }
-        const result = JSON.stringify(decoded, null, 2);
+        const result = JSON.stringify(decoded, jsonReplacer, 2);
         postOut({ type: "callFunctionResult", id: msg.id, result });
       } catch (e) {
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
@@ -871,7 +881,7 @@ self.onmessage = async (event: MessageEvent) => {
         postOut({
           type: "callFunctionResult",
           id: msg.id,
-          result: JSON.stringify(decoded, null, 2),
+          result: JSON.stringify(decoded, jsonReplacer, 2),
         });
       } catch (e: any) {
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';

@@ -214,7 +214,7 @@ async fn resolve_credentials(
             None,
         )
         .await
-        .is_ok_and(|out| !out.stdout.trim().is_empty())
+        .is_ok_and(|out| !String::from_utf8_lossy(&out.stdout).trim().is_empty())
     {
         return Ok(ResolvedCredentials::GcloudCli);
     }
@@ -248,7 +248,7 @@ async fn token_from_credentials(
                         "Google Cloud: gcloud auth print-access-token failed: {e}"
                     ))
                 })?;
-            let token = output.stdout.trim().to_string();
+            let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if token.is_empty() {
                 Err(BuildRequestError::AuthorizationFailed(
                     "Google Cloud: gcloud auth print-access-token returned empty".into(),
@@ -284,7 +284,7 @@ async fn project_id_from_credentials(
                 )
                 .await
             {
-                let pid = output.stdout.trim().to_string();
+                let pid = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !pid.is_empty() {
                     return Some(pid);
                 }
@@ -361,7 +361,7 @@ async fn project_id_from_credentials(
             )
             .await
         {
-            let pid = output.stdout.trim().to_string();
+            let pid = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !pid.is_empty() {
                 return Some(pid);
             }
@@ -1248,7 +1248,7 @@ mod tests {
             Box<
                 dyn Future<
                         Output = Result<
-                            sys_types::runtime_io::SysShellOutputHandle,
+                            sys_types::generated::owned::sys::ShellOutput,
                             RuntimeIoError,
                         >,
                     > + Send
@@ -1344,7 +1344,7 @@ mod tests {
             Box<
                 dyn Future<
                         Output = Result<
-                            sys_types::runtime_io::SysShellOutputHandle,
+                            sys_types::generated::owned::sys::ShellOutput,
                             RuntimeIoError,
                         >,
                     > + Send
@@ -1450,7 +1450,7 @@ mod tests {
             Box<
                 dyn Future<
                         Output = Result<
-                            sys_types::runtime_io::SysShellOutputHandle,
+                            sys_types::generated::owned::sys::ShellOutput,
                             RuntimeIoError,
                         >,
                     > + Send
@@ -1608,7 +1608,7 @@ mod tests {
             Box<
                 dyn Future<
                         Output = Result<
-                            sys_types::runtime_io::SysShellOutputHandle,
+                            sys_types::generated::owned::sys::ShellOutput,
                             RuntimeIoError,
                         >,
                     > + Send

@@ -5,6 +5,7 @@ export type BamlJsValue<T = unknown> =
   | number
   | boolean
   | null
+  | Uint8Array
   | BamlJsValue<T>[]
   | BamlJsMap<T>
   | BamlJsHandle<T>

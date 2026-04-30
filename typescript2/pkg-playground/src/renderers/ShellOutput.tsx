@@ -12,8 +12,8 @@ import { ToggleGroup } from '../components/ui/toggle-group';
 import type { ResultRendererProps } from '../result-renderers';
 
 interface ShellOutputShape {
-  stdout?: string;
-  stderr?: string;
+  stdout?: unknown;
+  stderr?: unknown;
   exit_code?: number;
 }
 
@@ -21,6 +21,31 @@ function isShellOutput(value: unknown): value is ShellOutputShape {
   if (value == null || typeof value !== 'object') return false;
   const o = value as Record<string, unknown>;
   return 'exit_code' in o;
+}
+
+/** Decode a bytes-like value to a UTF-8 string for display.
+ *  Handles tagged base64 `{ $baml: { type: "$bytes" }, base64: "..." }`,
+ *  native Uint8Array, and string fallback. */
+function decodeBytes(bytes: unknown): string {
+  if (bytes == null) return '';
+  // Tagged base64 from JSON round-trip through worker
+  if (typeof bytes === 'object' && !Array.isArray(bytes)) {
+    const obj = bytes as Record<string, unknown>;
+    const baml = obj.$baml as Record<string, unknown> | undefined;
+    if (baml?.type === '$bytes' && typeof obj.base64 === 'string') {
+      const binary = atob(obj.base64);
+      const arr = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+      return new TextDecoder('utf-8', { fatal: false }).decode(arr);
+    }
+  }
+  // Native Uint8Array (direct protobuf path)
+  if (bytes instanceof Uint8Array) {
+    return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  }
+  // Fallback: if it's somehow a string already
+  if (typeof bytes === 'string') return bytes;
+  return '';
 }
 
 /** Compact description for inline mode: "shell exit 0. stdout: 5 lines." */
@@ -80,8 +105,8 @@ export const ShellOutputRenderer: FC<ResultRendererProps> = ({ value, displayMod
 
   const ok = shell.exit_code === 0;
   const code = shell.exit_code ?? -1;
-  const stdout = (shell.stdout ?? '').replace(/\n$/, '');
-  const stderr = (shell.stderr ?? '').replace(/\n$/, '');
+  const stdout = decodeBytes(shell.stdout).replace(/\n$/, '');
+  const stderr = decodeBytes(shell.stderr).replace(/\n$/, '');
   const summary = inlineSummary(code, stdout, stderr);
 
   // ── Inline mode (event log rows) ──────────────────────────────────
