@@ -14,6 +14,11 @@ class Address(pydantic.BaseModel):
     zip: typing.Union[str, None]
 
 
+class Box(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    item: typing.Union[None, None]
+
+
 class PhoneNumber(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     country_code: typing.Union[int, None]
@@ -32,6 +37,7 @@ class Resume(pydantic.BaseModel):
 
 __all__ = [
     "Address",
+    "Box",
     "PhoneNumber",
     "Resume",
 ]

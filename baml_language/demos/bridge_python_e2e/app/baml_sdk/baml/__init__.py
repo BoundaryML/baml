@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from . import errors, fs, http, llm, media, net, panics, stream
+from . import errors, fs, glob, http, llm, media, net, panics, stream
 
 import typing
 import pydantic
@@ -9,6 +9,66 @@ from baml.baml_core import (
     define_instance_method as _define_instance_method,
     define_static_method as _define_static_method,
 )
+
+
+E = typing.TypeVar("E")
+K = typing.TypeVar("K")
+T = typing.TypeVar("T")
+U = typing.TypeVar("U")
+V = typing.TypeVar("V")
+
+
+class Array(pydantic.BaseModel, typing.Generic[T]):
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    length       = _define_instance_method("baml.Array.length", "sync",  ["self"])
+    length_async = _define_instance_method("baml.Array.length", "async", ["self"])
+
+    at       = _define_instance_method("baml.Array.at", "sync",  ["self", "index"])
+    at_async = _define_instance_method("baml.Array.at", "async", ["self", "index"])
+
+    push       = _define_instance_method("baml.Array.push", "sync",  ["self", "item"])
+    push_async = _define_instance_method("baml.Array.push", "async", ["self", "item"])
+
+    pop       = _define_instance_method("baml.Array.pop", "sync",  ["self"])
+    pop_async = _define_instance_method("baml.Array.pop", "async", ["self"])
+
+    concat       = _define_instance_method("baml.Array.concat", "sync",  ["self", "other"])
+    concat_async = _define_instance_method("baml.Array.concat", "async", ["self", "other"])
+
+    reverse       = _define_instance_method("baml.Array.reverse", "sync",  ["self"])
+    reverse_async = _define_instance_method("baml.Array.reverse", "async", ["self"])
+
+    slice       = _define_instance_method("baml.Array.slice", "sync",  ["self", "start", "end"])
+    slice_async = _define_instance_method("baml.Array.slice", "async", ["self", "start", "end"])
+
+    join       = _define_instance_method("baml.Array.join", "sync",  ["self", "separator"])
+    join_async = _define_instance_method("baml.Array.join", "async", ["self", "separator"])
+
+    map       = _define_instance_method("baml.Array.map", "sync",  ["self", "f"])
+    map_async = _define_instance_method("baml.Array.map", "async", ["self", "f"])
+
+
+class Map(pydantic.BaseModel, typing.Generic[K, V]):
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    length       = _define_instance_method("baml.Map.length", "sync",  ["self"])
+    length_async = _define_instance_method("baml.Map.length", "async", ["self"])
+
+    has       = _define_instance_method("baml.Map.has", "sync",  ["self", "key"])
+    has_async = _define_instance_method("baml.Map.has", "async", ["self", "key"])
+
+    keys       = _define_instance_method("baml.Map.keys", "sync",  ["self"])
+    keys_async = _define_instance_method("baml.Map.keys", "async", ["self"])
+
+    values       = _define_instance_method("baml.Map.values", "sync",  ["self"])
+    values_async = _define_instance_method("baml.Map.values", "async", ["self"])
+
+    set       = _define_instance_method("baml.Map.set", "sync",  ["self", "key", "value"])
+    set_async = _define_instance_method("baml.Map.set", "async", ["self", "key", "value"])
+
+    get       = _define_instance_method("baml.Map.get", "sync",  ["self", "key"])
+    get_async = _define_instance_method("baml.Map.get", "async", ["self", "key"])
 
 
 class String(pydantic.BaseModel):
@@ -110,6 +170,8 @@ class Uint8Array(pydantic.BaseModel):
 
 
 __all__ = [
+    "Array",
+    "Map",
     "String",
     "Uint8Array",
 ]

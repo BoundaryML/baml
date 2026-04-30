@@ -19,6 +19,11 @@ pub(crate) struct PyClass {
     /// Source pool key, retained for debug / routing.
     #[allow(dead_code)]
     pub(crate) source: Name,
+    /// `TypeVar` names declared on this class. Empty for non-generic
+    /// classes. When populated, the class line gets a
+    /// `typing.Generic[T, …]` second base and the leaf-level `TypeVar`
+    /// declarations include each name.
+    pub(crate) generic_params: Vec<String>,
     /// Class fields, in IR declaration order. Field names are emitted
     /// verbatim per 09b §5 ("agent-friendly" naming).
     pub(crate) properties: Vec<PyClassProperty>,

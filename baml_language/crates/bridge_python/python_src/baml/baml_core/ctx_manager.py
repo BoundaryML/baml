@@ -19,7 +19,7 @@ import threading
 import typing
 from typing import Any, Dict
 
-from .baml_core import BamlRuntime, HostSpanManager
+from .baml_py import BamlRuntime, HostSpanManager
 
 F = typing.TypeVar("F", bound=typing.Callable[..., typing.Any])
 
@@ -189,7 +189,7 @@ class CtxManager:
         Delegates to the global publisher thread in bex_events which
         handles BAML_TRACE_FILE internally.
         """
-        from .baml_core import flush_events
+        from .baml_py import flush_events
 
         flush_events()
 

@@ -35,6 +35,21 @@ class File(pydantic.BaseModel):
     write_bytes_async = _define_instance_method("baml.fs.File.write_bytes", "async", ["self", "data"])
 
 
+class DirEntry(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    name: str
+    is_dir: bool
+    is_file: bool
+    is_symlink: bool
+
+
+class MkdirOptions(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    recursive: bool
+
+
 __all__ = [
     "File",
+    "DirEntry",
+    "MkdirOptions",
 ]

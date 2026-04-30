@@ -24,7 +24,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 python-source = "python_src"
-module-name = "baml.baml_core.baml_core"
+module-name = "baml.baml_core.baml_py"
 features = ["pyo3/extension-module"]
 include = [{ path = "python_src/baml/py.typed", format = ["sdist", "wheel"] }]
 

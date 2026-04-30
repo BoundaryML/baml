@@ -26,15 +26,16 @@ pub struct Origin {
 
 pub struct Function {
     pub name: baml_base::Name,
+    /// `TypeVar`s declared on this function. Empty for non-generic functions.
+    /// Mirrors AST `FunctionDef.generic_params`. Inner `Ty::TypeVar`
+    /// references in `arguments` / `return_type` resolve against this list.
+    pub generic_params: Vec<baml_base::Name>,
     pub docstring: Option<String>,
     pub arguments: Vec<FunctionArgument>,
     pub return_type: super::Ty,
 
     // TODO: add other APIs here that impact code-gen
     pub watchers: Vec<(baml_base::Name, super::Ty)>,
-
-    /// Companion functions attached to this function (e.g. `build_request`, `parse`).
-    pub companions: Vec<(String, Function)>,
 
     /// Source-origin info: the defining `.baml` file and byte span start.
     /// Used by the emitter to order symbols deterministically within a leaf.
@@ -49,6 +50,10 @@ pub struct FunctionArgument {
 
 pub struct Class {
     pub name: super::Name,
+    /// `TypeVar`s declared on this class. Empty for non-generic classes.
+    /// Mirrors AST `ClassDef.generic_params`. Inner `Ty::TypeVar`
+    /// references in `properties` / methods resolve against this list.
+    pub generic_params: Vec<baml_base::Name>,
     pub docstring: Option<String>,
     pub properties: Vec<ClassProperty>,
     /// Static methods on this class. Source-declaration order is
@@ -117,9 +122,6 @@ impl Function {
             .map(|args| args.ty.validate())
             .collect::<Result<Vec<_>, _>>()?;
         self.return_type.validate()?;
-        for (_, companion) in &self.companions {
-            companion.validate()?;
-        }
 
         Ok(())
     }
@@ -129,11 +131,6 @@ impl Function {
             .iter()
             .flat_map(|args| args.ty.walk_all_unions().into_iter())
             .chain(self.return_type.walk_all_unions())
-            .chain(
-                self.companions
-                    .iter()
-                    .flat_map(|(_, c)| c.walk_all_unions().into_iter()),
-            )
             .collect()
     }
 }
@@ -190,13 +187,18 @@ impl super::Ty {
             | Ty::Unit
             | Ty::Uint8Array
             | Ty::Media(_)
-            | Ty::Class(_)
             | Ty::Enum(_)
             | Ty::TypeAlias(_)
+            | Ty::TypeVar(_)
             | Ty::BuiltinUnknown
             // Unions are guaranteed to not have unions thanks to .validate()
             | Ty::Union(_)
             | Ty::Literal(_) => {}
+            Ty::Class(_, args) => {
+                for a in args {
+                    unions.extend(a.walk_all_unions());
+                }
+            }
             Ty::Optional(ty) | Ty::List(ty) | Ty::Map { key: _, value: ty } => {
                 unions.extend(ty.walk_all_unions());
             }
