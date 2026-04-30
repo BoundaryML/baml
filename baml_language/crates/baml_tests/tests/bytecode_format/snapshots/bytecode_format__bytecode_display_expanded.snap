@@ -4,7 +4,7 @@ source: crates/baml_tests/tests/bytecode_format/main.rs
 function assert.contains(haystack: string, needle: string) -> null {
   28   0    load_var 1             (haystack)
        1    load_var 2             (needle)
-       2    call 32                (baml.String.includes)
+       2    call 33                (baml.String.includes)
        3    unary_op !             
        4    pop_jump_if_false +2   (to 6)
        5    jump +3                (to 8)
@@ -14,7 +14,7 @@ function assert.contains(haystack: string, needle: string) -> null {
   28   7    jump +3                (to 10)
 
   29   8    load_const 1           ("assertion failed: string does not contain expected substring")
-       9    call 66                (baml.sys.panic)
+       9    call 67                (baml.sys.panic)
        10   return                 
 }
 
@@ -30,7 +30,7 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
   20   6   jump +3                (to 9)
 
   21   7   load_const 1           ("assertion failed: expected equal values")
-       8   call 66                (baml.sys.panic)
+       8   call 67                (baml.sys.panic)
        9   return                 
 }
 
@@ -45,7 +45,7 @@ function assert.is_true(condition: bool) -> null {
   4   5   jump +3                (to 8)
 
   5   6   load_const 1           ("assertion failed: expected true")
-      7   call 66                (baml.sys.panic)
+      7   call 67                (baml.sys.panic)
       8   return                 
 }
 
@@ -61,7 +61,7 @@ function assert.not_null(value: unknown?) -> null {
   12   6   jump +3                (to 9)
 
   13   7   load_const 1           ("assertion failed: expected non-null value")
-       8   call 66                (baml.sys.panic)
+       8   call 67                (baml.sys.panic)
        9   return                 
 }
 
@@ -213,7 +213,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
        78   load_var 10            (t)
        79   load_field 0           (name)
        80   load_var 7             (hash_prefix)
-       81   call 33                (baml.String.startsWith)
+       81   call 34                (baml.String.startsWith)
        82   pop_jump_if_false +5   (to 87)
        83   load_var 6             (count)
        84   load_const 5           (1)
@@ -317,7 +317,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
        78   load_var 10            (ts)
        79   load_field 0           (name)
        80   load_var 7             (hash_prefix)
-       81   call 33                (baml.String.startsWith)
+       81   call 34                (baml.String.startsWith)
        82   pop_jump_if_false +5   (to 87)
        83   load_var 6             (count)
        84   load_const 5           (1)
@@ -380,7 +380,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         38    load_var 11            (k)
         39    load_const 2           ("/")
         40    bin_op +               
-        41    call 33                (baml.String.startsWith)
+        41    call 34                (baml.String.startsWith)
         42    pop_jump_if_false +2   (to 44)
         43    jump +6                (to 49)
 
@@ -413,7 +413,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         66    store_var 4            (__for_idx)
         67    jump -61               (to 6)
 
-  147   68    call 71                (baml.sys.now_ms)
+  147   68    call 65                (baml.sys.now_ms)
         69    store_var 6            (start)
 
   148   70    alloc_instance 129     (testing.TestCollector)
@@ -431,7 +431,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         81    call_indirect          
         82    pop 1                  
 
-  150   83    call 71                (baml.sys.now_ms)
+  150   83    call 65                (baml.sys.now_ms)
         84    store_var 8            (_19)
 
   156   85    load_var 1             (self)
@@ -519,7 +519,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         38   load_var 8             (k)
         39   load_const 2           ("/")
         40   bin_op +               
-        41   call 33                (baml.String.startsWith)
+        41   call 34                (baml.String.startsWith)
 
   133   42   pop_jump_if_false +2   (to 44)
         43   jump +6                (to 49)
