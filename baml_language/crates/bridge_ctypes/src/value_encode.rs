@@ -358,11 +358,15 @@ mod tests {
     }
 
     #[test]
-    fn rust_data_unknown_type_returns_error() {
+    fn rust_data_unknown_type_returns_fallback_string() {
         let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
         let value = BexExternalValue::RustData(unknown);
         let options = HandleTableOptions::for_in_process();
         let result = external_to_baml_value(&value, &options);
-        assert!(result.is_err());
+        let value = result.unwrap().value;
+        assert_eq!(
+            value,
+            Some(BamlValueVariant::StringValue("<native handle>".to_string()))
+        );
     }
 }
