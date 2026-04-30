@@ -496,7 +496,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           if (pending) {
             pendingCallsRef.current.delete(data.id);
             try {
-              pending.resolve(JSON.parse(data.result));
+              // Worker sends JSON string, WebSocketRuntimePort sends pre-decoded object
+              const resolved = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+              pending.resolve(resolved);
             } catch (e) {
               pending.reject(
                 e instanceof Error ? e : new Error(`Failed to parse callFunctionResult for ${data.id}`),
