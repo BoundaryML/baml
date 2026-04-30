@@ -7,17 +7,17 @@ const ACCENT = '#6D28D9';
 const DASH = 'rgba(109, 40, 217, 0.35)';
 
 const LEFT = [
-  'schema-aware prompts',
-  'type safety',
-  'multi-language codegen',
-  'retries & fallbacks',
+  'schema aware parsing',
+  'tagged union match dispatch',
+  'typed throw and catch',
+  'generics, lambdas, namespaces',
 ];
 
 const RIGHT = [
-  'schema repair',
-  'streaming',
-  'tests & playground',
-  'LSP & autocomplete',
+  'compiles to BexVM bytecode',
+  'incremental Salsa compiler',
+  'inline testset blocks',
+  'LSP that feels like rust-analyzer',
 ];
 
 export function WhyALanguage() {
@@ -123,7 +123,7 @@ export function WhyALanguage() {
               margin: 0,
             }}
           >
-            Engineering, not magic.
+            Just engineering.
           </p>
         </div>
       </div>

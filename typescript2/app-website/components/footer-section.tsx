@@ -20,7 +20,7 @@ export function FooterSection() {
             <p className="text-xl font-semibold text-primary">Boundary</p>
           </Link>
           <p className="tracking-tight text-muted-foreground font-medium">
-            Statically-typed, expression-oriented, first-class LLM functions.
+            A programming language for agents. They write it. They run in it.
           </p>
           <div className="flex items-center gap-2 dark:hidden">
             {/* <Icons.soc2 className="size-12" /> */}
