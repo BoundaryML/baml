@@ -750,8 +750,8 @@ async fn run_process(
         let duration = std::time::Duration::from_millis(ms.max(0).cast_unsigned());
         // Spawn the wait in a separate task so we can kill regardless of ownership
         let task_child = child;
-        let wait_task = tokio::spawn(async move { task_child.wait_with_output().await });
-        match tokio::time::timeout(duration, wait_task).await {
+        let mut wait_task = tokio::spawn(async move { task_child.wait_with_output().await });
+        match tokio::time::timeout(duration, &mut wait_task).await {
             Ok(Ok(result)) => result.map_err(|e| OpErrorKind::Io {
                 message: format!("Failed to wait on '{label}': {e}"),
             })?,
@@ -761,6 +761,8 @@ async fn run_process(
                 });
             }
             Err(_elapsed) => {
+                // Abort the task so task_child is dropped, triggering kill_on_drop
+                wait_task.abort();
                 return Err(OpErrorKind::Timeout {
                     message: format!("Command '{label}' timed out after {ms}ms"),
                     duration,
