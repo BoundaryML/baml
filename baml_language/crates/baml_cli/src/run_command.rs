@@ -164,7 +164,7 @@ pub enum OutputFormat {
 impl RunArgs {
     fn emit_format_hint_if_needed(needs_format_hint: bool) {
         if needs_format_hint {
-            println!("{FORMAT_HINT}");
+            eprintln!("{FORMAT_HINT}");
         }
     }
 
