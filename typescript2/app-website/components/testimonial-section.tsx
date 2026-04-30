@@ -42,17 +42,39 @@ export function TestimonialSection() {
       </SectionHeader>
       <SocialProofTestimonials testimonials={testimonials} />
       <div className="mt-8 flex justify-center">
-        <Button asChild className="gap-2" size="lg" variant="outline">
-          <a
-            href="https://github.com/BoundaryML/site/issues/new?template=testimonial.yml"
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            <Github className="h-4 w-4" />
-            Share your story
-          </a>
-        </Button>
+        <a
+          href="https://github.com/BoundaryML/site/issues/new?template=testimonial.yml"
+          rel="noopener noreferrer"
+          target="_blank"
+          className="editorial-btn"
+        >
+          <Github className="h-4 w-4" />
+          Share your story
+        </a>
       </div>
+      <style>{`
+        .editorial-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 22px;
+          border-radius: 8px;
+          background: #ffffff;
+          color: #1A1612;
+          border: 1px solid #D9D3C4;
+          font-size: 14px;
+          font-weight: 500;
+          letter-spacing: 0.01em;
+          text-decoration: none;
+          transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, transform 200ms ease;
+        }
+        .editorial-btn:hover {
+          background: #FBF8F1;
+          border-color: #6D28D9;
+          color: #6D28D9;
+          transform: translateY(-1px);
+        }
+      `}</style>
     </section>
   );
 }

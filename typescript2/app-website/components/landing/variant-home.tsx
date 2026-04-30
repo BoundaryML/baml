@@ -212,8 +212,6 @@ const customStyles = {
   },
   container: {
     backgroundColor: '#ffffff',
-    borderLeft: '1px solid #D9D3C4',
-    borderRight: '1px solid #D9D3C4',
     color: '#1A1612',
     display: 'flex',
     flexDirection: 'column',
@@ -221,7 +219,6 @@ const customStyles = {
     lineHeight: '1.5',
     margin: '0 auto',
     maxWidth: '1600px',
-    minHeight: '100vh',
     width: '100%',
   } as React.CSSProperties,
   ctaContainer: {

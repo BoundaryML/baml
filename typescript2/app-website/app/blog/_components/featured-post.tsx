@@ -1,104 +1,253 @@
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowRight, Clock, Tag } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Card } from '@/components/ui/card';
 import type { Post } from '../_lib/get-posts';
 import { formatCategoryForDisplay } from './category-filter';
+
+const INK = '#1A1612';
+const MUTED = '#5C5852';
+const BORDER = '#D9D3C4';
+const ACCENT = '#6D28D9';
+const EYEBROW = '#8A8580';
+const CARD_BG = '#FBF8F1';
 
 interface FeaturedPostProps {
   post: Post;
 }
 
 export function FeaturedPost({ post }: FeaturedPostProps) {
-  // Use og.image, then firstImage, then fallback to default
   const postImage = post.og?.image || post.firstImage;
 
   return (
-    <Link href={`/blog/${post.slug}`}>
-      <Card className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow h-96 pt-0 relative group">
-        {/* Background Image */}
-        <div className="absolute inset-0">
+    <Link
+      href={`/blog/${post.slug}`}
+      style={{
+        textDecoration: 'none',
+        color: 'inherit',
+        display: 'block',
+      }}
+      className="blog-featured-card"
+    >
+      <article
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr)',
+          gap: 0,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 8,
+          overflow: 'hidden',
+          background: '#ffffff',
+          transition: 'box-shadow 200ms ease, transform 200ms ease',
+        }}
+        className="blog-featured-grid"
+      >
+        <div
+          style={{
+            position: 'relative',
+            aspectRatio: '16 / 10',
+            background: postImage
+              ? CARD_BG
+              : 'linear-gradient(135deg, #4C1D95 0%, #6D28D9 45%, #8B5CF6 100%)',
+            borderRight: `1px solid ${BORDER}`,
+            overflow: 'hidden',
+          }}
+          className="blog-featured-image"
+        >
           {postImage ? (
             <Image
               alt={post.title}
-              className="object-cover w-full h-full blur-[2px] group-hover:blur-none transition-all duration-300"
+              className="object-cover"
               fill
               priority
-              sizes="100vw"
+              sizes="(max-width: 900px) 100vw, 60vw"
               src={postImage}
+              style={{ objectFit: 'cover' }}
             />
           ) : (
-            <Image
-              alt="BAML Background"
-              className="object-cover w-full h-full"
-              fill
-              priority
-              sizes="100vw"
-              src="/baml-og-background.png"
-            />
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'rgba(255,255,255,0.85)',
+                fontFamily: 'var(--font-serif)',
+                fontStyle: 'italic',
+                fontSize: 'clamp(2.5rem, 5vw, 4rem)',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              BAML
+            </div>
           )}
-          {/* Gradient overlay - darker at bottom for text readability */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/70 to-black/40 transition-all duration-300" />
         </div>
 
-        {/* Glassmorphism Card Content */}
-        <div className="relative z-10 h-full flex flex-col justify-between p-8">
-          <div className="flex-1">
-            {/* Category and Meta Info */}
-            <div className="flex items-center gap-4 text-sm text-white/80 mb-4">
-              <span className="flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-white/20 backdrop-blur-sm border border-white/20">
-                <Tag className="h-4 w-4" />
-                {formatCategoryForDisplay(post.tags[0])}
+        <div
+          style={{
+            padding: '40px 36px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            gap: 24,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                marginBottom: 16,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: ACCENT,
+                }}
+              >
+                Featured
               </span>
-
-              <span className="flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                {post.readingTime}
+              <span
+                style={{
+                  width: 4,
+                  height: 4,
+                  borderRadius: '50%',
+                  background: BORDER,
+                }}
+              />
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: EYEBROW,
+                }}
+              >
+                {formatCategoryForDisplay(post.tags[0])}
               </span>
             </div>
 
-            {/* Title */}
-            <h2 className="text-3xl font-bold mb-4 line-clamp-2 text-white">
+            <h2
+              style={{
+                fontSize: 'clamp(1.5rem, 2.5vw, 2.1rem)',
+                fontWeight: 600,
+                lineHeight: 1.15,
+                letterSpacing: '-0.02em',
+                margin: 0,
+                color: INK,
+              }}
+            >
               {post.title}
             </h2>
 
-            {/* Description */}
-            <p className="text-white/80 line-clamp-3">{post.description}</p>
+            <p
+              style={{
+                fontSize: 16,
+                lineHeight: 1.6,
+                color: MUTED,
+                margin: '16px 0 0',
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              {post.description}
+            </p>
           </div>
 
-          {/* Bottom Section */}
-          <div className="flex items-center justify-between mt-6">
-            <div className="flex items-center gap-3">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingTop: 20,
+              borderTop: `1px solid ${BORDER}`,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               {post.author?.imageUrl && (
-                <div className="relative size-12 rounded-full overflow-hidden border-2 border-white/20">
+                <div
+                  style={{
+                    position: 'relative',
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    overflow: 'hidden',
+                    border: `1px solid ${BORDER}`,
+                  }}
+                >
                   <Image
                     alt={post.author.name}
                     className="object-cover"
                     fill
-                    sizes="48px"
+                    sizes="36px"
                     src={post.author.imageUrl}
+                    style={{ objectFit: 'cover' }}
                   />
                 </div>
               )}
-              <div className="flex flex-col">
-                <span className="text-sm text-white/80">
-                  By {post.author?.name}
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: INK,
+                  }}
+                >
+                  {post.author?.name}
                 </span>
-                <span className="text-xs text-white/60">
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: EYEBROW,
+                  }}
+                >
                   {formatDistanceToNow(new Date(post.date), {
                     addSuffix: true,
                   })}
+                  {' · '}
+                  {post.readingTime}
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
-              <span className="text-sm">Read More</span>
-              <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-            </div>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 13,
+                fontWeight: 500,
+                color: INK,
+              }}
+              className="blog-featured-cta"
+            >
+              Read
+              <ArrowRight size={14} />
+            </span>
           </div>
         </div>
-      </Card>
+      </article>
+
+      <style>{`
+        .blog-featured-card:hover article {
+          box-shadow: 0 18px 48px -24px rgba(0,0,0,0.18);
+          transform: translateY(-2px);
+        }
+        .blog-featured-card:hover .blog-featured-cta { color: ${ACCENT}; }
+        @media (max-width: 900px) {
+          .blog-featured-grid { grid-template-columns: 1fr !important; }
+          .blog-featured-image { border-right: none !important; border-bottom: 1px solid ${BORDER}; }
+        }
+      `}</style>
     </Link>
   );
 }

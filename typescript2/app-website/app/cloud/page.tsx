@@ -7,7 +7,7 @@ import { Cloud, Shield, Zap, Globe, Lock, Settings } from 'lucide-react';
 
 export default function CloudPage() {
   return (
-    <div className="max-w-7xl mx-auto border-x relative">
+    <div className="max-w-7xl mx-auto relative">
       <Navbar />
       <main className="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full">
         {/* Hero Section */}

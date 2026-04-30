@@ -45,9 +45,18 @@ export default async function BlogPage() {
   const posts = await getPosts();
 
   return (
-    <div className="max-w-7xl mx-auto border-x relative">
+    <div
+      style={{
+        background: '#ffffff',
+        color: '#1A1612',
+        width: '100%',
+        maxWidth: 1600,
+        margin: '0 auto',
+        minHeight: '100vh',
+      }}
+    >
       <Navbar />
-      <main className="flex flex-col items-center justify-center min-h-screen w-full">
+      <main>
         <BlogContent initialPosts={posts} />
         <FooterSection />
       </main>

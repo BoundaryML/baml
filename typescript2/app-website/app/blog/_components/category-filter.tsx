@@ -1,7 +1,5 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-
 const categories = [
   'All',
   'Announcements',
@@ -11,24 +9,15 @@ const categories = [
   'LaunchWeek',
 ];
 
+const INK = '#1A1612';
+const MUTED = '#5C5852';
+const BORDER = '#D9D3C4';
+const ACCENT = '#6D28D9';
+const CARD_BG = '#FBF8F1';
+
 const getCategoryStyles = (category: string) => {
-  // Convert tag to camelCase format for style lookup
-  const normalizeCategory = (cat: string) => {
-    if (cat.toLowerCase() === 'launch week') return 'LaunchWeek';
-    return cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase();
-  };
-
-  const normalizedCategory = normalizeCategory(category);
-
-  const styles = {
-    All: { backgroundColor: '#f1f5f9', color: '#1e293b' },
-    Announcements: { backgroundColor: '#dbeafe', color: '#1e40af' },
-    Engineering: { backgroundColor: '#fed7aa', color: '#ea580c' },
-    LaunchWeek: { backgroundColor: '#fce7f3', color: '#be185d' },
-    Research: { backgroundColor: '#f3e8ff', color: '#7c3aed' },
-    Tutorials: { backgroundColor: '#dcfce7', color: '#166534' },
-  };
-  return styles[normalizedCategory as keyof typeof styles] || styles['All'];
+  // Retained for legacy callers — returns subtle accent style.
+  return { backgroundColor: ACCENT, color: '#ffffff' };
 };
 
 const formatCategoryForDisplay = (category: string) => {
@@ -47,23 +36,50 @@ export function CategoryFilter({
   onCategoryChange,
 }: CategoryFilterProps) {
   return (
-    <div className="w-full">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {categories.map((category) => (
-          <Button
-            className="rounded-lg whitespace-nowrap border transition-all duration-200 hover:scale-105"
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 8,
+      }}
+    >
+      {categories.map((category) => {
+        const active = category === selectedCategory;
+        return (
+          <button
+            type="button"
             key={category}
             onClick={() => onCategoryChange(category)}
-            size="sm"
-            style={
-              category === selectedCategory ? getCategoryStyles(category) : {}
-            }
-            variant="ghost"
+            style={{
+              padding: '8px 14px',
+              fontSize: 13,
+              fontWeight: 500,
+              letterSpacing: '0.01em',
+              color: active ? '#ffffff' : INK,
+              background: active ? ACCENT : '#ffffff',
+              border: `1px solid ${active ? ACCENT : BORDER}`,
+              borderRadius: 999,
+              cursor: 'pointer',
+              transition:
+                'background-color 200ms ease, color 200ms ease, border-color 200ms ease',
+            }}
+            onMouseEnter={(e) => {
+              if (!active) {
+                e.currentTarget.style.backgroundColor = CARD_BG;
+                e.currentTarget.style.color = INK;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!active) {
+                e.currentTarget.style.backgroundColor = '#ffffff';
+                e.currentTarget.style.color = INK;
+              }
+            }}
           >
             {formatCategoryForDisplay(category)}
-          </Button>
-        ))}
-      </div>
+          </button>
+        );
+      })}
     </div>
   );
 }

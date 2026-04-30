@@ -12,7 +12,11 @@ export function FooterSection() {
   const fontSize = mobile ? 70 : tablet ? 90 : 160;
 
   return (
-    <footer className="w-full pb-0" id="footer">
+    <footer
+      className="w-full pb-0 flex flex-col"
+      id="footer"
+      style={{ height: '100vh' }}
+    >
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,320px)_1fr] gap-y-10 md:gap-x-16 p-10 items-start">
         <div className="flex flex-col items-start gap-y-5 max-w-xs mx-0">
           <Link className="flex items-center gap-2" href="/">
@@ -56,21 +60,19 @@ export function FooterSection() {
           </div>
         </div>
       </div>
-      <div className="relative w-full h-[120vh] z-0">
-        <div className="sticky top-0 h-screen w-full overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-t from-transparent to-background z-10 from-40%" />
-          <div className="absolute inset-0 mx-6">
-            <FlickeringGrid
-              className="h-full w-full"
-              color="#6B7280"
-              flickerChance={0.1}
-              fontSize={fontSize}
-              gridGap={tablet ? 2 : 3}
-              maxOpacity={0.3}
-              squareSize={2}
-              text={'Boundary'}
-            />
-          </div>
+      <div className="relative w-full flex-1 min-h-0 z-0 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-t from-transparent to-background z-10 from-40%" />
+        <div className="absolute inset-0 mx-6">
+          <FlickeringGrid
+            className="h-full w-full"
+            color="#6B7280"
+            flickerChance={0.1}
+            fontSize={fontSize}
+            gridGap={tablet ? 2 : 3}
+            maxOpacity={0.3}
+            squareSize={2}
+            text={'Boundary'}
+          />
         </div>
       </div>
     </footer>

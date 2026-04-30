@@ -9,15 +9,15 @@ const DASH = 'rgba(109, 40, 217, 0.35)';
 const LEFT = [
   'schema aware parsing',
   'tagged union match dispatch',
-  'typed throw and catch',
+  'typed errors and retries',
   'generics, lambdas, namespaces',
 ];
 
 const RIGHT = [
-  'compiles to BexVM bytecode',
-  'incremental Salsa compiler',
-  'inline testset blocks',
-  'LSP that feels like rust-analyzer',
+  'compiles to python, typescript, ruby, go',
+  'streaming with typed partials',
+  'one interface, every llm provider',
+  'tests live next to your prompts',
 ];
 
 export function WhyALanguage() {
@@ -39,10 +39,8 @@ export function WhyALanguage() {
         className="mx-auto"
         style={{
           maxWidth: '1600px',
-          borderLeft: `1px solid ${BORDER}`,
-          borderRight: `1px solid ${BORDER}`,
           borderBottom: `1px solid ${BORDER}`,
-          padding: '40px 48px 120px',
+          padding: '99px 48px 132px',
         }}
       >
         <div className="mx-auto flex w-full max-w-[900px] flex-col items-center text-center">
