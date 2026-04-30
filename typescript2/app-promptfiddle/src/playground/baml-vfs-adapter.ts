@@ -25,7 +25,7 @@ interface WasmVfsLike {
   removeFile(path: string): void;
   removeDir(path: string): void;
   metadata(path: string): {
-    file_type: "file" | "directory";
+    file_type: string;
     len: number;
     created: number | undefined;
     modified: number | undefined;
@@ -113,7 +113,7 @@ export class BamlVfsAdapter implements IFileSystem {
   }
 
   async rm(path: string, opts?: RmOptions): Promise<void> {
-    let meta: { file_type: "file" | "directory" } | null = null;
+    let meta: { file_type: string } | null = null;
     try {
       meta = this.vfs.metadata(path);
     } catch {
@@ -133,7 +133,7 @@ export class BamlVfsAdapter implements IFileSystem {
 
   async mv(src: string, dest: string): Promise<void> {
     // Try file first, fall back to directory
-    let meta: { file_type: "file" | "directory" } | null = null;
+    let meta: { file_type: string } | null = null;
     try {
       meta = this.vfs.metadata(src);
     } catch {
