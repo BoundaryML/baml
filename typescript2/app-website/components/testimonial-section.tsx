@@ -37,7 +37,7 @@ export function TestimonialSection() {
             margin: '16px 0 0',
           }}
         >
-          Typed prompt boundaries for structured-output LLM work.
+          Agents write it. Teams ship with it.
         </p>
       </SectionHeader>
       <SocialProofTestimonials testimonials={testimonials} />

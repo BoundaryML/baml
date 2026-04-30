@@ -124,38 +124,38 @@ export const siteConfig = {
   ],
   bentoSection: {
     description:
-      'BAML supplies typed prompt boundaries: define a class, write a Jinja-templated prompt, get a typed result.',
+      'BAML compiles to bytecode for the Bex VM. The compiler is incremental like rust-analyzer. The stdlib is written in BAML. Built so agents can write it as fluently as they run in it.',
     items: [
       {
         content: <FirstBentoAnimation />,
         description:
-          'An LLM function is a function with a named client and prompt in its body. The return type drives structured-output parsing.',
+          'TypeScript shaped surface. Optional chaining, null coalescing, struct literals, expression style if and match. LLMs author BAML at the speed they author TypeScript. Two hackathon teams shipped roughly 6,000 lines of valid BAML across nine independent agent projects.',
         id: 1,
-        title: 'First-Class LLM Functions',
+        title: 'Agents write BAML fluently',
       },
       {
         content: <SecondBentoAnimation />,
         description:
-          'Define a class, write a Jinja prompt, and get a typed result. The intended use case works.',
+          'Each tool is a class. The agent function returns a tagged union of those classes. match dispatches to handlers. No JSON schema bookkeeping. Adding a tool is one class plus one match arm. The agent loop is just a while loop in main().',
         id: 2,
-        title: 'Structured LLM Outputs',
+        title: 'The agent is the program',
       },
       {
         content: <ThirdBentoAnimation />,
         description:
-          'testset / test / assert.* blocks are fast, low-ceremony, and read like documentation.',
+          'An LLM function is just a function with a named client and a Jinja prompt. The return type drives schema aware parsing. Four companions get synthesized for free: render_prompt, build_request, parse, parse_stream.',
         id: 3,
-        title: 'Tests Live With Prompts',
+        title: 'First class LLM functions',
       },
       {
         content: <FourthBentoAnimation once={false} />,
         description:
-          'Use throw classes and typed catch as the error idiom. catch_all is exhaustive; panics stay special.',
+          'testset blocks live next to the code they exercise. Generate tests at compile time with for loops. Run them in the playground or CI. 128 tests in 12 seconds is the kind of inner loop that lets an agent iterate fast.',
         id: 4,
-        title: 'Typed Catch',
+        title: 'Inline tests as a language feature',
       },
     ],
-    title: 'Built for typed prompt boundaries',
+    title: 'A programming language for agents',
   },
   companyShowcase: {
     companyLogos: [
@@ -189,24 +189,25 @@ export const siteConfig = {
       text: 'Book a meeting with us',
     },
     id: 'cta',
-    subtext: 'Start with first-class LLM functions in minutes',
-    title: 'Typed prompt boundaries',
+    subtext:
+      'Statically typed, Turing complete, with a custom VM and schema aware parsing. Agents write it. Agents run in it.',
+    title: 'A language for agents.',
   },
   description:
-    'BAML is a statically-typed, expression-oriented language with first-class LLM functions.',
+    'BAML is a statically typed, Turing complete programming language with first class LLM functions, a custom VM, and schema aware parsing. Agents write BAML fluently and run in BAML cleanly.',
   faqSection: {
     description:
       "Answers to common questions about BAML and its features. If you have any other questions, please don't hesitate to contact us.",
     faQitems: [
       {
         answer:
-          'BAML is a statically-typed, expression-oriented language with first-class LLM functions. Files use the .baml extension, and an LLM function is a function with a named client and Jinja-templated prompt in its body.',
+          'BAML is a statically typed, Turing complete programming language with first class LLM functions, a custom VM (BexVM), an incremental query based compiler, namespaces, generics, lambdas, schema aware parsing, tagged union tool dispatch, and a stdlib that covers filesystem, HTTP, shell, env, and embeddings.',
         id: 1,
         question: 'What is BAML?',
       },
       {
         answer:
-          'BAML supplies typed prompt boundaries. Define a class, write a Jinja prompt, and get a typed result. The return type drives structured-output parsing, and the generated clients let you call that LLM function from your existing app.',
+          'You write the whole workflow in one .baml file. Define classes for your data and tools. Write LLM functions with a named client and a Jinja prompt. Dispatch tools with match. Run testset blocks next to the code. Compile to bytecode. The agent is just a while loop calling a BAML function whose return type is a tagged union of tool classes.',
         id: 2,
         question: 'How does BAML work?',
       },
@@ -230,7 +231,7 @@ export const siteConfig = {
       },
       {
         answer:
-          'BAML is strongest at structured-output LLM boundaries: extraction, classification, typed deserialization, and chained LLM functions. The cliff is steep when you leave that boundary and try to make it a general agentic orchestration language.',
+          'BAML is strongest where the program shape and the agent shape line up: typed tool call dispatch, schema aware parsing of model output, structured errors, and inline tests, all in one source file. Multi stage LLM pipelines, tool calling agents, classification and extraction, typed deserialization, RAG over local data. The TypeScript shaped surface also means LLMs author BAML at roughly the speed they author TypeScript, with tight compile diagnostics for fast iteration. The cliff is steeper when you push into systems work like sockets, FFI, and bitwise ops, where the stdlib is still being built out.',
         id: 6,
         question: 'When does BAML shine?',
       },

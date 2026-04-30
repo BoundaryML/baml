@@ -87,20 +87,18 @@ const TrustMarquee = () => (
 );
 
 const ROTATING_WORDS = [
-  'harnessing',
   'writing',
-  'building',
-  'running',
-  'evaluating',
-  'debugging',
+  'testing',
+  'dispatching',
+  'parsing',
   'orchestrating',
   'shipping',
-  'testing',
-  'training',
-  'deploying',
-  'scaling',
-  'securing',
+  'running',
+  'debugging',
+  'evaluating',
   'streaming',
+  'verifying',
+  'deploying',
 ];
 const HOLD_MS = 2200;
 const TRANSITION_MS = 400;
@@ -587,15 +585,14 @@ const HeroSection = () => {
       <div style={customStyles.heroLeft}>
         <div>
           <h1 style={customStyles.h1}>
-            The language
+            A language
             <br />
             for <RotatingWord />
             <br />
             AI.
           </h1>
           <p style={customStyles.p}>
-            BAML is a statically-typed, expression-oriented language for typed
-            prompt boundaries and structured-output AI.
+            Python and Java were built for humans. BAML was built for agents.
           </p>
           <div style={customStyles.ctaContainer}>
             <div className="w-full max-w-xl">
@@ -688,28 +685,28 @@ const HeroSection = () => {
 const FeatureIndex = () => {
   const features = [
     {
-      meta: 'Core',
+      meta: 'Authorship',
       num: '01',
-      title: 'Typescript-inspired type system',
-      version: '1.0',
+      title: 'TypeScript shape, agents write it fluently',
+      version: 'core',
     },
     {
-      meta: 'Core',
+      meta: 'Compiler',
       num: '02',
-      title: 'Type-safe non-viral errors',
-      version: '1.1',
+      title: 'Schema aware parsing (bex_sap)',
+      version: 'core',
+    },
+    {
+      meta: 'Language',
+      num: '03',
+      title: 'Tagged union tool dispatch via match',
+      version: 'core',
     },
     {
       meta: 'Runtime',
-      num: '03',
-      title: 'Semantic grep & parsing',
-      version: '2.0',
-    },
-    {
-      meta: 'System',
       num: '04',
-      title: 'Universal runtime (Python, Rust, JS)',
-      version: '3.0',
+      title: 'Custom VM with epoch based async',
+      version: 'BexVM',
     },
   ];
 
@@ -744,10 +741,10 @@ const StatementSection = () => (
   <section style={customStyles.statementSection}>
     <div style={customStyles.statementText}>
       <p style={customStyles.statementP}>
-        Python and Typescript were built for people.
+        Agents write it. Agents run in it.
       </p>
       <p style={customStyles.statementP}>
-        BAML is an <strong>agent-optimized</strong> programming language.
+        <strong>The agent is the program</strong>.
       </p>
     </div>
     <FeatureIndex />
@@ -765,42 +762,46 @@ const LegacyCodeWindow = () => (
       <div style={customStyles.codeScroll}>
         <pre style={customStyles.pre}>
           <code>
-            <span style={customStyles.kw}>import</span> {'{ OpenAI }'}{' '}
-            <span style={customStyles.kw}>from</span>{' '}
-            <span style={customStyles.st}>'openai'</span>
-            {';'}
+            <span style={customStyles.kw}>type</span>{' '}
+            <span style={customStyles.ty}>Tool</span> ={'\n'}
+            {'  | { kind: '}
+            <span style={customStyles.st}>'answer'</span>
+            {'; text: '}
+            <span style={customStyles.ty}>string</span>
+            {' }'}
             {'\n'}
-            <span style={customStyles.kw}>import</span> {'{ z }'}{' '}
-            <span style={customStyles.kw}>from</span>{' '}
-            <span style={customStyles.st}>'zod'</span>;{'\n'}
+            {'  | { kind: '}
+            <span style={customStyles.st}>'readFile'</span>
+            {'; path: '}
+            <span style={customStyles.ty}>string</span>
+            {' }'}
             {'\n'}
-            <span style={customStyles.kw}>const</span> schema = z.object({'{'}
-            {'\n'} intent: z.enum([
-            <span style={customStyles.st}>'buy'</span>,{' '}
-            <span style={customStyles.st}>'support'</span>]),
-            {'\n'} confidence: z.number()
-            {'\n'}
-            {'}'});
+            {'  | { kind: '}
+            <span style={customStyles.st}>'runBash'</span>
+            {'; cmd: '}
+            <span style={customStyles.ty}>string</span>
+            {' };'}
             {'\n'}
             {'\n'}
             <span style={customStyles.kw}>async function</span>{' '}
-            <span style={customStyles.fn}>analyze</span>(text:{' '}
-            <span style={customStyles.ty}>string</span>) {'{'}
+            <span style={customStyles.fn}>dispatch</span>(t:{' '}
+            <span style={customStyles.ty}>Tool</span>) {'{'}
             {'\n'}{' '}
             <span style={customStyles.cm}>
-              {'// Manual prompt construction'}
+              {'// no exhaustiveness check at the language level'}
             </span>
             {'\n'}{' '}
-            <span style={customStyles.cm}>
-              {'// Complex error handling needed'}
-            </span>
+            <span style={customStyles.kw}>if</span> (t.kind ==={' '}
+            <span style={customStyles.st}>'answer'</span>){' '}
+            <span style={customStyles.kw}>return</span> t.text;
+            {'\n'}{' '}
+            <span style={customStyles.kw}>if</span> (t.kind ==={' '}
+            <span style={customStyles.st}>'readFile'</span>){' '}
+            <span style={customStyles.kw}>return</span>{' '}
+            <span style={customStyles.fn}>read</span>(t.path);
             {'\n'}{' '}
             <span style={customStyles.cm}>
-              {'// JSON parsing logic required'}
-            </span>
-            {'\n'}{' '}
-            <span style={customStyles.cm}>
-              {'// ... 50 lines of boilerplate ...'}
+              {'// hand rolled JSON schema, hope the LLM emits the right kind'}
             </span>
             {'\n'}
             {'}'}
@@ -815,31 +816,55 @@ const BamlCodeWindow = () => (
   <div style={customStyles.codeWindowAccent}>
     <div style={customStyles.codeContentArea}>
       <div style={customStyles.lineNumbersAccent}>
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
           <div key={n}>{n}</div>
         ))}
       </div>
       <div style={customStyles.codeScroll}>
         <pre style={customStyles.pre}>
           <code>
-            <span style={customStyles.kw}>enum</span>{' '}
-            <span style={customStyles.ty}>Intent</span> {'{'}
-            {'\n'} Buy
-            {'\n'} Support
+            <span style={customStyles.kw}>class</span>{' '}
+            <span style={customStyles.ty}>Answer</span>
+            {'   { text '}
+            <span style={customStyles.ty}>string</span>
+            {' }'}
             {'\n'}
-            {'}'}
+            <span style={customStyles.kw}>class</span>{' '}
+            <span style={customStyles.ty}>ReadFile</span>
+            {' { path '}
+            <span style={customStyles.ty}>string</span>
+            {' }'}
+            {'\n'}
+            <span style={customStyles.kw}>class</span>{' '}
+            <span style={customStyles.ty}>RunBash</span>
+            {'  { command '}
+            <span style={customStyles.ty}>string</span>
+            {' }'}
+            {'\n'}
+            <span style={customStyles.kw}>type</span>{' '}
+            <span style={customStyles.ty}>Tool</span> ={' '}
+            <span style={customStyles.ty}>Answer</span> |{' '}
+            <span style={customStyles.ty}>ReadFile</span> |{' '}
+            <span style={customStyles.ty}>RunBash</span>
             {'\n'}
             {'\n'}
             <span style={customStyles.kw}>function</span>{' '}
-            <span style={customStyles.fn}>Analyze</span>(text:{' '}
-            <span style={customStyles.ty}>string</span>) -&gt; (
-            <span style={customStyles.ty}>Intent</span>,{' '}
-            <span style={customStyles.ty}>float</span>) {'{'}
-            {'\n'} <span style={customStyles.kw}>client</span> FastLLM
-            {'\n'} <span style={customStyles.kw}>prompt</span> #"
-            {'\n'} Analyze this text: {'{{ text }}'}
-            {'\n'} {'{{ ctx.output_format }}'}
-            {'\n'} "#
+            <span style={customStyles.fn}>dispatch</span>(tool:{' '}
+            <span style={customStyles.ty}>Tool</span>) -&gt;{' '}
+            <span style={customStyles.ty}>string</span> {'{'}
+            {'\n'} <span style={customStyles.kw}>match</span> (tool) {'{'}
+            {'\n'}{'    a: '}
+            <span style={customStyles.ty}>Answer</span>
+            {'    => a.text,'}
+            {'\n'}{'    r: '}
+            <span style={customStyles.ty}>ReadFile</span>
+            {'  => baml.fs.'}
+            <span style={customStyles.fn}>read</span>(r.path),
+            {'\n'}{'    b: '}
+            <span style={customStyles.ty}>RunBash</span>
+            {'   => baml.sys.'}
+            <span style={customStyles.fn}>shell</span>(b.command),
+            {'\n'}{'  }'}
             {'\n'}
             {'}'}
           </code>
@@ -852,20 +877,20 @@ const BamlCodeWindow = () => (
 const ExhibitSection = () => (
   <section>
     <div style={customStyles.exhibitHeader}>
-      <h2 style={customStyles.exhibitTitle}>Typescript → BAML</h2>
+      <h2 style={customStyles.exhibitTitle}>The agent is the program.</h2>
     </div>
     <div className="exhibit-grid-responsive" style={customStyles.exhibitGrid}>
       <div style={customStyles.exhibitPanelLeft}>
         <div style={customStyles.panelHeader}>
-          <span>Legacy Implementation</span>
-          <span>main.ts</span>
+          <span>TypeScript</span>
+          <span>dispatch.ts</span>
         </div>
         <LegacyCodeWindow />
       </div>
       <div style={customStyles.exhibitPanel}>
         <div style={customStyles.panelHeader}>
-          <span>BAML Implementation</span>
-          <span>analyze.baml</span>
+          <span>BAML</span>
+          <span>dispatch.baml</span>
         </div>
         <BamlCodeWindow />
       </div>

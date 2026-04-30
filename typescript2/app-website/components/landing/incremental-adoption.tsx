@@ -117,35 +117,35 @@ def triage(message: str) -> Triage:
     return b.Triage(message)
 `;
 
-const STEP_4_BAML = `class Triage {
-  category "billing" | "technical" | "feedback"
-  order_id string?
-  sentiment float @description("from -1 to 1")
-  urgency "low" | "med" | "high"
-  next_action NextAction
-}
+const STEP_4_BAML = `class Answer   { text string }
+class ReadFile { path string }
+class RunBash  { command string }
+type Tool = Answer | ReadFile | RunBash
 
-function Triage(message: string) -> Triage {
+class Action { thought string  tool Tool }
+
+function Agent(message: string) -> Action {
   client GPT4
   prompt #"
-    Classify this support message and extract info.
+    Pick a tool to handle the user request.
     {{ ctx.output_format }}
     {{ _.role("user") }} {{ message }}
   "#
 }
 
-retry_policy Exponential {
-  max_retries 3
-  strategy { type exponential_backoff }
+function dispatch(tool: Tool) -> string {
+  match (tool) {
+    a: Answer    => a.text,
+    r: ReadFile  => baml.fs.read(r.path),
+    b: RunBash   => baml.sys.shell(b.command),
+  }
 }
 
-test BillingQuery {
-  functions [Triage]
-  args {
-    message "I was charged twice for order #4402 last week"
+testset "agent" {
+  test "picks the right tool" {
+    let act = Agent("read package.json");
+    assert.is_true(act.tool is ReadFile);
   }
-  @@assert(is_billing, {{ this.category == "billing" }})
-  @@assert(has_order, {{ this.order_id == "4402" }})
 }
 `;
 
@@ -248,32 +248,37 @@ const STEPS: Step[] = [
         lang: 'python',
       },
     ],
-    body: 'Schema, prompt, and model choice in one place. Your Python app stays Python. BAML handles the LLM boundary.',
+    body: 'Class, prompt, and client live together. The return type drives schema aware parsing. Your Python app calls a typed function. The model never sees a hand rolled JSON schema.',
     heading:
-      'Define the schema and prompt once. Call it from your existing code.',
+      'Define the function once. Call it from anywhere.',
   },
   {
     blocks: [
       {
         annotations: [
           {
-            column: 24,
-            lineNumber: 19,
-            text: 'declarative retries.\nnot a library wrapper.',
+            column: 14,
+            lineNumber: 4,
+            text: 'each tool is a class.\nadd a tool, add a match arm.',
           },
           {
-            column: 18,
-            lineNumber: 28,
-            text: 'tests live with the prompt.\nrun them in the playground or CI.',
+            column: 3,
+            lineNumber: 18,
+            text: 'exhaustive match.\nmissing a tool is a compile error.',
+          },
+          {
+            column: 1,
+            lineNumber: 25,
+            text: 'tests live next to the code.\nrun in the playground or CI.',
           },
         ],
         code: STEP_4_BAML,
-        filename: 'triage.baml',
+        filename: 'agent.baml',
         key: 's4-baml',
         lang: 'baml',
       },
     ],
-    body: 'Retries, streaming, tests, and multi-language codegen at compiler level, not library level. One file, every client, every guarantee.',
+    body: 'Tagged union tool dispatch via match. Schema aware parsing of model output. testset blocks beside the code. Stdlib written in BAML. The agent loop is BAML.',
     heading: 'We need a whole new language.',
   },
 ];
@@ -636,8 +641,8 @@ export function IncrementalAdoption() {
   );
   const step3Progress = useTransform(
     scrollYProgress,
-    [0.74, 0.86, 1],
-    [0, 1, 1],
+    [0.74, 0.84, 0.9, 1],
+    [0, 1, 1, 0],
   );
   const stepProgresses = [
     step0Progress,
