@@ -1,0 +1,133 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "MFoo"
+    L_BRACE "{"
+    FIELD
+      WORD "x"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "OrderingModifiers"
+    L_BRACE "{"
+    FIELD
+      WORD "c1"
+      TYPE_EXPR
+        WORD "MFoo"
+        QUESTION "?"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "c2"
+      TYPE_EXPR
+        WORD "MFoo"
+        QUESTION "?"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "c2_alias"
+              QUOTE """
+              WORD "c2_alias"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "c3"
+      TYPE_EXPR
+        WORD "MFoo"
+        L_BRACKET "["
+        R_BRACKET "]"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "c4"
+      TYPE_EXPR
+        WORD "MFoo"
+        L_BRACKET "["
+        R_BRACKET "]"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "c4_alias"
+              QUOTE """
+              WORD "c4_alias"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "c5"
+      TYPE_EXPR
+        WORD "MFoo"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "c5_alias"
+              QUOTE """
+              WORD "c5_alias"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "c6"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "MFoo"
+            WORD "MFoo"
+          GREATER ">"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "c6_alias"
+              QUOTE """
+              WORD "c6_alias"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

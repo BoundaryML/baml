@@ -1,0 +1,267 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "ValidOpenAI"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "max_tokens"
+            CONFIG_VALUE "100"
+              INTEGER_LITERAL "100"
+          CONFIG_ITEM
+            WORD "temperature"
+            CONFIG_VALUE "0.7"
+              FLOAT_LITERAL "0.7"
+          CONFIG_ITEM
+            WORD "base_url"
+            CONFIG_VALUE
+              STRING_LITERAL "https://api.openai.com/v1"
+                QUOTE """
+                WORD "https"
+                COLON ":"
+                SLASH "/"
+                SLASH "/"
+                WORD "api"
+                DOT "."
+                WORD "openai"
+                DOT "."
+                WORD "com"
+                SLASH "/"
+                WORD "v1"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "BadMaxTokens"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "max_tokens"
+            CONFIG_VALUE
+              STRING_LITERAL "not a number"
+                QUOTE """
+                WORD "not"
+                WORD "a"
+                WORD "number"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "BadTemperature"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "temperature"
+            CONFIG_VALUE
+              STRING_LITERAL "warm"
+                QUOTE """
+                WORD "warm"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "ValidAzure"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "azure-openai"
+          WORD "azure-openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "resource_name"
+            CONFIG_VALUE
+              STRING_LITERAL "my-resource"
+                QUOTE """
+                WORD "my-resource"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "deployment_id"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4o"
+                QUOTE """
+                WORD "gpt-4o"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "api_version"
+            CONFIG_VALUE
+              STRING_LITERAL "2024-02-15-preview"
+                QUOTE """
+                INTEGER_LITERAL "2024"
+                MINUS "-"
+                INTEGER_LITERAL "02"
+                MINUS "-"
+                INTEGER_LITERAL "15"
+                MINUS "-"
+                WORD "preview"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "ValidAzureBaseUrl"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "azure-openai"
+          WORD "azure-openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "base_url"
+            CONFIG_VALUE
+              STRING_LITERAL "https://my-resource.openai.azure.com/openai/deployments/gpt-4o"
+                QUOTE """
+                WORD "https"
+                COLON ":"
+                SLASH "/"
+                SLASH "/"
+                WORD "my-resource"
+                DOT "."
+                WORD "openai"
+                DOT "."
+                WORD "azure"
+                DOT "."
+                WORD "com"
+                SLASH "/"
+                WORD "openai"
+                SLASH "/"
+                WORD "deployments"
+                SLASH "/"
+                WORD "gpt-4o"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "api_version"
+            CONFIG_VALUE
+              STRING_LITERAL "2024-02-15-preview"
+                QUOTE """
+                INTEGER_LITERAL "2024"
+                MINUS "-"
+                INTEGER_LITERAL "02"
+                MINUS "-"
+                INTEGER_LITERAL "15"
+                MINUS "-"
+                WORD "preview"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "BadAzureMissingUrl"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "azure-openai"
+          WORD "azure-openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "api_version"
+            CONFIG_VALUE
+              STRING_LITERAL "2024-02-15-preview"
+                QUOTE """
+                INTEGER_LITERAL "2024"
+                MINUS "-"
+                INTEGER_LITERAL "02"
+                MINUS "-"
+                INTEGER_LITERAL "15"
+                MINUS "-"
+                WORD "preview"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4o"
+                QUOTE """
+                WORD "gpt-4o"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+
+=== ERRORS ===
+None

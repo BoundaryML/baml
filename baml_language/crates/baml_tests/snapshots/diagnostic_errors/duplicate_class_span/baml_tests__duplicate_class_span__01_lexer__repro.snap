@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+Class "class"
+Word "A"
+LBrace "{"
+Word "field"
+Word "string"
+RBrace "}"
+Class "class"
+Word "A"
+LBrace "{"
+Word "field"
+Word "string"
+RBrace "}"
+Word "type"
+Word "A"
+Equals "="
+Word "int"

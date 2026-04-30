@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.sum_array(arr: int[]) -> int  [expr] {
+  { let sum = 0; let total = []; for i in arr {  } total.push(() -> { { sum Add= i } }); for cb in total { cb() } } sum
+}
+
+--- captures ---
+lambda () in ?: captures [sum, i]

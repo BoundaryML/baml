@@ -1,0 +1,81 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.Worker.scale(self: null, value: int) -> int {
+    load_var self
+    load_field .factor
+    load_var value
+    bin_op *
+    return
+}
+
+function user.accept_hidden(cb: (int) -> int throws never) -> int {
+    load_const 1
+    load_var cb
+    call_indirect
+    return
+}
+
+function user.builtin_map(cb: (int) -> int throws never, values: int[]) -> int[] {
+    load_var values
+    load_var cb
+    call baml.Array.map
+    return
+}
+
+function user.chain(cb: (int) -> int throws never) -> int {
+    load_var cb
+    call user.forward
+    return
+}
+
+function user.direct(cb: (int) -> int throws never) -> int {
+    load_const 1
+    load_var cb
+    call_indirect
+    return
+}
+
+function user.fail_hidden() -> int {
+    load_global user.risky
+    call user.accept_hidden
+    return
+}
+
+function user.fail_returned() -> (int) -> int throws never {
+    make_closure .<lambda(fail_returned, 0)>, 0
+    return
+}
+
+function user.fail_stored() -> Holder {
+    alloc_instance user.Holder
+    load_global user.risky
+    init_field .cb
+    return
+}
+
+function user.forward(cb: (int) -> int throws never) -> int {
+    load_var cb
+    call user.direct
+    return
+}
+
+function user.member_map(worker: Worker, values: int[]) -> int[] {
+    load_var values
+    load_var worker
+    make_bound_method user.Worker.scale
+    call baml.Array.map
+    return
+}
+
+function user.nested_position(cb: ((int) -> int throws never) -> int throws never) -> int {
+    make_closure .<lambda(nested_position, 0)>, 0
+    load_var cb
+    call_indirect
+    return
+}
+
+function user.risky(value: int) -> int {
+    load_const "boom"
+    throw
+}

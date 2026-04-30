@@ -1,0 +1,123 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "B"
+    L_BRACE "{"
+    FIELD
+      WORD "label"
+      TYPE_EXPR "string"
+        WORD "string"
+    FUNCTION_DEF
+      KW_FUNCTION "function"
+      WORD "greet"
+      PARAMETER_LIST
+        L_PAREN "("
+        PARAMETER "self"
+          WORD "self"
+        R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "string"
+        WORD "string"
+      EXPR_FUNCTION_BODY
+        BLOCK_EXPR
+          L_BRACE "{"
+          PATH_EXPR "self.label"
+            WORD "self"
+            DOT "."
+            WORD "label"
+          R_BRACE "}"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "A"
+    L_BRACE "{"
+    FIELD
+      WORD "b"
+      TYPE_EXPR "B"
+        WORD "B"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_deep_method"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "A"
+          WORD "A"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "a.b.greet"
+            WORD "a"
+            DOT "."
+            WORD "b"
+            DOT "."
+            WORD "greet"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_deep_field"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "A"
+          WORD "A"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        PATH_EXPR "a.b.label"
+          WORD "a"
+          DOT "."
+          WORD "b"
+          DOT "."
+          WORD "label"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_direct_method"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "B"
+          WORD "B"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "b.greet"
+            WORD "b"
+            DOT "."
+            WORD "greet"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

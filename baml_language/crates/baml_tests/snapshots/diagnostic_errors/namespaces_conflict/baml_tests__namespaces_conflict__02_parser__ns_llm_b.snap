@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Response"
+    L_BRACE "{"
+    FIELD
+      WORD "body"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "status"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

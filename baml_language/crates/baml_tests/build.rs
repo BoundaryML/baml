@@ -47,14 +47,31 @@ fn generate_tests(manifest_dir: &str) {
     // diffs in insta snapshot metadata).
     let dest_path = Path::new(&manifest_dir).join("src/generated_tests.rs");
 
-    let project_modules: TokenStream = projects
-        .iter()
-        .map(|project| generate_project_tests(project, manifest_dir))
-        .collect();
+    // Group projects by tier
+    let mut tier_groups: std::collections::BTreeMap<&'static str, Vec<TokenStream>> =
+        std::collections::BTreeMap::new();
 
-    let test_modules: TokenStream = quote! {
-        #project_modules
-    };
+    for project in &projects {
+        let module = generate_project_tests(project, manifest_dir);
+        tier_groups
+            .entry(project.tier.dir_name())
+            .or_default()
+            .push(module);
+    }
+
+    // Emit nested modules: mod broken_syntax { mod project1 { ... } mod project2 { ... } }
+    let test_modules: TokenStream = tier_groups
+        .into_iter()
+        .map(|(tier_name, modules)| {
+            let tier_ident = format_ident!("{}", tier_name);
+            quote! {
+                #[cfg(test)]
+                mod #tier_ident {
+                    #(#modules)*
+                }
+            }
+        })
+        .collect();
 
     let header = "\
 // Auto-generated tests from projects/ by build.rs
@@ -112,11 +129,41 @@ fn write_formatted_code(path: &Path, code: TokenStream, header: &str) {
 }
 
 // Test-related structures and functions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Tier {
+    BrokenSyntax,
+    DiagnosticErrors,
+    Compiles,
+    Passing,
+    PassingLlm,
+}
+
+impl Tier {
+    fn dir_name(&self) -> &'static str {
+        match self {
+            Tier::BrokenSyntax => "broken_syntax",
+            Tier::DiagnosticErrors => "diagnostic_errors",
+            Tier::Compiles => "compiles",
+            Tier::Passing => "passing",
+            Tier::PassingLlm => "passing_llm",
+        }
+    }
+
+    const ALL: &[Tier] = &[
+        Tier::BrokenSyntax,
+        Tier::DiagnosticErrors,
+        Tier::Compiles,
+        Tier::Passing,
+        Tier::PassingLlm,
+    ];
+}
+
 struct TestProject {
     name: String,
     #[allow(dead_code)]
     path: PathBuf,
     files: Vec<BamlFile>,
+    tier: Tier,
 }
 
 struct BamlFile {
@@ -132,28 +179,43 @@ fn discover_projects(projects_dir: &Path) -> Vec<TestProject> {
         return projects;
     }
 
-    for entry in fs::read_dir(projects_dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-
-        if !path.is_dir() {
+    for tier in Tier::ALL {
+        let tier_dir = projects_dir.join(tier.dir_name());
+        if !tier_dir.exists() {
             continue;
         }
 
-        let name = path.file_name().unwrap().to_str().unwrap().to_string();
+        for entry in fs::read_dir(&tier_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
 
-        if name == "parser_stress" {
-            continue;
-        }
+            if !path.is_dir() {
+                continue;
+            }
 
-        let files = discover_baml_files(&path);
+            let name = path.file_name().unwrap().to_str().unwrap().to_string();
 
-        if !files.is_empty() {
-            projects.push(TestProject { name, path, files });
+            // parser_stress remains excluded (it would only appear if
+            // someone moved it into a tier directory by mistake)
+            if name == "parser_stress" {
+                continue;
+            }
+
+            let files = discover_baml_files(&path);
+
+            if !files.is_empty() {
+                projects.push(TestProject {
+                    name,
+                    path,
+                    files,
+                    tier: *tier,
+                });
+            }
         }
     }
 
-    projects.sort_by(|a, b| a.name.cmp(&b.name));
+    // Sort by tier first, then by name within each tier
+    projects.sort_by(|a, b| a.tier.cmp(&b.tier).then(a.name.cmp(&b.name)));
     projects
 }
 
@@ -189,8 +251,9 @@ fn discover_baml_files(dir: &Path) -> Vec<BamlFile> {
 fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStream {
     let module_name = format_ident!("{}", project.name.replace("-", "_"));
     let snapshot_path = format!(
-        "{}/snapshots/{}",
+        "{}/snapshots/{}/{}",
         manifest_dir.replace('\\', "/"),
+        project.tier.dir_name(),
         project.name
     );
 
@@ -241,7 +304,6 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     };
 
     quote! {
-        #[cfg(test)]
         mod #module_name {
             use baml_db::*;
             use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};

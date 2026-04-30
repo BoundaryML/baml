@@ -1,0 +1,145 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.UnicodeHeaders() -> string throws never {
+  { : "test"
+    // [1] 你好世界
+    // [2] Émojis 🎉🎊
+    // [3] Special «Characters» ™
+    "test" : "test"
+  }
+}
+function user.HeaderLevels() -> string throws never {
+  { : "deep nesting"
+    // [1] Level 1
+    // [2] Level 2
+    // [3] Level 3
+    // [4] Level 4
+    // [5] Level 5
+    // [6] Level 6
+    // [7] Level 7 - More than 6 levels
+    // [8] Level 8
+    // [9] Level 9
+    "deep nesting" : "deep nesting"
+  }
+}
+function user.HeadersWithWhitespace() -> string throws never {
+  { : string
+    // [1] Extra Spaces Before Title
+    // [2] Mixed Tabs And Spaces
+    // [3] All Tabs
+    let x = "whitespace test" : "whitespace test" -> string
+    // [1] Trailing Spaces
+    // [2] Multiple  Spaces  Between  Words
+    x : string
+  }
+}
+function user.HeadersAndComments() -> string throws never {
+  { : string
+    // [1] Header Before Comment
+    let x = "test" : "test" -> string
+    // [2] Header After Comment
+    // [3] Header After Doc Comment
+    x : string
+  }
+}
+function user.HeadersInComplexNesting() -> string throws never {
+  { : string
+    // [1] Main Function
+    let result = : string
+      { : string
+        // [2] Inside Block Expression
+        let inner = : string | "else value" -> string
+          if (true : true) : string | "else value"
+            { : string
+              // [3] Inside If True
+              let deep = : "deep value" -> string
+                { : "deep value"
+                  // [4] Very Deep Block
+                  "deep value" : "deep value"
+                }
+              // [3] Back to If Level
+              deep : string
+            }
+          else
+            { : "else value"
+              // [3] Inside Else
+              "else value" : "else value"
+            }
+        // [2] Back to Block Level
+        inner : string
+      }
+    // [1] Back to Function Level
+    result : string
+  }
+}
+function user.HeadersWithSpecialChars() -> string throws never {
+  { : "special chars"
+    // [1] Header-With-Dashes
+    // [2] Header_With_Underscores
+    // [3] Header.With.Dots
+    // [4] Header/With/Slashes
+    // [5] Header\With\Backslashes
+    // [6] Header|With|Pipes
+    "special chars" : "special chars"
+  }
+}
+function user.ConsecutiveHeaders() -> string throws never {
+  { : "multiple consecutive headers"
+    // [1] First Header
+    // [1] Second Header
+    // [1] Third Header
+    // [2] Subsection A
+    // [2] Subsection B
+    // [2] Subsection C
+    "multiple consecut..." : "multiple consecutive headers"
+  }
+}
+function user.HeadersAroundExpressions() -> string throws never {
+  { : int
+    // [1] Before Let
+    let x = 5 : 5 -> int
+    // [2] After Let
+    // [3] Before If
+    if (x > 0 : bool) : int | 0
+      { : int
+        // [4] Inside If
+        x : int
+      }
+    else
+      { : 0
+        // [4] Inside Else
+        0 : 0
+      }
+    // [3] After If
+    // [2] Before For
+    for i in [1, 2, 3]
+      { : int
+        // [3] Inside For
+        i : int
+      }
+    // [2] After For
+    // [1] Final Section
+    x : int
+  }
+  !! 2389..2390: type mismatch: expected string, got int
+}
+function user.VeryLongHeaderTitle() -> string throws never {
+  { : "long headers"
+    // [1] This Is An Extremely Long Header Title That Goes On And On And On And Contains Many Words To Test How The Parser Handles Very Long Header Titles That Might Span Multiple Lines In Some Editors But Should Still Be Parsed As A Single Header
+    // [2] Another Long Title With Special Characters !@#$%^&*()_+-=[]{}|;':",./<>? And Numbers 1234567890
+    "long headers" : "long headers"
+  }
+}
+function user.HeaderOnlyFunction() -> string throws never {
+  { : "default"
+    // [1] Just Headers
+    // [2] No Code
+    // [3] Only Documentation
+    // [4] Pure Annotation
+    // [5] No Expressions
+    // [6] Until The End
+    "default" : "default"
+  }
+}

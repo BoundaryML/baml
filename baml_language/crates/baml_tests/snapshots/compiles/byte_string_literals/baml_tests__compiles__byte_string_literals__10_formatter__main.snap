@@ -1,0 +1,65 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Byte string literal tests
+
+function ByteStringBasic() -> int {
+    let data = b"hello";
+    data.length()
+}
+
+function ByteStringEmpty() -> int {
+    let data = b"";
+    data.length()
+}
+
+function ByteStringHexEscapes() -> int {
+    let data = b"\x48\x65\x6c\x6c\x6f";
+    data.length()
+}
+
+function ByteStringStandardEscapes() -> int {
+    let data = b"\n\t\r\0\\\"";
+    data.length()
+}
+
+function ByteStringIndexAccess() -> int? {
+    let data = b"\x41\x42\x43";
+    data.at(0)
+}
+
+// Byte strings in expressions
+function ByteStringInCondition() -> int {
+    if (b"abc".length() > 0) {
+        1
+    } else {
+        0
+    }
+}
+
+function ByteStringEquality() -> bool {
+    b"abc" == b"abc"
+}
+
+// Byte string as function argument
+function ByteStringPassAndReturn(data: uint8array) -> int {
+    data.length()
+}
+
+// Byte string index write (mutable)
+function ByteStringMutate() -> int? {
+    let data = b"\x00\x00\x00";
+    data[0] = 42;
+    data.at(0)
+}
+
+// Direct index read (data[0], not .at(0))
+function ByteStringDirectIndexRead() -> int {
+    let data = b"\x41\x42\x43";
+    data[0]
+}
+
+// Byte string literal as function call argument
+function ByteStringLiteralAsArg() -> int {
+    ByteStringPassAndReturn(b"abc")
+}

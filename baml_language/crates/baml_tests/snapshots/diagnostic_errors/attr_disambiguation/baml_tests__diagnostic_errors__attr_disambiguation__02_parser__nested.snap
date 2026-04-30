@@ -1,0 +1,248 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "NFoo"
+    L_BRACE "{"
+    FIELD
+      WORD "x"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "NBar"
+    L_BRACE "{"
+    FIELD
+      WORD "x"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "AliasInNestedTypes"
+    L_BRACE "{"
+    FIELD
+      WORD "d1"
+      TYPE_EXPR
+        WORD "NFoo"
+        L_BRACKET "["
+        R_BRACKET "]"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "d1_alias"
+              QUOTE """
+              WORD "d1_alias"
+              QUOTE """
+            R_PAREN ")"
+    FIELD
+      WORD "d2"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "NFoo"
+            ATTRIBUTE
+              AT "@"
+              WORD "alias"
+              ATTRIBUTE_ARGS
+                L_PAREN "("
+                STRING_LITERAL "d2_alias"
+                  QUOTE """
+                  WORD "d2_alias"
+                  QUOTE """
+                R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "d3"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "NFoo"
+            ATTRIBUTE "@stream.done"
+              AT "@"
+              WORD "stream"
+              DOT "."
+              WORD "done"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "d4"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR
+            WORD "NFoo"
+            ATTRIBUTE
+              AT "@"
+              WORD "alias"
+              ATTRIBUTE_ARGS
+                L_PAREN "("
+                STRING_LITERAL "d4_alias"
+                  QUOTE """
+                  WORD "d4_alias"
+                  QUOTE """
+                R_PAREN ")"
+          COMMA ","
+          TYPE_EXPR "NBar"
+            WORD "NBar"
+          GREATER ">"
+    FIELD
+      WORD "d5"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR
+            WORD "NFoo"
+            ATTRIBUTE "@stream.done"
+              AT "@"
+              WORD "stream"
+              DOT "."
+              WORD "done"
+          COMMA ","
+          TYPE_EXPR "NBar"
+            WORD "NBar"
+          GREATER ">"
+    FIELD
+      WORD "d6"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "NFoo"
+            ATTRIBUTE
+              AT "@"
+              WORD "alias"
+              ATTRIBUTE_ARGS
+                L_PAREN "("
+                STRING_LITERAL "d6_alias"
+                  QUOTE """
+                  WORD "d6_alias"
+                  QUOTE """
+                R_PAREN ")"
+            PIPE "|"
+            WORD "NBar"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "d7"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "NFoo | NBar"
+            WORD "NFoo"
+            PIPE "|"
+            WORD "NBar"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "d7_alias"
+              QUOTE """
+              WORD "d7_alias"
+              QUOTE """
+            R_PAREN ")"
+    FIELD
+      WORD "d8"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "NFoo"
+            ATTRIBUTE
+              AT "@"
+              WORD "alias"
+              ATTRIBUTE_ARGS
+                L_PAREN "("
+                STRING_LITERAL "d8_alias"
+                  QUOTE """
+                  WORD "d8_alias"
+                  QUOTE """
+                R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "d9"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "NFoo"
+            ATTRIBUTE
+              AT "@"
+              WORD "alias"
+              ATTRIBUTE_ARGS
+                L_PAREN "("
+                STRING_LITERAL "d9_inner"
+                  QUOTE """
+                  WORD "d9_inner"
+                  QUOTE """
+                R_PAREN ")"
+        R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "d9_outer"
+              QUOTE """
+              WORD "d9_outer"
+              QUOTE """
+            R_PAREN ")"
+    FIELD
+      WORD "d10"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR
+                WORD "NFoo"
+                ATTRIBUTE
+                  AT "@"
+                  WORD "alias"
+                  ATTRIBUTE_ARGS
+                    L_PAREN "("
+                    STRING_LITERAL "d10_alias"
+                      QUOTE """
+                      WORD "d10_alias"
+                      QUOTE """
+                    R_PAREN ")"
+              COMMA ","
+              TYPE_EXPR "NBar"
+                WORD "NBar"
+              GREATER ">"
+          GREATER ">"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

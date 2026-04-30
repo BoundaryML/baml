@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Test: multi-segment path on captured variables inside lambdas (MIR capture roots)
+// and map fallback continuing for remaining segments.
+
+class Inner {
+    value: int,
+}
+
+class Outer {
+    inner: Inner,
+    name: string,
+}
+
+// Issue #1: Captured root in multi-segment path inside lambda.
+// `outer.inner.value` inside the lambda should resolve via Place::Capture,
+// not fall back to Null because `outer` isn't in self.locals.
+function test_captured_chain(outer: Outer) -> int {
+    let result = [1]
+        .map(
+            (x) -> {
+                outer.inner.value
+            },
+        );
+    result[0]
+}
+
+// Issue #1 variant: captured root used as method receiver inside lambda.
+// `outer.inner` should resolve through capture, not produce a dummy temp.
+function test_captured_method(outer: Outer) -> string {
+    let result = [1]
+        .map(
+            (x) -> {
+                outer.name
+            },
+        );
+    result[0]
+}
+
+// Issue #2: Map fallback should chain for all remaining segments, not just the first.
+// If `data` is map<string, map<string, int>>, then `data.a.b` should produce
+// Place::Index(Place::Index(data, "a"), "b"), not Place::Index(data, "a") with "b" dropped.
+function test_map_chain(data: map<string, map<string, int>>) -> int {
+    data.a.b
+}
+
+// Issue #2 variant: 4-segment map chain.
+function test_deep_map_chain(data: map<string, map<string, map<string, int>>>) -> int {
+    data.a.b.c
+}

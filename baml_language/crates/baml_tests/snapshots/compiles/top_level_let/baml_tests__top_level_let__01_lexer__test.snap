@@ -1,0 +1,8 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+Let "let"
+Word "x"
+Equals "="
+IntegerLiteral "1"
+Semicolon ";"

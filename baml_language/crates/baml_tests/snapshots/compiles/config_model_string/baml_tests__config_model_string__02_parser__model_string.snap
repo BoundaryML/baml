@@ -1,0 +1,53 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "MyAwsClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "aws-bedrock"
+          WORD "aws-bedrock"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "anthropic.claude-3-haiku-20240307-v1:0"
+                QUOTE """
+                WORD "anthropic"
+                DOT "."
+                WORD "claude-3-haiku-20240307-v1"
+                COLON ":"
+                INTEGER_LITERAL "0"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "max_tokens"
+            CONFIG_VALUE "100"
+              INTEGER_LITERAL "100"
+          CONFIG_ITEM
+            WORD "temperature"
+            CONFIG_VALUE "0.7"
+              FLOAT_LITERAL "0.7"
+          CONFIG_ITEM
+            WORD "api_key"
+            CONFIG_VALUE
+              STRING_LITERAL "sk-1234"
+                QUOTE """
+                WORD "sk-1234"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+
+=== ERRORS ===
+None

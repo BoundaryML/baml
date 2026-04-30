@@ -1,0 +1,469 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Status"
+    L_BRACE "{"
+    ENUM_VARIANT "HttpError"
+      WORD "HttpError"
+    ENUM_VARIANT "IndexError"
+      WORD "IndexError"
+    ENUM_VARIANT "AuthError"
+      WORD "AuthError"
+    ENUM_VARIANT "SomeOtherError"
+      WORD "SomeOtherError"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "AlwaysThrowsStatus"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "n"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "Status"
+      WORD "Status"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "n"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN "0"
+              INTEGER_LITERAL "0"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              STRING_LITERAL "http_error"
+                QUOTE """
+                WORD "http_error"
+                QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "_"
+              WORD "_"
+            FAT_ARROW "=>"
+            THROW_EXPR "throw 404"
+              KW_THROW "throw"
+              INTEGER_LITERAL "404"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "WrapperAlwaysThrows"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "n"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "Status"
+      WORD "Status"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "AlwaysThrowsStatus"
+          CALL_ARGS "(n)"
+            L_PAREN "("
+            WORD "n"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchAlwaysThrows"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "n"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "WrapperAlwaysThrows"
+            CALL_ARGS "(n)"
+              L_PAREN "("
+              WORD "n"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN
+                WORD "_"
+                COLON ":"
+                TYPE_EXPR "string"
+                  WORD "string"
+              FAT_ARROW "=>"
+              STRING_LITERAL "http!"
+                QUOTE """
+                WORD "http"
+                NOT "!"
+                QUOTE """
+            R_BRACE "}"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e2"
+              WORD "e2"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN
+                WORD "_"
+                COLON ":"
+                TYPE_EXPR "int"
+                  WORD "int"
+              FAT_ARROW "=>"
+              STRING_LITERAL "index!"
+                QUOTE """
+                WORD "index"
+                NOT "!"
+                QUOTE """
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ThrowsAllStatusVariants"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "n"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "Status"
+      WORD "Status"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "n"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN "1"
+              INTEGER_LITERAL "1"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              PATH_EXPR "Status.HttpError"
+                WORD "Status"
+                DOT "."
+                WORD "HttpError"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "2"
+              INTEGER_LITERAL "2"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              PATH_EXPR "Status.IndexError"
+                WORD "Status"
+                DOT "."
+                WORD "IndexError"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "3"
+              INTEGER_LITERAL "3"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              PATH_EXPR "Status.AuthError"
+                WORD "Status"
+                DOT "."
+                WORD "AuthError"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "_"
+              WORD "_"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              PATH_EXPR "Status.SomeOtherError"
+                WORD "Status"
+                DOT "."
+                WORD "SomeOtherError"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchAllStatusVariants"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "n"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "ThrowsAllStatusVariants"
+            CALL_ARGS "(n)"
+              L_PAREN "("
+              WORD "n"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN "Status.HttpError"
+                WORD "Status"
+                DOT "."
+                WORD "HttpError"
+              FAT_ARROW "=>"
+              STRING_LITERAL "http!"
+                QUOTE """
+                WORD "http"
+                NOT "!"
+                QUOTE """
+            R_BRACE "}"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN "Status.IndexError"
+                WORD "Status"
+                DOT "."
+                WORD "IndexError"
+              FAT_ARROW "=>"
+              STRING_LITERAL "index!"
+                QUOTE """
+                WORD "index"
+                NOT "!"
+                QUOTE """
+            R_BRACE "}"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN "Status.AuthError"
+                WORD "Status"
+                DOT "."
+                WORD "AuthError"
+              FAT_ARROW "=>"
+              STRING_LITERAL "auth!"
+                QUOTE """
+                WORD "auth"
+                NOT "!"
+                QUOTE """
+            R_BRACE "}"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN "Status.SomeOtherError"
+                WORD "Status"
+                DOT "."
+                WORD "SomeOtherError"
+              FAT_ARROW "=>"
+              STRING_LITERAL "other!"
+                QUOTE """
+                WORD "other"
+                NOT "!"
+                QUOTE """
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "RecA"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "n"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "n"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN "0"
+              INTEGER_LITERAL "0"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              STRING_LITERAL "boom"
+                QUOTE """
+                WORD "boom"
+                QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "_"
+              WORD "_"
+            FAT_ARROW "=>"
+            CALL_EXPR
+              WORD "RecB"
+              CALL_ARGS "(n)"
+                L_PAREN "("
+                WORD "n"
+                R_PAREN ")"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "RecB"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "n"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "RecA"
+          CALL_ARGS "(n)"
+            L_PAREN "("
+            WORD "n"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchRecursiveThrow"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "n"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "RecB"
+            CALL_ARGS "(n)"
+              L_PAREN "("
+              WORD "n"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN
+                WORD "_"
+                COLON ":"
+                TYPE_EXPR "string"
+                  WORD "string"
+              FAT_ARROW "=>"
+              STRING_LITERAL "handled"
+                QUOTE """
+                WORD "handled"
+                QUOTE """
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "UnreachableTailStillChecked"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BLOCK_EXPR
+          L_BRACE "{"
+          THROW_STMT
+            THROW_EXPR
+              KW_THROW "throw"
+              STRING_LITERAL "error"
+                QUOTE """
+                WORD "error"
+                QUOTE """
+          LET_STMT "let x = 123;"
+            KW_LET "let"
+            WORD "x"
+            EQUALS "="
+            INTEGER_LITERAL "123"
+            SEMICOLON ";"
+          PATH_EXPR "x.missing"
+            WORD "x"
+            DOT "."
+            WORD "missing"
+          R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

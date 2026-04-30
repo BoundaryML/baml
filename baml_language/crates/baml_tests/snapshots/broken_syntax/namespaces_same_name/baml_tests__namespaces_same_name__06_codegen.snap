@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.GetHttpStatus() -> http.Response {
+    alloc_instance user.http.Response
+    load_const 200
+    init_field .status
+    load_const "ok"
+    init_field .body
+    return
+}
+
+function user.GetLlmText() -> llm.Response {
+    alloc_instance user.llm.Response
+    load_const "hello"
+    init_field .text
+    load_const 5
+    init_field .tokens
+    return
+}
+
+function user.ThrowsHttpResponse() -> null {
+    alloc_instance user.http.Response
+    load_const 500
+    init_field .status
+    load_const "boom"
+    init_field .body
+    throw
+}

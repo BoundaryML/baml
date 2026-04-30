@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+Slash "/"
+Slash "/"
+Word "First"
+Word "definition"
+Word "of"
+Word "Response"
+In "in"
+Word "llm"
+Word "namespace"
+Class "class"
+Word "Response"
+LBrace "{"
+Word "text"
+Word "string"
+RBrace "}"

@@ -1,0 +1,6 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function Foo() -> int {
+    1 + "foo"
+}

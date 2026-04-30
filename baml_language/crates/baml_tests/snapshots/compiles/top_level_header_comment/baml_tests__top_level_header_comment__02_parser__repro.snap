@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  HEADER_COMMENT "//# Top Level Header"
+    SLASH "/"
+    SLASH "/"
+    HASH "#"
+    WORD "Top"
+    WORD "Level"
+    WORD "Header"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Foo"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    1
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "1"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

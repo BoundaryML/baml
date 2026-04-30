@@ -1,0 +1,80 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Errors"
+    L_BRACE "{"
+    ENUM_VARIANT "AuthenticationError"
+      WORD "AuthenticationError"
+    ENUM_VARIANT "AuthorizationError"
+      WORD "AuthorizationError"
+    ENUM_VARIANT "NotFoundError"
+      WORD "NotFoundError"
+    ENUM_VARIANT "InternalServerError"
+      WORD "InternalServerError"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "callee"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "bool"
+      WORD "bool"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "Errors"
+        WORD "Errors"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        RETURN_STMT "return true"
+          KW_RETURN "return"
+          WORD "true"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "caller"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "bool"
+      WORD "bool"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "callee"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN "Errors.AuthenticationError"
+                WORD "Errors"
+                DOT "."
+                WORD "AuthenticationError"
+              FAT_ARROW "=>"
+              BLOCK_EXPR
+                L_BRACE "{"
+                RETURN_STMT "return e"
+                  KW_RETURN "return"
+                  WORD "e"
+                R_BRACE "}"
+            R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

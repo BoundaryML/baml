@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Resume"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "education"
+      TYPE_EXPR "Education[]"
+        WORD "Education"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "highest_degree"
+      TYPE_EXPR "Degree"
+        WORD "Degree"
+    FIELD
+      WORD "aliases"
+      TYPE_EXPR "EducationList"
+        WORD "EducationList"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

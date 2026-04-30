@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "MetaAlias"
+    EQUALS "="
+    TYPE_EXPR "type"
+      WORD "type"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "MetaList"
+    EQUALS "="
+    TYPE_EXPR "type[]"
+      WORD "type"
+      L_BRACKET "["
+      R_BRACKET "]"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "MetaUnion"
+    EQUALS "="
+    TYPE_EXPR "type | string"
+      WORD "type"
+      PIPE "|"
+      WORD "string"
+
+=== ERRORS ===
+None

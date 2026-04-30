@@ -1,0 +1,525 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Education"
+    L_BRACE "{"
+    FIELD
+      WORD "school"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "year"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Person"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "age"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Inner"
+    L_BRACE "{"
+    FIELD
+      WORD "value"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ExplicitAnnotations"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "starts_as"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "Loading..."
+              QUOTE """
+              WORD "Loading"
+              DOT_DOT_DOT "..."
+              QUOTE """
+            R_PAREN ")"
+    FIELD
+      WORD "gpa"
+      TYPE_EXPR
+        WORD "float"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
+    FIELD
+      WORD "certifications"
+      TYPE_EXPR
+        WORD "Education"
+        L_BRACKET "["
+        R_BRACKET "]"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "type"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "Education"
+              WORD "Education"
+        L_BRACKET "["
+        R_BRACKET "]"
+    R_PAREN ")"
+    FIELD
+      WORD "internal"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "type"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "never"
+              WORD "never"
+            R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "WithDone"
+    L_BRACE "{"
+    FIELD
+      WORD "type"
+      TYPE_EXPR
+        STRING_LITERAL "resume"
+          QUOTE """
+          WORD "resume"
+          QUOTE """
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "name"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "id"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "AtomicPoint"
+    L_BRACE "{"
+    BLOCK_ATTRIBUTE "@@stream.done"
+      AT_AT "@@"
+      WORD "stream"
+      DOT "."
+      WORD "done"
+    FIELD
+      WORD "x"
+      TYPE_EXPR "float"
+        WORD "float"
+    FIELD
+      WORD "y"
+      TYPE_EXPR "float"
+        WORD "float"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "AtomicWithOverride"
+    L_BRACE "{"
+    BLOCK_ATTRIBUTE "@@stream.done"
+      AT_AT "@@"
+      WORD "stream"
+      DOT "."
+      WORD "done"
+    FIELD
+      WORD "x"
+      TYPE_EXPR "float"
+        WORD "float"
+    FIELD
+      WORD "y"
+      TYPE_EXPR
+        WORD "float"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "starts_as"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "null"
+              WORD "null"
+            R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "NotNullEducation"
+    L_BRACE "{"
+    BLOCK_ATTRIBUTE "@@stream.not_null"
+      AT_AT "@@"
+      WORD "stream"
+      DOT "."
+      WORD "not_null"
+    FIELD
+      WORD "school"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "year"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "NotNullStatus"
+    L_BRACE "{"
+    BLOCK_ATTRIBUTE "@@stream.not_null"
+      AT_AT "@@"
+      WORD "stream"
+      DOT "."
+      WORD "not_null"
+    ENUM_VARIANT "Active"
+      WORD "Active"
+    ENUM_VARIANT "Inactive"
+      WORD "Inactive"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ReferencesNotNull"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "education"
+      TYPE_EXPR "NotNullEducation"
+        WORD "NotNullEducation"
+    FIELD
+      WORD "status"
+      TYPE_EXPR "NotNullStatus"
+        WORD "NotNullStatus"
+    FIELD
+      WORD "educations"
+      TYPE_EXPR "NotNullEducation[]"
+        WORD "NotNullEducation"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "optional_education"
+      TYPE_EXPR "NotNullEducation?"
+        WORD "NotNullEducation"
+        QUESTION "?"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "AnnotatedResume"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "gpa"
+      TYPE_EXPR
+        WORD "float"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
+    FIELD
+      WORD "title"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "starts_as"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "Loading..."
+              QUOTE """
+              WORD "Loading"
+              DOT_DOT_DOT "..."
+              QUOTE """
+            R_PAREN ")"
+    FIELD
+      WORD "internal_id"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "type"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "never"
+              WORD "never"
+            R_PAREN ")"
+    FIELD
+      WORD "token"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
+    R_BRACE "}"
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Status"
+    L_BRACE "{"
+    ENUM_VARIANT "Loading"
+      WORD "Loading"
+    ENUM_VARIANT "Ready"
+      WORD "Ready"
+    ENUM_VARIANT "Error"
+      WORD "Error"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "StatusResponse"
+    L_BRACE "{"
+    FIELD
+      WORD "status"
+      TYPE_EXPR
+        WORD "Status"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "starts_as"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "Status.Loading"
+              QUOTE """
+              WORD "Status"
+              DOT "."
+              WORD "Loading"
+              QUOTE """
+            R_PAREN ")"
+    FIELD
+      WORD "message"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TypeCategoryOverrides"
+    L_BRACE "{"
+    FIELD
+      WORD "items"
+      TYPE_EXPR
+        WORD "Person"
+        L_BRACKET "["
+        R_BRACKET "]"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "type"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "string"
+              WORD "string"
+            R_PAREN ")"
+    FIELD
+      WORD "maybe"
+      TYPE_EXPR
+        WORD "string"
+        QUESTION "?"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "type"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "int"
+              WORD "int"
+            R_PAREN ")"
+    FIELD
+      WORD "internal"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "type"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "never"
+              WORD "never"
+            R_PAREN ")"
+    FIELD
+      WORD "data"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "int"
+            WORD "int"
+          GREATER ">"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "type"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "never"
+              WORD "never"
+            R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "WithDesugaring"
+    L_BRACE "{"
+    FIELD
+      WORD "done_string"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "not_null_string"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
+    FIELD
+      WORD "not_null_class"
+      TYPE_EXPR
+        WORD "Inner"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
+    FIELD
+      WORD "done_and_not_null"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
+    FIELD
+      WORD "type_never"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "type"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "never"
+              WORD "never"
+            R_PAREN ")"
+    FIELD
+      WORD "type_never_literal"
+      TYPE_EXPR
+        STRING_LITERAL "resume"
+          QUOTE """
+          WORD "resume"
+          QUOTE """
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "type"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "never"
+              WORD "never"
+            R_PAREN ")"
+    R_BRACE "}"
+
+=== ERRORS ===
+Error: Expected ')', found '['
+    ╭─[ main.baml:32:9 ]
+    │
+ 32 │     name string @stream.done
+    │         ┬  
+    │         ╰── Expected ')', found '['
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected Unexpected token in class body, found ')'
+    ╭─[ main.baml:32:11 ]
+    │
+ 32 │     name string @stream.done
+    │           ┬  
+    │           ╰── Expected Unexpected token in class body, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯

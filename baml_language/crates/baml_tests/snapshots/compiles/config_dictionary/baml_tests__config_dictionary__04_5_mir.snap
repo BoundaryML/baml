@@ -1,0 +1,39 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.MyClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: baml.llm.PrimitiveClientOptions
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<string, int | string[] | string | bool | null[] | map<string, string | string[] | int> | void[]>
+    let _5: string[]
+    let _6: string[]
+    let _7: string[]
+    let _8: null[]
+    let _9: map<string, string | string[] | int>
+    let _10: string[]
+    let _11: void[]
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _5 = [const "abc", const "abc", const "ccc"];
+        _6 = [const "one", const "two"];
+        _7 = [const "one", const "two"];
+        _8 = [const null, const null, const null];
+        _10 = [const "yes", const "queen"];
+        _9 = { const "key": const "value", const "key2": const "value2", const "nestedArray": copy _10, const "number": const 10_i64 };
+        _11 = [];
+        _4 = { const "max_tokens": const 100_i64, const "array_key_with_quoted_unquoted": copy _5, const "key2": const "somerandomvalue", const "hello": const "world", const "thing": const "hello", const "block_string": const "#hellotheremyfriend#", const "inline_raw_string": const "#inlinerawstring,,#", const "booleanValue": const true, const "stringKey": const true, const "array1": copy _6, const "array2": copy _7, const "array3Numbers": copy _8, const "nestedKey": copy _9, const "oneMoreValueToTestBrokenness": const "value", const "myInteger": const 100_i64, const "tools": copy _11, const "block_string": const "#hellotheremyfriend{#acommentinaprompt#}#" };
+        _1 = baml.llm.PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "MyClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

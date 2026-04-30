@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Foo"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR
+          INTEGER_LITERAL "1"
+          PLUS "+"
+          STRING_LITERAL "foo"
+            QUOTE """
+            WORD "foo"
+            QUOTE """
+        R_BRACE "}"
+
+=== ERRORS ===
+None

@@ -1,0 +1,87 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.Counter.increment(self: null) -> int {
+    load_var self
+    load_var self
+    load_field .value
+    load_const 1
+    bin_op +
+    store_field .value
+    load_var self
+    load_field .value
+    return
+}
+
+function user.Employee.full_name(self: null) -> string {
+    load_var self
+    load_field .first
+    load_const " "
+    bin_op +
+    load_var self
+    load_field .last
+    bin_op +
+    return
+}
+
+function user.Formatter.format(self: null, text: string) -> string {
+    load_var self
+    load_field .prefix
+    load_var text
+    bin_op +
+    return
+}
+
+function user.takes_unbound(f: (Employee) -> string throws never) -> string {
+    alloc_instance user.Employee
+    load_const "X"
+    init_field .first
+    load_const "Y"
+    init_field .last
+    load_var f
+    call_indirect
+    return
+}
+
+function user.test_err_bound_for_unbound() -> string {
+    alloc_instance user.Employee
+    load_const "Alice"
+    init_field .first
+    load_const "Smith"
+    init_field .last
+    make_bound_method user.Employee.full_name
+    call user.takes_unbound
+    return
+}
+
+function user.test_err_bound_type_mismatch() -> int {
+    alloc_instance user.Counter
+    load_const 0
+    init_field .value
+    store_var c
+    load_const 0
+    return
+}
+
+function user.test_err_extra_arg() -> string {
+    alloc_instance user.Formatter
+    load_const ">> "
+    init_field .prefix
+    store_var fmt
+    load_var fmt
+    load_const "hello"
+    load_var fmt
+    make_bound_method user.Formatter.format
+    call_indirect
+    return
+}
+
+function user.test_err_missing_self() -> string {
+    call user.Employee.full_name
+    return
+}
+
+function user.test_err_unbound_type_mismatch() -> string {
+    load_const ""
+    return
+}
