@@ -495,7 +495,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           const pending = pendingCallsRef.current.get(data.id);
           if (pending) {
             pendingCallsRef.current.delete(data.id);
-            pending.resolve(JSON.parse(data.result));
+            try {
+              pending.resolve(JSON.parse(data.result));
+            } catch (e) {
+              pending.reject(
+                e instanceof Error ? e : new Error(`Failed to parse callFunctionResult for ${data.id}`),
+              );
+            }
           }
           break;
         }

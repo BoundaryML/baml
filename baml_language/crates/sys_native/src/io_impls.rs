@@ -728,6 +728,7 @@ async fn run_process(
     }
 
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.kill_on_drop(true);
 
     let mut child = cmd.spawn().map_err(|e| OpErrorKind::Io {
         message: format!("Failed to spawn '{label}': {e}"),
