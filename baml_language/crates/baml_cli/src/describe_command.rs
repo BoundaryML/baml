@@ -51,12 +51,12 @@ impl DescribeArgs {
             return Ok(crate::ExitCode::Other);
         }
 
-        let source_files = db.get_source_files();
+        let user_source_files = db.get_source_files();
 
         // ── --symbols mode ──────────────────────────────────────────────────
         if self.symbols {
             let kind_filter = crate::grep_command::parse_kind_filter(&self.kind)?;
-            let symbols = baml_lsp2_actions::list_symbols(&db, &source_files, &kind_filter);
+            let symbols = baml_lsp2_actions::list_symbols(&db, &user_source_files, &kind_filter);
             if symbols.is_empty() {
                 eprintln!("No symbols found.");
                 return Ok(crate::ExitCode::Other);
@@ -83,7 +83,8 @@ impl DescribeArgs {
             }
         };
 
-        let descriptions = describe(&db, &source_files, name);
+        let describe_files = baml_db::baml_compiler2_hir::compiler2_all_files(&db);
+        let descriptions = describe(&db, &describe_files, name);
 
         if descriptions.is_empty() {
             eprintln!("No symbol found: {name}");

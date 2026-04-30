@@ -97,6 +97,44 @@ fn describe_nonexistent() {
 }
 
 #[test]
+fn describe_builtin_string_with_compiler2_visible_files() {
+    let project = make_project();
+    let descs = project.describe_compiler2_visible("String");
+
+    assert_eq!(descs.len(), 1);
+    assert_eq!(descs[0].name, "String");
+    insta::assert_snapshot!(project.format_description(&descs[0]));
+}
+
+#[test]
+fn describe_builtin_deep_copy_with_compiler2_visible_files() {
+    let project = make_project();
+    let descs = project.describe_compiler2_visible("deep_copy");
+
+    assert_eq!(descs.len(), 1);
+    assert_eq!(descs[0].name, "deep_copy");
+    insta::assert_snapshot!(project.format_description(&descs[0]));
+}
+
+#[test]
+fn user_only_describe_still_does_not_search_builtins() {
+    let project = make_project();
+    let descs = project.describe("String");
+
+    assert!(descs.is_empty());
+}
+
+#[test]
+fn list_symbols_compiler2_visible_includes_selected_builtins() {
+    let project = make_project();
+    let symbols = project.list_symbols_compiler2_visible();
+
+    assert!(symbols.iter().any(|sym| sym.name == "String"));
+    assert!(symbols.iter().any(|sym| sym.name == "Array"));
+    assert!(symbols.iter().any(|sym| sym.name == "deep_copy"));
+}
+
+#[test]
 fn describe_is_case_sensitive() {
     let project = make_project();
     // "point" should not match "Point"

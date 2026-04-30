@@ -18,6 +18,7 @@ use crate::{
     definition::{Location, definition_at},
     describe::SymbolDescription,
     grep::{GrepOptions, GrepResult, TextMatch},
+    search::SymbolInfo,
     usages::usages_at,
 };
 
@@ -302,6 +303,13 @@ impl ProjectTest {
         crate::describe::describe(&self.db, &self.files, name)
     }
 
+    /// Run `describe()` using the compiler2-visible file set.
+    #[allow(dead_code)]
+    pub(crate) fn describe_compiler2_visible(&self, name: &str) -> Vec<SymbolDescription> {
+        let files = baml_compiler2_hir::compiler2_all_files(&self.db);
+        crate::describe::describe(&self.db, &files, name)
+    }
+
     /// Run `grep()` and return the result.
     pub(crate) fn grep(&self, pattern: &str) -> GrepResult {
         let opts = GrepOptions {
@@ -323,8 +331,15 @@ impl ProjectTest {
     }
 
     /// Run `list_symbols()` and return the result.
-    pub(crate) fn list_symbols(&self) -> Vec<crate::search::SymbolInfo> {
+    pub(crate) fn list_symbols(&self) -> Vec<SymbolInfo> {
         crate::grep::list_symbols(&self.db, &self.files, &[])
+    }
+
+    /// Run `list_symbols()` using the compiler2-visible file set.
+    #[allow(dead_code)]
+    pub(crate) fn list_symbols_compiler2_visible(&self) -> Vec<SymbolInfo> {
+        let files = baml_compiler2_hir::compiler2_all_files(&self.db);
+        crate::grep::list_symbols(&self.db, &files, &[])
     }
 
     /// Format a `SymbolDescription` for snapshot comparison.
