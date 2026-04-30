@@ -814,8 +814,9 @@ impl io::IoNamespaceSys for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ShellOutput> {
         SysOpOutput::async_op(async move {
-            let mut cmd = tokio::process::Command::new("sh");
-            cmd.arg("-c").arg(&command);
+            let resolved = crate::shell::default_shell();
+            let mut cmd = tokio::process::Command::new(&resolved.path);
+            resolved.apply(&mut cmd, &command);
             run_process(&mut cmd, options, &command).await
         })
     }
