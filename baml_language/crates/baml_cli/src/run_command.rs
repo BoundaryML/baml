@@ -162,6 +162,12 @@ pub enum OutputFormat {
 // ============================================================================
 
 impl RunArgs {
+    fn emit_format_hint_if_needed(needs_format_hint: bool) {
+        if needs_format_hint {
+            println!("{FORMAT_HINT}");
+        }
+    }
+
     /// Print a `[verbose]`-prefixed line when `--verbose` is set; no-op otherwise.
     fn vlog(&self, args: std::fmt::Arguments<'_>) {
         if self.verbose {
@@ -274,16 +280,18 @@ impl RunArgs {
 
         let argv = self.build_argv();
 
-        let (db, engine) = if self.target.as_ref().is_some_and(|t| t.ends_with(".baml")) {
-            self.load_and_compile_standalone(
-                self.target.as_ref().unwrap(),
-                event_sink.clone(),
-                argv,
-            )?
-        } else {
-            self.load_and_compile(event_sink.clone(), argv)?
-        };
+        let (db, engine, needs_format_hint) =
+            if self.target.as_ref().is_some_and(|t| t.ends_with(".baml")) {
+                self.load_and_compile_standalone(
+                    self.target.as_ref().unwrap(),
+                    event_sink.clone(),
+                    argv,
+                )?
+            } else {
+                self.load_and_compile(event_sink.clone(), argv)?
+            };
         let _ = db; // keep db alive for engine lifetime
+        Self::emit_format_hint_if_needed(needs_format_hint);
 
         let toml_content = std::fs::read_to_string(self.from.join("baml.toml")).unwrap_or_default();
         let scripts = Self::parse_scripts(&toml_content);
@@ -412,13 +420,18 @@ impl RunArgs {
         &self,
         event_sink: Option<Arc<dyn bex_events::EventSink>>,
         argv: Vec<String>,
-    ) -> Result<(ProjectDatabase, BexEngine)> {
+    ) -> Result<(ProjectDatabase, BexEngine, bool)> {
         let (db, from, baml_files) = load_project_from(&self.from)?;
         self.vlog(format_args!("Loading project from {}", from.display()));
         if baml_files.is_empty() {
             anyhow::bail!("No .baml files found in {}", from.display());
         }
         self.vlog(format_args!("Found {} .baml file(s)", baml_files.len()));
+        let needs_format_hint = baml_files.iter().any(|path| {
+            std::fs::read_to_string(path)
+                .map(|source| source_needs_format_hint(&source))
+                .unwrap_or(false)
+        });
 
         self.check_project_diagnostics(&db, "Cannot run: compilation errors found")?;
         self.vlog(format_args!("Compiling..."));
@@ -427,7 +440,7 @@ impl RunArgs {
             "Compiled {} user function(s)",
             engine.user_functions().len()
         ));
-        Ok((db, engine))
+        Ok((db, engine, needs_format_hint))
     }
 
     /// Load a single .baml file in hermetic standalone mode.
@@ -439,7 +452,7 @@ impl RunArgs {
         file_path: &str,
         event_sink: Option<Arc<dyn bex_events::EventSink>>,
         argv: Vec<String>,
-    ) -> Result<(ProjectDatabase, BexEngine)> {
+    ) -> Result<(ProjectDatabase, BexEngine, bool)> {
         let canonical = std::fs::canonicalize(Path::new(file_path))
             .with_context(|| format!("File not found: {file_path}"))?;
         self.vlog(format_args!(
@@ -449,6 +462,7 @@ impl RunArgs {
 
         let content = std::fs::read_to_string(&canonical)
             .with_context(|| format!("Failed to read {}", canonical.display()))?;
+        let needs_format_hint = source_needs_format_hint(&content);
 
         // Project root is the file's parent so relative imports resolve.
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
@@ -466,7 +480,7 @@ impl RunArgs {
             "Compiled {} function(s) from standalone file",
             engine.user_functions().len()
         ));
-        Ok((db, engine))
+        Ok((db, engine, needs_format_hint))
     }
 
     // ========================================================================
@@ -1143,6 +1157,16 @@ impl RunArgs {
 // Reserved verbs & namespace helpers
 // ============================================================================
 
+const FORMAT_HINT: &str = "[INFO] Your code is unformatted, but will continue to run. You can fix this whenever you'd like by running `baml format`.";
+
+fn source_needs_format_hint(source: &str) -> bool {
+    let options = baml_fmt::FormatOptions::default();
+    match baml_fmt::format(source, &options) {
+        Ok(formatted) => formatted != source,
+        Err(_) => false,
+    }
+}
+
 /// BEP-027 Appendix A: names that cannot be used as `[scripts]` keys.
 const RESERVED_VERBS: &[&str] = &[
     "run", "test", "repl", "init", "help", "version", "fmt", "lint", "check", "build", "generate",
@@ -1657,6 +1681,32 @@ mod tests {
         Ty::Bool {
             attr: Default::default(),
         }
+    }
+
+    #[test]
+    fn source_needs_format_hint_returns_false_for_formatted_source() {
+        let source = "function main() -> string {\n    \"ok\"\n}\n";
+        assert!(!source_needs_format_hint(source));
+    }
+
+    #[test]
+    fn source_needs_format_hint_returns_true_for_unformatted_source() {
+        let source = "function main()->string {\n\"ok\"\n}\n";
+        assert!(source_needs_format_hint(source));
+    }
+
+    #[test]
+    fn source_needs_format_hint_returns_false_on_formatter_error() {
+        let source = "function main( -> string {";
+        assert!(!source_needs_format_hint(source));
+    }
+
+    #[test]
+    fn format_hint_text_matches_ticket() {
+        assert_eq!(
+            FORMAT_HINT,
+            "[INFO] Your code is unformatted, but will continue to run. You can fix this whenever you'd like by running `baml format`."
+        );
     }
 
     // Tests that touch the filesystem build paths under $TMPDIR. Appending
@@ -3058,7 +3108,7 @@ mod tests {
         args.from = project.to_path_buf();
         args.target = Some(s("eval"));
 
-        let (_db, engine) = args
+        let (_db, engine, _needs_format_hint) = args
             .load_and_compile(None, Vec::new())
             .expect("compile should succeed");
         match args.resolve_target(&engine, &no_scripts()).unwrap() {
@@ -3096,7 +3146,8 @@ backfill = "--function scripts.Backfill"
         let mut args_dev = run_args();
         args_dev.from = project.to_path_buf();
         args_dev.target = Some(s("dev"));
-        let (_db, engine) = args_dev.load_and_compile(None, Vec::new()).unwrap();
+        let (_db, engine, _needs_format_hint) =
+            args_dev.load_and_compile(None, Vec::new()).unwrap();
         let toml = std::fs::read_to_string(project.join("baml.toml")).unwrap();
         let scripts = RunArgs::parse_scripts(&toml);
         match args_dev.resolve_target(&engine, &scripts).unwrap() {
@@ -3111,7 +3162,7 @@ backfill = "--function scripts.Backfill"
         let mut args_bf = run_args();
         args_bf.from = project.to_path_buf();
         args_bf.target = Some(s("backfill"));
-        let (_db, engine) = args_bf.load_and_compile(None, Vec::new()).unwrap();
+        let (_db, engine, _needs_format_hint) = args_bf.load_and_compile(None, Vec::new()).unwrap();
         match args_bf.resolve_target(&engine, &scripts).unwrap() {
             ResolvedTarget::Script(expansion) => {
                 assert_eq!(expansion.function.as_deref(), Some("scripts.Backfill"));
