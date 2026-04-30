@@ -44,7 +44,7 @@ pub fn to_source_code(
     // Every symbol in the pool routes to exactly one leaf. Dedup via
     // `BTreeSet` so leaf and directory enumeration below is stable.
     let mut leaves: BTreeSet<LeafPath> = BTreeSet::new();
-    for (key, symbol) in pool.iter() {
+    for (key, symbol) in pool {
         leaves.insert(route(key, symbol));
     }
 
@@ -368,9 +368,8 @@ mod tests {
         span: u32,
         companions: Vec<(&str, Function)>,
     ) {
-        let parent_key = cg_name(pkg, ns, bare);
         pool.insert(
-            parent_key.clone(),
+            cg_name(pkg, ns, bare),
             Symbol::Function(bare_func(bare, file, span)),
         );
         for (suffix, mut companion) in companions {
@@ -1046,6 +1045,7 @@ mod tests {
     /// Insert parent + companions as independent pool entries. Each
     /// companion is described by `(suffix, args)`; the companion shares
     /// the parent's span so they cluster contiguously after sorting.
+    #[allow(clippy::too_many_arguments)]
     fn insert_parent_with_companion_args(
         pool: &mut SymbolPool,
         pkg: &str,
@@ -1197,15 +1197,7 @@ mod tests {
     #[test]
     fn vendor_function_fqn_uses_vendor_pkg() {
         let mut pool: SymbolPool = HashMap::new();
-        insert_parent_only(
-            &mut pool,
-            "aws",
-            &["s3"],
-            "create_bucket",
-            &[],
-            "x.baml",
-            0,
-        );
+        insert_parent_only(&mut pool, "aws", &["s3"], "create_bucket", &[], "x.baml", 0);
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
         assert!(leaf.contains(
@@ -1216,15 +1208,7 @@ mod tests {
     #[test]
     fn baml_pkg_function_fqn_keeps_baml_prefix() {
         let mut pool: SymbolPool = HashMap::new();
-        insert_parent_only(
-            &mut pool,
-            "baml",
-            &["http"],
-            "fetch",
-            &["url"],
-            "x.baml",
-            0,
-        );
+        insert_parent_only(&mut pool, "baml", &["http"], "fetch", &["url"], "x.baml", 0);
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("baml/http/__init__.py")];
         assert!(leaf.contains(

@@ -61,7 +61,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
     // triples with identical sort keys (shouldn't happen in practice,
     // but if they do) stay in a stable order across runs.
     let mut entries: Vec<(&Name, &Symbol)> = pool.iter().collect();
-    entries.sort_by(|a, b| a.0.cmp(b.0));
+    entries.sort_by_key(|e| e.0);
 
     let mut out: Vec<(LeafPath, EmittedSymbol, SortKey)> = Vec::new();
 
@@ -174,7 +174,7 @@ fn expand_function(
         .map(|n| n.as_str().to_string())
         .collect();
     expand_callable(
-        bare,
+        &bare,
         &fqn_root,
         &f.arguments,
         &f.return_type,
@@ -207,11 +207,7 @@ fn expand_methods(
     kind: MethodKind,
 ) -> Vec<PyMethodBinding> {
     let mut sorted: Vec<&baml_codegen_types::Function> = methods.iter().collect();
-    sorted.sort_by(|a, b| {
-        origin_key(&a.origin)
-            .cmp(&origin_key(&b.origin))
-            .then_with(|| a.name.as_str().cmp(b.name.as_str()))
-    });
+    sorted.sort_by_key(|m| (origin_key(&m.origin), m.name.as_str()));
 
     let mut out: Vec<PyMethodBinding> = Vec::new();
     for m in sorted {
@@ -224,7 +220,7 @@ fn expand_methods(
             .map(|n| n.as_str().to_string())
             .collect();
         expand_callable(
-            bare,
+            &bare,
             &fqn_root,
             &m.arguments,
             &m.return_type,
@@ -263,17 +259,10 @@ fn expand_methods(
 ///   underscore — matches the longstanding free-function rule).
 /// - `foo$<other>` → `foo__<other>`.
 fn bare_callable_name(name: &str) -> String {
-    match name.find('$') {
+    match name.split_once('$') {
         None => name.to_string(),
-        Some(i) => {
-            let parent = &name[..i];
-            let suffix = &name[i + 1..];
-            if suffix == "stream" {
-                format!("{parent}_stream")
-            } else {
-                format!("{parent}__{suffix}")
-            }
-        }
+        Some((parent, "stream")) => format!("{parent}_stream"),
+        Some((parent, suffix)) => format!("{parent}__{suffix}"),
     }
 }
 
@@ -282,7 +271,7 @@ fn bare_callable_name(name: &str) -> String {
 /// arrive as their own callable; the suffix-aware `bare` value is
 /// computed up front by the caller via `bare_callable_name`.
 fn expand_callable<F>(
-    bare: String,
+    bare: &str,
     fqn_root: &str,
     arguments: &[baml_codegen_types::FunctionArgument],
     return_type: &Ty,
@@ -294,13 +283,13 @@ fn expand_callable<F>(
         .iter()
         .map(|a| a.name.as_str().to_string())
         .collect();
-    let tys: Vec<Ty> = arguments.iter().map(|a| a.ty.clone()).collect();
+    let arg_types: Vec<Ty> = arguments.iter().map(|a| a.ty.clone()).collect();
     emit(
-        bare.clone(),
+        bare.to_string(),
         fqn_root.to_string(),
         SyncAsync::Sync,
         params.clone(),
-        tys.clone(),
+        arg_types.clone(),
         return_type.clone(),
     );
     emit(
@@ -308,7 +297,7 @@ fn expand_callable<F>(
         fqn_root.to_string(),
         SyncAsync::Async,
         params,
-        tys,
+        arg_types,
         return_type.clone(),
     );
 }

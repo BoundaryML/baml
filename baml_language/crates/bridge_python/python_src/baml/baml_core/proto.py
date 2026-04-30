@@ -240,19 +240,6 @@ def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-def _is_pydantic_generic(cls: type) -> bool:
-    """Whether `cls` was declared as `class C(BaseModel, Generic[T, …])`.
-
-    Pydantic stores the declared TypeVars on `__pydantic_generic_metadata__
-    ["parameters"]`; non-generic models have an empty tuple there.
-    """
-    meta = getattr(cls, "__pydantic_generic_metadata__", None)
-    if meta is None:
-        return False
-    params = meta.get("parameters") or ()
-    return len(params) > 0
-
-
 _MEDIA_KIND_SUBPATHS = {
     baml_outbound_pb2.MediaTypeEnum.IMAGE: "baml.media.Image",
     baml_outbound_pb2.MediaTypeEnum.AUDIO: "baml.media.Audio",
@@ -323,19 +310,19 @@ def _baml_ty_to_python_type(baml_ty) -> Any:
     raise BamlError(f"Unsupported BamlTy variant {which!r} in generic arg")
 
 
-def _parameterize(cls: type, generic_args) -> type:
-    """Apply BAML generic args to a Python class via `cls[arg_types…]`.
+def _parameterize(cls, generic_args):
+    """Apply BAML generic args to a symbol via `cls[arg_types…]`.
+
+    Works for any subscriptable symbol — Pydantic generics, generic
+    type aliases (PEP 695 `TypeAliasType` or `typing` aliases like
+    `List[T]`), `typing.Generic` subclasses, etc. The try/except
+    catches the failure modes (arity mismatch, non-generic class,
+    fully-bound alias) and falls back to the unparameterized `cls`.
 
     No-op when `generic_args` is empty (the rollout-safe path: works
     before the Rust producer is updated to populate them — `13b` §3.5).
-    Falls back to the unparameterized class on any `TypeError` /
-    `AttributeError`, e.g. arity mismatch or non-generic class. Pydantic
-    caches `cls[args]` after the first call, so steady-state cost is a
-    dict lookup.
     """
     if not generic_args:
-        return cls
-    if not _is_pydantic_generic(cls):
         return cls
     py_args = tuple(_baml_ty_to_python_type(g.ty) for g in generic_args)
     try:

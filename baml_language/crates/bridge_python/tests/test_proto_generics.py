@@ -34,7 +34,6 @@ if str(SIM_ROOT) not in sys.path:
 from baml.baml_core.proto import (
     _base_class_for_fqn,
     _baml_ty_to_python_type,
-    _is_pydantic_generic,
     _parameterize,
     _set_inbound_value,
 )
@@ -59,7 +58,7 @@ class Plain(pydantic.BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# _base_class_for_fqn / _is_pydantic_generic
+# _base_class_for_fqn
 # ---------------------------------------------------------------------------
 
 
@@ -70,15 +69,6 @@ def test_base_class_for_fqn_strips_parameterization():
 
 def test_base_class_for_fqn_passes_non_generic_through():
     assert _base_class_for_fqn(Plain) is Plain
-
-
-def test_is_pydantic_generic_detects_generic_models():
-    assert _is_pydantic_generic(Box) is True
-    assert _is_pydantic_generic(Crate) is True
-
-
-def test_is_pydantic_generic_rejects_non_generic_models():
-    assert _is_pydantic_generic(Plain) is False
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +164,23 @@ def test_parameterize_falls_back_for_non_generic_class():
     args = [_generic_arg("T", lambda ty: ty.int_type.SetInParent())]
     # Plain has no TypeVars; parameterization is a no-op.
     assert _parameterize(Plain, args) is Plain
+
+
+def test_parameterize_applies_to_generic_type_alias():
+    """Generic type aliases (codegen emits `StringList: TypeAlias = List[T]`)
+    must parameterize the same way pydantic generics do — the symbol is
+    not a class, but it's still subscriptable."""
+    StringList = List[T]  # what `StringList: TypeAlias = List[T]` evaluates to
+    args = [_generic_arg("T", lambda ty: ty.int_type.SetInParent())]
+    assert _parameterize(StringList, args) == List[int]
+
+
+def test_parameterize_falls_back_for_fully_bound_alias():
+    # Already-concrete alias has no TypeVars left to bind — try/except
+    # catches the TypeError and returns the alias unchanged.
+    Concrete = List[int]
+    args = [_generic_arg("T", lambda ty: ty.string_type.SetInParent())]
+    assert _parameterize(Concrete, args) is Concrete
 
 
 # ---------------------------------------------------------------------------

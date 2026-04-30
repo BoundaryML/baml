@@ -47,15 +47,10 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
         Ty::Media(MediaKind::Pdf) => "baml.media.Pdf".to_string(),
         Ty::Media(MediaKind::Generic) => "typing.Any".to_string(),
         Ty::Class(name, args) => {
-            let head = render_name_ref_or_self_ref(name, ctx);
-            if args.is_empty() {
-                head
-            } else {
-                let arg_strs: Vec<String> = args.iter().map(|a| translate_ty(a, ctx)).collect();
-                format!("{head}[{}]", arg_strs.join(", "))
-            }
+            let arg_strs: Vec<String> = args.iter().map(|a| translate_ty(a, ctx)).collect();
+            render_name_ref_or_self_ref(name, ctx, &arg_strs.join(", "))
         }
-        Ty::TypeAlias(name) => render_name_ref_or_self_ref(name, ctx),
+        Ty::TypeAlias(name) => render_name_ref_or_self_ref(name, ctx, ""),
         Ty::Enum(name) => render_name_ref(name, ctx),
         Ty::TypeVar(name) => name.as_str().to_string(),
         Ty::Optional(inner) => format!("typing.Optional[{}]", translate_ty(inner, ctx)),
@@ -90,20 +85,24 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
     }
 }
 
-fn render_name_ref_or_self_ref(name: &Name, ctx: &TranslateCtx) -> String {
-    let rendered = render_name_ref(name, ctx);
-    if should_quote_self_ref(name, ctx) {
-        py_string(&rendered)
+fn render_name_ref_or_self_ref(name: &Name, ctx: &TranslateCtx, generic_args: &str) -> String {
+    let head = render_name_ref(name, ctx);
+    let full = if generic_args.is_empty() {
+        head
     } else {
-        rendered
+        format!("{head}[{generic_args}]")
+    };
+    if should_quote_self_ref(name, ctx) {
+        py_string(&full)
+    } else {
+        full
     }
 }
 
 fn should_quote_self_ref(name: &Name, ctx: &TranslateCtx) -> bool {
     match &ctx.self_ref {
         Some(self_ref) => {
-            route_class_ref(name) == self_ref.routed_leaf
-                && name.bare_name() == self_ref.bare_name
+            route_class_ref(name) == self_ref.routed_leaf && name.bare_name() == self_ref.bare_name
         }
         None => false,
     }
@@ -545,6 +544,27 @@ mod tests {
                 ty: Ty::TypeAlias(name("user", &["util"], "RecList")),
                 ctx: ctx_with_self(&["util"], &["util"], "RecList"),
                 expected: "\"RecList\"",
+            },
+            Case {
+                label: "self-ref class no args",
+                ty: Ty::Class(name("user", &["lorem"], "Node"), vec![]),
+                ctx: ctx_with_self(&["lorem"], &["lorem"], "Node"),
+                expected: "\"Node\"",
+            },
+            Case {
+                label: "self-ref generic class wraps args inside quotes",
+                ty: Ty::Class(name("user", &["lorem"], "Node"), vec![Ty::String]),
+                ctx: ctx_with_self(&["lorem"], &["lorem"], "Node"),
+                expected: "\"Node[str]\"",
+            },
+            Case {
+                label: "self-ref generic class nested in list wraps args inside quotes",
+                ty: Ty::List(Box::new(Ty::Class(
+                    name("user", &["lorem"], "Node"),
+                    vec![Ty::Int],
+                ))),
+                ctx: ctx_with_self(&["lorem"], &["lorem"], "Node"),
+                expected: "typing.List[\"Node[int]\"]",
             },
             Case {
                 label: "recursive alias inside list",

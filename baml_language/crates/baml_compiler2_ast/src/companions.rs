@@ -43,9 +43,6 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
         parent,
         "render_prompt",
         &["baml", "llm", "PromptAst"],
-        // `$render_prompt` takes the parent's parameters, so its signature
-        // still references the parent's TypeVars.
-        parent.generic_params.clone(),
     ))
 }
 
@@ -58,9 +55,6 @@ fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
         parent,
         "build_request",
         &["baml", "http", "Request"],
-        // `$build_request` returns `baml.http.Request` and parameter types
-        // are the post-call erased shape; no TypeVars survive.
-        Vec::new(),
     ))
 }
 
@@ -72,8 +66,6 @@ fn llm_build_request_stream(parent: &FunctionDef) -> Option<FunctionDef> {
         parent,
         "build_request_stream",
         &["baml", "http", "Request"],
-        // Same as `$build_request`: erased post-call shape.
-        Vec::new(),
     ))
 }
 
@@ -103,9 +95,7 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
 
     Some(FunctionDef {
         name,
-        // `$parse` takes a `json: string` and returns the parent's domain
-        // type — the parsed (post-call) shape. No parent TypeVars survive.
-        generic_params: Vec::new(),
+        generic_params: parent.generic_params.clone(),
         params: vec![json_param],
         return_type,
         throws: None,
@@ -122,7 +112,6 @@ fn make_llm_companion(
     parent: &FunctionDef,
     target: &str,
     return_type_path: &[&str],
-    generic_params: Vec<Name>,
 ) -> FunctionDef {
     let name = Name::new(format!("{}${}", parent.name, target));
     let return_type = SpannedTypeExpr {
@@ -148,7 +137,7 @@ fn make_llm_companion(
     );
     FunctionDef {
         name,
-        generic_params,
+        generic_params: parent.generic_params.clone(),
         params: parent.params.clone(),
         return_type: Some(return_type),
         throws: None,
