@@ -258,12 +258,12 @@ const STEPS: Step[] = [
         annotations: [
           {
             column: 24,
-            lineNumber: 18,
+            lineNumber: 19,
             text: 'declarative retries.\nnot a library wrapper.',
           },
           {
             column: 18,
-            lineNumber: 23,
+            lineNumber: 28,
             text: 'tests live with the prompt.\nrun them in the playground or CI.',
           },
         ],
@@ -274,7 +274,7 @@ const STEPS: Step[] = [
       },
     ],
     body: 'Retries, streaming, tests, and multi-language codegen at compiler level, not library level. One file, every client, every guarantee.',
-    heading: 'Yeah, we built a whole language.',
+    heading: 'We need a whole new language.',
   },
 ];
 

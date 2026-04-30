@@ -597,10 +597,6 @@ const HeroSection = () => {
             BAML is a statically-typed, expression-oriented language for typed
             prompt boundaries and structured-output AI.
           </p>
-          <p style={customStyles.p}>
-            Define a class, write a Jinja-templated prompt, and get a typed
-            result.
-          </p>
           <div style={customStyles.ctaContainer}>
             <div className="w-full max-w-xl">
               <p
