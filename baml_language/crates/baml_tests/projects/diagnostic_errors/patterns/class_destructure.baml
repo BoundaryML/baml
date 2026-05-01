@@ -7,6 +7,16 @@ class Dog {
     breed string
 }
 
+class Cat {
+    name string
+    indoor bool
+}
+
+class Fish {
+    name string
+    freshwater bool
+}
+
 // Destructure in let — use the extracted field
 function test_let_destructure_use_field() -> string {
     let x: Animal { name } = Animal { name: "Rex" };

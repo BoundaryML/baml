@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.Cat {
+  name: string
+  indoor: bool
+}
+class user.Fish {
+  name: string
+  freshwater: bool
+}
+function user.test_or_same_bindings(x: user.Cat | user.Fish) -> string throws never {
+  { : string
+    match (x : user.Cat | user.Fish) : string
+      Cat { name: let name } | Fish { name: let name } =>
+        name : string
+  }
+}
+class user.Cat$stream {
+  name: null | string
+  indoor: null | bool
+}
+class user.Fish$stream {
+  name: null | string
+  freshwater: null | bool
+}

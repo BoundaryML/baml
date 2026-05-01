@@ -1,0 +1,15 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+class user.Cat {
+  name: string
+  indoor: bool
+}
+class user.Fish {
+  name: string
+  freshwater: bool
+}
+function user.test_or_same_bindings(x: user.Cat | user.Fish) -> string  [expr] {
+  {  } match (x) { Cat { name: let name } | Fish { name: let name } => name }
+}

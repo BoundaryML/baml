@@ -12,6 +12,18 @@ class Outer {
   name string
 }
 
+enum Color {
+  Red
+}
+
+class Cat {
+  name string
+}
+
+class Fish {
+  freshwater bool
+}
+
 // Binding name collides with destructured field name
 function BindAndField() -> int {
   let x: Inner { x } = Inner { val: 1 };
@@ -63,95 +75,232 @@ function TripleBind() -> int {
   val
 }
 
+// Destructure against an unresolved class name
+function MissingClassDestructure() -> int {
+  let MissingInner { val } = 1;
+  val
+}
+
+// Destructure a concrete type that exists but is not a class
+function EnumDestructure() -> int {
+  let Color { x } = 1;
+  x
+}
+
+// Primitive sugar followed by class destructure in a let pattern
+function PrimitiveLetDestructure() -> int {
+  let int { val } = 1;
+  val
+}
+
+// Unresolved class name nested inside a valid class destructure
+function NestedMissingClass(x: Outer) -> int {
+  let Outer { middle: MissingMiddle { val } } = x;
+  val
+}
+
+// Non-existent field nested inside a valid class destructure
+function NestedMissingField(x: Outer) -> int {
+  let Outer { middle: Middle { inner: Inner { missing } } } = x;
+  missing
+}
+
+// Duplicate field names with explicit aliases should not produce duplicate binding noise
+function DuplicateFieldAliases(x: Inner) -> int {
+  let Inner { val: let a, val: let b } = x;
+  a
+}
+
+// Or-pattern with an unresolved class in one alternative
+function OrMissingClass(x: Cat) -> string {
+  match (x) {
+    Cat { name } | MissingPet { name } => name
+  }
+}
+
+// Or-pattern with the same binding name but a bad field in one alternative
+function OrBadField(x: Cat | Fish) -> string {
+  match (x) {
+    Cat { name } | Fish { name } => name
+  }
+}
+
+// Chain-internal type mismatch should point at the chain pattern
+function ChainTypeMismatch() -> int {
+  let x: string: Inner { val } = "nope";
+  val
+}
+
 //----
 //- diagnostics
 // Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:17:17 ]
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:29:18 ]
 //     │
-//  17 │   let x: Inner { x } = Inner { val: 1 };
-//     │                 ─┬  
+//  29 │   let x: Inner { x } = Inner { val: 1 };
+//     │                  ┬  
 //     │                  ╰── identifier `x` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0094
 // ────╯
 // Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:23:14 ]
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:35:14 ]
 //     │
-//  23 │   let x: let x = 1;
+//  35 │   let x: let x = 1;
 //     │              ┬  
 //     │              ╰── identifier `x` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0094
 // ────╯
 // Error: identifier `val` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:29:19 ]
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:41:20 ]
 //     │
-//  29 │   let val: Inner { val } = Inner { val: 1 };
-//     │                   ──┬─  
+//  41 │   let val: Inner { val } = Inner { val: 1 };
+//     │                    ─┬─  
 //     │                     ╰─── identifier `val` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0094
 // ────╯
 // Error: identifier `tag` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:35:36 ]
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:47:37 ]
 //     │
-//  35 │   let tag: Outer { middle: Middle { tag, inner: Inner { val } } } = Outer {
-//     │                                    ──┬─  
+//  47 │   let tag: Outer { middle: Middle { tag, inner: Inner { val } } } = Outer {
+//     │                                     ─┬─  
 //     │                                      ╰─── identifier `tag` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0094
 // ────╯
 // Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:44:39 ]
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:56:39 ]
 //     │
-//  44 │   let Middle { inner: let x, tag: let x } = Middle {
+//  56 │   let Middle { inner: let x, tag: let x } = Middle {
 //     │                                       ┬  
 //     │                                       ╰── identifier `x` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0094
 // ────╯
 // Error: identifier `name` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:53:20 ]
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:65:21 ]
 //     │
-//  53 │   let name: Outer { name } = Outer {
-//     │                    ──┬──  
-//     │                      ╰──── identifier `name` is bound more than once in the same pattern
+//  65 │   let name: Outer { name } = Outer {
+//     │                     ──┬─  
+//     │                       ╰─── identifier `name` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0094
 // ────╯
 // Error: identifier `val` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:62:19 ]
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:74:20 ]
 //     │
-//  62 │   let val: Inner { val }: let val = Inner { val: 1 };
-//     │                   ──┬─  
+//  74 │   let val: Inner { val }: let val = Inner { val: 1 };
+//     │                    ─┬─  
 //     │                     ╰─── identifier `val` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0094
 // ────╯
 // Error: class `Inner` has no field `x`
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:17:24 ]
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:29:18 ]
 //     │
-//  17 │   let x: Inner { x } = Inner { val: 1 };
-//     │                        ────────┬───────  
-//     │                                ╰───────── class `Inner` has no field `x`
+//  29 │   let x: Inner { x } = Inner { val: 1 };
+//     │                  ┬  
+//     │                  ╰── class `Inner` has no field `x`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
 // Error: type mismatch: expected int, got string
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:48:3 ]
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:60:3 ]
 //     │
-//  48 │   x
+//  60 │   x
 //     │   ┬  
 //     │   ╰── type mismatch: expected int, got string
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: type mismatch: expected int, got user.Inner
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:63:3 ]
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:75:3 ]
 //     │
-//  63 │   val
+//  75 │   val
 //     │   ─┬─  
 //     │    ╰─── type mismatch: expected int, got user.Inner
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
+// Error: unresolved name: MissingInner
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:80:7 ]
+//     │
+//  80 │   let MissingInner { val } = 1;
+//     │       ──────┬─────  
+//     │             ╰─────── unresolved name: MissingInner
+//     │ 
+//     │ Note: Error code: E0003
+// ────╯
+// Error: cannot destructure `Color`: only classes can be destructured
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:86:7 ]
+//     │
+//  86 │   let Color { x } = 1;
+//     │       ──┬──  
+//     │         ╰──── cannot destructure `Color`: only classes can be destructured
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: cannot destructure `int`: only classes can be destructured
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:92:7 ]
+//     │
+//  92 │   let int { val } = 1;
+//     │       ─┬─  
+//     │        ╰─── cannot destructure `int`: only classes can be destructured
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unresolved name: MissingMiddle
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:98:23 ]
+//     │
+//  98 │   let Outer { middle: MissingMiddle { val } } = x;
+//     │                       ──────┬──────  
+//     │                             ╰──────── unresolved name: MissingMiddle
+//     │ 
+//     │ Note: Error code: E0003
+// ────╯
+// Error: class `Inner` has no field `missing`
+//      ╭─[ functions_v2_duplicate_pattern_binding.baml:104:47 ]
+//      │
+//  104 │   let Outer { middle: Middle { inner: Inner { missing } } } = x;
+//      │                                               ───┬───  
+//      │                                                  ╰───── class `Inner` has no field `missing`
+//      │ 
+//      │ Note: Error code: E0007
+// ─────╯
+// Error: field `val` listed more than once in `Inner` destructure
+//      ╭─[ functions_v2_duplicate_pattern_binding.baml:110:27 ]
+//      │
+//  110 │   let Inner { val: let a, val: let b } = x;
+//      │                           ─┬─  
+//      │                            ╰─── field `val` listed more than once in `Inner` destructure
+//      │ 
+//      │ Note: Error code: E0007
+// ─────╯
+// Error: unresolved name: MissingPet
+//      ╭─[ functions_v2_duplicate_pattern_binding.baml:117:20 ]
+//      │
+//  117 │     Cat { name } | MissingPet { name } => name
+//      │                    ─────┬────  
+//      │                         ╰────── unresolved name: MissingPet
+//      │ 
+//      │ Note: Error code: E0003
+// ─────╯
+// Error: class `Fish` has no field `name`
+//      ╭─[ functions_v2_duplicate_pattern_binding.baml:124:27 ]
+//      │
+//  124 │     Cat { name } | Fish { name } => name
+//      │                           ──┬─  
+//      │                             ╰─── class `Fish` has no field `name`
+//      │ 
+//      │ Note: Error code: E0007
+// ─────╯
+// Error: type mismatch: expected string, got user.Inner
+//      ╭─[ functions_v2_duplicate_pattern_binding.baml:130:18 ]
+//      │
+//  130 │   let x: string: Inner { val } = "nope";
+//      │                  ──────┬──────  
+//      │                        ╰──────── type mismatch: expected string, got user.Inner
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

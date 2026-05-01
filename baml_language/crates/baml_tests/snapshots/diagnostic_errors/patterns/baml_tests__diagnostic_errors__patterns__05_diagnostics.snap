@@ -1,0 +1,83 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: type mismatch: expected user.Foo, got user.Foo | user.Bar
+     ╭─[ class_destructure.baml:157:16 ]
+     │
+ 157 │     accept_foo(x)
+     │                ┬  
+     │                ╰── type mismatch: expected user.Foo, got user.Foo | user.Bar
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [hir] Error: or-pattern alternatives must bind the same variables; not bound in all alternatives: `name`; only bound in some alternatives: `freshwater`
+   ╭─[ or_patterns_invalid.baml:4:24 ]
+   │
+ 4 │         Cat { name } | Fish { freshwater } => "matched"
+   │                        ─────────┬─────────  
+   │                                 ╰─────────── or-pattern alternatives must bind the same variables; not bound in all alternatives: `name`; only bound in some alternatives: `freshwater`
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [hir] Error: or-pattern alternatives must bind the same variables; not bound in all alternatives: `name`
+    ╭─[ or_patterns_invalid.baml:11:24 ]
+    │
+ 11 │         Cat { name } | Fish => "matched"
+    │                        ──┬─  
+    │                          ╰─── or-pattern alternatives must bind the same variables; not bound in all alternatives: `name`
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [hir] Error: or-pattern alternatives must bind the same variables; only bound in some alternatives: `name`
+    ╭─[ or_patterns_invalid.baml:18:15 ]
+    │
+ 18 │         int | Cat { name } => name
+    │               ──────┬─────  
+    │                     ╰─────── or-pattern alternatives must bind the same variables; only bound in some alternatives: `name`
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: or-pattern binding `val` has type `int` in one alternative but `string` in another
+    ╭─[ or_patterns_invalid.baml:33:35 ]
+    │
+ 33 │         IntBox { val } | StrBox { val } => "matched"
+    │                                   ─┬─  
+    │                                    ╰─── or-pattern binding `val` has type `int` in one alternative but `string` in another
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: class `Cat` has no field `bogus`
+    ╭─[ or_patterns_invalid.baml:64:15 ]
+    │
+ 64 │         Cat { bogus } => bogus
+    │               ──┬──  
+    │                 ╰──── class `Cat` has no field `bogus`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [type] Error: field `name` listed more than once in `Cat` destructure
+    ╭─[ or_patterns_invalid.baml:71:21 ]
+    │
+ 71 │         Cat { name, name } => name
+    │                     ──┬─  
+    │                       ╰─── field `name` listed more than once in `Cat` destructure
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [type] Error: cannot destructure `int`: only classes can be destructured
+    ╭─[ or_patterns_invalid.baml:78:9 ]
+    │
+ 78 │         int { val } => val
+    │         ─┬─  
+    │          ╰─── cannot destructure `int`: only classes can be destructured
+    │ 
+    │ Note: Error code: E0001
+────╯

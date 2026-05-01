@@ -1,0 +1,161 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+class Animal {
+    name: string,
+}
+
+class Dog {
+    name: string,
+    breed: string,
+}
+
+class Cat {
+    name: string,
+    indoor: bool,
+}
+
+class Fish {
+    name: string,
+    freshwater: bool,
+}
+
+// Destructure in let — use the extracted field
+function test_let_destructure_use_field() -> string {
+    let x: Animal = Animal { name: "Rex" };
+    return name;
+}
+
+// Destructure with chain — use the field
+function test_let_destructure_chain() -> string {
+    let x: Animal = Animal { name: "Rex" };
+    return name;
+}
+
+// Destructure multiple fields
+function test_let_destructure_multiple_fields() -> string {
+    let x: Dog = Dog { name: "Rex", breed: "Lab" };
+    return name + " " + breed;
+}
+
+// Type then destructure — use extracted field
+function test_type_then_destructure() -> string {
+    let x: Dog = Dog { name: "Rex", breed: "Lab" };
+    return breed;
+}
+
+// Destructure in match arm
+function test_match_destructure(x: Animal) -> string {
+    match (x) {
+        Animal => name,
+    }
+}
+
+// Destructure in match with multiple fields
+function test_match_destructure_multi(x: Dog) -> string {
+    match (x) {
+        Dog => name + " the " + breed,
+    }
+}
+
+// --- Deep nesting ---
+
+class Inner {
+    value: string,
+}
+
+class Middle {
+    inner: Inner,
+    tag: string,
+}
+
+class Outer {
+    middle: Middle,
+    label: string,
+}
+
+// Two levels: Outer { middle: Middle { tag } }
+function test_nested_destructure_let(x: Outer) -> string {
+    let _: Outer = x;
+    return value + ":" + tag;
+}
+
+// Two levels in match
+function test_nested_destructure_match(x: Outer) -> string {
+    match (x) {
+        Outer => label + "/" + tag,
+    }
+}
+
+// Three levels deep
+function test_deep_destructure(x: Outer) -> string {
+    let _: Outer = x;
+    return value;
+}
+
+// Nested destructure in match with multiple arms
+function test_nested_destructure_multi_arm(x: Animal | Outer) -> string {
+    match (x) {
+        Outer => tag,
+        Animal => name,
+    }
+}
+
+// --- Edge cases ---
+
+// Empty destructure (zero fields)
+function test_empty_destructure(x: Animal) -> string {
+    match (x) {
+        Animal => "matched",
+    }
+}
+
+// 3+ or-alternatives
+class Goldfish {
+    name: string,
+}
+
+function test_three_or_alternatives(x: Cat | Fish | Goldfish) -> string {
+    match (x) {
+        Cat => name,
+    }
+}
+
+// Optional field
+class MaybeNamed {
+    name: string?,
+}
+
+function test_optional_field_destructure(x: MaybeNamed) -> string? {
+    match (x) {
+        MaybeNamed => name,
+    }
+}
+
+// Nested or inside field position
+class Wrapper {
+    pet: Cat | Fish,
+}
+
+function test_nested_or_in_field(x: Wrapper) -> string {
+    let _: Wrapper = x;
+    return name;
+}
+
+// Or-pattern in let: x should be typed as Foo | Bar
+class Foo {
+    a: int,
+}
+
+class Bar {
+    a: int,
+}
+
+function accept_foo(f: Foo) -> int {
+    f.a
+}
+
+function test_or_let_union_type() -> int {
+    let x: Foo = Bar { a: 42 };
+    accept_foo(x)
+}

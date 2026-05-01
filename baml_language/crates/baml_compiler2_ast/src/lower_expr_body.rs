@@ -5,7 +5,7 @@
 //! (parallel span storage) in one pass.
 
 use baml_base::{Name, TypePath};
-use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
+use baml_compiler_syntax::{SyntaxKind, SyntaxNode, trimmed_range};
 use la_arena::Arena;
 use rowan::ast::AstNode;
 use text_size::TextRange;
@@ -233,6 +233,8 @@ struct PatternPosition {
     binding_name: Option<Name>,
     /// The lowered type expression. `None` for bare binding names or malformed CST.
     type_expr: Option<crate::ast::TypeExpr>,
+    /// Exact CST span of the type expression/class name before any destructure body.
+    type_expr_span: Option<TextRange>,
     /// Non-empty when this position is a class destructure.
     fields: Vec<FieldPat>,
     span: TextRange,
@@ -244,6 +246,7 @@ impl PatternPosition {
             has_let: false,
             binding_name: None,
             type_expr: None,
+            type_expr_span: None,
             fields: Vec::new(),
             span,
         }
@@ -1085,7 +1088,7 @@ impl LoweringContext {
     /// bindings do not share scope. Plain `|` (no `let`) inside a `PATTERN_ALT`
     /// is chain-local and extends the most recent position with Or-alternatives.
     fn lower_match_pattern(&mut self, node: &SyntaxNode) -> PatId {
-        let span = node.text_range();
+        let span = trimmed_range(node);
         let alts: Vec<PatId> = node
             .children()
             .filter(|c| c.kind() == SyntaxKind::PATTERN_ALT)
@@ -1101,7 +1104,7 @@ impl LoweringContext {
     /// Lower a single `PATTERN_ALT` into a chain. Each colon-separated position
     /// becomes a chain link; chain-local `|` produces an Or pattern at that link.
     fn lower_pattern_alternative(&mut self, node: &SyntaxNode) -> PatId {
-        let span = node.text_range();
+        let span = trimmed_range(node);
 
         // Collect colon-separated chain links. Each link is a vec of 1+
         // chain-local alternatives.
@@ -1134,6 +1137,9 @@ impl LoweringContext {
                         cur_has_let = false;
                         push_or_alt(&mut chain, span);
                     }
+                    SyntaxKind::L_BRACE | SyntaxKind::R_BRACE if cur.type_expr.is_some() => {
+                        cur.span = TextRange::new(cur.span.start(), token.text_range().end());
+                    }
                     k if is_ident_token(k) && cur_has_let && cur.binding_name.is_none() => {
                         cur.binding_name = Some(Name::new(token.text()));
                         cur.span = token.text_range();
@@ -1145,12 +1151,15 @@ impl LoweringContext {
                         if let Some(cst_ty) =
                             baml_compiler_syntax::ast::TypeExpr::cast(child.clone())
                         {
+                            let type_expr_span = trimmed_range(&child);
                             cur.type_expr =
                                 Some(crate::lower_type_expr::lower_type_expr_node(&cst_ty));
-                            cur.span = child.text_range();
+                            cur.span = type_expr_span;
+                            cur.type_expr_span = Some(type_expr_span);
                         }
                     }
                     SyntaxKind::PATTERN_FIELD => {
+                        cur.span = TextRange::new(cur.span.start(), trimmed_range(&child).end());
                         cur.fields.push(self.lower_pattern_field(&child));
                     }
                     _ => {}
@@ -1184,7 +1193,10 @@ impl LoweringContext {
             let alt = alts.into_iter().next().unwrap();
             return self.lower_pattern_position(alt, fallback_span);
         }
-        let span = alts.first().map(|a| a.span).unwrap_or(fallback_span);
+        let span = match (alts.first(), alts.last()) {
+            (Some(first), Some(last)) => TextRange::new(first.span.start(), last.span.end()),
+            _ => fallback_span,
+        };
         let parts: Vec<PatId> = alts
             .into_iter()
             .map(|alt| self.lower_pattern_position(alt, fallback_span))
@@ -1222,7 +1234,11 @@ impl LoweringContext {
                 },
                 chain: None,
             };
-            return self.alloc_pattern(pat, span);
+            let pat_id = self.alloc_pattern(pat, span);
+            self.source_map
+                .pattern_class_name_spans
+                .insert(pat_id, pos.type_expr_span.unwrap_or(span));
+            return pat_id;
         }
 
         // Bare binding name from parser lookahead (WORD token after `let`).
@@ -1275,6 +1291,7 @@ impl LoweringContext {
     /// - With pattern `name: <pat>` → `FieldPat { field: name, pat: <pat> }`
     fn lower_pattern_field(&mut self, node: &SyntaxNode) -> FieldPat {
         let mut field_name: Option<Name> = None;
+        let mut field_name_span: Option<TextRange> = None;
         let mut inner_pat: Option<PatId> = None;
 
         for elem in node.children_with_tokens() {
@@ -1282,6 +1299,7 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => {
                     if is_ident_token(token.kind()) && field_name.is_none() {
                         field_name = Some(Name::new(token.text()));
+                        field_name_span = Some(token.text_range());
                     }
                 }
                 rowan::NodeOrToken::Node(child) => {
@@ -1294,9 +1312,12 @@ impl LoweringContext {
 
         let field = field_name.unwrap_or_else(|| Name::new("_"));
         let pat = inner_pat.unwrap_or_else(|| {
-            let span = node.text_range();
+            let span = trimmed_range(node);
             self.alloc_pattern(Pattern::binding(field.clone()), span)
         });
+        if let Some(span) = field_name_span {
+            self.source_map.pattern_field_name_spans.insert(pat, span);
+        }
         FieldPat { field, pat }
     }
 

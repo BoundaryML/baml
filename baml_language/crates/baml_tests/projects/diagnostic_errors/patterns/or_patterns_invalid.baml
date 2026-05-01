@@ -1,5 +1,3 @@
-// Classes Cat and Fish are defined in or_patterns.baml
-
 // Or-pattern where alternatives bind different variables
 function test_or_mismatched_bindings(x: Cat | Fish) -> string {
     match (x) {

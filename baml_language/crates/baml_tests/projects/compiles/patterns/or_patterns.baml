@@ -1,5 +1,3 @@
-// Classes are defined in class_destructure.baml
-
 class Cat {
     name string
     indoor bool

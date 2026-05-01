@@ -418,6 +418,11 @@ pub struct AstSourceMap {
     pub pattern_spans: Arena<TextRange>,
     pub match_arm_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
+    /// For class destructure patterns, the span of just the class/type name.
+    pub pattern_class_name_spans: HashMap<PatId, TextRange>,
+    /// For class destructure fields, the span of just the field name.
+    /// Keyed by the field's lowered pattern id.
+    pub pattern_field_name_spans: HashMap<PatId, TextRange>,
     /// For `MemberAccess` expressions, the span of just the member name (after the dot).
     pub member_access_member_spans: HashMap<ExprId, TextRange>,
     /// For multi-segment `Path` expressions, per-segment spans.
@@ -433,6 +438,8 @@ impl AstSourceMap {
             pattern_spans: Arena::new(),
             match_arm_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
+            pattern_class_name_spans: HashMap::new(),
+            pattern_field_name_spans: HashMap::new(),
             member_access_member_spans: HashMap::new(),
             path_segment_spans: HashMap::new(),
         }
@@ -488,6 +495,22 @@ impl AstSourceMap {
             .nth(raw as usize)
             .map(|(_, &span)| span)
             .unwrap_or_default()
+    }
+
+    /// Look up the class/type-name span for a class destructure pattern.
+    pub fn pattern_class_name_span(&self, id: PatId) -> TextRange {
+        self.pattern_class_name_spans
+            .get(&id)
+            .copied()
+            .unwrap_or_else(|| self.pattern_span(id))
+    }
+
+    /// Look up the field-name span for a class destructure field's lowered pattern.
+    pub fn pattern_field_name_span(&self, id: PatId) -> TextRange {
+        self.pattern_field_name_spans
+            .get(&id)
+            .copied()
+            .unwrap_or_else(|| self.pattern_span(id))
     }
 
     /// Look up the source span of a match arm by its `MatchArmId`.

@@ -557,7 +557,11 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::PatternKind::Class { fields, .. } => {
                 let mut paths = vec![Vec::new()];
+                let mut seen_fields = FxHashSet::default();
                 for field in fields {
+                    if !seen_fields.insert(field.field.clone()) {
+                        continue;
+                    }
                     let field_paths = self.pattern_binding_paths(field.pat, body, source_map);
                     paths = Self::concat_pattern_binding_paths(&paths, &field_paths);
                 }
@@ -639,18 +643,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         let chain = pat.chain;
         match &pat.kind {
             ast::PatternKind::Bind { name } if !Self::is_bare_type_sugar_binding(name) => {
-                let site = site.unwrap_or(DefinitionSite::Pattern(pat_id));
-                let name_range = source_map.pattern_span(pat_id);
-                let scope_id = self.current_scope_id();
-                self.scope_bindings[scope_id.index() as usize]
-                    .bindings
-                    .push(LocalBinding {
-                        name: name.clone(),
-                        site,
-                        pattern: pat_id,
-                        name_range,
-                        visible_from,
-                    });
+                self.register_pattern_binding_name(
+                    name,
+                    pat_id,
+                    site.unwrap_or(DefinitionSite::Pattern(pat_id)),
+                    source_map,
+                    visible_from,
+                );
             }
             ast::PatternKind::Class { fields, .. } => {
                 for f in fields {
@@ -658,14 +657,98 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::PatternKind::Or(parts) => {
-                if let Some(&first) = parts.first() {
-                    self.register_pattern_bindings(first, None, body, source_map, visible_from);
+                let mut seen_names = FxHashSet::default();
+                for part in parts {
+                    self.register_pattern_bindings_unique(
+                        *part,
+                        body,
+                        source_map,
+                        visible_from,
+                        &mut seen_names,
+                    );
                 }
             }
             _ => {}
         }
         if let Some(chain_id) = chain {
             self.register_pattern_bindings(chain_id, None, body, source_map, visible_from);
+        }
+    }
+
+    fn register_pattern_binding_name(
+        &mut self,
+        name: &Name,
+        pat_id: ast::PatId,
+        site: DefinitionSite,
+        source_map: &ast::AstSourceMap,
+        visible_from: TextSize,
+    ) {
+        let name_range = source_map.pattern_span(pat_id);
+        let scope_id = self.current_scope_id();
+        self.scope_bindings[scope_id.index() as usize]
+            .bindings
+            .push(LocalBinding {
+                name: name.clone(),
+                site,
+                pattern: pat_id,
+                name_range,
+                visible_from,
+            });
+    }
+
+    fn register_pattern_bindings_unique(
+        &mut self,
+        pat_id: ast::PatId,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+        visible_from: TextSize,
+        seen_names: &mut FxHashSet<Name>,
+    ) {
+        let pat = &body.patterns[pat_id];
+        match &pat.kind {
+            ast::PatternKind::Bind { name }
+                if !Self::is_bare_type_sugar_binding(name) && seen_names.insert(name.clone()) =>
+            {
+                self.register_pattern_binding_name(
+                    name,
+                    pat_id,
+                    DefinitionSite::Pattern(pat_id),
+                    source_map,
+                    visible_from,
+                );
+            }
+            ast::PatternKind::Class { fields, .. } => {
+                for field in fields {
+                    self.register_pattern_bindings_unique(
+                        field.pat,
+                        body,
+                        source_map,
+                        visible_from,
+                        seen_names,
+                    );
+                }
+            }
+            ast::PatternKind::Or(parts) => {
+                for part in parts {
+                    self.register_pattern_bindings_unique(
+                        *part,
+                        body,
+                        source_map,
+                        visible_from,
+                        seen_names,
+                    );
+                }
+            }
+            _ => {}
+        }
+        if let Some(chain_id) = pat.chain {
+            self.register_pattern_bindings_unique(
+                chain_id,
+                body,
+                source_map,
+                visible_from,
+                seen_names,
+            );
         }
     }
 

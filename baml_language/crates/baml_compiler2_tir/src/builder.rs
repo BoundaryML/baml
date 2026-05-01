@@ -2984,34 +2984,28 @@ impl<'db> TypeInferenceBuilder<'db> {
             },
 
             PatternKind::Class { class, fields } => {
-                let (class_ty, field_types) = self.resolve_class_for_destructure(class, at_expr);
-
-                let class_resolved = !field_types.is_empty() || {
-                    let lookup = Name::new(class.as_str());
-                    self.package_items
-                        .lookup_type(&self.ns_context, &lookup)
-                        .map(|d| matches!(d, Definition::Class(_)))
-                        .unwrap_or(false)
-                };
+                let (class_ty, field_types, diagnostic_class_name) =
+                    self.resolve_class_for_destructure(class, pat_id, Some(&scrutinee_ty));
+                let class_resolved = matches!(class_ty, Ty::Class(..));
                 let mut seen_fields = FxHashSet::default();
                 let mut bindings = Vec::new();
                 for f in fields {
                     if !seen_fields.insert(f.field.clone()) {
-                        self.context.report_simple(
+                        self.context.report_at_pattern_field_name(
                             TirTypeError::DuplicateDestructureField {
-                                class_name: class.clone(),
+                                class_name: diagnostic_class_name.clone(),
                                 field_name: f.field.clone(),
                             },
-                            at_expr,
+                            f.pat,
                         );
                     }
                     if class_resolved && !field_types.contains_key(&f.field) {
-                        self.context.report_simple(
+                        self.context.report_at_pattern_field_name(
                             TirTypeError::NoSuchDestructureField {
-                                class_name: class.clone(),
+                                class_name: diagnostic_class_name.clone(),
                                 field_name: f.field.clone(),
                             },
-                            at_expr,
+                            f.pat,
                         );
                     }
                     let field_ty = field_types.get(&f.field).cloned().unwrap_or(Ty::Unknown {
@@ -3038,7 +3032,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .map(|i| i.pattern_ty.clone())
                         .collect::<Vec<_>>(),
                 );
-                let bindings = self.reconcile_or_bindings(&alt_infos, at_expr, body);
+                let bindings = self.reconcile_or_bindings(&alt_infos, body);
                 PatternInfo {
                     pattern_ty,
                     bindings,
@@ -3070,7 +3064,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn reconcile_or_bindings(
         &mut self,
         alts: &[PatternInfo],
-        at_expr: ExprId,
         body: &ExprBody,
     ) -> Vec<PatternBinding> {
         let Some(first) = alts.first() else {
@@ -3097,14 +3090,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                             && body.patterns[alt_binding.pat_id].chain.is_some()
                             && !Self::pattern_chain_contains_or(first_binding.pat_id, body)
                             && !Self::pattern_chain_contains_or(alt_binding.pat_id, body);
-                    if first_binding.ty != alt_binding.ty && !both_are_simple_chain_binds {
-                        self.context.report_simple(
+                    if first_binding.ty != alt_binding.ty
+                        && !both_are_simple_chain_binds
+                        && !Self::is_error_recovery_ty(&first_binding.ty)
+                        && !Self::is_error_recovery_ty(&alt_binding.ty)
+                    {
+                        self.context.report_at_pattern(
                             TirTypeError::OrPatternBindingTypeMismatch {
                                 name: alt_binding.name.clone(),
                                 first: first_binding.ty.clone(),
                                 other: alt_binding.ty.clone(),
                             },
-                            at_expr,
+                            alt_binding.pat_id,
                         );
                     }
                 }
@@ -3123,6 +3120,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 {
                     binding.ty = Self::join_types(&binding.ty, &alt_binding.ty);
                 }
+            }
+        }
+        for alt in alts.iter().skip(1) {
+            for alt_binding in &alt.bindings {
+                if duplicate_names.contains(&alt_binding.name)
+                    || merged
+                        .iter()
+                        .any(|binding| binding.name == alt_binding.name)
+                {
+                    continue;
+                }
+                merged.push(alt_binding.clone());
             }
         }
         merged
@@ -3158,12 +3167,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(prev) = &result
                     && !self.is_subtype(&ty, prev)
                 {
-                    self.context.report_simple(
+                    self.context.report_at_pattern(
                         TirTypeError::TypeMismatch {
                             expected: prev.clone(),
                             got: ty.clone(),
                         },
-                        at_expr,
+                        id,
                     );
                     chain_broken = true;
                 }
@@ -3189,8 +3198,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         let kind = body.patterns[pat_id].kind.clone();
         match &kind {
             PatternKind::Type(ty_expr) => Some(self.resolve_type_expr(ty_expr, at_expr)),
+            PatternKind::Class { class, .. } if class.as_str() == "_" => None,
             PatternKind::Class { class, .. } => {
-                Some(self.resolve_class_for_destructure(class, at_expr).0)
+                Some(self.resolve_class_for_destructure(class, pat_id, None).0)
             }
             PatternKind::Or(parts) => {
                 let tys: Vec<_> = parts
@@ -3207,47 +3217,81 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    fn is_error_recovery_ty(ty: &Ty) -> bool {
+        matches!(ty, Ty::Unknown { .. } | Ty::Error { .. })
+    }
+
     /// Resolve a class name to its type and field map. Reports errors for
     /// unresolved names and non-class destructures.
     fn resolve_class_for_destructure(
         &mut self,
         class: &Name,
-        at_expr: ExprId,
-    ) -> (Ty, FxHashMap<Name, Ty>) {
+        pat_id: PatId,
+        scrutinee_ty: Option<&Ty>,
+    ) -> (Ty, FxHashMap<Name, Ty>, Name) {
+        if class.as_str() == "_"
+            && let Some(scrutinee_ty) = scrutinee_ty
+        {
+            if let Ty::Class(qn, type_args, _) = scrutinee_ty {
+                let fields = self.lookup_class_fields(qn, type_args);
+                return (scrutinee_ty.clone(), fields, qn.name().clone());
+            }
+
+            self.context.report_at_pattern_class_name(
+                TirTypeError::DestructureOnNonClass {
+                    ty_name: Name::new(scrutinee_ty.to_string()),
+                },
+                pat_id,
+            );
+            return (
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+                FxHashMap::default(),
+                class.clone(),
+            );
+        }
+
         let lookup = Name::new(class.as_str());
         let def = self.package_items.lookup_type(&self.ns_context, &lookup);
         match def {
             Some(def) if matches!(def, Definition::Class(_)) => {
                 let qn = crate::lower_type_expr::qualify_def(self.context.db(), def, &lookup);
                 let fields = self.lookup_class_fields(&qn, &[]);
-                (Ty::Class(qn, vec![], TyAttr::default()), fields)
+                (
+                    Ty::Class(qn, vec![], TyAttr::default()),
+                    fields,
+                    class.clone(),
+                )
             }
             Some(_) => {
-                self.context.report_simple(
+                self.context.report_at_pattern_class_name(
                     TirTypeError::DestructureOnNonClass {
                         ty_name: class.clone(),
                     },
-                    at_expr,
+                    pat_id,
                 );
                 (
                     Ty::Unknown {
                         attr: TyAttr::default(),
                     },
                     FxHashMap::default(),
+                    class.clone(),
                 )
             }
             None => {
-                self.context.report_simple(
+                self.context.report_at_pattern_class_name(
                     TirTypeError::UnresolvedName {
                         name: class.clone(),
                     },
-                    at_expr,
+                    pat_id,
                 );
                 (
                     Ty::Unknown {
                         attr: TyAttr::default(),
                     },
                     FxHashMap::default(),
+                    class.clone(),
                 )
             }
         }

@@ -1,0 +1,59 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.test_or_same_bindings(x: Cat | Fish) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Cat | Fish // x // param
+    let _2: bool
+    let _3: bool
+    let _4: bool
+    let _5: string
+    let _6: string // name
+    let _7: bool
+    let _8: string
+    let _9: string // name
+
+    bb0: {
+        _2 = is_type(copy _1, Class(TypeName { name: "Cat", module_path: ["user"], display_name: "Cat" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _3 = is_type(copy _1, Class(TypeName { name: "Fish", module_path: ["user"], display_name: "Fish" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _3 -> [bb2, bb7];
+    }
+
+    bb2: {
+        _4 = is_type(copy _1, Class(TypeName { name: "Cat", module_path: ["user"], display_name: "Cat" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _4 -> [bb5, bb3];
+    }
+
+    bb3: {
+        _7 = is_type(copy _1, Class(TypeName { name: "Fish", module_path: ["user"], display_name: "Fish" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _7 -> [bb4, bb6];
+    }
+
+    bb4: {
+        _8 = copy _1.0;
+        _9 = copy _8;
+        _6 = copy _9;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _5 = copy _1.0;
+        _6 = copy _5;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _0 = copy _6;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}

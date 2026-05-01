@@ -472,6 +472,8 @@ pub fn synthesize_llm_builtin_call(
         pattern_spans: Arena::new(),
         match_arm_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
+        pattern_class_name_spans: std::collections::HashMap::new(),
+        pattern_field_name_spans: std::collections::HashMap::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
     };
@@ -534,6 +536,8 @@ pub(crate) fn synthesize_llm_parse_call(
         pattern_spans: Arena::new(),
         match_arm_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
+        pattern_class_name_spans: std::collections::HashMap::new(),
+        pattern_field_name_spans: std::collections::HashMap::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
     };
@@ -624,6 +628,8 @@ pub fn synthesize_llm_make_stream_call(
         pattern_spans: Arena::new(),
         match_arm_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
+        pattern_class_name_spans: std::collections::HashMap::new(),
+        pattern_field_name_spans: std::collections::HashMap::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
     };
@@ -1366,6 +1372,8 @@ fn synthesize_retry_policy_let(
         pattern_spans: la_arena::Arena::new(),
         match_arm_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
+        pattern_class_name_spans: std::collections::HashMap::new(),
+        pattern_field_name_spans: std::collections::HashMap::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
     };
@@ -1605,6 +1613,8 @@ fn synthesize_client_let(
         pattern_spans: la_arena::Arena::new(),
         match_arm_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
+        pattern_class_name_spans: std::collections::HashMap::new(),
+        pattern_field_name_spans: std::collections::HashMap::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
     };
@@ -1856,6 +1866,8 @@ fn synthesize_client_new_companion(
         pattern_spans: la_arena::Arena::new(),
         match_arm_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
+        pattern_class_name_spans: std::collections::HashMap::new(),
+        pattern_field_name_spans: std::collections::HashMap::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
     };

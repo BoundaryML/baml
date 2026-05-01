@@ -58,7 +58,10 @@ mod tests {
     use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 
     use crate::{
-        ast::{BuiltinKind, Expr, FunctionBodyDef, Item, Stmt, TypeExpr},
+        ast::{
+            AstSourceMap, BuiltinKind, Expr, ExprBody, FunctionBodyDef, Item, PatId, PatternKind,
+            Stmt, TypeExpr,
+        },
         lower_cst::lower_file,
         unescape_string_literal,
     };
@@ -310,6 +313,161 @@ mod tests {
                 }
             })
             .expect("expected a FunctionDef")
+    }
+
+    fn function_expr_body(function: &crate::ast::FunctionDef) -> (&ExprBody, &AstSourceMap) {
+        match &function.body {
+            Some(FunctionBodyDef::Expr(body, source_map)) => (body, source_map),
+            other => panic!("expected expression body, got {other:?}"),
+        }
+    }
+
+    fn span_text(source: &str, range: text_size::TextRange) -> &str {
+        let start: usize = range.start().into();
+        let end: usize = range.end().into();
+        &source[start..end]
+    }
+
+    fn assert_span_text(source: &str, range: text_size::TextRange, expected: &str) {
+        assert_eq!(span_text(source, range), expected);
+    }
+
+    fn first_let_pattern(body: &ExprBody) -> PatId {
+        let root = body.root_expr.expect("expected root expr");
+        let Expr::Block { stmts, .. } = &body.exprs[root] else {
+            panic!("expected block root expression");
+        };
+        let Stmt::Let { pattern, .. } = &body.stmts[stmts[0]] else {
+            panic!("expected first statement to be let");
+        };
+        *pattern
+    }
+
+    fn class_field_pattern(body: &ExprBody, pattern: PatId, field_name: &str) -> PatId {
+        let PatternKind::Class { fields, .. } = &body.patterns[pattern].kind else {
+            panic!("expected class pattern, got {:?}", body.patterns[pattern]);
+        };
+        fields
+            .iter()
+            .find(|field| field.field.as_str() == field_name)
+            .map(|field| field.pat)
+            .unwrap_or_else(|| panic!("expected field pattern `{field_name}`"))
+    }
+
+    #[test]
+    fn pattern_source_map_tracks_nested_class_and_field_name_spans() {
+        let source = r#"
+function f(x: Outer) -> int {
+  let Outer { middle: Middle { inner: Inner { missing } } } = x;
+  missing
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let (body, source_map) = function_expr_body(&function);
+
+        let outer = first_let_pattern(body);
+        assert_span_text(
+            source,
+            source_map.pattern_span(outer),
+            "Outer { middle: Middle { inner: Inner { missing } } }",
+        );
+        assert_span_text(source, source_map.pattern_class_name_span(outer), "Outer");
+
+        let middle = class_field_pattern(body, outer, "middle");
+        assert_span_text(source, source_map.pattern_field_name_span(middle), "middle");
+        assert_span_text(
+            source,
+            source_map.pattern_span(middle),
+            "Middle { inner: Inner { missing } }",
+        );
+        assert_span_text(source, source_map.pattern_class_name_span(middle), "Middle");
+
+        let inner = class_field_pattern(body, middle, "inner");
+        assert_span_text(source, source_map.pattern_field_name_span(inner), "inner");
+        assert_span_text(source, source_map.pattern_span(inner), "Inner { missing }");
+        assert_span_text(source, source_map.pattern_class_name_span(inner), "Inner");
+
+        let missing = class_field_pattern(body, inner, "missing");
+        assert_span_text(
+            source,
+            source_map.pattern_field_name_span(missing),
+            "missing",
+        );
+        assert_span_text(source, source_map.pattern_span(missing), "missing");
+        assert!(matches!(
+            body.patterns[missing].kind,
+            PatternKind::Bind { ref name } if name.as_str() == "missing"
+        ));
+    }
+
+    #[test]
+    fn pattern_source_map_tracks_chain_class_pattern_spans() {
+        let source = r#"
+function f() -> int {
+  let x: string: Inner { val } = 1;
+  val
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let (body, source_map) = function_expr_body(&function);
+
+        let bind = first_let_pattern(body);
+        assert_span_text(source, source_map.pattern_span(bind), "x");
+
+        let string_ty = body.patterns[bind].chain.expect("expected type chain");
+        assert_span_text(source, source_map.pattern_span(string_ty), "string");
+
+        let inner = body.patterns[string_ty]
+            .chain
+            .expect("expected class destructure chain");
+        assert_span_text(source, source_map.pattern_span(inner), "Inner { val }");
+        assert_span_text(source, source_map.pattern_class_name_span(inner), "Inner");
+
+        let val = class_field_pattern(body, inner, "val");
+        assert_span_text(source, source_map.pattern_field_name_span(val), "val");
+        assert_span_text(source, source_map.pattern_span(val), "val");
+    }
+
+    #[test]
+    fn pattern_source_map_tracks_or_pattern_alternative_spans() {
+        let source = r#"
+function f(x: Cat | Fish) -> string {
+  let Cat { name } | Fish { freshwater } = x;
+  name
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let (body, source_map) = function_expr_body(&function);
+
+        let or_pattern = first_let_pattern(body);
+        assert_span_text(
+            source,
+            source_map.pattern_span(or_pattern),
+            "Cat { name } | Fish { freshwater }",
+        );
+
+        let PatternKind::Or(parts) = &body.patterns[or_pattern].kind else {
+            panic!("expected or pattern, got {:?}", body.patterns[or_pattern]);
+        };
+        assert_eq!(parts.len(), 2);
+
+        let cat = parts[0];
+        assert_span_text(source, source_map.pattern_span(cat), "Cat { name }");
+        assert_span_text(source, source_map.pattern_class_name_span(cat), "Cat");
+        let name = class_field_pattern(body, cat, "name");
+        assert_span_text(source, source_map.pattern_field_name_span(name), "name");
+        assert_span_text(source, source_map.pattern_span(name), "name");
+
+        let fish = parts[1];
+        assert_span_text(source, source_map.pattern_span(fish), "Fish { freshwater }");
+        assert_span_text(source, source_map.pattern_class_name_span(fish), "Fish");
+        let freshwater = class_field_pattern(body, fish, "freshwater");
+        assert_span_text(
+            source,
+            source_map.pattern_field_name_span(freshwater),
+            "freshwater",
+        );
+        assert_span_text(source, source_map.pattern_span(freshwater), "freshwater");
     }
 
     #[test]

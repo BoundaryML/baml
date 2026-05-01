@@ -1,0 +1,289 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.Animal {
+  name: string
+}
+class user.Dog {
+  name: string
+  breed: string
+}
+class user.Cat {
+  name: string
+  indoor: bool
+}
+class user.Fish {
+  name: string
+  freshwater: bool
+}
+function user.test_let_destructure_use_field() -> string throws never {
+  { : never
+    let x: Animal { name: let name } = Animal { name: "Rex" } : user.Animal
+    return name : string
+  }
+}
+function user.test_let_destructure_chain() -> string throws never {
+  { : never
+    let x: Animal { name: let name }: Animal = Animal { name: "Rex" } : user.Animal
+    return name : string
+  }
+}
+function user.test_let_destructure_multiple_fields() -> string throws never {
+  { : never
+    let x: Dog { name: let name, breed: let breed } = Dog { name: "Rex", breed: "Lab" } : user.Dog
+    return name + " " + breed : string
+  }
+}
+function user.test_type_then_destructure() -> string throws never {
+  { : never
+    let x: Dog: Dog { breed: let breed } = Dog { name: "Rex", breed: "Lab" } : user.Dog
+    return breed : string
+  }
+}
+function user.test_match_destructure(x: user.Animal) -> string throws never {
+  { : string
+    match (x : user.Animal) : string
+      Animal { name: let name } =>
+        name : string
+  }
+}
+function user.test_match_destructure_multi(x: user.Dog) -> string throws never {
+  { : string
+    match (x : user.Dog) : string
+      Dog { name: let name, breed: let breed } =>
+        name + " the " + breed : string
+  }
+}
+class user.Inner {
+  value: string
+}
+class user.Middle {
+  inner: user.Inner
+  tag: string
+}
+class user.Outer {
+  middle: user.Middle
+  label: string
+}
+function user.test_nested_destructure_let(x: user.Outer) -> string throws never {
+  { : never
+    _: Outer { middle: Middle { inner: Inner { value: let value }, tag: let tag } } = x : user.Outer
+    return value + ":" + tag : string
+  }
+}
+function user.test_nested_destructure_match(x: user.Outer) -> string throws never {
+  { : string
+    match (x : user.Outer) : string
+      Outer { middle: Middle { tag: let tag }, label: let label } =>
+        label + "/" + tag : string
+  }
+}
+function user.test_deep_destructure(x: user.Outer) -> string throws never {
+  { : never
+    _: Outer { middle: Middle { inner: Inner { value: let value } } } = x : user.Outer
+    return value : string
+  }
+}
+function user.test_nested_destructure_multi_arm(x: user.Animal | user.Outer) -> string throws never {
+  { : string
+    match (x : user.Animal | user.Outer) : string
+      Outer { middle: Middle { tag: let tag } } =>
+        tag : string
+      Animal { name: let name } =>
+        name : string
+  }
+}
+function user.test_empty_destructure(x: user.Animal) -> string throws never {
+  { : "matched"
+    match (x : user.Animal) : "matched"
+      Animal =>
+        "matched" : "matched"
+  }
+}
+class user.Goldfish {
+  name: string
+}
+function user.test_three_or_alternatives(x: user.Cat | user.Fish | user.Goldfish) -> string throws never {
+  { : string
+    match (x : user.Cat | user.Fish | user.Goldfish) : string
+      Cat { name: let name } | Fish { name: let name } | Goldfish { name: let name } =>
+        name : string
+  }
+}
+class user.MaybeNamed {
+  name: string?
+}
+function user.test_optional_field_destructure(x: user.MaybeNamed) -> string? throws never {
+  { : string?
+    match (x : user.MaybeNamed) : string?
+      MaybeNamed { name: let name } =>
+        name : string?
+  }
+}
+class user.Wrapper {
+  pet: user.Cat | user.Fish
+}
+function user.test_nested_or_in_field(x: user.Wrapper) -> string throws never {
+  { : never
+    _: Wrapper { pet: Cat { name: let name } | Fish { name: let name } } = x : user.Wrapper
+    return name : string
+  }
+}
+class user.Foo {
+  a: int
+}
+class user.Bar {
+  a: int
+}
+function user.accept_foo(f: user.Foo) -> int throws never {
+  { : int
+    f.a : int
+  }
+}
+function user.test_or_let_union_type() -> int throws never {
+  { : int
+    let x: Foo { a: let a } | Bar { a: let a } = Bar { a: 42 } : user.Bar -> user.Foo | user.Bar
+    accept_foo(x) : int
+  }
+  !! 3228..3229: type mismatch: expected user.Foo, got user.Foo | user.Bar
+}
+class user.Animal$stream {
+  name: null | string
+}
+class user.Dog$stream {
+  name: null | string
+  breed: null | string
+}
+class user.Cat$stream {
+  name: null | string
+  indoor: null | bool
+}
+class user.Fish$stream {
+  name: null | string
+  freshwater: null | bool
+}
+class user.Inner$stream {
+  value: null | string
+}
+class user.Middle$stream {
+  inner: null | user.Inner$stream
+  tag: null | string
+}
+class user.Outer$stream {
+  middle: null | user.Middle$stream
+  label: null | string
+}
+class user.Goldfish$stream {
+  name: null | string
+}
+class user.MaybeNamed$stream {
+  name: null | string
+}
+class user.Wrapper$stream {
+  pet: null | user.Cat$stream | user.Fish$stream
+}
+class user.Foo$stream {
+  a: null | int
+}
+class user.Bar$stream {
+  a: null | int
+}
+function user.test_or_mismatched_bindings(x: user.Cat | user.Fish) -> string throws never {
+  { : "matched"
+    match (x : user.Cat | user.Fish) : "matched"
+      Cat { name: let name } | Fish { freshwater: let freshwater } =>
+        "matched" : "matched"
+  }
+}
+function user.test_or_missing_binding(x: user.Cat | user.Fish) -> string throws never {
+  { : "matched"
+    match (x : user.Cat | user.Fish) : "matched"
+      Cat { name: let name } | Fish =>
+        "matched" : "matched"
+  }
+}
+function user.test_or_type_then_destructure(x: int | user.Cat) -> string throws never {
+  { : string
+    match (x : int | user.Cat) : string
+      int | Cat { name: let name } =>
+        name : string
+  }
+}
+class user.IntBox {
+  val: int
+}
+class user.StrBox {
+  val: string
+}
+function user.test_or_same_name_different_type(x: user.IntBox | user.StrBox) -> string throws never {
+  { : "matched"
+    match (x : user.IntBox | user.StrBox) : "matched"
+      IntBox { val: let val } | StrBox { val: let val } =>
+        "matched" : "matched"
+  }
+  !! 811..814: or-pattern binding `val` has type `int` in one alternative but `string` in another
+}
+function user.test_or_rebind(x: user.Cat | user.Fish) -> string throws never {
+  { : string
+    match (x : user.Cat | user.Fish) : string
+      Cat { name: let n } | Fish { name: let n } =>
+        n : string
+  }
+}
+class user.CatBox {
+  pet: user.Cat
+}
+class user.FishBox {
+  pet: user.Fish
+}
+function user.test_or_nested_destructure(x: user.CatBox | user.FishBox) -> string throws never {
+  { : string
+    match (x : user.CatBox | user.FishBox) : string
+      CatBox { pet: Cat { name: let name } } | FishBox { pet: Fish { name: let name } } =>
+        name : string
+  }
+}
+function user.test_nonexistent_field(x: user.Cat) -> string throws never {
+  { : unknown
+    match (x : user.Cat) : unknown
+      Cat { bogus: let bogus } =>
+        bogus : unknown
+  }
+  !! 1478..1483: class `Cat` has no field `bogus`
+}
+function user.test_duplicate_field(x: user.Cat) -> string throws never {
+  { : string
+    match (x : user.Cat) : string
+      Cat { name: let name, name: let name } =>
+        name : string
+  }
+  !! 1613..1617: field `name` listed more than once in `Cat` destructure
+}
+function user.test_destructure_primitive(x: int) -> int throws never {
+  { : unknown
+    match (x : int) : unknown
+      _ { val: let val } =>
+        val : unknown
+  }
+  !! 1747..1750: cannot destructure `int`: only classes can be destructured
+}
+function user.test_wildcard_field(x: user.Cat) -> string throws never {
+  { : "matched"
+    match (x : user.Cat) : "matched"
+      Cat { name: _ } =>
+        "matched" : "matched"
+  }
+}
+class user.IntBox$stream {
+  val: null | int
+}
+class user.StrBox$stream {
+  val: null | string
+}
+class user.CatBox$stream {
+  pet: null | user.Cat$stream
+}
+class user.FishBox$stream {
+  pet: null | user.Fish$stream
+}

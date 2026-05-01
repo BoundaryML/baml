@@ -10,7 +10,7 @@
 use std::{cell::RefCell, fmt};
 
 use baml_base::{FileId, Name, SourceFile};
-use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId};
+use baml_compiler2_ast::{AstSourceMap, ExprId, PatId, StmtId};
 use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, FunctionLoc},
@@ -504,6 +504,9 @@ pub enum DiagnosticLocation {
     /// `ExprSegment(path_id, segment_idx)` resolves to `path_segment_span(path_id, segment_idx)`.
     ExprSegment(ExprId, usize),
     Stmt(StmtId),
+    Pattern(PatId),
+    PatternClassName(PatId),
+    PatternFieldName(PatId),
     Span(TextRange),
 }
 
@@ -545,6 +548,15 @@ impl<'db> TirDiagnostic<'db> {
             DiagnosticLocation::Stmt(id) => {
                 source_map.map(|sm| sm.stmt_span(*id)).unwrap_or_default()
             }
+            DiagnosticLocation::Pattern(id) => source_map
+                .map(|sm| sm.pattern_span(*id))
+                .unwrap_or_default(),
+            DiagnosticLocation::PatternClassName(id) => source_map
+                .map(|sm| sm.pattern_class_name_span(*id))
+                .unwrap_or_default(),
+            DiagnosticLocation::PatternFieldName(id) => source_map
+                .map(|sm| sm.pattern_field_name_span(*id))
+                .unwrap_or_default(),
             DiagnosticLocation::Span(range) => *range,
         };
 
@@ -794,6 +806,45 @@ impl<'db> InferContext<'db> {
                 error,
                 severity: DiagnosticSeverity::Error,
                 primary: DiagnosticLocation::Stmt(at),
+                related: Vec::new(),
+            });
+    }
+
+    /// Report a type error at a specific pattern.
+    pub fn report_at_pattern(&self, error: TirTypeError, at: PatId) {
+        self.diagnostics
+            .borrow_mut()
+            .diagnostics
+            .push(TirDiagnostic {
+                error,
+                severity: DiagnosticSeverity::Error,
+                primary: DiagnosticLocation::Pattern(at),
+                related: Vec::new(),
+            });
+    }
+
+    /// Report a type error at a class/type name inside a class destructure pattern.
+    pub fn report_at_pattern_class_name(&self, error: TirTypeError, at: PatId) {
+        self.diagnostics
+            .borrow_mut()
+            .diagnostics
+            .push(TirDiagnostic {
+                error,
+                severity: DiagnosticSeverity::Error,
+                primary: DiagnosticLocation::PatternClassName(at),
+                related: Vec::new(),
+            });
+    }
+
+    /// Report a type error at a field name inside a class destructure pattern.
+    pub fn report_at_pattern_field_name(&self, error: TirTypeError, at: PatId) {
+        self.diagnostics
+            .borrow_mut()
+            .diagnostics
+            .push(TirDiagnostic {
+                error,
+                severity: DiagnosticSeverity::Error,
+                primary: DiagnosticLocation::PatternFieldName(at),
                 related: Vec::new(),
             });
     }
