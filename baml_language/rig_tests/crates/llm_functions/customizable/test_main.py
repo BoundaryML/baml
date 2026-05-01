@@ -144,9 +144,8 @@ def test_inlinedbaml_files_present():
 
 def test_runtime_init_called_at_import():
     # The root __init__.py invokes BamlRuntime.initialize_runtime(...) at
-    # import time; the conftest stub no-ops it. Just verifying the call
-    # didn't blow up during module load by checking we can still reach
-    # the SDK surface.
+    # import time. Just verifying the call didn't blow up during module
+    # load by checking we can still reach the SDK surface.
     import baml_sdk
     assert hasattr(baml_sdk, "lorem")
     assert hasattr(baml_sdk, "ipsum")

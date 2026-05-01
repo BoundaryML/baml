@@ -276,6 +276,7 @@ def _make_call(
 
         _sync.__name__ = baml_fqn.rsplit(".", 1)[-1] or baml_fqn
         _sync.__qualname__ = _sync.__name__
+        _sync.param_names = list(names)
         return _sync
     elif mode == "async":
         async def _async(*args: Any, **kwargs: Any) -> Any:
@@ -287,6 +288,7 @@ def _make_call(
 
         _async.__name__ = baml_fqn.rsplit(".", 1)[-1] or baml_fqn
         _async.__qualname__ = _async.__name__
+        _async.param_names = list(names)
         return _async
     else:
         raise ValueError(f"mode must be 'sync' or 'async', got {mode!r}")
