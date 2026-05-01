@@ -53,7 +53,7 @@ tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "net" ] }
 wiremock = { workspace = true }
 
 [[bench]]
-name = "compiler_benchmark"
+name = "runtime_benchmark"
 harness = false
 
 [features]
