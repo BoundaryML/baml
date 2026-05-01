@@ -425,20 +425,15 @@ jobs:
 
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
-    # Skip benchmarks in merge_group - they already ran in the PR
+    # Run benchmarks when any Rust code changes, or on manual opt-in.
+    # Skip merge_group since they already ran in the PR.
     if: |
       github.event_name != 'merge_group' &&
       (
-        github.ref == 'refs/heads/main' ||
-        github.ref == 'refs/heads/canary' ||
-        contains(github.event.pull_request.body, 'RUN_CODSPEED=1') ||
-        needs.determine_changes.outputs.lexer == 'true' ||
-        needs.determine_changes.outputs.parser == 'true' ||
-        needs.determine_changes.outputs.hir == 'true' ||
-        needs.determine_changes.outputs.thir == 'true' ||
-        needs.determine_changes.outputs.codegen == 'true'
+        needs.determine_changes.outputs.code == 'true' ||
+        contains(github.event.pull_request.body, 'RUN_CODSPEED=1')
       )
     timeout-minutes: 25
     steps:
@@ -468,7 +463,7 @@ jobs:
         working-directory: baml_language
 
       - name: "Run benchmarks"
-        uses: CodSpeedHQ/action@v3
+        uses: CodSpeedHQ/action@v4
         with:
           mode: walltime
           run: cd baml_language && cargo codspeed run
