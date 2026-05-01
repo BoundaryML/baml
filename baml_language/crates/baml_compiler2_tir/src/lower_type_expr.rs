@@ -203,10 +203,19 @@ pub fn lower_type_expr_in_ns(
                         let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
                         pkg.lookup_type(&ns_path[1..], &enum_item_name)
                     };
-                    if let Some(def) = enum_resolved {
-                        if matches!(def, Definition::Enum(_)) {
+                    if let Some(Definition::Enum(enum_loc)) = enum_resolved {
+                        // Validate that `variant` is actually declared on the
+                        // enum before returning `Ty::EnumVariant`. Without this
+                        // check, a misspelled variant (`Color.Reeed`) silently
+                        // lowers as a phantom variant type, which downstream
+                        // surfaces as misleading "non-exhaustive match" /
+                        // "unreachable arm" diagnostics rather than a clean
+                        // unresolved-type error at the typo site.
+                        let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
+                        let enum_data = &item_tree[enum_loc.id(db)];
+                        if enum_data.variants.iter().any(|v| v.name == *variant) {
                             return Ty::EnumVariant(
-                                qualify_def(db, def, &enum_item_name),
+                                qualify_def(db, Definition::Enum(enum_loc), &enum_item_name),
                                 variant.clone(),
                                 TyAttr::default(),
                             );

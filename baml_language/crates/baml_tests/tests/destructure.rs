@@ -617,6 +617,65 @@ async fn shadow_outer_with_destructure() {
     assert_eq!(output.result, Ok(BexExternalValue::String("inner".into())));
 }
 
+// Regression: assigning to a destructured (inner) binding that shadows an
+// outer same-named local must NOT leak the assignment to the outer scope.
+// `resolve_pattern` previously inserted nested bindings straight into
+// `self.locals` without going through `declare_scoped_local`, so the inner
+// binding was missing from `let_binding_patterns`. Subsequent `assign_local`
+// then resolved the name to the outer pattern, and `restore_scoped_locals`
+// kept the assignment under the wrong identity.
+#[tokio::test]
+async fn assign_to_destructured_shadow_does_not_leak() {
+    let output = baml_test!(
+        r#"
+        class Foo { name string }
+
+        function main() -> string {
+            let name = "outer";
+            let x: Foo = Foo { name: "inner" };
+            match (x) {
+                Foo { name } => {
+                    name = "modified";
+                }
+            }
+            name
+        }
+    "#
+    );
+
+    // Inner shadow is mutated; outer must remain "outer".
+    assert_eq!(output.result, Ok(BexExternalValue::String("outer".into())));
+}
+
+// Regression: when the destructured shadow has a different type than the
+// outer, an assignment to the inner binding must not retype the outer in
+// the surrounding scope. Without scoped declaration of the destructured
+// binding, `restore_scoped_locals` left `locals[name]` at the inner's
+// type — a downstream `name`-as-string use would then mis-typecheck.
+#[tokio::test]
+async fn assign_to_typed_destructured_shadow_does_not_retype_outer() {
+    let output = baml_test!(
+        r#"
+        class Holder { count int }
+
+        function main() -> int {
+            let count: string = "outer";
+            let h: Holder = Holder { count: 99 };
+            match (h) {
+                Holder { count } => {
+                    count = count + 1;
+                }
+            }
+            count.length()
+        }
+    "#
+    );
+
+    // Outer `count` is the string "outer" (length 5) regardless of any
+    // assignment to the destructured int shadow inside the match arm.
+    assert_eq!(output.result, Ok(BexExternalValue::Int(5)));
+}
+
 // Destructure + guard using the destructured field
 #[tokio::test]
 async fn destructure_guard_on_nested_field() {
@@ -2840,4 +2899,44 @@ async fn for_in_destructure_pass_to_helper_with_match() {
         output.result,
         Ok(BexExternalValue::String("c:Milo,d:Rex,d:Buddy".into()))
     );
+}
+
+// Regression: a for-loop binding declared inside an or-pattern must get a
+// fresh cell each iteration so closures captured in the body see distinct
+// values. Previously `bind_pattern_inner` propagated `fresh_cells=true` for
+// straight-line bindings but called `bind_or_alternatives` (which routes
+// back through `bind_pattern` with `fresh_cells=false`), so or-pattern
+// captures all aliased the same cell and returned the final iteration's
+// value.
+#[tokio::test]
+async fn for_or_pattern_captures_fresh_cell_each_iteration() {
+    let output = baml_test!(
+        r#"
+        class A { val int }
+        class B { val int }
+        type AB = A | B
+
+        function main() -> int {
+            let items: AB[] = [
+                A { val: 1 },
+                B { val: 10 },
+                A { val: 100 },
+            ];
+            let lambdas: (() -> int)[] = [];
+            for (let A { val } | B { val } in items) {
+                lambdas.push(() -> int { val });
+            }
+            let total = 0;
+            for (let f in lambdas) {
+                total = total + f();
+            }
+            total
+        }
+    "#
+    );
+    // With fresh_cell on or-pattern bindings: each lambda captures its own
+    //   iteration's `val` cell → 1 + 10 + 100 = 111.
+    // Without (the bug): every lambda aliases the same cell, which by end of
+    //   loop holds 100 → 100 * 3 = 300.
+    assert_eq!(output.result, Ok(BexExternalValue::Int(111)));
 }

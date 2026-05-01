@@ -95,17 +95,6 @@ function UnionDeepCollision(pet: Pet) -> string {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: type mismatch: expected string, got user.Outer
-//     ╭─[ match_match_duplicate_bindings.baml:35:42 ]
-//     │
-//  35 │ ╭─▶ function DeepArmDestructure() -> string {
-//     ┆ ┆   
-//  38 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── type mismatch: expected string, got user.Outer
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
 // Error: identifier `x` is bound more than once in the same pattern
 //     ╭─[ match_match_duplicate_bindings.baml:44:48 ]
 //     │
@@ -170,15 +159,4 @@ function UnionDeepCollision(pet: Pet) -> string {
 //     │                                 ╰─── identifier `name` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0001
-// ────╯
-// Error: type mismatch: expected string, got user.Cat | user.Dog
-//     ╭─[ match_match_duplicate_bindings.baml:71:50 ]
-//     │
-//  71 │ ╭─▶ function UnionDeepCollision(pet: Pet) -> string {
-//     ┆ ┆   
-//  75 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── type mismatch: expected string, got user.Cat | user.Dog
-//     │     
-//     │     Note: Error code: E0001
 // ────╯

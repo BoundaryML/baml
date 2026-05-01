@@ -707,6 +707,7 @@ function user.NestedTypeBindings(r: user.Result) -> int throws never {
       let f: Failure =>
         1 : 1
   }
+  !! 24231..24232: unreachable arm
 }
 function user.NestedLiteralUnions(code: int) -> string throws never {
   { : "success" | "client error" | "other"

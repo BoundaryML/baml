@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unresolved type: Status.Pendng
+    ╭─[ enum_unknown_variant_in_match.baml:17:26 ]
+    │
+ 17 │         Status.Pendng => "pending"
+    │                          ────┬────  
+    │                              ╰────── unresolved type: Status.Pendng
+    │ 
+    │ Note: Error code: E0002
+────╯

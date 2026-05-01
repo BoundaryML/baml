@@ -211,7 +211,11 @@ impl<'a> AstGraphBuilder<'a> {
                     matches!(init_expr, ast::Expr::If { .. } | ast::Expr::Match { .. });
                 if needs_scope {
                     let pat_name = self.format_pattern(*pattern);
-                    let label = format!("{pat_name} = ...");
+                    let label = if pat_name.starts_with("let ") {
+                        format!("{pat_name} = ...")
+                    } else {
+                        format!("let {pat_name} = ...")
+                    };
                     self.emit_other_scope(*init, Some(label));
                 } else {
                     self.visit_expr(*init);

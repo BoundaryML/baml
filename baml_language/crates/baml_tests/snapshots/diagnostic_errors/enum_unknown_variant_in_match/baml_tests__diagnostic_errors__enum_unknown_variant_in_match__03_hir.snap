@@ -1,0 +1,8 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+enum user.Status {Active, Inactive, Pending}
+function user.classify(s: user.Status) -> string  [expr] {
+  {  } match (s) { Status.Active => "active", Status.Inactive => "inactive", Status.Pendng => "pending" }
+}

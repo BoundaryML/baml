@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+enum user.Status
+function user.classify(s: user.Status) -> string throws never {
+  { : "active" | "inactive" | "pending"
+    match (s : user.Status) : "active" | "inactive" | "pending"
+      Status.Active =>
+        "active" : "active"
+      Status.Inactive =>
+        "inactive" : "inactive"
+      Status.Pendng =>
+        "pending" : "pending"
+  }
+  !! 663..672: unresolved type: Status.Pendng
+}

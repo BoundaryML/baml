@@ -3022,22 +3022,22 @@ impl<'a> Parser<'a> {
 
     /// Parse a single position in a pattern.
     ///
-    /// After `let`, a bare identifier (not followed by `.`, `{`, `[`, `<`, `?`,
-    /// or `|`) is a binding name — emitted as a raw WORD token. Otherwise
-    /// delegates to `parse_pattern_element` (which calls `parse_type`).
+    /// After `let`, a bare WORD is a binding name. The only continuations
+    /// that turn it into a class destructure are:
+    ///   - `.` — qualified path (`let std.Pair { x, y }`)
+    ///   - `<` — generic args (`let Box<int> { value }`)
+    ///   - `{` — direct destructure body (`let User { name }`)
+    ///
+    /// Anything else (`?`, `[`, `|`, end-of-input, etc.) leaves the WORD as
+    /// a binding; the pipe / colon / chain handling all happens in
+    /// `parse_pattern_alternative`. The CST shape this produces is what the
+    /// AST lowering relies on — see `lower_pattern_position`.
     fn parse_pattern_position(&mut self, had_let: bool) {
         if had_let && self.at(TokenKind::Word) {
-            let is_binding_name = !self.peek(1).is_some_and(|t| {
-                matches!(
-                    t.kind,
-                    TokenKind::Dot
-                        | TokenKind::LBrace
-                        | TokenKind::LBracket
-                        | TokenKind::Less
-                        | TokenKind::Question
-                )
+            let leads_to_destructure = self.peek(1).is_some_and(|t| {
+                matches!(t.kind, TokenKind::Dot | TokenKind::Less | TokenKind::LBrace)
             });
-            if is_binding_name {
+            if !leads_to_destructure {
                 self.bump(); // bare WORD — binding name
                 return;
             }

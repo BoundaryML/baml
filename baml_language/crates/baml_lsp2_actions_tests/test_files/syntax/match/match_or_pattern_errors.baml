@@ -54,6 +54,15 @@ function DuplicateInTopLevelAlt(x: AB) -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
+// Error: or-pattern binding `x` has type `user.A | user.B` in one alternative but `user.C` in another
+//     ╭─[ match_match_or_pattern_errors.baml:35:56 ]
+//     │
+//  35 │     let x: A { val } | B { val } | let x: C { val } => val
+//     │                                                        ─┬─  
+//     │                                                         ╰─── or-pattern binding `x` has type `user.A | user.B` in one alternative but `user.C` in another
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
 // Error: class `A` has no field `x`
 //     ╭─[ match_match_or_pattern_errors.baml:42:40 ]
 //     │
@@ -62,15 +71,6 @@ function DuplicateInTopLevelAlt(x: AB) -> int {
 //     │                                        ╰── class `A` has no field `x`
 //     │ 
 //     │ Note: Error code: E0007
-// ────╯
-// Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ match_match_or_pattern_errors.baml:42:40 ]
-//     │
-//  42 │     let x: A { x } | let x: B { x } => x
-//     │                                        ┬  
-//     │                                        ╰── identifier `x` is bound more than once in the same pattern
-//     │ 
-//     │ Note: Error code: E0001
 // ────╯
 // Error: class `B` has no field `x`
 //     ╭─[ match_match_or_pattern_errors.baml:42:40 ]
@@ -89,15 +89,4 @@ function DuplicateInTopLevelAlt(x: AB) -> int {
 //     │                                        ╰── identifier `x` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0001
-// ────╯
-// Error: type mismatch: expected int, got user.A | user.B
-//     ╭─[ match_match_or_pattern_errors.baml:40:48 ]
-//     │
-//  40 │ ╭─▶ function DuplicateInTopLevelAlt(x: AB) -> int {
-//     ┆ ┆   
-//  43 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── type mismatch: expected int, got user.A | user.B
-//     │     
-//     │     Note: Error code: E0001
 // ────╯

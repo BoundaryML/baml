@@ -1860,6 +1860,28 @@ async fn wildcard_skips_index_out_of_bounds() {
     assert_uncaught_panic(&output.result, "baml.panics.IndexOutOfBounds");
 }
 
+// Regression: a bare-binding catch-all (`catch (e) { x => ... }`) is treated
+// as a catchall by dispatch (no IsType test) just like `_`. The arm-flagging
+// logic for `throw_if_panic` insertion must also recognize unchained `Bind`
+// as wildcard-equivalent — otherwise the binding arm silently swallows
+// language panics that the wildcard arm would have rethrown.
+#[tokio::test]
+async fn bare_binding_catch_all_skips_division_by_zero() {
+    let output = baml_test!(
+        r#"
+        function risky(x: int) -> int {
+            if (x > 100) { throw "too big" }
+            1 / x
+        }
+
+        function main() -> int {
+            risky(0) catch (e) { let x => -1 }
+        }
+    "#
+    );
+    assert_uncaught_panic(&output.result, "baml.panics.DivisionByZero");
+}
+
 // ============================================================================
 // §7 — Multi-arm: panics + user errors in same catch
 // ============================================================================

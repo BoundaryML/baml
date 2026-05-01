@@ -207,6 +207,16 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:807:27 ]
+     │
+ 807 │         let f: Failure => 1
+     │                           ┬  
+     │                           ╰── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: unreachable arm
      ╭─[ match_exhaustiveness.baml:855:21 ]
      │
  855 │             true => "unreachable nested"

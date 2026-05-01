@@ -219,7 +219,7 @@ async fn match_typed_discard_patterns_typetag_switch_path() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function classify(x: int | string | bool | float) -> int {
         load_var x
         type_tag

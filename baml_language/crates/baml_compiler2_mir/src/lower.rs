@@ -4961,7 +4961,7 @@ impl LoweringContext<'_> {
             }
             AstPatternKind::Or(parts) => {
                 let parts = parts.clone();
-                self.bind_or_alternatives(scrutinee, &parts);
+                self.bind_or_alternatives(scrutinee, &parts, fresh_cells);
             }
             AstPatternKind::Wildcard | AstPatternKind::Type(_) => {}
         }
@@ -4977,12 +4977,16 @@ impl LoweringContext<'_> {
     /// name). Subsequent alternatives extract fields into temporaries and copy
     /// to the first alternative's locals. All bind blocks converge to a shared
     /// join block — exactly how Rust lowers or-patterns.
-    fn bind_or_alternatives(&mut self, scrutinee: Local, parts: &[AstPatId]) {
+    ///
+    /// `fresh_cells` is forwarded so for-loop or-patterns get a fresh heap
+    /// cell each iteration — without it, closures captured in the loop body
+    /// would all alias the same cell.
+    fn bind_or_alternatives(&mut self, scrutinee: Local, parts: &[AstPatId], fresh_cells: bool) {
         if parts.is_empty() {
             return;
         }
         if parts.len() == 1 {
-            self.bind_pattern(scrutinee, parts[0]);
+            self.bind_pattern_inner(scrutinee, parts[0], fresh_cells);
             return;
         }
 
@@ -5009,20 +5013,33 @@ impl LoweringContext<'_> {
             self.builder.set_current_block(bb_bind);
 
             if i == 0 {
-                self.bind_pattern(scrutinee, part);
+                self.bind_pattern_inner(scrutinee, part, fresh_cells);
                 // After first alt, self.locals contains the output locals.
             } else {
                 // Snapshot the output locals (from first alt).
                 let output_locals = self.locals.clone();
                 // Reset to pre-or state so bind_pattern creates fresh temps.
                 self.locals.clone_from(&saved_locals);
-                self.bind_pattern(scrutinee, part);
+                // Subsequent alts only produce throwaway temporaries that are
+                // immediately copied into the i=0 output locals — they don't
+                // need fresh cells of their own.
+                self.bind_pattern_inner(scrutinee, part, false);
                 // Copy each newly introduced binding to the first alt's local.
+                // When fresh_cells is requested (for-loop pattern), reissue a
+                // fresh cell on the output local before the copy so closures
+                // captured this iteration don't alias prior iterations' cells.
+                // Without this, only the i=0 alt path would emit FreshCell;
+                // hits to the i>0 alt would reuse the previous iteration's
+                // cell, retroactively mutating the value seen by earlier
+                // closures.
                 for (name, &temp_local) in &self.locals {
                     if saved_locals.contains_key(name) {
                         continue;
                     }
                     if let Some(&output_local) = output_locals.get(name) {
+                        if fresh_cells {
+                            self.builder.fresh_cell(output_local);
+                        }
                         self.builder.assign(
                             Place::local(output_local),
                             Rvalue::Use(Operand::Copy(Place::Local(temp_local))),
@@ -5390,8 +5407,15 @@ impl LoweringContext<'_> {
             for &arm_id in &clause.arms {
                 let arm = self.body.catch_arms[arm_id].clone();
                 let pat = &self.body.patterns[arm.pattern];
-                let is_wildcard =
-                    matches!(pat.kind, AstPatternKind::Wildcard) && pat.chain.is_none();
+                // Unchained `Bind` is a catchall like `Wildcard` (see
+                // `lower_pattern_test` and `classify_switch_pat`), so it must
+                // also be flagged as wildcard here — otherwise the panic
+                // rethrow guard (`throw_if_panic`) is skipped and a bare
+                // binding arm silently swallows language panics.
+                let is_wildcard = matches!(
+                    pat.kind,
+                    AstPatternKind::Wildcard | AstPatternKind::Bind { .. }
+                ) && pat.chain.is_none();
                 arms.push((arm, is_wildcard, clause_idx));
             }
         }

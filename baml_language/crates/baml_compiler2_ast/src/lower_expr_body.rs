@@ -1198,6 +1198,16 @@ impl LoweringContext {
     fn lower_pattern_position(&mut self, pos: PatternPosition, fallback_span: TextRange) -> PatId {
         let span = pos.span;
 
+        // The parser (`parse_pattern_position`) guarantees the CST shape:
+        //   `let WORD`         → `binding_name` set, no `type_expr`.
+        //   `let WORD { ... }` → `type_expr` + non-empty `fields` (class destructure,
+        //                        possibly via path or generics: `let std.Pair { x }`,
+        //                        `let Box<int> { v }`).
+        //   anything else after `let` (e.g. `let foo.bar` with no `{`) is a malformed
+        //   pattern and falls through to the generic type-match path below.
+        // The binding-vs-destructure decision is therefore made at the CST level —
+        // there is no `single-name TYPE_EXPR + has_let → binding` fallback here.
+
         // Class destructure: TYPE_EXPR + fields
         if !pos.fields.is_empty() {
             let class = pos
@@ -1212,15 +1222,7 @@ impl LoweringContext {
                 },
                 chain: None,
             };
-            let class_id = self.alloc_pattern(pat, span);
-            if pos.has_let {
-                // `let` on a destructure position: extract name from type_expr
-                // This handles `let User { name }` where User is both class and... no.
-                // Actually `let` on the innermost destructure doesn't add a binding —
-                // the binding comes from a left position. Just return the class pattern.
-                return class_id;
-            }
-            return class_id;
+            return self.alloc_pattern(pat, span);
         }
 
         // Bare binding name from parser lookahead (WORD token after `let`).
@@ -1232,14 +1234,11 @@ impl LoweringContext {
             return self.alloc_pattern(Pattern::wildcard(), fallback_span);
         };
 
-        // With `let` but type_expr (not a bare WORD) — fallback via type_expr_single_name.
-        // This handles cases where the parser wrapped the name in TYPE_EXPR.
         if pos.has_let {
-            if let Some(name) = type_expr_single_name(&ty) {
-                return self.alloc_pattern(Pattern::binding(name), span);
-            }
-            // `let` on a complex type (e.g. `let int[]`) — not meaningful as a
-            // binding name. Treat as a type match and let later validation catch it.
+            // Reachable only for malformed `let` positions the parser couldn't
+            // resolve to a binding or destructure (e.g. `let path.Class` with no
+            // `{ ... }`, `let Foo<T>` with no body). Lower as a type match and
+            // let later validation surface the error.
             return self.alloc_pattern(Pattern::type_match(ty), span);
         }
 

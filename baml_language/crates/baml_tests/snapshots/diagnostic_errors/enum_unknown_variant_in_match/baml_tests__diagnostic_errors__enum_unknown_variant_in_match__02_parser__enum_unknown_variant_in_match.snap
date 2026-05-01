@@ -1,0 +1,82 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Status"
+    L_BRACE "{"
+    ENUM_VARIANT "Active"
+      WORD "Active"
+    ENUM_VARIANT "Inactive"
+      WORD "Inactive"
+    ENUM_VARIANT "Pending"
+      WORD "Pending"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "classify"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "s"
+        COLON ":"
+        TYPE_EXPR "Status"
+          WORD "Status"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "s"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Status.Active"
+                  WORD "Status"
+                  DOT "."
+                  WORD "Active"
+            FAT_ARROW "=>"
+            STRING_LITERAL "active"
+              QUOTE """
+              WORD "active"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Status.Inactive"
+                  WORD "Status"
+                  DOT "."
+                  WORD "Inactive"
+            FAT_ARROW "=>"
+            STRING_LITERAL "inactive"
+              QUOTE """
+              WORD "inactive"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Status.Pendng"
+                  WORD "Status"
+                  DOT "."
+                  WORD "Pendng"
+            FAT_ARROW "=>"
+            STRING_LITERAL "pending"
+              QUOTE """
+              WORD "pending"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None
