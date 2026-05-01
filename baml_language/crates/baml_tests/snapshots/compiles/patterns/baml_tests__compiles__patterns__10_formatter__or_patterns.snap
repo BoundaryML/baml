@@ -11,9 +11,22 @@ class Fish {
     freshwater: bool,
 }
 
+class Bird {
+    name: string,
+}
+
 // Or-pattern with same binding in both arms
 function test_or_same_bindings(x: Cat | Fish) -> string {
     match (x) {
         Cat => name,
+    }
+}
+
+// Chained or-patterns test the head before the chain:
+// `(Cat | Fish) : (Cat | Fish | Bird)` should not cover Bird.
+function test_chained_or_head_precedes_chain(x: Cat | Fish | Bird) -> string {
+    match (x) {
+        let y: Cat | Fish: Cat | Fish | Bird => "pet",
+        _ => "other",
     }
 }

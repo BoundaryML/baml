@@ -68,16 +68,19 @@ struct ThrowPatternMatches {
 /// - `pattern_ty`: the type the scrutinee is narrowed to inside the body
 ///   when this pattern matches (= `scrutinee_ty` for `_` and `let x`,
 ///   the narrower type for `Foo` / destructure / chained patterns).
+/// - `covered_ty`: the subset of the original scrutinee this pattern can
+///   actually match. This differs from `pattern_ty` for chains that widen
+///   relative to the head (`A | B : A | B | C` still only covers `A | B`).
 /// - `bindings`: every name the pattern introduces, with the type each
 ///   should be declared with. Callers `declare_scoped_local` each one
 ///   (using the binding pattern id), optionally refining the chain-level
 ///   binding's type for callsite-specific reasons (let annotations,
 ///   catch throw-narrowing).
 ///
-/// Anything else (`match_cases`, `covers_all`, throw-set intersections,
-/// panic-subset detection) is derived from `pattern_ty` at the callsite.
+/// Exhaustiveness uses `covered_ty`; body narrowing/bindings use `pattern_ty`.
 struct PatternInfo {
     pattern_ty: Ty,
+    covered_ty: Ty,
     bindings: Vec<PatternBinding>,
 }
 
@@ -2577,9 +2580,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             let pattern_ty = info.pattern_ty.clone();
             let has_duplicate_bindings =
                 !Self::duplicate_pattern_binding_names(&info.bindings).is_empty();
-            // Derive match-arm metadata from the pattern's narrowed type.
-            let match_cases = self.required_match_cases(&pattern_ty).unwrap_or_default();
-            let covers_all = self.is_subtype(&scrutinee_ty, &pattern_ty);
+            // Derive exhaustiveness metadata from the subset this pattern can
+            // actually match. Chained patterns compose by intersection, so this
+            // can be narrower than the type visible inside the arm body.
+            let match_cases = self
+                .required_match_cases(&info.covered_ty)
+                .unwrap_or_default();
+            let covers_all = self.is_subtype(&scrutinee_ty, &info.covered_ty);
 
             let mut unreachable = catch_all_seen;
             if !unreachable && arm.guard.is_none() {
@@ -2949,26 +2956,30 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         let mut info = match &pat.kind {
             PatternKind::Wildcard => PatternInfo {
-                pattern_ty: scrutinee_ty,
+                pattern_ty: scrutinee_ty.clone(),
+                covered_ty: scrutinee_ty,
                 bindings: Vec::new(),
             },
 
             PatternKind::Bind { name } => {
                 if Self::is_bare_type_sugar_binding(name) {
+                    let ty = self.resolve_type_expr(
+                        &TypeExpr::Path {
+                            segments: vec![name.clone()],
+                            generic_args: vec![],
+                            attrs: vec![],
+                        },
+                        at_expr,
+                    );
                     PatternInfo {
-                        pattern_ty: self.resolve_type_expr(
-                            &TypeExpr::Path {
-                                segments: vec![name.clone()],
-                                generic_args: vec![],
-                                attrs: vec![],
-                            },
-                            at_expr,
-                        ),
+                        pattern_ty: ty.clone(),
+                        covered_ty: ty,
                         bindings: Vec::new(),
                     }
                 } else {
                     PatternInfo {
                         pattern_ty: scrutinee_ty.clone(),
+                        covered_ty: scrutinee_ty.clone(),
                         bindings: vec![PatternBinding {
                             pat_id,
                             name: name.clone(),
@@ -2978,10 +2989,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
 
-            PatternKind::Type(ty_expr) => PatternInfo {
-                pattern_ty: self.resolve_type_expr(ty_expr, at_expr),
-                bindings: Vec::new(),
-            },
+            PatternKind::Type(ty_expr) => {
+                let ty = self.resolve_type_expr(ty_expr, at_expr);
+                PatternInfo {
+                    pattern_ty: ty.clone(),
+                    covered_ty: ty,
+                    bindings: Vec::new(),
+                }
+            }
 
             PatternKind::Class { class, fields } => {
                 let (class_ty, field_types, diagnostic_class_name) =
@@ -3016,7 +3031,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 PatternInfo {
-                    pattern_ty: class_ty,
+                    pattern_ty: class_ty.clone(),
+                    covered_ty: class_ty,
                     bindings,
                 }
             }
@@ -3035,6 +3051,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let bindings = self.reconcile_or_bindings(&alt_infos, body);
                 PatternInfo {
                     pattern_ty,
+                    covered_ty: Self::join_all(
+                        &alt_infos
+                            .iter()
+                            .map(|i| i.covered_ty.clone())
+                            .collect::<Vec<_>>(),
+                    ),
                     bindings,
                 }
             }
@@ -3043,8 +3065,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.bindings.insert(pat_id, info.pattern_ty.clone());
 
         if let Some(next) = pat.chain {
+            let head_covered_ty = info.covered_ty.clone();
             let chain = self.infer_pattern_walk(next, info.pattern_ty.clone(), body, at_expr);
             info.pattern_ty = chain.pattern_ty;
+            info.covered_ty = self.intersect_tys(&head_covered_ty, &chain.covered_ty);
             if let Some(bind_name) = bind_name {
                 if let Some(binding) = info
                     .bindings
@@ -5765,6 +5789,43 @@ impl<'db> TypeInferenceBuilder<'db> {
             .fold(types[0].clone(), |acc, t| Self::join_types(&acc, t))
     }
 
+    fn intersect_tys(&self, left: &Ty, right: &Ty) -> Ty {
+        if self.is_subtype(left, right) {
+            return left.clone();
+        }
+        if self.is_subtype(right, left) {
+            return right.clone();
+        }
+
+        let left_parts: Vec<&Ty> = match left {
+            Ty::Union(parts, _) => parts.iter().collect(),
+            _ => vec![left],
+        };
+        let right_parts: Vec<&Ty> = match right {
+            Ty::Union(parts, _) => parts.iter().collect(),
+            _ => vec![right],
+        };
+
+        let mut overlapping = Vec::new();
+        for left_part in &left_parts {
+            for right_part in &right_parts {
+                if self.is_subtype(left_part, right_part) {
+                    overlapping.push((*left_part).clone());
+                } else if self.is_subtype(right_part, left_part) {
+                    overlapping.push((*right_part).clone());
+                }
+            }
+        }
+
+        if overlapping.is_empty() {
+            Ty::Never {
+                attr: TyAttr::default(),
+            }
+        } else {
+            Self::join_all(&overlapping)
+        }
+    }
+
     /// Subtype check — delegates to the normalizer which resolves type aliases
     /// and performs equirecursive structural subtyping.
     fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
@@ -6732,6 +6793,50 @@ mod tests {
             diag.error,
             TirTypeError::OrPatternBindingTypeMismatch { .. }
         )));
+    }
+
+    #[test]
+    fn infer_pattern_coverage_intersects_head_and_chain() {
+        let (db, file) = PatternTestDb::with_file("");
+        let mut builder = test_builder(&db, file);
+        let (mut body, at_expr) = body();
+
+        let int = body.patterns.alloc(Pattern::type_match(int_type_expr()));
+        let string = body.patterns.alloc(Pattern::type_match(string_type_expr()));
+        let head = body.patterns.alloc(Pattern::or(vec![int, string]));
+
+        let wide_int = body.patterns.alloc(Pattern::type_match(int_type_expr()));
+        let wide_string = body.patterns.alloc(Pattern::type_match(string_type_expr()));
+        let wide_bool = body.patterns.alloc(Pattern::type_match(bool_type_expr()));
+        let wide_chain = body
+            .patterns
+            .alloc(Pattern::or(vec![wide_int, wide_string, wide_bool]));
+
+        body.patterns[head].chain = Some(wide_chain);
+
+        let info = builder.infer_pattern(
+            head,
+            union(vec![
+                prim(PrimitiveType::Int),
+                prim(PrimitiveType::String),
+                prim(PrimitiveType::Bool),
+            ]),
+            &body,
+            at_expr,
+        );
+
+        assert_eq!(
+            info.pattern_ty,
+            union(vec![
+                prim(PrimitiveType::Int),
+                prim(PrimitiveType::String),
+                prim(PrimitiveType::Bool),
+            ])
+        );
+        assert_eq!(
+            info.covered_ty,
+            union(vec![prim(PrimitiveType::Int), prim(PrimitiveType::String)])
+        );
     }
 
     #[test]

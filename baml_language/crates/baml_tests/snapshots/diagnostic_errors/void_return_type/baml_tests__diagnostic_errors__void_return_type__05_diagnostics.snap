@@ -63,21 +63,21 @@ source: crates/baml_tests/src/generated_tests.rs
 ───╯
 
   [hir] Error: `void` can only be used as a function return type, not as a let binding annotation
-   ╭─[ void_type_position_errors.baml:8:9 ]
+   ╭─[ void_type_position_errors.baml:8:10 ]
    │
  8 │   let x: void = 1;
-   │         ──┬──  
-   │           ╰──── `void` not allowed here
+   │          ──┬─  
+   │            ╰─── `void` not allowed here
    │ 
    │ Note: Error code: E0110
 ───╯
 
   [hir] Error: `void` can only be used as a function return type, not as a let binding annotation
-    ╭─[ void_type_position_errors.baml:10:9 ]
+    ╭─[ void_type_position_errors.baml:10:10 ]
     │
  10 │   let y: void = {
-    │         ──┬──  
-    │           ╰──── `void` not allowed here
+    │          ──┬─  
+    │            ╰─── `void` not allowed here
     │ 
     │ Note: Error code: E0110
 ────╯

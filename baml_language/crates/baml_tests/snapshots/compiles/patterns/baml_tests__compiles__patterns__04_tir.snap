@@ -10,11 +10,23 @@ class user.Fish {
   name: string
   freshwater: bool
 }
+class user.Bird {
+  name: string
+}
 function user.test_or_same_bindings(x: user.Cat | user.Fish) -> string throws never {
   { : string
     match (x : user.Cat | user.Fish) : string
       Cat { name: let name } | Fish { name: let name } =>
         name : string
+  }
+}
+function user.test_chained_or_head_precedes_chain(x: user.Cat | user.Fish | user.Bird) -> string throws never {
+  { : "pet" | "other"
+    match (x : user.Cat | user.Fish | user.Bird) : "pet" | "other"
+      let y: Cat | Fish: Cat | Fish | Bird =>
+        "pet" : "pet"
+      _ =>
+        "other" : "other"
   }
 }
 class user.Cat$stream {
@@ -24,4 +36,7 @@ class user.Cat$stream {
 class user.Fish$stream {
   name: null | string
   freshwater: null | bool
+}
+class user.Bird$stream {
+  name: null | string
 }

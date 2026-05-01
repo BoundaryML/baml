@@ -2,6 +2,9 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
+class user.Bird {
+  name: string
+}
 class user.Cat {
   name: string
   indoor: bool
@@ -9,6 +12,9 @@ class user.Cat {
 class user.Fish {
   name: string
   freshwater: bool
+}
+function user.test_chained_or_head_precedes_chain(x: user.Cat | user.Fish | user.Bird) -> string  [expr] {
+  {  } match (x) { let y: user.Cat | user.Fish: user.Cat | user.Fish | user.Bird => "pet", _ => "other" }
 }
 function user.test_or_same_bindings(x: user.Cat | user.Fish) -> string  [expr] {
   {  } match (x) { Cat { name: let name } | Fish { name: let name } => name }

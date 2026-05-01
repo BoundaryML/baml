@@ -810,7 +810,7 @@ impl Pattern {
     /// Used by the let-stmt validator to reject patterns that can fail at
     /// runtime; refutable patterns belong in `match` / `if let` / `let-else`.
     pub fn is_irrefutable(&self, body: &ExprBody) -> bool {
-        match &self.kind {
+        let head_irrefutable = match &self.kind {
             PatternKind::Wildcard => true,
             PatternKind::Bind { .. } => true,
             PatternKind::Class { fields, .. } => fields
@@ -818,7 +818,13 @@ impl Pattern {
                 .all(|f| body.patterns[f.pat].is_irrefutable(body)),
             PatternKind::Type(_) => true,
             PatternKind::Or(_) => false,
-        }
+        };
+
+        head_irrefutable
+            && self
+                .chain
+                .map(|chain_id| body.patterns[chain_id].is_irrefutable(body))
+                .unwrap_or(true)
     }
 }
 

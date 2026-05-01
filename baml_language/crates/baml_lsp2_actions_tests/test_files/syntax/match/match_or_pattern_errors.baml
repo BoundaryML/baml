@@ -55,38 +55,38 @@ function DuplicateInTopLevelAlt(x: AB) -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ match_match_or_pattern_errors.baml:42:15 ]
+//     ╭─[ match_match_or_pattern_errors.baml:42:16 ]
 //     │
 //  42 │     let x: A { x } | let x: B { x } => x
-//     │               ─┬  
+//     │                ┬  
 //     │                ╰── identifier `x` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0094
 // ────╯
 // Error: or-pattern binding `x` has type `user.A | user.B` in one alternative but `user.C` in another
-//     ╭─[ match_match_or_pattern_errors.baml:35:56 ]
+//     ╭─[ match_match_or_pattern_errors.baml:35:40 ]
 //     │
 //  35 │     let x: A { val } | B { val } | let x: C { val } => val
-//     │                                                        ─┬─  
-//     │                                                         ╰─── or-pattern binding `x` has type `user.A | user.B` in one alternative but `user.C` in another
+//     │                                        ┬  
+//     │                                        ╰── or-pattern binding `x` has type `user.A | user.B` in one alternative but `user.C` in another
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: class `A` has no field `x`
-//     ╭─[ match_match_or_pattern_errors.baml:42:40 ]
+//     ╭─[ match_match_or_pattern_errors.baml:42:16 ]
 //     │
 //  42 │     let x: A { x } | let x: B { x } => x
-//     │                                        ┬  
-//     │                                        ╰── class `A` has no field `x`
+//     │                ┬  
+//     │                ╰── class `A` has no field `x`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
 // Error: class `B` has no field `x`
-//     ╭─[ match_match_or_pattern_errors.baml:42:40 ]
+//     ╭─[ match_match_or_pattern_errors.baml:42:33 ]
 //     │
 //  42 │     let x: A { x } | let x: B { x } => x
-//     │                                        ┬  
-//     │                                        ╰── class `B` has no field `x`
+//     │                                 ┬  
+//     │                                 ╰── class `B` has no field `x`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯

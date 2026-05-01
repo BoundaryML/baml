@@ -471,6 +471,24 @@ function f(x: Cat | Fish) -> string {
     }
 
     #[test]
+    fn chained_or_pattern_is_refutable() {
+        let source = r#"
+function f(value: int | string) -> int {
+  let x: int | string = value;
+  1
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let (body, _source_map) = function_expr_body(&function);
+        let pattern = first_let_pattern(body);
+
+        assert!(
+            !body.patterns[pattern].is_irrefutable(body),
+            "a bind with a chained or-pattern should be refutable"
+        );
+    }
+
+    #[test]
     fn ast_function_def_has_generic_params() {
         let source = r#"
 function deep_copy<T>(value: T) -> T {

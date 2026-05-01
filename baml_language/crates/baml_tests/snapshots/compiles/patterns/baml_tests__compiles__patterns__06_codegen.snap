@@ -1,6 +1,46 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.test_chained_or_head_precedes_chain(x: Cat | Fish | Bird) -> string {
+    load_var x
+    is_type Cat
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    is_type Fish
+    pop_jump_if_false L4
+
+  L1:
+    load_var x
+    is_type Cat
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var x
+    is_type Fish
+    pop_jump_if_false L3
+    jump L5
+
+  L3:
+    load_var x
+    is_type Bird
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const "other"
+    jump L6
+
+  L5:
+    load_const "pet"
+
+  L6:
+    return
+}
+
 function user.test_or_same_bindings(x: Cat | Fish) -> string {
     load_var x
     is_type Cat

@@ -4764,18 +4764,38 @@ impl LoweringContext<'_> {
     ) {
         let pat = self.body.patterns[pat_id].clone();
         if let Some(chain_id) = pat.chain {
+            if matches!(
+                pat.kind,
+                AstPatternKind::Wildcard | AstPatternKind::Bind { .. }
+            ) {
+                self.lower_pattern_test(scrutinee, chain_id, success, failure);
+                return;
+            }
+
+            let chain_block = self.builder.create_block();
+            self.lower_pattern_head_test(scrutinee, pat_id, &pat.kind, chain_block, failure);
+            self.builder.set_current_block(chain_block);
             self.lower_pattern_test(scrutinee, chain_id, success, failure);
             return;
         }
-        match &pat.kind {
+        self.lower_pattern_head_test(scrutinee, pat_id, &pat.kind, success, failure);
+    }
+
+    fn lower_pattern_head_test(
+        &mut self,
+        scrutinee: Local,
+        pat_id: AstPatId,
+        pat_kind: &AstPatternKind,
+        success: BlockId,
+        failure: BlockId,
+    ) {
+        match pat_kind {
             AstPatternKind::Wildcard => {
                 self.builder.goto(success);
             }
             AstPatternKind::Bind { .. } => {
-                // Unchained Bind is a catchall — its declared type is the
-                // scrutinee's type by construction, so the IsType check would
-                // always pass. (Chained Bind, e.g. `let x: T`, has its test
-                // emitted via the early `chain` branch above.)
+                // Bind heads are catchalls. Any chained refinement is emitted by
+                // `lower_pattern_test` as a continuation after this head succeeds.
                 self.builder.goto(success);
             }
             AstPatternKind::Type(ty_expr) => {

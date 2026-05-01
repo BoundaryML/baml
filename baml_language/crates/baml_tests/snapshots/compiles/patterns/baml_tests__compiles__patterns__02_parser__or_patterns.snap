@@ -29,6 +29,15 @@ SOURCE_FILE
       TYPE_EXPR "bool"
         WORD "bool"
     R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Bird"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "test_or_same_bindings"
@@ -72,6 +81,71 @@ SOURCE_FILE
                 R_BRACE "}"
             FAT_ARROW "=>"
             WORD "name"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_chained_or_head_precedes_chain"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "Cat | Fish | Bird"
+          WORD "Cat"
+          PIPE "|"
+          WORD "Fish"
+          PIPE "|"
+          WORD "Bird"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                KW_LET "let"
+                WORD "y"
+                COLON ":"
+                TYPE_EXPR "Cat"
+                  WORD "Cat"
+                PIPE "|"
+                TYPE_EXPR "Fish"
+                  WORD "Fish"
+                COLON ":"
+                TYPE_EXPR "Cat"
+                  WORD "Cat"
+                PIPE "|"
+                TYPE_EXPR "Fish"
+                  WORD "Fish"
+                PIPE "|"
+                TYPE_EXPR "Bird"
+                  WORD "Bird"
+            FAT_ARROW "=>"
+            STRING_LITERAL "pet"
+              QUOTE """
+              WORD "pet"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "_"
+                  WORD "_"
+            FAT_ARROW "=>"
+            STRING_LITERAL "other"
+              QUOTE """
+              WORD "other"
+              QUOTE """
           R_BRACE "}"
         R_BRACE "}"
 
