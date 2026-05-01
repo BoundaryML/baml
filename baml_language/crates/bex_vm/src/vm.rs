@@ -16,6 +16,21 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+/// Branch hint: tells the compiler this condition is almost never true.
+#[allow(clippy::inline_always)]
+#[inline(always)]
+#[cold]
+fn cold() {}
+
+#[allow(clippy::inline_always)]
+#[inline(always)]
+fn unlikely(b: bool) -> bool {
+    if b {
+        cold();
+    }
+    b
+}
+
 use ::bex_vm_types::{EarlyYieldCheck, RootHaver, types::ErrorClass};
 use ::core::any::TypeId;
 #[cfg(not(target_arch = "wasm32"))]
@@ -2180,7 +2195,9 @@ impl BexVm {
                 // 3. `process_notifications` walks all roots reaching this
                 //    node (just itself, since it IS a root) and applies
                 //    the watch filter to decide whether to notify.
-                if self.watched_vars.contains_key(&local_var_index) {
+                if unlikely(!self.watched_vars.is_empty())
+                    && self.watched_vars.contains_key(&local_var_index)
+                {
                     let watched_node = NodeId::LocalVar(local_var_index);
 
                     self.update_watched_node(watched_node, watch::Path::Binding, old_value, value);
