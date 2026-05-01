@@ -427,12 +427,14 @@ jobs:
     name: "benchmarks instrumented (baml)"
     runs-on: ubuntu-latest
     needs: determine_changes
-    # Run benchmarks when any Rust code changes, or on manual opt-in.
+    # Run benchmarks when any Rust code changes, on manual opt-in, or on push to main/canary.
     # Skip merge_group since they already ran in the PR.
     if: |
       github.event_name != 'merge_group' &&
       (
         needs.determine_changes.outputs.code == 'true' ||
+        github.ref == 'refs/heads/main' ||
+        github.ref == 'refs/heads/canary' ||
         contains(github.event.pull_request.body, 'RUN_CODSPEED=1')
       )
     timeout-minutes: 25
