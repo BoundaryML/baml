@@ -4,6 +4,14 @@
 //! holding `Arc<MediaValue>`. Static and instance methods dispatch
 //! natively here instead of round-tripping through the BAML engine.
 //!
+//! These classes interact with the global `HANDLE_TABLE` directly —
+//! they do *not* go through `BamlHandle`. The proto encoder/decoder on
+//! the Python side reads the raw u64 key produced by
+//! `_insert_into_handle_table` and writes it (alongside the
+//! statically-known `_handle_type`) into the proto, and on the way back
+//! resolves the key via `_take_from_handle_table`. `BamlHandle` is
+//! scheduled for removal in a later phase.
+//!
 //! Hand-written for the four kinds; an IR-driven generator that produces
 //! these from `baml_builtins2` is tracked separately. The duplication
 //! across four `#[pymethods]` blocks is intentional and gives the
@@ -20,42 +28,6 @@ use pyo3::{
     types::PyAnyMethods,
 };
 
-use crate::handle::BamlHandle;
-
-// Resolve a BamlHandle whose `handle_type` matches `expected_kind`,
-// pull the inner Arc<MediaValue> out of the table, release the
-// temporary slot, and hand the Arc back to the caller.
-//
-// The release on success transfers ownership: the temporary HANDLE_TABLE
-// slot inserted on the engine side is no longer needed once we hold a
-// strong PyO3-owned Arc. On mismatch we leave the slot intact so callers
-// can diagnose without losing data.
-fn arc_from_handle(handle: &BamlHandle, expected_kind: MediaKind) -> PyResult<Arc<MediaValue>> {
-    let arc_value = HANDLE_TABLE
-        .resolve(handle.key())
-        .ok_or_else(|| PyRuntimeError::new_err("media handle is no longer valid"))?;
-    let result = match &*arc_value {
-        CffiHandleTableEntry::Adt(BexExternalAdt::Media(media_arc))
-            if media_arc.kind == expected_kind =>
-        {
-            Ok(Arc::clone(media_arc))
-        }
-        CffiHandleTableEntry::Adt(BexExternalAdt::Media(media_arc)) => {
-            Err(PyTypeError::new_err(format!(
-                "media handle kind mismatch: expected {:?}, got {:?}",
-                expected_kind, media_arc.kind
-            )))
-        }
-        _ => Err(PyTypeError::new_err(
-            "handle does not point to a media value",
-        )),
-    };
-    if result.is_ok() {
-        HANDLE_TABLE.release(handle.key());
-    }
-    result
-}
-
 fn handle_type_for(kind: MediaKind) -> BamlHandleType {
     match kind {
         MediaKind::Image => BamlHandleType::AdtMediaImage,
@@ -64,16 +36,6 @@ fn handle_type_for(kind: MediaKind) -> BamlHandleType {
         MediaKind::Pdf => BamlHandleType::AdtMediaPdf,
         MediaKind::Generic => BamlHandleType::AdtMediaGeneric,
     }
-}
-
-// Insert an `Arc<MediaValue>` into the global handle table and return a
-// fresh `BamlHandle` pointing at it. Used by the inbound encoder so a
-// Python-owned media value survives a round-trip into the engine.
-fn arc_to_handle(arc: &Arc<MediaValue>) -> BamlHandle {
-    let table_value = CffiHandleTableEntry::Adt(BexExternalAdt::Media(Arc::clone(arc)));
-    let key = HANDLE_TABLE.insert(table_value);
-    let handle_type = handle_type_for(arc.kind) as i32;
-    BamlHandle::new(key, handle_type)
 }
 
 // `core_schema.is_instance_schema(cls)` produced via PyO3.
@@ -144,23 +106,68 @@ macro_rules! define_media_pyclass {
                 self.inner.mime_type()
             }
 
-            // Internal: resolve a BamlHandle from the handle table into a
+            // Internal: borrow this value into the global handle table and
+            // return the raw u64 key. Used by the inbound encoder
+            // (`proto.py`'s `_set_inbound_value`). The handle-table slot
+            // is owned by the engine for the duration of the call — once
+            // `convert_external_to_vm_value` allocates a `RustData` on
+            // the VM heap (which holds its own `Arc::clone`), the slot
+            // can be released.
+            //
+            // Bypasses `BamlHandle` entirely: the proto's `handle_type`
+            // field is populated separately via `_handle_type` (a
+            // statically-known per-class constant).
+            fn _insert_into_handle_table(&self) -> u64 {
+                let entry =
+                    CffiHandleTableEntry::Adt(BexExternalAdt::Media(Arc::clone(&self.inner)));
+                HANDLE_TABLE.insert(entry)
+            }
+
+            // Internal: resolve a raw key from the handle table into a
             // fresh PyO3 instance owning the underlying Arc. Used by the
             // outbound decoder (`proto.py`'s `_decode_handle`).
+            //
+            // On success the slot is released — ownership transfers to
+            // the returned PyO3 instance. On kind mismatch the slot is
+            // left intact so callers can diagnose without losing data.
             #[classmethod]
-            fn _from_handle(
+            fn _take_from_handle_table(
                 _cls: &Bound<'_, pyo3::types::PyType>,
-                handle: &BamlHandle,
+                key: u64,
             ) -> PyResult<Self> {
-                let arc = arc_from_handle(handle, $kind)?;
+                let arc_value = HANDLE_TABLE
+                    .resolve(key)
+                    .ok_or_else(|| PyRuntimeError::new_err("media handle is no longer valid"))?;
+                let arc = match &*arc_value {
+                    CffiHandleTableEntry::Adt(BexExternalAdt::Media(media_arc))
+                        if media_arc.kind == $kind =>
+                    {
+                        Arc::clone(media_arc)
+                    }
+                    CffiHandleTableEntry::Adt(BexExternalAdt::Media(media_arc)) => {
+                        return Err(PyTypeError::new_err(format!(
+                            "media handle kind mismatch: expected {:?}, got {:?}",
+                            $kind, media_arc.kind
+                        )));
+                    }
+                    _ => {
+                        return Err(PyTypeError::new_err(
+                            "handle does not point to a media value",
+                        ));
+                    }
+                };
+                HANDLE_TABLE.release(key);
                 Ok(Self { inner: arc })
             }
 
-            // Internal: borrow this value into the handle table and return
-            // a fresh BamlHandle pointing at it. Used by the inbound encoder
-            // (`proto.py`'s `_set_inbound_value`).
-            fn _to_handle(&self) -> BamlHandle {
-                arc_to_handle(&self.inner)
+            // Internal: the proto `BamlHandleType` tag for this class,
+            // as i32 (matching the proto enum's encoding). Statically
+            // known per kind; exposed as a classmethod so the Python
+            // proto encoder can populate `handle.handle_type` without
+            // instantiating a `BamlHandle`.
+            #[classmethod]
+            fn _handle_type(_cls: &Bound<'_, pyo3::types::PyType>) -> i32 {
+                handle_type_for($kind) as i32
             }
 
             // Pydantic v2 hook so user models can declare fields like
