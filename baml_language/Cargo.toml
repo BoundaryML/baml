@@ -68,6 +68,8 @@ bridge_wasm = { path = "crates/bridge_wasm" }
 bex_events = { path = "crates/bex_events" }
 bex_events_native = { path = "crates/bex_events_native" }
 bex_resource_types = { path = "crates/bex_resource_types" }
+darwin-kperf = "0.1.0"
+darwin-kperf-events = "0.1.0"
 
 # External dependency for sys_llm jinja module
 minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", default-features = false, features = [
@@ -307,7 +309,7 @@ opt-level = 0
 inherits = "release"
 strip = false
 debug = "full"
-lto = false
+lto = "thin"
 
 # The profile that 'cargo dist' will build with.
 [profile.dist]

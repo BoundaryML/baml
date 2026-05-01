@@ -584,7 +584,7 @@ impl BexVm {
     pub fn get_object_mut(&mut self, ptr: HeapPtr) -> &mut Object {
         // SAFETY: We have &mut self, so no other code can access the VM.
         // The TLAB ensures this VM has exclusive access to its allocated objects.
-        assert!(
+        debug_assert!(
             !self.heap.is_compile_time_ptr(ptr),
             "Cannot mutate compile-time object"
         );
@@ -1169,7 +1169,7 @@ impl BexVm {
 
     #[inline]
     fn local_slot_stack_index(locals_offset: StackIndex, slot: usize) -> StackIndex {
-        assert!(
+        debug_assert!(
             slot > 0,
             "local slot 0 is reserved and should never be materialized on stack"
         );
@@ -1892,6 +1892,8 @@ impl BexVm {
         }
     }
 
+    #[allow(clippy::inline_always)] // Measured: 20-40% speedup from inlining the dispatch loop
+    #[inline(always)]
     fn exec_inner(&mut self) -> Result<VmExecState, VmError> {
         if self.frames.is_empty() {
             return Ok(VmExecState::Complete(Value::Null));
@@ -1911,7 +1913,7 @@ impl BexVm {
             // This also handles re-entry after exec() yielded a
             // FunctionExit span for a traced callback.
             while matches!(self.frames.last(), Some(Frame::Native(_))) {
-                let v = self.stack.ensure_pop()?;
+                let v = self.stack.ensure_pop();
                 let Some(Frame::Native(nf)) = self.frames.pop() else {
                     unreachable!("just matched Some(Frame::Native(_))");
                 };
@@ -1986,11 +1988,7 @@ impl BexVm {
             }
 
             if self.frames.is_empty() {
-                return self
-                    .stack
-                    .ensure_pop()
-                    .map_err(VmError::InternalError)
-                    .map(VmExecState::Complete);
+                return Ok(VmExecState::Complete(self.stack.ensure_pop()));
             }
 
             // Sync frame state — may have changed due to continuation
@@ -2058,13 +2056,23 @@ impl BexVm {
     /// ```
     /// at the end to allow early yielding in the event of a long-running
     /// operation.
+    #[allow(clippy::inline_always)] // Measured: 20-40% speedup from inlining the dispatch loop
+    #[inline(always)]
     fn step(
         &mut self,
         frame_idx: &mut usize,
         function: &mut &'static Function,
         instruction_ptr: usize,
     ) -> Result<Option<VmExecState>, VmError> {
-        match function.bytecode.instructions[instruction_ptr] {
+        // SAFETY: The bytecode compiler guarantees every code path ends with
+        // a Return instruction, so instruction_ptr is always in bounds.
+        // Skipping the bounds check removes a cmp+branch from every dispatch.
+        match unsafe {
+            *function
+                .bytecode
+                .instructions
+                .get_unchecked(instruction_ptr)
+        } {
             Instruction::NotifyBlock(block_index) => {
                 // Get the notification from the function's storage
                 let notification = &function.block_notifications[block_index];
@@ -2084,7 +2092,12 @@ impl BexVm {
             }
 
             Instruction::VizEnter(index) | Instruction::VizExit(index) => {
-                let instruction = &function.bytecode.instructions[instruction_ptr];
+                let instruction = unsafe {
+                    function
+                        .bytecode
+                        .instructions
+                        .get_unchecked(instruction_ptr)
+                };
                 let delta = match instruction {
                     Instruction::VizEnter(_) => bytecode::VizExecDelta::Enter,
                     Instruction::VizExit(_) => bytecode::VizExecDelta::Exit,
@@ -2120,8 +2133,11 @@ impl BexVm {
             }
 
             Instruction::LoadVar(index) => {
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let slot = Self::local_slot_stack_index(bf.locals_offset, index);
                 let value = self.stack[slot];
@@ -2129,14 +2145,17 @@ impl BexVm {
             }
 
             Instruction::StoreVar(index) => {
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 // Absolute index of the local variable.
                 let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
 
                 // New value.
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
 
                 // Old value being replaced.
                 let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
@@ -2187,14 +2206,14 @@ impl BexVm {
 
             Instruction::StoreGlobal(index) => {
                 // Consume the value. Read impl of Instruction::StoreVar.
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
 
                 // No write barrier: globals is a VM-owned root structure, not a heap object.
                 self.globals[index] = value;
             }
 
             Instruction::LoadField(index) => {
-                let top = self.stack.ensure_pop()?;
+                let top = self.stack.ensure_pop();
 
                 let reference = self.as_object_ptr(&top, ObjectType::Instance)?;
 
@@ -2216,10 +2235,10 @@ impl BexVm {
 
             Instruction::StoreField(index) => {
                 // Consume the new value to be set from the stack.
-                let new_value = self.stack.ensure_pop()?;
+                let new_value = self.stack.ensure_pop();
 
                 // Consume the instance value from the stack.
-                let instance_value = self.stack.ensure_pop()?;
+                let instance_value = self.stack.ensure_pop();
                 let instance_index = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
 
                 // Read old value (and typecheck).
@@ -2264,10 +2283,10 @@ impl BexVm {
 
             Instruction::InitField(index) => {
                 // Consume the new value to be set from the stack.
-                let new_value = self.stack.ensure_pop()?;
+                let new_value = self.stack.ensure_pop();
 
                 // Peek — do NOT pop the instance; it stays on the stack for the next field.
-                let instance_slot = self.stack.ensure_slot_from_top(0)?;
+                let instance_slot = self.stack.ensure_slot_from_top(0);
                 let instance_value = self.stack[instance_slot];
                 let instance_index = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
 
@@ -2318,7 +2337,7 @@ impl BexVm {
             }
 
             Instruction::Copy(offset) => {
-                let index = self.stack.ensure_slot_from_top(offset)?;
+                let index = self.stack.ensure_slot_from_top(offset);
                 let value = self.stack[index];
                 self.stack.push(value);
             }
@@ -2329,8 +2348,11 @@ impl BexVm {
                 // becomes a bottleneck on hot loops, it can be replaced with
                 // wrapping_add_signed — the array bounds check on the next
                 // iteration will catch invalid pointers anyway.
-                let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked_mut(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 bf.instruction_ptr = instruction_ptr
                     .checked_add_signed(offset)
@@ -2342,7 +2364,7 @@ impl BexVm {
 
             Instruction::PopJumpIfFalse(offset) => {
                 // Pop the condition from the stack (don't leave it there).
-                let condition = self.stack.ensure_pop()?;
+                let condition = self.stack.ensure_pop();
 
                 match condition {
                     // Reassign only if the condition is false.
@@ -2373,11 +2395,14 @@ impl BexVm {
             }
 
             Instruction::JumpIfFalse(offset) => {
-                let top = self.stack.ensure_stack_top()?;
+                let top = self.stack.ensure_stack_top();
                 let condition = self.stack[top];
 
-                let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked_mut(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
 
                 match condition {
@@ -2402,7 +2427,7 @@ impl BexVm {
             }
 
             Instruction::Throw => {
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
                 self.try_unwind_exception(frame_idx, function, value)?;
                 if self.early_yield.should_early_yield() {
                     return Ok(Some(VmExecState::EarlyYield));
@@ -2410,8 +2435,8 @@ impl BexVm {
             }
 
             Instruction::BinOp(op) => {
-                let right = self.stack.ensure_pop()?;
-                let left = self.stack.ensure_pop()?;
+                let right = self.stack.ensure_pop();
+                let left = self.stack.ensure_pop();
 
                 let result = match (left, right) {
                     (Value::Int(left), Value::Int(right)) => Value::Int(match op {
@@ -2563,8 +2588,8 @@ impl BexVm {
             }
 
             Instruction::CmpOp(op) => {
-                let right = self.stack.ensure_pop()?;
-                let left = self.stack.ensure_pop()?;
+                let right = self.stack.ensure_pop();
+                let left = self.stack.ensure_pop();
 
                 let result = match (left, right) {
                     (Value::Int(left), Value::Int(right)) => Value::Bool(match op {
@@ -2702,7 +2727,7 @@ impl BexVm {
             }
 
             Instruction::UnaryOp(op) => {
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
 
                 let result = match (op, value) {
                     (UnaryOp::Not, Value::Bool(value)) => Value::Bool(!value),
@@ -2735,8 +2760,8 @@ impl BexVm {
             Instruction::LoadArrayElement => {
                 // Stack should contain [array, index]
                 // Pop the index first, then the array
-                let index_value = self.stack.ensure_pop()?;
-                let array_value = self.stack.ensure_pop()?;
+                let index_value = self.stack.ensure_pop();
+                let array_value = self.stack.ensure_pop();
 
                 let array_obj_index = self.as_object_ptr(&array_value, ObjectType::Array)?;
 
@@ -2835,8 +2860,8 @@ impl BexVm {
                 //    - Return a runtime error NoSuchKeyInMap if key not found
                 // 7. Push the found value onto the stack
 
-                let key_value = self.stack.ensure_pop()?;
-                let map_value = self.stack.ensure_pop()?;
+                let key_value = self.stack.ensure_pop();
+                let map_value = self.stack.ensure_pop();
 
                 let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
 
@@ -2863,9 +2888,9 @@ impl BexVm {
 
             Instruction::StoreArrayElement => {
                 // Instruction args.
-                let new_value = self.stack.ensure_pop()?;
-                let index_value = self.stack.ensure_pop()?;
-                let array_value = self.stack.ensure_pop()?;
+                let new_value = self.stack.ensure_pop();
+                let index_value = self.stack.ensure_pop();
+                let array_value = self.stack.ensure_pop();
                 let array_object_index = self.as_object_ptr(&array_value, ObjectType::Array)?;
 
                 // Get the array length for bounds checking.
@@ -2985,9 +3010,9 @@ impl BexVm {
 
             Instruction::StoreMapElement => {
                 // Instruction args.
-                let new_value = self.stack.ensure_pop()?;
-                let key_value = self.stack.ensure_pop()?;
-                let map_value = self.stack.ensure_pop()?;
+                let new_value = self.stack.ensure_pop();
+                let key_value = self.stack.ensure_pop();
+                let map_value = self.stack.ensure_pop();
 
                 // Get the string key from the objects pool.
                 let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
@@ -3080,7 +3105,7 @@ impl BexVm {
                     enm.variants.len()
                 };
 
-                let variant = self.stack.ensure_pop()?;
+                let variant = self.stack.ensure_pop();
 
                 let Value::Int(variant_index) = variant else {
                     return Err(VmInternalError::TypeError {
@@ -3168,7 +3193,7 @@ impl BexVm {
             }
 
             Instruction::Await => {
-                let value = self.stack.ensure_stack_top()?;
+                let value = self.stack.ensure_stack_top();
 
                 let wanted_type = FutureType::Any;
 
@@ -3207,7 +3232,7 @@ impl BexVm {
                 // Stack contains: [channel, filter]
 
                 // Consume filter.
-                let filter = match self.stack.ensure_pop()? {
+                let filter = match self.stack.ensure_pop() {
                     Value::Null => WatchFilter::Default,
                     Value::Object(object_index) => match self.get_object(object_index) {
                         Object::Function(_) => WatchFilter::Function(object_index),
@@ -3223,11 +3248,14 @@ impl BexVm {
                 };
 
                 // Consume channel.
-                let channel_value = self.stack.ensure_pop()?;
+                let channel_value = self.stack.ensure_pop();
                 let channel = self.as_string(&channel_value)?.to_owned();
 
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
                 let value = self.stack[local_var_index];
@@ -3269,8 +3297,11 @@ impl BexVm {
             }
 
             Instruction::Unwatch(index) => {
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
 
@@ -3296,8 +3327,11 @@ impl BexVm {
             }
 
             Instruction::Notify(index) => {
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
                 let var_node = NodeId::LocalVar(local_var_index);
@@ -3334,7 +3368,7 @@ impl BexVm {
 
             Instruction::CallIndirect => {
                 // Stack layout: [arg1, arg2, ..., argN, callee]
-                let callee_slot = self.stack.ensure_stack_top()?;
+                let callee_slot = self.stack.ensure_stack_top();
                 let callee_value = self.stack[callee_slot];
                 let callee_ptr =
                     self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
@@ -3367,7 +3401,7 @@ impl BexVm {
                     let fn_ptr = bm.function;
 
                     // Pop the callee (bound_method) off the top.
-                    let _popped = self.stack.ensure_pop()?;
+                    let _popped = self.stack.ensure_pop();
 
                     // Stack: [arg1, ..., argN] where N = visible_arity.
                     let args_offset = self
@@ -3399,7 +3433,7 @@ impl BexVm {
                         .len()
                         .checked_sub(arg_count + 1)
                         .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count + 1))?;
-                    let _popped_callee = self.stack.ensure_pop()?;
+                    let _popped_callee = self.stack.ensure_pop();
                     let locals_offset = StackIndex::from_raw(args_offset);
 
                     if let Some(state) = self.execute_call_from_locals_offset(
@@ -3419,7 +3453,7 @@ impl BexVm {
 
             Instruction::Return => {
                 // Pop the result from the eval stack.
-                let result = self.stack.ensure_pop()?;
+                let result = self.stack.ensure_pop();
 
                 // Check if this frame was traced.
                 // Capture function name before popping the frame.
@@ -3437,8 +3471,11 @@ impl BexVm {
 
                 // Restore the eval stack to the state before the function
                 // was called and leave the result on top.
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 self.stack.drain(bf.locals_offset..);
                 self.stack.push(result);
@@ -3449,22 +3486,12 @@ impl BexVm {
                 // Return from interrupt.
                 if Some(self.frames.len()) == self.interrupt_frame {
                     self.interrupt_frame = None;
-                    return self
-                        .stack
-                        .ensure_pop()
-                        .map_err(VmError::InternalError)
-                        .map(VmExecState::Complete)
-                        .map(Some);
+                    return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
                 }
 
                 // If there are no more frames, we're done.
                 if self.frames.is_empty() {
-                    return self
-                        .stack
-                        .ensure_pop()
-                        .map_err(VmError::InternalError)
-                        .map(VmExecState::Complete)
-                        .map(Some);
+                    return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
                 }
 
                 // Yield FunctionExit for traced frames (with result value).
@@ -3487,9 +3514,9 @@ impl BexVm {
 
             Instruction::AllocMap(n) => {
                 let map = if n > 0 {
-                    let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1)?;
-                    let end_of_keys = self.stack.ensure_slot_from_top(n - 1)?;
-                    let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1)?;
+                    let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
+                    let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
+                    let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1);
 
                     // We can safely copy the objects that act as values so there's no problem
                     // with not draining them.
@@ -3531,7 +3558,7 @@ impl BexVm {
             // ============================================================
             Instruction::JumpTable { table_idx, default } => {
                 // Pop discriminant from stack
-                let discriminant = self.stack.ensure_pop()?;
+                let discriminant = self.stack.ensure_pop();
 
                 // Must be an integer
                 let Value::Int(value) = discriminant else {
@@ -3547,8 +3574,11 @@ impl BexVm {
                 let offset = table.lookup(value).unwrap_or(default);
 
                 // Jump
-                let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked_mut(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 bf.instruction_ptr = instruction_ptr
                     .checked_add_signed(offset)
@@ -3561,7 +3591,7 @@ impl BexVm {
 
             Instruction::Discriminant => {
                 // Pop value from stack
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
 
                 // Must be an object (variants are heap-allocated)
                 let Value::Object(object_idx) = value else {
@@ -3590,13 +3620,13 @@ impl BexVm {
             }
 
             Instruction::TypeTag => {
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
                 let tag = value_type_tag(&value);
                 self.stack.push(Value::Int(tag));
             }
 
             Instruction::IsType(const_idx) => {
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
                 let expected = &function.bytecode.resolved_constants[const_idx];
                 let result = match expected {
                     Value::Object(class_ptr) => {
@@ -3624,7 +3654,7 @@ impl BexVm {
                 clippy::cast_possible_truncation
             )]
             Instruction::DenseTag(table_idx) => {
-                let tag = match self.stack.ensure_pop()? {
+                let tag = match self.stack.ensure_pop() {
                     Value::Int(t) => t,
                     other => {
                         // TypeTag always pushes Int, so this shouldn't happen.
@@ -3648,7 +3678,7 @@ impl BexVm {
             }
 
             Instruction::ThrowIfPanic => {
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
                 let is_panic = match value {
                     Value::Object(ptr) => match self.get_object(ptr) {
                         Object::Instance(instance) => {
@@ -3675,7 +3705,7 @@ impl BexVm {
             }
 
             Instruction::MakeCell => {
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
                 let cell = Object::Cell(Cell { value });
                 let ptr = self.tlab.alloc(cell);
                 self.stack.push(Value::Object(ptr));
@@ -3684,7 +3714,7 @@ impl BexVm {
             Instruction::MakeClosure(obj_idx, capture_count) => {
                 let mut captures = Vec::with_capacity(capture_count);
                 for _ in 0..capture_count {
-                    captures.push(self.stack.ensure_pop()?);
+                    captures.push(self.stack.ensure_pop());
                 }
                 // Captures were pushed left-to-right, popped right-to-left.
                 captures.reverse();
@@ -3698,7 +3728,7 @@ impl BexVm {
             }
 
             Instruction::MakeBoundMethod(global_idx) => {
-                let receiver = self.stack.ensure_pop()?;
+                let receiver = self.stack.ensure_pop();
                 let callee_value = self.globals[global_idx];
                 let function_ptr =
                     self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
@@ -3716,8 +3746,11 @@ impl BexVm {
             }
 
             Instruction::LoadDeref(slot) => {
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let cell_value = self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)];
                 let Value::Object(cell_ptr) = cell_value else {
@@ -3740,9 +3773,12 @@ impl BexVm {
             }
 
             Instruction::StoreDeref(slot) => {
-                let value = self.stack.ensure_pop()?;
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let value = self.stack.ensure_pop();
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let cell_value = self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)];
                 let Value::Object(cell_ptr) = cell_value else {
@@ -3767,8 +3803,11 @@ impl BexVm {
             }
 
             Instruction::LoadCapture(idx) => {
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let closure_ptr = bf.function;
                 // SAFETY: closure_ptr is the frame's function, valid for
@@ -3802,9 +3841,12 @@ impl BexVm {
             }
 
             Instruction::StoreCapture(idx) => {
-                let value = self.stack.ensure_pop()?;
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let value = self.stack.ensure_pop();
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let closure_ptr = bf.function;
                 // SAFETY: closure_ptr is the frame's function, valid for
@@ -3846,8 +3888,11 @@ impl BexVm {
                 // Push the raw cell pointer from captures[idx] without
                 // reading through the cell.  Used by nested closures to
                 // forward a shared cell to an inner closure.
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let closure_ptr = bf.function;
                 // SAFETY: closure_ptr is the frame's function, valid for
@@ -3866,8 +3911,8 @@ impl BexVm {
             Instruction::SendEvent => {
                 // Stack layout (top-to-bottom): [data, event_name]
                 // Pop data first (it's on top), then event_name.
-                let data = self.stack.ensure_pop()?;
-                let name_value = self.stack.ensure_pop()?;
+                let data = self.stack.ensure_pop();
+                let name_value = self.stack.ensure_pop();
 
                 // Extract the event name string from the heap.
                 let event_name = self.as_string(&name_value)?.clone();
