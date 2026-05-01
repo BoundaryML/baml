@@ -96,6 +96,7 @@ class Foo(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     name: typing.Literal["foo"]
     my_pdf: baml.media.Pdf
+    my_image: baml.media.Image
     repackage       = _define_instance_method("user.lorem.Foo.repackage", "sync",  ["self"])
     repackage_async = _define_instance_method("user.lorem.Foo.repackage", "async", ["self"])
 
@@ -103,6 +104,7 @@ class Foo(pydantic.BaseModel):
 class Bar(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     their_pdf: baml.media.Pdf
+    their_image: baml.media.Image
     name: typing.Literal["bar"]
 
 

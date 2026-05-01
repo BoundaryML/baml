@@ -39,6 +39,7 @@ class Address(pydantic.BaseModel):
 class Bar(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     their_pdf: baml.media.Pdf
+    their_image: baml.media.Image
     name: typing.Literal["bar"]
 
 
@@ -51,6 +52,7 @@ class Foo(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     name: typing.Literal["foo"]
     my_pdf: baml.media.Pdf
+    my_image: baml.media.Image
 
 
 class PhoneNumber(pydantic.BaseModel):
