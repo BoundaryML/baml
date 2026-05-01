@@ -21,7 +21,9 @@ pub mod baml {
 
 pub use error::CtypesError;
 pub use event_encode::{runtime_event_to_bytes, runtime_event_to_proto};
-pub use handle_table::{HANDLE_TABLE, HandleTable, HandleTableOptions, HandleTableValue};
+pub use handle_table::{
+    CffiHandleTable, CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
+};
 pub use utils::DecodeFromBuffer;
 pub use value_decode::{inbound_to_external, kwargs_to_bex_values};
 pub use value_encode::external_to_baml_value;
