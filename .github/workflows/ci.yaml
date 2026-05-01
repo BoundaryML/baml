@@ -73,7 +73,9 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/**' \
+            ':scripts/baml-language-version' \
             ':.github/workflows/ci.yaml' \
+            ':.github/workflows/release-baml-language-alpha.yml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \
           ; then
@@ -296,6 +298,25 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           exit "$exit_code"
 
+  release-metadata:
+    name: "Release Metadata"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 5
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: "Validate baml_language release metadata"
+        run: scripts/baml-language-version check
+
+      - name: "Validate alpha version computation"
+        run: test "$(scripts/baml-language-version compute --alpha-number 1842)" = "$(scripts/baml-language-version show)-alpha.1842"
+
   # Call reusable workflows
   cargo-tests:
     name: "Cargo Tests"
@@ -484,6 +505,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs:
       - prek
+      - release-metadata
       - cargo-tests
       - wasm-pack-tests
       - beps
@@ -504,6 +526,7 @@ jobs:
           echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| prek | ${{ needs.prek.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| release-metadata | ${{ needs.release-metadata.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cargo-tests | ${{ needs.cargo-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| beps | ${{ needs.beps.result }} |" >> $GITHUB_STEP_SUMMARY
