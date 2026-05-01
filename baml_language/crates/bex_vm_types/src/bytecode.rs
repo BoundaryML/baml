@@ -1140,6 +1140,31 @@ impl ExceptionTableEntry {
     }
 }
 
+/// Compact jump table: maps discriminant values to i32 byte offsets
+/// (relative to the end of the `JumpTable` instruction in the compact stream).
+/// Parallel to `Bytecode::jump_tables` but with translated offsets.
+#[derive(Clone, Debug)]
+pub struct CompactJumpTable {
+    /// Minimum discriminant value (maps to index 0), same as `JumpTableData::min`.
+    pub min: i64,
+    /// Byte offsets (relative to instruction end) for each value from min to min+len-1.
+    /// None means "hole" — should use the default offset encoded in the instruction.
+    pub offsets: Vec<Option<i32>>,
+}
+
+impl CompactJumpTable {
+    /// Lookup the byte offset for a discriminant value.
+    /// Returns `None` if value is out of range or is a hole (use default).
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn lookup(&self, value: i64) -> Option<i32> {
+        if value < self.min {
+            return None;
+        }
+        let index = (value - self.min) as usize;
+        self.offsets.get(index).copied().flatten()
+    }
+}
+
 /// Compact bytecode encoding.
 ///
 /// A re-encoding of `Vec<Instruction>` as `Vec<u8>` with 1-byte opcodes and
@@ -1153,6 +1178,9 @@ pub struct CompactCode {
     pub line_table: Vec<LineTableEntry>,
     /// Exception table with PCs translated to byte offsets.
     pub exception_table: Vec<ExceptionTableEntry>,
+    /// Jump tables with offsets translated to byte offsets.
+    /// Parallel to `Bytecode::jump_tables`.
+    pub jump_tables: Vec<CompactJumpTable>,
 }
 
 impl CompactCode {
@@ -1498,10 +1526,61 @@ impl Bytecode {
             })
             .collect();
 
+        // ── Translate jump tables ────────────────────────────────────────
+        // For each JumpTableData instruction at index `i`, the JumpTable opcode
+        // is at byte offset `index_to_offset[i]` and its encoded size is 9.
+        // The instruction end (after reading both u32+i32 operands) is at
+        // `index_to_offset[i] + 9`. The default offset in the compact code is
+        // already computed as `target_byte - instr_end` in pass 2 above.
+        // For per-entry offsets, we need: byte_target - instr_end.
+        //
+        // We iterate the instructions to find JumpTable instructions and their
+        // original index, then translate each entry's isize offset.
+        let jump_tables: Vec<CompactJumpTable> = self
+            .jump_tables
+            .iter()
+            .enumerate()
+            .map(|(table_idx, jtd)| {
+                // Find the instruction index of the JumpTable using this table.
+                // We need the byte offset of the instruction end to compute relative offsets.
+                // Find the instruction that uses this table_idx.
+                let instr_idx = self
+                    .instructions
+                    .iter()
+                    .position(|instr| {
+                        matches!(instr, Instruction::JumpTable { table_idx: t, .. } if *t == table_idx)
+                    })
+                    .expect("JumpTable instruction must exist for each jump_tables entry");
+                let instr_end_byte = index_to_offset[instr_idx] + OpCode::JumpTable.encoded_size();
+
+                let offsets: Vec<Option<i32>> = jtd
+                    .offsets
+                    .iter()
+                    .map(|offset_opt| {
+                        offset_opt.map(|isize_offset| {
+                            // target instruction index = instr_idx + isize_offset
+                            // (same formula as the old VM: target = i + offset)
+                            let target_instr =
+                                (instr_idx as isize + isize_offset) as usize;
+                            let target_byte = index_to_offset[target_instr];
+                            let byte_offset = target_byte as i64 - instr_end_byte as i64;
+                            byte_offset as i32
+                        })
+                    })
+                    .collect();
+
+                CompactJumpTable {
+                    min: jtd.min,
+                    offsets,
+                }
+            })
+            .collect();
+
         CompactCode {
             code,
             line_table,
             exception_table,
+            jump_tables,
         }
     }
 
