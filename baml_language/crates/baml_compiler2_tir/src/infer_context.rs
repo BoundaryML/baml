@@ -155,19 +155,12 @@ pub enum TirTypeError {
         /// LHS expression text
         lhs: String,
     },
-    /// Or-pattern alternatives bind different sets of variables.
-    OrPatternBindingMismatch {
-        missing: Vec<Name>,
-        extra: Vec<Name>,
-    },
     /// Or-pattern alternatives bind the same variable with different types.
     OrPatternBindingTypeMismatch { name: Name, first: Ty, other: Ty },
     /// Class destructure references a field that does not exist on the class.
     NoSuchDestructureField { class_name: Name, field_name: Name },
     /// Class destructure lists the same field more than once.
     DuplicateDestructureField { class_name: Name, field_name: Name },
-    /// Same identifier bound more than once in a single pattern.
-    DuplicatePatternBinding { name: Name },
     /// Class destructure used on a type that is not a class (e.g. `int { val }`).
     DestructureOnNonClass { ty_name: Name },
     /// Member access (`.field` or `[index]`) on a nullable type without `?.`.
@@ -413,28 +406,6 @@ impl fmt::Display for TirTypeError {
                     "did you mean `{lhs}`? `... ?? null` is unnecessary because `{lhs}` is already nullable"
                 )
             }
-            TirTypeError::OrPatternBindingMismatch { missing, extra } => {
-                let mut parts = Vec::new();
-                if !missing.is_empty() {
-                    let names: Vec<_> = missing.iter().map(|n| format!("`{n}`")).collect();
-                    parts.push(format!(
-                        "not bound in all alternatives: {}",
-                        names.join(", ")
-                    ));
-                }
-                if !extra.is_empty() {
-                    let names: Vec<_> = extra.iter().map(|n| format!("`{n}`")).collect();
-                    parts.push(format!(
-                        "only bound in some alternatives: {}",
-                        names.join(", ")
-                    ));
-                }
-                write!(
-                    f,
-                    "or-pattern alternatives must bind the same variables; {}",
-                    parts.join("; ")
-                )
-            }
             TirTypeError::OrPatternBindingTypeMismatch { name, first, other } => {
                 write!(
                     f,
@@ -454,12 +425,6 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "field `{field_name}` listed more than once in `{class_name}` destructure"
-                )
-            }
-            TirTypeError::DuplicatePatternBinding { name } => {
-                write!(
-                    f,
-                    "identifier `{name}` is bound more than once in the same pattern"
                 )
             }
             TirTypeError::DestructureOnNonClass { ty_name } => {

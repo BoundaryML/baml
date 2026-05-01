@@ -6,12 +6,12 @@
 //!
 //! Scope chain: Project → Package → Namespace* → File → Items.
 
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use baml_base::{Name, SourceFile};
 use baml_compiler_diagnostics::diagnostic::DiagnosticId;
 use baml_compiler2_ast::{self as ast, LoweringDiagnostic};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::{TextRange, TextSize};
 
 use crate::{
@@ -37,6 +37,12 @@ struct PathRootReference {
     use_scope: FileScopeId,
     use_offset: TextSize,
     owner_lambda: Option<FileScopeId>,
+}
+
+#[derive(Debug, Clone)]
+struct PatternBindingName {
+    name: Name,
+    span: TextRange,
 }
 
 pub struct SemanticIndexBuilder<'db> {
@@ -509,7 +515,114 @@ impl<'db> SemanticIndexBuilder<'db> {
         source_map: &ast::AstSourceMap,
         visible_from: TextSize,
     ) {
+        self.validate_pattern_bindings(pat_id, body, source_map);
         self.register_pattern_bindings(pat_id, Some(site), body, source_map, visible_from);
+    }
+
+    fn validate_pattern_bindings(
+        &mut self,
+        pat_id: ast::PatId,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        let paths = self.pattern_binding_paths(pat_id, body, source_map);
+        let mut reported = FxHashSet::default();
+        for path in paths {
+            let mut seen = FxHashSet::default();
+            for binding in path {
+                if !seen.insert(binding.name.clone()) && reported.insert(binding.name.clone()) {
+                    self.diagnostics
+                        .push(Hir2Diagnostic::DuplicatePatternBinding {
+                            name: binding.name,
+                            span: binding.span,
+                        });
+                }
+            }
+        }
+    }
+
+    fn pattern_binding_paths(
+        &mut self,
+        pat_id: ast::PatId,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) -> Vec<Vec<PatternBindingName>> {
+        let pat = &body.patterns[pat_id];
+        let mut paths = match &pat.kind {
+            ast::PatternKind::Bind { name } if !Self::is_bare_type_sugar_binding(name) => {
+                vec![vec![PatternBindingName {
+                    name: name.clone(),
+                    span: source_map.pattern_span(pat_id),
+                }]]
+            }
+            ast::PatternKind::Class { fields, .. } => {
+                let mut paths = vec![Vec::new()];
+                for field in fields {
+                    let field_paths = self.pattern_binding_paths(field.pat, body, source_map);
+                    paths = Self::concat_pattern_binding_paths(&paths, &field_paths);
+                }
+                paths
+            }
+            ast::PatternKind::Or(parts) => {
+                let mut paths = Vec::new();
+                let mut first_names: Option<BTreeSet<Name>> = None;
+                for part in parts {
+                    let part_paths = self.pattern_binding_paths(*part, body, source_map);
+                    let part_names: BTreeSet<Name> = part_paths
+                        .first()
+                        .into_iter()
+                        .flat_map(|path| path.iter().map(|binding| binding.name.clone()))
+                        .collect();
+                    if let Some(first_names) = &first_names {
+                        let missing: Vec<_> =
+                            first_names.difference(&part_names).cloned().collect();
+                        let extra: Vec<_> = part_names.difference(first_names).cloned().collect();
+                        if !missing.is_empty() || !extra.is_empty() {
+                            self.diagnostics
+                                .push(Hir2Diagnostic::OrPatternBindingMismatch {
+                                    missing,
+                                    extra,
+                                    span: source_map.pattern_span(*part),
+                                });
+                        }
+                    } else {
+                        first_names = Some(part_names);
+                    }
+                    paths.extend(part_paths);
+                }
+                paths
+            }
+            _ => vec![Vec::new()],
+        };
+
+        if let Some(chain_id) = pat.chain {
+            let chain_paths = self.pattern_binding_paths(chain_id, body, source_map);
+            paths = Self::concat_pattern_binding_paths(&paths, &chain_paths);
+        }
+
+        paths
+    }
+
+    fn concat_pattern_binding_paths(
+        left: &[Vec<PatternBindingName>],
+        right: &[Vec<PatternBindingName>],
+    ) -> Vec<Vec<PatternBindingName>> {
+        let mut out = Vec::new();
+        for left_path in left {
+            for right_path in right {
+                let mut path = left_path.clone();
+                path.extend(right_path.iter().cloned());
+                out.push(path);
+            }
+        }
+        out
+    }
+
+    fn is_bare_type_sugar_binding(name: &Name) -> bool {
+        matches!(
+            name.as_str(),
+            "int" | "float" | "string" | "bool" | "null" | "image" | "audio" | "video" | "pdf"
+        )
     }
 
     /// Walk the entire pattern tree (root + chain) and register every Bind as
@@ -525,7 +638,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         let pat = &body.patterns[pat_id];
         let chain = pat.chain;
         match &pat.kind {
-            ast::PatternKind::Bind { name } => {
+            ast::PatternKind::Bind { name } if !Self::is_bare_type_sugar_binding(name) => {
                 let site = site.unwrap_or(DefinitionSite::Pattern(pat_id));
                 let name_range = source_map.pattern_span(pat_id);
                 let scope_id = self.current_scope_id();

@@ -2918,23 +2918,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         at_expr: ExprId,
     ) -> PatternInfo {
-        let info = self.infer_pattern_walk(pat_id, scrutinee_ty, body, at_expr);
-        self.report_duplicate_pattern_bindings(&info.bindings, at_expr);
-        info
-    }
-
-    fn report_duplicate_pattern_bindings(&mut self, bindings: &[PatternBinding], at_expr: ExprId) {
-        let mut seen = FxHashSet::default();
-        for binding in bindings {
-            if !seen.insert(binding.name.clone()) {
-                self.context.report_simple(
-                    TirTypeError::DuplicatePatternBinding {
-                        name: binding.name.clone(),
-                    },
-                    at_expr,
-                );
-            }
-        }
+        self.infer_pattern_walk(pat_id, scrutinee_ty, body, at_expr)
     }
 
     fn duplicate_pattern_binding_names(bindings: &[PatternBinding]) -> FxHashSet<Name> {
@@ -3048,9 +3032,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .iter()
                     .map(|p| self.infer_pattern_walk(*p, scrutinee_ty.clone(), body, at_expr))
                     .collect();
-                for alt in alt_infos.iter().skip(1) {
-                    self.report_duplicate_pattern_bindings(&alt.bindings, at_expr);
-                }
                 let pattern_ty = Self::join_all(
                     &alt_infos
                         .iter()
@@ -3095,29 +3076,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         let Some(first) = alts.first() else {
             return Vec::new();
         };
-        let first_names: BTreeSet<Name> = first
-            .bindings
-            .iter()
-            .map(|binding| binding.name.clone())
-            .collect();
         let first_duplicates = Self::duplicate_pattern_binding_names(&first.bindings);
         let mut duplicate_names = first_duplicates.clone();
         for alt in alts.iter().skip(1) {
-            let alt_names: BTreeSet<Name> = alt
-                .bindings
-                .iter()
-                .map(|binding| binding.name.clone())
-                .collect();
             let alt_duplicates = Self::duplicate_pattern_binding_names(&alt.bindings);
             duplicate_names.extend(alt_duplicates.iter().cloned());
-            let missing: Vec<_> = first_names.difference(&alt_names).cloned().collect();
-            let extra: Vec<_> = alt_names.difference(&first_names).cloned().collect();
-            if !missing.is_empty() || !extra.is_empty() {
-                self.context.report_simple(
-                    TirTypeError::OrPatternBindingMismatch { missing, extra },
-                    at_expr,
-                );
-            }
             for alt_binding in &alt.bindings {
                 if first_duplicates.contains(&alt_binding.name)
                     || alt_duplicates.contains(&alt_binding.name)
@@ -6762,11 +6725,6 @@ mod tests {
             ]
         );
         let diagnostics = builder.finish().5;
-        assert!(
-            diagnostics
-                .diagnostics
-                .iter()
-                .any(|diag| matches!(diag.error, TirTypeError::DuplicatePatternBinding { .. }))
-        );
+        assert!(diagnostics.diagnostics.is_empty());
     }
 }

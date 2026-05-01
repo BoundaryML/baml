@@ -65,6 +65,69 @@ function TripleBind() -> int {
 
 //----
 //- diagnostics
+// Error: identifier `x` is bound more than once in the same pattern
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:17:17 ]
+//     │
+//  17 │   let x: Inner { x } = Inner { val: 1 };
+//     │                 ─┬  
+//     │                  ╰── identifier `x` is bound more than once in the same pattern
+//     │ 
+//     │ Note: Error code: E0094
+// ────╯
+// Error: identifier `x` is bound more than once in the same pattern
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:23:14 ]
+//     │
+//  23 │   let x: let x = 1;
+//     │              ┬  
+//     │              ╰── identifier `x` is bound more than once in the same pattern
+//     │ 
+//     │ Note: Error code: E0094
+// ────╯
+// Error: identifier `val` is bound more than once in the same pattern
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:29:19 ]
+//     │
+//  29 │   let val: Inner { val } = Inner { val: 1 };
+//     │                   ──┬─  
+//     │                     ╰─── identifier `val` is bound more than once in the same pattern
+//     │ 
+//     │ Note: Error code: E0094
+// ────╯
+// Error: identifier `tag` is bound more than once in the same pattern
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:35:36 ]
+//     │
+//  35 │   let tag: Outer { middle: Middle { tag, inner: Inner { val } } } = Outer {
+//     │                                    ──┬─  
+//     │                                      ╰─── identifier `tag` is bound more than once in the same pattern
+//     │ 
+//     │ Note: Error code: E0094
+// ────╯
+// Error: identifier `x` is bound more than once in the same pattern
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:44:39 ]
+//     │
+//  44 │   let Middle { inner: let x, tag: let x } = Middle {
+//     │                                       ┬  
+//     │                                       ╰── identifier `x` is bound more than once in the same pattern
+//     │ 
+//     │ Note: Error code: E0094
+// ────╯
+// Error: identifier `name` is bound more than once in the same pattern
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:53:20 ]
+//     │
+//  53 │   let name: Outer { name } = Outer {
+//     │                    ──┬──  
+//     │                      ╰──── identifier `name` is bound more than once in the same pattern
+//     │ 
+//     │ Note: Error code: E0094
+// ────╯
+// Error: identifier `val` is bound more than once in the same pattern
+//     ╭─[ functions_v2_duplicate_pattern_binding.baml:62:19 ]
+//     │
+//  62 │   let val: Inner { val }: let val = Inner { val: 1 };
+//     │                   ──┬─  
+//     │                     ╰─── identifier `val` is bound more than once in the same pattern
+//     │ 
+//     │ Note: Error code: E0094
+// ────╯
 // Error: class `Inner` has no field `x`
 //     ╭─[ functions_v2_duplicate_pattern_binding.baml:17:24 ]
 //     │
@@ -74,81 +137,12 @@ function TripleBind() -> int {
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:17:24 ]
-//     │
-//  17 │   let x: Inner { x } = Inner { val: 1 };
-//     │                        ────────┬───────  
-//     │                                ╰───────── identifier `x` is bound more than once in the same pattern
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:23:18 ]
-//     │
-//  23 │   let x: let x = 1;
-//     │                  ┬  
-//     │                  ╰── identifier `x` is bound more than once in the same pattern
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: identifier `val` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:29:28 ]
-//     │
-//  29 │   let val: Inner { val } = Inner { val: 1 };
-//     │                            ────────┬───────  
-//     │                                    ╰───────── identifier `val` is bound more than once in the same pattern
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: identifier `tag` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:35:69 ]
-//     │
-//  35 │ ╭─▶   let tag: Outer { middle: Middle { tag, inner: Inner { val } } } = Outer {
-//     ┆ ┆   
-//  38 │ ├─▶   };
-//     │ │          
-//     │ ╰────────── identifier `tag` is bound more than once in the same pattern
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
-// Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:44:45 ]
-//     │
-//  44 │ ╭─▶   let Middle { inner: let x, tag: let x } = Middle {
-//     ┆ ┆   
-//  47 │ ├─▶   };
-//     │ │          
-//     │ ╰────────── identifier `x` is bound more than once in the same pattern
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
 // Error: type mismatch: expected int, got string
 //     ╭─[ functions_v2_duplicate_pattern_binding.baml:48:3 ]
 //     │
 //  48 │   x
 //     │   ┬  
 //     │   ╰── type mismatch: expected int, got string
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: identifier `name` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:53:30 ]
-//     │
-//  53 │ ╭─▶   let name: Outer { name } = Outer {
-//     ┆ ┆   
-//  56 │ ├─▶   };
-//     │ │          
-//     │ ╰────────── identifier `name` is bound more than once in the same pattern
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
-// Error: identifier `val` is bound more than once in the same pattern
-//     ╭─[ functions_v2_duplicate_pattern_binding.baml:62:37 ]
-//     │
-//  62 │   let val: Inner { val }: let val = Inner { val: 1 };
-//     │                                     ────────┬───────  
-//     │                                             ╰───────── identifier `val` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

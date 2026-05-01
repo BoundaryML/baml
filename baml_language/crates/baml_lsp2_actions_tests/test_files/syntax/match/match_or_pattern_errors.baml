@@ -46,13 +46,22 @@ function DuplicateInTopLevelAlt(x: AB) -> int {
 //----
 //- diagnostics
 // Error: or-pattern alternatives must bind the same variables; not bound in all alternatives: `x`; only bound in some alternatives: `y`
-//     ╭─[ match_match_or_pattern_errors.baml:26:44 ]
+//     ╭─[ match_match_or_pattern_errors.baml:26:28 ]
 //     │
 //  26 │     let x: A { val } | let y: B { val } => val
-//     │                                            ─┬─  
-//     │                                             ╰─── or-pattern alternatives must bind the same variables; not bound in all alternatives: `x`; only bound in some alternatives: `y`
+//     │                            ┬  
+//     │                            ╰── or-pattern alternatives must bind the same variables; not bound in all alternatives: `x`; only bound in some alternatives: `y`
 //     │ 
 //     │ Note: Error code: E0001
+// ────╯
+// Error: identifier `x` is bound more than once in the same pattern
+//     ╭─[ match_match_or_pattern_errors.baml:42:15 ]
+//     │
+//  42 │     let x: A { x } | let x: B { x } => x
+//     │               ─┬  
+//     │                ╰── identifier `x` is bound more than once in the same pattern
+//     │ 
+//     │ Note: Error code: E0094
 // ────╯
 // Error: or-pattern binding `x` has type `user.A | user.B` in one alternative but `user.C` in another
 //     ╭─[ match_match_or_pattern_errors.baml:35:56 ]
@@ -80,13 +89,4 @@ function DuplicateInTopLevelAlt(x: AB) -> int {
 //     │                                        ╰── class `B` has no field `x`
 //     │ 
 //     │ Note: Error code: E0007
-// ────╯
-// Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ match_match_or_pattern_errors.baml:42:40 ]
-//     │
-//  42 │     let x: A { x } | let x: B { x } => x
-//     │                                        ┬  
-//     │                                        ╰── identifier `x` is bound more than once in the same pattern
-//     │ 
-//     │ Note: Error code: E0001
 // ────╯

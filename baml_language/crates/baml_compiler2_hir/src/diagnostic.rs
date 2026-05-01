@@ -50,6 +50,14 @@ pub enum Hir2Diagnostic {
     },
     /// Builtin-only syntax used outside builtin stdlib files.
     BuiltinOnlySyntax { feature: String, span: TextRange },
+    /// Same identifier bound more than once along a single successful pattern path.
+    DuplicatePatternBinding { name: Name, span: TextRange },
+    /// Or-pattern alternatives bind different sets of variables.
+    OrPatternBindingMismatch {
+        missing: Vec<Name>,
+        extra: Vec<Name>,
+        span: TextRange,
+    },
     /// Generic single-span diagnostic for builtin contract validation.
     DiagnosticMessage {
         diagnostic_id: DiagnosticId,
@@ -160,6 +168,54 @@ impl Hir2Diagnostic {
                 "builtin-only syntax",
             )
             .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::DuplicatePatternBinding { name, span } => {
+                let message = format!(
+                    "identifier `{name}` is bound more than once in the same pattern"
+                );
+                Diagnostic::error(DiagnosticId::DuplicateBinding, message.clone())
+                    .with_primary(
+                        Span {
+                            file_id,
+                            range: *span,
+                        },
+                        message,
+                    )
+                    .with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::OrPatternBindingMismatch {
+                missing,
+                extra,
+                span,
+            } => {
+                let mut parts = Vec::new();
+                if !missing.is_empty() {
+                    let names: Vec<_> = missing.iter().map(|n| format!("`{n}`")).collect();
+                    parts.push(format!(
+                        "not bound in all alternatives: {}",
+                        names.join(", ")
+                    ));
+                }
+                if !extra.is_empty() {
+                    let names: Vec<_> = extra.iter().map(|n| format!("`{n}`")).collect();
+                    parts.push(format!(
+                        "only bound in some alternatives: {}",
+                        names.join(", ")
+                    ));
+                }
+                let message = format!(
+                    "or-pattern alternatives must bind the same variables; {}",
+                    parts.join("; ")
+                );
+                Diagnostic::error(DiagnosticId::TypeMismatch, message.clone())
+                    .with_primary(
+                        Span {
+                            file_id,
+                            range: *span,
+                        },
+                        message,
+                    )
+                    .with_phase(DiagnosticPhase::Hir)
+            }
             Hir2Diagnostic::DiagnosticMessage {
                 diagnostic_id,
                 message,

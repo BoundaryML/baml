@@ -22,22 +22,22 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [type] Error: or-pattern alternatives must bind the same variables; not bound in all alternatives: `a`; only bound in some alternatives: `b`
-    ╭─[ syntax_errors.baml:18:37 ]
+  [hir] Error: or-pattern alternatives must bind the same variables; not bound in all alternatives: `a`; only bound in some alternatives: `b`
+    ╭─[ syntax_errors.baml:18:26 ]
     │
  18 │         let a: int | let b: bool => "bad"
-    │                                     ──┬──  
-    │                                       ╰──── or-pattern alternatives must bind the same variables; not bound in all alternatives: `a`; only bound in some alternatives: `b`
+    │                          ┬  
+    │                          ╰── or-pattern alternatives must bind the same variables; not bound in all alternatives: `a`; only bound in some alternatives: `b`
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: or-pattern alternatives must bind the same variables; only bound in some alternatives: `n`
-    ╭─[ syntax_errors.baml:25:28 ]
+  [hir] Error: or-pattern alternatives must bind the same variables; only bound in some alternatives: `n`
+    ╭─[ syntax_errors.baml:25:18 ]
     │
  25 │         42 | let n: int => "mixed"
-    │                            ───┬───  
-    │                               ╰───── or-pattern alternatives must bind the same variables; only bound in some alternatives: `n`
+    │                  ┬  
+    │                  ╰── or-pattern alternatives must bind the same variables; only bound in some alternatives: `n`
     │ 
     │ Note: Error code: E0001
 ────╯

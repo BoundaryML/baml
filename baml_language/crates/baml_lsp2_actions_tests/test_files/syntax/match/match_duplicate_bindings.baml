@@ -78,40 +78,76 @@ function UnionDeepCollision(pet: Pet) -> string {
 //----
 //- diagnostics
 // Error: identifier `val` is bound more than once in the same pattern
-//     ╭─[ match_match_duplicate_bindings.baml:30:31 ]
+//     ╭─[ match_match_duplicate_bindings.baml:30:21 ]
 //     │
 //  30 │     let val: Inner { val } => "bad"
-//     │                               ──┬──  
-//     │                                 ╰──── identifier `val` is bound more than once in the same pattern
+//     │                     ──┬─  
+//     │                       ╰─── identifier `val` is bound more than once in the same pattern
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0094
 // ────╯
 // Error: identifier `tag` is bound more than once in the same pattern
-//     ╭─[ match_match_duplicate_bindings.baml:37:50 ]
+//     ╭─[ match_match_duplicate_bindings.baml:37:38 ]
 //     │
 //  37 │     let tag: Outer { middle: Middle { tag } } => tag
-//     │                                                  ─┬─  
-//     │                                                   ╰─── identifier `tag` is bound more than once in the same pattern
+//     │                                      ──┬─  
+//     │                                        ╰─── identifier `tag` is bound more than once in the same pattern
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0094
 // ────╯
 // Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ match_match_duplicate_bindings.baml:44:48 ]
+//     ╭─[ match_match_duplicate_bindings.baml:44:41 ]
 //     │
 //  44 │     let Middle { inner: let x, tag: let x } => "bad"
-//     │                                                ──┬──  
-//     │                                                  ╰──── identifier `x` is bound more than once in the same pattern
+//     │                                         ┬  
+//     │                                         ╰── identifier `x` is bound more than once in the same pattern
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0094
 // ────╯
 // Error: identifier `val` is bound more than once in the same pattern
-//     ╭─[ match_match_duplicate_bindings.baml:51:40 ]
+//     ╭─[ match_match_duplicate_bindings.baml:51:21 ]
 //     │
 //  51 │     let val: Inner { val }: let val => val
-//     │                                        ─┬─  
-//     │                                         ╰─── identifier `val` is bound more than once in the same pattern
+//     │                     ──┬─  
+//     │                       ╰─── identifier `val` is bound more than once in the same pattern
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0094
+// ────╯
+// Error: identifier `val` is bound more than once in the same pattern
+//     ╭─[ match_match_duplicate_bindings.baml:59:21 ]
+//     │
+//  59 │     let val: Inner { val } => "bad"
+//     │                     ──┬─  
+//     │                       ╰─── identifier `val` is bound more than once in the same pattern
+//     │ 
+//     │ Note: Error code: E0094
+// ────╯
+// Error: identifier `x` is bound more than once in the same pattern
+//     ╭─[ match_match_duplicate_bindings.baml:66:16 ]
+//     │
+//  66 │     let x: let x | let x: let x => x
+//     │                ┬  
+//     │                ╰── identifier `x` is bound more than once in the same pattern
+//     │ 
+//     │ Note: Error code: E0094
+// ────╯
+// Error: identifier `name` is bound more than once in the same pattern
+//     ╭─[ match_match_duplicate_bindings.baml:73:20 ]
+//     │
+//  73 │     let name: Cat { name } => name,
+//     │                    ──┬──  
+//     │                      ╰──── identifier `name` is bound more than once in the same pattern
+//     │ 
+//     │ Note: Error code: E0094
+// ────╯
+// Error: identifier `name` is bound more than once in the same pattern
+//     ╭─[ match_match_duplicate_bindings.baml:74:20 ]
+//     │
+//  74 │     let name: Dog { name } => name
+//     │                    ──┬──  
+//     │                      ╰──── identifier `name` is bound more than once in the same pattern
+//     │ 
+//     │ Note: Error code: E0094
 // ────╯
 // Error: type mismatch: expected int, got user.Inner
 //     ╭─[ match_match_duplicate_bindings.baml:49:37 ]
@@ -123,40 +159,4 @@ function UnionDeepCollision(pet: Pet) -> string {
 //     │ ╰───────── type mismatch: expected int, got user.Inner
 //     │     
 //     │     Note: Error code: E0001
-// ────╯
-// Error: identifier `val` is bound more than once in the same pattern
-//     ╭─[ match_match_duplicate_bindings.baml:59:31 ]
-//     │
-//  59 │     let val: Inner { val } => "bad"
-//     │                               ──┬──  
-//     │                                 ╰──── identifier `val` is bound more than once in the same pattern
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ match_match_duplicate_bindings.baml:66:36 ]
-//     │
-//  66 │     let x: let x | let x: let x => x
-//     │                                    ┬  
-//     │                                    ╰── identifier `x` is bound more than once in the same pattern
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: identifier `name` is bound more than once in the same pattern
-//     ╭─[ match_match_duplicate_bindings.baml:73:31 ]
-//     │
-//  73 │     let name: Cat { name } => name,
-//     │                               ──┬─  
-//     │                                 ╰─── identifier `name` is bound more than once in the same pattern
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: identifier `name` is bound more than once in the same pattern
-//     ╭─[ match_match_duplicate_bindings.baml:74:31 ]
-//     │
-//  74 │     let name: Dog { name } => name
-//     │                               ──┬─  
-//     │                                 ╰─── identifier `name` is bound more than once in the same pattern
-//     │ 
-//     │ Note: Error code: E0001
 // ────╯
