@@ -874,6 +874,7 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
 
 fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     let glue_name = format!("__glue_{method_name}");
+    let needs_owned = matches!(b.vm_usage, VmUsage::MutRef) || b.may_yield;
 
     writeln!(
         out,
@@ -887,8 +888,8 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
         // operators in arg extractions work (VmInternalError -> VmRustFnError via From),
         // then flatten the result.
         out.push_str("        let __result: Result<NativeCallResult, VmRustFnError> = (|| {\n");
-        emit_arg_extractions_indented(out, b, "            ");
-        let call_args = call_arg_list(b);
+        emit_arg_extractions_indented(out, b, "            ", needs_owned);
+        let call_args = call_arg_list(b, needs_owned);
         writeln!(out, "            Ok(Self::{method_name}(vm, {call_args}))").unwrap();
         out.push_str("        })();\n");
         out.push_str("        match __result {\n");
@@ -904,9 +905,9 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     // Use a closure returning NativeFunctionResult so `?` operators work inside.
     out.push_str("        let __result: NativeFunctionResult = (|| {\n");
 
-    emit_arg_extractions_indented(out, b, "            ");
+    emit_arg_extractions_indented(out, b, "            ", needs_owned);
 
-    let call_args = call_arg_list(b);
+    let call_args = call_arg_list(b, needs_owned);
     let returns_null = matches!(b.return_type, BamlType::Null);
 
     let binding = if returns_null {
@@ -1031,8 +1032,9 @@ fn emit_single_extraction_indented(
     idx: usize,
     ty: &BamlType,
     indent: &str,
+    needs_owned: bool,
 ) {
-    let rhs = extraction_expr(&format!("&args[{idx}]"), ty, false);
+    let rhs = extraction_expr(&format!("&args[{idx}]"), ty, false, needs_owned);
     writeln!(out, "{indent}let {name} = {rhs};").unwrap();
 }
 
@@ -1042,6 +1044,7 @@ fn emit_immut_receiver_extraction_indented(
     idx: usize,
     recv: &Receiver,
     indent: &str,
+    needs_owned: bool,
 ) {
     match recv.class_name.as_str() {
         _ if is_media_class(recv.class_name.as_str()) => {
@@ -1058,7 +1061,7 @@ fn emit_immut_receiver_extraction_indented(
             .unwrap();
         }
         _ => {
-            let rhs = receiver_immut_extraction_expr(&format!("&args[{idx}]"), recv);
+            let rhs = receiver_immut_extraction_expr(&format!("&args[{idx}]"), recv, needs_owned);
             writeln!(out, "{indent}let {name} = {rhs};").unwrap();
         }
     }
@@ -1081,32 +1084,37 @@ fn emit_mut_receiver_extraction_indented(
 }
 
 /// Like `emit_arg_extractions` but uses `indent` for each line.
-fn emit_arg_extractions_indented(out: &mut String, b: &NativeBuiltin, indent: &str) {
+fn emit_arg_extractions_indented(
+    out: &mut String,
+    b: &NativeBuiltin,
+    indent: &str,
+    needs_owned: bool,
+) {
     if let Some(recv) = &b.receiver {
         if recv.receiver_type.is_static() {
             // Static methods: no receiver
             for (i, p) in b.params.iter().enumerate() {
                 let arg_idx = i;
-                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent);
+                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent, needs_owned);
             }
         } else if recv.receiver_type.is_mut() {
             for (i, p) in b.params.iter().enumerate() {
                 let arg_idx = i + 1;
-                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent);
+                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent, needs_owned);
             }
             let recv_name = receiver_param_name(recv);
             emit_mut_receiver_extraction_indented(out, &recv_name, recv, indent);
         } else {
             let recv_name = receiver_param_name(recv);
-            emit_immut_receiver_extraction_indented(out, &recv_name, 0, recv, indent);
+            emit_immut_receiver_extraction_indented(out, &recv_name, 0, recv, indent, needs_owned);
             for (i, p) in b.params.iter().enumerate() {
                 let arg_idx = i + 1;
-                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent);
+                emit_single_extraction_indented(out, &p.name, arg_idx, &p.ty, indent, needs_owned);
             }
         }
     } else {
         for (i, p) in b.params.iter().enumerate() {
-            emit_single_extraction_indented(out, &p.name, i, &p.ty, indent);
+            emit_single_extraction_indented(out, &p.name, i, &p.ty, indent, needs_owned);
         }
     }
 }
@@ -1115,27 +1123,63 @@ fn emit_arg_extractions_indented(out: &mut String, b: &NativeBuiltin, indent: &s
 // Extraction expressions
 // ============================================================================
 
-fn receiver_immut_extraction_expr(val: &str, recv: &Receiver) -> String {
+fn receiver_immut_extraction_expr(val: &str, recv: &Receiver, needs_owned: bool) -> String {
     match recv.class_name.as_str() {
-        "Array" => format!("vm.as_array({val})?.to_vec()"),
-        "Map" => format!("vm.as_map({val})?.clone()"),
-        "String" => format!("vm.as_string({val})?.clone()"),
-        "Uint8Array" => format!("vm.as_uint8array({val})?.clone()"),
+        "Array" => {
+            if needs_owned {
+                format!("vm.as_array({val})?.to_vec()")
+            } else {
+                format!("vm.as_array({val})?")
+            }
+        }
+        "Map" => {
+            if needs_owned {
+                format!("vm.as_map({val})?.clone()")
+            } else {
+                format!("vm.as_map({val})?")
+            }
+        }
+        "String" => {
+            if needs_owned {
+                format!("vm.as_string({val})?.clone()")
+            } else {
+                format!("vm.as_string({val})?")
+            }
+        }
+        "Uint8Array" => {
+            if needs_owned {
+                format!("vm.as_uint8array({val})?.clone()")
+            } else {
+                format!("vm.as_uint8array({val})?")
+            }
+        }
         name if is_media_class(name) => {
             let kind = media_kind_expr(&recv.class_name);
-            format!("vm.as_media({val}, {kind})?.clone()")
+            if needs_owned {
+                format!("vm.as_media({val}, {kind})?.clone()")
+            } else {
+                format!("vm.as_media({val}, {kind})?")
+            }
         }
-        _ => format!("{val}.clone()"),
+        _ => {
+            if needs_owned {
+                format!("{val}.clone()")
+            } else {
+                val.to_string()
+            }
+        }
     }
 }
 
-fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool) -> String {
+fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) -> String {
     match ty {
         BamlType::String => {
             if is_mut {
                 format!("vm.as_string_mut({val})?")
-            } else {
+            } else if needs_owned {
                 format!("vm.as_string({val})?.clone()")
+            } else {
+                format!("vm.as_string({val})?")
             }
         }
         BamlType::Int => format!(
@@ -1150,39 +1194,50 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool) -> String {
         BamlType::List(_) => {
             if is_mut {
                 format!("vm.as_array_mut({val})?")
-            } else {
+            } else if needs_owned {
                 format!("vm.as_array({val})?.to_vec()")
+            } else {
+                format!("vm.as_array({val})?")
             }
         }
         BamlType::Map(_, _) => {
             if is_mut {
                 format!("vm.as_map_mut({val})?")
-            } else {
+            } else if needs_owned {
                 format!("vm.as_map({val})?.clone()")
+            } else {
+                format!("vm.as_map({val})?")
             }
         }
         BamlType::Optional(inner) => {
-            let inner_expr = extraction_expr("other", inner, false);
+            let inner_expr = extraction_expr("other", inner, false, needs_owned);
             format!("match {val} {{ Value::Null => None, other => Some({inner_expr}) }}")
         }
         BamlType::Uint8Array => {
             if is_mut {
                 format!("vm.as_uint8array_mut({val})?")
-            } else {
+            } else if needs_owned {
                 format!("vm.as_uint8array({val})?.clone()")
+            } else {
+                format!("vm.as_uint8array({val})?")
             }
         }
         BamlType::Generic(_) => val.to_string(),
         BamlType::Media(name) => {
             let kind = media_kind_expr(name);
-            format!("vm.as_media({val}, {kind})?.clone()")
+            if needs_owned {
+                format!("vm.as_media({val}, {kind})?.clone()")
+            } else {
+                format!("vm.as_media({val}, {kind})?")
+            }
         }
         BamlType::Named(_) | BamlType::Null | BamlType::RustType => val.to_string(),
     }
 }
 
-fn call_arg_list(b: &NativeBuiltin) -> String {
+fn call_arg_list(b: &NativeBuiltin, needs_owned: bool) -> String {
     let mut args: Vec<String> = Vec::new();
+    let is_ref = !needs_owned;
 
     if let Some(recv) = &b.receiver {
         if !recv.receiver_type.is_static() {
@@ -1190,37 +1245,55 @@ fn call_arg_list(b: &NativeBuiltin) -> String {
             if recv.receiver_type.is_mut() {
                 args.push(name);
             } else {
-                args.push(call_arg_for_type(&name, &receiver_baml_type(recv)));
+                args.push(call_arg_for_type(&name, &receiver_baml_type(recv), is_ref));
             }
         }
     }
     for p in &b.params {
-        args.push(call_arg_for_type(&p.name, &p.ty));
+        args.push(call_arg_for_type(&p.name, &p.ty, is_ref));
     }
 
     args.join(", ")
 }
 
-fn call_arg_for_type(name: &str, ty: &BamlType) -> String {
+fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
     match ty {
         BamlType::String
         | BamlType::Uint8Array
         | BamlType::List(_)
         | BamlType::Map(_, _)
         | BamlType::Media(_) => {
-            format!("&{name}")
+            if is_ref {
+                // Extraction already returned a reference — don't double-ref
+                name.to_string()
+            } else {
+                format!("&{name}")
+            }
         }
-        BamlType::Optional(inner) => match inner.as_ref() {
-            BamlType::String => format!("{name}.as_deref()"),
-            BamlType::List(_) => format!("{name}.as_deref()"),
-            _ => {
-                if call_arg_needs_ref(inner) {
-                    format!("{name}.as_ref()")
-                } else {
-                    name.to_string()
+        BamlType::Optional(inner) => {
+            if is_ref {
+                // Extraction returned Option<&T> — convert to match clean method signature
+                match inner.as_ref() {
+                    BamlType::String => format!("{name}.map(String::as_str)"),
+                    BamlType::Uint8Array => format!("{name}.map(Vec::as_slice)"),
+                    // Option<&[Value]>, Option<&IndexMap>, Option<&MediaValue> — already correct
+                    _ => name.to_string(),
+                }
+            } else {
+                // Extraction returned Option<T> (owned) — current behavior
+                match inner.as_ref() {
+                    BamlType::String => format!("{name}.as_deref()"),
+                    BamlType::List(_) => format!("{name}.as_deref()"),
+                    _ => {
+                        if call_arg_needs_ref(inner) {
+                            format!("{name}.as_ref()")
+                        } else {
+                            name.to_string()
+                        }
+                    }
                 }
             }
-        },
+        }
         BamlType::Int | BamlType::Float | BamlType::Bool | BamlType::Null => name.to_string(),
         // Media class view types (Pdf, Audio, Video, Image) are Named and need to be passed by ref
         BamlType::Named(class_name) if is_media_class(class_name.as_str()) => {
