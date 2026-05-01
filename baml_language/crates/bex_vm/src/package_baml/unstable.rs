@@ -9,13 +9,13 @@ use crate::{
 };
 
 impl BamlNamespaceUnstable for PackageBamlImpl {
-    fn string(vm: &mut BexVm, value: &Value) -> Result<String, VmRustFnError> {
+    fn string(vm: &BexVm, value: &Value) -> Result<String, VmRustFnError> {
         format_value_recursive(vm, value, 0)
     }
 }
 
 fn format_value_recursive(
-    vm: &mut BexVm,
+    vm: &BexVm,
     value: &Value,
     depth: usize,
 ) -> Result<String, VmRustFnError> {
