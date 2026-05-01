@@ -179,6 +179,8 @@ fn deep_equals_recursive(
                     a_var.enm == b_var.enm && a_var.index == b_var.index
                 }
 
+                (Object::Type(a_ty), Object::Type(b_ty)) => a_ty == b_ty,
+
                 (Object::Enum(a_enum), Object::Enum(b_enum)) => {
                     a_enum.name == b_enum.name
                         && a_enum.variants.len() == b_enum.variants.len()

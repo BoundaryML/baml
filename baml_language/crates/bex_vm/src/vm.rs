@@ -2683,6 +2683,32 @@ impl BexVm {
                         })
                     }
 
+                    // Type comparison: structural equality using baml_type::Ty's derived Eq
+                    (Value::Object(left_index), Value::Object(right_index))
+                        if matches!(self.get_object(left_index), Object::Type(_))
+                            && matches!(self.get_object(right_index), Object::Type(_)) =>
+                    {
+                        let Object::Type(left_ty) = self.get_object(left_index) else {
+                            unreachable!()
+                        };
+                        let Object::Type(right_ty) = self.get_object(right_index) else {
+                            unreachable!()
+                        };
+
+                        Value::Bool(match op {
+                            CmpOp::Eq => left_ty == right_ty,
+                            CmpOp::NotEq => left_ty != right_ty,
+                            _ => {
+                                return Err(VmInternalError::CannotApplyCmpOp {
+                                    left: Type::Object(ObjectType::Type),
+                                    right: Type::Object(ObjectType::Type),
+                                    op,
+                                }
+                                .into());
+                            }
+                        })
+                    }
+
                     _ => Value::Bool(match op {
                         CmpOp::Eq => left == right,
                         CmpOp::NotEq => left != right,
