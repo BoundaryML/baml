@@ -1328,6 +1328,18 @@ fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) 
         writeln!(out, "{indent}Ok(result.to_value(vm))").unwrap();
         return;
     }
+    // List(String) needs two steps to avoid double-borrow of vm:
+    // first map+collect into Value vec, then alloc_array.
+    if matches!(&b.return_type, BamlType::List(inner) if matches!(inner.as_ref(), BamlType::String))
+    {
+        writeln!(
+            out,
+            "{indent}let result_values: Vec<Value> = result.into_iter().map(|s| vm.alloc_string(s)).collect();"
+        )
+        .unwrap();
+        writeln!(out, "{indent}Ok(vm.alloc_array(result_values))").unwrap();
+        return;
+    }
     let conversion = result_conversion_expr("result", &b.return_type);
     writeln!(out, "{indent}Ok({conversion})").unwrap();
 }
@@ -1406,7 +1418,10 @@ fn baml_type_to_output(ty: &BamlType) -> String {
         BamlType::Float => "f64".to_string(),
         BamlType::Bool => "bool".to_string(),
         BamlType::Null => "()".to_string(),
-        BamlType::List(_) => "Vec<Value>".to_string(),
+        BamlType::List(inner) => match inner.as_ref() {
+            BamlType::String => "Vec<String>".to_string(),
+            _ => "Vec<Value>".to_string(),
+        },
         BamlType::Map(_, _) => "IndexMap<String, Value>".to_string(),
         BamlType::Optional(inner) => {
             let inner_str = baml_type_to_output(inner);

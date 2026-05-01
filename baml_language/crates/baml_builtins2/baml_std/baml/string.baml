@@ -27,7 +27,6 @@ class String {
     $rust_function
   }
 
-  //baml:mut_vm
   function split(self, delimiter: string) -> string[] {
     $rust_function
   }

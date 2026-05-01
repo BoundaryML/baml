@@ -1,7 +1,4 @@
-use bex_vm_types::types::Value;
-
 use super::{BamlClassString, PackageBamlImpl};
-use crate::BexVm;
 
 impl BamlClassString for PackageBamlImpl {
     #[allow(clippy::cast_possible_wrap)]
@@ -33,11 +30,8 @@ impl BamlClassString for PackageBamlImpl {
         string.ends_with(suffix)
     }
 
-    fn split(vm: &mut BexVm, string: &str, delimiter: &str) -> Vec<Value> {
-        string
-            .split(delimiter)
-            .map(|s| vm.alloc_string(s.to_string()))
-            .collect()
+    fn split(string: &str, delimiter: &str) -> Vec<String> {
+        string.split(delimiter).map(str::to_string).collect()
     }
 
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
