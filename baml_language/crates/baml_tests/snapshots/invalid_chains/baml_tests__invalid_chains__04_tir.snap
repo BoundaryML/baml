@@ -1,0 +1,55 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16154
+---
+=== TIR2 ===
+class user.Animal {
+  name: string
+}
+class user.Dog {
+  name: string
+  breed: string
+}
+function user.test_incompatible_types() -> string throws never {
+  { : never
+    let x: int: string = 5 : 5 -> int
+    return "ok" : "ok"
+  }
+  !! 306..307: type mismatch: expected int, got string
+}
+function user.test_class_then_wrong_type() -> string throws never {
+  { : never
+    let x: Animal: int = Animal { name: "Rex" } : user.Animal
+    return "ok" : "ok"
+  }
+  !! 468..490: type mismatch: expected user.Animal, got int
+}
+function user.test_destructure_then_wrong_type() -> string throws never {
+  { : never
+    let x: Animal { name: let name }: int = Animal { name: "Rex" } : user.Animal
+    return "ok" : "ok"
+  }
+  !! 646..668: type mismatch: expected user.Animal, got int
+}
+function user.test_type_then_wrong_destructure() -> string throws never {
+  { : never
+    let x: int: Dog { breed: let breed } = Dog { name: "Rex", breed: "Lab" } : user.Dog
+    return "ok" : "ok"
+  }
+  !! 830..863: type mismatch: expected int, got user.Dog
+}
+function user.test_three_link_chain() -> string throws never {
+  { : never
+    let x: int: string: bool = true : true -> bool
+    return "ok" : "ok"
+  }
+  !! 999..1003: type mismatch: expected int, got string
+  !! 999..1003: type mismatch: expected string, got bool
+}
+class user.Animal$stream {
+  name: null | string
+}
+class user.Dog$stream {
+  name: null | string
+  breed: null | string
+}

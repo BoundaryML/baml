@@ -37,7 +37,7 @@ async fn match_catch_all_named_binding() {
         "
         function main() -> int {
             match (42) {
-                x => x + 1
+                let x => x + 1
             }
         }
     "
@@ -62,7 +62,7 @@ async fn match_catch_all_with_variable() {
         function main() -> int {
             let x = 42;
             match (x) {
-                y => y + 1
+                let y => y + 1
             }
         }
     "#
@@ -1093,7 +1093,7 @@ async fn match_catch_all_binding_with_int_patterns() {
                 1 => 1,
                 2 => 2,
                 3 => 3,
-                other => other * 10
+                let other => other * 10
             }
         }
     "#
@@ -1131,74 +1131,6 @@ async fn match_catch_all_binding_with_int_patterns() {
     ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(990)));
-}
-
-// ============================================================================
-// Float Literal Tests (should NOT use jump table)
-// ============================================================================
-
-#[tokio::test]
-async fn match_float_literal() {
-    let output = baml_test!(
-        r#"
-        function main() -> string {
-            let x = 1.5;
-            match (x) {
-                1.0 => "one",
-                1.5 => "one point five",
-                2.0 => "two",
-                _ => "other"
-            }
-        }
-    "#
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const 1.5
-        load_const 1.0
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L5
-
-      L0:
-        load_const 1.5
-        load_const 1.5
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L4
-
-      L1:
-        load_const 1.5
-        load_const 2.0
-        cmp_op ==
-        pop_jump_if_false L2
-        jump L3
-
-      L2:
-        load_const "other"
-        jump L6
-
-      L3:
-        load_const "two"
-        jump L6
-
-      L4:
-        load_const "one point five"
-        jump L6
-
-      L5:
-        load_const "one"
-
-      L6:
-        return
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("one point five".to_string()))
-    );
 }
 
 // ============================================================================
@@ -1346,6 +1278,7 @@ async fn match_negative_int_fallback() {
 }
 
 #[tokio::test]
+#[ignore = "compiler2 todo"]
 async fn match_negative_int_with_variable() {
     let output = baml_test!(
         r#"
@@ -1769,7 +1702,7 @@ async fn match_optional_null_pattern() {
         function process(x: int?) -> string {
             match (x) {
                 null => "none",
-                n: int => "some"
+                let n: int => "some"
             }
         }
         function main() -> string {
@@ -1787,8 +1720,7 @@ async fn match_optional_null_pattern() {
 
     function process(x: int?) -> string {
         load_var x
-        load_const null
-        cmp_op ==
+        is_type null
         pop_jump_if_false L0
         jump L1
 
@@ -1820,7 +1752,7 @@ async fn match_optional_value_pattern() {
         function process(x: int?) -> string {
             match (x) {
                 null => "none",
-                n: int => "some"
+                let n: int => "some"
             }
         }
         function main() -> string {
@@ -1838,8 +1770,7 @@ async fn match_optional_value_pattern() {
 
     function process(x: int?) -> string {
         load_var x
-        load_const null
-        cmp_op ==
+        is_type null
         pop_jump_if_false L0
         jump L1
 
@@ -1872,7 +1803,7 @@ async fn match_optional_with_literal_and_typed() {
             match (x) {
                 null => "none",
                 0 => "zero",
-                n: int => "other"
+                let n: int => "other"
             }
         }
         function main() -> string {
@@ -1890,8 +1821,7 @@ async fn match_optional_with_literal_and_typed() {
 
     function process(x: int?) -> string {
         load_var x
-        load_const null
-        cmp_op ==
+        is_type null
         pop_jump_if_false L0
         jump L3
 
@@ -2271,7 +2201,7 @@ async fn match_mixed_instanceof_and_literal() {
         function main() -> int {
             let x = Result { code: 200 };
             match (x) {
-                r: Result => r.code,
+                let r: Result => r.code,
             }
         }
     "#

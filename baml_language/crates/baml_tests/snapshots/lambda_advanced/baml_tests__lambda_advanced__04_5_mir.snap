@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 16195
 ---
 === MIR2 ===
 fn user.test_apply_twice_inferred() -> int {
@@ -471,9 +470,9 @@ fn user.test_generic_multi_instantiation() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: (void) -> void throws never // id
-    let _2: int | 42 // a
+    let _2: int // a
     let _3: (void) -> void throws never
-    let _4: string | "hello" // b
+    let _4: string // b
     let _5: (void) -> void throws never
 
     bb0: {
@@ -1088,7 +1087,7 @@ fn .<lambda(test_map_optional_inferred, 0)>(x: null) -> null {
     let _2: bool
 
     bb0: {
-        _2 = copy _1 == const null;
+        _2 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _2 -> [bb2, bb1];
     }
 

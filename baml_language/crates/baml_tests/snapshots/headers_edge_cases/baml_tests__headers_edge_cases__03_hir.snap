@@ -15,7 +15,7 @@ function user.HeadersAndComments() -> string  [expr] {
   { // [1] Header Before Comment; let x = "test"; // [2] Header After Comment; // [3] Header After Doc Comment } x
 }
 function user.HeadersAroundExpressions() -> string  [expr] {
-  { // [1] Before Let; let x = 5; // [2] After Let; // [3] Before If; if (x Gt 0) { // [4] Inside If } x else { // [4] Inside Else } 0; // [3] After If; // [2] Before For; for i in [1, 2, 3] { // [3] Inside For } i; // [2] After For; // [1] Final Section } x
+  { // [1] Before Let; let x = 5; // [2] After Let; // [3] Before If; if (x Gt 0) { // [4] Inside If } x else { // [4] Inside Else } 0; // [3] After If; // [2] Before For; for let i in [1, 2, 3] { // [3] Inside For } i; // [2] After For; // [1] Final Section } x
 }
 function user.HeadersInComplexNesting() -> string  [expr] {
   { // [1] Main Function; let result = { // [2] Inside Block Expression; let inner = if (true) { // [3] Inside If True; let deep = { // [4] Very Deep Block } "deep value"; // [3] Back to If Level } deep else { // [3] Inside Else } "else value"; // [2] Back to Block Level } inner; // [1] Back to Function Level } result

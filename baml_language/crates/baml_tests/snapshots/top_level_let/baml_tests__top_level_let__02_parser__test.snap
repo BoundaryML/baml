@@ -3,9 +3,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
-  LET_STMT "let x = 1;"
-    KW_LET "let"
-    WORD "x"
+  LET_STMT
+    PATTERN
+      PATTERN_ALT "let x"
+        KW_LET "let"
+        WORD "x"
     EQUALS "="
     INTEGER_LITERAL "1"
     SEMICOLON ";"

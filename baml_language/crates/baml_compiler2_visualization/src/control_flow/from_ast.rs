@@ -211,7 +211,7 @@ impl<'a> AstGraphBuilder<'a> {
                     matches!(init_expr, ast::Expr::If { .. } | ast::Expr::Match { .. });
                 if needs_scope {
                     let pat_name = self.format_pattern(*pattern);
-                    let label = format!("let {pat_name} = ...");
+                    let label = format!("{pat_name} = ...");
                     self.emit_other_scope(*init, Some(label));
                 } else {
                     self.visit_expr(*init);
@@ -655,38 +655,22 @@ impl<'a> AstGraphBuilder<'a> {
         let pat = &self.body.patterns[pat_id];
         let base = match &pat.kind {
             ast::PatternKind::Wildcard => "_".to_string(),
-            // TODO: render inner pattern when bind-with-pattern syntax lands
-            ast::PatternKind::Bind {
-                name,
-                inner: _inner,
-            } => name.to_string(),
-            ast::PatternKind::Literal(lit) => format_literal_ast(lit),
-            ast::PatternKind::Null => "null".to_string(),
-            ast::PatternKind::EnumVariant { enum_name, variant } => {
-                let path: Vec<_> = enum_name.iter().map(baml_base::Name::as_str).collect();
-                format!("{}.{variant}", path.join("."))
-            }
+            ast::PatternKind::Bind { name } => format!("let {name}"),
+            ast::PatternKind::Type(ty) => ty.to_string(),
             ast::PatternKind::Or(pats) => {
                 let parts: Vec<_> = pats.iter().map(|p| self.format_pattern(*p)).collect();
                 parts.join(" | ")
             }
-            ast::PatternKind::Type(ty) => ty.to_string(),
             ast::PatternKind::Class { class, fields } => {
                 let field_strs: Vec<_> = fields
                     .iter()
-                    .map(|f| {
-                        if let Some(inner) = f.pat {
-                            format!("{}: {}", f.field, self.format_pattern(inner))
-                        } else {
-                            f.field.to_string()
-                        }
-                    })
+                    .map(|f| format!("{}: {}", f.field, self.format_pattern(f.pat)))
                     .collect();
                 format!("{} {{ {} }}", class, field_strs.join(", "))
             }
         };
-        if let Some(narrow) = &pat.narrow {
-            format!("{base}: {narrow}")
+        if let Some(chain_id) = pat.chain {
+            format!("{base}: {}", self.format_pattern(chain_id))
         } else {
             base
         }
@@ -852,7 +836,6 @@ mod tests {
             patterns,
             match_arms,
             catch_arms,
-            type_annotations: Arena::new(),
             root_expr,
         }
     }
@@ -876,7 +859,6 @@ mod tests {
             patterns: Arena::new(),
             match_arms: Arena::new(),
             catch_arms: Arena::new(),
-            type_annotations: Arena::new(),
             root_expr: None,
         };
         let graph = build_control_flow_graph_from_ast("MyFunc", &body);
@@ -1024,8 +1006,14 @@ mod tests {
     fn match_creates_branch_group_with_arms() {
         let body = make_ast_body(|exprs, _, patterns, match_arms| {
             let scrutinee = exprs.alloc(ast::Expr::Path(vec!["x".into()]));
-            let pat1 = patterns.alloc(ast::Pattern::literal(ast::Literal::Int(1)));
-            let pat2 = patterns.alloc(ast::Pattern::literal(ast::Literal::Int(2)));
+            let pat1 = patterns.alloc(ast::Pattern::type_match(ast::TypeExpr::Literal {
+                value: ast::Literal::Int(1),
+                attrs: vec![],
+            }));
+            let pat2 = patterns.alloc(ast::Pattern::type_match(ast::TypeExpr::Literal {
+                value: ast::Literal::Int(2),
+                attrs: vec![],
+            }));
             let body1 = exprs.alloc(ast::Expr::Null);
             let body2 = exprs.alloc(ast::Expr::Null);
             let arm1 = match_arms.alloc(ast::MatchArm {
@@ -1040,7 +1028,6 @@ mod tests {
             });
             Some(exprs.alloc(ast::Expr::Match {
                 scrutinee,
-                scrutinee_type: None,
                 arms: vec![arm1, arm2],
             }))
         });
@@ -1129,7 +1116,6 @@ mod tests {
             let pat = patterns.alloc(ast::Pattern::binding("x".into()));
             let let_stmt = stmts.alloc(ast::Stmt::Let {
                 pattern: pat,
-                type_annotation: None,
                 initializer: Some(if_expr),
                 is_watched: false,
                 origin: ast::LetOrigin::Source,
@@ -1406,7 +1392,6 @@ mod tests {
             patterns,
             match_arms,
             catch_arms,
-            type_annotations: Arena::new(),
             root_expr: Some(obj),
         };
 

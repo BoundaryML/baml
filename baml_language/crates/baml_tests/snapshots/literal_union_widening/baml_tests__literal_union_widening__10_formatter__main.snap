@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 19273
 ---
 function arrayOfInts() -> int[] {
     let x = [1, 2, 3];

@@ -1,0 +1,88 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: type mismatch: expected user.Foo, got user.Foo | user.Bar
+
+  [type] Error: or-pattern alternatives must bind the same variables; not bound in all alternatives: `name`; only bound in some alternatives: `freshwater`
+   ╭─[ or_patterns_invalid.baml:6:47 ]
+   │
+ 6 │         Cat { name } | Fish { freshwater } => "matched"
+   │                                               ────┬────  
+   │                                                   ╰────── or-pattern alternatives must bind the same variables; not bound in all alternatives: `name`; only bound in some alternatives: `freshwater`
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: or-pattern alternatives must bind the same variables; not bound in all alternatives: `name`
+    ╭─[ or_patterns_invalid.baml:13:32 ]
+    │
+ 13 │         Cat { name } | Fish => "matched"
+    │                                ────┬────  
+    │                                    ╰────── or-pattern alternatives must bind the same variables; not bound in all alternatives: `name`
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: or-pattern alternatives must bind the same variables; only bound in some alternatives: `name`
+    ╭─[ or_patterns_invalid.baml:20:31 ]
+    │
+ 20 │         int | Cat { name } => name
+    │                               ──┬─  
+    │                                 ╰─── or-pattern alternatives must bind the same variables; only bound in some alternatives: `name`
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: or-pattern binding `val` has type `int` in one alternative but `string` in another
+    ╭─[ or_patterns_invalid.baml:35:44 ]
+    │
+ 35 │         IntBox { val } | StrBox { val } => "matched"
+    │                                            ────┬────  
+    │                                                ╰────── or-pattern binding `val` has type `int` in one alternative but `string` in another
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: class `Cat` has no field `bogus`
+    ╭─[ or_patterns_invalid.baml:66:30 ]
+    │
+ 66 │ ╭─▶         Cat { bogus } => bogus
+ 67 │ ├─▶     }
+    │ │           
+    │ ╰─────────── class `Cat` has no field `bogus`
+    │     
+    │     Note: Error code: E0007
+────╯
+
+  [type] Error: field `name` listed more than once in `Cat` destructure
+    ╭─[ or_patterns_invalid.baml:73:35 ]
+    │
+ 73 │ ╭─▶         Cat { name, name } => name
+ 74 │ ├─▶     }
+    │ │           
+    │ ╰─────────── field `name` listed more than once in `Cat` destructure
+    │     
+    │     Note: Error code: E0007
+────╯
+
+  [type] Error: identifier `name` is bound more than once in the same pattern
+    ╭─[ or_patterns_invalid.baml:73:35 ]
+    │
+ 73 │ ╭─▶         Cat { name, name } => name
+ 74 │ ├─▶     }
+    │ │           
+    │ ╰─────────── identifier `name` is bound more than once in the same pattern
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: _
+    ╭─[ or_patterns_invalid.baml:81:1 ]
+    │
+ 81 │     }
+    │ ─┬─  
+    │  ╰─── unresolved name: _
+    │ 
+    │ Note: Error code: E0003
+────╯

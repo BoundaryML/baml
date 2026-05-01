@@ -808,7 +808,7 @@ function f() -> int {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
         let cb = null : null
@@ -816,7 +816,7 @@ function f() -> int {
       }
       !! 52..59: type mismatch: expected int, got null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -912,7 +912,7 @@ function f() -> null {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.cb() -> int throws never {
       { : never
         return 1 : 1
@@ -1203,7 +1203,7 @@ function f() -> null {
         expr_type_in_function(&db, file, "f", "triple"),
         "() -> (() -> ((n: int) -> int throws never) throws never) throws never"
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> null throws never {
       { : never
         let triple = : () -> (() -> ((n: int) -> int throws never) throws never) throws never
@@ -1231,7 +1231,7 @@ function f() -> null {
     }
     lambda user.f {
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1260,7 +1260,7 @@ function f() -> null {
         expr_type_in_function(&db, file, "f", "quadruple"),
         "() -> (() -> (() -> ((n: int) -> int throws never) throws never) throws never) throws never"
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> null throws never {
       { : never
         let quadruple = : () -> (() -> (() -> ((n: int) -> int throws never) throws never) throws never) throws never
@@ -1295,7 +1295,7 @@ function f() -> null {
     }
     lambda user.f {
     }
-    "#);
+    ");
 }
 
 #[test]

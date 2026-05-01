@@ -5,32 +5,27 @@ function user.Broken.BadUnionPattern(x: int | bool) -> string {
     load_var x
     is_type int
     pop_jump_if_false L0
-    jump L3
+    jump L1
 
   L0:
     load_var x
-    pop 1
-    load_const false
-    pop_jump_if_false L1
-    jump L3
+    is_type bool
+    pop_jump_if_false L3
 
   L1:
     load_var x
-    is_type bool
+    is_type int
     pop_jump_if_false L2
+    jump L3
 
   L2:
-    load_const "bad"
-    return
+    load_var x
+    is_type bool
+    pop_jump_if_false L3
 
   L3:
-    load_const "parse error"
-    call baml.sys.panic
-    pop 1
-    jump L4
-
-  L4:
-    unreachable
+    load_const "bad"
+    return
 }
 
 function user.Broken.Invalid() -> null {
@@ -48,9 +43,21 @@ function user.Broken.MixedLiteralAndTyped(x: int) -> string {
   L0:
     load_var x
     is_type int
-    pop_jump_if_false L1
+    pop_jump_if_false L3
 
   L1:
+    load_var x
+    load_const 42
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var x
+    is_type int
+    pop_jump_if_false L3
+
+  L3:
     load_const "mixed"
     return
 }

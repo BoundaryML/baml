@@ -227,12 +227,21 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found ';'
+// Error: Expected let, found ';'
 //     ╭─[ parens.baml:25:8 ]
 //     │
 //  25 │    for ;; { }
 //     │        ┬  
-//     │        ╰── Expected loop variable, found ';'
+//     │        ╰── Expected let, found ';'
+//     │ 
+//     │ Note: Error code: E0010
+// ────╯
+// Error: Expected type, found ';'
+//     ╭─[ parens.baml:25:8 ]
+//     │
+//  25 │    for ;; { }
+//     │        ┬  
+//     │        ╰── Expected type, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -281,12 +290,21 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found ';'
+// Error: Expected let, found ';'
 //     ╭─[ parens.baml:29:8 ]
 //     │
 //  29 │    for ;;) {}
 //     │        ┬  
-//     │        ╰── Expected loop variable, found ';'
+//     │        ╰── Expected let, found ';'
+//     │ 
+//     │ Note: Error code: E0010
+// ────╯
+// Error: Expected type, found ';'
+//     ╭─[ parens.baml:29:8 ]
+//     │
+//  29 │    for ;;) {}
+//     │        ┬  
+//     │        ╰── Expected type, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -344,12 +362,21 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found ';'
+// Error: Expected let, found ';'
 //     ╭─[ parens.baml:39:8 ]
 //     │
 //  39 │    for ;;i += x) {}
 //     │        ┬  
-//     │        ╰── Expected loop variable, found ';'
+//     │        ╰── Expected let, found ';'
+//     │ 
+//     │ Note: Error code: E0010
+// ────╯
+// Error: Expected type, found ';'
+//     ╭─[ parens.baml:39:8 ]
+//     │
+//  39 │    for ;;i += x) {}
+//     │        ┬  
+//     │        ╰── Expected type, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -389,12 +416,21 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found ';'
+// Error: Expected let, found ';'
 //     ╭─[ parens.baml:41:8 ]
 //     │
 //  41 │    for ;;i += x {}
 //     │        ┬  
-//     │        ╰── Expected loop variable, found ';'
+//     │        ╰── Expected let, found ';'
+//     │ 
+//     │ Note: Error code: E0010
+// ────╯
+// Error: Expected type, found ';'
+//     ╭─[ parens.baml:41:8 ]
+//     │
+//  41 │    for ;;i += x {}
+//     │        ┬  
+//     │        ╰── Expected type, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -443,12 +479,21 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found ';'
+// Error: Expected let, found ';'
 //     ╭─[ parens.baml:49:8 ]
 //     │
 //  49 │    for ;;i = x) {}
 //     │        ┬  
-//     │        ╰── Expected loop variable, found ';'
+//     │        ╰── Expected let, found ';'
+//     │ 
+//     │ Note: Error code: E0010
+// ────╯
+// Error: Expected type, found ';'
+//     ╭─[ parens.baml:49:8 ]
+//     │
+//  49 │    for ;;i = x) {}
+//     │        ┬  
+//     │        ╰── Expected type, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -488,12 +533,21 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found ';'
+// Error: Expected let, found ';'
 //     ╭─[ parens.baml:51:8 ]
 //     │
 //  51 │    for ;;i = x {}
 //     │        ┬  
-//     │        ╰── Expected loop variable, found ';'
+//     │        ╰── Expected let, found ';'
+//     │ 
+//     │ Note: Error code: E0010
+// ────╯
+// Error: Expected type, found ';'
+//     ╭─[ parens.baml:51:8 ]
+//     │
+//  51 │    for ;;i = x {}
+//     │        ┬  
+//     │        ╰── Expected type, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -524,48 +578,12 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found let
-//     ╭─[ parens.baml:55:8 ]
+// Error: Expected block after for expression, found for
+//     ╭─[ parens.baml:57:4 ]
 //     │
-//  55 │    for let a in as {}
-//     │        ─┬─  
-//     │         ╰─── Expected loop variable, found let
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected in, found let
-//     ╭─[ parens.baml:55:8 ]
-//     │
-//  55 │    for let a in as {}
-//     │        ─┬─  
-//     │         ╰─── Expected in, found let
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected expression, found let
-//     ╭─[ parens.baml:55:8 ]
-//     │
-//  55 │    for let a in as {}
-//     │        ─┬─  
-//     │         ╰─── Expected expression, found let
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected block after for expression, found identifier
-//     ╭─[ parens.baml:55:12 ]
-//     │
-//  55 │    for let a in as {}
-//     │            ┬  
-//     │            ╰── Expected block after for expression, found identifier
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected expression, found in
-//     ╭─[ parens.baml:55:14 ]
-//     │
-//  55 │    for let a in as {}
-//     │              ─┬  
-//     │               ╰── Expected expression, found in
+//  57 │    for (let a in as {}
+//     │    ─┬─  
+//     │     ╰─── Expected block after for expression, found for
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -587,48 +605,12 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found let
-//     ╭─[ parens.baml:59:8 ]
+// Error: Expected block after for expression, found ')'
+//     ╭─[ parens.baml:59:19 ]
 //     │
 //  59 │    for let a in as) {}
-//     │        ─┬─  
-//     │         ╰─── Expected loop variable, found let
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected in, found let
-//     ╭─[ parens.baml:59:8 ]
-//     │
-//  59 │    for let a in as) {}
-//     │        ─┬─  
-//     │         ╰─── Expected in, found let
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected expression, found let
-//     ╭─[ parens.baml:59:8 ]
-//     │
-//  59 │    for let a in as) {}
-//     │        ─┬─  
-//     │         ╰─── Expected expression, found let
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected block after for expression, found identifier
-//     ╭─[ parens.baml:59:12 ]
-//     │
-//  59 │    for let a in as) {}
-//     │            ┬  
-//     │            ╰── Expected block after for expression, found identifier
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected expression, found in
-//     ╭─[ parens.baml:59:14 ]
-//     │
-//  59 │    for let a in as) {}
-//     │              ─┬  
-//     │               ╰── Expected expression, found in
+//     │                   ┬  
+//     │                   ╰── Expected block after for expression, found ')'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -704,14 +686,14 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: a
-//     ╭─[ parens.baml:55:12 ]
+// Error: cannot iterate over type `unknown`
+//     ╭─[ parens.baml:55:17 ]
 //     │
 //  55 │    for let a in as {}
-//     │            ┬  
-//     │            ╰── unresolved name: a
+//     │                 ──┬──  
+//     │                   ╰──── cannot iterate over type `unknown`
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0006
 // ────╯
 // Error: cannot iterate over type `unknown`
 //     ╭─[ parens.baml:57:18 ]
@@ -722,15 +704,6 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0006
 // ────╯
-// Error: unresolved name: a
-//     ╭─[ parens.baml:59:12 ]
-//     │
-//  59 │    for let a in as) {}
-//     │            ┬  
-//     │            ╰── unresolved name: a
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
 // Error: unresolved name: as
 //     ╭─[ parens.baml:59:17 ]
 //     │
@@ -739,6 +712,15 @@ function foo() -> int {
 //     │                  ╰── unresolved name: as
 //     │ 
 //     │ Note: Error code: E0003
+// ────╯
+// Error: cannot iterate over type `unknown`
+//     ╭─[ parens.baml:59:17 ]
+//     │
+//  59 │    for let a in as) {}
+//     │                 ─┬  
+//     │                  ╰── cannot iterate over type `unknown`
+//     │ 
+//     │ Note: Error code: E0006
 // ────╯
 // Error: unresolved name: as
 //     ╭─[ parens.baml:61:18 ]

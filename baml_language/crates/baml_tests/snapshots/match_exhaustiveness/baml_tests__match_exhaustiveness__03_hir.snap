@@ -42,7 +42,7 @@ type user.Role = "user" | "assistant" | "system"
 type user.SuccessCode = 200 | 201 | 204
 type user.SuccessOr200 = user.Success | 200
 function user.BoolLiteralAfterTypedBool(b: bool) -> string  [expr] {
-  {  } match (b) { x: bool => "any bool", true => "unreachable" }
+  {  } match (b) { let x: bool => "any bool", true => "unreachable" }
 }
 function user.BoolUnionPattern(b: bool) -> string  [expr] {
   {  } match (b) { true | false => "covered" }
@@ -57,7 +57,7 @@ function user.DuplicateBoolLiteral(b: bool) -> string  [expr] {
   {  } match (b) { true => "first true", true => "second true", false => "false" }
 }
 function user.DuplicateEnumVariant(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "first", user.Status.Active => "second", user.Status.Inactive => "inactive", user.Status.Pending => "pending" }
+  {  } match (s) { Status.Active => "first", Status.Active => "second", Status.Inactive => "inactive", Status.Pending => "pending" }
 }
 function user.DuplicateIntLiteral(x: int) -> string  [expr] {
   {  } match (x) { 1 => "first one", 1 => "second one", _ => "other" }
@@ -66,13 +66,13 @@ function user.DuplicateStringLiteral(role: user.Role) -> string  [expr] {
   {  } match (role) { "user" => "first user", "user" => "second user", "assistant" => "assistant", "system" => "system" }
 }
 function user.EnumVariantAfterTypedEnum(s: user.Status) -> string  [expr] {
-  {  } match (s) { x: user.Status => "any status", user.Status.Active => "unreachable" }
+  {  } match (s) { let x: user.Status => "any status", Status.Active => "unreachable" }
 }
 function user.EnumVariantUnion(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active | user.Status.Pending => "actionable", user.Status.Inactive => "inactive" }
+  {  } match (s) { Status.Active | Status.Pending => "actionable", Status.Inactive => "inactive" }
 }
 function user.EnumVariantUnionWithCatchAll(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active | user.Status.Pending => "actionable", _ => "other" }
+  {  } match (s) { Status.Active | Status.Pending => "actionable", _ => "other" }
 }
 function user.ExhaustiveAliasOfLiterals(code: user.OkOrCreated) -> string  [expr] {
   {  } match (code) { 200 => "ok", 201 => "created" }
@@ -81,22 +81,22 @@ function user.ExhaustiveBool(b: bool) -> string  [expr] {
   {  } match (b) { true => "yes", false => "no" }
 }
 function user.ExhaustiveClassPlusLiteral(x: user.SuccessOr200) -> string  [expr] {
-  {  } match (x) { s: user.Success => s.data, 200 => "http ok" }
+  {  } match (x) { let s: user.Success => s.data, 200 => "http ok" }
 }
 function user.ExhaustiveCustomBool(b: user.CustomBool) -> string  [expr] {
   {  } match (b) { true => "yes", false => "no" }
 }
 function user.ExhaustiveDoubleMaybe(dm: user.DoubleMaybe) -> string  [expr] {
-  {  } match (dm) { s: user.Success => s.data, f: user.Failure => f.reason, null => "nothing" }
+  {  } match (dm) { let s: user.Success => s.data, let f: user.Failure => f.reason, null => "nothing" }
 }
 function user.ExhaustiveEnumAllVariants(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", user.Status.Inactive => "inactive", user.Status.Pending => "pending" }
+  {  } match (s) { Status.Active => "active", Status.Inactive => "inactive", Status.Pending => "pending" }
 }
 function user.ExhaustiveEnumWithCatchAll(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", _ => "other" }
+  {  } match (s) { Status.Active => "active", _ => "other" }
 }
 function user.ExhaustiveEnumWithTypedPattern(s: user.Status) -> string  [expr] {
-  {  } match (s) { x: user.Status => "any status" }
+  {  } match (s) { let x: user.Status => "any status" }
 }
 function user.ExhaustiveFalseType(f: user.AlwaysFalse) -> string  [expr] {
   {  } match (f) { false => "always false" }
@@ -105,19 +105,19 @@ function user.ExhaustiveIntLiterals(code: user.SuccessCode) -> string  [expr] {
   {  } match (code) { 200 => "OK", 201 => "Created", 204 => "No Content" }
 }
 function user.ExhaustiveLiteralWithBaseType(x: int) -> string  [expr] {
-  {  } match (x) { 200 => "ok", n: int => "other" }
+  {  } match (x) { 200 => "ok", let n: int => "other" }
 }
 function user.ExhaustiveMixedLiterals(x: user.MixedLiterals) -> string  [expr] {
   {  } match (x) { 200 => "http ok", "success" => "string success", true => "boolean true" }
 }
 function user.ExhaustiveNullableEnum(s: user.Status?) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", user.Status.Inactive => "inactive", user.Status.Pending => "pending", null => "no status" }
+  {  } match (s) { Status.Active => "active", Status.Inactive => "inactive", Status.Pending => "pending", null => "no status" }
 }
 function user.ExhaustiveNullableEnumWithTypedPattern(s: user.Status?) -> string  [expr] {
-  {  } match (s) { x: user.Status => "some status", null => "no status" }
+  {  } match (s) { let x: user.Status => "some status", null => "no status" }
 }
 function user.ExhaustiveOptional(x: int?) -> string  [expr] {
-  {  } match (x) { n: int => "has value", null => "no value" }
+  {  } match (x) { let n: int => "has value", null => "no value" }
 }
 function user.ExhaustiveOptionalSingleton(code: user.MaybeOk) -> string  [expr] {
   {  } match (code) { 200 => "OK", null => "no code" }
@@ -132,13 +132,13 @@ function user.ExhaustiveTrueType(t: user.AlwaysTrue) -> string  [expr] {
   {  } match (t) { true => "always true" }
 }
 function user.ExhaustiveTypeAlias(r: user.Result) -> string  [expr] {
-  {  } match (r) { s: user.Success => s.data, f: user.Failure => f.reason }
+  {  } match (r) { let s: user.Success => s.data, let f: user.Failure => f.reason }
 }
 function user.ExhaustiveTypeAliasWithCatchAll(r: user.Result) -> string  [expr] {
-  {  } match (r) { s: user.Success => s.data, _ => "fallback" }
+  {  } match (r) { let s: user.Success => s.data, _ => "fallback" }
 }
 function user.ExhaustiveWithNamedCatchAll(x: int) -> int  [expr] {
-  {  } match (x) { 1 => 100, other => other Add 1 }
+  {  } match (x) { 1 => 100, user.other => other Add 1 }
 }
 function user.ExhaustiveWithUnderscore(x: int) -> int  [expr] {
   {  } match (x) { 1 => 100, 2 => 200, _ => 0 }
@@ -147,28 +147,28 @@ function user.GetStatus() -> user.Status  [expr] {
   {  } Status.Active
 }
 function user.GuardedOnlyNonExhaustive(x: int) -> int  [expr] {
-  {  } match (x) { n: int => n Mul 2, n: int => n Mul Neg 1 }
+  {  } match (x) { let n: int => n Mul 2, let n: int => n Mul Neg 1 }
 }
 function user.GuardedWithFallback(x: int) -> int  [expr] {
-  {  } match (x) { n: int => n Mul 2, _ => 0 }
+  {  } match (x) { let n: int => n Mul 2, _ => 0 }
 }
 function user.HighLineNumberNonExhaustive(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active only" }
+  {  } match (s) { Status.Active => "active only" }
 }
 function user.IntLiteralUnionPattern(code: user.SuccessCode) -> string  [expr] {
   {  } match (code) { 200 | 201 => "success with body", 204 => "no content" }
 }
 function user.JumpTableClassTypeTag(pet: user.Cat | user.Dog | user.Bird | user.Fish) -> string  [expr] {
-  {  } match (pet) { c: user.Cat => "cat", d: user.Dog => "dog", b: user.Bird => "bird", f: user.Fish => "fish" }
+  {  } match (pet) { let c: user.Cat => "cat", let d: user.Dog => "dog", let b: user.Bird => "bird", let f: user.Fish => "fish" }
 }
 function user.JumpTableEnumDiscriminant(state: user.DispatchState) -> int  [expr] {
-  {  } match (state) { user.DispatchState.Alpha => 10, user.DispatchState.Beta => 20, user.DispatchState.Gamma => 30, user.DispatchState.Delta => 40 }
+  {  } match (state) { DispatchState.Alpha => 10, DispatchState.Beta => 20, DispatchState.Gamma => 30, DispatchState.Delta => 40 }
 }
 function user.JumpTableTypeTag(value: int | string | bool | float) -> string  [expr] {
-  {  } match (value) { i: int => "int", s: string => "string", b: bool => "bool", f: float => "float" }
+  {  } match (value) { let i: int => "int", let s: string => "string", let b: bool => "bool", let f: float => "float" }
 }
 function user.LiteralAfterTypedPattern(x: int) -> string  [expr] {
-  {  } match (x) { n: int => "int", 42 => "unreachable" }
+  {  } match (x) { let n: int => "int", 42 => "unreachable" }
 }
 function user.LiteralUnionWithCatchAll(code: int) -> string  [expr] {
   {  } match (code) { 200 | 201 => "success", 400 | 404 => "client error", _ => "other" }
@@ -180,19 +180,19 @@ function user.MatchComplexScrutinee(x: int) -> string  [expr] {
   {  } match (x Mul 2 Add 1) { 1 => "x was 0", 3 => "x was 1", _ => "other" }
 }
 function user.MatchFunctionCallScrutinee() -> string  [expr] {
-  {  } match (GetStatus()) { user.Status.Active => "active", user.Status.Inactive => "inactive", user.Status.Pending => "pending" }
+  {  } match (GetStatus()) { Status.Active => "active", Status.Inactive => "inactive", Status.Pending => "pending" }
 }
 function user.MixedPatterns(x: int) -> string  [expr] {
-  {  } match (x) { 0 => "zero", 1 => "one", n: int => "positive", _ => "negative" }
+  {  } match (x) { 0 => "zero", 1 => "one", let n: int => "positive", _ => "negative" }
 }
 function user.MultipleUnreachableSpans(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", user.Status.Active => "duplicate 1", user.Status.Inactive => "inactive", user.Status.Active => "duplicate 2", user.Status.Pending => "pending" }
+  {  } match (s) { Status.Active => "active", Status.Active => "duplicate 1", Status.Inactive => "inactive", Status.Active => "duplicate 2", Status.Pending => "pending" }
 }
 function user.NestedEnumMatch(s1: user.Status, s2: user.Status) -> string  [expr] {
-  {  } match (s1) { user.Status.Active => match (s2) { user.Status.Active => "both active", user.Status.Inactive => "first active, sec...", user.Status.Pending => "first active, sec..." }, user.Status.Inactive => "first inactive", user.Status.Pending => "first pending" }
+  {  } match (s1) { Status.Active => match (s2) { Status.Active => "both active", Status.Inactive => "first active, sec...", Status.Pending => "first active, sec..." }, Status.Inactive => "first inactive", Status.Pending => "first pending" }
 }
 function user.NestedEnumVariantUnions(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active | user.Status.Pending | user.Status.Inactive => "all statuses" }
+  {  } match (s) { Status.Active | Status.Pending | Status.Inactive => "all statuses" }
 }
 function user.NestedLiteralUnions(code: int) -> string  [expr] {
   {  } match (code) { 200 | 201 | 202 | 204 => "success", 400 | 404 | 405 | 406 | 409 => "client error", _ => "other" }
@@ -201,10 +201,10 @@ function user.NestedMatchSpans(x: int, y: bool) -> string  [expr] {
   {  } match (x) { 0 => match (y) { true => "zero true", false => "zero false", true => "unreachable nested" }, _ => "other" }
 }
 function user.NestedTypeAlias(mr: user.MaybeResult) -> string  [expr] {
-  {  } match (mr) { s: user.Success => s.data, f: user.Failure => f.reason, null => "nothing" }
+  {  } match (mr) { let s: user.Success => s.data, let f: user.Failure => f.reason, null => "nothing" }
 }
 function user.NestedTypeBindings(r: user.Result) -> int  [expr] {
-  {  } match (r) { s: user.Success | user.Failure => 0, f: user.Failure => 1 }
+  {  } match (r) { let s: user.Success | user.Failure => 0, let f: user.Failure => 1 }
 }
 function user.NonExhaustiveAliasOfLiterals(code: user.OkOrCreated) -> string  [expr] {
   {  } match (code) { 200 => "ok" }
@@ -219,22 +219,22 @@ function user.NonExhaustiveClassPlusLiteralMissingClass(x: user.SuccessOr200) ->
   {  } match (x) { 200 => "http ok" }
 }
 function user.NonExhaustiveClassPlusLiteralMissingLiteral(x: user.SuccessOr200) -> string  [expr] {
-  {  } match (x) { s: user.Success => s.data }
+  {  } match (x) { let s: user.Success => s.data }
 }
 function user.NonExhaustiveCustomBoolMissing(b: user.CustomBool) -> string  [expr] {
   {  } match (b) { true => "yes" }
 }
 function user.NonExhaustiveDoubleMaybeMissingNull(dm: user.DoubleMaybe) -> string  [expr] {
-  {  } match (dm) { s: user.Success => s.data, f: user.Failure => f.reason }
+  {  } match (dm) { let s: user.Success => s.data, let f: user.Failure => f.reason }
 }
 function user.NonExhaustiveEnumMissingMultiple(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active" }
+  {  } match (s) { Status.Active => "active" }
 }
 function user.NonExhaustiveEnumMissingOne(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", user.Status.Inactive => "inactive" }
+  {  } match (s) { Status.Active => "active", Status.Inactive => "inactive" }
 }
 function user.NonExhaustiveFullResultMissingOne(r: user.FullResult) -> string  [expr] {
-  {  } match (r) { s: user.Success => s.data, f: user.Failure => f.reason }
+  {  } match (r) { let s: user.Success => s.data, let f: user.Failure => f.reason }
 }
 function user.NonExhaustiveIntLiteral(code: user.SuccessCode) -> string  [expr] {
   {  } match (code) { 200 => "OK", 201 => "Created" }
@@ -243,10 +243,10 @@ function user.NonExhaustiveMixedLiterals(x: user.MixedLiterals) -> string  [expr
   {  } match (x) { 200 => "http ok", "success" => "string success" }
 }
 function user.NonExhaustiveNullableEnumMissingNull(s: user.Status?) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", user.Status.Inactive => "inactive", user.Status.Pending => "pending" }
+  {  } match (s) { Status.Active => "active", Status.Inactive => "inactive", Status.Pending => "pending" }
 }
 function user.NonExhaustiveNullableEnumMissingVariant(s: user.Status?) -> string  [expr] {
-  {  } match (s) { user.Status.Active => "active", user.Status.Inactive => "inactive", null => "no status" }
+  {  } match (s) { Status.Active => "active", Status.Inactive => "inactive", null => "no status" }
 }
 function user.NonExhaustiveOptionalMissingNull(code: user.MaybeOk) -> string  [expr] {
   {  } match (code) { 200 => "OK" }
@@ -261,7 +261,7 @@ function user.NonExhaustiveTrueTypeWrongLiteral(t: user.AlwaysTrue) -> string  [
   {  } match (t) { false => "wrong!" }
 }
 function user.NonExhaustiveTypeAliasMissingOne(r: user.Result) -> string  [expr] {
-  {  } match (r) { s: user.Success => s.data }
+  {  } match (r) { let s: user.Success => s.data }
 }
 function user.OptionalWithCatchAll(x: int?) -> string  [expr] {
   {  } match (x) { null => "no value", _ => "has value" }
@@ -270,19 +270,19 @@ function user.OverlappingTypedPatterns(r: user.Result) -> string  [expr] {
   {  } match (r) { _: user.Success => "success", _: user.Success | user.Failure => "covers failure on..." }
 }
 function user.OverlappingWithBindings(r: user.Result) -> string  [expr] {
-  {  } match (r) { s: user.Success => s.data, x: user.Success | user.Failure => "remaining" }
+  {  } match (r) { let s: user.Success => s.data, let x: user.Success | user.Failure => "remaining" }
 }
 function user.ParenthesizedSingleLiteral(b: bool) -> string  [expr] {
   {  } match (b) { true => "yes", false => "no" }
 }
 function user.PartialUnionPatternCoverage(r: user.FullResult) -> string  [expr] {
-  {  } match (r) { x: user.Success | user.Failure => "not pending" }
+  {  } match (r) { let x: user.Success | user.Failure => "not pending" }
 }
 function user.PartialUnionPlusCatchAll(r: user.FullResult) -> string  [expr] {
-  {  } match (r) { x: user.Success | user.Failure => "success or failure", _: user.Pending => "pending" }
+  {  } match (r) { let x: user.Success | user.Failure => "success or failure", _: user.Pending => "pending" }
 }
 function user.StringLiteralAfterStringType(s: string) -> string  [expr] {
-  {  } match (s) { x: string => "any string", "hello" => "unreachable" }
+  {  } match (s) { let x: string => "any string", "hello" => "unreachable" }
 }
 function user.StringLiteralUnionPattern(role: user.Role) -> string  [expr] {
   {  } match (role) { "user" | "assistant" => "chat participant", "system" => "system" }
@@ -294,13 +294,13 @@ function user.ThreeLevelNestedMatch(x: int, y: int, z: int) -> string  [expr] {
   {  } match (x) { 0 => match (y) { 0 => match (z) { 0 => "all zero", _ => "z nonzero" }, _ => "y nonzero" }, _ => "x nonzero" }
 }
 function user.UnionPatternCoversAll(r: user.Result) -> string  [expr] {
-  {  } match (r) { x: user.Success | user.Failure => "covered" }
+  {  } match (r) { let x: user.Success | user.Failure => "covered" }
 }
 function user.UnreachableAfterCatchAll(x: int) -> string  [expr] {
-  {  } match (x) { _ => "catch all", n: int => "never reached" }
+  {  } match (x) { _ => "catch all", let n: int => "never reached" }
 }
 function user.UnreachableMultiple(x: int) -> string  [expr] {
-  {  } match (x) { _ => "catch all", n: int => "unreachable 1", m: int => "unreachable 2" }
+  {  } match (x) { _ => "catch all", let n: int => "unreachable 1", let m: int => "unreachable 2" }
 }
 function user.WrongLiteralTypeBoolWithInt(b: bool) -> string  [expr] {
   {  } match (b) { 42 => "wrong type" }

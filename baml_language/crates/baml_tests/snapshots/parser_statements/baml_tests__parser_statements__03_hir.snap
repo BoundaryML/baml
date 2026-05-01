@@ -72,10 +72,10 @@ function user.c_style_for_loop() -> int  [expr] {
   { let result = 0; { let i = 0; while i Lt 10 { result Add= i } }; return result }
 }
 function user.iterator_style_for_loop() -> int  [expr] {
-  { let result = 0; for i in [1, 2, 3] { result Add= i }; return result }
+  { let result = 0; for let i in [1, 2, 3] { result Add= i }; return result }
 }
 function user.nested_for_loop() -> int  [expr] {
-  { let result = 0; for i in [1, 2, 3] { for j in [4, 5, 6] { result Add= i Mul j } }; return result }
+  { let result = 0; for let i in [1, 2, 3] { for let j in [4, 5, 6] { result Add= i Mul j } }; return result }
 }
 function user.ConditionalLogic(age: int) -> string  [expr] {
   {  } if (age Lt 18) { return "minor" } else if (age Lt 65) { return "adult" } else { return "senior" }

@@ -11,21 +11,12 @@ function InvalidArmSyntax(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Expected pattern, found let
-//    ╭─[ catch_invalid_arm_syntax.baml:8:5 ]
+// Error: Expected '=>' after catch pattern, found '='
+//    ╭─[ catch_invalid_arm_syntax.baml:8:11 ]
 //    │
 //  8 │     let y = "hi";
-//    │     ─┬─  
-//    │      ╰─── Expected pattern, found let
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected '=>' after catch pattern, found identifier
-//    ╭─[ catch_invalid_arm_syntax.baml:8:9 ]
-//    │
-//  8 │     let y = "hi";
-//    │         ┬  
-//    │         ╰── Expected '=>' after catch pattern, found identifier
+//    │           ┬  
+//    │           ╰── Expected '=>' after catch pattern, found '='
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

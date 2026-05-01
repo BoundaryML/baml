@@ -89,8 +89,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "score"
+          PATTERN
+            PATTERN_ALT "let score"
+              KW_LET "let"
+              WORD "score"
           EQUALS "="
           PATH_EXPR "analysis.score"
             WORD "analysis"

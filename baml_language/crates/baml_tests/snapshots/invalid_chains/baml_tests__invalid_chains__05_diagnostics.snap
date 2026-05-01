@@ -1,0 +1,64 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16245
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: type mismatch: expected int, got string
+    ╭─[ main.baml:14:28 ]
+    │
+ 14 │     let x: int: string = 5;
+    │                            ┬  
+    │                            ╰── type mismatch: expected int, got string
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected user.Animal, got int
+    ╭─[ main.baml:20:28 ]
+    │
+ 20 │     let x: Animal: int = Animal { name: "Rex" };
+    │                            ───────────┬──────────  
+    │                                       ╰──────────── type mismatch: expected user.Animal, got int
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected user.Animal, got int
+    ╭─[ main.baml:26:37 ]
+    │
+ 26 │     let x: Animal { name }: int = Animal { name: "Rex" };
+    │                                     ───────────┬──────────  
+    │                                                ╰──────────── type mismatch: expected user.Animal, got int
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected int, got user.Dog
+    ╭─[ main.baml:32:35 ]
+    │
+ 32 │     let x: int: Dog { breed } = Dog { name: "Rex", breed: "Lab" };
+    │                                   ────────────────┬────────────────  
+    │                                                   ╰────────────────── type mismatch: expected int, got user.Dog
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected int, got string
+    ╭─[ main.baml:38:34 ]
+    │
+ 38 │     let x: int: string: bool = true;
+    │                                  ──┬─  
+    │                                    ╰─── type mismatch: expected int, got string
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected string, got bool
+    ╭─[ main.baml:38:34 ]
+    │
+ 38 │     let x: int: string: bool = true;
+    │                                  ──┬─  
+    │                                    ╰─── type mismatch: expected string, got bool
+    │ 
+    │ Note: Error code: E0001
+────╯

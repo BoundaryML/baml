@@ -19,21 +19,30 @@ function InitWithLet() -> int {
 
 //----
 //- diagnostics
-// Error: Expected ')', found ';'
-//    ╭─[ loops_header_requires_let_positive.baml:4:19 ]
+// Error: Expected 'let' or ';', found identifier
+//    ╭─[ loops_header_requires_let_positive.baml:4:7 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
-//    │                      ┬  
-//    │                      ╰── Expected ')', found ';'
+//    │          ┬  
+//    │          ╰── Expected 'let' or ';', found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected block after for expression, found ';'
-//    ╭─[ loops_header_requires_let_positive.baml:4:19 ]
+// Error: Expected ')', found identifier
+//    ╭─[ loops_header_requires_let_positive.baml:4:7 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
-//    │                      ┬  
-//    │                      ╰── Expected block after for expression, found ';'
+//    │          ┬  
+//    │          ╰── Expected ')', found identifier
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected block after for expression, found identifier
+//    ╭─[ loops_header_requires_let_positive.baml:4:7 ]
+//    │
+//  4 │     for (i = 0; i < 3; i += 1) {
+//    │          ┬  
+//    │          ╰── Expected block after for expression, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

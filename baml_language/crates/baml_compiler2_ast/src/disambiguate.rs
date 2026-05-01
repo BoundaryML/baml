@@ -82,18 +82,8 @@ fn validate_let_def(let_def: &LetDef, diagnostics: &mut Vec<(String, text_size::
 /// Walk an expression body, checking all type annotations and typed patterns
 /// for field attributes that are invalid in expression-level type positions.
 fn validate_expr_body(body: &ExprBody, diagnostics: &mut Vec<(String, text_size::TextRange)>) {
-    // Check every type annotation in the arena (used by let bindings, match scrutinees, etc.).
-    // In expression bodies, field attrs are NEVER valid on type annotations — there is no
-    // hoisting step, so every field attr here is an error.
-    for (_, ty) in body.type_annotations.iter() {
-        validate_type_expr_tree(ty, diagnostics);
-    }
-
     // Check typed patterns (e.g. `let x: string @alias("n") = ...`).
     for (_, pat) in body.patterns.iter() {
-        if let Some(ty) = &pat.narrow {
-            validate_type_expr_tree(ty, diagnostics);
-        }
         if let crate::ast::PatternKind::Type(ty) = &pat.kind {
             validate_type_expr_tree(ty, diagnostics);
         }

@@ -410,7 +410,7 @@ fn match_catch_all() {
         "test.baml",
         r#"function f(x: int) -> int {
   return match (x) {
-    y => y + 1
+    let y => y + 1
   };
 }"#,
     );
@@ -419,7 +419,7 @@ fn match_catch_all() {
       { : never
         return : int
           match (x : int) : int
-            y =>
+            let y =>
               y + 1 : int
       }
     }
@@ -841,7 +841,7 @@ function g() -> void { }
 function f() -> int { let x = g(); 1 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.g() -> void throws never {
       { : void
       }

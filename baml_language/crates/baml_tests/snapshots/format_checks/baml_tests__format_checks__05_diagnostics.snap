@@ -441,9 +441,9 @@ assertion_line: 11870
 ─────╯
 
   [type] Warning: unreachable code: 1 statement(s) after diverging statement
-     ╭─[ loop_stmts.baml:406:39 ]
+     ╭─[ loop_stmts.baml:406:43 ]
      │
- 406 │ ╭─▶                 n: int if n > 100 => {
+ 406 │ ╭─▶                 let n: int if n > 100 => {
  407 │ ├─▶                     continue;
      │ │                                   
      │ ╰─────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
@@ -519,6 +519,16 @@ assertion_line: 11870
      │                                                                                  ╰──── operator `Mul` cannot be applied to `bool` and `int`
      │ 
      │ Note: Error code: E0004
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ match_exprs.baml:309:14 ]
+     │
+ 309 │         _ => "nonzero"
+     │              ────┬────  
+     │                  ╰────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [validation] Error: Name `ManyParams` defined 2 times as: function, template_string

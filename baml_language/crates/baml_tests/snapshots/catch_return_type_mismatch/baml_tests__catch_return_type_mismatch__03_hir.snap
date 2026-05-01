@@ -7,5 +7,5 @@ function user.callee() -> bool  [expr] {
   { return true }
 }
 function user.caller() -> bool  [expr] {
-  {  } callee() catch (e) { user.Errors.AuthenticationError => { return e } }
+  {  } callee() catch (let e) { Errors.AuthenticationError => { return e } }
 }

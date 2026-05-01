@@ -16,8 +16,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "double"
+          PATTERN
+            PATTERN_ALT "let double"
+              KW_LET "let"
+              WORD "double"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -58,8 +60,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "double"
+          PATTERN
+            PATTERN_ALT "let double"
+              KW_LET "let"
+              WORD "double"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -98,8 +102,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "constant"
+          PATTERN
+            PATTERN_ALT "let constant"
+              KW_LET "let"
+              WORD "constant"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST "()"
@@ -133,13 +139,15 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "items"
-          COLON ":"
-          TYPE_EXPR "int[]"
-            WORD "int"
-            L_BRACKET "["
-            R_BRACKET "]"
+          PATTERN
+            PATTERN_ALT
+              KW_LET "let"
+              WORD "items"
+              COLON ":"
+              TYPE_EXPR "int[]"
+                WORD "int"
+                L_BRACKET "["
+                R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
@@ -185,8 +193,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "risky"
+          PATTERN
+            PATTERN_ALT "let risky"
+              KW_LET "let"
+              WORD "risky"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -246,14 +256,18 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let offset = 10"
-          KW_LET "let"
-          WORD "offset"
+        LET_STMT
+          PATTERN
+            PATTERN_ALT "let offset"
+              KW_LET "let"
+              WORD "offset"
           EQUALS "="
           INTEGER_LITERAL "10"
         LET_STMT
-          KW_LET "let"
-          WORD "add_offset"
+          PATTERN
+            PATTERN_ALT "let add_offset"
+              KW_LET "let"
+              WORD "add_offset"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -294,8 +308,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "outer"
+          PATTERN
+            PATTERN_ALT "let outer"
+              KW_LET "let"
+              WORD "outer"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -310,8 +326,10 @@ SOURCE_FILE
             BLOCK_EXPR
               L_BRACE "{"
               LET_STMT
-                KW_LET "let"
-                WORD "inner"
+                PATTERN
+                  PATTERN_ALT "let inner"
+                    KW_LET "let"
+                    WORD "inner"
                 EQUALS "="
                 LAMBDA_EXPR
                   PARAMETER_LIST
@@ -359,8 +377,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "identity"
+          PATTERN
+            PATTERN_ALT "let identity"
+              KW_LET "let"
+              WORD "identity"
           EQUALS "="
           LAMBDA_EXPR
             GENERIC_PARAM_LIST
@@ -403,8 +423,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "add"
+          PATTERN
+            PATTERN_ALT "let add"
+              KW_LET "let"
+              WORD "add"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST

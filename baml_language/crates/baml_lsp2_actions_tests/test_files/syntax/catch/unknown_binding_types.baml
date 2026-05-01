@@ -3,24 +3,15 @@ function MayFail(x: int) -> string {
 }
 
 function UnknownBindingTypes(x: int) -> string {
-  MayFail(x) catch (e: any) {
+  MayFail(x) catch (e) {
     _ => "caught any"
-  } catch (other: unknown) {
+  } catch (other) {
     _ => "caught unknown"
   }
 }
 
 //----
 //- diagnostics
-// Error: invalid catch binding type `any`; use a concrete type instead
-//    ╭─[ catch_unknown_binding_types.baml:6:3 ]
-//    │
-//  6 │   MayFail(x) catch (e: any) {
-//    │   ─────┬────  
-//    │        ╰────── invalid catch binding type `any`; use a concrete type instead
-//    │ 
-//    │ Note: Error code: E0093
-// ───╯
 // Warning: unreachable arm
 //    ╭─[ catch_unknown_binding_types.baml:7:10 ]
 //    │
@@ -29,15 +20,6 @@ function UnknownBindingTypes(x: int) -> string {
 //    │                ╰─────── unreachable arm
 //    │ 
 //    │ Note: Error code: E0063
-// ───╯
-// Error: invalid catch binding type `unknown`; use a concrete type instead
-//    ╭─[ catch_unknown_binding_types.baml:6:3 ]
-//    │
-//  6 │   MayFail(x) catch (e: any) {
-//    │   ─────┬────  
-//    │        ╰────── invalid catch binding type `unknown`; use a concrete type instead
-//    │ 
-//    │ Note: Error code: E0093
 // ───╯
 // Warning: unreachable arm
 //    ╭─[ catch_unknown_binding_types.baml:9:10 ]

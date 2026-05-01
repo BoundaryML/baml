@@ -16,8 +16,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN
+            PATTERN_ALT "let f"
+              KW_LET "let"
+              WORD "f"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST "()"
@@ -51,8 +53,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN
+            PATTERN_ALT "let f"
+              KW_LET "let"
+              WORD "f"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST "()"
@@ -66,8 +70,10 @@ SOURCE_FILE
               R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "x"
+          PATTERN
+            PATTERN_ALT "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           CALL_EXPR
             WORD "f"
@@ -90,8 +96,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN
+            PATTERN_ALT "let f"
+              KW_LET "let"
+              WORD "f"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST

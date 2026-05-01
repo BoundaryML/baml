@@ -327,7 +327,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
                 self.register_local_pattern(
                     *pattern,
-                    DefinitionSite::Statement(stmt_id),
+                    DefinitionSite::Pattern(*pattern),
                     body,
                     source_map,
                     source_map.stmt_span(stmt_id).end(),
@@ -342,7 +342,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.push_scope(ScopeKind::Block, None, source_map.stmt_span(stmt_id));
                 self.register_local_pattern(
                     *binding,
-                    DefinitionSite::Statement(stmt_id),
+                    DefinitionSite::Pattern(*binding),
                     body,
                     source_map,
                     source_map.pattern_span(*binding).start(),
@@ -509,18 +509,50 @@ impl<'db> SemanticIndexBuilder<'db> {
         source_map: &ast::AstSourceMap,
         visible_from: TextSize,
     ) {
-        if let Some(name) = Self::local_binding_name(&body.patterns, pat_id) {
-            let name_range = source_map.pattern_span(pat_id);
-            let scope_id = self.current_scope_id();
-            self.scope_bindings[scope_id.index() as usize]
-                .bindings
-                .push(LocalBinding {
-                    name: name.clone(),
-                    site,
-                    pattern: pat_id,
-                    name_range,
-                    visible_from,
-                });
+        self.register_pattern_bindings(pat_id, Some(site), body, source_map, visible_from);
+    }
+
+    /// Walk the entire pattern tree (root + chain) and register every Bind as
+    /// a scope-level local binding. All bindings use `Pattern(pat_id)`.
+    fn register_pattern_bindings(
+        &mut self,
+        pat_id: ast::PatId,
+        site: Option<DefinitionSite>,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+        visible_from: TextSize,
+    ) {
+        let pat = &body.patterns[pat_id];
+        let chain = pat.chain;
+        match &pat.kind {
+            ast::PatternKind::Bind { name } => {
+                let site = site.unwrap_or(DefinitionSite::Pattern(pat_id));
+                let name_range = source_map.pattern_span(pat_id);
+                let scope_id = self.current_scope_id();
+                self.scope_bindings[scope_id.index() as usize]
+                    .bindings
+                    .push(LocalBinding {
+                        name: name.clone(),
+                        site,
+                        pattern: pat_id,
+                        name_range,
+                        visible_from,
+                    });
+            }
+            ast::PatternKind::Class { fields, .. } => {
+                for f in fields {
+                    self.register_pattern_bindings(f.pat, None, body, source_map, visible_from);
+                }
+            }
+            ast::PatternKind::Or(parts) => {
+                if let Some(&first) = parts.first() {
+                    self.register_pattern_bindings(first, None, body, source_map, visible_from);
+                }
+            }
+            _ => {}
+        }
+        if let Some(chain_id) = chain {
+            self.register_pattern_bindings(chain_id, None, body, source_map, visible_from);
         }
     }
 
@@ -535,7 +567,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         let visible_from = source_map.pattern_span(arm.pattern).start();
         self.register_local_pattern(
             arm.pattern,
-            DefinitionSite::PatternBinding(arm.pattern),
+            DefinitionSite::Pattern(arm.pattern),
             body,
             source_map,
             visible_from,
@@ -558,7 +590,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         let binding_visible_from = source_map.pattern_span(clause.binding).start();
         self.register_local_pattern(
             clause.binding,
-            DefinitionSite::PatternBinding(clause.binding),
+            DefinitionSite::Pattern(clause.binding),
             body,
             source_map,
             binding_visible_from,
@@ -567,7 +599,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             let st_visible_from = source_map.pattern_span(st_pat).start();
             self.register_local_pattern(
                 st_pat,
-                DefinitionSite::PatternBinding(st_pat),
+                DefinitionSite::Pattern(st_pat),
                 body,
                 source_map,
                 st_visible_from,
@@ -590,7 +622,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         let visible_from = source_map.pattern_span(arm.pattern).start();
         self.register_local_pattern(
             arm.pattern,
-            DefinitionSite::PatternBinding(arm.pattern),
+            DefinitionSite::Pattern(arm.pattern),
             body,
             source_map,
             visible_from,
@@ -736,19 +768,6 @@ impl<'db> SemanticIndexBuilder<'db> {
             use_offset,
             owner_lambda: self.lambda_stack.last().copied(),
         });
-    }
-
-    /// Extract the binding name from a pattern, if it has one.
-    ///
-    /// The AST canonicalizes `_` to `Wildcard` at construction time
-    /// (`Pattern::binding`), so `_` never reaches us as a `Bind` regardless of
-    /// the surface form. `let`/`for` patterns and `match`/`catch` arm
-    /// patterns therefore use the same extraction.
-    fn local_binding_name(
-        patterns: &la_arena::Arena<ast::Pattern>,
-        pat_id: ast::PatId,
-    ) -> Option<&Name> {
-        patterns[pat_id].binding_name()
     }
 
     // ── Item lowering ────────────────────────────────────────────────────────

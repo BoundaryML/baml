@@ -114,7 +114,7 @@ function user.HeadersAroundExpressions() -> string throws never {
       }
     // [3] After If
     // [2] Before For
-    for i in [1, 2, 3]
+    for let i in [1, 2, 3]
       { : int
         // [3] Inside For
         i : int

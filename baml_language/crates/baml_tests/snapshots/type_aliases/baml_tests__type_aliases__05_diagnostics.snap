@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 40282
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type mismatch: expected user.foo, got true
@@ -41,4 +40,14 @@ assertion_line: 40282
    │          ╰──── unresolved type: name
    │ 
    │ Note: Error code: E0002
+───╯
+
+  [type] Error: type mismatch: expected user.JSON, got user.NotJSON
+   ╭─[ type_aliases_json.baml:9:3 ]
+   │
+ 9 │   NotJSON{ inner: "Whoops" }
+   │   ─────────────┬────────────  
+   │                ╰────────────── type mismatch: expected user.JSON, got user.NotJSON
+   │ 
+   │ Note: Error code: E0001
 ───╯

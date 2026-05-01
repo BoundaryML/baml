@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
 function user.sum_array(arr: int[]) -> int  [expr] {
-  { let sum = 0; let total = []; for i in arr {  } total.push(() -> { { sum Add= i } }); for cb in total { cb() } } sum
+  { let sum = 0; let total = []; for let i in arr {  } total.push(() -> { { sum Add= i } }); for let cb in total { cb() } } sum
 }
 
 --- captures ---

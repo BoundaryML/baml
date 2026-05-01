@@ -134,21 +134,13 @@ fn local_definition_location(
     let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
 
     match site {
-        DefinitionSite::Statement(stmt_id) => {
-            // Get the source map to convert StmtId → TextRange.
-            let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
-            let range = source_map.stmt_span(stmt_id);
-            Some(Location { file, range })
-        }
         DefinitionSite::Parameter(param_idx) => {
-            // Get the signature source map to find parameter spans.
             let sig_map =
                 baml_compiler2_hir::signature::function_signature_source_map(db, func_loc);
             let range = sig_map.param_spans.get(param_idx).copied()?;
             Some(Location { file, range })
         }
-        DefinitionSite::PatternBinding(pat_id) => {
-            // Navigate to the pattern binding.
+        DefinitionSite::Pattern(pat_id) => {
             let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
             let range = source_map.pattern_span(pat_id);
             Some(Location { file, range })

@@ -463,7 +463,6 @@ pub fn synthesize_llm_builtin_call(
         patterns: Arena::new(),
         match_arms: Arena::new(),
         catch_arms: Arena::new(),
-        type_annotations: Arena::new(),
         root_expr: Some(call),
     };
 
@@ -472,7 +471,6 @@ pub fn synthesize_llm_builtin_call(
         stmt_spans: Arena::new(),
         pattern_spans: Arena::new(),
         match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
@@ -527,7 +525,6 @@ pub(crate) fn synthesize_llm_parse_call(
         patterns: Arena::new(),
         match_arms: Arena::new(),
         catch_arms: Arena::new(),
-        type_annotations: Arena::new(),
         root_expr: Some(call),
     };
 
@@ -536,7 +533,6 @@ pub(crate) fn synthesize_llm_parse_call(
         stmt_spans: Arena::new(),
         pattern_spans: Arena::new(),
         match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
@@ -619,7 +615,6 @@ pub fn synthesize_llm_make_stream_call(
         patterns: Arena::new(),
         match_arms: Arena::new(),
         catch_arms: Arena::new(),
-        type_annotations: Arena::new(),
         root_expr: Some(call),
     };
 
@@ -628,7 +623,6 @@ pub fn synthesize_llm_make_stream_call(
         stmt_spans: Arena::new(),
         pattern_spans: Arena::new(),
         match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
@@ -1364,7 +1358,6 @@ fn synthesize_retry_policy_let(
         patterns: la_arena::Arena::new(),
         match_arms: la_arena::Arena::new(),
         catch_arms: la_arena::Arena::new(),
-        type_annotations: la_arena::Arena::new(),
         root_expr: Some(root),
     };
     let source_map = AstSourceMap {
@@ -1372,7 +1365,6 @@ fn synthesize_retry_policy_let(
         stmt_spans: la_arena::Arena::new(),
         pattern_spans: la_arena::Arena::new(),
         match_arm_spans: la_arena::Arena::new(),
-        type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
@@ -1605,7 +1597,6 @@ fn synthesize_client_let(
         patterns: la_arena::Arena::new(),
         match_arms: la_arena::Arena::new(),
         catch_arms: la_arena::Arena::new(),
-        type_annotations: la_arena::Arena::new(),
         root_expr: Some(root),
     };
     let source_map = AstSourceMap {
@@ -1613,7 +1604,6 @@ fn synthesize_client_let(
         stmt_spans: la_arena::Arena::new(),
         pattern_spans: la_arena::Arena::new(),
         match_arm_spans: la_arena::Arena::new(),
-        type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
@@ -1858,7 +1848,6 @@ fn synthesize_client_new_companion(
         patterns: la_arena::Arena::new(),
         match_arms: la_arena::Arena::new(),
         catch_arms: la_arena::Arena::new(),
-        type_annotations: la_arena::Arena::new(),
         root_expr: Some(root),
     };
     let source_map = AstSourceMap {
@@ -1866,7 +1855,6 @@ fn synthesize_client_new_companion(
         stmt_spans: la_arena::Arena::new(),
         pattern_spans: la_arena::Arena::new(),
         match_arm_spans: la_arena::Arena::new(),
-        type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),

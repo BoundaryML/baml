@@ -75,7 +75,7 @@ function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {
       (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws unknown
         {
           let topics = ["happy", "sad"]
-          for sentiments in topics
+          for let sentiments in topics
             {
               testset.register_test_set(sentiments, (testset: testing.TestCollector) -> { ... }, null)
             }

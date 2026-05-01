@@ -1,0 +1,47 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Test valid pattern chains — each link is a subtype of the previous.
+// Classes Animal and Dog are defined in invalid_chains.baml.
+
+// Same type repeated
+function test_repeated_type() -> string {
+    let x: int = 1;
+    return "ok";
+}
+
+// Single type annotation (trivial chain)
+function test_single_type() -> string {
+    let x: string = "hello";
+    return "ok";
+}
+
+// Class destructure only
+function test_class_destructure() -> string {
+    let x: Animal = Animal { name: "Rex" };
+    return "ok";
+}
+
+// Class destructure then same class type
+function test_destructure_then_same_type() -> string {
+    let x: Animal = Animal { name: "Rex" };
+    return "ok";
+}
+
+// Type then class destructure of same type
+function test_type_then_destructure() -> string {
+    let x: Dog = Dog { name: "Rex", breed: "Lab" };
+    return "ok";
+}
+
+// Widen to a union type
+function test_widen_to_union() -> string {
+    let x: int[] = [1, 2, 3];
+    return "ok";
+}
+
+// Widen then narrow back down
+function test_widen_then_narrow() -> string {
+    let x: int[] = [1, 2, 3];
+    return "ok";
+}

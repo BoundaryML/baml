@@ -16,8 +16,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "a"
+          PATTERN
+            PATTERN_ALT "let a"
+              KW_LET "let"
+              WORD "a"
           EQUALS "="
           BINARY_EXPR "1 + 2"
             INTEGER_LITERAL "1"
@@ -25,8 +27,10 @@ SOURCE_FILE
             INTEGER_LITERAL "2"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b"
+          PATTERN
+            PATTERN_ALT "let b"
+              KW_LET "let"
+              WORD "b"
           EQUALS "="
           BINARY_EXPR "a * 3"
             WORD "a"
@@ -34,8 +38,10 @@ SOURCE_FILE
             INTEGER_LITERAL "3"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "c"
+          PATTERN
+            PATTERN_ALT "let c"
+              KW_LET "let"
+              WORD "c"
           EQUALS "="
           BINARY_EXPR
             BINARY_EXPR "b / 2"
@@ -46,8 +52,10 @@ SOURCE_FILE
             INTEGER_LITERAL "1"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "d"
+          PATTERN
+            PATTERN_ALT "let d"
+              KW_LET "let"
+              WORD "d"
           EQUALS "="
           BINARY_EXPR
             PAREN_EXPR

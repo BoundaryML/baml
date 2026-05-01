@@ -34,7 +34,7 @@ function user.AlsoMayFail(x: int) -> string throws never {
 function user.SingleCatchWildcard(x: int) -> string throws never {
   { : string | "caught"
     catch (MayFail(x) : string) : unknown
-      catch (e)
+      catch (let e)
         _ =>
           "caught" : "caught"
   }
@@ -42,7 +42,7 @@ function user.SingleCatchWildcard(x: int) -> string throws never {
 function user.SingleCatchTyped(x: int) -> string throws never {
   { : string | "caught string"
     catch (MayFail(x) : string) : unknown
-      catch (e)
+      catch (let e)
         _: string =>
           "caught string" : "caught string"
   }
@@ -50,10 +50,10 @@ function user.SingleCatchTyped(x: int) -> string throws never {
 function user.CatchWithFallback(x: int) -> string throws never {
   { : string | "caught string" | "caught int fallback"
     catch (MayFailIntOrString(x) : string) : unknown
-      catch (e)
+      catch (let e)
         _: string =>
           "caught string" : "caught string"
-      catch (e2)
+      catch (let e2)
         _: int =>
           "caught int fallback" : "caught int fallback"
   }
@@ -61,7 +61,7 @@ function user.CatchWithFallback(x: int) -> string throws never {
 function user.CatchWithTypedArm(x: int) -> string throws never {
   { : string | "caught string"
     catch (MayFail(x) : string) : unknown
-      catch (e)
+      catch (let e)
         _: string =>
           "caught string" : "caught string"
   }
@@ -69,7 +69,7 @@ function user.CatchWithTypedArm(x: int) -> string throws never {
 function user.MultipleCatchArms(x: int) -> string throws never {
   { : string | "caught string" | "caught int"
     catch (MayFailIntOrString(x) : string) : unknown
-      catch (e)
+      catch (let e)
         _: string =>
           "caught string" : "caught string"
         _: int =>
@@ -80,11 +80,11 @@ function user.NestedCatch(x: int) -> string throws never {
   { : string
     let inner = : string | "inner caught" -> string
       catch (MayFail(x) : string) : string | "inner caught"
-        catch (e)
+        catch (let e)
           _ =>
             "inner caught" : "inner caught"
     catch (AlsoMayFail(x) : string) : unknown
-      catch (e)
+      catch (let e)
         _ =>
           inner : string
   }
@@ -92,7 +92,7 @@ function user.NestedCatch(x: int) -> string throws never {
 function user.CatchAndRethrow(x: int) -> string throws never {
   { : string
     catch (MayFail(x) : string) : unknown
-      catch (e)
+      catch (let e)
         _ =>
           throw e : never
   }
@@ -107,10 +107,10 @@ function user.ThrowStatement(x: int) -> string throws never {
 function user.ChainedCatchClauses(x: int) -> string throws never {
   { : string | "first handler" | "second handler"
     catch (MayFailIntOrString(x) : string) : unknown
-      catch (e)
+      catch (let e)
         _: string =>
           "first handler" : "first handler"
-      catch (e2)
+      catch (let e2)
         _: int =>
           "second handler" : "second handler"
   }

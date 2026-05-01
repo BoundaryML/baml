@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 30502
 ---
 === COMPILER2 DIAGNOSTICS ===
   [parse] Error: Unmatched '>' in type expression (found 1 extra)

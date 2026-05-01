@@ -1,0 +1,79 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Cat"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "indoor"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Fish"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "freshwater"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_or_same_bindings"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "Cat | Fish"
+          WORD "Cat"
+          PIPE "|"
+          WORD "Fish"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Cat"
+                  WORD "Cat"
+                L_BRACE "{"
+                PATTERN_FIELD "name"
+                  WORD "name"
+                R_BRACE "}"
+                PIPE "|"
+                TYPE_EXPR "Fish"
+                  WORD "Fish"
+                L_BRACE "{"
+                PATTERN_FIELD "name"
+                  WORD "name"
+                R_BRACE "}"
+            FAT_ARROW "=>"
+            WORD "name"
+          R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

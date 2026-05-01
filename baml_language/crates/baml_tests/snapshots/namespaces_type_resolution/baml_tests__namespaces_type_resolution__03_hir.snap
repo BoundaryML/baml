@@ -32,7 +32,7 @@ function user.RootConstruct(key: string) -> user.Config  [expr] {
   {  } user.Config { key: key, env: "prod" }
 }
 function user.RootEnumMatch(s: user.Status) -> string  [expr] {
-  {  } match (s) { user.Status.Ok => "ok", user.Status.Failed => "failed", user.Status.Pending => "pending" }
+  {  } match (s) { Status.Ok => "ok", Status.Failed => "failed", Status.Pending => "pending" }
 }
 function user.RootEnumReturn() -> user.Status  [expr] {
   {  } Status.Ok
@@ -88,7 +88,7 @@ function user.auth.AuthConstruct(provider: string) -> user.auth.Config  [expr] {
   {  } user.auth.Config { provider: provider, secret: "s3cret" }
 }
 function user.auth.AuthEnumMatch(r: user.auth.Role) -> string  [expr] {
-  {  } match (r) { user.auth.Role.Admin => "admin", user.auth.Role.User => "user", user.auth.Role.Guest => "guest" }
+  {  } match (r) { Role.Admin => "admin", Role.User => "user", Role.Guest => "guest" }
 }
 function user.auth.AuthEnumReturn() -> user.auth.Role  [expr] {
   {  } Role.Admin
@@ -176,7 +176,7 @@ function user.llm.LlmConstruct(model: string) -> user.llm.Config  [expr] {
   {  } user.llm.Config { model: model, temperature: 0.7 }
 }
 function user.llm.LlmEnumMatch(s: user.llm.Status) -> string  [expr] {
-  {  } match (s) { user.llm.Status.Ready => "ready", user.llm.Status.Generating => "generating", user.llm.Status.Done => "done" }
+  {  } match (s) { Status.Ready => "ready", Status.Generating => "generating", Status.Done => "done" }
 }
 function user.llm.LlmEnumReturn() -> user.llm.Status  [expr] {
   {  } Status.Ready
@@ -242,7 +242,7 @@ function user.llm.openai.OpenAIConstruct(key: string) -> user.llm.openai.Client 
   {  } user.llm.openai.Client { api_key: key, org_id: "org-123" }
 }
 function user.llm.openai.OpenAIEnumMatch(m: user.llm.openai.Model) -> string  [expr] {
-  {  } match (m) { user.llm.openai.Model.GPT4o => "gpt4o", user.llm.openai.Model.GPT4oMini => "gpt4o-mini", user.llm.openai.Model.O3 => "o3" }
+  {  } match (m) { Model.GPT4o => "gpt4o", Model.GPT4oMini => "gpt4o-mini", Model.O3 => "o3" }
 }
 function user.llm.openai.OpenAIEnumReturn() -> user.llm.openai.Model  [expr] {
   {  } Model.GPT4o
@@ -263,7 +263,7 @@ function user.llm.openai.OpenAIMixedErrors(openai_err: user.llm.openai.Error, ro
   {  } openai_err.body
 }
 function user.llm.openai.OpenAIMixedModels(openai_model: user.llm.openai.Model, llm_model: root.llm.Model) -> string  [expr] {
-  {  } match (openai_model) { user.llm.openai.Model.GPT4o => "gpt4o", user.llm.openai.Model.GPT4oMini => "mini", user.llm.openai.Model.O3 => "o3" }
+  {  } match (openai_model) { Model.GPT4o => "gpt4o", Model.GPT4oMini => "mini", Model.O3 => "o3" }
 }
 function user.llm.openai.OpenAIThrowClass(x: int) -> string  [expr] {
   {  } match (x) { 0 => throw user.llm.openai.Error { status_code: 429, body: "rate limited" }, _ => "ok" }

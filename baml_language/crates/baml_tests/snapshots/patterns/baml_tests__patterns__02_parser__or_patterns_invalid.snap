@@ -1,0 +1,498 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_or_mismatched_bindings"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "Cat | Fish"
+          WORD "Cat"
+          PIPE "|"
+          WORD "Fish"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Cat"
+                  WORD "Cat"
+                L_BRACE "{"
+                PATTERN_FIELD "name"
+                  WORD "name"
+                R_BRACE "}"
+                PIPE "|"
+                TYPE_EXPR "Fish"
+                  WORD "Fish"
+                L_BRACE "{"
+                PATTERN_FIELD "freshwater"
+                  WORD "freshwater"
+                R_BRACE "}"
+            FAT_ARROW "=>"
+            STRING_LITERAL "matched"
+              QUOTE """
+              WORD "matched"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_or_missing_binding"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "Cat | Fish"
+          WORD "Cat"
+          PIPE "|"
+          WORD "Fish"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Cat"
+                  WORD "Cat"
+                L_BRACE "{"
+                PATTERN_FIELD "name"
+                  WORD "name"
+                R_BRACE "}"
+                PIPE "|"
+                TYPE_EXPR "Fish"
+                  WORD "Fish"
+            FAT_ARROW "=>"
+            STRING_LITERAL "matched"
+              QUOTE """
+              WORD "matched"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_or_type_then_destructure"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int | Cat"
+          WORD "int"
+          PIPE "|"
+          WORD "Cat"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "int"
+                  WORD "int"
+                PIPE "|"
+                TYPE_EXPR "Cat"
+                  WORD "Cat"
+                L_BRACE "{"
+                PATTERN_FIELD "name"
+                  WORD "name"
+                R_BRACE "}"
+            FAT_ARROW "=>"
+            WORD "name"
+          R_BRACE "}"
+        R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "IntBox"
+    L_BRACE "{"
+    FIELD
+      WORD "val"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "StrBox"
+    L_BRACE "{"
+    FIELD
+      WORD "val"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_or_same_name_different_type"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "IntBox | StrBox"
+          WORD "IntBox"
+          PIPE "|"
+          WORD "StrBox"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "IntBox"
+                  WORD "IntBox"
+                L_BRACE "{"
+                PATTERN_FIELD "val"
+                  WORD "val"
+                R_BRACE "}"
+                PIPE "|"
+                TYPE_EXPR "StrBox"
+                  WORD "StrBox"
+                L_BRACE "{"
+                PATTERN_FIELD "val"
+                  WORD "val"
+                R_BRACE "}"
+            FAT_ARROW "=>"
+            STRING_LITERAL "matched"
+              QUOTE """
+              WORD "matched"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_or_rebind"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "Cat | Fish"
+          WORD "Cat"
+          PIPE "|"
+          WORD "Fish"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Cat"
+                  WORD "Cat"
+                L_BRACE "{"
+                PATTERN_FIELD
+                  WORD "name"
+                  COLON ":"
+                  PATTERN
+                    PATTERN_ALT "let n"
+                      KW_LET "let"
+                      WORD "n"
+                R_BRACE "}"
+                PIPE "|"
+                TYPE_EXPR "Fish"
+                  WORD "Fish"
+                L_BRACE "{"
+                PATTERN_FIELD
+                  WORD "name"
+                  COLON ":"
+                  PATTERN
+                    PATTERN_ALT "let n"
+                      KW_LET "let"
+                      WORD "n"
+                R_BRACE "}"
+            FAT_ARROW "=>"
+            WORD "n"
+          R_BRACE "}"
+        R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "CatBox"
+    L_BRACE "{"
+    FIELD
+      WORD "pet"
+      TYPE_EXPR "Cat"
+        WORD "Cat"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "FishBox"
+    L_BRACE "{"
+    FIELD
+      WORD "pet"
+      TYPE_EXPR "Fish"
+        WORD "Fish"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_or_nested_destructure"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "CatBox | FishBox"
+          WORD "CatBox"
+          PIPE "|"
+          WORD "FishBox"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "CatBox"
+                  WORD "CatBox"
+                L_BRACE "{"
+                PATTERN_FIELD
+                  WORD "pet"
+                  COLON ":"
+                  PATTERN
+                    PATTERN_ALT
+                      TYPE_EXPR "Cat"
+                        WORD "Cat"
+                      L_BRACE "{"
+                      PATTERN_FIELD "name"
+                        WORD "name"
+                      R_BRACE "}"
+                R_BRACE "}"
+                PIPE "|"
+                TYPE_EXPR "FishBox"
+                  WORD "FishBox"
+                L_BRACE "{"
+                PATTERN_FIELD
+                  WORD "pet"
+                  COLON ":"
+                  PATTERN
+                    PATTERN_ALT
+                      TYPE_EXPR "Fish"
+                        WORD "Fish"
+                      L_BRACE "{"
+                      PATTERN_FIELD "name"
+                        WORD "name"
+                      R_BRACE "}"
+                R_BRACE "}"
+            FAT_ARROW "=>"
+            WORD "name"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_nonexistent_field"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "Cat"
+          WORD "Cat"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Cat"
+                  WORD "Cat"
+                L_BRACE "{"
+                PATTERN_FIELD "bogus"
+                  WORD "bogus"
+                R_BRACE "}"
+            FAT_ARROW "=>"
+            WORD "bogus"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_duplicate_field"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "Cat"
+          WORD "Cat"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Cat"
+                  WORD "Cat"
+                L_BRACE "{"
+                PATTERN_FIELD "name"
+                  WORD "name"
+                COMMA ","
+                PATTERN_FIELD "name"
+                  WORD "name"
+                R_BRACE "}"
+            FAT_ARROW "=>"
+            WORD "name"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_destructure_primitive"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "int"
+                  WORD "int"
+                L_BRACE "{"
+                PATTERN_FIELD "val"
+                  WORD "val"
+                R_BRACE "}"
+            FAT_ARROW "=>"
+            WORD "val"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_wildcard_field"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "Cat"
+          WORD "Cat"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Cat"
+                  WORD "Cat"
+                L_BRACE "{"
+                PATTERN_FIELD
+                  WORD "name"
+                  COLON ":"
+                  PATTERN
+                    PATTERN_ALT
+                      TYPE_EXPR "_"
+                        WORD "_"
+                R_BRACE "}"
+            FAT_ARROW "=>"
+            STRING_LITERAL "matched"
+              QUOTE """
+              WORD "matched"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

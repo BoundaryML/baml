@@ -171,7 +171,7 @@ class user.MaybeBox {
 function user.MaybeBox.get_or_default(self: user.MaybeBox, default: unknown) -> unknown throws never {
   { : T
     match (self.value : T?) : T
-      v: T =>
+      let v: T =>
         v : T
       _: null =>
         default : T

@@ -6,11 +6,11 @@ class user.Broken {
   field: int
 }
 function user.BadUnionPattern(x: int | bool) -> string  [expr] {
-  {  } match (x) { a: int | user.b => <missing>, bool => "bad" }
+  {  } match (x) { let a: int | let b: bool => "bad" }
 }
 function user.Invalid() -> ?  [expr] {
   {  }
 }
 function user.MixedLiteralAndTyped(x: int) -> string  [expr] {
-  {  } match (x) { 42 | n: int => "mixed" }
+  {  } match (x) { 42 | let n: int => "mixed" }
 }

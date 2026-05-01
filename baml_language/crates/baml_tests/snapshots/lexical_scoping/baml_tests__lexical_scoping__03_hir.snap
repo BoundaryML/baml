@@ -12,7 +12,7 @@ function user.declared_type_restored() -> string  [expr] {
   { let x: string = "outer"; { let x: int = 1 } } x
 }
 function user.for_loop_restores_outer() -> int  [expr] {
-  { let x = 1; for x in [2, 3] { x } } x
+  { let x = 1; for let x in [2, 3] { x } } x
 }
 function user.initializer_uses_previous() -> int  [expr] {
   { let x = 1; let x = x Add 1 } x

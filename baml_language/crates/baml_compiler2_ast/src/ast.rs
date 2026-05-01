@@ -321,8 +321,6 @@ pub type StmtId = Idx<Stmt>;
 pub type PatId = Idx<Pattern>;
 pub type MatchArmId = Idx<MatchArm>;
 pub type CatchArmId = Idx<CatchArm>;
-pub type TypeAnnotId = Idx<TypeExpr>;
-
 /// Full expression body — owned arena of expressions, statements,
 /// and patterns. Modeled after `ExprBody` in `body.rs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -332,8 +330,6 @@ pub struct ExprBody {
     pub patterns: Arena<Pattern>,
     pub match_arms: Arena<MatchArm>,
     pub catch_arms: Arena<CatchArm>,
-    /// Type annotations on let bindings etc.
-    pub type_annotations: Arena<TypeExpr>,
     /// Root expression of the function body.
     pub root_expr: Option<ExprId>,
 }
@@ -421,7 +417,6 @@ pub struct AstSourceMap {
     pub stmt_spans: Arena<TextRange>,
     pub pattern_spans: Arena<TextRange>,
     pub match_arm_spans: Arena<TextRange>,
-    pub type_annotation_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
     /// For `MemberAccess` expressions, the span of just the member name (after the dot).
     pub member_access_member_spans: HashMap<ExprId, TextRange>,
@@ -437,7 +432,6 @@ impl AstSourceMap {
             stmt_spans: Arena::new(),
             pattern_spans: Arena::new(),
             match_arm_spans: Arena::new(),
-            type_annotation_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
             member_access_member_spans: HashMap::new(),
             path_segment_spans: HashMap::new(),
@@ -506,16 +500,6 @@ impl AstSourceMap {
             .unwrap_or_default()
     }
 
-    /// Look up the source span of a type annotation by its `TypeAnnotId`.
-    pub fn type_annotation_span(&self, id: TypeAnnotId) -> TextRange {
-        let raw: u32 = id.into_raw().into_u32();
-        self.type_annotation_spans
-            .iter()
-            .nth(raw as usize)
-            .map(|(_, &span)| span)
-            .unwrap_or_default()
-    }
-
     /// Look up the source span of a catch arm by its `CatchArmId`.
     pub fn catch_arm_span(&self, id: CatchArmId) -> TextRange {
         let raw: u32 = id.into_raw().into_u32();
@@ -550,7 +534,6 @@ pub enum Expr {
     },
     Match {
         scrutinee: ExprId,
-        scrutinee_type: Option<TypeAnnotId>,
         arms: Vec<MatchArmId>,
     },
     Catch {
@@ -633,7 +616,6 @@ pub enum Stmt {
     Expr(ExprId),
     Let {
         pattern: PatId,
-        type_annotation: Option<TypeAnnotId>,
         initializer: Option<ExprId>,
         is_watched: bool,
         origin: LetOrigin,
@@ -684,41 +666,32 @@ pub enum Stmt {
 
 /// Patterns — modeled after `Pattern` in `body.rs`.
 ///
-/// A pattern is `kind` plus an optional trailing `: T` narrow per BEP-015.
-/// Narrow currently carries the type-ascription part of `let x: T = ...`
-/// (and is also where future second-colon narrowing on structural patterns
-/// will land). All other shape lives in [`PatternKind`].
+/// A pattern is `kind` plus an optional `: <pat>` chain per BEP-015.
+/// Each colon introduces another pattern in the chain, enabling recursive
+/// refinement: `let x: int`, `let x: Cat { name }: Serializable`, etc.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pattern {
     pub kind: PatternKind,
-    /// Trailing `: T` narrow. For irrefutable `let`, the scrutinee's static
-    /// type must equal this type; checked in TIR, not at the AST level.
-    pub narrow: Option<TypeExpr>,
+    /// Chained pattern after `:`. Each colon-separated position in the
+    /// source becomes a link in this chain.
+    pub chain: Option<PatId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PatternKind {
     /// `_` — wildcard. Always irrefutable. Binds nothing.
     Wildcard,
-    /// `x` (with `inner: None`) or `let x: <inner>` (with `inner: Some(_)`).
-    /// Binds `name` to the matched value; if `inner` is set, the value must
-    /// also satisfy the inner pattern.
-    Bind { name: Name, inner: Option<PatId> },
-    /// `User { f1, f2: <pat>, ... }` — class destructure. Future variant,
-    /// not yet emitted by the parser.
+    /// `let x` — variable binding. Further refinements (type annotations,
+    /// class destructures) are attached via the pattern's `chain`.
+    Bind { name: Name },
+    /// `User { f1, f2: <pat>, ... }` — class destructure.
     Class { class: Name, fields: Vec<FieldPat> },
-    /// Bare type-match in pattern position (e.g. an arm `int =>`). Future
-    /// variant, not yet emitted by the parser.
+    /// Type-match in pattern position. Covers bare types (`int =>`), literals
+    /// (`42 =>`, `"hi" =>`), null, enum variants (`Status.Active =>`), and
+    /// unions (`int | string =>`). The TIR resolves the `TypeExpr` to determine
+    /// match semantics.
     Type(TypeExpr),
-    /// `42`, `"hi"`, `true`, etc. Refutable.
-    Literal(Literal),
-    /// `null` literal pattern. Refutable.
-    Null,
-    /// `Status.Active` or `baml.panics.DivideByZero` style enum variant.
-    /// `enum_name` carries the dotted path as proper segments (no string
-    /// round-tripping); the trailing identifier is `variant`. Refutable.
-    EnumVariant { enum_name: Vec<Name>, variant: Name },
-    /// `a | b | c` (formerly `Union`). Refutable in general (each part may be).
+    /// `a | b | c` — or-pattern. Refutable in general (each part may be).
     Or(Vec<PatId>),
 }
 
@@ -728,14 +701,14 @@ pub enum PatternKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldPat {
     pub field: Name,
-    pub pat: Option<PatId>,
+    pub pat: PatId,
 }
 
 impl Pattern {
     pub fn wildcard() -> Self {
         Pattern {
             kind: PatternKind::Wildcard,
-            narrow: None,
+            chain: None,
         }
     }
 
@@ -746,53 +719,22 @@ impl Pattern {
             return Pattern::wildcard();
         }
         Pattern {
-            kind: PatternKind::Bind { name, inner: None },
-            narrow: None,
+            kind: PatternKind::Bind { name },
+            chain: None,
         }
     }
 
-    /// `Bind { name }` with `narrow: Some(ty)` — the legacy
-    /// `Pattern::TypedBinding { name, ty }` shape. Same `_`-canonicalization
-    /// rule as [`Pattern::binding`]: `typed_binding("_", T)` is a wildcard
-    /// carrying `narrow: Some(T)` (so `let _: int = e` still asserts `int`).
-    pub fn typed_binding(name: Name, ty: TypeExpr) -> Self {
-        if name.as_str() == "_" {
-            return Pattern {
-                kind: PatternKind::Wildcard,
-                narrow: Some(ty),
-            };
-        }
+    pub fn type_match(ty: TypeExpr) -> Self {
         Pattern {
-            kind: PatternKind::Bind { name, inner: None },
-            narrow: Some(ty),
-        }
-    }
-
-    pub fn null() -> Self {
-        Pattern {
-            kind: PatternKind::Null,
-            narrow: None,
-        }
-    }
-
-    pub fn literal(lit: Literal) -> Self {
-        Pattern {
-            kind: PatternKind::Literal(lit),
-            narrow: None,
-        }
-    }
-
-    pub fn enum_variant(enum_name: Vec<Name>, variant: Name) -> Self {
-        Pattern {
-            kind: PatternKind::EnumVariant { enum_name, variant },
-            narrow: None,
+            kind: PatternKind::Type(ty),
+            chain: None,
         }
     }
 
     pub fn or(parts: Vec<PatId>) -> Self {
         Pattern {
             kind: PatternKind::Or(parts),
-            narrow: None,
+            chain: None,
         }
     }
 
@@ -804,30 +746,55 @@ impl Pattern {
         }
     }
 
+    /// Collect all binding names introduced by this pattern (recursively).
+    pub fn collect_binding_names(&self, body: &ExprBody) -> std::collections::BTreeSet<Name> {
+        let mut names = std::collections::BTreeSet::new();
+        self.collect_binding_names_into(body, &mut names);
+        names
+    }
+
+    fn collect_binding_names_into(
+        &self,
+        body: &ExprBody,
+        names: &mut std::collections::BTreeSet<Name>,
+    ) {
+        match &self.kind {
+            PatternKind::Wildcard | PatternKind::Type(_) => {}
+            PatternKind::Bind { name } => {
+                names.insert(name.clone());
+            }
+            PatternKind::Class { fields, .. } => {
+                for f in fields {
+                    body.patterns[f.pat].collect_binding_names_into(body, names);
+                }
+            }
+            PatternKind::Or(parts) => {
+                for part in parts {
+                    body.patterns[*part].collect_binding_names_into(body, names);
+                }
+            }
+        }
+        if let Some(chain_id) = self.chain {
+            body.patterns[chain_id].collect_binding_names_into(body, names);
+        }
+    }
+
     /// True iff this pattern is structurally guaranteed to match every value
     /// at its position. **Pure structural check** — does not consider the
     /// scrutinee's static type. The TIR layer is responsible for verifying
-    /// `narrow` and `Class`/`Type` assertions against the scrutinee type.
+    /// `chain` and `Class`/`Type` assertions against the scrutinee type.
     ///
     /// Used by the let-stmt validator to reject patterns that can fail at
     /// runtime; refutable patterns belong in `match` / `if let` / `let-else`.
     pub fn is_irrefutable(&self, body: &ExprBody) -> bool {
         match &self.kind {
             PatternKind::Wildcard => true,
-            PatternKind::Bind { inner, .. } => {
-                inner.is_none_or(|id| body.patterns[id].is_irrefutable(body))
-            }
-            PatternKind::Class { fields, .. } => fields.iter().all(|f| {
-                f.pat
-                    .is_none_or(|id| body.patterns[id].is_irrefutable(body))
-            }),
-            // `Type(T)` is structurally fine; whether the value is actually
-            // a `T` is a typing concern, not a pattern concern.
+            PatternKind::Bind { .. } => true,
+            PatternKind::Class { fields, .. } => fields
+                .iter()
+                .all(|f| body.patterns[f.pat].is_irrefutable(body)),
             PatternKind::Type(_) => true,
-            PatternKind::Literal(_)
-            | PatternKind::Null
-            | PatternKind::EnumVariant { .. }
-            | PatternKind::Or(_) => false,
+            PatternKind::Or(_) => false,
         }
     }
 }

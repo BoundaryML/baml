@@ -88,7 +88,7 @@ class Client {
     planner_state: PlannerState,
   ) -> OrchestrationStep[] {
     match (self.retry) {
-      r: RetryPolicy => {
+      let r: RetryPolicy => {
         let result: OrchestrationStep[] = [];
         let current_delay = r.initial_delay_ms + 0.0;
 
@@ -125,7 +125,7 @@ class Client {
     inherited_delay_ms: int,
   ) -> Stream<T, S> {
     match (self.retry) {
-      r: RetryPolicy => {
+      let r: RetryPolicy => {
         let current_delay = r.initial_delay_ms + 0.0
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
@@ -229,7 +229,7 @@ class Client {
     inherited_delay_ms: int,
   ) -> T {
     match (self.retry) {
-      r: RetryPolicy => {
+      let r: RetryPolicy => {
         let current_delay = r.initial_delay_ms + 0.0
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
@@ -484,7 +484,7 @@ class Stream<T, S> {
         _: null => {
           return root.stream.StreamFinished {};
         }
-        next: string => next,
+        let next: string => next,
       };
       self._acc.add_events(next);
       if (self._acc.is_done()) {
@@ -498,7 +498,7 @@ class Stream<T, S> {
         _: root.stream.StreamNoYield => {
           continue;
         }
-        parsed: S => {
+        let parsed: S => {
           return parsed;
         }
       }
@@ -514,7 +514,7 @@ class Stream<T, S> {
         _: null => {
           break;
         }
-        next: string => next,
+        let next: string => next,
       };
       self._acc.add_events(next);
       if (self._acc.is_done()) {
@@ -526,7 +526,7 @@ class Stream<T, S> {
       null => {
         throw root.errors.LlmClientError { message: "Streaming finished without finish_reason" };
       },
-      reason: string => self._client.validate_finish_reason(reason),
+      let reason: string => self._client.validate_finish_reason(reason),
     }
 
     let content = self._acc.content();

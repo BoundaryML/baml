@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 23633
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: did you mean `user?.profile?.name`? `user?.profile.name` does not handle the case when `user?.profile` is null

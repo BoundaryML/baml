@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 23967
 ---
 === TIR2 ===
 class user.Config {

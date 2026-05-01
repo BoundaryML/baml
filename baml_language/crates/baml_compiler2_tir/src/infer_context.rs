@@ -10,7 +10,7 @@
 use std::{cell::RefCell, fmt};
 
 use baml_base::{FileId, Name, SourceFile};
-use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId, TypeAnnotId};
+use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId};
 use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, FunctionLoc},
@@ -155,6 +155,21 @@ pub enum TirTypeError {
         /// LHS expression text
         lhs: String,
     },
+    /// Or-pattern alternatives bind different sets of variables.
+    OrPatternBindingMismatch {
+        missing: Vec<Name>,
+        extra: Vec<Name>,
+    },
+    /// Or-pattern alternatives bind the same variable with different types.
+    OrPatternBindingTypeMismatch { name: Name, first: Ty, other: Ty },
+    /// Class destructure references a field that does not exist on the class.
+    NoSuchDestructureField { class_name: Name, field_name: Name },
+    /// Class destructure lists the same field more than once.
+    DuplicateDestructureField { class_name: Name, field_name: Name },
+    /// Same identifier bound more than once in a single pattern.
+    DuplicatePatternBinding { name: Name },
+    /// Class destructure used on a type that is not a class (e.g. `int { val }`).
+    DestructureOnNonClass { ty_name: Name },
     /// Member access (`.field` or `[index]`) on a nullable type without `?.`.
     /// Occurs when parentheses break an optional chain: `(a?.b).c`.
     NullableMemberAccess {
@@ -398,6 +413,61 @@ impl fmt::Display for TirTypeError {
                     "did you mean `{lhs}`? `... ?? null` is unnecessary because `{lhs}` is already nullable"
                 )
             }
+            TirTypeError::OrPatternBindingMismatch { missing, extra } => {
+                let mut parts = Vec::new();
+                if !missing.is_empty() {
+                    let names: Vec<_> = missing.iter().map(|n| format!("`{n}`")).collect();
+                    parts.push(format!(
+                        "not bound in all alternatives: {}",
+                        names.join(", ")
+                    ));
+                }
+                if !extra.is_empty() {
+                    let names: Vec<_> = extra.iter().map(|n| format!("`{n}`")).collect();
+                    parts.push(format!(
+                        "only bound in some alternatives: {}",
+                        names.join(", ")
+                    ));
+                }
+                write!(
+                    f,
+                    "or-pattern alternatives must bind the same variables; {}",
+                    parts.join("; ")
+                )
+            }
+            TirTypeError::OrPatternBindingTypeMismatch { name, first, other } => {
+                write!(
+                    f,
+                    "or-pattern binding `{name}` has type `{first}` in one alternative but `{other}` in another"
+                )
+            }
+            TirTypeError::NoSuchDestructureField {
+                class_name,
+                field_name,
+            } => {
+                write!(f, "class `{class_name}` has no field `{field_name}`")
+            }
+            TirTypeError::DuplicateDestructureField {
+                class_name,
+                field_name,
+            } => {
+                write!(
+                    f,
+                    "field `{field_name}` listed more than once in `{class_name}` destructure"
+                )
+            }
+            TirTypeError::DuplicatePatternBinding { name } => {
+                write!(
+                    f,
+                    "identifier `{name}` is bound more than once in the same pattern"
+                )
+            }
+            TirTypeError::DestructureOnNonClass { ty_name } => {
+                write!(
+                    f,
+                    "cannot destructure `{ty_name}`: only classes can be destructured"
+                )
+            }
             TirTypeError::NullableMemberAccess { base, member, expr } => {
                 // member is ".name" or "[...]" — construct suggestion by inserting ?
                 // e.g. base="a", member=".name" → "a?.name"
@@ -469,7 +539,6 @@ pub enum DiagnosticLocation {
     /// `ExprSegment(path_id, segment_idx)` resolves to `path_segment_span(path_id, segment_idx)`.
     ExprSegment(ExprId, usize),
     Stmt(StmtId),
-    TypeAnnot(TypeAnnotId),
     Span(TextRange),
 }
 
@@ -511,9 +580,6 @@ impl<'db> TirDiagnostic<'db> {
             DiagnosticLocation::Stmt(id) => {
                 source_map.map(|sm| sm.stmt_span(*id)).unwrap_or_default()
             }
-            DiagnosticLocation::TypeAnnot(id) => source_map
-                .map(|sm| sm.type_annotation_span(*id))
-                .unwrap_or_default(),
             DiagnosticLocation::Span(range) => *range,
         };
 
@@ -728,19 +794,6 @@ impl<'db> InferContext<'db> {
                 severity: DiagnosticSeverity::Error,
                 primary: DiagnosticLocation::ExprSegment(at, segment_idx),
                 related,
-            });
-    }
-
-    /// Report a type error at a type annotation location.
-    pub fn report_at_type_annot(&self, error: TirTypeError, at: TypeAnnotId) {
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::TypeAnnot(at),
-                related: Vec::new(),
             });
     }
 

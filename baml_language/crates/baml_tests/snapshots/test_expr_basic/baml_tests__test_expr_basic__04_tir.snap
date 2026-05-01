@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 33921
 ---
 === TIR2 ===
 function user.$init_test_24(registry: testing.TestCollector) -> ? throws never {

@@ -316,6 +316,12 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::SuggestNullCoalesce { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::NullCoalesceWithNull { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::NullableMemberAccess { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::OrPatternBindingMismatch { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::OrPatternBindingTypeMismatch { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::NoSuchDestructureField { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::DuplicateDestructureField { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::DuplicatePatternBinding { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::DestructureOnNonClass { .. } => DiagnosticId::TypeMismatch,
     }
 }
 

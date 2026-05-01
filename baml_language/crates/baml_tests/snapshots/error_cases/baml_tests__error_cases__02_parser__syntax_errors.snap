@@ -48,17 +48,20 @@ SOURCE_FILE
             R_PAREN ")"
             L_BRACE "{"
             MATCH_ARM
-              MATCH_PATTERN
-                WORD "a"
-                COLON ":"
-                TYPE_EXPR "int | b"
-                  WORD "int"
-                  PIPE "|"
+              PATTERN
+                PATTERN_ALT
+                  KW_LET "let"
+                  WORD "a"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                PIPE "|"
+                PATTERN_ALT
+                  KW_LET "let"
                   WORD "b"
-              COLON ":"
-            MATCH_ARM
-              MATCH_PATTERN "bool"
-                WORD "bool"
+                  COLON ":"
+                  TYPE_EXPR "bool"
+                    WORD "bool"
               FAT_ARROW "=>"
               STRING_LITERAL "bad"
                 QUOTE """
@@ -90,13 +93,17 @@ SOURCE_FILE
             R_PAREN ")"
             L_BRACE "{"
             MATCH_ARM
-              MATCH_PATTERN
-                INTEGER_LITERAL "42"
+              PATTERN
+                PATTERN_ALT
+                  TYPE_EXPR "42"
+                    INTEGER_LITERAL "42"
                 PIPE "|"
-                WORD "n"
-                COLON ":"
-                TYPE_EXPR "int"
-                  WORD "int"
+                PATTERN_ALT
+                  KW_LET "let"
+                  WORD "n"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
               FAT_ARROW "=>"
               STRING_LITERAL "mixed"
                 QUOTE """
@@ -125,26 +132,6 @@ Error: Expected return type (->), found '{'
    │ 
    │ Note: Error code: E0010
 ───╯
-
-Error: Expected '=>' after pattern, found ':'
-    ╭─[ syntax_errors.baml:18:19 ]
-    │
- 18 │         a: int | b: bool => "bad"
-    │                   ┬  
-    │                   ╰── Expected '=>' after pattern, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected expression, found ':'
-    ╭─[ syntax_errors.baml:18:19 ]
-    │
- 18 │         a: int | b: bool => "bad"
-    │                   ┬  
-    │                   ╰── Expected expression, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
 
 Error: Expected '}', found EOF
     ╭─[ syntax_errors.baml:27:1 ]

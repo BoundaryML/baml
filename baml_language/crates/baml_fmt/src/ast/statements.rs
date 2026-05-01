@@ -169,16 +169,39 @@ impl Printable for ExpressionStmt {
     }
 }
 
+/// A `: <type>` annotation on a `let` binding: the colon, the first type, and
+/// any chain-local `| type` follow-ons.
+pub type LetTypeAnnotation = (t::Colon, Type, Vec<(t::Pipe, Type)>);
+
 /// Corresponds to a [`SyntaxKind::LET_STMT`] node or a [`SyntaxKind::WATCH_LET`] node.
 #[derive(Debug)]
 pub struct LetStmt {
     pub watch: Option<t::Watch>,
     pub keyword: t::Let,
     pub name: t::Word,
-    pub type_annotation: Option<(t::Colon, Type)>,
+    /// A `: <type>` annotation, possibly followed by chain-local `| type` alternatives.
+    /// Stored as the colon + the first type + any `(pipe, type)` follow-ons.
+    pub type_annotation: Option<LetTypeAnnotation>,
     pub initializer: Option<(t::Equals, Expression)>,
     /// Not required in some contexts like for-let loops
     pub semicolon: Option<t::Semicolon>,
+}
+
+fn read_let_type_annotation(
+    it: &mut SyntaxNodeIter,
+) -> Result<Option<LetTypeAnnotation>, StrongAstError> {
+    let Some(colon) = it.next_if_kind(SyntaxKind::COLON) else {
+        return Ok(None);
+    };
+    let colon = t::Colon::from_cst(colon)?;
+    let first: Type = it.expect_parse()?;
+    let mut alts = Vec::new();
+    while let Some(pipe_elem) = it.next_if_kind(SyntaxKind::PIPE) {
+        let pipe = t::Pipe::from_cst(pipe_elem)?;
+        let ty: Type = it.expect_parse()?;
+        alts.push((pipe, ty));
+    }
+    Ok(Some((colon, first, alts)))
 }
 
 impl FromCST for LetStmt {
@@ -200,15 +223,25 @@ impl FromCST for LetStmt {
             None
         };
 
-        let keyword = it.expect_parse()?;
-
-        let name = it.expect_parse()?;
-
-        let type_annotation = if let Some(colon) = it.next_if_kind(SyntaxKind::COLON) {
-            Some((t::Colon::from_cst(colon)?, it.expect_parse()?))
-        } else {
-            None
-        };
+        // The parser wraps KW_LET, WORD, and optional COLON+TYPE_EXPR inside a
+        // PATTERN > PATTERN_ALT node hierarchy. Dig into it.
+        let (keyword, name, type_annotation) =
+            if let Some(pattern_elem) = it.next_if_kind(SyntaxKind::PATTERN) {
+                let pattern_node = StrongAstError::assert_is_node(pattern_elem)?;
+                let mut pit = SyntaxNodeIter::new(&pattern_node);
+                let alt_elem = pit.expect_next("PATTERN_ALT")?;
+                let alt_node = StrongAstError::assert_is_node(alt_elem)?;
+                let mut pit = SyntaxNodeIter::new(&alt_node);
+                let kw = pit.expect_parse()?;
+                let nm = pit.expect_parse()?;
+                let ta = read_let_type_annotation(&mut pit)?;
+                (kw, nm, ta)
+            } else {
+                let kw = it.expect_parse()?;
+                let nm = it.expect_parse()?;
+                let ta = read_let_type_annotation(&mut it)?;
+                (kw, nm, ta)
+            };
 
         let initializer = if let Some(equals) = it.next_if_kind(SyntaxKind::EQUALS) {
             let value = it.expect_next("an expression")?;
@@ -244,7 +277,7 @@ impl Printable for LetStmt {
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
 
-        if let Some((colon, ty)) = &self.type_annotation {
+        if let Some((colon, ty, or_alts)) = &self.type_annotation {
             // No trivia between name and `:`, but YES between `:` and Type
             let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
             printer.print_raw_token(colon);
@@ -253,9 +286,16 @@ impl Printable for LetStmt {
             let ty_leading = printer.trivia.get_leading_for_element(ty);
             printer.print_trivia_squished(ty_leading);
             multi_lined |= printer.print(ty, shape.clone()).multi_lined;
+            for (pipe, alt_ty) in or_alts {
+                printer.print_str(" ");
+                printer.print_raw_token(pipe);
+                printer.print_str(" ");
+                multi_lined |= printer.print(alt_ty, shape.clone()).multi_lined;
+            }
             // Type trailing trivia: only if more children follow
             if self.initializer.is_some() || self.semicolon.is_some() {
-                let ty_trailing = printer.trivia.get_trailing_for_element(ty);
+                let last_ty = or_alts.last().map(|(_, t)| t).unwrap_or(ty);
+                let ty_trailing = printer.trivia.get_trailing_for_element(last_ty);
                 printer.print_trivia_squished(ty_trailing);
             }
         }
@@ -300,8 +340,11 @@ impl Printable for LetStmt {
         if let Some((_, expr)) = &self.initializer {
             return expr.rightmost_token();
         }
-        if let Some((_, ty)) = &self.type_annotation {
-            return ty.rightmost_token();
+        if let Some((_, ty, or_alts)) = &self.type_annotation {
+            return or_alts
+                .last()
+                .map(|(_, t)| t.rightmost_token())
+                .unwrap_or_else(|| ty.rightmost_token());
         }
         self.name.span()
     }
@@ -397,11 +440,28 @@ impl FromCST for ForStmt {
 
         let open_paren = it.expect_parse()?;
 
-        let let_stmt = it.expect_node_of_kind(SyntaxKind::LET_STMT)?; // does not allow WATCH_LET
-        let let_stmt = LetStmt::from_cst(SyntaxElement::Node(let_stmt))?;
+        // Iterator-style emits PATTERN directly (`for (let x in expr)`),
+        // C-style emits a full LET_STMT (`for (let x = 0; cond; update)`).
+        let head_elem = it.expect_next("PATTERN or LET_STMT")?;
+        let head_kind = head_elem.kind();
 
-        let args = if let Some(kw_in) = it.next_if_kind(SyntaxKind::KW_IN) {
-            // for-in
+        let args = if head_kind == SyntaxKind::PATTERN {
+            // for-in: head is PATTERN, then IN, then expr.
+            let pattern_node = StrongAstError::assert_is_node(head_elem)?;
+            let mut pit = SyntaxNodeIter::new(&pattern_node);
+            let alt_elem = pit.expect_next("PATTERN_ALT")?;
+            let alt_node = StrongAstError::assert_is_node(alt_elem)?;
+            let mut pit = SyntaxNodeIter::new(&alt_node);
+            let kw_let: t::Let = pit.expect_parse()?;
+            let name: t::Word = pit.expect_parse()?;
+
+            let kw_in = it.next_if_kind(SyntaxKind::KW_IN).ok_or_else(|| {
+                StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "`in` keyword".into(),
+                    found: SyntaxKind::ERROR_TOKEN,
+                    at: pattern_node.text_range(),
+                }
+            })?;
             let expr = it.expect_next("iterator expression")?;
             let expression = Expression::from_cst(expr)?;
 
@@ -409,13 +469,16 @@ impl FromCST for ForStmt {
 
             ForArgs::Iterator(ForIteratorArgs {
                 open_paren,
-                let_stmt,
+                keyword: kw_let,
+                name,
                 in_keyword: t::In::from_cst(kw_in)?,
                 expression,
                 close_paren,
             })
         } else {
-            // C-style
+            // C-style: head is LET_STMT.
+            let let_stmt = LetStmt::from_cst(head_elem)?;
+
             let condition = it.expect_next("an expression")?;
             let condition = Expression::from_cst(condition)?;
 
@@ -426,14 +489,14 @@ impl FromCST for ForStmt {
 
             let close_paren = it.expect_parse()?;
 
-            ForArgs::CStyle(ForCStyleArgs {
+            ForArgs::CStyle(Box::new(ForCStyleArgs {
                 open_paren,
                 init: let_stmt,
                 condition,
                 semicolon,
                 update: Box::new(update),
                 close_paren,
-            })
+            }))
         };
 
         // BLOCK_EXPR
@@ -475,7 +538,7 @@ impl Printable for ForStmt {
 #[derive(Debug)]
 pub enum ForArgs {
     Iterator(ForIteratorArgs),
-    CStyle(ForCStyleArgs),
+    CStyle(Box<ForCStyleArgs>),
 }
 
 impl Printable for ForArgs {
@@ -639,7 +702,8 @@ impl Printable for ForCStyleArgs {
 #[derive(Debug)]
 pub struct ForIteratorArgs {
     pub open_paren: t::LParen,
-    pub let_stmt: LetStmt,
+    pub keyword: t::Let,
+    pub name: t::Word,
     pub in_keyword: t::In,
     pub expression: Expression,
     pub close_paren: t::RParen,
@@ -662,17 +726,13 @@ impl PrintMultiLine for ForIteratorArgs {
         printer.print_trivia_all_trailing_for(self.open_paren.span());
         printer.print_newline();
 
-        let let_stmt_leading = printer.trivia.get_leading_for_element(&self.let_stmt);
-        printer.print_trivia_with_newline(let_stmt_leading, inner_shape.indent);
+        let kw_leading = printer.trivia.get_for_range_split(self.keyword.span()).0;
+        printer.print_trivia_with_newline(kw_leading, inner_shape.indent);
         printer.print_spaces(inner_shape.indent);
 
-        if let Some(watch) = &self.let_stmt.watch {
-            printer.print_raw_token(watch);
-            printer.print_spaces(1);
-        }
-        printer.print_raw_token(&self.let_stmt.keyword);
+        printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
-        printer.print_raw_token(&self.let_stmt.name);
+        printer.print_raw_token(&self.name);
         printer.print_str(" ");
         printer.print_raw_token(&self.in_keyword);
         printer.print_spaces(1);
@@ -706,13 +766,9 @@ impl ForIteratorArgs {
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
         printer.try_print_trivia_single_line_squished(open_trailing)?;
 
-        if let Some(watch) = &self.let_stmt.watch {
-            printer.print_raw_token(watch);
-            printer.print_spaces(1);
-        }
-        printer.print_raw_token(&self.let_stmt.keyword);
+        printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
-        printer.print_raw_token(&self.let_stmt.name);
+        printer.print_raw_token(&self.name);
         printer.print_str(" ");
         printer.print_raw_token(&self.in_keyword);
         printer.print_str(" ");

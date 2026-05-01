@@ -1,0 +1,559 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.accept_foo(f: Foo) -> int {
+    load_var f
+    load_field .a
+    return
+}
+
+function user.test_deep_destructure(x: Outer) -> string {
+    load_var x
+    load_field .middle
+    load_field .inner
+    load_field .value
+    return
+}
+
+function user.test_destructure_primitive(x: int) -> int {
+    load_var x
+    pop 1
+    load_const false
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _0
+    return
+
+  L1:
+    load_const "unresolved local: val"
+    call baml.sys.panic
+    pop 1
+    jump L2
+
+  L2:
+    unreachable
+}
+
+function user.test_duplicate_field(x: Cat) -> string {
+    load_var x
+    is_type Cat
+    pop_jump_if_false L0
+    load_var x
+    load_field .name
+
+  L0:
+    return
+}
+
+function user.test_empty_destructure(x: Animal) -> string {
+    load_var x
+    is_type Animal
+    pop_jump_if_false L0
+
+  L0:
+    load_const "matched"
+    return
+}
+
+function user.test_let_destructure_chain() -> string {
+    alloc_instance Animal
+    load_const "Rex"
+    init_field .name
+    load_field .name
+    return
+}
+
+function user.test_let_destructure_multiple_fields() -> string {
+    alloc_instance Dog
+    load_const "Rex"
+    init_field .name
+    load_const "Lab"
+    init_field .breed
+    store_var x
+    load_var x
+    load_field .name
+    load_const " "
+    bin_op +
+    load_var x
+    load_field .breed
+    bin_op +
+    return
+}
+
+function user.test_let_destructure_use_field() -> string {
+    alloc_instance Animal
+    load_const "Rex"
+    init_field .name
+    load_field .name
+    return
+}
+
+function user.test_match_destructure(x: Animal) -> string {
+    load_var x
+    is_type Animal
+    pop_jump_if_false L0
+    load_var x
+    load_field .name
+
+  L0:
+    return
+}
+
+function user.test_match_destructure_multi(x: Dog) -> string {
+    load_var x
+    is_type Dog
+    pop_jump_if_false L0
+    load_var x
+    load_field .name
+    load_const " the "
+    bin_op +
+    load_var x
+    load_field .breed
+    bin_op +
+
+  L0:
+    return
+}
+
+function user.test_nested_destructure_let(x: Outer) -> string {
+    load_var x
+    load_field .middle
+    store_var _3
+    load_var _3
+    load_field .inner
+    load_field .value
+    load_const ":"
+    bin_op +
+    load_var _3
+    load_field .tag
+    bin_op +
+    return
+}
+
+function user.test_nested_destructure_match(x: Outer) -> string {
+    load_var x
+    is_type Outer
+    pop_jump_if_false L0
+    load_var x
+    load_field .label
+    load_const "/"
+    bin_op +
+    load_var x
+    load_field .middle
+    load_field .tag
+    bin_op +
+
+  L0:
+    return
+}
+
+function user.test_nested_destructure_multi_arm(x: Animal | Outer) -> string {
+    load_var x
+    is_type Outer
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    is_type Animal
+    pop_jump_if_false L2
+    load_var x
+    load_field .0
+    jump L2
+
+  L1:
+    load_var x
+    load_field .0
+    load_field .tag
+
+  L2:
+    return
+}
+
+function user.test_nested_or_in_field(x: Wrapper) -> string {
+    load_var x
+    load_field .pet
+    store_var _3
+    load_var _3
+    is_type Cat
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _3
+    is_type Fish
+    pop_jump_if_false L2
+    load_var _3
+    load_field .0
+    store_var name
+    jump L2
+
+  L1:
+    load_var _3
+    load_field .0
+    store_var name
+
+  L2:
+    load_var name
+    return
+}
+
+function user.test_nonexistent_field(x: Cat) -> string {
+    load_var x
+    is_type Cat
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _0
+    return
+
+  L1:
+    load_const "unresolved local: bogus"
+    call baml.sys.panic
+    pop 1
+    jump L2
+
+  L2:
+    unreachable
+}
+
+function user.test_optional_field_destructure(x: MaybeNamed) -> string? {
+    load_var x
+    is_type MaybeNamed
+    pop_jump_if_false L0
+    load_var x
+    load_field .name
+
+  L0:
+    return
+}
+
+function user.test_or_let_union_type() -> int {
+    alloc_instance Bar
+    load_const 42
+    init_field .a
+    store_var x
+    load_var x
+    is_type Foo
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    is_type Bar
+    pop_jump_if_false L1
+    load_var x
+    load_field .0
+    store_var a
+
+  L1:
+    load_var x
+    call user.accept_foo
+    return
+}
+
+function user.test_or_mismatched_bindings(x: Cat | Fish) -> string {
+    load_var x
+    is_type Cat
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    is_type Fish
+    pop_jump_if_false L3
+
+  L1:
+    load_var x
+    is_type Cat
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var x
+    is_type Fish
+    pop_jump_if_false L3
+
+  L3:
+    load_const "matched"
+    return
+}
+
+function user.test_or_missing_binding(x: Cat | Fish) -> string {
+    load_var x
+    is_type Cat
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    is_type Fish
+    pop_jump_if_false L3
+
+  L1:
+    load_var x
+    is_type Cat
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var x
+    is_type Fish
+    pop_jump_if_false L3
+
+  L3:
+    load_const "matched"
+    return
+}
+
+function user.test_or_nested_destructure(x: CatBox | FishBox) -> string {
+    load_var x
+    is_type CatBox
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    is_type FishBox
+    pop_jump_if_false L5
+
+  L1:
+    load_var x
+    is_type CatBox
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var x
+    is_type FishBox
+    pop_jump_if_false L4
+    load_var x
+    load_field .0
+    load_field .name
+    store_var name
+    jump L4
+
+  L3:
+    load_var x
+    load_field .0
+    load_field .name
+    store_var name
+
+  L4:
+    load_var name
+
+  L5:
+    return
+}
+
+function user.test_or_rebind(x: Cat | Fish) -> string {
+    load_var x
+    is_type Cat
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    is_type Fish
+    pop_jump_if_false L5
+
+  L1:
+    load_var x
+    is_type Cat
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var x
+    is_type Fish
+    pop_jump_if_false L4
+    load_var x
+    load_field .0
+    store_var n
+    jump L4
+
+  L3:
+    load_var x
+    load_field .0
+    store_var n
+
+  L4:
+    load_var n
+
+  L5:
+    return
+}
+
+function user.test_or_same_bindings(x: Cat | Fish) -> string {
+    load_var x
+    is_type Cat
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    is_type Fish
+    pop_jump_if_false L5
+
+  L1:
+    load_var x
+    is_type Cat
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var x
+    is_type Fish
+    pop_jump_if_false L4
+    load_var x
+    load_field .0
+    store_var name
+    jump L4
+
+  L3:
+    load_var x
+    load_field .0
+    store_var name
+
+  L4:
+    load_var name
+
+  L5:
+    return
+}
+
+function user.test_or_same_name_different_type(x: IntBox | StrBox) -> string {
+    load_var x
+    is_type IntBox
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    is_type StrBox
+    pop_jump_if_false L3
+
+  L1:
+    load_var x
+    is_type IntBox
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var x
+    is_type StrBox
+    pop_jump_if_false L3
+    load_var x
+    load_field .0
+    store_var val
+
+  L3:
+    load_const "matched"
+    return
+}
+
+function user.test_or_type_then_destructure(x: int | Cat) -> string {
+    load_var x
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    is_type Cat
+    pop_jump_if_false L3
+
+  L1:
+    load_var x
+    is_type int
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var x
+    is_type Cat
+    pop_jump_if_false L3
+
+  L3:
+    load_const null
+    return
+}
+
+function user.test_three_or_alternatives(x: Cat | Fish | Goldfish) -> string {
+    load_var x
+    is_type Cat
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var x
+    is_type Fish
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var x
+    is_type Goldfish
+    pop_jump_if_false L8
+
+  L2:
+    load_var x
+    is_type Cat
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var x
+    is_type Fish
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var x
+    is_type Goldfish
+    pop_jump_if_false L7
+    load_var x
+    load_field .0
+    store_var name
+    jump L7
+
+  L5:
+    load_var x
+    load_field .0
+    store_var name
+    jump L7
+
+  L6:
+    load_var x
+    load_field .0
+    store_var name
+
+  L7:
+    load_var name
+
+  L8:
+    return
+}
+
+function user.test_type_then_destructure() -> string {
+    alloc_instance Dog
+    load_const "Rex"
+    init_field .name
+    load_const "Lab"
+    init_field .breed
+    load_field .breed
+    return
+}
+
+function user.test_wildcard_field(x: Cat) -> string {
+    load_var x
+    is_type Cat
+    pop_jump_if_false L0
+
+  L0:
+    load_const "matched"
+    return
+}

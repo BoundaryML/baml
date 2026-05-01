@@ -571,7 +571,7 @@ fn testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.Tes
 
     bb0: {
         _3 = make_closure lambda[0](copy _1);
-        _4 = copy _2 == const null;
+        _4 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _4 -> [bb4, bb1];
     }
 
@@ -788,7 +788,7 @@ fn testing.run_testset(run_children: () -> testing.TestSetReport throws never, r
     let _8: () -> testing.TestSetReport throws never
 
     bb0: {
-        _3 = copy _2 == const null;
+        _3 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _3 -> [bb4, bb1];
     }
 
@@ -900,7 +900,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     }
 
     bb8: {
-        _28 = copy _19 == const null;
+        _28 = is_type(copy _19, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _28 -> [bb9, bb12];
     }
 

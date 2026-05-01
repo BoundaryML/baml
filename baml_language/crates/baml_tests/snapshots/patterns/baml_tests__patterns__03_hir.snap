@@ -1,0 +1,138 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+class user.Animal {
+  name: string
+}
+class user.Bar {
+  a: int
+}
+class user.Dog {
+  name: string
+  breed: string
+}
+class user.Foo {
+  a: int
+}
+class user.Goldfish {
+  name: string
+}
+class user.Inner {
+  value: string
+}
+class user.MaybeNamed {
+  name: string?
+}
+class user.Middle {
+  inner: user.Inner
+  tag: string
+}
+class user.Outer {
+  middle: user.Middle
+  label: string
+}
+class user.Wrapper {
+  pet: user.Cat | user.Fish
+}
+function user.accept_foo(f: user.Foo) -> int  [expr] {
+  {  } f.a
+}
+function user.test_deep_destructure(x: user.Outer) -> string  [expr] {
+  { _: Outer { middle: Middle { inner: Inner { value: let value } } } = x; return value }
+}
+function user.test_empty_destructure(x: user.Animal) -> string  [expr] {
+  {  } match (x) { user.Animal => "matched" }
+}
+function user.test_let_destructure_chain() -> string  [expr] {
+  { let x: Animal { name: let name }: user.Animal = user.Animal { name: "Rex" }; return name }
+}
+function user.test_let_destructure_multiple_fields() -> string  [expr] {
+  { let x: Dog { name: let name, breed: let breed } = user.Dog { name: "Rex", breed: "Lab" }; return name Add " " Add breed }
+}
+function user.test_let_destructure_use_field() -> string  [expr] {
+  { let x: Animal { name: let name } = user.Animal { name: "Rex" }; return name }
+}
+function user.test_match_destructure(x: user.Animal) -> string  [expr] {
+  {  } match (x) { Animal { name: let name } => name }
+}
+function user.test_match_destructure_multi(x: user.Dog) -> string  [expr] {
+  {  } match (x) { Dog { name: let name, breed: let breed } => name Add " the " Add breed }
+}
+function user.test_nested_destructure_let(x: user.Outer) -> string  [expr] {
+  { _: Outer { middle: Middle { inner: Inner { value: let value }, tag: let tag } } = x; return value Add ":" Add tag }
+}
+function user.test_nested_destructure_match(x: user.Outer) -> string  [expr] {
+  {  } match (x) { Outer { middle: Middle { tag: let tag }, label: let label } => label Add "/" Add tag }
+}
+function user.test_nested_destructure_multi_arm(x: user.Animal | user.Outer) -> string  [expr] {
+  {  } match (x) { Outer { middle: Middle { tag: let tag } } => tag, Animal { name: let name } => name }
+}
+function user.test_nested_or_in_field(x: user.Wrapper) -> string  [expr] {
+  { _: Wrapper { pet: Cat { name: let name } | Fish { name: let name } } = x; return name }
+}
+function user.test_optional_field_destructure(x: user.MaybeNamed) -> string?  [expr] {
+  {  } match (x) { MaybeNamed { name: let name } => name }
+}
+function user.test_or_let_union_type() -> int  [expr] {
+  { let x: Foo { a: let a } | Bar { a: let a } = user.Bar { a: 42 } } accept_foo(x)
+}
+function user.test_three_or_alternatives(x: user.Cat | user.Fish | user.Goldfish) -> string  [expr] {
+  {  } match (x) { Cat { name: let name } | Fish { name: let name } | Goldfish { name: let name } => name }
+}
+function user.test_type_then_destructure() -> string  [expr] {
+  { let x: user.Dog: Dog { breed: let breed } = user.Dog { name: "Rex", breed: "Lab" }; return breed }
+}
+class user.Cat {
+  name: string
+  indoor: bool
+}
+class user.Fish {
+  name: string
+  freshwater: bool
+}
+function user.test_or_same_bindings(x: user.Cat | user.Fish) -> string  [expr] {
+  {  } match (x) { Cat { name: let name } | Fish { name: let name } => name }
+}
+class user.CatBox {
+  pet: user.Cat
+}
+class user.FishBox {
+  pet: user.Fish
+}
+class user.IntBox {
+  val: int
+}
+class user.StrBox {
+  val: string
+}
+function user.test_destructure_primitive(x: int) -> int  [expr] {
+  {  } match (x) { _ { val: let val } => val }
+}
+function user.test_duplicate_field(x: user.Cat) -> string  [expr] {
+  {  } match (x) { Cat { name: let name, name: let name } => name }
+}
+function user.test_nonexistent_field(x: user.Cat) -> string  [expr] {
+  {  } match (x) { Cat { bogus: let bogus } => bogus }
+}
+function user.test_or_mismatched_bindings(x: user.Cat | user.Fish) -> string  [expr] {
+  {  } match (x) { Cat { name: let name } | Fish { freshwater: let freshwater } => "matched" }
+}
+function user.test_or_missing_binding(x: user.Cat | user.Fish) -> string  [expr] {
+  {  } match (x) { Cat { name: let name } | user.Fish => "matched" }
+}
+function user.test_or_nested_destructure(x: user.CatBox | user.FishBox) -> string  [expr] {
+  {  } match (x) { CatBox { pet: Cat { name: let name } } | FishBox { pet: Fish { name: let name } } => name }
+}
+function user.test_or_rebind(x: user.Cat | user.Fish) -> string  [expr] {
+  {  } match (x) { Cat { name: let n } | Fish { name: let n } => n }
+}
+function user.test_or_same_name_different_type(x: user.IntBox | user.StrBox) -> string  [expr] {
+  {  } match (x) { IntBox { val: let val } | StrBox { val: let val } => "matched" }
+}
+function user.test_or_type_then_destructure(x: int | user.Cat) -> string  [expr] {
+  {  } match (x) { int | Cat { name: let name } => name }
+}
+function user.test_wildcard_field(x: user.Cat) -> string  [expr] {
+  {  } match (x) { Cat { name: _ } => "matched" }
+}

@@ -14,8 +14,10 @@ SOURCE_FILE
     BLOCK_EXPR
       L_BRACE "{"
       LET_STMT
-        KW_LET "let"
-        WORD "base_url"
+        PATTERN
+          PATTERN_ALT "let base_url"
+            KW_LET "let"
+            WORD "base_url"
         EQUALS "="
         STRING_LITERAL "https://api.example.com"
           QUOTE """
@@ -29,9 +31,11 @@ SOURCE_FILE
           DOT "."
           WORD "com"
           QUOTE """
-      LET_STMT "let timeout = 5000"
-        KW_LET "let"
-        WORD "timeout"
+      LET_STMT
+        PATTERN
+          PATTERN_ALT "let timeout"
+            KW_LET "let"
+            WORD "timeout"
         EQUALS "="
         INTEGER_LITERAL "5000"
       TEST_EXPR_DEF

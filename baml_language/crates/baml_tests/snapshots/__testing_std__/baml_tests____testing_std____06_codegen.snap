@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 1061
 ---
 function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {
     load_var c
@@ -596,8 +595,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
 
   L5:
     load_var expanded
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L7
     load_var items
     alloc_instance SerializedTest
@@ -665,8 +663,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
     make_closure .<lambda(run_test, 0)>, 1
     store_var base_run
     load_var runner
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L0
     jump L1
 
@@ -690,8 +687,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
 
 function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> testing.TestSetReport {
     load_var runner
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L0
     jump L1
 

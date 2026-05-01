@@ -167,10 +167,12 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "Status.Ready"
-              WORD "Status"
-              DOT "."
-              WORD "Ready"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Status.Ready"
+                  WORD "Status"
+                  DOT "."
+                  WORD "Ready"
             FAT_ARROW "=>"
             STRING_LITERAL "ready"
               QUOTE """
@@ -178,10 +180,12 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "Status.Generating"
-              WORD "Status"
-              DOT "."
-              WORD "Generating"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Status.Generating"
+                  WORD "Status"
+                  DOT "."
+                  WORD "Generating"
             FAT_ARROW "=>"
             STRING_LITERAL "generating"
               QUOTE """
@@ -189,10 +193,12 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "Status.Done"
-              WORD "Status"
-              DOT "."
-              WORD "Done"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "Status.Done"
+                  WORD "Status"
+                  DOT "."
+                  WORD "Done"
             FAT_ARROW "=>"
             STRING_LITERAL "done"
               QUOTE """
@@ -246,8 +252,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -270,8 +278,10 @@ SOURCE_FILE
                 R_BRACE "}"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "_"
+                  WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """
@@ -303,8 +313,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -314,8 +326,10 @@ SOURCE_FILE
                 WORD "Done"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "_"
+                  WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """
@@ -449,12 +463,14 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "root.Status.Ok"
-              WORD "root"
-              DOT "."
-              WORD "Status"
-              DOT "."
-              WORD "Ok"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "root.Status.Ok"
+                  WORD "root"
+                  DOT "."
+                  WORD "Status"
+                  DOT "."
+                  WORD "Ok"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """
@@ -462,12 +478,14 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "root.Status.Failed"
-              WORD "root"
-              DOT "."
-              WORD "Status"
-              DOT "."
-              WORD "Failed"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "root.Status.Failed"
+                  WORD "root"
+                  DOT "."
+                  WORD "Status"
+                  DOT "."
+                  WORD "Failed"
             FAT_ARROW "=>"
             STRING_LITERAL "failed"
               QUOTE """
@@ -475,12 +493,14 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "root.Status.Pending"
-              WORD "root"
-              DOT "."
-              WORD "Status"
-              DOT "."
-              WORD "Pending"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "root.Status.Pending"
+                  WORD "root"
+                  DOT "."
+                  WORD "Status"
+                  DOT "."
+                  WORD "Pending"
             FAT_ARROW "=>"
             STRING_LITERAL "pending"
               QUOTE """
@@ -536,8 +556,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -563,8 +585,10 @@ SOURCE_FILE
                 R_BRACE "}"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "_"
+                  WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """
@@ -596,8 +620,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -609,8 +635,10 @@ SOURCE_FILE
                 WORD "Failed"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              PATTERN_ALT
+                TYPE_EXPR "_"
+                  WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """

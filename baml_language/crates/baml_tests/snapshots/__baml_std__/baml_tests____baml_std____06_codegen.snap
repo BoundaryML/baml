@@ -445,8 +445,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.l
 
   L0:
     load_var _3
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L4
     load_var self
     load_var planner_state
@@ -899,8 +898,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
 
   L0:
     load_var _4
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L9
     load_var self
     load_var context
@@ -1007,8 +1005,7 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
 
   L0:
     load_var _4
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L9
     load_var self
     load_var context
@@ -1262,8 +1259,7 @@ function baml.llm.Stream.final(self: null) -> void {
     await
     store_var _24
     load_var _24
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L4
     jump L6
 

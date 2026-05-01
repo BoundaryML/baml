@@ -126,22 +126,17 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
         // ── Type hints for let bindings without annotations ───────────────────
 
         for (stmt_id, stmt) in expr_body.stmts.iter() {
-            let Stmt::Let {
-                pattern,
-                type_annotation,
-                ..
-            } = stmt
-            else {
+            let Stmt::Let { pattern, .. } = stmt else {
                 continue;
             };
 
-            // Skip if the user already wrote a type annotation.
-            if type_annotation.is_some() {
+            // Skip if the user already wrote a type annotation (present as pattern chain).
+            let pat = &expr_body.patterns[*pattern];
+            if pat.chain.is_some() {
                 continue;
             }
 
             // Get the binding name to suppress hints for `_`.
-            let pat = &expr_body.patterns[*pattern];
             let Some(binding_name) = pat.binding_name() else {
                 continue; // Not a simple binding (or `_` wildcard) — skip
             };

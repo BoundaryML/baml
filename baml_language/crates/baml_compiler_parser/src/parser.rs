@@ -1839,6 +1839,10 @@ impl<'a> Parser<'a> {
     /// Examples: string, int, User, string[], map<string, int>, string | int
     /// Can also use string literals: "user", "assistant"
     pub(crate) fn parse_type(&mut self) {
+        self.parse_type_inner(true);
+    }
+
+    fn parse_type_inner(&mut self, allow_union: bool) {
         self.with_node(SyntaxKind::TYPE_EXPR, |p| {
             p.parse_type_primary();
 
@@ -1856,7 +1860,7 @@ impl<'a> Parser<'a> {
                 } else if p.at(TokenKind::Question) {
                     // Optional type: string?
                     p.bump();
-                } else if p.at(TokenKind::Pipe) {
+                } else if allow_union && p.at(TokenKind::Pipe) {
                     // Union type: string | int | "user" | "assistant"
                     p.bump();
                     p.parse_type_primary();
@@ -2775,30 +2779,14 @@ impl<'a> Parser<'a> {
 
     fn parse_let_stmt(&mut self) {
         self.with_node(SyntaxKind::LET_STMT, |p| {
-            p.expect(TokenKind::Let);
+            p.parse_pattern(true);
 
-            // Variable name
-            if p.at(TokenKind::Word) {
-                p.bump();
-            } else {
-                p.error_unexpected_token("variable name".to_string());
-            }
-
-            // Optional type annotation
-            if p.eat(TokenKind::Colon) {
-                p.parse_type();
-            }
-
-            // Initializer
             if p.eat(TokenKind::Equals) {
-                // Parse expression but exclude assignment operators (parse_expr_bp with min_bp=3)
-                // This prevents `let a = b = c` from being parsed as nested assignment
                 p.parse_expr_bp(3);
             } else {
                 p.error_unexpected_token("initializer (=)".to_string());
             }
 
-            // Consume trailing semicolon
             p.eat(TokenKind::Semicolon);
         });
     }
@@ -2806,28 +2794,14 @@ impl<'a> Parser<'a> {
     fn parse_watch_let_stmt(&mut self) {
         self.with_node(SyntaxKind::WATCH_LET, |p| {
             p.expect(TokenKind::Watch);
-            p.expect(TokenKind::Let);
+            p.parse_pattern(true);
 
-            // Variable name
-            if p.at(TokenKind::Word) {
-                p.bump();
-            } else {
-                p.error_unexpected_token("variable name".to_string());
-            }
-
-            // Optional type annotation
-            if p.eat(TokenKind::Colon) {
-                p.parse_type();
-            }
-
-            // Initializer
             if p.eat(TokenKind::Equals) {
                 p.parse_expr_bp(3);
             } else {
                 p.error_unexpected_token("initializer (=)".to_string());
             }
 
-            // Consume trailing semicolon
             p.eat(TokenKind::Semicolon);
         });
     }
@@ -2966,7 +2940,7 @@ impl<'a> Parser<'a> {
     fn parse_match_arm(&mut self) {
         self.with_node(SyntaxKind::MATCH_ARM, |p| {
             // Parse the pattern
-            p.parse_match_pattern();
+            p.parse_pattern(false);
 
             // Optional guard: if expr
             if p.at(TokenKind::If) {
@@ -2992,107 +2966,140 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse a match pattern.
-    ///
-    /// Grammar (from BEP-002):
+    /// Parse a pattern (BEP-015).
     ///
     /// ```text
-    /// pattern         := binding_pattern | literal_pattern | union_pattern
-    /// binding_pattern := IDENT (':' type_expr)?
-    /// literal_pattern := 'null' | 'true' | 'false' | INTEGER | FLOAT | STRING
-    /// union_pattern   := (literal_pattern | enum_variant) ('|' (literal_pattern | enum_variant))*
-    /// enum_variant    := IDENT '.' IDENT
+    /// pattern       := position (':' position)*
+    /// position      := 'let'? pattern_element
+    /// pattern_element := neg_literal | type_expr ('{' pattern_field (',' pattern_field)* '}')?
+    /// pattern_field := IDENT (':' pattern)?
     /// ```
     ///
-    /// Note: `_` is parsed as a regular identifier (binding pattern) - semantic
-    /// analysis will treat it as a wildcard/discard.
-    fn parse_match_pattern(&mut self) {
-        self.with_node(SyntaxKind::MATCH_PATTERN, |p| {
-            // First, parse the initial pattern element
-            p.parse_pattern_element();
-
-            // Check for union pattern: element | element | ...
-            while p.at(TokenKind::Pipe) {
-                p.bump(); // |
-                p.parse_pattern_element();
+    /// Each `:` introduces a further narrowing position. `|` (union) is consumed
+    /// inside `parse_type` for bare types; at the pattern level, `|` after a class
+    /// destructure creates an or-pattern (`Cat { name } | Fish { name }`).
+    ///
+    /// When `require_let` is true (let-statement, for-in), `let` is mandatory
+    /// on the first position.
+    fn parse_pattern(&mut self, require_let: bool) {
+        self.with_node(SyntaxKind::PATTERN, |p| {
+            p.parse_pattern_alternative(require_let);
+            // Top-level Or: `| let` separates alternatives whose bindings
+            // do NOT share scope. Plain `|` (no `let`) is chain-local —
+            // it extends the current position's Or set inside an alternative.
+            while p.at(TokenKind::Pipe) && p.peek(1).is_some_and(|t| t.kind == TokenKind::Let) {
+                p.bump();
+                p.parse_pattern_alternative(false);
             }
         });
     }
 
-    /// Parse a single pattern element (used in patterns and union patterns).
-    ///
-    /// This can be:
-    /// - A literal: null, true, false, integer, float, string
-    /// - An enum variant: Ident.Ident
-    /// - A binding: ident or ident: Type
-    /// - A parenthesized pattern group: (pattern)
-    fn parse_pattern_element(&mut self) {
-        // Handle parenthesized pattern group (for nested unions like `200 | (201 | 202)`)
-        if self.at(TokenKind::LParen) {
-            self.bump(); // (
-            self.parse_match_pattern(); // Recursive - creates nested MATCH_PATTERN
-            self.expect(TokenKind::RParen);
-            return;
-        }
-
-        // Check for literals first (including negative literals)
-        // Handle negative numeric literals: -42, -3.14
-        if self.at(TokenKind::Minus) {
-            // Peek ahead to see if this is a negative numeric literal
-            let is_negative_number = self.peek(1).is_some_and(|t| {
-                matches!(t.kind, TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
-            });
-            if is_negative_number {
-                self.bump(); // consume the minus
-                self.bump(); // consume the number
+    fn parse_pattern_alternative(&mut self, require_let: bool) {
+        self.with_node(SyntaxKind::PATTERN_ALT, |p| {
+            let had_let = if require_let {
+                p.expect(TokenKind::Let);
+                true
             } else {
-                self.error_unexpected_token("pattern".to_string());
-                self.bump();
-            }
-        } else if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
-            self.bump();
-        } else if self.parse_any_string() {
-            // String literal handled
-        } else if self.at(TokenKind::Word) {
-            let text = self.current().map(|t| t.text.as_str()).unwrap_or("");
-
-            if text == "null" || text == "true" || text == "false" {
-                // Literal keywords
-                self.bump();
-            } else {
-                // Could be:
-                // 1. Enum variant: Ident.Ident (e.g., Status.Active)
-                // 2. Binding without type: ident (including _ as wildcard)
-                // 3. Binding with type: ident: Type
-
-                self.bump(); // First identifier
-
-                if self.at(TokenKind::Dot) {
-                    // Dotted path pattern: Ident.Ident or Ident.Ident.Ident...
-                    // (e.g., Status.Active or baml.llm.ClientType.Primitive)
-                    while self.at(TokenKind::Dot) {
-                        self.bump(); // .
-                        if self.at(TokenKind::Word) {
-                            self.bump(); // next segment
-                        } else {
-                            self.error_unexpected_token("identifier after '.'".to_string());
-                            break;
-                        }
-                    }
-                } else if self.at(TokenKind::Colon) {
-                    // Typed binding pattern: ident: Type
-                    self.bump(); // :
-                    self.parse_type();
+                p.eat(TokenKind::Let)
+            };
+            p.parse_pattern_position(had_let);
+            loop {
+                if p.at(TokenKind::Colon) {
+                    p.bump();
+                    let had_let = p.eat(TokenKind::Let);
+                    p.parse_pattern_position(had_let);
+                } else if p.at(TokenKind::Pipe)
+                    && !p.peek(1).is_some_and(|t| t.kind == TokenKind::Let)
+                {
+                    // Chain-local Or: extends the most recent position's
+                    // alternatives. Outer code (`parse_pattern`) handles
+                    // the `| let` case as a top-level boundary.
+                    p.bump();
+                    p.parse_pattern_position(false);
+                } else {
+                    break;
                 }
-                // else: simple binding pattern (just the identifier)
             }
-        } else {
-            self.error_unexpected_token("pattern".to_string());
-            // Consume unexpected token to avoid infinite loop
-            if !self.at_end() {
-                self.bump();
+        });
+    }
+
+    /// Parse a single position in a pattern.
+    ///
+    /// After `let`, a bare identifier (not followed by `.`, `{`, `[`, `<`, `?`,
+    /// or `|`) is a binding name — emitted as a raw WORD token. Otherwise
+    /// delegates to `parse_pattern_element` (which calls `parse_type`).
+    fn parse_pattern_position(&mut self, had_let: bool) {
+        if had_let && self.at(TokenKind::Word) {
+            let is_binding_name = !self.peek(1).is_some_and(|t| {
+                matches!(
+                    t.kind,
+                    TokenKind::Dot
+                        | TokenKind::LBrace
+                        | TokenKind::LBracket
+                        | TokenKind::Less
+                        | TokenKind::Question
+                )
+            });
+            if is_binding_name {
+                self.bump(); // bare WORD — binding name
+                return;
             }
         }
+        self.parse_pattern_element();
+    }
+
+    /// Parse a single pattern element.
+    ///
+    /// Uses `parse_type_inner(false)` so that `|` is reserved for the
+    /// pattern-level or-pattern handler. `Foo | Bar { name }` parses as
+    /// `Or([Foo, Bar{name}])` — destructure binds tighter than union.
+    fn parse_pattern_element(&mut self) {
+        self.parse_type_inner(false);
+
+        // Class destructure: Type { field, field: pat }
+        if self.at(TokenKind::LBrace) {
+            self.parse_class_destructure_body();
+        }
+    }
+
+    /// Parse the body of a class destructure pattern: `{ field, field: pat }`.
+    ///
+    /// Called after the class name path has already been consumed.
+    fn parse_class_destructure_body(&mut self) {
+        self.bump(); // {
+
+        if !self.at(TokenKind::RBrace) {
+            self.parse_pattern_field();
+
+            while self.eat(TokenKind::Comma) {
+                if self.at(TokenKind::RBrace) {
+                    break; // trailing comma
+                }
+                self.parse_pattern_field();
+            }
+        }
+
+        self.expect(TokenKind::RBrace);
+    }
+
+    /// Parse a single field in a class destructure pattern.
+    ///
+    /// Per BEP-015:
+    /// - `name` — shorthand, always binds
+    /// - `name: <pattern>` — nested pattern (type match, literal, destructure, or `let` rename)
+    fn parse_pattern_field(&mut self) {
+        self.with_node(SyntaxKind::PATTERN_FIELD, |p| {
+            if p.at(TokenKind::Word) {
+                p.bump(); // field name
+            } else {
+                p.error_unexpected_token("field name".to_string());
+                return;
+            }
+
+            if p.eat(TokenKind::Colon) {
+                p.parse_pattern(false);
+            }
+        });
     }
 
     /// Parse a match guard.
@@ -3130,7 +3137,8 @@ impl<'a> Parser<'a> {
             if !p.expect(TokenKind::LParen) {
                 return;
             }
-            p.parse_catch_pattern();
+            // Catch clause binding is always a raw name, not a pattern.
+            p.expect(TokenKind::Word);
             // Optional second binding: catch (e, stack_trace)
             if p.at(TokenKind::Comma) {
                 p.bump(); // consume ','
@@ -3165,7 +3173,7 @@ impl<'a> Parser<'a> {
 
     fn parse_catch_arm(&mut self) {
         self.with_node(SyntaxKind::CATCH_ARM, |p| {
-            p.parse_catch_pattern();
+            p.parse_pattern(false);
 
             if p.at(TokenKind::FatArrow) {
                 p.bump(); // =>
@@ -3182,16 +3190,6 @@ impl<'a> Parser<'a> {
             }
 
             p.eat(TokenKind::Comma);
-        });
-    }
-
-    fn parse_catch_pattern(&mut self) {
-        self.with_node(SyntaxKind::CATCH_PATTERN, |p| {
-            p.parse_pattern_element();
-            while p.at(TokenKind::Pipe) {
-                p.bump(); // |
-                p.parse_pattern_element();
-            }
         });
     }
 
@@ -3293,19 +3291,23 @@ impl<'a> Parser<'a> {
 
                 // Check if this is iterator-style: for (let var in expr) or C-style: for (init; cond; update)
                 if p.at(TokenKind::Let) {
-                    // Peek ahead to check if this is iterator-style (has 'in' keyword)
-                    // For iterator-style: for (let i in expr)
-                    // For C-style: for (let i = 0; ...)
-                    if p.looks_like_for_in_loop() {
-                        // Iterator-style: for (let var in expr)
-                        p.parse_for_in_pattern();
+                    // Both for-in and C-style can start with `let`.
+                    //   for-in:  `for (let <pattern> in expr)`
+                    //   C-style: `for (let x = 0; cond; update)`
+                    //
+                    // Disambiguate by scanning ahead: if `in` appears before
+                    // `=` or `;`, this is for-in; otherwise C-style.
+                    if p.for_let_has_in_before_equals() {
+                        // Iterator-style: parse pattern then `in expr`.
+                        p.parse_pattern(true);
                         p.expect(TokenKind::In);
                         p.parse_expr(); // iterator expression
                     } else {
-                        // C-style: for (let i = 0; cond; update)
+                        // C-style: use parse_let_stmt to produce a proper
+                        // LET_STMT node wrapping the pattern + initializer.
                         p.parse_let_stmt();
-                        // The let statement already consumed the semicolon
-                        // Now parse condition
+                        // parse_let_stmt consumed `let pattern = expr ;`.
+                        // Now parse condition and update.
                         if !p.at(TokenKind::Semicolon) && !p.at(TokenKind::RParen) {
                             p.parse_expr(); // condition
                         }
@@ -3316,36 +3318,17 @@ impl<'a> Parser<'a> {
                             p.parse_expr(); // update
                         }
                     }
-                } else if p.at(TokenKind::Word) {
-                    // Could be iterator-style: for (i in expr)
-                    // Or could be C-style starting with expression: for (i = 0; ...)
-                    // Look ahead to determine
-                    if p.peek(1).map(|t| t.kind == TokenKind::In).unwrap_or(false) {
-                        // Simple iterator-style without let: for (i in expr)
-                        p.bump(); // variable name
-                        p.bump(); // in
-                        p.parse_expr(); // iterator expression
-                    } else {
-                        // C-style without initializer starting with expression
-                        // Just parse as expression-based C-style
-                        p.parse_c_style_for_body();
-                    }
                 } else if p.at(TokenKind::Semicolon) {
                     // C-style with empty initializer: for (; cond; update)
                     p.parse_c_style_for_body();
                 } else {
-                    p.error_unexpected_token("loop variable, 'let', or ';'".to_string());
+                    p.error_unexpected_token("'let' or ';'".to_string());
                 }
 
                 p.expect(TokenKind::RParen);
             } else {
-                // Non-parenthesized form: for var in expr { }
-                if p.at(TokenKind::Word) {
-                    p.bump();
-                } else {
-                    p.error_unexpected_token("loop variable".to_string());
-                }
-
+                // Non-parenthesized form: for <pattern> in expr { }
+                p.parse_pattern(true);
                 p.expect(TokenKind::In);
                 p.parse_expr();
             }
@@ -3359,13 +3342,22 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Check if this looks like a for-in loop (has 'in' keyword after variable name)
-    fn looks_like_for_in_loop(&self) -> bool {
-        // We're at 'let', look for pattern: let WORD in
-        // Skip: let (0), WORD (1), check for 'in' (2)
-        self.peek(2)
-            .map(|t| t.kind == TokenKind::In)
-            .unwrap_or(false)
+    /// Peek ahead from a `let` token to decide for-in vs C-style.
+    ///
+    /// Returns `true` if `in` appears before `=` or `;` (for-in loop),
+    /// `false` otherwise (C-style loop).
+    fn for_let_has_in_before_equals(&self) -> bool {
+        let mut i = 0;
+        loop {
+            let Some(tok) = self.peek(i) else {
+                return false;
+            };
+            match tok.kind {
+                TokenKind::In => return true,
+                TokenKind::Equals | TokenKind::Semicolon | TokenKind::RParen => return false,
+                _ => i += 1,
+            }
+        }
     }
 
     /// Parse C-style for loop body (condition and update parts): ; cond; update
@@ -3386,27 +3378,6 @@ impl<'a> Parser<'a> {
         if !self.at(TokenKind::RParen) {
             self.parse_expr();
         }
-    }
-
-    /// Parse a for-in loop pattern: let var (without initializer)
-    fn parse_for_in_pattern(&mut self) {
-        self.with_node(SyntaxKind::LET_STMT, |p| {
-            p.expect(TokenKind::Let);
-
-            // Variable name
-            if p.at(TokenKind::Word) {
-                p.bump();
-            } else {
-                p.error_unexpected_token("variable name".to_string());
-            }
-
-            // Optional type annotation
-            if p.eat(TokenKind::Colon) {
-                p.parse_type();
-            }
-
-            // No initializer for for-in loops - don't emit error
-        });
     }
 
     fn parse_break_stmt(&mut self) {
@@ -5572,5 +5543,158 @@ type Callback = (value: int) -> string throws Foo
             "expected function type throws clause text, got {:?}",
             throws.text().to_string()
         );
+    }
+
+    #[test]
+    fn parses_let_with_pattern_node() {
+        let source = r#"
+function demo(u: User) -> int {
+  let x = 1;
+  x
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+
+        let pattern = let_stmt
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("LET_STMT should contain a PATTERN child");
+        let alt = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN_ALT)
+            .expect("PATTERN should contain a PATTERN_ALT child");
+
+        let has_let_kw = alt
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|t| t.kind() == SyntaxKind::KW_LET);
+        assert!(has_let_kw, "PATTERN_ALT should contain KW_LET");
+
+        let has_word = alt
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|t| t.kind() == SyntaxKind::WORD && t.text() == "x");
+        assert!(has_word, "PATTERN_ALT should contain WORD 'x'");
+    }
+
+    #[test]
+    fn parses_class_destructure_in_match() {
+        let source = r#"
+function demo(val: json) -> int {
+  match (val) {
+    User { name, age } => 1,
+    User { name, age: let a } => 2,
+    ns.User { name: Name { first } } => 3,
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let arms: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::MATCH_ARM)
+            .collect();
+        assert_eq!(arms.len(), 3, "expected 3 match arms");
+
+        let alt_of = |n: &SyntaxNode| -> SyntaxNode {
+            n.children()
+                .find(|c| c.kind() == SyntaxKind::PATTERN_ALT)
+                .expect("PATTERN should contain PATTERN_ALT")
+        };
+
+        // First arm: User { name, age }
+        let pat0 = arms[0]
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("arm should have PATTERN");
+        let alt0 = alt_of(&pat0);
+        let fields0: Vec<_> = alt0
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::PATTERN_FIELD)
+            .collect();
+        assert_eq!(
+            fields0.len(),
+            2,
+            "User {{ name, age }} should have 2 fields"
+        );
+
+        // Second arm: User { name, age: let a } — field rename
+        let pat1 = arms[1]
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("arm should have PATTERN");
+        let alt1 = alt_of(&pat1);
+        let fields1: Vec<_> = alt1
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::PATTERN_FIELD)
+            .collect();
+        assert_eq!(fields1.len(), 2);
+        // The second field should contain a nested PATTERN (for `let a`)
+        let nested = fields1[1]
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("renamed field should have nested PATTERN");
+        let nested_alt = alt_of(&nested);
+        let has_let = nested_alt
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|t| t.kind() == SyntaxKind::KW_LET);
+        assert!(has_let, "nested pattern in field rename should have KW_LET");
+
+        // Third arm: ns.User { name: Name { first } } — dotted class, nested destructure
+        let pat2 = arms[2]
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("arm should have PATTERN");
+        let type_expr = pat2
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("pattern should contain TYPE_EXPR for class name");
+        let words: Vec<_> = type_expr
+            .descendants_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|t| t.kind() == SyntaxKind::WORD)
+            .collect();
+        assert_eq!(words[0].text(), "ns");
+        assert_eq!(words[1].text(), "User");
+    }
+
+    #[test]
+    fn parses_let_class_destructure() {
+        let source = r#"
+function demo(u: User) -> string {
+  let User { name, age } = u;
+  name
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+
+        let pattern = let_stmt
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("LET_STMT should contain a PATTERN child");
+        let alt = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN_ALT)
+            .expect("PATTERN should contain a PATTERN_ALT child");
+
+        let fields: Vec<_> = alt
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::PATTERN_FIELD)
+            .collect();
+        assert_eq!(fields.len(), 2, "destructure should have 2 fields");
     }
 }

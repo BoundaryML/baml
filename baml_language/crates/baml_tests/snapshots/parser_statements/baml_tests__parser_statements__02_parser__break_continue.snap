@@ -78,9 +78,11 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let i = 0;"
-            KW_LET "let"
-            WORD "i"
+          LET_STMT
+            PATTERN
+              PATTERN_ALT "let i"
+                KW_LET "let"
+                WORD "i"
             EQUALS "="
             INTEGER_LITERAL "0"
             SEMICOLON ";"
@@ -124,9 +126,11 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let i = 0;"
-            KW_LET "let"
-            WORD "i"
+          LET_STMT
+            PATTERN
+              PATTERN_ALT "let i"
+                KW_LET "let"
+                WORD "i"
             EQUALS "="
             INTEGER_LITERAL "0"
             SEMICOLON ";"
@@ -216,9 +220,11 @@ SOURCE_FILE
             R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
-            LET_STMT "let x = 1;"
-              KW_LET "let"
-              WORD "x"
+            LET_STMT
+              PATTERN
+                PATTERN_ALT "let x"
+                  KW_LET "let"
+                  WORD "x"
               EQUALS "="
               INTEGER_LITERAL "1"
               SEMICOLON ";"
@@ -230,9 +236,11 @@ SOURCE_FILE
                 R_PAREN ")"
               BLOCK_EXPR
                 L_BRACE "{"
-                LET_STMT "let y = 2;"
-                  KW_LET "let"
-                  WORD "y"
+                LET_STMT
+                  PATTERN
+                    PATTERN_ALT "let y"
+                      KW_LET "let"
+                      WORD "y"
                   EQUALS "="
                   INTEGER_LITERAL "2"
                   SEMICOLON ";"
@@ -268,9 +276,11 @@ SOURCE_FILE
             R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
-            LET_STMT "let x = 1;"
-              KW_LET "let"
-              WORD "x"
+            LET_STMT
+              PATTERN
+                PATTERN_ALT "let x"
+                  KW_LET "let"
+                  WORD "x"
               EQUALS "="
               INTEGER_LITERAL "1"
               SEMICOLON ";"
@@ -282,9 +292,11 @@ SOURCE_FILE
                 R_PAREN ")"
               BLOCK_EXPR
                 L_BRACE "{"
-                LET_STMT "let y = 2;"
-                  KW_LET "let"
-                  WORD "y"
+                LET_STMT
+                  PATTERN
+                    PATTERN_ALT "let y"
+                      KW_LET "let"
+                      WORD "y"
                   EQUALS "="
                   INTEGER_LITERAL "2"
                   SEMICOLON ";"

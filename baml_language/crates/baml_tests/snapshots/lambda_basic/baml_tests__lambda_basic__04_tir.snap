@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 16480
 ---
 === TIR2 ===
 function user.test_annotated() -> int throws never {
@@ -41,7 +40,7 @@ lambda user.test_zero_param {
 }
 function user.test_map_inferred() -> int[] throws never {
   { : int[]
-    let items = [1, 2, 3] : int[]
+    let items: int[] = [1, 2, 3] : int[]
     items.map<U, E>((x) -> { ... }) : int[]
       (x) -> { ... } : (x: int) -> int throws E
         {

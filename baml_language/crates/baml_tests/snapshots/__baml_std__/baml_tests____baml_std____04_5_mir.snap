@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 585
 ---
 === MIR2 ===
 
@@ -815,7 +814,7 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
     }
 
     bb1: {
-        _36 = copy _3 == const null;
+        _36 = is_type(copy _3, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _36 -> [bb2, bb6];
     }
 
@@ -1478,7 +1477,7 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
     }
 
     bb1: {
-        _32 = copy _4 == const null;
+        _32 = is_type(copy _4, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _32 -> [bb2, bb18];
     }
 
@@ -1625,7 +1624,7 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
     }
 
     bb1: {
-        _32 = copy _4 == const null;
+        _32 = is_type(copy _4, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _32 -> [bb2, bb18];
     }
 
@@ -1856,7 +1855,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     }
 
     bb18: {
-        _27 = copy _24 == const null;
+        _27 = is_type(copy _24, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _27 -> [bb27, bb19];
     }
 

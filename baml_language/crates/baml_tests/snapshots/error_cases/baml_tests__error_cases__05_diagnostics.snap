@@ -22,45 +22,24 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [type] Error: unresolved type: b
-    ╭─[ syntax_errors.baml:17:16 ]
+  [type] Error: or-pattern alternatives must bind the same variables; not bound in all alternatives: `a`; only bound in some alternatives: `b`
+    ╭─[ syntax_errors.baml:18:37 ]
     │
- 17 │ ╭─▶     match (x) {
- 18 │ ├─▶         a: int | b: bool => "bad"
-    │ │                                       
-    │ ╰─────────────────────────────────────── unresolved type: b
-    │     
-    │     Note: Error code: E0002
+ 18 │         let a: int | let b: bool => "bad"
+    │                                     ──┬──  
+    │                                       ╰──── or-pattern alternatives must bind the same variables; not bound in all alternatives: `a`; only bound in some alternatives: `b`
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
-  [parse] Error: Expected '=>' after pattern, found ':'
-    ╭─[ syntax_errors.baml:18:19 ]
+  [type] Error: or-pattern alternatives must bind the same variables; only bound in some alternatives: `n`
+    ╭─[ syntax_errors.baml:25:28 ]
     │
- 18 │         a: int | b: bool => "bad"
-    │                   ┬  
-    │                   ╰── Expected '=>' after pattern, found ':'
+ 25 │         42 | let n: int => "mixed"
+    │                            ───┬───  
+    │                               ╰───── or-pattern alternatives must bind the same variables; only bound in some alternatives: `n`
     │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected expression, found ':'
-    ╭─[ syntax_errors.baml:18:19 ]
-    │
- 18 │         a: int | b: bool => "bad"
-    │                   ┬  
-    │                   ╰── Expected expression, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [type] Error: unreachable arm
-    ╭─[ syntax_errors.baml:18:29 ]
-    │
- 18 │         a: int | b: bool => "bad"
-    │                             ──┬──  
-    │                               ╰──── unreachable arm
-    │ 
-    │ Note: Error code: E0063
+    │ Note: Error code: E0001
 ────╯
 
   [parse] Error: Expected '}', found EOF

@@ -49,8 +49,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "b"
+          PATTERN
+            PATTERN_ALT "let b"
+              KW_LET "let"
+              WORD "b"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR
@@ -285,8 +287,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "p"
+          PATTERN
+            PATTERN_ALT "let p"
+              KW_LET "let"
+              WORD "p"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR
@@ -343,8 +347,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "p"
+          PATTERN
+            PATTERN_ALT "let p"
+              KW_LET "let"
+              WORD "p"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR
@@ -548,8 +554,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "h"
+          PATTERN
+            PATTERN_ALT "let h"
+              KW_LET "let"
+              WORD "h"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR
@@ -817,8 +825,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "c"
+          PATTERN
+            PATTERN_ALT "let c"
+              KW_LET "let"
+              WORD "c"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR
@@ -939,8 +949,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "f"
+          PATTERN
+            PATTERN_ALT "let f"
+              KW_LET "let"
+              WORD "f"
           EQUALS "="
           CALL_EXPR
             FIELD_ACCESS_EXPR
@@ -1010,20 +1022,24 @@ SOURCE_FILE
             R_PAREN ")"
             L_BRACE "{"
             MATCH_ARM
-              MATCH_PATTERN
-                WORD "v"
-                COLON ":"
-                TYPE_EXPR "T"
-                  WORD "T"
+              PATTERN
+                PATTERN_ALT
+                  KW_LET "let"
+                  WORD "v"
+                  COLON ":"
+                  TYPE_EXPR "T"
+                    WORD "T"
               FAT_ARROW "=>"
               WORD "v"
               COMMA ","
             MATCH_ARM
-              MATCH_PATTERN
-                WORD "_"
-                COLON ":"
-                TYPE_EXPR "null"
-                  WORD "null"
+              PATTERN
+                PATTERN_ALT
+                  TYPE_EXPR "_"
+                    WORD "_"
+                  COLON ":"
+                  TYPE_EXPR "null"
+                    WORD "null"
               FAT_ARROW "=>"
               WORD "default"
               COMMA ","
@@ -1043,8 +1059,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "b"
+          PATTERN
+            PATTERN_ALT "let b"
+              KW_LET "let"
+              WORD "b"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR
@@ -1122,8 +1140,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "s"
+          PATTERN
+            PATTERN_ALT "let s"
+              KW_LET "let"
+              WORD "s"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR

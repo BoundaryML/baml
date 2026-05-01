@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16304
+---
+function user.test_class_then_wrong_type() -> string {
+    load_const "ok"
+    return
+}
+
+function user.test_destructure_then_wrong_type() -> string {
+    load_const "ok"
+    return
+}
+
+function user.test_incompatible_types() -> string {
+    load_const "ok"
+    return
+}
+
+function user.test_three_link_chain() -> string {
+    load_const "ok"
+    return
+}
+
+function user.test_type_then_wrong_destructure() -> string {
+    load_const "ok"
+    return
+}

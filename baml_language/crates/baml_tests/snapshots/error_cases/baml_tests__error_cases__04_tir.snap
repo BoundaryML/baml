@@ -10,22 +10,20 @@ function user.Broken.Invalid() -> ? throws never {
   }
 }
 function user.Broken.BadUnionPattern(x: int | bool) -> string throws never {
-  { : unknown | "bad"
-    match (x : int | bool) : unknown | "bad"
-      a: int | b =>
-        <missing> : unknown
-      bool =>
+  { : "bad"
+    match (x : int | bool) : "bad"
+      let a: int | let b: bool =>
         "bad" : "bad"
   }
-  !! 635..655: unresolved type: b
-  !! 664..669: unreachable arm
+  !! 672..677: or-pattern alternatives must bind the same variables; not bound in all alternatives: `a`; only bound in some alternatives: `b`
 }
 function user.Broken.MixedLiteralAndTyped(x: int) -> string throws never {
   { : "mixed"
     match (x : int) : "mixed"
-      42 | n: int =>
+      42 | let n: int =>
         "mixed" : "mixed"
   }
+  !! 829..836: or-pattern alternatives must bind the same variables; only bound in some alternatives: `n`
 }
 class user.Broken$stream {
   field: null | int

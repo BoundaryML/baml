@@ -172,6 +172,47 @@ pub fn lower_type_expr_in_ns(
                         return Ty::TypeVar(segments[0].clone(), TyAttr::default());
                     }
                 }
+                // Enum variant: try interpreting as Enum.Variant. The
+                // enum's path splits as `[pkg?, ns..., type]`:
+                // - last segment = enum type name
+                // - everything before the type = namespace path inside its package
+                // - leading "root" or a package name optionally selects the package
+                if segments.len() >= 2 {
+                    let enum_path = &segments[..segments.len() - 1];
+                    let variant = segments.last().unwrap();
+                    let enum_item_name = enum_path.last().unwrap().clone();
+                    let ns_path = &enum_path[..enum_path.len() - 1];
+
+                    // Bare enum reference (no package qualifier): look up
+                    // relative to the current namespace, falling back to the
+                    // package root.
+                    let enum_resolved = if ns_path.is_empty() {
+                        let here = if ns_context.is_empty() {
+                            package_items.lookup_type(&[], &enum_item_name)
+                        } else {
+                            let ns: Vec<baml_base::Name> = ns_context.to_vec();
+                            package_items.lookup_type(&ns, &enum_item_name)
+                        };
+                        here.or_else(|| package_items.lookup_type(&[], &enum_item_name))
+                    } else if ns_path[0].as_str() == "root" {
+                        // root.<ns>.<Type> — current package, namespace `ns_path[1..]`.
+                        package_items.lookup_type(&ns_path[1..], &enum_item_name)
+                    } else {
+                        // <pkg>.<ns>.<Type> — external package.
+                        let pkg_id = PackageId::new(db, ns_path[0].clone());
+                        let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+                        pkg.lookup_type(&ns_path[1..], &enum_item_name)
+                    };
+                    if let Some(def) = enum_resolved {
+                        if matches!(def, Definition::Enum(_)) {
+                            return Ty::EnumVariant(
+                                qualify_def(db, def, &enum_item_name),
+                                variant.clone(),
+                                TyAttr::default(),
+                            );
+                        }
+                    }
+                }
                 let name_str = segments
                     .iter()
                     .map(smol_str::SmolStr::as_str)

@@ -143,7 +143,7 @@ async fn catch_literal_int_match() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function fails() -> int {
         load_const 42
         throw
@@ -510,7 +510,7 @@ async fn named_binding_string_access_value() {
 
         function main() -> string {
             fails(0) catch (e) {
-                msg: string => msg,
+                let msg: string => msg,
                 _: int => "was int"
             }
         }
@@ -581,7 +581,7 @@ async fn named_binding_int_access_value() {
         function main() -> int {
             fails(1) catch (e) {
                 _: string => -1,
-                code: int => code
+                let code: int => code
             }
         }
     "#
@@ -980,7 +980,7 @@ async fn named_class_binding_access_field() {
 
         function main() -> string {
             fails() catch (e) {
-                err: NetworkError => err.url
+                let err: NetworkError => err.url
             }
         }
     "#
@@ -1033,8 +1033,8 @@ async fn named_class_binding_dispatch_access_fields() {
 
         function main() -> string {
             fails(1) catch (e) {
-                net: NetworkError => net.url,
-                parse: ParseError => parse.message
+                let net: NetworkError => net.url,
+                let parse: ParseError => parse.message
             }
         }
     "#
@@ -1573,12 +1573,12 @@ async fn named_panic_binding_division_by_zero_field() {
 
         function main() -> int {
             divides() catch (e) {
-                err: baml.panics.DivisionByZero => err.dividend
+                let err: baml.panics.DivisionByZero => err.dividend
             }
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function divides() -> int {
         load_const 10
         load_const 0
@@ -1617,12 +1617,12 @@ async fn named_panic_binding_index_out_of_bounds_fields() {
 
         function main() -> int {
             oob() catch (e) {
-                err: baml.panics.IndexOutOfBounds => err.index
+                let err: baml.panics.IndexOutOfBounds => err.index
             }
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         call user.oob
         jump L2
@@ -1664,12 +1664,12 @@ async fn named_panic_binding_index_out_of_bounds_length() {
 
         function main() -> int {
             oob() catch (e) {
-                err: baml.panics.IndexOutOfBounds => err.length
+                let err: baml.panics.IndexOutOfBounds => err.length
             }
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         call user.oob
         jump L2
@@ -1711,7 +1711,7 @@ async fn named_panic_binding_map_key_not_found_field() {
 
         function main() -> string {
             bad() catch (e) {
-                err: baml.panics.MapKeyNotFound => err.key
+                let err: baml.panics.MapKeyNotFound => err.key
             }
         }
     "#
@@ -3013,7 +3013,7 @@ async fn panic_alias_catches_any_panic() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function divides() -> int {
         load_const 1
         load_const 0
@@ -3456,7 +3456,7 @@ async fn catch_four_typed_arms_jump_table() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 2
         call user.risky
@@ -3901,7 +3901,7 @@ async fn catch_four_primitive_wildcard_on_float() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function fails() -> int {
         load_const 3.14
         throw
@@ -4275,9 +4275,9 @@ async fn catch_mixed_named_and_anonymous_bindings() {
 
         function main() -> string {
             fails() catch (e) {
-                err: NetworkError => err.url,
-                err: AuthError => err.reason,
-                err: NotFound => err.path,
+                let err: NetworkError => err.url,
+                let err: AuthError => err.reason,
+                let err: NotFound => err.path,
                 _: RateLimit => "rate limited",
                 _ => "unknown"
             }
@@ -4457,7 +4457,7 @@ function divider() -> int {
 
 function main() -> int | string {
   divider() catch (e, st) {
-    DivisionByZero => { st.to_string() }
+    _: baml.panics.DivisionByZero => { st.to_string() }
   }
 }
 "#

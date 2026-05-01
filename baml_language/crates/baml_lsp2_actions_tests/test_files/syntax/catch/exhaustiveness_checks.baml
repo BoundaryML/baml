@@ -15,8 +15,8 @@ function MayFail(x: int) -> string {
 function UnreachableMatchArmInsideCatch(x: int, pet: Pet) -> string {
   MayFail(x) catch (e) {
     _ => match (pet) {
-      c: Cat => "cat",
-      d: Dog => "dog",
+      let c: Cat => "cat",
+      let d: Dog => "dog",
       _ => "unreachable"
     }
   }
@@ -25,7 +25,7 @@ function UnreachableMatchArmInsideCatch(x: int, pet: Pet) -> string {
 function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
   MayFail(x) catch (e) {
     _ => match (pet) {
-      c: Cat => "cat"
+      let c: Cat => "cat"
     }
   }
 }

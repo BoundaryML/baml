@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13252
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -133,9 +132,11 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let h = forward"
-          KW_LET "let"
-          WORD "h"
+        LET_STMT
+          PATTERN
+            PATTERN_ALT "let h"
+              KW_LET "let"
+              WORD "h"
           EQUALS "="
           WORD "forward"
         CALL_EXPR

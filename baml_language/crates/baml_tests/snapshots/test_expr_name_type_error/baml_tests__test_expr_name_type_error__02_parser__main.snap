@@ -35,39 +35,127 @@ SOURCE_FILE
       QUOTE """
     BLOCK_EXPR
       L_BRACE "{"
-      FOR_EXPR
+      FOR_EXPR "for ("
         KW_FOR "for"
         L_PAREN "("
-        WORD "i"
+      WORD "i"
+      INDEX_EXPR "in [1"
         KW_IN "in"
-        ARRAY_LITERAL "[1, 2, 3]"
-          L_BRACKET "["
-          INTEGER_LITERAL "1"
-          COMMA ","
-          INTEGER_LITERAL "2"
-          COMMA ","
-          INTEGER_LITERAL "3"
-          R_BRACKET "]"
-        R_PAREN ")"
-        BLOCK_EXPR
-          L_BRACE "{"
-          TEST_EXPR_DEF
-            KW_TEST "test"
-            PAREN_EXPR
-              L_PAREN "("
-              BINARY_EXPR "5 + i"
-                INTEGER_LITERAL "5"
-                PLUS "+"
-                WORD "i"
-              R_PAREN ")"
-            BLOCK_EXPR "{
+        L_BRACKET "["
+        INTEGER_LITERAL "1"
+      COMMA ","
+      INTEGER_LITERAL "2"
+      COMMA ","
+      INTEGER_LITERAL "3"
+      R_BRACKET "]"
+      R_PAREN ")"
+      BLOCK_EXPR
+        L_BRACE "{"
+        TEST_EXPR_DEF
+          KW_TEST "test"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "5 + i"
+              INTEGER_LITERAL "5"
+              PLUS "+"
+              WORD "i"
+            R_PAREN ")"
+          BLOCK_EXPR "{
       null
     }"
-              L_BRACE "{"
-              WORD "null"
-              R_BRACE "}"
-          R_BRACE "}"
+            L_BRACE "{"
+            WORD "null"
+            R_BRACE "}"
+        R_BRACE "}"
       R_BRACE "}"
 
 === ERRORS ===
-None
+Error: Expected 'let' or ';', found identifier
+    ╭─[ main.baml:12:10 ]
+    │
+ 12 │   for (i in [1, 2, 3]) {
+    │          ┬  
+    │          ╰── Expected 'let' or ';', found identifier
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found identifier
+    ╭─[ main.baml:12:10 ]
+    │
+ 12 │   for (i in [1, 2, 3]) {
+    │          ┬  
+    │          ╰── Expected ')', found identifier
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected block after for expression, found identifier
+    ╭─[ main.baml:12:10 ]
+    │
+ 12 │   for (i in [1, 2, 3]) {
+    │          ┬  
+    │          ╰── Expected block after for expression, found identifier
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found in
+    ╭─[ main.baml:12:12 ]
+    │
+ 12 │   for (i in [1, 2, 3]) {
+    │            ─┬  
+    │             ╰── Expected expression, found in
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ']', found ','
+    ╭─[ main.baml:12:17 ]
+    │
+ 12 │   for (i in [1, 2, 3]) {
+    │                 ┬  
+    │                 ╰── Expected ']', found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ','
+    ╭─[ main.baml:12:17 ]
+    │
+ 12 │   for (i in [1, 2, 3]) {
+    │                 ┬  
+    │                 ╰── Expected expression, found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ','
+    ╭─[ main.baml:12:20 ]
+    │
+ 12 │   for (i in [1, 2, 3]) {
+    │                    ┬  
+    │                    ╰── Expected expression, found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ']'
+    ╭─[ main.baml:12:23 ]
+    │
+ 12 │   for (i in [1, 2, 3]) {
+    │                       ┬  
+    │                       ╰── Expected expression, found ']'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ')'
+    ╭─[ main.baml:12:24 ]
+    │
+ 12 │   for (i in [1, 2, 3]) {
+    │                        ┬  
+    │                        ╰── Expected expression, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯

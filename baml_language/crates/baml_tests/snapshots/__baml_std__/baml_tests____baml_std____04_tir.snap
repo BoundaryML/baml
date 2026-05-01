@@ -173,7 +173,7 @@ class baml.llm.PlannerState {
 function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int throws never {
   { : int
     let offset = 0 : 0 -> int
-    for seen_name in self.rr_client_names
+    for let seen_name in self.rr_client_names
       { : void
         if (seen_name == client_name : bool) : void
           { : void
@@ -225,7 +225,7 @@ function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: s
   { : T
     let jinja_string = get_jinja_template(function_name) : string
     let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
-    let result = client.execute_oneshot<T>(context, 0) : T
+    let result: T = client.execute_oneshot<T>(context, 0) : T
     result : T
   }
 }
@@ -233,7 +233,7 @@ function baml.llm.stream_llm_function<T, S>(client: baml.llm.Client, function_na
   { : baml.llm.Stream<T, S>
     let jinja_string = get_jinja_template(function_name) : string
     let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
-    let result = client.execute_stream(context, 0) : baml.llm.Stream<T, S>
+    let result: Stream<T, S> = client.execute_stream(context, 0) : baml.llm.Stream<T, S>
     result : baml.llm.Stream<T, S>
   }
 }
@@ -296,10 +296,10 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
         }
       ClientType.Fallback =>
         { : baml.llm.OrchestrationStep[]
-          let steps = [] : baml.llm.OrchestrationStep[]
-          for sub in self.sub_clients
+          let steps: OrchestrationStep[] = [] : baml.llm.OrchestrationStep[]
+          for let sub in self.sub_clients
             { : void
-              for step in sub.build_plan_with_state(planner_state)
+              for let step in sub.build_plan_with_state(planner_state)
                 { : int
                   steps.push(step) : int
                 }
@@ -329,9 +329,9 @@ function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.Orchestra
 function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
   { : baml.llm.OrchestrationStep[]
     match (self.retry : baml.llm.RetryPolicy?) : baml.llm.OrchestrationStep[]
-      r: RetryPolicy =>
+      let r: RetryPolicy =>
         { : baml.llm.OrchestrationStep[]
-          let result = [] : baml.llm.OrchestrationStep[]
+          let result: OrchestrationStep[] = [] : baml.llm.OrchestrationStep[]
           let current_delay = r.initial_delay_ms + 0.0 : float
           { : void
             let attempt = 0 : 0 -> int
@@ -352,7 +352,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
                       }
                   }
                 let inner = self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
-                for step in inner
+                for let step in inner
                   { : void
                     result.push(OrchestrationStep { primitive_client: step.primitive_client, delay_ms: delay }) : int
                   }
@@ -367,7 +367,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
 function baml.llm.Client.execute_stream<T, S>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<T, S> throws never {
   { : never
     match (self.retry : baml.llm.RetryPolicy?) : never
-      r: RetryPolicy =>
+      let r: RetryPolicy =>
         { : never
           let current_delay = r.initial_delay_ms + 0.0 : float
           { : void
@@ -392,9 +392,9 @@ function baml.llm.Client.execute_stream<T, S>(self: baml.llm.Client, context: ba
                   { : void
                     attempt_delay = inherited_delay_ms : int
                   }
-                let result2 = : unknown -> baml.llm.Stream<T, S>
+                let result2: Stream<T, S> = : unknown -> baml.llm.Stream<T, S>
                   catch (self.execute_once_stream(context, attempt_delay) : baml.llm.Stream<T, S>) : unknown
-                    catch (e)
+                    catch (let e)
                       _ =>
                         { : never
                           continue
@@ -406,7 +406,7 @@ function baml.llm.Client.execute_stream<T, S>(self: baml.llm.Client, context: ba
         }
       null =>
         { : never
-          let result = self.execute_once_stream(context, inherited_delay_ms) : baml.llm.Stream<T, S>
+          let result: Stream<T, S> = self.execute_once_stream(context, inherited_delay_ms) : baml.llm.Stream<T, S>
           return result : baml.llm.Stream<T, S>
         }
   }
@@ -422,16 +422,16 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
           let http_request = primitive.build_request_stream(specialized) : baml.http.Request
           let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
-          let stream = self.__make_stream(sse, context.function_name) : baml.llm.Stream<T, S>
+          let stream: Stream<T, S> = self.__make_stream(sse, context.function_name) : baml.llm.Stream<T, S>
           return stream : baml.llm.Stream<T, S>
         }
       ClientType.Fallback =>
         { : never
-          for sub in self.sub_clients
+          for let sub in self.sub_clients
             { : never
-              let result2 = : unknown -> baml.llm.Stream<T, S>
+              let result2: Stream<T, S> = : unknown -> baml.llm.Stream<T, S>
                 catch (sub.execute_stream(context, active_delay_ms) : baml.llm.Stream<T, S>) : unknown
-                  catch (e)
+                  catch (let e)
                     _ =>
                       { : never
                         continue
@@ -448,7 +448,7 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
             }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3 = self.sub_clients[idx].execute_stream(context, active_delay_ms) : baml.llm.Stream<T, S>
+          let result3: Stream<T, S> = self.sub_clients[idx].execute_stream(context, active_delay_ms) : baml.llm.Stream<T, S>
           return result3 : baml.llm.Stream<T, S>
         }
   }
@@ -459,14 +459,14 @@ function baml.llm.Client.__make_stream<T, S>(self: baml.llm.Client, sse: baml.ht
     let return_type = get_return_type(function_name) : type
     let stream_return_type = get_stream_return_type(function_name) : type
     let acc = primitive.new_stream_accumulator() : baml.llm.StreamAccumulator
-    let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<T, S>
+    let cache: StreamCache<T, S> = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<T, S>
     Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<T, S>
   }
 }
 function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws never {
   { : never
     match (self.retry : baml.llm.RetryPolicy?) : never
-      r: RetryPolicy =>
+      let r: RetryPolicy =>
         { : never
           let current_delay = r.initial_delay_ms + 0.0 : float
           { : void
@@ -491,9 +491,9 @@ function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml
                   { : void
                     attempt_delay = inherited_delay_ms : int
                   }
-                let result2 = : unknown -> T
+                let result2: T = : unknown -> T
                   catch (self.execute_once_oneshot<T>(context, attempt_delay) : T) : unknown
-                    catch (e)
+                    catch (let e)
                       _ =>
                         { : never
                           continue
@@ -505,7 +505,7 @@ function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml
         }
       null =>
         { : never
-          let result = self.execute_once_oneshot<T>(context, inherited_delay_ms) : T
+          let result: T = self.execute_once_oneshot<T>(context, inherited_delay_ms) : T
           return result : T
         }
   }
@@ -524,9 +524,9 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
           if (http_response.ok() : bool) : T
             { : T
               let body = http_response.text() : string
-              let result = : unknown -> T
+              let result: T = : unknown -> T
                 catch (primitive.parse<T>(body, return_type) : T) : unknown
-                  catch (e)
+                  catch (let e)
                     _ =>
                       { : never
                         if (active_delay_ms > 0 : bool) : void
@@ -541,7 +541,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
             { : never
               let error_body = : string | "" -> string
                 catch (http_response.text() : string) : string | ""
-                  catch (e)
+                  catch (let e)
                     _ =>
                       { : ""
                         "" : ""
@@ -555,11 +555,11 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
         }
       ClientType.Fallback =>
         { : never
-          for sub in self.sub_clients
+          for let sub in self.sub_clients
             { : never
-              let result2 = : unknown -> T
+              let result2: T = : unknown -> T
                 catch (sub.execute_oneshot<T>(context, active_delay_ms) : T) : unknown
-                  catch (e)
+                  catch (let e)
                     _ =>
                       { : never
                         continue
@@ -576,7 +576,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
             }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3 = self.sub_clients[idx].execute_oneshot<T>(context, active_delay_ms) : T
+          let result3: T = self.sub_clients[idx].execute_oneshot<T>(context, active_delay_ms) : T
           return result3 : T
         }
   }
@@ -653,7 +653,7 @@ function baml.llm.Stream.next(self: baml.llm.Stream) -> unknown | baml.stream.St
               { : never
                 return StreamFinished {  } : unknown
               }
-            next: string =>
+            let next: string =>
               next : string
         self._acc.add_events(next) : null
         if (self._acc.is_done() : bool) : void
@@ -662,13 +662,13 @@ function baml.llm.Stream.next(self: baml.llm.Stream) -> unknown | baml.stream.St
             return StreamFinished {  } : unknown
           }
         let content = self._acc.content() : string
-        let parsed = __sap_parse_partial<S>(content, self._cache) : S | baml.stream.StreamNoYield
+        let parsed: S | root.stream.StreamNoYield = __sap_parse_partial<S>(content, self._cache) : S | baml.stream.StreamNoYield
         match (parsed : S | baml.stream.StreamNoYield) : never
           _: root.stream.StreamNoYield =>
             { : never
               continue
             }
-          parsed: S =>
+          let parsed: S =>
             { : never
               return parsed : S
             }
@@ -686,7 +686,7 @@ function baml.llm.Stream.final(self: baml.llm.Stream) -> unknown throws never {
               { : never
                 break
               }
-            next: string =>
+            let next: string =>
               next : string
         self._acc.add_events(next) : null
         if (self._acc.is_done() : bool) : void
@@ -700,7 +700,7 @@ function baml.llm.Stream.final(self: baml.llm.Stream) -> unknown throws never {
         { : never
           throw LlmClientError { message: "Streaming finishe..." } : unknown
         }
-      reason: string =>
+      let reason: string =>
         self._client.validate_finish_reason(reason) : null
     let content = self._acc.content() : string
     __sap_parse_final<T>(content, self._cache) : T

@@ -193,7 +193,7 @@ class MaybeBox<T> {
 
     function get_or_default(self, default: T) -> T {
         match (self.value) {
-            v: T => v,
+            let v: T => v,
             _: null => default,
         }
     }

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 11603
 ---
 === TIR2 ===
 function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int throws never {
@@ -913,9 +914,9 @@ function user.ManyNestedExprs(items: int[]) -> int throws never {
 function user.NestedLoops(matrix: int[][]) -> int throws never {
   { : never
     let total = 0 : 0 -> int
-    for row in matrix
+    for let row in matrix
       { : void
-        for val in row
+        for let val in row
           { : void
             if (val < 0 : bool) : void
               { : never
@@ -1203,17 +1204,17 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
           result Add= i : int
         }
     }
-    for item in items
+    for let item in items
       { : void
         result Add= item : int
       }
-    for x in [1, 2, 3, 4, 5]
+    for let x in [1, 2, 3, 4, 5]
       { : void
         result Add= x : int
       }
-    for i in [1, 2, 3]
+    for let i in [1, 2, 3]
       { : void
-        for j in [4, 5, 6]
+        for let j in [4, 5, 6]
           { : void
             result Add= i * j : int
           }
@@ -1232,11 +1233,11 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
           result Add= i : int
         }
     }
-    for item in items
+    for let item in items
       { : void
         result Add= item : int
       }
-    for item in items
+    for let item in items
       { : void
         result Add= item : int
       }
@@ -1262,11 +1263,11 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
           result Add= extremely_long_loop_counter_variable : int
         }
     }
-    for item in ["very long string one", "very long string two", "very long string ...", "very long string ..."]
+    for let item in ["very long string one", "very long string two", "very long string ...", "very long string ..."]
       { : void
         result Add= 1 : int
       }
-    for extremely_long_item_variable_name in ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"]
+    for let extremely_long_item_variable_name in ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"]
       { : void
         result Add= 1 : int
       }
@@ -1292,19 +1293,19 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
           result Add= extremely_long_loop_counter_variable : int
         }
     }
-    for extremely_long_item_variable_name in ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"]
+    for let extremely_long_item_variable_name in ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"]
       { : void
         result Add= 1 : int
       }
-    for extremely_long_item_variable_name in ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"]
+    for let extremely_long_item_variable_name in ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"]
       { : void
         result Add= 1 : int
       }
-    for i in [1, 2, 3]
+    for let i in [1, 2, 3]
       { : void
-        for j in [4, 5, 6]
+        for let j in [4, 5, 6]
           { : void
-            for k in [7, 8, 9]
+            for let k in [7, 8, 9]
               { : void
                 result Add= i * j * k : int
               }
@@ -1326,13 +1327,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
           }
         outer Add= 1 : int
       }
-    for i in [1, 2, 3, 4, 5]
+    for let i in [1, 2, 3, 4, 5]
       { : void
         if (i == 3 : bool) : void
           { : never
             continue
           }
-        for j in [10, 20, 30, 40, 50]
+        for let j in [10, 20, 30, 40, 50]
           { : void
             let val = : int
               match (i * j : int) : int
@@ -1341,12 +1342,12 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
                     break
                     0 : unknown
                   }
-                n: int if n > 100 =>
+                let n: int if n > 100 =>
                   { : never
                     continue
                     n : unknown
                   }
-                n: int =>
+                let n: int =>
                   n : int
             result Add= val : int
           }
@@ -1354,7 +1355,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
     let lvl1 = 0 : 0 -> int
     while lvl1 < 2
       { : void
-        for lvl2 in [1, 2]
+        for let lvl2 in [1, 2]
           { : void
             { : void
               let lvl3 = 0 : 0 -> int
@@ -1371,7 +1372,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
           }
         lvl1 Add= 1 : int
       }
-    for i in items
+    for let i in items
       { : void
         { : void
           let j = i * i + result * result : int
@@ -1381,9 +1382,9 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
             }
         }
       }
-    for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    for let i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
       { : void
-        for j in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        for let j in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
           { : void
             let computation = : int | 0 -> int
               if (i * j > 500 && i + j < 100 : bool) : int | 0
@@ -1414,26 +1415,26 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
           result Add= i : int
         }
     }
-    for item in items
+    for let item in items
       { : void
         result Add= item : int
       }
     let plain = 1 : 1 -> int
-    let typed = 2 : 2
+    let typed: int = 2 : 2 -> int
     let complex_init = a + result : int
-    let very_long_variable_name_for_testing_wrapping = map { "key": 42 } : map<string, int | string | bool | float | null>
+    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = map { "key": 42 } : map<string, int | string | bool | float | null>
     let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
-    let deeply_typed = map { "outer": map { "inner": map { "deep": 42 } } } : map<string, map<string, map<string, int | string | bool>>>
-    let trivia_var = 42 : 42
-    let trivia_var_block = 42 : 42
-    let very_long_variable_name_for_testing_wrapping = map { "key": 42 } : map<string, int | string | bool | float | null>
-    let very_long_variable_name_for_testing_wrapping = map { "key": 42 } : map<string, int | string | bool | float | null>
+    let deeply_typed: map<string, map<string, map<string, int | string | bool>>> = map { "outer": map { "inner": map { "deep": 42 } } } : map<string, map<string, map<string, int | string | bool>>>
+    let trivia_var: int = 42 : 42 -> int
+    let trivia_var_block: int = 42 : 42 -> int
+    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = map { "key": 42 } : map<string, int | string | bool | float | null>
+    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = map { "key": 42 } : map<string, int | string | bool | float | null>
     let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
     let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
     return result : int
   }
   ?? 12080..12107: unreachable code: 1 statement(s) after diverging statement
-  ?? 12187..12217: unreachable code: 1 statement(s) after diverging statement
+  ?? 12191..12221: unreachable code: 1 statement(s) after diverging statement
 }
 function user.AssertStmts(x: int, y: int) -> int throws never {
   { : int
@@ -1505,12 +1506,12 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
       _ =>
         "other" : "other"
     match (x : int) : "positive" | "other"
-      n: int if n > 0 =>
+      let n: int if n > 0 =>
         "positive" : "positive"
       _ =>
         "other" : "other"
     match (x : int) : "positive" | "other"
-      n: int if n > 0 =>
+      let n: int if n > 0 =>
         "positive" : "positive"
       _ =>
         "other" : "other"
@@ -1538,10 +1539,10 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
     match (x : int) : "zero" | "nonzero"
       0 =>
         "zero" : "zero"
-      n =>
+      let n =>
         "nonzero" : "nonzero"
     match (x : int) : "an integer"
-      n: int =>
+      let n: int =>
         "an integer" : "an integer"
     match (s : user.MatchStatus) : "active" | "inactive" | "pending"
       MatchStatus.Active =>
@@ -1570,12 +1571,12 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
       MatchStatus.Inactive =>
         "done" : "done"
     match (r : user.MatchResult) : string
-      s: MatchSuccess =>
+      let s: MatchSuccess =>
         s.data : string
-      f: MatchFailure =>
+      let f: MatchFailure =>
         f.reason : string
     match (r : user.MatchResult) : "something"
-      x: MatchSuccess | MatchFailure =>
+      let x: MatchSuccess | MatchFailure =>
         "something" : "something"
     match (x : int) : "small" | "big"
       0 | 1 | 2 | 3 | 4 | 5 =>
@@ -1583,14 +1584,14 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
       _ =>
         "big" : "big"
     match (x : int) : "positive" | "negative" | "zero"
-      n: int if n > 0 =>
+      let n: int if n > 0 =>
         "positive" : "positive"
-      n: int if n < 0 =>
+      let n: int if n < 0 =>
         "negative" : "negative"
       _ =>
         "zero" : "zero"
     match (x : int) : "acceptable small positive number that passes all the filters" | "other"
-      n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 && n != 99 =>
+      let n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 && n != 99 =>
         "acceptable small ..." : "acceptable small positive number that passes all the filters"
       _ =>
         "other" : "other"
@@ -1626,12 +1627,12 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
       _ =>
         "short" : "short"
     match (x : int) : "acceptable small positive number that passes all the defined filter conditions" | "other"
-      n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 =>
+      let n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 =>
         "acceptable small ..." : "acceptable small positive number that passes all the defined filter conditions"
       _ =>
         "other" : "other"
     match (x : int) : "acceptable small positive number that passes all the defined filter conditions" | "other"
-      n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 =>
+      let n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 =>
         "acceptable small ..." : "acceptable small positive number that passes all the defined filter conditions"
       _ =>
         "other" : "other"
@@ -1679,13 +1680,13 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
             "zero-false" : "zero-false"
       1 =>
         match (r : user.MatchResult) : string | "one-success-false"
-          s: MatchSuccess =>
+          let s: MatchSuccess =>
             match (b : bool) : string | "one-success-false"
               true =>
                 s.data : string
               false =>
                 "one-success-false" : "one-success-false"
-          f: MatchFailure =>
+          let f: MatchFailure =>
             f.reason : string
       _ =>
         "other" : "other"
@@ -1713,13 +1714,14 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
       _ =>
         "other" : "other"
   }
-  !! 3875..3885: unreachable arm
-  !! 3900..3907: unreachable arm
-  !! 8340..8345: operator `Mul` cannot be applied to `bool` and `bool`
-  !! 8348..8353: operator `Mul` cannot be applied to `int` and `bool`
-  !! 8376..8381: operator `Mul` cannot be applied to `bool` and `bool`
-  !! 8388..8393: operator `Mul` cannot be applied to `int` and `bool`
-  !! 8400..8405: operator `Mul` cannot be applied to `bool` and `int`
+  !! 3883..3893: unreachable arm
+  !! 3908..3915: unreachable arm
+  !! 8388..8393: operator `Mul` cannot be applied to `bool` and `bool`
+  !! 8396..8401: operator `Mul` cannot be applied to `int` and `bool`
+  !! 8424..8429: operator `Mul` cannot be applied to `bool` and `bool`
+  !! 8436..8441: operator `Mul` cannot be applied to `int` and `bool`
+  !! 8448..8453: operator `Mul` cannot be applied to `bool` and `int`
+  !! 8506..8515: unreachable arm
 }
 class user.MatchSuccess$stream {
   data: null | string

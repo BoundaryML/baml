@@ -15,13 +15,13 @@ function 123Invalid() {}
 // Invalid: multiple typed bindings in union pattern
 function BadUnionPattern(x: int | bool) -> string {
     match (x) {
-        a: int | b: bool => "bad"
+        let a: int | let b: bool => "bad"
     }
 }
 
 // Invalid: typed binding after literal in union
 function MixedLiteralAndTyped(x: int) -> string {
     match (x) {
-        42 | n: int => "mixed"
+        42 | let n: int => "mixed"
     }
 }

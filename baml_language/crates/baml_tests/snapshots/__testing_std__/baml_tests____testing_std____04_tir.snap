@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 893
 ---
 === TIR2 ===
 
@@ -40,7 +39,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
         }
     let count = 0 : 0 -> int
     let hash_prefix = full_name + "#" : string
-    for t in self.tests
+    for let t in self.tests
       { : void
         if (t.name == full_name || t.name.startsWith(hash_prefix) : bool) : void
           { : void
@@ -60,7 +59,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
         { : string
           full_name : string
         }
-    let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner }) : int
+    _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner }) : int
   }
 }
 function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: testing.TestSetBody, runner: testing.TestSetRunner?) -> void throws never {
@@ -76,7 +75,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
         }
     let count = 0 : 0 -> int
     let hash_prefix = full_name + "#" : string
-    for ts in self.testsets
+    for let ts in self.testsets
       { : void
         if (ts.name == full_name || ts.name.startsWith(hash_prefix) : bool) : void
           { : void
@@ -96,12 +95,12 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
         { : string
           full_name : string
         }
-    let _ = self.testsets.push(TestSetRegistration { name: final_name, collector: collector, runner: runner }) : int
+    _ = self.testsets.push(TestSetRegistration { name: final_name, collector: collector, runner: runner }) : int
   }
 }
 function testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration throws never {
   { : never
-    for ts in self.testsets
+    for let ts in self.testsets
       { : void
         if (ts.name == name : bool) : void
           { : never
@@ -138,16 +137,16 @@ function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.T
 }
 function testing.TestRegistry.serialize(self: testing.TestRegistry) -> testing.SerializedTestDef[] throws never {
   { : never
-    let items = [] : testing.SerializedTestDef[]
-    for t in self.collector.tests
+    let items: SerializedTestDef[] = [] : testing.SerializedTestDef[]
+    for let t in self.collector.tests
       { : int
         items.push(SerializedTest { type: "test", name: t.name }) : int
       }
-    for ts in self.collector.testsets
+    for let ts in self.collector.testsets
       { : int
         let expanded = self.expansions.get(ts.name) : testing.TestRegistry?
         match (expanded : testing.TestRegistry?) : int
-          sub: TestRegistry =>
+          let sub: TestRegistry =>
             { : int
               items.push(SerializedTestSet { name: ts.name, items: sub.serialize(), loadingTimeMs: sub.loading_time_ms }) : int
             }
@@ -161,14 +160,14 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> testing.S
 }
 function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> testing.TestReport throws never {
   { : never
-    for t in self.collector.tests
+    for let t in self.collector.tests
       { : void
         if (t.name == name : bool) : void
           { : never
             return root.run_test(t.body, t.runner) : testing.TestReport
           }
       }
-    for k in self.expansions.keys()
+    for let k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
         if (name.startsWith(k + "/") : bool) : void
@@ -181,7 +180,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
 }
 function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> testing.SerializedTestDef[] throws never {
   { : never
-    for ts in self.collector.testsets
+    for let ts in self.collector.testsets
       { : void
         if (ts.name == name : bool) : void
           { : never
@@ -194,7 +193,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
             return self.serialize() : testing.SerializedTestDef[]
           }
       }
-    for k in self.expansions.keys()
+    for let k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
         if (name.startsWith(k + "/") : bool) : void
@@ -207,20 +206,20 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
 }
 function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -> testing.TestReport throws never {
   { : testing.TestReport
-    let base_run = : () -> testing.TestReport throws never
+    let base_run: TestReportThunk = : () -> testing.TestReport throws never -> testing.TestReportThunk
       () -> TestReport { ... } : () -> testing.TestReport throws never
         {
           let start = baml.sys.now_ms()
           let result = ...
-            { 1 stmts + tail } catch_all (e) { _ => { 0 stmts + tail } }
+            { 1 stmts + tail } catch_all (let e) { _ => { 0 stmts + tail } }
           TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start }] }
         }
     match (runner : testing.TestRunner?) : testing.TestReport
       null =>
         base_run() : testing.TestReport
-      r: TestRunner =>
+      let r: TestRunner =>
         { : testing.TestReport
-          let wrapped = r(base_run) : testing.TestReportThunk
+          let wrapped: TestReportThunk = r(base_run) : testing.TestReportThunk
           wrapped() : testing.TestReport
         }
   }
@@ -232,9 +231,9 @@ function testing.run_testset(run_children: testing.TestSetReportThunk, runner: t
     match (runner : testing.TestSetRunner?) : testing.TestSetReport
       null =>
         run_children() : testing.TestSetReport
-      r: TestSetRunner =>
+      let r: TestSetRunner =>
         { : testing.TestSetReport
-          let wrapped = r(run_children) : testing.TestSetReportThunk
+          let wrapped: TestSetReportThunk = r(run_children) : testing.TestSetReportThunk
           wrapped() : testing.TestSetReport
         }
   }

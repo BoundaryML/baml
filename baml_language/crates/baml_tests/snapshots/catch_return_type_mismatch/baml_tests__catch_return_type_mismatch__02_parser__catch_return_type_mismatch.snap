@@ -57,15 +57,16 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
-              WORD "e"
+            WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN "Errors.AuthenticationError"
-                WORD "Errors"
-                DOT "."
-                WORD "AuthenticationError"
+              PATTERN
+                PATTERN_ALT
+                  TYPE_EXPR "Errors.AuthenticationError"
+                    WORD "Errors"
+                    DOT "."
+                    WORD "AuthenticationError"
               FAT_ARROW "=>"
               BLOCK_EXPR
                 L_BRACE "{"

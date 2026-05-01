@@ -527,30 +527,13 @@ fn local_type_info(
             })
         }
 
-        DefinitionSite::Statement(stmt_id) => {
-            // Look up the binding type from inferred scope types.
-            // We need to go from `StmtId` → `PatId` → binding type.
-            //
-            // Use the function body to find the statement and extract the pat id,
-            // then look up the type from infer_scope_types for the enclosing scope.
-            let body = baml_compiler2_hir::body::function_body(db, func_loc);
-            let pat_id = body_stmt_to_pat_id(&body, stmt_id)?;
-
-            // Get the scope containing at_offset (may be a nested block scope).
-            // infer_scope_types is keyed by ScopeId. We need the function scope's
-            // ScopeId to get the binding type, since bindings are stored per scope.
+        DefinitionSite::Pattern(pat_id) => {
             let func_scope_id = index.scope_ids[enclosing_func_scope.index() as usize];
             let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_id);
             let ty_str = inference
                 .binding_type(pat_id)
                 .map(utils::display_ty)
                 .unwrap_or_else(|| {
-                    // Try the use-site's ancestor scope chain — restricts the
-                    // lookup to inferences for bodies that share the
-                    // use-site's pattern arena. Iterating *every* scope in
-                    // the file would, under PatId collisions across nested
-                    // ExprBodies (e.g. two lambdas with the same arena
-                    // index), surface the wrong type for hover/inlay hints.
                     find_binding_ty_in_scopes(db, index, scope_id, pat_id)
                         .unwrap_or_else(|| "unknown".to_string())
                 });
@@ -560,40 +543,11 @@ fn local_type_info(
                 ty: ty_str,
             })
         }
-
-        DefinitionSite::PatternBinding(_) => {
-            // Pattern bindings — report as local variable with unknown type for now.
-            Some(TypeInfo::LocalVar {
-                name: name.as_str().to_string(),
-                ty: "unknown".to_string(),
-            })
-        }
     }
 }
 
 /// Extract the `PatId` for the binding introduced by `stmt_id`.
 ///
-/// For local declaration statements, returns the pattern ID.
-/// Returns `None` for other statement kinds.
-fn body_stmt_to_pat_id(
-    body: &baml_compiler2_hir::body::FunctionBody,
-    stmt_id: baml_compiler2_ast::StmtId,
-) -> Option<baml_compiler2_ast::PatId> {
-    use baml_compiler2_hir::body::FunctionBody;
-    let FunctionBody::Expr(expr_body) = body else {
-        return None;
-    };
-
-    let stmt = &expr_body.stmts[stmt_id];
-    match stmt {
-        baml_compiler2_ast::Stmt::Let { pattern, .. }
-        | baml_compiler2_ast::Stmt::For {
-            binding: pattern, ..
-        } => Some(*pattern),
-        _ => None,
-    }
-}
-
 /// Search the use-site's ancestor-scope chain for the binding type of
 /// `pat_id`.
 ///

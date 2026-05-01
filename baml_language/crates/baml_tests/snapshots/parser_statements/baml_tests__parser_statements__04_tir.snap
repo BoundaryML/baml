@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 28190
 ---
 === TIR2 ===
 function user.simple_assign() -> int throws never {
@@ -214,7 +213,7 @@ function user.c_style_for_loop() -> int throws never {
 function user.iterator_style_for_loop() -> int throws never {
   { : never
     let result = 0 : 0 -> int
-    for i in [1, 2, 3]
+    for let i in [1, 2, 3]
       { : void
         result Add= i : int
       }
@@ -224,9 +223,9 @@ function user.iterator_style_for_loop() -> int throws never {
 function user.nested_for_loop() -> int throws never {
   { : never
     let result = 0 : 0 -> int
-    for i in [1, 2, 3]
+    for let i in [1, 2, 3]
       { : void
-        for j in [4, 5, 6]
+        for let j in [4, 5, 6]
           { : void
             result Add= i * j : int
           }
@@ -254,9 +253,9 @@ function user.ConditionalLogic(age: int) -> string throws never {
 function user.let_statements() -> int throws never {
   { : never
     let x = 1 : 1 -> int
-    let y = 2 : 2
-    let z = [1, 2, 3] : int[]
-    let point = Point { x: 1, y: 2 } : user.Point
+    let y: int = 2 : 2 -> int
+    let z: int[] = [1, 2, 3] : int[]
+    let point: Point = Point { x: 1, y: 2 } : user.Point
     return point.x + point.y : int
   }
 }

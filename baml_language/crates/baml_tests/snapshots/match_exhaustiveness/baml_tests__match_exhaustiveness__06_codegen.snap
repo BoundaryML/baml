@@ -358,8 +358,7 @@ function user.ExhaustiveDoubleMaybe(dm: (Success | Failure)??) -> string {
 
   L1:
     load_var dm
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L4
     load_const "nothing"
     jump L4
@@ -558,10 +557,6 @@ function user.ExhaustiveNullableEnum(s: Status?) -> string {
     jump L3
 
   L2:
-    load_var s
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L6
     load_const "no status"
     jump L6
 
@@ -605,8 +600,7 @@ function user.ExhaustiveOptional(x: int?) -> string {
 
   L0:
     load_var x
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L2
     load_const "no value"
     jump L2
@@ -627,8 +621,7 @@ function user.ExhaustiveOptionalSingleton(code: 200?) -> string {
 
   L0:
     load_var code
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L2
     load_const "no code"
     jump L2
@@ -744,6 +737,10 @@ function user.ExhaustiveWithNamedCatchAll(x: int) -> int {
 
   L0:
     load_var x
+    pop 1
+    load_const false
+    pop_jump_if_false L2
+    load_const null
     load_const 1
     bin_op +
     jump L2
@@ -1334,8 +1331,7 @@ function user.NestedTypeAlias(mr: (Success | Failure)?) -> string {
 
   L1:
     load_var mr
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L4
     load_const "nothing"
     jump L4
@@ -1632,8 +1628,7 @@ function user.NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
 
   L1:
     load_var s
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L4
     load_const "no status"
     jump L4
@@ -1662,8 +1657,7 @@ function user.NonExhaustiveOptionalMissingNull(code: 200?) -> string {
 
 function user.NonExhaustiveOptionalMissingValue(code: 200?) -> string {
     load_var code
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L0
 
   L0:
@@ -1717,8 +1711,7 @@ function user.NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
 
 function user.OptionalWithCatchAll(x: int?) -> string {
     load_var x
-    load_const null
-    cmp_op ==
+    is_type null
     pop_jump_if_false L0
     jump L1
 

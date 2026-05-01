@@ -7,7 +7,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use baml_base::Name;
-use baml_compiler2_ast::{ExprId, LoweringDiagnostic, PatId, StmtId};
+use baml_compiler2_ast::{ExprId, LoweringDiagnostic, PatId};
 use text_size::{TextRange, TextSize};
 
 // ── PathResolution ────────────────────────────────────────────────────────────
@@ -43,15 +43,13 @@ use crate::{
 
 // ── DefinitionSite ───────────────────────────────────────────────────────────
 
-/// Where a local variable was defined (for go-to-definition).
+/// Where a local variable was defined (for go-to-definition and capture identity).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DefinitionSite {
-    /// Defined in a let statement.
-    Statement(StmtId),
     /// Defined as a function parameter (with its index).
     Parameter(usize),
-    /// Defined by a pattern binding (match arm, catch arm, catch clause, etc.).
-    PatternBinding(PatId),
+    /// Defined by a pattern (let statement, for-in binding, match arm, catch arm, etc.).
+    Pattern(PatId),
 }
 
 // ── BindingId ────────────────────────────────────────────────────────────────

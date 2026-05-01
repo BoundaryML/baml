@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
+assertion_line: 43
 ---
 function assert.contains(haystack: string, needle: string) -> null {
   28   0    load_var 1             (haystack)
@@ -588,7 +589,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         10   call 14                 (baml.Array.length)
         11   cmp_op <                
         12   pop_jump_if_false +2    (to 14)
-        13   jump +69                (to 82)
+        13   jump +68                (to 81)
 
   104   14   load_var 1              (self)
         15   load_field 0            (collector)
@@ -623,73 +624,72 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
   106   40   load_var 10             (expanded)
         41   is_type 1               
         42   pop_jump_if_false +2    (to 44)
-        43   jump +15                (to 58)
+        43   jump +14                (to 57)
         44   load_var 10             (expanded)
-        45   load_const 2            (null)
-        46   cmp_op ==               
-        47   pop_jump_if_false +30   (to 77)
+        45   is_type 2               
+        46   pop_jump_if_false +30   (to 76)
 
-  115   48   load_var 3              (items)
-        49   alloc_instance 110      (SerializedTest)
-        50   load_const 3            ("lazyTestSet")
-        51   init_field 0            (type)
-        52   load_var 9              (ts)
-        53   load_field 0            (name)
-        54   init_field 1            (name)
-        55   call 8                  (baml.Array.push)
-        56   pop 1                   
-        57   jump +20                (to 77)
+  115   47   load_var 3              (items)
+        48   alloc_instance 110      (SerializedTest)
+        49   load_const 3            ("lazyTestSet")
+        50   init_field 0            (type)
+        51   load_var 9              (ts)
+        52   load_field 0            (name)
+        53   init_field 1            (name)
+        54   call 8                  (baml.Array.push)
+        55   pop 1                   
+        56   jump +20                (to 76)
 
-  106   58   load_var 10             (expanded)
-        59   store_var 11            (sub)
+  106   57   load_var 10             (expanded)
+        58   store_var 11            (sub)
 
-  109   60   load_var 9              (ts)
-        61   load_field 0            (name)
-        62   store_var 12            (_25)
+  109   59   load_var 9              (ts)
+        60   load_field 0            (name)
+        61   store_var 12            (_25)
 
-  110   63   load_var 11             (sub)
-        64   call 165                (testing.TestRegistry.serialize)
-        65   store_var 13            (_26)
+  110   62   load_var 11             (sub)
+        63   call 165                (testing.TestRegistry.serialize)
+        64   store_var 13            (_26)
 
-  108   66   load_var 3              (items)
-        67   alloc_instance 108      (SerializedTestSet)
-        68   load_var 12             (_25)
-        69   init_field 0            (name)
-        70   load_var 13             (_26)
-        71   init_field 1            (items)
+  108   65   load_var 3              (items)
+        66   alloc_instance 108      (SerializedTestSet)
+        67   load_var 12             (_25)
+        68   init_field 0            (name)
+        69   load_var 13             (_26)
+        70   init_field 1            (items)
 
-  111   72   load_var 11             (sub)
-        73   load_field 2            (loading_time_ms)
-        74   init_field 2            (loadingTimeMs)
-        75   call 8                  (baml.Array.push)
-        76   pop 1                   
+  111   71   load_var 11             (sub)
+        72   load_field 2            (loading_time_ms)
+        73   init_field 2            (loadingTimeMs)
+        74   call 8                  (baml.Array.push)
+        75   pop 1                   
 
-  104   77   load_var 8              (__for_idx_1)
-        78   load_const 4            (1)
-        79   bin_op +                
-        80   store_var 8             (__for_idx_1)
-        81   jump -61                (to 20)
+  104   76   load_var 8              (__for_idx_1)
+        77   load_const 4            (1)
+        78   bin_op +                
+        79   store_var 8             (__for_idx_1)
+        80   jump -60                (to 20)
 
-  101   82   load_var 4              (_3)
-        83   load_var 5              (__for_idx)
-        84   load_array_element      
-        85   store_var 6             (t)
+  101   81   load_var 4              (_3)
+        82   load_var 5              (__for_idx)
+        83   load_array_element      
+        84   store_var 6             (t)
 
-  102   86   load_var 3              (items)
-        87   alloc_instance 110      (SerializedTest)
-        88   load_const 5            ("test")
-        89   init_field 0            (type)
-        90   load_var 6              (t)
-        91   load_field 0            (name)
-        92   init_field 1            (name)
-        93   call 8                  (baml.Array.push)
-        94   pop 1                   
+  102   85   load_var 3              (items)
+        86   alloc_instance 110      (SerializedTest)
+        87   load_const 5            ("test")
+        88   init_field 0            (type)
+        89   load_var 6              (t)
+        90   load_field 0            (name)
+        91   init_field 1            (name)
+        92   call 8                  (baml.Array.push)
+        93   pop 1                   
 
-  101   95   load_var 5              (__for_idx)
-        96   load_const 4            (1)
-        97   bin_op +                
-        98   store_var 5             (__for_idx)
-        99   jump -91                (to 8)
+  101   94   load_var 5              (__for_idx)
+        95   load_const 4            (1)
+        96   bin_op +                
+        97   store_var 5             (__for_idx)
+        98   jump -90                (to 8)
 }
 
 function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
@@ -702,50 +702,48 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         5    store_var 3             (base_run)
 
   188   6    load_var 2              (runner)
-        7    load_const 0            (null)
-        8    cmp_op ==               
-        9    pop_jump_if_false +2    (to 11)
-        10   jump +11                (to 21)
-        11   load_var 2              (runner)
-        12   is_type 1               
-        13   pop_jump_if_false +10   (to 23)
-        14   load_var 2              (runner)
-        15   store_var 4             (r)
+        7    is_type 0               
+        8    pop_jump_if_false +2    (to 10)
+        9    jump +11                (to 20)
+        10   load_var 2              (runner)
+        11   is_type 1               
+        12   pop_jump_if_false +10   (to 22)
+        13   load_var 2              (runner)
+        14   store_var 4             (r)
 
-  191   16   load_var 3              (base_run)
-        17   load_var 4              (r)
-        18   call_indirect           
+  191   15   load_var 3              (base_run)
+        16   load_var 4              (r)
+        17   call_indirect           
 
-  192   19   call_indirect           
-        20   jump +3                 (to 23)
+  192   18   call_indirect           
+        19   jump +3                 (to 22)
 
-  189   21   load_var 3              (base_run)
-        22   call_indirect           
-        23   return                  
+  189   20   load_var 3              (base_run)
+        21   call_indirect           
+        22   return                  
 }
 
 function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> testing.TestSetReport {
   199   0    load_var 2              (runner)
-        1    load_const 0            (null)
-        2    cmp_op ==               
-        3    pop_jump_if_false +2    (to 5)
-        4    jump +11                (to 15)
-        5    load_var 2              (runner)
-        6    is_type 1               
-        7    pop_jump_if_false +10   (to 17)
-        8    load_var 2              (runner)
-        9    store_var 3             (r)
+        1    is_type 0               
+        2    pop_jump_if_false +2    (to 4)
+        3    jump +11                (to 14)
+        4    load_var 2              (runner)
+        5    is_type 1               
+        6    pop_jump_if_false +10   (to 16)
+        7    load_var 2              (runner)
+        8    store_var 3             (r)
 
-  202   10   load_var 1              (run_children)
-        11   load_var 3              (r)
-        12   call_indirect           
+  202   9    load_var 1              (run_children)
+        10   load_var 3              (r)
+        11   call_indirect           
 
-  203   13   call_indirect           
-        14   jump +3                 (to 17)
+  203   12   call_indirect           
+        13   jump +3                 (to 16)
 
-  200   15   load_var 1              (run_children)
-        16   call_indirect           
-        17   return                  
+  200   14   load_var 1              (run_children)
+        15   call_indirect           
+        16   return                  
 }
 
 function user.User.promote(self: null, bonus: int) -> Report {

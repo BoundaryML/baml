@@ -1,5 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== STRONG AST ERROR ===
-Expected token/node of kind STRING_LITERAL, but found BINARY_EXPR at main.baml:3:5
+=== PARSER ERROR ===
+[UnexpectedToken { expected: "'let' or ';'", found: "identifier", span: Span { file_id: FileId(0), range: 149..150 } }, UnexpectedToken { expected: "')'", found: "identifier", span: Span { file_id: FileId(0), range: 149..150 } }, UnexpectedToken { expected: "block after for expression", found: "identifier", span: Span { file_id: FileId(0), range: 149..150 } }, UnexpectedToken { expected: "expression", found: "in", span: Span { file_id: FileId(0), range: 151..153 } }, UnexpectedToken { expected: "']'", found: "','", span: Span { file_id: FileId(0), range: 156..157 } }, UnexpectedToken { expected: "expression", found: "','", span: Span { file_id: FileId(0), range: 156..157 } }, UnexpectedToken { expected: "expression", found: "','", span: Span { file_id: FileId(0), range: 159..160 } }, UnexpectedToken { expected: "expression", found: "']'", span: Span { file_id: FileId(0), range: 162..163 } }, UnexpectedToken { expected: "expression", found: "')'", span: Span { file_id: FileId(0), range: 163..164 } }]

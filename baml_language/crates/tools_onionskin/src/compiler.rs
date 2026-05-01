@@ -617,17 +617,7 @@ fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBo
     let pat = &body.patterns[pat_id];
     let base = match &pat.kind {
         PatternKind::Wildcard => "_".to_string(),
-        // TODO: render inner pattern when bind-with-pattern syntax lands
-        PatternKind::Bind {
-            name,
-            inner: _inner,
-        } => name.to_string(),
-        PatternKind::Literal(lit) => lit.to_string(),
-        PatternKind::Null => "null".into(),
-        PatternKind::EnumVariant { enum_name, variant } => {
-            let path: Vec<_> = enum_name.iter().map(|s| s.as_str()).collect();
-            format!("{}.{variant}", path.join("."))
-        }
+        PatternKind::Bind { name } => format!("let {name}"),
         PatternKind::Or(pats) => pats
             .iter()
             .map(|p| pat_desc(*p, body))
@@ -637,19 +627,13 @@ fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBo
         PatternKind::Class { class, fields } => {
             let field_strs: Vec<_> = fields
                 .iter()
-                .map(|f| {
-                    if let Some(inner) = f.pat {
-                        format!("{}: {}", f.field, pat_desc(inner, body))
-                    } else {
-                        f.field.to_string()
-                    }
-                })
+                .map(|f| format!("{}: {}", f.field, pat_desc(f.pat, body)))
                 .collect();
             format!("{} {{ {} }}", class, field_strs.join(", "))
         }
     };
-    if let Some(narrow) = &pat.narrow {
-        format!("{base}: {}", hir2_type_expr_to_string(narrow))
+    if let Some(chain_id) = pat.chain {
+        format!("{base}: {}", pat_desc(chain_id, body))
     } else {
         base
     }
@@ -1933,17 +1917,7 @@ impl CompilerRunner {
             let pat = &body.patterns[pat_id];
             let base = match &pat.kind {
                 PatternKind::Wildcard => "_".to_string(),
-                // TODO: render inner pattern when bind-with-pattern syntax lands
-                PatternKind::Bind {
-                    name,
-                    inner: _inner,
-                } => name.to_string(),
-                PatternKind::Literal(lit) => lit.to_string(),
-                PatternKind::Null => "null".into(),
-                PatternKind::EnumVariant { enum_name, variant } => {
-                    let path: Vec<_> = enum_name.iter().map(|s| s.as_str()).collect();
-                    format!("{}.{variant}", path.join("."))
-                }
+                PatternKind::Bind { name } => format!("let {name}"),
                 PatternKind::Or(pats) => pats
                     .iter()
                     .map(|p| pat_desc(*p, body))
@@ -1953,19 +1927,13 @@ impl CompilerRunner {
                 PatternKind::Class { class, fields } => {
                     let field_strs: Vec<_> = fields
                         .iter()
-                        .map(|f| {
-                            if let Some(inner) = f.pat {
-                                format!("{}: {}", f.field, pat_desc(inner, body))
-                            } else {
-                                f.field.to_string()
-                            }
-                        })
+                        .map(|f| format!("{}: {}", f.field, pat_desc(f.pat, body)))
                         .collect();
                     format!("{} {{ {} }}", class, field_strs.join(", "))
                 }
             };
-            if let Some(narrow) = &pat.narrow {
-                format!("{base}: {}", hir2_type_expr_to_string(narrow))
+            if let Some(chain_id) = pat.chain {
+                format!("{base}: {}", pat_desc(chain_id, body))
             } else {
                 base
             }
