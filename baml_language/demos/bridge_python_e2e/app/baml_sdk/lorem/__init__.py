@@ -24,8 +24,9 @@ import enum
 import typing
 import pydantic
 
+from .. import baml
+
 if typing.TYPE_CHECKING:
-    from .. import baml
     from .. import stream_types
 
 from baml.baml_core import (
@@ -91,6 +92,22 @@ class Box(pydantic.BaseModel, typing.Generic[T]):
     repackage_async = _define_instance_method("user.lorem.Box.repackage", "async", ["self"])
 
 
+class Foo(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    name: typing.Literal["foo"]
+    my_pdf: baml.media.Pdf
+    my_image: baml.media.Image
+    repackage       = _define_instance_method("user.lorem.Foo.repackage", "sync",  ["self"])
+    repackage_async = _define_instance_method("user.lorem.Foo.repackage", "async", ["self"])
+
+
+class Bar(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    their_pdf: baml.media.Pdf
+    their_image: baml.media.Image
+    name: typing.Literal["bar"]
+
+
 __all__ = [
     "ExtractResume",
     "ExtractResume_async",
@@ -111,4 +128,6 @@ __all__ = [
     "PhoneNumber",
     "Resume",
     "Box",
+    "Foo",
+    "Bar",
 ]

@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 
-from . import errors, fs, glob, http, llm, media, net, panics, stream
+from . import errors, fs, glob, http, llm, media, net, panics, stream, sys
 
 import typing
 import pydantic
@@ -106,6 +106,8 @@ class String(pydantic.BaseModel):
     matches_async = _define_instance_method("baml.String.matches", "async", ["self", "pattern"])
     replaceAll       = _define_instance_method("baml.String.replaceAll", "sync",  ["self", "search", "replacement"])
     replaceAll_async = _define_instance_method("baml.String.replaceAll", "async", ["self", "search", "replacement"])
+    to_bytes       = _define_instance_method("baml.String.to_bytes", "sync",  ["self"])
+    to_bytes_async = _define_instance_method("baml.String.to_bytes", "async", ["self"])
 
 
 class Uint8Array(pydantic.BaseModel):
@@ -140,6 +142,8 @@ class Uint8Array(pydantic.BaseModel):
     to_hex_async = _define_instance_method("baml.Uint8Array.to_hex", "async", ["self"])
     to_base64       = _define_instance_method("baml.Uint8Array.to_base64", "sync",  ["self"])
     to_base64_async = _define_instance_method("baml.Uint8Array.to_base64", "async", ["self"])
+    to_string       = _define_instance_method("baml.Uint8Array.to_string", "sync",  ["self"])
+    to_string_async = _define_instance_method("baml.Uint8Array.to_string", "async", ["self"])
     sort       = _define_instance_method("baml.Uint8Array.sort", "sync",  ["self"])
     sort_async = _define_instance_method("baml.Uint8Array.sort", "async", ["self"])
 

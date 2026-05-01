@@ -52,3 +52,27 @@ class Box<T> {
     Box<T> { item: self.item }
   }
 }
+
+class Foo {
+  name "foo"
+  my_pdf pdf
+  my_image image
+
+  // Free pure top-level functions are filtered out of the Python
+  // symbol pool (`client_codegen.rs:326` requires LLM declarative
+  // meta), so 15d's `repackage_pdf` is expressed here as a method
+  // on Foo instead. Methods are emitted unconditionally.
+  function repackage(self) -> Bar {
+    Bar {
+      their_pdf: self.my_pdf,
+      their_image: self.my_image,
+      name: "bar",
+    }
+  }
+}
+
+class Bar {
+  their_pdf pdf
+  their_image image
+  name "bar"
+}

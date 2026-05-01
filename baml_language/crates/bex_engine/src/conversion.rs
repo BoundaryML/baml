@@ -309,9 +309,7 @@ impl BexEngine {
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 panic!("PromptAst values cannot be converted to VM values yet")
             }
-            BexExternalValue::Adt(BexExternalAdt::Media(_)) => {
-                panic!("Media values cannot be converted to VM values yet")
-            }
+            BexExternalValue::Adt(BexExternalAdt::Media(arc)) => vm.alloc_rust_data(arc),
             BexExternalValue::FunctionRef { global_index } => {
                 let idx = bex_vm_types::GlobalIndex::from_raw(global_index);
                 assert!(
