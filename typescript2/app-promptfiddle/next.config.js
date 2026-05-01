@@ -40,7 +40,7 @@ export default function nextConfig(phase) {
       typedRoutes: true
     },
     transpilePackages: ['pkg-playground', 'pkg-proto'],
-    webpack: (config) => {
+    webpack: (config, { webpack }) => {
       config.resolve = config.resolve || {};
       config.resolve.alias = {
         ...config.resolve.alias,
@@ -52,6 +52,21 @@ export default function nextConfig(phase) {
       config.experiments = {
         ...config.experiments,
         asyncWebAssembly: true,
+      };
+
+      // just-bash/browser bundle still references a few Node.js built-ins
+      // (gzip/gunzip commands — dead code in browser). Webpack 5 treats
+      // "node:X" as an unhandled URI scheme and bails before resolve runs.
+      // Rewrite node:-prefixed imports to bare names so resolve.fallback
+      // can map them to empty modules.
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(/^node:/, (resource) => {
+          resource.request = resource.request.replace(/^node:/, '');
+        })
+      );
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        zlib: false,
       };
 
       return config;

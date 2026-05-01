@@ -26,20 +26,10 @@ function CatchInLet(x: int) -> string {
 //----
 //- diagnostics
 // Warning: unreachable arm
-//     ╭─[ catch_nested_catch.baml:12:11 ]
+//     ╭─[ catch_nested_catch.baml:12:9 ]
 //     │
 //  12 │ ╭─▶     _ => AlsoMayFail(x) catch (e2) {
 //     ┆ ┆   
-//  15 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── unreachable arm
-//     │     
-//     │     Note: Error code: E0063
-// ────╯
-// Warning: unreachable arm
-//     ╭─[ catch_nested_catch.baml:13:14 ]
-//     │
-//  13 │ ╭─▶       _ => "double caught"
 //  14 │ ├─▶     }
 //     │ │           
 //     │ ╰─────────── unreachable arm
@@ -47,12 +37,20 @@ function CatchInLet(x: int) -> string {
 //     │     Note: Error code: E0063
 // ────╯
 // Warning: unreachable arm
-//     ╭─[ catch_nested_catch.baml:21:12 ]
+//     ╭─[ catch_nested_catch.baml:13:12 ]
 //     │
-//  21 │ ╭─▶     _ => "fallback"
-//  22 │ ├─▶   };
-//     │ │          
-//     │ ╰────────── unreachable arm
-//     │     
-//     │     Note: Error code: E0063
+//  13 │       _ => "double caught"
+//     │            ───────┬───────  
+//     │                   ╰───────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0063
+// ────╯
+// Warning: unreachable arm
+//     ╭─[ catch_nested_catch.baml:21:10 ]
+//     │
+//  21 │     _ => "fallback"
+//     │          ─────┬────  
+//     │               ╰────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0063
 // ────╯

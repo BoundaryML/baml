@@ -2,4 +2,46 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-No errors found.
+  [type] Error: type mismatch: expected string, got uint8array
+   ╭─[ shell_ops.baml:3:34 ]
+   │
+ 3 │ ╭─▶ function RunCommand() -> string {
+ 4 │ ├─▶     baml.sys.shell("echo hello", null).stdout
+   │ │                                                   
+   │ ╰─────────────────────────────────────────────────── type mismatch: expected string, got uint8array
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] Error: type mismatch: expected string, got uint8array
+   ╭─[ shell_ops.baml:8:24 ]
+   │
+ 8 │ ╭─▶     let cmd = "ls -la";
+ 9 │ ├─▶     baml.sys.shell(cmd, null).stdout
+   │ │                                          
+   │ ╰────────────────────────────────────────── type mismatch: expected string, got uint8array
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] Error: type mismatch: expected string, got uint8array
+    ╭─[ shell_ops.baml:26:35 ]
+    │
+ 26 │ ╭─▶ function ExecCommand() -> string {
+ 27 │ ├─▶     baml.sys.exec("echo", ["hello"], null).stdout
+    │ │                                                       
+    │ ╰─────────────────────────────────────────────────────── type mismatch: expected string, got uint8array
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected string, got uint8array
+    ╭─[ shell_ops.baml:30:39 ]
+    │
+ 30 │ ╭─▶ function ExecWithOptions() -> string {
+ 31 │ ├─▶     baml.sys.exec("pwd", null, baml.sys.ProcessOptions { cwd: "/tmp" }).stdout
+    │ │                                                                                    
+    │ ╰──────────────────────────────────────────────────────────────────────────────────── type mismatch: expected string, got uint8array
+    │     
+    │     Note: Error code: E0001
+────╯

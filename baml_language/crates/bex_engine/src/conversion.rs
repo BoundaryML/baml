@@ -197,13 +197,8 @@ impl BexEngine {
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
-            Object::RustData(arc) => {
-                bex_external_types::try_convert_rust_data(arc).ok_or_else(|| {
-                    EngineError::CannotConvert {
-                        type_name: "rust_data".to_string(),
-                    }
-                })
-            }
+            Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
+                .unwrap_or_else(|| BexExternalValue::RustData(arc.clone()))),
             Object::Closure(_) => Err(EngineError::CannotConvert {
                 type_name: "closure".to_string(),
             }),
@@ -462,14 +457,22 @@ fn resolve_named_object<'a>(
     objects: &'a indexmap::IndexMap<String, HeapPtr>,
     name: &str,
 ) -> Option<&'a HeapPtr> {
-    objects.get(name).or_else(|| {
-        if name.contains('.') {
-            None
-        } else {
-            let user_name = format!("user.{name}");
-            objects.get(&user_name)
-        }
-    })
+    // Direct hit (engine FQN, e.g., "user.lorem.MyLorem" or
+    // "baml.http.Response").
+    if let Some(found) = objects.get(name) {
+        return Some(found);
+    }
+    // MIR's `qtn_to_type_name` strips the `user.` prefix from
+    // `display_name` for user-package types, so an `Instance` arriving
+    // from `coerce_arg_to_declared_type` may carry `lorem.MyLorem` while
+    // the engine registered `user.lorem.MyLorem`. Try the `user.`
+    // prefix as a fallback before giving up. Builtin/vendor types keep
+    // their full FQN so this only fires for user-package classes.
+    let user_qualified = format!("user.{name}");
+    if let Some(found) = objects.get(&user_qualified) {
+        return Some(found);
+    }
+    None
 }
 
 /// Check if a value matches a declared type.

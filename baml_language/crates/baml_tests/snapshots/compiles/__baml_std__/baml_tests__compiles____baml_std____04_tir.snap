@@ -938,6 +938,33 @@ class baml.stream.StreamNoYield$stream {
 }
 
 --- <builtin>/baml/ns_sys/sys.baml ---
+class baml.sys.ProcessOptions {
+  cwd: string?
+  env: map<string, string>?
+  timeout_ms: int?
+  stdin: string?
+}
+class baml.sys.ShellOutput {
+  stdout: uint8array
+  stderr: uint8array
+  exit_code: int
+}
+function baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool throws never {
+  { : bool
+    self.exit_code == 0 : bool
+  }
+}
+class baml.sys.ProcessOptions$stream {
+  cwd: null | string
+  env: null | map<string, string>
+  timeout_ms: null | int
+  stdin: null | string
+}
+class baml.sys.ShellOutput$stream {
+  stdout: uint8array
+  stderr: uint8array
+  exit_code: null | int
+}
 
 --- <builtin>/baml/ns_unstable/unstable.baml ---
 

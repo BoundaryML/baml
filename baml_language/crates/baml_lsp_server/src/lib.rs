@@ -85,7 +85,7 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         .with_writer(std::io::stderr)
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("debug")),
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,salsa=warn")),
         )
         .with_ansi(false)
         .init();
@@ -161,12 +161,14 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
     let event_sink = Some(composed_sink.clone());
 
     // Create the BexLsp (multi-project LSP)
+    let spawner = bex_project::BackgroundSpawner::with_handle(tokio_runtime.handle().clone());
     let bex = bex_project::new_lsp(
         sys_op_factory,
         lsp_sender,
         playground_sender,
         baml_vfs,
         event_sink,
+        spawner,
     );
     let bex: Arc<dyn bex_project::BexLsp> = Arc::new(bex);
 

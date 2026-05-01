@@ -331,7 +331,6 @@ fn bex_value_to_json_impl(value: &BexExternalValue, depth: usize) -> serde_json:
     if depth > MAX_SERIALIZATION_DEPTH {
         return serde_json::Value::String("...".into());
     }
-
     match value {
         BexExternalValue::Null => serde_json::Value::Null,
         BexExternalValue::Bool(b) => serde_json::Value::Bool(*b),
@@ -438,13 +437,7 @@ fn bex_value_to_debug_impl(value: &BexExternalValue, depth: usize) -> String {
         BexExternalValue::Null => "null".to_string(),
         BexExternalValue::Bool(b) => b.to_string(),
         BexExternalValue::Int(i) => i.to_string(),
-        BexExternalValue::Float(f) => {
-            if f.fract() == 0.0 {
-                format!("{f:.1}")
-            } else {
-                f.to_string()
-            }
-        }
+        BexExternalValue::Float(f) => bex_vm_types::format_float(*f),
         BexExternalValue::String(s) => format!("{s:?}"),
         BexExternalValue::Array { items, .. } => {
             if items.is_empty() {

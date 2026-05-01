@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { encodeCallArgs, decodeCallResult, serializeValue, deserializeValue } from '../index';
 import { CallFunctionArgs, BamlHandleType } from '../generated/baml/cffi/v1/baml_inbound';
-import { BamlOutboundValue } from '../generated/baml/cffi/v1/baml_outbound';
+import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml/cffi/v1/baml_outbound';
 
 describe('encodeCallArgs', () => {
   it('encodes an unsorted array as function kwargs', () => {
@@ -255,6 +255,69 @@ describe('decodeCallResult', () => {
       handle: { kind: 'functionRef', key: 42n },
     });
   });
+
+  // Coverage checklist — all BamlOutboundValue.$case values:
+  // [x] nullValue, [x] stringValue, [x] intValue (via listValue), [x] floatValue (via encodeCallArgs),
+  // [x] boolValue (via encodeCallArgs), [x] classValue, [x] enumValue, [x] literalValue,
+  // [x] listValue, [x] mapValue, [x] unionVariantValue, [x] handleValue,
+  // [x] uint8arrayValue, [x] mediaValue, [x] promptAstValue
+
+  it('decodes a uint8array', () => {
+    const sampleBytes = new Uint8Array([72, 101, 108, 108, 111]); // "Hello"
+    const bytes = encodeResult({
+      value: { $case: 'uint8arrayValue', uint8arrayValue: sampleBytes },
+    });
+    const result = decodeCallResult(bytes, defaultWrapHandle);
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(result).toEqual(sampleBytes);
+  });
+
+  it('decodes media (url type)', () => {
+    const bytes = encodeResult({
+      value: {
+        $case: 'mediaValue',
+        mediaValue: {
+          media: MediaTypeEnum.IMAGE,
+          mimeType: 'image/png',
+          value: { $case: 'url', url: 'https://example.com/img.png' },
+        },
+      },
+    });
+    const result = decodeCallResult(bytes, defaultWrapHandle) as Record<string, unknown>;
+    expect(result).toEqual({
+      $baml: { type: '$media' },
+      media_type: 'image',
+      mime_type: 'image/png',
+      content_type: 'url',
+      url: 'https://example.com/img.png',
+    });
+  });
+
+  it('decodes prompt ast (simple string)', () => {
+    const bytes = encodeResult({
+      value: {
+        $case: 'promptAstValue',
+        promptAstValue: {
+          value: {
+            $case: 'simple',
+            simple: {
+              value: { $case: 'string', string: 'Hello prompt' },
+            },
+          },
+        },
+      },
+    });
+    const result = decodeCallResult(bytes, defaultWrapHandle) as Record<string, unknown>;
+    expect(result).toEqual({
+      $baml: { type: '$prompt_ast' },
+      content_type: 'simple',
+      value: {
+        $baml: { type: '$prompt_ast_simple' },
+        content_type: 'string',
+        value: 'Hello prompt',
+      },
+    });
+  });
 });
 
 describe('round-trip: encode bubble sort args', () => {
@@ -283,5 +346,133 @@ describe('round-trip: encode bubble sort args', () => {
 
     const result = decodeCallResult(sortedResult, (_key, _ht, typeName) => ({ handle_type: typeName }));
     expect(result).toEqual([1, 2, 3, 4, 5]);
+  });
+});
+
+describe('structuredClone round-trip', () => {
+  function encodeResult(holder: Parameters<typeof BamlOutboundValue.encode>[0]): Uint8Array {
+    return BamlOutboundValue.encode(holder).finish();
+  }
+
+  const cloneWrapHandle = (key: bigint, handleType: number, typeName: string) => ({
+    handle_key: key,
+    handle_type: handleType,
+    type_name: typeName,
+  });
+
+  it('primitives survive structured clone', () => {
+    const cases = [
+      { value: { $case: 'nullValue' as const, nullValue: {} } },
+      { value: { $case: 'stringValue' as const, stringValue: 'hello' } },
+      { value: { $case: 'intValue' as const, intValue: 42 } },
+      { value: { $case: 'boolValue' as const, boolValue: true } },
+    ];
+    for (const c of cases) {
+      const bytes = encodeResult(c);
+      const decoded = decodeCallResult(bytes, cloneWrapHandle);
+      expect(structuredClone(decoded)).toEqual(decoded);
+    }
+  });
+
+  it('Uint8Array survives structured clone', () => {
+    const sampleBytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const bytes = encodeResult({
+      value: { $case: 'uint8arrayValue', uint8arrayValue: sampleBytes },
+    });
+    const decoded = decodeCallResult(bytes, cloneWrapHandle);
+    const cloned = structuredClone(decoded);
+    expect(cloned).toBeInstanceOf(Uint8Array);
+    expect(cloned).toEqual(decoded);
+  });
+
+  it('class with nested fields survives structured clone', () => {
+    const bytes = encodeResult({
+      value: {
+        $case: 'classValue',
+        classValue: {
+          name: { namespace: 1, name: 'Person', genericArgs: [] },
+          fields: [
+            { key: 'name', value: { value: { $case: 'stringValue', stringValue: 'Alice' } } },
+            { key: 'age', value: { value: { $case: 'intValue', intValue: 30 } } },
+          ],
+        },
+      },
+    });
+    const decoded = decodeCallResult(bytes, cloneWrapHandle);
+    expect(structuredClone(decoded)).toEqual(decoded);
+  });
+
+  it('handle with bigint key survives structured clone', () => {
+    const bytes = encodeResult({
+      value: {
+        $case: 'handleValue',
+        handleValue: { key: 42, handleType: BamlHandleType.FUNCTION_REF },
+      },
+    });
+    const decoded = decodeCallResult(bytes, cloneWrapHandle);
+    const cloned = structuredClone(decoded);
+    expect(cloned).toEqual(decoded);
+    // Verify bigint is preserved
+    const handle = (cloned as { handle: { handle_key: bigint } }).handle;
+    expect(typeof handle.handle_key).toBe('bigint');
+  });
+
+  it('complex nested value survives structured clone', () => {
+    const bytes = encodeResult({
+      value: {
+        $case: 'classValue',
+        classValue: {
+          name: { namespace: 1, name: 'ComplexResult', genericArgs: [] },
+          fields: [
+            {
+              key: 'items',
+              value: {
+                value: {
+                  $case: 'listValue',
+                  listValue: {
+                    itemType: { type: { $case: 'intType', intType: {} } },
+                    items: [
+                      { value: { $case: 'intValue', intValue: 1 } },
+                      { value: { $case: 'intValue', intValue: 2 } },
+                    ],
+                  },
+                },
+              },
+            },
+            {
+              key: 'data',
+              value: {
+                value: { $case: 'uint8arrayValue', uint8arrayValue: new Uint8Array([10, 20, 30]) },
+              },
+            },
+            {
+              key: 'ref',
+              value: {
+                value: {
+                  $case: 'handleValue',
+                  handleValue: { key: 99, handleType: BamlHandleType.FUNCTION_REF },
+                },
+              },
+            },
+            {
+              key: 'image',
+              value: {
+                value: {
+                  $case: 'mediaValue',
+                  mediaValue: {
+                    media: MediaTypeEnum.IMAGE,
+                    mimeType: 'image/png',
+                    value: { $case: 'url', url: 'https://example.com/img.png' },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+    const decoded = decodeCallResult(bytes, cloneWrapHandle);
+    const cloned = structuredClone(decoded);
+    expect(cloned).toEqual(decoded);
   });
 });

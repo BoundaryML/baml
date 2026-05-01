@@ -3,11 +3,12 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type `int` has no member `to_string`
-    ╭─[ main.baml:16:2 ]
+    ╭─[ main.baml:15:19 ]
     │
- 16 │     z.to_string()
-    │  ────────┬───────  
-    │          ╰───────── type `int` has no member `to_string`
-    │ 
-    │ Note: Error code: E0007
+ 15 │ ╭─▶     let z = x + y;
+ 16 │ ├─▶     z.to_string()
+    │ │                       
+    │ ╰─────────────────────── type `int` has no member `to_string`
+    │     
+    │     Note: Error code: E0007
 ────╯

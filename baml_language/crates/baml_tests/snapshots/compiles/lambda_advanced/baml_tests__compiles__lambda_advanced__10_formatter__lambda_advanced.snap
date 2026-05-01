@@ -120,10 +120,10 @@ function test_nested_map() -> int[][] {
         .map(
             (row: int[]) -> {
                 row.map(
-                        (x) -> {
-                            x * x
-                        },
-                    )
+                    (x) -> {
+                        x * x
+                    },
+                )
             },
         )
 }
@@ -214,14 +214,14 @@ function test_fully_inferred_map() -> int[] {
 function test_map_type_change_inferred() -> string[] {
     let nums: int[] = [1, 2, 3];
     nums.map(
-            (n) -> {
-                match (n) {
-                    1 => "one",
-                    2 => "two",
-                    _ => "other",
-                }
-            },
-        )
+        (n) -> {
+            match (n) {
+                1 => "one",
+                2 => "two",
+                _ => "other",
+            }
+        },
+    )
     // n: int inferred, return: string inferred from match body
     // U binds to "one"|"two"|"other", result is string[]?
 }

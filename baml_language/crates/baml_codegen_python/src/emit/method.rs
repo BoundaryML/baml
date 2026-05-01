@@ -31,6 +31,10 @@ pub(crate) struct PyMethodBinding {
     pub(crate) arg_tys: Vec<Ty>,
     /// Return type, used only by `.pyi` rendering.
     pub(crate) return_ty: Ty,
+    /// `TypeVar` names declared on this method. Empty for non-generic
+    /// methods. Surfaces only in `.pyi` rendering — the `.py` factory
+    /// binding is type-erased.
+    pub(crate) generic_params: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

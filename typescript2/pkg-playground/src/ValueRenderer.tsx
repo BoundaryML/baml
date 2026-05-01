@@ -42,8 +42,8 @@ export const ValueRenderer: FC<{
   if (type) {
     const Renderer = resolve(type, customRenderers);
     if (Renderer) return <Renderer value={value} displayMode={displayMode} />;
-    if (isInline) return <span className="font-vsc-mono text-xs text-vsc-text-faint">{type}</span>;
-    return <CodeBlock>{JSON.stringify(value, null, 2)}</CodeBlock>;
+    // Fall through to object rendering so class fields are visible
+    // (the className prefix is added at line ~108 below)
   }
 
   // $type dispatch — BAML instance types from bex_value_to_json

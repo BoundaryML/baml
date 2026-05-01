@@ -1645,8 +1645,13 @@ mod tests {
                 .receiver
                 .as_ref()
                 .is_some_and(|r| r.receiver_type.is_mut());
-            let has_mut_vm = output.contains(&format!("fn {name}(vm: &mut BexVm,"));
-            let has_ref_vm = output.contains(&format!("fn {name}(vm: &BexVm,"));
+
+            // Build the expected full signature to avoid false matches when
+            // multiple classes have a method with the same name but different
+            // VmUsage (e.g. uint8array.to_string vs errors.StackTrace.to_string).
+            let params = clean_param_list(b);
+            let has_mut_vm = output.contains(&format!("fn {name}(vm: &mut BexVm, {params})"));
+            let has_ref_vm = output.contains(&format!("fn {name}(vm: &BexVm, {params})"));
 
             if has_mut_receiver {
                 assert!(

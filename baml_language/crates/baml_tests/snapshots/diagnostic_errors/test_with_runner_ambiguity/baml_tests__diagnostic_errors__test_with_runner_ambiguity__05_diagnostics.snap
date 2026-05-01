@@ -3,22 +3,21 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: unresolved name: my_runner
-   ╭─[ main.baml:8:31 ]
+   ╭─[ main.baml:8:27 ]
    │
- 8 │ ╭─▶ test "simple runner" with my_runner {
- 9 │ ├─▶   assert.is_true(true)
-   │ │                            
-   │ ╰──────────────────────────── unresolved name: my_runner
-   │     
-   │     Note: Error code: E0003
+ 8 │ test "simple runner" with my_runner {
+   │                           ────┬────  
+   │                               ╰────── unresolved name: my_runner
+   │ 
+   │ Note: Error code: E0003
 ───╯
 
   [type] Error: unresolved name: Quorum
-    ╭─[ main.baml:13:30 ]
+    ╭─[ main.baml:13:24 ]
     │
  13 │ test "call runner" with testing.Quorum(5, 3) {
-    │                              ───────┬───────  
-    │                                     ╰───────── unresolved name: Quorum
+    │                        ───────┬───────  
+    │                               ╰───────── unresolved name: Quorum
     │ 
     │ Note: Error code: E0003
 ────╯

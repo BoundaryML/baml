@@ -1,7 +1,7 @@
 // Test hover on sys.shell builtin
 
-function TestShell() -> string {
-    baml.sys<[CURSOR].shell("echo hello")
+function TestShell() -> baml.sys.ShellOutput {
+    baml.sys<[CURSOR].shell("echo hello", null)
 }
 
 //----

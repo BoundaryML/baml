@@ -395,27 +395,56 @@ impl FromCST for ForStmt {
         // KW_FOR
         let keyword = it.expect_parse()?;
 
-        let open_paren = it.expect_parse()?;
+        // Three legal shapes:
+        //   for (let i in expr) { ... }       — paren + LET_STMT
+        //   for (let i = 0; cond; upd) { ... } — paren + LET_STMT + C-style
+        //   for (i in expr) { ... }            — paren + bare WORD
+        //   for i in expr { ... }              — no paren + bare WORD
+        let open_paren: Option<t::LParen> = it
+            .next_if_kind(SyntaxKind::L_PAREN)
+            .map(t::LParen::from_cst)
+            .transpose()?;
 
-        let let_stmt = it.expect_node_of_kind(SyntaxKind::LET_STMT)?; // does not allow WATCH_LET
-        let let_stmt = LetStmt::from_cst(SyntaxElement::Node(let_stmt))?;
+        // Binding: either a LET_STMT node or a bare Word token.
+        let binding = if let Some(let_elem) = it.next_if_kind(SyntaxKind::LET_STMT) {
+            ForBinding::Let(Box::new(LetStmt::from_cst(let_elem)?))
+        } else {
+            let word_elem = it.expect_next("for-loop binding (let or identifier)")?;
+            let word = t::Word::from_cst(word_elem)?;
+            ForBinding::Bare(word)
+        };
 
         let args = if let Some(kw_in) = it.next_if_kind(SyntaxKind::KW_IN) {
             // for-in
             let expr = it.expect_next("iterator expression")?;
             let expression = Expression::from_cst(expr)?;
 
-            let close_paren = it.expect_parse()?;
+            let close_paren = open_paren.as_ref().map(|_| it.expect_parse()).transpose()?;
 
             ForArgs::Iterator(ForIteratorArgs {
                 open_paren,
-                let_stmt,
+                binding,
                 in_keyword: t::In::from_cst(kw_in)?,
                 expression,
                 close_paren,
             })
         } else {
-            // C-style
+            // C-style — only valid with a `let` binding and parens
+            let ForBinding::Let(let_stmt) = binding else {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "C-style for loops require a `let` initializer".into(),
+                    found: SyntaxKind::FOR_EXPR,
+                    at: it.parent,
+                });
+            };
+            let Some(open_paren) = open_paren else {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "C-style for loops require parentheses".into(),
+                    found: SyntaxKind::FOR_EXPR,
+                    at: it.parent,
+                });
+            };
+
             let condition = it.expect_next("an expression")?;
             let condition = Expression::from_cst(condition)?;
 
@@ -428,7 +457,7 @@ impl FromCST for ForStmt {
 
             ForArgs::CStyle(ForCStyleArgs {
                 open_paren,
-                init: let_stmt,
+                init: *let_stmt,
                 condition,
                 semicolon,
                 update: Box::new(update),
@@ -473,6 +502,7 @@ impl Printable for ForStmt {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum ForArgs {
     Iterator(ForIteratorArgs),
     CStyle(ForCStyleArgs),
@@ -636,13 +666,24 @@ impl Printable for ForCStyleArgs {
     }
 }
 
+/// The binding side of a for-loop (`let i`, `let i: T`, or bare `i`).
+#[derive(Debug)]
+pub enum ForBinding {
+    /// `for (let i in ...)` — full let-statement (may carry a type annotation).
+    Let(Box<LetStmt>),
+    /// `for (i in ...)` or `for i in ...` — bare identifier, no `let`.
+    Bare(t::Word),
+}
+
 #[derive(Debug)]
 pub struct ForIteratorArgs {
-    pub open_paren: t::LParen,
-    pub let_stmt: LetStmt,
+    /// `None` for the parens-less form `for i in expr { ... }`.
+    pub open_paren: Option<t::LParen>,
+    pub binding: ForBinding,
     pub in_keyword: t::In,
     pub expression: Expression,
-    pub close_paren: t::RParen,
+    /// Mirrors `open_paren` — present iff `open_paren` is.
+    pub close_paren: Option<t::RParen>,
 }
 
 impl PrintMultiLine for ForIteratorArgs {
@@ -658,21 +699,37 @@ impl PrintMultiLine for ForIteratorArgs {
         let inner_shape =
             Shape::standalone(shape.width, shape.indent + printer.config.indent_width);
 
-        printer.print_raw_token(&self.open_paren);
-        printer.print_trivia_all_trailing_for(self.open_paren.span());
-        printer.print_newline();
-
-        let let_stmt_leading = printer.trivia.get_leading_for_element(&self.let_stmt);
-        printer.print_trivia_with_newline(let_stmt_leading, inner_shape.indent);
-        printer.print_spaces(inner_shape.indent);
-
-        if let Some(watch) = &self.let_stmt.watch {
-            printer.print_raw_token(watch);
-            printer.print_spaces(1);
+        if let Some(open_paren) = &self.open_paren {
+            printer.print_raw_token(open_paren);
+            printer.print_trivia_all_trailing_for(open_paren.span());
+            printer.print_newline();
+            let binding_leading = match &self.binding {
+                ForBinding::Let(let_stmt) => printer.trivia.get_leading_for_element(&**let_stmt),
+                ForBinding::Bare(word) => printer.trivia.get_for_range_split(word.span()).0,
+            };
+            printer.print_trivia_with_newline(binding_leading, inner_shape.indent);
+            printer.print_spaces(inner_shape.indent);
         }
-        printer.print_raw_token(&self.let_stmt.keyword);
-        printer.print_str(" ");
-        printer.print_raw_token(&self.let_stmt.name);
+
+        match &self.binding {
+            ForBinding::Let(let_stmt) => {
+                if let Some(watch) = &let_stmt.watch {
+                    printer.print_raw_token(watch);
+                    printer.print_spaces(1);
+                }
+                printer.print_raw_token(&let_stmt.keyword);
+                printer.print_str(" ");
+                printer.print_raw_token(&let_stmt.name);
+                if let Some((colon, ty)) = &let_stmt.type_annotation {
+                    printer.print_raw_token(colon);
+                    printer.print_str(" ");
+                    printer.print(ty, inner_shape.clone());
+                }
+            }
+            ForBinding::Bare(word) => {
+                printer.print_raw_token(word);
+            }
+        }
         printer.print_str(" ");
         printer.print_raw_token(&self.in_keyword);
         printer.print_spaces(1);
@@ -690,29 +747,50 @@ impl PrintMultiLine for ForIteratorArgs {
         };
         self.expression.print(expr_shape, printer);
         printer.print_trivia_trailing(expr_trailing);
-        printer.print_newline();
 
-        let (close_paren_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        printer.print_trivia_with_newline(close_paren_leading, inner_shape.indent);
-        printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_paren);
+        if let Some(close_paren) = &self.close_paren {
+            printer.print_newline();
+            let (close_paren_leading, _) = printer.trivia.get_for_range_split(close_paren.span());
+            printer.print_trivia_with_newline(close_paren_leading, inner_shape.indent);
+            printer.print_spaces(shape.indent);
+            printer.print_raw_token(close_paren);
+        }
         PrintInfo::default_multi_lined()
     }
 }
 
 impl ForIteratorArgs {
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.open_paren);
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        printer.try_print_trivia_single_line_squished(open_trailing)?;
-
-        if let Some(watch) = &self.let_stmt.watch {
-            printer.print_raw_token(watch);
-            printer.print_spaces(1);
+        if let Some(open_paren) = &self.open_paren {
+            printer.print_raw_token(open_paren);
+            let (_, open_trailing) = printer.trivia.get_for_range_split(open_paren.span());
+            printer.try_print_trivia_single_line_squished(open_trailing)?;
         }
-        printer.print_raw_token(&self.let_stmt.keyword);
-        printer.print_str(" ");
-        printer.print_raw_token(&self.let_stmt.name);
+
+        match &self.binding {
+            ForBinding::Let(let_stmt) => {
+                if let Some(watch) = &let_stmt.watch {
+                    printer.print_raw_token(watch);
+                    printer.print_spaces(1);
+                }
+                printer.print_raw_token(&let_stmt.keyword);
+                printer.print_str(" ");
+                printer.print_raw_token(&let_stmt.name);
+                if let Some((colon, ty)) = &let_stmt.type_annotation {
+                    printer.print_raw_token(colon);
+                    printer.print_str(" ");
+                    if printer
+                        .print(ty, Shape::unlimited_single_line())
+                        .multi_lined
+                    {
+                        return None;
+                    }
+                }
+            }
+            ForBinding::Bare(word) => {
+                printer.print_raw_token(word);
+            }
+        }
         printer.print_str(" ");
         printer.print_raw_token(&self.in_keyword);
         printer.print_str(" ");
@@ -729,9 +807,11 @@ impl ForIteratorArgs {
         }
         printer.try_print_trivia_single_line_squished(expr_trailing)?;
 
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_raw_token(&self.close_paren);
+        if let Some(close_paren) = &self.close_paren {
+            let (close_leading, _) = printer.trivia.get_for_range_split(close_paren.span());
+            printer.try_print_trivia_single_line_squished(close_leading)?;
+            printer.print_raw_token(close_paren);
+        }
 
         if printer.output.len() > shape.width {
             None
@@ -748,10 +828,22 @@ impl Printable for ForIteratorArgs {
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
-        self.open_paren.span()
+        if let Some(open_paren) = &self.open_paren {
+            return open_paren.span();
+        }
+        match &self.binding {
+            ForBinding::Let(let_stmt) => let_stmt
+                .watch
+                .as_ref()
+                .map_or_else(|| let_stmt.keyword.span(), Token::span),
+            ForBinding::Bare(word) => word.span(),
+        }
     }
     fn rightmost_token(&self) -> TextRange {
-        self.close_paren.span()
+        if let Some(close_paren) = &self.close_paren {
+            return close_paren.span();
+        }
+        self.expression.rightmost_token()
     }
 }
 

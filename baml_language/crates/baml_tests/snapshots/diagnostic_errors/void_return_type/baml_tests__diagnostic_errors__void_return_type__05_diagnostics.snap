@@ -33,21 +33,21 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] Error: type mismatch: expected void, got 42
-    ╭─[ void_return_type.baml:12:12 ]
+    ╭─[ void_return_type.baml:12:10 ]
     │
  12 │   return 42;
-    │            ─┬  
-    │             ╰── type mismatch: expected void, got 42
+    │          ─┬  
+    │           ╰── type mismatch: expected void, got 42
     │ 
     │ Note: Error code: E0001
 ────╯
 
   [type] Error: cannot use return value of a void function
-    ╭─[ void_return_type.baml:17:13 ]
+    ╭─[ void_return_type.baml:17:11 ]
     │
  17 │   let x = do_nothing();
-    │             ──────┬─────  
-    │                   ╰─────── cannot use return value of a void function
+    │           ──────┬─────  
+    │                 ╰─────── cannot use return value of a void function
     │ 
     │ Note: Error code: E0001
 ────╯
