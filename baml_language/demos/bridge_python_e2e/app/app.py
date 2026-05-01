@@ -164,7 +164,21 @@ assert bar.name == "bar"
 assert isinstance(bar.their_pdf, Pdf)
 assert bar.their_pdf.url() == "https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf"
 
+# Extended accessor coverage — exercises `from_file` / `from_base64` /
+# the `file()` / `base64()` / `mime_type()` accessors that the M0 path
+# doesn't touch. Pure-Rust dispatch, no engine round-trip.
+pdf_file = Pdf.from_file("/tmp/sample.pdf", "application/pdf")
+assert pdf_file.file() == "/tmp/sample.pdf"
+assert pdf_file.url() is None
+assert pdf_file.mime_type() == "application/pdf"
+
+import base64 as b64
+data = b64.b64encode(b"%PDF-1.4 fake bytes").decode()
+pdf_b64 = Pdf.from_base64(data, "application/pdf")
+assert pdf_b64.base64() == data
+
 print()
 print("OK — round-trip succeeded for: Optional, List<Class>, Map, Enum, "
       "nested-Class, sync+async, plus LLM `__build_request` companion, "
-      "plus Box<T> and Box<Box<int>> generics, plus Pdf media handle.")
+      "plus Box<T> and Box<Box<int>> generics, plus Pdf media handle "
+      "(top-level + nested round-trip + accessors).")
