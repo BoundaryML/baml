@@ -24,8 +24,7 @@ import enum
 import typing
 import pydantic
 
-if typing.TYPE_CHECKING:
-    from ... import baml
+from ... import baml
 
 from baml.baml_core import (
     define_instance_method as _define_instance_method,

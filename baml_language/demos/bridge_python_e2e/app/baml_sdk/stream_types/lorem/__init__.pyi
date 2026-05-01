@@ -26,7 +26,13 @@ import pydantic
 class Address(pydantic.BaseModel): ...
 
 
+class Bar(pydantic.BaseModel): ...
+
+
 class Box(pydantic.BaseModel): ...
+
+
+class Foo(pydantic.BaseModel): ...
 
 
 class PhoneNumber(pydantic.BaseModel): ...
@@ -37,7 +43,9 @@ class Resume(pydantic.BaseModel): ...
 
 __all__ = [
     "Address",
+    "Bar",
     "Box",
+    "Foo",
     "PhoneNumber",
     "Resume",
 ]

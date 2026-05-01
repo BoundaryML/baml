@@ -67,6 +67,14 @@ class Box(pydantic.BaseModel, typing.Generic[T]):
     async def repackage_async(self) -> Box[T]: ...
 
 
+class Foo(pydantic.BaseModel):
+    def repackage(self) -> Bar: ...
+    async def repackage_async(self) -> Bar: ...
+
+
+class Bar(pydantic.BaseModel): ...
+
+
 __all__ = [
     "ExtractResume",
     "ExtractResume_async",
@@ -87,4 +95,6 @@ __all__ = [
     "PhoneNumber",
     "Resume",
     "Box",
+    "Foo",
+    "Bar",
 ]

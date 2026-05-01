@@ -11,11 +11,14 @@ import asyncio
 import json
 
 from baml_sdk.baml.http import Request
+from baml_sdk.baml.media import Pdf
 from baml_sdk.lorem import (
     Address,
+    Bar,
     Box,
     ExtractResume__build_request,
     ExtractResume__build_request_async,
+    Foo,
     PhoneNumber,
     Resume,
     Sentiment,
@@ -137,6 +140,31 @@ assert isinstance(outer_after_async.item, Box)
 assert outer_after_async.item.item == 42
 
 print()
+
+# ---------------------------------------------------------------------------
+# Media handles: top-level + nested round-trip per 15b spec.
+# Exercises Pdf.from_url (PyO3 staticmethod -> Arc<MediaValue>),
+# isinstance check on the returned value, instance accessor (url()),
+# nested pdf in input class (Foo.my_pdf), and nested pdf in output class
+# (Bar.their_pdf) decoded back to a Pdf.
+# ---------------------------------------------------------------------------
+
+original = Pdf.from_url(
+    "https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf",
+    "application/pdf",
+)
+assert isinstance(original, Pdf), f"expected Pdf, got {type(original).__name__}"
+assert original.url() == "https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf"
+
+foo = Foo(name="foo", my_pdf=original)
+bar = foo.repackage()
+
+assert isinstance(bar, Bar)
+assert bar.name == "bar"
+assert isinstance(bar.their_pdf, Pdf)
+assert bar.their_pdf.url() == "https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf"
+
+print()
 print("OK — round-trip succeeded for: Optional, List<Class>, Map, Enum, "
       "nested-Class, sync+async, plus LLM `__build_request` companion, "
-      "plus Box<T> and Box<Box<int>> generics.")
+      "plus Box<T> and Box<Box<int>> generics, plus Pdf media handle.")
