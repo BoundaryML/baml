@@ -122,7 +122,10 @@ def _install_baml_stub() -> None:
         return
 
     baml = types.ModuleType("baml")
+    baml.__path__ = []  # mark as package so submodule lookups resolve
     baml_core = types.ModuleType("baml.baml_core")
+    baml_core.__path__ = []
+    baml_py = types.ModuleType("baml.baml_core.baml_py")
 
     class BamlRuntime:  # noqa: D401
         @staticmethod
@@ -138,14 +141,23 @@ def _install_baml_stub() -> None:
         factory.param_names = list(param_names)
         return factory
 
+    class _MediaStub:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+    for name in ("BamlPdf", "BamlAudio", "BamlVideo", "BamlImage"):
+        setattr(baml_py, name, type(name, (_MediaStub,), {}))
+
     baml_core.BamlRuntime = BamlRuntime
     baml_core.define_function = _make_factory
     baml_core.define_static_method = _make_factory
     baml_core.define_instance_method = _make_factory
+    baml_core.baml_py = baml_py
     baml.baml_core = baml_core
 
     sys.modules["baml"] = baml
     sys.modules["baml.baml_core"] = baml_core
+    sys.modules["baml.baml_core.baml_py"] = baml_py
 
 
 _install_baml_stub()
