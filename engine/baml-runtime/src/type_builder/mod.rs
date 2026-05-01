@@ -4,7 +4,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use baml_types::{BamlValue, EvaluationContext, TypeIR};
+use baml_types::{
+    ir_type::{TypeGeneric, UnionTypeViewGeneric},
+    BamlValue, EvaluationContext, TypeIR,
+};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::{
     internal_baml_parser_database::ParserDatabase, ir::repr::TypeBuilderEntry,
@@ -819,9 +822,143 @@ impl TypeBuilder {
         log::debug!("Dynamic types: \n {cls:#?} \n Dynamic enums\n {enm:#?} enums");
 
         let recursive_aliases = self.recursive_type_aliases.lock().unwrap().clone();
-        let recursive_classes = self.recursive_classes.lock().unwrap().clone();
+        let mut recursive_classes = self.recursive_classes.lock().unwrap().clone();
+        for cycle in self.detect_recursive_class_cycles() {
+            if !recursive_classes
+                .iter()
+                .any(|existing| same_class_cycle(existing, &cycle))
+            {
+                recursive_classes.push(cycle);
+            }
+        }
 
         (cls, enm, aliases, recursive_classes, recursive_aliases)
+    }
+
+    fn detect_recursive_class_cycles(&self) -> Vec<IndexSet<String>> {
+        let class_entries = self
+            .classes
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(name, class)| {
+                let property_types = class
+                    .lock()
+                    .unwrap()
+                    .properties
+                    .lock()
+                    .unwrap()
+                    .values()
+                    .filter_map(|property| property.lock().unwrap().r#type())
+                    .collect::<Vec<_>>();
+                (name.clone(), property_types)
+            })
+            .collect::<Vec<_>>();
+
+        let class_names = class_entries
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect::<IndexSet<_>>();
+        let graph = class_entries
+            .into_iter()
+            .map(|(name, property_types)| {
+                let mut references = IndexSet::new();
+                for property_type in property_types {
+                    collect_class_references(&property_type, &class_names, &mut references);
+                }
+                (name, references)
+            })
+            .collect::<IndexMap<_, _>>();
+
+        let mut cycles = Vec::new();
+        for class_name in graph.keys() {
+            let mut path = Vec::new();
+            collect_cycles_from(class_name, class_name, &graph, &mut path, &mut cycles);
+        }
+        cycles
+    }
+}
+
+fn same_class_cycle(left: &IndexSet<String>, right: &IndexSet<String>) -> bool {
+    left.len() == right.len() && left.iter().all(|class_name| right.contains(class_name))
+}
+
+fn push_class_cycle(cycles: &mut Vec<IndexSet<String>>, cycle: IndexSet<String>) {
+    if !cycles
+        .iter()
+        .any(|existing| same_class_cycle(existing, &cycle))
+    {
+        cycles.push(cycle);
+    }
+}
+
+fn collect_cycles_from(
+    start: &str,
+    current: &str,
+    graph: &IndexMap<String, IndexSet<String>>,
+    path: &mut Vec<String>,
+    cycles: &mut Vec<IndexSet<String>>,
+) {
+    if path.iter().any(|class_name| class_name == current) {
+        return;
+    }
+
+    path.push(current.to_string());
+    if let Some(neighbors) = graph.get(current) {
+        for neighbor in neighbors {
+            if neighbor == start {
+                push_class_cycle(cycles, path.iter().cloned().collect());
+            } else if graph.contains_key(neighbor) {
+                collect_cycles_from(start, neighbor, graph, path, cycles);
+            }
+        }
+    }
+    path.pop();
+}
+
+fn collect_class_references(
+    r#type: &TypeIR,
+    class_names: &IndexSet<String>,
+    references: &mut IndexSet<String>,
+) {
+    match r#type {
+        TypeGeneric::Class { name, .. } => {
+            if class_names.contains(name) {
+                references.insert(name.clone());
+            }
+        }
+        TypeGeneric::List(inner, _) => collect_class_references(inner, class_names, references),
+        TypeGeneric::Map(key, value, _) => {
+            collect_class_references(key, class_names, references);
+            collect_class_references(value, class_names, references);
+        }
+        TypeGeneric::Tuple(items, _) => {
+            for item in items {
+                collect_class_references(item, class_names, references);
+            }
+        }
+        TypeGeneric::Arrow(arrow, _) => {
+            for param in &arrow.param_types {
+                collect_class_references(param, class_names, references);
+            }
+            collect_class_references(&arrow.return_type, class_names, references);
+        }
+        TypeGeneric::Union(union, _) => match union.view() {
+            UnionTypeViewGeneric::Null => {}
+            UnionTypeViewGeneric::Optional(inner) => {
+                collect_class_references(inner, class_names, references)
+            }
+            UnionTypeViewGeneric::OneOf(items) | UnionTypeViewGeneric::OneOfOptional(items) => {
+                for item in items {
+                    collect_class_references(item, class_names, references);
+                }
+            }
+        },
+        TypeGeneric::Top(_)
+        | TypeGeneric::Primitive(_, _)
+        | TypeGeneric::Enum { .. }
+        | TypeGeneric::Literal(_, _)
+        | TypeGeneric::RecursiveTypeAlias { .. } => {}
     }
 }
 
@@ -1087,7 +1224,7 @@ mod tests {
             node.upsert_property("child")
                 .lock()
                 .unwrap()
-                .set_type(TypeIR::class("Node"))
+                .set_type(TypeIR::class("Node").as_list())
                 .with_meta(
                     "description",
                     BamlValue::String("recursive self reference".to_string()),
@@ -1104,7 +1241,7 @@ mod tests {
                 r#"TypeBuilder(
   Classes: [
     Node {
-      child Node (description=String("recursive self reference"))
+      child Node[] (description=String("recursive self reference"))
     }
   ]
 )"#
@@ -1113,8 +1250,11 @@ mod tests {
         );
 
         // Verify via to_overrides() that the recursive field is set correctly.
-        let (class_overrides, _enum_overrides, _aliases, _recursive_classes, _recursive_aliases) =
+        let (class_overrides, _enum_overrides, _aliases, recursive_classes, _recursive_aliases) =
             builder.to_overrides();
+        assert!(recursive_classes
+            .iter()
+            .any(|cycle| cycle.len() == 1 && cycle.contains("Node")));
         let node_override = class_overrides
             .get("Node")
             .expect("Expected override for Node");
@@ -1126,8 +1266,8 @@ mod tests {
         // The child's field type should exactly be a recursive reference to 'Node'
         assert_eq!(
             child_field_type,
-            &TypeIR::class("Node"),
-            "The 'child' field is not correctly set as a recursive reference to 'Node'"
+            &TypeIR::class("Node").as_list(),
+            "The 'child' field is not correctly set as a recursive list reference to 'Node'"
         );
     }
 
