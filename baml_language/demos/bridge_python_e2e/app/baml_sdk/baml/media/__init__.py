@@ -20,6 +20,16 @@
 
 from __future__ import annotations
 
+import typing
+import pydantic
+
+from ... import baml
+
+from baml.baml_core import (
+    define_instance_method as _define_instance_method,
+    define_static_method as _define_static_method,
+)
+
 
 from baml.baml_core.baml_py import BamlPdf as Pdf
 from baml.baml_core.baml_py import BamlAudio as Audio

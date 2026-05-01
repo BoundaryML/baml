@@ -51,24 +51,21 @@ impl LeafBody {
         }
         // Class field types and type aliases may use `typing.Optional`,
         // `typing.List`, `typing.TypeAlias`, etc. — be generous and
-        // import `typing` whenever a class or alias is present. Media
-        // re-export classes render as a one-line import only — they
-        // don't need `typing` for their own body.
-        if self.symbols.iter().any(|(s, _)| match s {
-            EmittedSymbol::Class(c) => media_reexport_rust_name(c).is_none(),
-            EmittedSymbol::TypeAlias(_) => true,
-            _ => false,
-        }) {
+        // import `typing` whenever a class or alias is present.
+        if self
+            .symbols
+            .iter()
+            .any(|(s, _)| matches!(s, EmittedSymbol::Class(_) | EmittedSymbol::TypeAlias(_)))
+        {
             out.push("typing");
         }
         out
     }
 
     pub(crate) fn needs_pydantic(&self) -> bool {
-        self.symbols.iter().any(|(s, _)| match s {
-            EmittedSymbol::Class(c) => media_reexport_rust_name(c).is_none(),
-            _ => false,
-        })
+        self.symbols
+            .iter()
+            .any(|(s, _)| matches!(s, EmittedSymbol::Class(_)))
     }
 
     pub(crate) fn needs_define_function(&self) -> bool {
@@ -79,18 +76,14 @@ impl LeafBody {
 
     pub(crate) fn needs_define_static_method(&self) -> bool {
         self.symbols.iter().any(|(s, _)| match s {
-            EmittedSymbol::Class(c) => {
-                media_reexport_rust_name(c).is_none() && !c.static_methods.is_empty()
-            }
+            EmittedSymbol::Class(c) => !c.static_methods.is_empty(),
             _ => false,
         })
     }
 
     pub(crate) fn needs_define_instance_method(&self) -> bool {
         self.symbols.iter().any(|(s, _)| match s {
-            EmittedSymbol::Class(c) => {
-                media_reexport_rust_name(c).is_none() && !c.instance_methods.is_empty()
-            }
+            EmittedSymbol::Class(c) => !c.instance_methods.is_empty(),
             _ => false,
         })
     }
@@ -111,7 +104,6 @@ impl LeafBody {
         let current = &self.leaf;
         for (sym, _) in &self.symbols {
             match sym {
-                EmittedSymbol::Class(c) if media_reexport_rust_name(c).is_some() => {}
                 EmittedSymbol::Class(c) => {
                     for prop in &c.properties {
                         collect_cross_leaf(&prop.ty, current, &mut set);
@@ -152,7 +144,6 @@ impl LeafBody {
         let current = &self.leaf;
         for (sym, _) in &self.symbols {
             match sym {
-                EmittedSymbol::Class(c) if media_reexport_rust_name(c).is_some() => {}
                 EmittedSymbol::Class(c) => {
                     for m in &c.static_methods {
                         for ty in &m.arg_tys {
@@ -190,10 +181,9 @@ impl LeafBody {
         self.symbols.iter().any(|(s, _)| match s {
             EmittedSymbol::Function(_) | EmittedSymbol::TypeAlias(_) => true,
             EmittedSymbol::Class(c) => {
-                media_reexport_rust_name(c).is_none()
-                    && (!c.static_methods.is_empty()
-                        || !c.instance_methods.is_empty()
-                        || !c.generic_params.is_empty())
+                !c.static_methods.is_empty()
+                    || !c.instance_methods.is_empty()
+                    || !c.generic_params.is_empty()
             }
             EmittedSymbol::Enum(_) => false,
         })
