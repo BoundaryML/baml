@@ -695,36 +695,71 @@ fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
                 d.phase == DiagnosticPhase::Parse
                     && d.severity == baml_compiler_diagnostics::Severity::Error
             });
+            let error_count = diagnostics.iter().filter(|d| d.severity == baml_compiler_diagnostics::Severity::Error).count();
+            let warning_count = diagnostics.iter().filter(|d| d.severity == baml_compiler_diagnostics::Severity::Warning).count();
             assert!(
                 has_parse_errors,
-                "Tier invariant violation: project '{}' is in '{}/' but has no parse errors. \
-                 Move it to 'diagnostic_errors/' (if it has semantic errors) or 'compiles/' (if it's clean).",
+                "Tier invariant failed for project '{}' in '{}/'\n\
+                 \n\
+                 Expected: at least one parse-phase error (broken_syntax/ projects test invalid syntax)\n\
+                 Got:      {} error(s), {} warning(s), 0 parse errors\n\
+                 \n\
+                 This usually means a parser change fixed a syntax error this project was testing.\n\
+                 The snapshot above shows the actual diagnostics.\n\
+                 \n\
+                 To fix:\n\
+                 1. If intentional, update the .baml files to test a different syntax error\n\
+                 2. If the project now has only semantic errors, move it to diagnostic_errors/\n\
+                 3. If the project now compiles cleanly, move it to compiles/",
                 #project_name,
                 #tier_name,
+                error_count,
+                warning_count,
             );
         },
         Tier::DiagnosticErrors => quote! {
             // Tier 2 invariant: must have error diagnostics but no parse errors
-            let has_parse_errors = diagnostics.iter().any(|d| {
+            let parse_error_count = diagnostics.iter().filter(|d| {
                 d.phase == DiagnosticPhase::Parse
                     && d.severity == baml_compiler_diagnostics::Severity::Error
-            });
+            }).count();
+            let error_count = diagnostics.iter().filter(|d| d.severity == baml_compiler_diagnostics::Severity::Error).count();
+            let warning_count = diagnostics.iter().filter(|d| d.severity == baml_compiler_diagnostics::Severity::Warning).count();
             assert!(
-                !has_parse_errors,
-                "Tier invariant violation: project '{}' is in '{}/' but has parse errors. \
-                 Move it to 'broken_syntax/'.",
+                parse_error_count == 0,
+                "Tier invariant failed for project '{}' in '{}/'\n\
+                 \n\
+                 Expected: error diagnostics but no parse errors (diagnostic_errors/ projects have valid syntax with semantic errors)\n\
+                 Got:      {} parse error(s) out of {} total error(s), {} warning(s)\n\
+                 \n\
+                 This usually means a code change introduced a syntax error in this project.\n\
+                 The snapshot above shows the actual diagnostics.\n\
+                 \n\
+                 To fix:\n\
+                 1. If a code change broke parsing, fix the parser regression\n\
+                 2. If the .baml files were edited to have intentionally broken syntax, move it to broken_syntax/",
                 #project_name,
                 #tier_name,
+                parse_error_count,
+                error_count,
+                warning_count,
             );
-            let has_errors = diagnostics.iter().any(|d| {
-                d.severity == baml_compiler_diagnostics::Severity::Error
-            });
             assert!(
-                has_errors,
-                "Tier invariant violation: project '{}' is in '{}/' but has no error diagnostics. \
-                 Move it to 'compiles/'.",
+                error_count > 0,
+                "Tier invariant failed for project '{}' in '{}/'\n\
+                 \n\
+                 Expected: at least one error diagnostic (diagnostic_errors/ projects test semantic errors)\n\
+                 Got:      0 errors, {} warning(s)\n\
+                 \n\
+                 This usually means a compiler change resolved the errors this project was testing.\n\
+                 The snapshot above shows the actual diagnostics.\n\
+                 \n\
+                 To fix:\n\
+                 1. If intentional, update the .baml files to test a different semantic error\n\
+                 2. If the project now compiles cleanly, move it to compiles/",
                 #project_name,
                 #tier_name,
+                warning_count,
             );
         },
         Tier::Compiles | Tier::Passing | Tier::PassingLlm => quote! {
@@ -733,13 +768,30 @@ fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
                 .iter()
                 .filter(|d| d.severity == baml_compiler_diagnostics::Severity::Error)
                 .collect();
+            let warning_count = diagnostics.iter().filter(|d| d.severity == baml_compiler_diagnostics::Severity::Warning).count();
+            let parse_error_count = errors.iter().filter(|d| d.phase == DiagnosticPhase::Parse).count();
+            let semantic_error_count = errors.len() - parse_error_count;
             assert!(
                 errors.is_empty(),
-                "Tier invariant violation: project '{}' is in '{}/' but has {} error diagnostic(s). \
-                 Move it to 'diagnostic_errors/' or 'broken_syntax/'.",
+                "Tier invariant failed for project '{}' in '{}/'\n\
+                 \n\
+                 Expected: zero error diagnostics (compiles/ projects must compile cleanly, warnings OK)\n\
+                 Got:      {} error(s) ({} parse, {} semantic), {} warning(s)\n\
+                 \n\
+                 This usually means a compiler change introduced new errors for this project.\n\
+                 The snapshot above shows the actual diagnostics.\n\
+                 \n\
+                 To fix:\n\
+                 1. If this is a compiler regression, fix the underlying compiler issue\n\
+                 2. If the new errors are intentional, move the project to the appropriate tier:\n\
+                    - broken_syntax/ if it has parse errors\n\
+                    - diagnostic_errors/ if it has only semantic errors",
                 #project_name,
                 #tier_name,
                 errors.len(),
+                parse_error_count,
+                semantic_error_count,
+                warning_count,
             );
         },
     };
