@@ -4345,6 +4345,10 @@ impl BexVm {
 
         let op = OpCode::try_from(op_byte).map_err(VmInternalError::InvalidOpcode)?;
 
+        // SAFETY: `function` is `&'static Function`, so `code` has lifetime 'static.
+        // This does NOT borrow from `self`, so there is no conflict with `&mut self`.
+        let code: &'static [u8] = &function.bytecode.compact.as_ref().unwrap().code;
+
         match op {
             // ── Common constants ──────────────────────────────────────────
             OpCode::LoadNull => {
@@ -4358,9 +4362,8 @@ impl BexVm {
             }
             OpCode::LoadIntSmall => {
                 let val = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_i8(&compact.code.clone(), &mut bf.instruction_ptr)
+                    read_i8(code, &mut bf.instruction_ptr)
                 };
                 self.stack.push(Value::Int(i64::from(val)));
             }
@@ -4368,9 +4371,8 @@ impl BexVm {
             // ── LoadConst ─────────────────────────────────────────────────
             OpCode::LoadConst => {
                 let idx = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let val = function.bytecode.resolved_constants[idx];
                 self.stack.push(val);
@@ -4379,9 +4381,8 @@ impl BexVm {
             // ── LoadVar / StoreVar ────────────────────────────────────────
             OpCode::LoadVar => {
                 let slot = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                     unreachable!()
@@ -4393,9 +4394,8 @@ impl BexVm {
 
             OpCode::StoreVar => {
                 let slot = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                     unreachable!()
@@ -4422,9 +4422,8 @@ impl BexVm {
             // ── LoadGlobal / StoreGlobal ──────────────────────────────────
             OpCode::LoadGlobal => {
                 let raw = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr)
+                    read_u32(code, &mut bf.instruction_ptr)
                 };
                 let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                 let value = self.globals[global_idx];
@@ -4433,9 +4432,8 @@ impl BexVm {
 
             OpCode::StoreGlobal => {
                 let raw = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr)
+                    read_u32(code, &mut bf.instruction_ptr)
                 };
                 let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                 let value = self.stack.ensure_pop()?;
@@ -4445,9 +4443,8 @@ impl BexVm {
             // ── LoadField / StoreField / InitField ────────────────────────
             OpCode::LoadField => {
                 let idx = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let top = self.stack.ensure_pop()?;
                 let obj_ptr = self.as_object_ptr(&top, ObjectType::Instance)?;
@@ -4464,9 +4461,8 @@ impl BexVm {
 
             OpCode::StoreField => {
                 let idx = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let new_value = self.stack.ensure_pop()?;
                 let instance_value = self.stack.ensure_pop()?;
@@ -4506,9 +4502,8 @@ impl BexVm {
 
             OpCode::InitField => {
                 let idx = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let new_value = self.stack.ensure_pop()?;
                 let instance_value = self.stack.ensure_pop()?;
@@ -4528,9 +4523,8 @@ impl BexVm {
             // ── Pop / Copy ────────────────────────────────────────────────
             OpCode::Pop => {
                 let n = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let drain_start = self.stack.len() - n;
                 let drain_range = StackIndex::from_raw(drain_start)..;
@@ -4539,9 +4533,8 @@ impl BexVm {
 
             OpCode::Copy => {
                 let offset = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let index = self.stack.ensure_slot_from_top(offset)?;
                 let value = self.stack[index];
@@ -4551,9 +4544,8 @@ impl BexVm {
             // ── Allocation opcodes ────────────────────────────────────────
             OpCode::AllocArray => {
                 let size = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
                 let array = self.stack.drain(drain_range).collect();
@@ -4563,9 +4555,8 @@ impl BexVm {
 
             OpCode::AllocMap => {
                 let n = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let map = if n > 0 {
                     let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1)?;
@@ -4591,9 +4582,8 @@ impl BexVm {
 
             OpCode::AllocInstance => {
                 let raw = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr)
+                    read_u32(code, &mut bf.instruction_ptr)
                 };
                 let class_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
                 let Object::Class(class) = self.get_object(class_ptr) else {
@@ -4616,9 +4606,8 @@ impl BexVm {
 
             OpCode::AllocVariant => {
                 let raw = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr)
+                    read_u32(code, &mut bf.instruction_ptr)
                 };
                 let enum_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
                 let variant_count = {
@@ -4660,9 +4649,8 @@ impl BexVm {
             // ── DispatchFuture ────────────────────────────────────────────
             OpCode::DispatchFuture => {
                 let raw = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr)
+                    read_u32(code, &mut bf.instruction_ptr)
                 };
                 let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                 let callee_value = self.globals[callee];
@@ -4703,9 +4691,8 @@ impl BexVm {
             // ── Watch / Unwatch / Notify / NotifyBlock ────────────────────
             OpCode::Watch => {
                 let index = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let filter = match self.stack.ensure_pop()? {
                     Value::Null => WatchFilter::Default,
@@ -4755,9 +4742,8 @@ impl BexVm {
 
             OpCode::Unwatch => {
                 let index = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                     unreachable!()
@@ -4782,9 +4768,8 @@ impl BexVm {
 
             OpCode::Notify => {
                 let index = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                     unreachable!()
@@ -4802,9 +4787,8 @@ impl BexVm {
 
             OpCode::NotifyBlock => {
                 let block_index = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let notification = &function.block_notifications[block_index];
                 let full_notification = bytecode::BlockNotification {
@@ -4822,9 +4806,8 @@ impl BexVm {
             // ── VizEnter / VizExit ────────────────────────────────────────
             OpCode::VizEnter | OpCode::VizExit => {
                 let index = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let delta = if op == OpCode::VizEnter {
                     bytecode::VizExecDelta::Enter
@@ -4854,9 +4837,8 @@ impl BexVm {
             // ── Call ──────────────────────────────────────────────────────
             OpCode::Call => {
                 let raw = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr)
+                    read_u32(code, &mut bf.instruction_ptr)
                 };
                 let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                 let callee_value = self.globals[callee_global];
@@ -5033,9 +5015,8 @@ impl BexVm {
             // ── Jump opcodes ──────────────────────────────────────────────
             OpCode::Jump => {
                 let offset = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_i32(&compact.code.clone(), &mut bf.instruction_ptr)
+                    read_i32(code, &mut bf.instruction_ptr)
                 };
                 let bf = self.current_bytecode_frame_mut(*frame_idx);
                 // offset is relative to instruction end (current bf.instruction_ptr)
@@ -5047,9 +5028,8 @@ impl BexVm {
 
             OpCode::PopJumpIfFalse => {
                 let offset = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_i32(&compact.code.clone(), &mut bf.instruction_ptr)
+                    read_i32(code, &mut bf.instruction_ptr)
                 };
                 let cond = self.stack.ensure_pop()?;
                 if cond == Value::Bool(false) {
@@ -5063,9 +5043,8 @@ impl BexVm {
 
             OpCode::JumpIfFalse => {
                 let offset = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_i32(&compact.code.clone(), &mut bf.instruction_ptr)
+                    read_i32(code, &mut bf.instruction_ptr)
                 };
                 let top_slot = self.stack.ensure_stack_top()?;
                 let cond = self.stack[top_slot];
@@ -5078,10 +5057,9 @@ impl BexVm {
             // ── JumpTable ─────────────────────────────────────────────────
             OpCode::JumpTable => {
                 let (table_idx, default_offset) = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    let tidx = read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize;
-                    let def = read_i32(&compact.code.clone(), &mut bf.instruction_ptr);
+                    let tidx = read_u32(code, &mut bf.instruction_ptr) as usize;
+                    let def = read_i32(code, &mut bf.instruction_ptr);
                     (tidx, def)
                 };
                 let discriminant = self.stack.ensure_pop()?;
@@ -5143,9 +5121,8 @@ impl BexVm {
             // ── IsType ────────────────────────────────────────────────────
             OpCode::IsType => {
                 let const_idx = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let value = self.stack.ensure_pop()?;
                 let expected = &function.bytecode.resolved_constants[const_idx];
@@ -5171,9 +5148,8 @@ impl BexVm {
             )]
             OpCode::DenseTag => {
                 let table_idx = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let tag = match self.stack.ensure_pop()? {
                     Value::Int(t) => t,
@@ -5234,10 +5210,9 @@ impl BexVm {
             // ── MakeClosure ───────────────────────────────────────────────
             OpCode::MakeClosure => {
                 let (obj_idx_raw, capture_count) = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    let o = read_u32(&compact.code.clone(), &mut bf.instruction_ptr);
-                    let c = read_u32(&compact.code.clone(), &mut bf.instruction_ptr);
+                    let o = read_u32(code, &mut bf.instruction_ptr);
+                    let c = read_u32(code, &mut bf.instruction_ptr);
                     (o as usize, c as usize)
                 };
                 let mut captures = Vec::with_capacity(capture_count);
@@ -5257,9 +5232,8 @@ impl BexVm {
             // ── MakeBoundMethod ───────────────────────────────────────────
             OpCode::MakeBoundMethod => {
                 let raw = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr)
+                    read_u32(code, &mut bf.instruction_ptr)
                 };
                 let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                 let receiver = self.stack.ensure_pop()?;
@@ -5277,9 +5251,8 @@ impl BexVm {
             // ── LoadDeref / StoreDeref ────────────────────────────────────
             OpCode::LoadDeref => {
                 let slot = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                     unreachable!()
@@ -5305,9 +5278,8 @@ impl BexVm {
 
             OpCode::StoreDeref => {
                 let slot = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let value = self.stack.ensure_pop()?;
                 let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
@@ -5336,9 +5308,8 @@ impl BexVm {
             // ── LoadCapture / StoreCapture / CaptureRef ───────────────────
             OpCode::LoadCapture => {
                 let idx = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                     unreachable!()
@@ -5373,9 +5344,8 @@ impl BexVm {
 
             OpCode::StoreCapture => {
                 let idx = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let value = self.stack.ensure_pop()?;
                 let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
@@ -5412,9 +5382,8 @@ impl BexVm {
 
             OpCode::CaptureRef => {
                 let idx = {
-                    let compact = function.bytecode.compact.as_ref().unwrap();
                     let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    read_u32(&compact.code.clone(), &mut bf.instruction_ptr) as usize
+                    read_u32(code, &mut bf.instruction_ptr) as usize
                 };
                 let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                     unreachable!()

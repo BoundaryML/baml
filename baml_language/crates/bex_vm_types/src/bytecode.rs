@@ -872,17 +872,17 @@ impl std::fmt::Display for OpCode {
 /// Read a little-endian u32 from `code[*pc..*pc+4]` and advance `*pc` by 4.
 #[inline]
 pub fn read_u32(code: &[u8], pc: &mut usize) -> u32 {
-    let bytes = [code[*pc], code[*pc + 1], code[*pc + 2], code[*pc + 3]];
+    let val = u32::from_le_bytes(code[*pc..*pc + 4].try_into().unwrap());
     *pc += 4;
-    u32::from_le_bytes(bytes)
+    val
 }
 
 /// Read a little-endian i32 from `code[*pc..*pc+4]` and advance `*pc` by 4.
 #[inline]
 pub fn read_i32(code: &[u8], pc: &mut usize) -> i32 {
-    let bytes = [code[*pc], code[*pc + 1], code[*pc + 2], code[*pc + 3]];
+    let val = i32::from_le_bytes(code[*pc..*pc + 4].try_into().unwrap());
     *pc += 4;
-    i32::from_le_bytes(bytes)
+    val
 }
 
 /// Read a signed byte from `code[*pc]` and advance `*pc` by 1.
