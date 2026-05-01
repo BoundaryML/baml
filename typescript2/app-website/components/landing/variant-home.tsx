@@ -17,11 +17,11 @@ const BamlPlayground = dynamic(
   },
 );
 
+import Image from 'next/image';
+import { useIsDesktop } from '@/hooks/use-media-query';
 import Marquee from '../magicui/marquee';
 import { ScriptCopyBtn } from '../magicui/script-copy-btn';
 import { Navbar } from '../navbar';
-import { EditorTerminalSplit } from './editor-terminal-split';
-import { PlaygroundTerminal } from './playground-terminal';
 
 const TRUST_LOGOS: { alt: string; src: string; heightPx: number }[] = [
   { alt: 'SAP', heightPx: 36, src: '/testimonials/logos/sapLogo.png' },
@@ -574,6 +574,7 @@ const installOptions: {
 
 const HeroSection = () => {
   const [installPath, setInstallPath] = useState<InstallPath>('claude');
+  const isDesktop = useIsDesktop();
 
   const selected = installOptions.find((o) => o.id === installPath)!;
 
@@ -654,10 +655,28 @@ const HeroSection = () => {
         style={customStyles.heroRight}
       >
         <div className="absolute inset-0 flex flex-col">
-          <EditorTerminalSplit
-            editor={<BamlPlayground compact />}
-            terminal={<PlaygroundTerminal />}
-          />
+          <div className="relative flex-1 min-h-0 overflow-hidden">
+            {isDesktop ? (
+              <BamlPlayground />
+            ) : (
+              <Link
+                className="group relative block h-full w-full"
+                href="/how-the-playground-works"
+              >
+                <Image
+                  alt="BAML playground preview"
+                  src="/bamlPlaygroundLightScreenshot.png"
+                  fill
+                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  className="object-cover object-top"
+                  priority={false}
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-white/85 px-4 py-3 text-center text-[13px] text-[#1A1612]">
+                  Open the playground on a desktop browser to try it live →
+                </div>
+              </Link>
+            )}
+          </div>
           <Link
             className="group text-[#5C5852] hover:text-[#A78BFA] no-underline transition-colors duration-500 ease-out"
             href="/how-the-playground-works"

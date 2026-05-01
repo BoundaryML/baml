@@ -15,7 +15,42 @@
   display: none; /* Safari and Chrome */
 }
 
+/* Scan pkg-playground TSX sources so its bg-vsc-*, text-vsc-*, etc. utilities
+ * and the shadcn classes it uses (bg-card, text-foreground, …) are emitted. */
+@source "../../pkg-playground/src/**/*.tsx";
+
 @theme inline {
+  /* Pkg-playground "vsc-*" token family — register so Tailwind emits
+   * utilities like bg-vsc-bg, text-vsc-text-faint, font-vsc-mono. Values
+   * are read from CSS vars set inside .baml-playground-root. */
+  --color-vsc-bg: var(--vsc-bg);
+  --color-vsc-surface: var(--vsc-surface);
+  --color-vsc-panel: var(--vsc-panel);
+  --color-vsc-border: var(--vsc-border);
+  --color-vsc-border-subtle: var(--vsc-border-subtle);
+  --color-vsc-text: var(--vsc-text);
+  --color-vsc-text-bright: var(--vsc-text-bright);
+  --color-vsc-text-muted: var(--vsc-text-muted);
+  --color-vsc-text-faint: var(--vsc-text-faint);
+  --color-vsc-accent: var(--vsc-accent);
+  --color-vsc-accent-fg: var(--vsc-accent-fg);
+  --color-vsc-accent-hover: var(--vsc-accent-hover);
+  --color-vsc-list-hover: var(--vsc-list-hover);
+  --color-vsc-list-hoverBg: var(--vsc-list-hover);
+  --color-vsc-hover: var(--vsc-list-hover);
+  --color-vsc-green: var(--vsc-green);
+  --color-vsc-red: var(--vsc-red);
+  --color-vsc-error: var(--vsc-red);
+  --color-vsc-yellow: var(--vsc-yellow);
+  --color-vsc-yellow-subtle: var(--vsc-yellow-subtle);
+  --color-vsc-link: var(--vsc-link);
+  --color-vsc-bg-secondary: var(--vsc-bg-secondary);
+  --color-vsc-input-bg: var(--vsc-input-bg);
+  --color-vsc-input-fg: var(--vsc-input-fg);
+  --color-vsc-input-border: var(--vsc-input-border);
+  --font-vsc: var(--font-vsc-family);
+  --font-vsc-mono: var(--font-vsc-mono-family);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --navigation-height: 3.5rem;
@@ -393,6 +428,66 @@
   --sidebar-accent-foreground: #141414;
   --sidebar-border: #C8C2B7;
   --sidebar-ring: #7C3AED;
+}
+
+/* Scoped dark VS-Code-themed surface for the playground. Wraps the editor
+ * and ExecutionPanel so pkg-playground components (which use bg-card,
+ * text-foreground, vsc-* utilities, etc.) inherit dark values without
+ * leaking back into the marketing-site theme. */
+.baml-playground-root {
+  color-scheme: dark;
+
+  /* vsc-* token defaults */
+  --vsc-bg: #1f1f1f;
+  --vsc-bg-secondary: #181818;
+  --vsc-surface: #181818;
+  --vsc-panel: #1f1f1f;
+  --vsc-border: #2b2b2b;
+  --vsc-border-subtle: #2b2b2b;
+  --vsc-text: #cccccc;
+  --vsc-text-bright: #ffffff;
+  --vsc-text-muted: #858585;
+  --vsc-text-faint: #6b6b6b;
+  --vsc-accent: #0078d4;
+  --vsc-accent-fg: #ffffff;
+  --vsc-accent-hover: #026ec1;
+  --vsc-list-hover: #2a2d2e;
+  --vsc-green: #3fb950;
+  --vsc-red: #f85149;
+  --vsc-yellow: #d29922;
+  --vsc-yellow-subtle: rgba(210, 153, 34, 0.15);
+  --vsc-link: #3794ff;
+  --vsc-input-bg: #313131;
+  --vsc-input-fg: #cccccc;
+  --vsc-input-border: transparent;
+  --font-vsc-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-vsc-mono-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+
+  /* Override shadcn tokens for descendants (dialogs, popovers, buttons inside
+   * the playground render dark). Light-theme values stay on the rest of
+   * the site since this scope only cascades into the playground. */
+  --background: #1f1f1f;
+  --foreground: #cccccc;
+  --card: #1f1f1f;
+  --card-foreground: #cccccc;
+  --popover: #1f1f1f;
+  --popover-foreground: #cccccc;
+  --primary: #0078d4;
+  --primary-foreground: #ffffff;
+  --secondary: #181818;
+  --secondary-foreground: #cccccc;
+  --muted: #181818;
+  --muted-foreground: #858585;
+  --accent: #2a2d2e;
+  --accent-foreground: #cccccc;
+  --destructive: #f85149;
+  --destructive-foreground: #ffffff;
+  --border: #2b2b2b;
+  --input: transparent;
+  --ring: #007fd4;
+
+  background-color: var(--vsc-bg);
+  color: var(--vsc-text);
 }
 
 .dark {

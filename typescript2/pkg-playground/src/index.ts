@@ -1,3 +1,5 @@
+'use client';
+
 // Execution panel + transport abstraction
 export { ExecutionPanel } from './ExecutionPanel';
 export type { ExecutionPanelProps } from './ExecutionPanel';

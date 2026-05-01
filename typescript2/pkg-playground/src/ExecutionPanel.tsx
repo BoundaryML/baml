@@ -96,6 +96,8 @@ export interface ExecutionPanelProps {
   onReload?: () => void;
   /** Called when user clicks an event with source location to jump to that line. */
   onNavigateToSource?: (source: { fileId: number; line: number; column: number }) => void;
+  /** Initial value for the function arguments JSON input. Defaults to '{}'. */
+  initialArgsJson?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -245,7 +247,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
 // Component
 // ---------------------------------------------------------------------------
 
-export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload, onNavigateToSource }) => {
+export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload, onNavigateToSource, initialArgsJson }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
   const [testTree, setTestTree] = useState<any>(null);
@@ -262,7 +264,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
-  const [argsJson, setArgsJson] = useState('{}');
+  const [argsJson, setArgsJson] = useState(initialArgsJson ?? '{}');
 
   // Run history — each entry is a complete invocation with its logs + result
   const [runs, setRuns] = useState<RunEntry[]>([]);
@@ -720,7 +722,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           port.postMessage({
             type: 'callFunction',
             id: callId,
-            name: `${selectedFn}.${subFn}`,
+            name: `${selectedFn}$${subFn}`,
             argsProto: new Uint8Array(argsProto),
             project: selectedProject,
           });
