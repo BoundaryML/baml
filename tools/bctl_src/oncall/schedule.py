@@ -105,6 +105,16 @@ def validate(sched: ScheduleFile, raw_text: str) -> list[ValidationError]:
                 )
             )
 
+        for rot in rotations_order:
+            if rot not in shift.assignments:
+                errors.append(
+                    ValidationError(
+                        line=None,
+                        message=f"{date_s}: missing assignment for rotation {rot!r}",
+                        fixable=False,
+                    )
+                )
+
         for rot, assignee in shift.assignments.items():
             if rot == "none":
                 continue

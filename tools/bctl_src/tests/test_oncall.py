@@ -28,6 +28,26 @@ METADATA = textwrap.dedent("""\
 """)
 
 
+MULTI_ROTATION_METADATA = textwrap.dedent("""\
+    # BEGIN_ONCALL_METADATA
+    # slack_config:
+    #   notification_channel: "#oncall"
+    #
+    # roster_by_rotation:
+    #   founders: [vbv, aaron]
+    #   discord: [kai, paulo]
+    #   none: [greg]
+    #
+    # roster_by_human:
+    #   aaron: [founders]
+    #   greg: [none]
+    #   kai: [discord]
+    #   paulo: [discord]
+    #   vbv: [founders]
+    # END_ONCALL_METADATA
+""")
+
+
 def _blocking(sched, text):
     return [e for e in validate(sched, text) if not e.fixable]
 
@@ -65,3 +85,13 @@ def test_fill_horizon_extends_when_horizon_short():
     assert len(filled.shifts) > len(sched.shifts)
     for prev, curr in zip(filled.shifts, filled.shifts[1:]):
         assert prev.date < curr.date
+
+
+def test_check_flags_missing_rotation_assignment():
+    text = MULTI_ROTATION_METADATA + "\n2026-04-24 founders=aaron\n"
+    sched = parse(text)
+    blocking = _blocking(sched, text)
+    assert any(
+        "2026-04-24: missing assignment for rotation 'discord'" in e.message
+        for e in blocking
+    ), [e.message for e in blocking]
