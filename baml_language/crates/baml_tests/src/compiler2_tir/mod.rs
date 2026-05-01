@@ -25,14 +25,10 @@ pub(crate) mod support {
     use std::fmt::Write;
 
     use baml_compiler2_ast::{
-        CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Pattern, Stmt, StmtId, TypeExpr,
+        CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Stmt, StmtId,
     };
     use baml_compiler2_hir::{
-        body::{FunctionBody, function_body},
-        contributions::Definition,
-        loc::FunctionLoc,
-        scope::ScopeKind,
-        signature::function_signature,
+        body::FunctionBody, contributions::Definition, loc::FunctionLoc, scope::ScopeKind,
     };
     use baml_compiler2_tir::{
         inference::{
@@ -45,85 +41,53 @@ pub(crate) mod support {
 
     // ── Rendering helpers ────────────────────────────────────────────────────
 
-    fn type_expr_to_string(ty: &TypeExpr) -> String {
-        match ty {
-            TypeExpr::Path { segments, .. } => segments
-                .iter()
-                .map(|n| n.as_str())
-                .collect::<Vec<_>>()
-                .join("."),
-            TypeExpr::Int { .. } => "int".into(),
-            TypeExpr::Float { .. } => "float".into(),
-            TypeExpr::String { .. } => "string".into(),
-            TypeExpr::Bool { .. } => "bool".into(),
-            TypeExpr::Null { .. } => "null".into(),
-            TypeExpr::Never { .. } => "never".into(),
-            TypeExpr::Uint8Array { .. } => "uint8array".into(),
-            TypeExpr::Media { kind: k, .. } => format!("{:?}", k).to_lowercase(),
-            TypeExpr::Optional { inner, .. } => {
-                let s = type_expr_to_string(inner);
-                if matches!(**inner, TypeExpr::Union { .. }) {
-                    format!("({s})?")
-                } else {
-                    format!("{s}?")
-                }
-            }
-            TypeExpr::List { inner, .. } => {
-                let s = type_expr_to_string(inner);
-                if matches!(**inner, TypeExpr::Union { .. }) {
-                    format!("({s})[]")
-                } else {
-                    format!("{s}[]")
-                }
-            }
-            TypeExpr::Map { key, value, .. } => format!(
-                "map<{}, {}>",
-                type_expr_to_string(key),
-                type_expr_to_string(value)
-            ),
-            TypeExpr::Union {
-                variants: members, ..
-            } => members
-                .iter()
-                .map(type_expr_to_string)
-                .collect::<Vec<_>>()
-                .join(" | "),
-            TypeExpr::Literal { value: lit, .. } => lit.to_string(),
-            TypeExpr::Function { params, ret, .. } => {
-                let ps: Vec<String> = params
-                    .iter()
-                    .map(|p| {
-                        p.name
-                            .as_ref()
-                            .map(|n| format!("{}: {}", n.as_str(), type_expr_to_string(&p.ty)))
-                            .unwrap_or_else(|| type_expr_to_string(&p.ty))
-                    })
-                    .collect();
-                format!("({}) -> {}", ps.join(", "), type_expr_to_string(ret))
-            }
-            TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
-            TypeExpr::Type { .. } => "type".into(),
-            TypeExpr::Rust { .. } => "$rust_type".into(),
-            TypeExpr::Error { .. } => "error".into(),
-            TypeExpr::Unknown { .. } => "?".into(),
-        }
-    }
-
     fn pat_desc(pat_id: PatId, body: &ExprBody) -> String {
+        use baml_compiler2_ast::PatternKind;
         let pat = &body.patterns[pat_id];
-        match pat {
-            Pattern::Binding(n) => n.to_string(),
-            Pattern::TypedBinding { name, ty } => {
-                format!("{name}: {}", type_expr_to_string(ty))
+        let core = match &pat.kind {
+            PatternKind::Wildcard => "_".to_string(),
+            PatternKind::Bind { name, inner: None } => name.to_string(),
+            PatternKind::Bind {
+                name,
+                inner: Some(inner),
+            } => {
+                format!("{name}: {}", pat_desc(*inner, body))
             }
-            Pattern::Literal(lit) => lit.to_string(),
-            Pattern::Null => "null".into(),
-            Pattern::EnumVariant { enum_name, variant } => format!("{enum_name}.{variant}"),
-            Pattern::Union(pats) => pats
+            PatternKind::Class { class, fields } => {
+                let fs = fields
+                    .iter()
+                    .map(|f| match f.pat {
+                        None => f.field.to_string(),
+                        Some(p) => format!("{}: {}", f.field, pat_desc(p, body)),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{class} {{ {fs} }}")
+            }
+            PatternKind::Type(ty) => ty.to_string(),
+            PatternKind::Literal(lit) => lit.to_string(),
+            PatternKind::Null => "null".into(),
+            PatternKind::EnumVariant { enum_name, variant } => {
+                let path = enum_name
+                    .iter()
+                    .map(|n| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(".");
+                if path.is_empty() {
+                    variant.to_string()
+                } else {
+                    format!("{path}.{variant}")
+                }
+            }
+            PatternKind::Or(pats) => pats
                 .iter()
                 .map(|p| pat_desc(*p, body))
                 .collect::<Vec<_>>()
                 .join(" | "),
+        };
+        match &pat.narrow {
+            Some(ty) => format!("{core}: {ty}"),
+            None => core,
         }
     }
 
@@ -132,12 +96,12 @@ pub(crate) mod support {
         match expr {
             Expr::Literal(lit) => match lit {
                 Literal::String(s) => {
-                    let truncated = if s.len() > 20 {
-                        format!("{}...", &s[..17])
+                    let truncated: String = if s.chars().count() > 20 {
+                        format!("{}...", s.chars().take(17).collect::<String>())
                     } else {
                         s.clone()
                     };
-                    format!("\"{}\"", truncated)
+                    format!("{truncated:?}")
                 }
                 Literal::Int(i) => i.to_string(),
                 Literal::Float(f) => f.clone(),
@@ -218,7 +182,10 @@ pub(crate) mod support {
             Expr::Object {
                 type_name, fields, ..
             } => {
-                let tn = type_name.as_ref().map(|n| n.as_str()).unwrap_or("_");
+                let tn = type_name
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "_".to_string());
                 let field_strs: Vec<String> = fields
                     .iter()
                     .map(|(name, val)| format!("{name}: {}", expr_desc(*val, body)))
@@ -240,11 +207,11 @@ pub(crate) mod support {
                 let tail = if tail_expr.is_some() { " + tail" } else { "" };
                 format!("{{ {} stmts{tail} }}", stmts.len())
             }
-            Expr::FieldAccess { base, field } => {
-                format!("{}.{field}", expr_desc(*base, body))
+            Expr::MemberAccess { base, member } => {
+                format!("{}.{member}", expr_desc(*base, body))
             }
-            Expr::OptionalFieldAccess { base, field } => {
-                format!("{}?.{field}", expr_desc(*base, body))
+            Expr::OptionalMemberAccess { base, member } => {
+                format!("{}?.{member}", expr_desc(*base, body))
             }
             Expr::Index { base, index } => {
                 format!("{}[{}]", expr_desc(*base, body), expr_desc(*index, body))
@@ -270,7 +237,7 @@ pub(crate) mod support {
             .iter()
             .map(|p| {
                 if let Some(ref te) = p.type_expr {
-                    format!("{}: {}", p.name, type_expr_to_string(&te.expr))
+                    format!("{}: {}", p.name, te.expr)
                 } else {
                     p.name.to_string()
                 }
@@ -279,12 +246,12 @@ pub(crate) mod support {
         let ret = func_def
             .return_type
             .as_ref()
-            .map(|te| format!(" {}", type_expr_to_string(&te.expr)))
+            .map(|te| format!(" {}", te.expr))
             .unwrap_or_default();
         let throws = func_def
             .throws
             .as_ref()
-            .map(|te| format!(" throws {}", type_expr_to_string(&te.expr)))
+            .map(|te| format!(" throws {}", te.expr))
             .unwrap_or_default();
         let generics = if func_def.generic_params.is_empty() {
             String::new()
@@ -312,7 +279,7 @@ pub(crate) mod support {
         local_type_names: &std::collections::HashSet<&str>,
     ) -> String {
         let qualify = |te: &baml_compiler2_ast::TypeExpr| -> String {
-            let raw = type_expr_to_string(te);
+            let raw = te.to_string();
             if local_type_names.contains(raw.as_str()) {
                 format!("{prefix}{raw}")
             } else {
@@ -686,11 +653,17 @@ pub(crate) mod support {
                     collect_typevars_inner(m, out);
                 }
             }
-            Ty::Function { params, ret, .. } => {
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 for (_, p) in params {
                     collect_typevars_inner(p, out);
                 }
                 collect_typevars_inner(ret, out);
+                collect_typevars_inner(throws, out);
             }
             _ => {}
         }
@@ -711,13 +684,7 @@ pub(crate) mod support {
                 initializer,
                 ..
             } => {
-                let pat_name = match &body.patterns[*pattern] {
-                    Pattern::Binding(n) => n.to_string(),
-                    Pattern::TypedBinding { name, ty } => {
-                        format!("{name}: {}", type_expr_to_string(ty))
-                    }
-                    other => format!("{other:?}"),
-                };
+                let pat_name = pat_desc(*pattern, body);
                 if let Some(init) = initializer {
                     let init_ty = expr_ty(inference, *init);
                     let binding_ty = inference.binding_type(*pattern).map(|t| t.to_string());
@@ -776,11 +743,7 @@ pub(crate) mod support {
                 collection,
                 body: for_body,
             } => {
-                let bind_name = match &body.patterns[*binding] {
-                    Pattern::Binding(n) => n.to_string(),
-                    Pattern::TypedBinding { name, .. } => name.to_string(),
-                    other => format!("{other:?}"),
-                };
+                let bind_name = pat_desc(*binding, body);
                 let coll_desc = expr_desc(*collection, body);
                 writeln!(output, "{pad}for {bind_name} in {coll_desc}").ok();
                 render_expr(*for_body, body, inference, indent + 2, output);
@@ -839,7 +802,7 @@ pub(crate) mod support {
     /// Render a file's TIR output in the same format as the onion skin tool.
     /// Uses the PPIR semantic index which includes synthetic stream_* types.
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_hir::package::{PackageId, package_items};
+        use baml_compiler2_hir::package::PackageId;
         use baml_compiler2_tir::inference::{
             detect_invalid_alias_cycles, detect_invalid_class_cycles,
         };
@@ -850,7 +813,7 @@ pub(crate) mod support {
         // Get package items for resolving TypeExpr -> Ty in signatures
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items = package_items(db, pkg_id);
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
         // Pre-compute throw sets for the package
         let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
@@ -1003,8 +966,8 @@ pub(crate) mod support {
                     let name_matches = scope.name.as_ref().is_none_or(|n| *n == func_data.name);
                     if func_data.span == scope.range && name_matches {
                         let func_loc = FunctionLoc::new(db, file, *local_id);
-                        func_body_opt = Some(function_body(db, func_loc));
-                        let sig = function_signature(db, func_loc);
+                        func_body_opt = Some(baml_compiler2_ppir::function_body(db, func_loc));
+                        let sig = baml_compiler2_ppir::function_signature(db, func_loc);
                         let ns = &pkg_info.namespace_path;
 
                         let enclosing_class_ty: Option<baml_compiler2_tir::ty::Ty> =
@@ -1017,6 +980,7 @@ pub(crate) mod support {
                                                 baml_compiler2_tir::lower_type_expr::qualify_def(
                                                     db, def, cn,
                                                 ),
+                                                vec![],
                                                 Default::default(),
                                             )
                                         })
@@ -1099,14 +1063,7 @@ pub(crate) mod support {
             }
 
             // Collect expression types for this scope — skip if none
-            let mut has_expr_types = false;
-            for (_expr_id, owner_scope) in &index.expr_scopes {
-                if owner_scope.index() as usize == i {
-                    has_expr_types = true;
-                    break;
-                }
-            }
-            if !has_expr_types {
+            if inference.iter_expressions().next().is_none() {
                 continue;
             }
 
@@ -1144,7 +1101,7 @@ pub(crate) mod support {
 
     /// Render a file's HIR2 (compiler2 item tree) as readable text.
     pub fn render_hir2(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal, Pattern};
+        use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal};
         use baml_compiler2_hir::{
             file_item_tree,
             file_package::file_package,
@@ -1153,17 +1110,19 @@ pub(crate) mod support {
         };
 
         fn qualify_type_name(
-            name: &baml_base::Name,
+            path: &baml_base::TypePath,
             pkg_prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
-            let s = name.as_str();
-            if s.contains('.') {
-                s.into()
-            } else if local_type_names.contains(s) {
-                format!("{pkg_prefix}{s}")
+            if path.is_qualified() {
+                path.to_string()
             } else {
-                s.into()
+                let leaf = path.leaf().as_str();
+                if local_type_names.contains(leaf) {
+                    format!("{pkg_prefix}{leaf}")
+                } else {
+                    leaf.into()
+                }
             }
         }
 
@@ -1187,6 +1146,7 @@ pub(crate) mod support {
                 baml_compiler2_ast::TypeExpr::Bool { .. } => "bool".into(),
                 baml_compiler2_ast::TypeExpr::Null { .. } => "null".into(),
                 baml_compiler2_ast::TypeExpr::Never { .. } => "never".into(),
+                baml_compiler2_ast::TypeExpr::Void { .. } => "void".into(),
                 baml_compiler2_ast::TypeExpr::Uint8Array { .. } => "uint8array".into(),
                 baml_compiler2_ast::TypeExpr::Media { kind: k, .. } => {
                     format!("{:?}", k).to_lowercase()
@@ -1210,7 +1170,12 @@ pub(crate) mod support {
                     .collect::<Vec<_>>()
                     .join(" | "),
                 baml_compiler2_ast::TypeExpr::Literal { value: lit, .. } => lit.to_string(),
-                baml_compiler2_ast::TypeExpr::Function { params, ret, .. } => {
+                baml_compiler2_ast::TypeExpr::Function {
+                    params,
+                    ret,
+                    throws,
+                    ..
+                } => {
                     let ps: Vec<String> = params
                         .iter()
                         .map(|p| {
@@ -1226,10 +1191,16 @@ pub(crate) mod support {
                                 .unwrap_or_else(|| type_expr_to_string_hir(&p.ty, pkg_prefix))
                         })
                         .collect();
+                    let throws = throws
+                        .as_deref()
+                        .map(|throws| type_expr_to_string_hir(throws, pkg_prefix))
+                        .map(|throws| format!(" throws {throws}"))
+                        .unwrap_or_default();
                     format!(
-                        "({}) -> {}",
+                        "({}) -> {}{}",
                         ps.join(", "),
-                        type_expr_to_string_hir(ret, pkg_prefix)
+                        type_expr_to_string_hir(ret, pkg_prefix),
+                        throws
                     )
                 }
                 baml_compiler2_ast::TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
@@ -1246,25 +1217,52 @@ pub(crate) mod support {
             prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
+            use baml_compiler2_ast::PatternKind;
             let pat = &body.patterns[pat_id];
-            match pat {
-                Pattern::Binding(n) => n.to_string(),
-                Pattern::TypedBinding { name, ty } => {
-                    format!("{name}: {}", type_expr_to_string_hir(ty, prefix))
-                }
-                Pattern::Literal(lit) => lit.to_string(),
-                Pattern::Null => "null".into(),
-                Pattern::EnumVariant { enum_name, variant } => {
+            let base = match &pat.kind {
+                PatternKind::Wildcard => "_".to_string(),
+                // TODO: render inner pattern when bind-with-pattern syntax lands
+                PatternKind::Bind {
+                    name,
+                    inner: _inner,
+                } => name.to_string(),
+                PatternKind::Literal(lit) => lit.to_string(),
+                PatternKind::Null => "null".into(),
+                PatternKind::EnumVariant { enum_name, variant } => {
+                    let path = baml_base::TypePath::new(enum_name.clone());
                     format!(
                         "{}.{variant}",
-                        qualify_type_name(enum_name, prefix, local_type_names)
+                        qualify_type_name(&path, prefix, local_type_names)
                     )
                 }
-                Pattern::Union(pats) => pats
+                PatternKind::Or(pats) => pats
                     .iter()
                     .map(|p| pat_desc_hir(*p, body, prefix, local_type_names))
                     .collect::<Vec<_>>()
                     .join(" | "),
+                PatternKind::Type(ty) => type_expr_to_string_hir(ty, prefix),
+                PatternKind::Class { class, fields } => {
+                    let field_strs: Vec<_> = fields
+                        .iter()
+                        .map(|f| {
+                            if let Some(inner) = f.pat {
+                                format!(
+                                    "{}: {}",
+                                    f.field,
+                                    pat_desc_hir(inner, body, prefix, local_type_names)
+                                )
+                            } else {
+                                f.field.to_string()
+                            }
+                        })
+                        .collect();
+                    format!("{} {{ {} }}", class, field_strs.join(", "))
+                }
+            };
+            if let Some(narrow) = &pat.narrow {
+                format!("{base}: {}", type_expr_to_string_hir(narrow, prefix))
+            } else {
+                base
             }
         }
 
@@ -1278,12 +1276,12 @@ pub(crate) mod support {
             match expr {
                 Expr::Literal(lit) => match lit {
                     Literal::String(s) => {
-                        let truncated = if s.len() > 20 {
-                            format!("{}...", &s[..17])
+                        let truncated: String = if s.chars().count() > 20 {
+                            format!("{}...", s.chars().take(17).collect::<String>())
                         } else {
                             s.clone()
                         };
-                        format!("\"{}\"", truncated)
+                        format!("{truncated:?}")
                     }
                     Literal::Int(i) => i.to_string(),
                     Literal::Float(f) => f.clone(),
@@ -1428,15 +1426,15 @@ pub(crate) mod support {
                         .unwrap_or_default();
                     format!("{{ {} }}{tail}", stmt_strs.join("; "))
                 }
-                Expr::FieldAccess { base, field } => {
+                Expr::MemberAccess { base, member } => {
                     format!(
-                        "{}.{field}",
+                        "{}.{member}",
                         expr_desc_hir(*base, body, prefix, local_type_names)
                     )
                 }
-                Expr::OptionalFieldAccess { base, field } => {
+                Expr::OptionalMemberAccess { base, member } => {
                     format!(
-                        "{}?.{field}",
+                        "{}?.{member}",
                         expr_desc_hir(*base, body, prefix, local_type_names)
                     )
                 }
@@ -1728,6 +1726,67 @@ pub(crate) mod support {
         }
 
         output
+    }
+
+    pub fn expr_type_in_function(
+        db: &ProjectDatabase,
+        file: baml_base::SourceFile,
+        function_name: &str,
+        expr_text: &str,
+    ) -> String {
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let (func_loc, func_span) = item_tree
+            .functions
+            .iter()
+            .find_map(|(local_id, func_data)| {
+                (func_data.name.as_str() == function_name)
+                    .then_some((FunctionLoc::new(db, file, *local_id), func_data.span))
+            })
+            .unwrap_or_else(|| panic!("function `{function_name}` not found"));
+        let func_body = baml_compiler2_ppir::function_body(db, func_loc);
+        let body = match func_body.as_ref() {
+            FunctionBody::Expr(body) => body,
+            _ => panic!("function `{function_name}` has no expression body"),
+        };
+
+        let index = baml_compiler2_ppir::file_semantic_index(db, file);
+        let scope_id = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(i, scope)| {
+                (matches!(scope.kind, ScopeKind::Function)
+                    && scope.range == func_span
+                    && scope
+                        .name
+                        .as_ref()
+                        .is_some_and(|name| name.as_str() == function_name))
+                .then_some(index.scope_ids[i])
+            })
+            .unwrap_or_else(|| panic!("scope for function `{function_name}` not found"));
+        let inference = infer_scope_types(db, scope_id);
+
+        let matches: Vec<_> = body
+            .exprs
+            .iter()
+            .filter_map(|(expr_id, _)| (expr_desc(expr_id, body) == expr_text).then_some(expr_id))
+            .collect();
+        let expr_id = match matches.as_slice() {
+            [expr_id] => *expr_id,
+            [] => panic!("expression `{expr_text}` not found in function `{function_name}`"),
+            _ => panic!(
+                "expression `{expr_text}` matched multiple nodes in function `{function_name}`"
+            ),
+        };
+
+        inference
+            .expression_type(expr_id)
+            .map(|ty| ty.to_string())
+            .unwrap_or_else(|| {
+                panic!(
+                    "expression `{expr_text}` in function `{function_name}` has no inferred type"
+                )
+            })
     }
 
     pub fn make_db() -> ProjectDatabase {

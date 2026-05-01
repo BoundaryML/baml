@@ -653,18 +653,42 @@ impl<'a> AstGraphBuilder<'a> {
 
     fn format_pattern(&self, pat_id: ast::PatId) -> String {
         let pat = &self.body.patterns[pat_id];
-        match pat {
-            ast::Pattern::Binding(name) => name.to_string(),
-            ast::Pattern::TypedBinding { name, .. } => name.to_string(),
-            ast::Pattern::Literal(lit) => format_literal_ast(lit),
-            ast::Pattern::Null => "null".to_string(),
-            ast::Pattern::EnumVariant { enum_name, variant } => {
-                format!("{enum_name}.{variant}")
+        let base = match &pat.kind {
+            ast::PatternKind::Wildcard => "_".to_string(),
+            // TODO: render inner pattern when bind-with-pattern syntax lands
+            ast::PatternKind::Bind {
+                name,
+                inner: _inner,
+            } => name.to_string(),
+            ast::PatternKind::Literal(lit) => format_literal_ast(lit),
+            ast::PatternKind::Null => "null".to_string(),
+            ast::PatternKind::EnumVariant { enum_name, variant } => {
+                let path: Vec<_> = enum_name.iter().map(baml_base::Name::as_str).collect();
+                format!("{}.{variant}", path.join("."))
             }
-            ast::Pattern::Union(pats) => {
+            ast::PatternKind::Or(pats) => {
                 let parts: Vec<_> = pats.iter().map(|p| self.format_pattern(*p)).collect();
                 parts.join(" | ")
             }
+            ast::PatternKind::Type(ty) => ty.to_string(),
+            ast::PatternKind::Class { class, fields } => {
+                let field_strs: Vec<_> = fields
+                    .iter()
+                    .map(|f| {
+                        if let Some(inner) = f.pat {
+                            format!("{}: {}", f.field, self.format_pattern(inner))
+                        } else {
+                            f.field.to_string()
+                        }
+                    })
+                    .collect();
+                format!("{} {{ {} }}", class, field_strs.join(", "))
+            }
+        };
+        if let Some(narrow) = &pat.narrow {
+            format!("{base}: {narrow}")
+        } else {
+            base
         }
     }
 }
@@ -702,7 +726,6 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                 ast::BinaryOp::BitXor => "^",
                 ast::BinaryOp::Shl => "<<",
                 ast::BinaryOp::Shr => ">>",
-                ast::BinaryOp::Instanceof => "instanceof",
                 ast::BinaryOp::NullCoalesce => "??",
             };
             format!(
@@ -719,11 +742,11 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
             };
             format!("{op_str}{}", render_expr_compact_ast(body, *expr))
         }
-        ast::Expr::FieldAccess { base, field } => {
-            format!("{}.{field}", render_expr_compact_ast(body, *base))
+        ast::Expr::MemberAccess { base, member } => {
+            format!("{}.{member}", render_expr_compact_ast(body, *base))
         }
-        ast::Expr::OptionalFieldAccess { base, field } => {
-            format!("{}?.{field}", render_expr_compact_ast(body, *base))
+        ast::Expr::OptionalMemberAccess { base, member } => {
+            format!("{}?.{member}", render_expr_compact_ast(body, *base))
         }
         ast::Expr::Index { base, index } => {
             format!(
@@ -805,6 +828,7 @@ fn format_literal_ast(lit: &ast::Literal) -> String {
 
 #[cfg(test)]
 mod tests {
+    use baml_base::TypePath;
     use la_arena::Arena;
 
     use super::*;
@@ -1001,8 +1025,8 @@ mod tests {
     fn match_creates_branch_group_with_arms() {
         let body = make_ast_body(|exprs, _, patterns, match_arms| {
             let scrutinee = exprs.alloc(ast::Expr::Path(vec!["x".into()]));
-            let pat1 = patterns.alloc(ast::Pattern::Literal(ast::Literal::Int(1)));
-            let pat2 = patterns.alloc(ast::Pattern::Literal(ast::Literal::Int(2)));
+            let pat1 = patterns.alloc(ast::Pattern::literal(ast::Literal::Int(1)));
+            let pat2 = patterns.alloc(ast::Pattern::literal(ast::Literal::Int(2)));
             let body1 = exprs.alloc(ast::Expr::Null);
             let body2 = exprs.alloc(ast::Expr::Null);
             let arm1 = match_arms.alloc(ast::MatchArm {
@@ -1103,7 +1127,7 @@ mod tests {
                 then_branch: then_b,
                 else_branch: Some(else_b),
             });
-            let pat = patterns.alloc(ast::Pattern::Binding("x".into()));
+            let pat = patterns.alloc(ast::Pattern::binding("x".into()));
             let let_stmt = stmts.alloc(ast::Stmt::Let {
                 pattern: pat,
                 type_annotation: None,
@@ -1260,7 +1284,7 @@ mod tests {
         let body = make_ast_body(|exprs, stmts, _, _| {
             let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let obj = exprs.alloc(ast::Expr::Object {
-                type_name: Some("MyResponse".into()),
+                type_name: Some(TypePath::bare("MyResponse".into())),
                 fields: vec![("ok".into(), field_val)],
                 spreads: vec![],
             });
@@ -1321,7 +1345,7 @@ mod tests {
         let body = make_ast_body(|exprs, stmts, _, _| {
             let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let obj_true = exprs.alloc(ast::Expr::Object {
-                type_name: Some("Result".into()),
+                type_name: Some(TypePath::bare("Result".into())),
                 fields: vec![],
                 spreads: vec![],
             });
@@ -1333,7 +1357,7 @@ mod tests {
 
             let err_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(false)));
             let obj_false = exprs.alloc(ast::Expr::Object {
-                type_name: Some("Result".into()),
+                type_name: Some(TypePath::bare("Result".into())),
                 fields: vec![("err".into(), err_val)],
                 spreads: vec![],
             });
@@ -1372,7 +1396,7 @@ mod tests {
 
         let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
         let obj = exprs.alloc(ast::Expr::Object {
-            type_name: Some("Resp".into()),
+            type_name: Some(TypePath::bare("Resp".into())),
             fields: vec![("ok".into(), field_val)],
             spreads: vec![],
         });

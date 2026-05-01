@@ -10,8 +10,10 @@ mod tests {
     use baml_base::Name;
     use baml_compiler2_hir::{
         file_semantic_index,
+        loc::FunctionLoc,
         namespace::NamespaceId,
         package::{PackageId, package_items},
+        signature::elaborated_function_signature,
     };
     use baml_project::ProjectDatabase;
     use salsa::Setter;
@@ -23,6 +25,42 @@ mod tests {
         let mut db = ProjectDatabase::new();
         db.set_project_root(std::path::Path::new("."));
         db
+    }
+
+    fn find_function_loc<'db>(
+        db: &'db ProjectDatabase,
+        file: baml_base::SourceFile,
+        name: &str,
+    ) -> FunctionLoc<'db> {
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let local_id = item_tree
+            .functions
+            .iter()
+            .find(|(_, func)| func.name.as_str() == name)
+            .map(|(local_id, _)| *local_id)
+            .unwrap_or_else(|| panic!("missing function {name}"));
+        FunctionLoc::new(db, file, local_id)
+    }
+
+    fn find_method_loc<'db>(
+        db: &'db ProjectDatabase,
+        file: baml_base::SourceFile,
+        class_name: &str,
+        method_name: &str,
+    ) -> FunctionLoc<'db> {
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let class = item_tree
+            .classes
+            .values()
+            .find(|class| class.name.as_str() == class_name)
+            .unwrap_or_else(|| panic!("missing class {class_name}"));
+        let method_id = class
+            .methods
+            .iter()
+            .find(|method_id| item_tree[**method_id].name.as_str() == method_name)
+            .copied()
+            .unwrap_or_else(|| panic!("missing method {class_name}.{method_name}"));
+        FunctionLoc::new(db, file, method_id)
     }
 
     // ── 1. Targeted unit test: multi-file package_items ──────────────────────
@@ -316,9 +354,11 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Four conflicts: greet, greet$render_prompt, greet$build_request, greet$parse
-        // Each LLM function expands to companions, all duplicated across 3 files.
-        assert_eq!(ns.conflicts().len(), 4);
+        // Five conflicts: greet, greet$render_prompt, greet$build_request,
+        // greet$build_request_stream, greet$parse
+        // Each LLM function expands to AST-level companions, all duplicated across 3 files.
+        // ($stream and $parse_stream are PPIR-level and don't appear here.)
+        assert_eq!(ns.conflicts().len(), 5);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);
         }
@@ -500,32 +540,224 @@ mod tests {
         assert!(sites.iter().all(|s| s.kind == DefinitionKind::Variant));
     }
 
-    /// Duplicate let-bindings in the same function produce a DuplicateDefinition diagnostic.
+    /// Same-scope let shadowing is legal and does not produce duplicate diagnostics.
     #[test]
-    fn duplicate_let_binding_produces_diagnostic() {
-        use baml_compiler2_hir::{contributions::DefinitionKind, diagnostic::Hir2Diagnostic};
+    fn same_scope_let_shadowing_has_no_duplicate_diagnostic() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
         let file = db.add_file(
-            "dup_let.baml",
+            "shadow_let.baml",
             "function foo() -> int {\n  let x = 1;\n  let x = 2;\n  return x;\n}",
         );
 
         let index = file_semantic_index(&db, file);
         let diags = index.diagnostics();
 
-        let dups: Vec<_> = diags
-            .iter()
-            .filter(|d| matches!(d, Hir2Diagnostic::DuplicateDefinition { name, .. } if name == &Name::new("x")))
-            .collect();
-        assert_eq!(dups.len(), 1);
+        assert!(!diags.iter().any(
+            |d| matches!(d, Hir2Diagnostic::DuplicateDefinition { name, .. } if name == &Name::new("x"))
+        ));
+    }
 
-        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0] else {
-            panic!("expected DuplicateDefinition diagnostic");
+    #[test]
+    fn shadowing_initializer_resolves_previous_binding() {
+        use baml_compiler2_hir::scope::ScopeKind;
+        use text_size::TextSize;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "initializer_shadow.baml",
+            "function foo() -> int {\n  let x = 1;\n  let x = x + 1;\n  x\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        let function_scope = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(idx, scope)| {
+                matches!(scope.kind, ScopeKind::Function)
+                    .then_some(baml_compiler2_hir::scope::FileScopeId::new(idx as u32))
+            })
+            .expect("function scope");
+        let x_bindings = index.scope_bindings[function_scope.index() as usize]
+            .bindings
+            .iter()
+            .filter(|binding| binding.name == Name::new("x"))
+            .collect::<Vec<_>>();
+        assert_eq!(x_bindings.len(), 2);
+
+        let text = file.text(&db);
+        let init_x_offset = TextSize::from(text.find("x + 1").expect("initializer x") as u32);
+        let use_scope = index.scope_at_offset(init_x_offset, Some(&Name::new("foo")));
+        let resolved = index
+            .visible_binding_at(use_scope, init_x_offset, &Name::new("x"))
+            .expect("initializer x should resolve");
+
+        assert_eq!(resolved.site, x_bindings[0].site);
+    }
+
+    #[test]
+    fn lambda_does_not_capture_its_own_nested_block_binding() {
+        use baml_compiler2_hir::scope::ScopeKind;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "lambda_local_block.baml",
+            "function foo() -> int {\n  let f = () -> int {\n    { let x = 1; x }\n  };\n  f()\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        let lambda_scope = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(idx, scope)| {
+                matches!(scope.kind, ScopeKind::Lambda)
+                    .then_some(baml_compiler2_hir::scope::FileScopeId::new(idx as u32))
+            })
+            .expect("lambda scope");
+
+        assert!(
+            index.scope_bindings[lambda_scope.index() as usize]
+                .captures
+                .is_empty(),
+            "lambda-local block binding should not be recorded as a capture"
+        );
+    }
+
+    /// A `let` inside a while body must not share the enclosing function's
+    /// scope. The body is an `Expr::Block` which pushes its own scope, so
+    /// the inner `let x = 99` must register in that scope, not the function
+    /// scope.
+    ///
+    /// This test pins the desired invariant. Without `Stmt::While` walking the
+    /// body inside its own block scope, find-references / rename / capture
+    /// analysis would walk ancestors from the wrong starting scope.
+    #[test]
+    fn while_body_let_lives_in_inner_scope() {
+        use baml_compiler2_hir::scope::ScopeKind;
+        use text_size::TextSize;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "while_scope.baml",
+            "function foo() -> int {\n  let x = 1;\n  let once = true;\n  while (once) {\n    let x = 99;\n    once = false;\n  };\n  x\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+
+        // Locate the function scope.
+        let function_scope = index
+            .scopes
+            .iter()
+            .enumerate()
+            .find_map(|(idx, scope)| {
+                matches!(scope.kind, ScopeKind::Function)
+                    .then_some(baml_compiler2_hir::scope::FileScopeId::new(idx as u32))
+            })
+            .expect("function scope");
+
+        // Find the offset of the inner `x = 99` token.
+        let text = file.text(&db);
+        let inner_x_decl = text.find("x = 99").expect("inner x decl");
+        let inner_x_offset = TextSize::from(inner_x_decl as u32);
+
+        let scope_at_inner = index.scope_at_offset(inner_x_offset, Some(&Name::new("foo")));
+        assert_ne!(
+            scope_at_inner, function_scope,
+            "inner `let x = 99` inside while body must resolve to a non-function scope; got function scope"
+        );
+
+        // The inner binding must register in some descendant of the function
+        // scope, not the function scope itself.
+        let inner_bindings = index.scope_bindings[scope_at_inner.index() as usize]
+            .bindings
+            .iter()
+            .filter(|b| b.name == Name::new("x"))
+            .count();
+        assert!(
+            inner_bindings >= 1,
+            "inner scope must contain the inner `x` binding"
+        );
+
+        // The outer `x = 1` binding must remain in the function scope.
+        let outer_x_in_function = index.scope_bindings[function_scope.index() as usize]
+            .bindings
+            .iter()
+            .filter(|b| b.name == Name::new("x"))
+            .count();
+        assert_eq!(
+            outer_x_in_function, 1,
+            "outer `let x = 1` must stay in function scope; got {} `x` bindings",
+            outer_x_in_function
+        );
+    }
+
+    /// Verify the HIR scope tree contains Block, MatchArm, CatchClause, and
+    /// CatchArm scope kinds nested under a Function. A future regression
+    /// that drops one of these kinds (e.g. a refactor that name-keys some
+    /// lookup and "doesn't need" the explicit scope) will fail this test
+    /// loudly.
+    #[test]
+    fn scope_tree_includes_block_match_catch_kinds() {
+        use baml_compiler2_hir::scope::ScopeKind;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "scope_kinds.baml",
+            r#"function f(x: int) -> int {
+  let _local = 1
+  {
+    let _block_local = 2
+  }
+  let _matched = match (x) {
+    n => n
+    _ => 0
+  }
+  try {
+    1
+  } catch (e) {
+    _ => 2
+  }
+}"#,
+        );
+
+        let index = file_semantic_index(&db, file);
+
+        // Each kind must appear at least once.
+        let kinds: Vec<&ScopeKind> = index.scopes.iter().map(|s| &s.kind).collect();
+        let has_kind = |kind: ScopeKind| {
+            kinds
+                .iter()
+                .any(|k| std::mem::discriminant(*k) == std::mem::discriminant(&kind))
         };
-        assert_eq!(scope.as_ref().unwrap(), &Name::new("foo"));
-        assert_eq!(sites.len(), 2);
-        assert!(sites.iter().all(|s| s.kind == DefinitionKind::Binding));
+
+        assert!(
+            has_kind(ScopeKind::Function),
+            "scope tree missing Function scope; kinds = {:?}",
+            kinds
+        );
+        assert!(
+            has_kind(ScopeKind::Block),
+            "scope tree missing Block scope; kinds = {:?}",
+            kinds
+        );
+        assert!(
+            has_kind(ScopeKind::MatchArm),
+            "scope tree missing MatchArm scope; kinds = {:?}",
+            kinds
+        );
+        assert!(
+            has_kind(ScopeKind::CatchClause),
+            "scope tree missing CatchClause scope; kinds = {:?}",
+            kinds
+        );
+        assert!(
+            has_kind(ScopeKind::CatchArm),
+            "scope tree missing CatchArm scope; kinds = {:?}",
+            kinds
+        );
     }
 
     /// A field and a method with the same name in a class produce a cross-kind diagnostic.
@@ -825,7 +1057,144 @@ mod tests {
         );
     }
 
-    // ── 9. Early-cutoff: comment-only change ──────────────────────────────────
+    // ── 9. Elaborated function signatures ───────────────────────────────────
+
+    #[test]
+    fn function_type_throws_immediate_callback_param_opens() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "callback.baml",
+            "function direct(cb: (value: int) -> string) -> string { return \"ok\"; }",
+        );
+
+        let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "direct"));
+
+        assert!(sig.user_generic_params.is_empty());
+        assert_eq!(
+            sig.synthetic_effect_params,
+            vec![Name::new("__effect_param_0")]
+        );
+        assert_eq!(
+            sig.params[0].1.to_string(),
+            "(value: int) -> string throws __effect_param_0"
+        );
+    }
+
+    #[test]
+    fn function_type_throws_alias_hidden_callback_stays_closed() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "alias_hidden.baml",
+            "type Handler = (value: int) -> string\nfunction use_alias(cb: Handler) -> string { return \"ok\"; }",
+        );
+
+        let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "use_alias"));
+
+        assert!(sig.synthetic_effect_params.is_empty());
+        assert_eq!(sig.params[0].1.to_string(), "Handler");
+    }
+
+    #[test]
+    fn function_type_throws_nested_callback_position_stays_closed() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "nested.baml",
+            "function nested(cb: ((value: int) -> string) -> string) -> string { return \"ok\"; }",
+        );
+
+        let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "nested"));
+
+        assert_eq!(
+            sig.synthetic_effect_params,
+            vec![Name::new("__effect_param_0")]
+        );
+        assert_eq!(
+            sig.params[0].1.to_string(),
+            "((value: int) -> string throws never) -> string throws __effect_param_0"
+        );
+    }
+
+    #[test]
+    fn function_type_throws_return_position_stays_closed() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "returns_fn.baml",
+            "function returns_handler() -> (value: int) -> string { return \"ok\"; }",
+        );
+
+        let sig =
+            elaborated_function_signature(&db, find_function_loc(&db, file, "returns_handler"));
+
+        assert!(sig.synthetic_effect_params.is_empty());
+        assert_eq!(
+            sig.return_type.as_ref().expect("return type").to_string(),
+            "(value: int) -> string throws never"
+        );
+    }
+
+    #[test]
+    fn function_type_throws_return_position_opens_immediate_callback_surface() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "returns_wrapper.baml",
+            "function returns_wrapper() -> ((value: int) -> string) -> string { return \"ok\"; }",
+        );
+
+        let sig =
+            elaborated_function_signature(&db, find_function_loc(&db, file, "returns_wrapper"));
+
+        assert_eq!(
+            sig.synthetic_effect_params,
+            vec![Name::new("__effect_param_0")]
+        );
+        assert_eq!(
+            sig.return_type.as_ref().expect("return type").to_string(),
+            "((value: int) -> string throws __effect_param_0) -> string throws __effect_param_0"
+        );
+    }
+
+    #[test]
+    fn function_type_throws_return_position_preserves_explicit_callback_throws() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "returns_explicit_wrapper.baml",
+            "function returns_explicit_wrapper() -> ((value: int) -> string throws string) -> string { return \"ok\"; }",
+        );
+
+        let sig = elaborated_function_signature(
+            &db,
+            find_function_loc(&db, file, "returns_explicit_wrapper"),
+        );
+
+        assert!(sig.synthetic_effect_params.is_empty());
+        assert_eq!(
+            sig.return_type.as_ref().expect("return type").to_string(),
+            "((value: int) -> string throws string) -> string throws string"
+        );
+    }
+
+    #[test]
+    fn function_type_throws_method_immediate_callback_param_opens() {
+        let mut db = make_db();
+        let file = db.add_file(
+            "method_callback.baml",
+            "class Box<T> {\n  value T\n  function run(cb: (value: T) -> string) -> string { return \"ok\"; }\n}",
+        );
+
+        let sig = elaborated_function_signature(&db, find_method_loc(&db, file, "Box", "run"));
+
+        assert!(sig.user_generic_params.is_empty());
+        assert_eq!(
+            sig.synthetic_effect_params,
+            vec![Name::new("__effect_param_0")]
+        );
+        assert_eq!(
+            sig.params[0].1.to_string(),
+            "(value: T) -> string throws __effect_param_0"
+        );
+    }
+
+    // ── 10. Early-cutoff: comment-only change ─────────────────────────────────
 
     /// Changing a comment in a file re-runs `file_semantic_index` (no_eq) and
     /// `namespace_items` (since it depends on file data), but because

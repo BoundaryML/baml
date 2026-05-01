@@ -17,6 +17,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_base = { workspace = true }
 baml_compiler2_ast = { workspace = true }
 indexmap = { workspace = true, features = [ "serde" ] }
 serde = { workspace = true, features = [ "derive" ] }

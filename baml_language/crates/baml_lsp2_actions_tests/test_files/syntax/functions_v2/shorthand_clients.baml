@@ -78,7 +78,7 @@ function ExtractName(text: string) -> string {
 //     │ │      
 //     │ ╰────── unresolved name: openai
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0003
 // ────╯
 // Error: unresolved name: openai
 //     ╭─[ functions_v2_shorthand_clients.baml:59:2 ]
@@ -89,5 +89,5 @@ function ExtractName(text: string) -> string {
 //     │ │      
 //     │ ╰────── unresolved name: openai
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0003
 // ────╯

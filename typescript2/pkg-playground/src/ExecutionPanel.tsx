@@ -9,9 +9,10 @@
  * VS Code webview without an embedded Monaco editor).
  */
 
-import type { ChangeEvent, FC, RefObject } from 'react';
+import type { ChangeEvent, FC, ReactNode, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
+import type { BamlJsValue } from '@b/pkg-proto';
 import { KeyRound, PanelLeft, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -21,6 +22,7 @@ import { CodeBlock } from './components/ui/code-block';
 import { ToggleGroup } from './components/ui/toggle-group';
 import { cn } from './lib/utils';
 import { ApiKeysDialog } from './components/ApiKeysDialog';
+import { useEnvVars } from './envAtoms';
 import { CopyButton } from './components/CopyButton';
 import { ErrorDisplay } from './components/ErrorDisplay';
 import { MetadataBadges } from './components/MetadataBadges';
@@ -36,12 +38,13 @@ import type {
   RunEntry,
   WorkerOutMessage,
 } from './worker-protocol';
-import { decodeCallResult } from '@b/pkg-proto';
 import type { ResultRendererProps } from './result-renderers';
 import { ResultDisplay } from './ResultDisplay';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
+import { HttpRequestCurlRenderer, isHttpRequest } from './renderers/HttpRequestCurl';
 import { GraphView } from './graph/GraphView';
 import { FunctionSidebar } from './FunctionSidebar';
+import { EventValueDisplay } from './EventValueDisplay';
 
 registerBuiltinResultRenderers();
 
@@ -56,6 +59,10 @@ function tryFormatJson(str: string): string {
     /* not valid JSON */
     return str;
   }
+}
+
+function stringifyResult(value: BamlJsValue): string {
+  return JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2);
 }
 
 function formatBuildTime(epochSecs: number): { absolute: string; relative: string } {
@@ -85,6 +92,10 @@ export interface ExecutionPanelProps {
    * Built-in renderers (e.g. curl for baml.http.Request) are always available.
    */
   resultRenderers?: Record<string, FC<ResultRendererProps>>;
+  /** Called when user clicks the WASM panic banner to reload the worker. */
+  onReload?: () => void;
+  /** Called when user clicks an event with source location to jump to that line. */
+  onNavigateToSource?: (source: { fileId: number; line: number; column: number }) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,21 +106,31 @@ interface CollectionRunViewProps {
   run: RunEntry;
   expandedLogId: number | null;
   setExpandedLogId: (id: number | null) => void;
+  resultRenderers?: Record<string, FC<ResultRendererProps>>;
 }
 
-const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId }) => {
+const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId, resultRenderers }) => {
+  const hasError = run.status === 'error';
+  const errorMessage = run.error || 'Unknown expansion error';
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
       <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border shrink-0">
-        <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-vsc-green" />
+        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', hasError ? 'bg-vsc-red' : 'bg-vsc-green')} />
         <span className="text-vsc-accent font-semibold text-[11px]">$collect_tests</span>
-        <span className="text-vsc-text-faint text-[10px] flex-1">collection fetch logs</span>
+        <span className="text-vsc-text-faint text-[10px] flex-1">{hasError ? 'expansion error' : 'collection fetch logs'}</span>
         <span className="text-vsc-text-faint text-[10px]">{run.fetchLogs.length} request{run.fetchLogs.length !== 1 ? 's' : ''}</span>
       </div>
+      {/* Error message */}
+      {hasError && (
+        <div className="px-2.5 py-2 bg-vsc-surface border-b border-vsc-border">
+          <div className="text-[10px] font-semibold text-red-500 mb-1 uppercase tracking-wide">Expansion Error</div>
+          <pre className="text-[11px] text-vsc-text whitespace-pre-wrap font-vsc-mono bg-vsc-bg p-2 rounded border border-vsc-border overflow-auto max-h-[300px]">{errorMessage}</pre>
+        </div>
+      )}
       {/* Fetch logs */}
       <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
-        {run.fetchLogs.length === 0 && (
+        {run.fetchLogs.length === 0 && !hasError && (
           <div className="p-5 text-center text-vsc-text-faint text-[11px]">
             No fetch logs — collection may not have made any HTTP requests
           </div>
@@ -155,6 +176,66 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
             </div>
           );
         })}
+        {/* Runtime events */}
+        {run.runtimeEvents.length > 0 && (
+          <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+            <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
+              Events ({run.runtimeEvents.length})
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {run.runtimeEvents.map((evt, evtIdx) => {
+                const kind = evt.event;
+                if (!kind) return null;
+
+                let label: string;
+                let payload: ReactNode;
+                let colorCls: string;
+
+                switch (kind.$case) {
+                  case 'functionStart':
+                    label = 'START';
+                    payload = kind.functionStart.name;
+                    colorCls = 'text-vsc-green';
+                    break;
+                  case 'functionEnd':
+                    label = 'END';
+                    payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
+                    colorCls = 'text-vsc-text-muted';
+                    break;
+                  case 'log': {
+                    const lvl = kind.log.level;
+                    label = lvl;
+                    payload = <EventValueDisplay value={kind.log.data} customRenderers={resultRenderers} />;
+                    colorCls = lvl === 'error' ? 'text-vsc-red'
+                      : lvl === 'warn' ? 'text-vsc-yellow'
+                      : lvl === 'debug' ? 'text-vsc-text-muted'
+                      : 'text-vsc-blue';
+                    break;
+                  }
+                  case 'custom':
+                    label = 'EVENT';
+                    payload = <><span>{kind.custom.name}: </span><EventValueDisplay value={kind.custom.data} customRenderers={resultRenderers} /></>;
+                    colorCls = 'text-vsc-purple';
+                    break;
+                  case 'setTags':
+                    label = 'TAGS';
+                    payload = kind.setTags.tags.map(t => `${t.key}=${t.value}`).join(', ');
+                    colorCls = 'text-vsc-text-muted';
+                    break;
+                  default:
+                    return null;
+                }
+
+                return (
+                  <div key={evtIdx} className="flex items-start gap-1.5 text-[11px]">
+                    <span className={`${colorCls} font-semibold uppercase shrink-0`}>{label}</span>
+                    <span className="text-vsc-text break-all">{payload}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -164,13 +245,14 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
 // Component
 // ---------------------------------------------------------------------------
 
-export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers }) => {
+export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload, onNavigateToSource }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
   const [testTree, setTestTree] = useState<any>(null);
   const [collectionCallId, setCollectionCallId] = useState<number | null>(null);
   const [generation, setGeneration] = useState<number>(0);
-  const [testRunResults, setTestRunResults] = useState<Map<string, Record<string, unknown>>>(new Map());
+  const [testRunResults, setTestRunResults] = useState<Map<string, unknown>>(new Map());
+  const [failedExpands, setFailedExpands] = useState<Set<string>>(new Set());
   // Synthetic RunEntry that accumulates fetch logs from test collection/expansion operations
   const [collectionRun, setCollectionRun] = useState<RunEntry | null>(null);
   // When true, the main content area shows the collection run's fetch logs
@@ -191,6 +273,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [controlFlowGraph, setControlFlowGraph] = useState<ControlFlowGraph | null>(null);
   const [activeTab, setActiveTab] = useState<'run' | 'graph' | 'prompt' | 'curl'>('run');
   const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(null);
+  const [cursorOffset, setCursorOffset] = useState<number | null>(null);
 
   // Workflow context: when a function belongs to multiple workflows,
   // this tracks which workflow is being viewed and the alternatives.
@@ -198,8 +281,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     functionName: string;
     workflows: string[];
   } | null>(null);
-  const [promptPreviewResult, setPromptPreviewResult] = useState<string | null>(null);
-  const [curlPreviewResult, setCurlPreviewResult] = useState<string | null>(null);
+  const [promptPreviewResult, setPromptPreviewResult] = useState<BamlJsValue | null>(null);
+  const [curlPreviewResult, setCurlPreviewResult] = useState<BamlJsValue | null>(null);
   const [promptPreviewError, setPromptPreviewError] = useState<string | null>(null);
   const [curlPreviewError, setCurlPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -211,11 +294,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [showApiKeysDialog, setShowApiKeysDialog] = useState(false);
   const showApiKeysDialogRef = useRef(false);
 
+  // Pending io.input() requests keyed by callId, each entry is a queue of { id, prompt }
+  const [pendingInputs, setPendingInputs] = useState<Map<number, Array<{ id: number; prompt: string | undefined }>>>(new Map());
+
   const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
-  const [envVars, setEnvVarsState] = useState<Record<string, string>>({});
-  // Keys the project is known to need — accumulated from envVarRequests, never shrunk.
-  const [knownRequiredKeys, setKnownRequiredKeys] = useState<Set<string>>(new Set());
+  const [wasmPanic, setWasmPanic] = useState<{ message: string; stack?: string } | null>(null);
+  const { envVars, knownRequiredKeys, addEnvVar, removeEnvVar, importEnvVars, addRequiredKey } = useEnvVars(port);
   // In-flight worker requests waiting for a value: id → variable name. Ref because it doesn't drive renders.
   const pendingEnvRequestsRef = useRef<Map<number, string>>(new Map());
 
@@ -230,7 +315,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   useEffect(() => { controlFlowGraphRef.current = controlFlowGraph; }, [controlFlowGraph]);
 
   const nextCallIdRef = useRef(0);
-  const pendingCallsRef = useRef<Map<number, { resolve: (v: string) => void; reject: (e: Error) => void }>>(new Map());
+  const pendingCallsRef = useRef<Map<number, { resolve: (v: BamlJsValue) => void; reject: (e: Error) => void }>>(new Map());
   // Buffer fetch logs by callId so logs that arrive before testCollectionResult are not lost.
   const pendingLogsRef = useRef<Map<number, FetchLogEntry[]>>(new Map());
 
@@ -288,6 +373,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   }
 
   function handleCursorContext(ctx: CursorContext) {
+    // Update cursor offset for event highlighting (cursor ↔ event matching)
+    console.log('[DEBUG] CursorContext:', { cursorOffset: ctx.cursorOffset, functionName: ctx.functionName });
+    setCursorOffset(ctx.cursorOffset ?? null);
+
     if (!ctx.functionName) return;
 
     const currentFn = selectedFnRef.current;
@@ -353,7 +442,16 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               try {
                 const jsonStr = new TextDecoder().decode(new Uint8Array(n.data));
                 const tree = JSON.parse(jsonStr);
-                console.log('[testCollectionResult] decoded tree:', JSON.stringify(tree, null, 2));
+
+                // Track failed expansions from the server-provided error field
+                if (n.expandError) {
+                  setFailedExpands((prev) => {
+                    const next = new Set(prev);
+                    next.add(n.expandError!.testsetName);
+                    return next;
+                  });
+                }
+
                 setTestTree(tree);
                 setCollectionCallId(n.callId);
                 setGeneration(n.generation);
@@ -363,14 +461,16 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 // fetch logs that arrived before this notification.
                 const buffered = pendingLogsRef.current.get(n.callId) ?? [];
                 pendingLogsRef.current.delete(n.callId);
+                const hasError = !!n.expandError;
                 const collectionEntry: RunEntry = {
                   id: n.callId,
                   functionName: '$collect_tests',
                   argsJson: '',
                   fetchLogs: buffered,
+                  runtimeEvents: [],
                   result: null,
-                  error: null,
-                  status: 'success',
+                  error: hasError ? n.expandError!.message : null,
+                  status: hasError ? 'error' : 'success',
                   startTime: performance.now(),
                   durationMs: null,
                 };
@@ -453,9 +553,28 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           );
           break;
 
+        case 'runtimeEventNew': {
+          const eventEntry = data.event;
+          if (data.callId != null) {
+            setRuns((prev) =>
+              prev.map((r) =>
+                r.id === data.callId
+                  ? { ...r, runtimeEvents: [...r.runtimeEvents, eventEntry] }
+                  : r
+              )
+            );
+            // Also route to collection run if this event belongs to it
+            setCollectionRun((prev) => {
+              if (!prev || prev.id !== data.callId) return prev;
+              return { ...prev, runtimeEvents: [...prev.runtimeEvents, eventEntry] };
+            });
+          }
+          break;
+        }
+
         case 'envVarRequest': {
           // Always track as a known required key (proactive indicator)
-          setKnownRequiredKeys((prev) => prev.has(data.variable) ? prev : new Set([...prev, data.variable]));
+          addRequiredKey(data.variable);
           const cached = envVarsRef.current[data.variable];
           if (cached !== undefined) {
             port.postMessage({ type: 'envVarResponse', id: data.id, value: cached, variable: data.variable });
@@ -467,6 +586,17 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               showApiKeysDialogRef.current = true;
             }
           }
+          break;
+        }
+
+        case 'inputRequest': {
+          const { id, prompt, callId } = data;
+          setPendingInputs((prev) => {
+            const next = new Map(prev);
+            const arr = next.get(callId) ?? [];
+            next.set(callId, [...arr, { id, prompt }]);
+            return next;
+          });
           break;
         }
 
@@ -488,6 +618,19 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
         case "cursorContext":
           handleCursorContext(data.context);
+          break;
+
+        case "wasmPanic":
+          setWasmPanic({ message: data.message, stack: data.stack });
+          break;
+
+        case "logDecorations":
+        case "clearLogDecorations":
+          // These are handled by MonacoEditor, ignore here
+          break;
+
+        case "runtimeEventError":
+          console.warn('[ExecutionPanel] runtimeEventError:', data.error);
           break;
 
         default:
@@ -572,7 +715,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       try {
         const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
         const callId = nextCallIdRef.current++;
-        const resultStr = await new Promise<string>((resolve, reject) => {
+        const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
           pendingCallsRef.current.set(callId, { resolve, reject });
           port.postMessage({
             type: 'callFunction',
@@ -582,7 +725,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             project: selectedProject,
           });
         });
-        setResult(resultStr);
+        setResult(resultValue);
         setError(null);
         setPreviewLoading(false);
       } catch (e) {
@@ -605,26 +748,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync when port changes
   }, [port]);
 
-  // ── Env var helpers ────────────────────────────────────────────────────
-
-  const addEnvVar = useCallback((key: string, value: string) => {
-    setEnvVarsState((prev) => ({ ...prev, [key]: value }));
-    envVarsRef.current[key] = value;
-    port.postMessage({ type: 'setEnvVar', key, value });
-  }, [port]);
-
-  const removeEnvVar = useCallback((key: string) => {
-    setEnvVarsState((prev) => { const { [key]: _, ...rest } = prev; return rest; });
-    delete envVarsRef.current[key];
-    port.postMessage({ type: 'deleteEnvVar', key });
-  }, [port]);
-
-  const handleImportEnvVars = useCallback((vars: Record<string, string>) => {
-    for (const [key, value] of Object.entries(vars)) {
-      addEnvVar(key, value);
-    }
-  }, [addEnvVar]);
-
   const onArgsJsonChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     setArgsJson(e.target.value);
   }, []);
@@ -637,6 +760,17 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     if (!selectedProject) return;
     port.postMessage({ type: 'cancelCall', id: runId, project: selectedProject });
   }, [port, selectedProject]);
+
+  const submitInput = useCallback((id: number, value: string, callId: number) => {
+    port.postMessage({ type: 'inputResponse', id, value });
+    setPendingInputs((prev) => {
+      const next = new Map(prev);
+      const arr = (next.get(callId) ?? []).filter((r) => r.id !== id);
+      if (arr.length === 0) next.delete(callId);
+      else next.set(callId, arr);
+      return next;
+    });
+  }, [port]);
 
   const toggleResultMode = useCallback((runId: number) => {
     setResultModes((prev) => ({
@@ -674,6 +808,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       functionName: selectedFn,
       argsJson,
       fetchLogs: [],
+      runtimeEvents: [],
       result: null,
       error: null,
       status: 'running',
@@ -694,7 +829,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       }
       const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
 
-      const resultStr = await new Promise<string>((resolve, reject) => {
+      const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
         pendingCallsRef.current.set(runId, { resolve, reject });
         port.postMessage(
           { type: 'callFunction', id: runId, name: selectedFn, argsProto: new Uint8Array(argsProto), project: selectedProject },
@@ -702,7 +837,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       });
 
       const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultStr, status: 'success', durationMs: dur } : r));
+      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultValue, status: 'success', durationMs: dur } : r));
     } catch (e) {
       const isCancelled = e instanceof Error && (e as any).cancelled === true;
       const errMsg = e instanceof Error ? e.message : String(e);
@@ -733,6 +868,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       testName: name,
       argsJson: `(test: ${name})`,
       fetchLogs: [],
+      runtimeEvents: [],
       result: null,
       error: null,
       status: 'running',
@@ -742,7 +878,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     setRuns((prev) => [...prev, newRun]);
 
     try {
-      const resultStr = await new Promise<string>((resolve, reject) => {
+      const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
         pendingCallsRef.current.set(runId, { resolve, reject });
         port.postMessage({
           type: 'callTestFunction',
@@ -757,15 +893,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       setRuns((prev) =>
         prev.map((r) =>
           r.id === runId
-            ? { ...r, result: resultStr, status: 'success', durationMs: dur }
+            ? { ...r, result: resultValue, status: 'success', durationMs: dur }
             : r,
         ),
       );
 
-      try {
-        const report = JSON.parse(resultStr);
-        setTestRunResults((prev) => new Map(prev).set(name, report));
-      } catch {}
+      setTestRunResults((prev) => new Map(prev).set(name, resultValue));
     } catch (e: any) {
       const dur = Math.round(performance.now() - newRun.startTime);
       const cancelled = e instanceof Error && (e as any).cancelled === true;
@@ -784,20 +917,23 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   }, [selectedProject, generation, port]);
 
   // Track which testsets we've already requested expansion for (per generation)
-  const pendingExpandsRef = useRef<{ generation: number; names: Set<string> }>({ generation: -1, names: new Set() });
+  const pendingExpandsRef = useRef<{ project: string | null; generation: number; names: Set<string> }>({ project: null, generation: -1, names: new Set() });
 
   // Auto-expand lazy testsets after receiving a new testTree
   useEffect(() => {
     if (!testTree || !selectedProject) return;
-    // Reset pending set when generation changes (new collection)
-    if (pendingExpandsRef.current.generation !== generation) {
-      pendingExpandsRef.current = { generation, names: new Set() };
+    // Reset pending set and failed state when generation or project changes.
+    // Generation is per-project on the server, so different projects can share
+    // the same generation number — we must track both to avoid leaking state.
+    if (pendingExpandsRef.current.generation !== generation || pendingExpandsRef.current.project !== selectedProject) {
+      pendingExpandsRef.current = { project: selectedProject, generation, names: new Set() };
+      setFailedExpands(new Set());
     }
     const pending = pendingExpandsRef.current.names;
     const expandLazy = (items: any[]) => {
       for (const item of items) {
         if (item && item.type === 'lazyTestSet' && !pending.has(item.name)) {
-          console.log('[auto-expand] expanding lazy testset:', item.name);
+
           pending.add(item.name);
           port.postMessage({
             type: 'expandTestSet',
@@ -815,6 +951,27 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       expandLazy(testTree);
     }
   }, [testTree, selectedProject, generation, port]);
+
+  // Retry expansion for a failed (or already expanded) testset
+  const handleRetryExpand = useCallback((testsetName: string) => {
+    if (!selectedProject) return;
+    // Remove from failed set so it shows spinner again
+    setFailedExpands((prev) => {
+      const next = new Set(prev);
+      next.delete(testsetName);
+      return next;
+    });
+    // Remove from pending so auto-expand doesn't skip it
+    pendingExpandsRef.current.names.delete(testsetName);
+    // Re-send expansion request
+    pendingExpandsRef.current.names.add(testsetName);
+    port.postMessage({
+      type: 'expandTestSet',
+      project: selectedProject,
+      generation,
+      testsetName,
+    });
+  }, [selectedProject, generation, port]);
 
   // ── Derived state ──────────────────────────────────────────────────────
 
@@ -915,6 +1072,32 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         </div>
       )}
 
+      {/* WASM Panic banner */}
+      {wasmPanic && (
+        <button
+          type="button"
+          onClick={() => {
+            setWasmPanic(null);
+            if (onReload) {
+              onReload();
+            } else {
+              window.location.reload();
+            }
+          }}
+          className="w-full flex items-center gap-2 px-2.5 py-2 border-none border-b border-vsc-border shrink-0 bg-[#5c1a1a] hover:bg-[#6e1f1f] transition-colors cursor-pointer text-left"
+        >
+          <span className="text-[12px]">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <span className="font-vsc-mono text-[11px] text-[#ff6b6b] font-medium">
+              WASM Panic — Click to reload worker
+            </span>
+            <div className="font-vsc-mono text-[10px] text-[#ff6b6b]/70 truncate">
+              {wasmPanic.message}
+            </div>
+          </div>
+        </button>
+      )}
+
       {/* Diagnostics banner */}
       {(hasErrors || engineStale) && (
         <div className="border-b border-vsc-border shrink-0 bg-[#3e1a1a]">
@@ -992,20 +1175,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             >
               {isRunning ? 'Running...' : 'Run'}
             </Button>
-            {runs.length > 0 && !isRunning && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-[10px]"
-                onClick={() => {
-                  const runIds = runs.map((r) => r.id);
-                  port.postMessage({ type: 'clearHandles', runIds });
-                  setRuns([]);
-                }}
-              >
-                Clear
-              </Button>
-            )}
           </div>
         )}
       </div>
@@ -1024,6 +1193,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 onRefreshTests={handleRefreshTests}
                 onRunTest={handleRunTest}
                 testRunResults={testRunResults}
+                failedExpands={failedExpands}
+                onRetryExpand={handleRetryExpand}
                 collectionRun={collectionRun}
                 viewingCollection={viewingCollection}
                 onSelectCollectionView={() => { setViewingCollection(true); setViewingTestRun(false); setSelectedFn(null); }}
@@ -1043,6 +1214,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               run={collectionRun}
               expandedLogId={expandedLogId}
               setExpandedLogId={setExpandedLogId}
+              resultRenderers={resultRenderers}
             />
           ) : viewingTestRun ? (
             <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
@@ -1126,6 +1298,94 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                         </div>
                       );
                     })}
+                    {/* Runtime events (log.info, baml.events.send, etc.) */}
+                    {run.runtimeEvents.length > 0 && (
+                      <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                        <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
+                          Events ({run.runtimeEvents.length})
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          {run.runtimeEvents.map((evt, evtIdx) => {
+                            const kind = evt.event;
+                            if (!kind) return null;
+
+                            let label: string;
+                            let payload: ReactNode;
+                            let colorCls: string;
+
+                            switch (kind.$case) {
+                              case 'functionStart':
+                                label = 'START';
+                                payload = kind.functionStart.name;
+                                colorCls = 'text-vsc-green';
+                                break;
+                              case 'functionEnd':
+                                label = 'END';
+                                payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
+                                colorCls = 'text-vsc-text-muted';
+                                break;
+                              case 'log': {
+                                const lvl = kind.log.level;
+                                label = lvl;
+                                payload = <EventValueDisplay value={kind.log.data} customRenderers={resultRenderers} />;
+                                colorCls = lvl === 'error' ? 'text-vsc-red'
+                                  : lvl === 'warn' ? 'text-vsc-yellow'
+                                  : lvl === 'debug' ? 'text-vsc-text-muted'
+                                  : 'text-vsc-blue';
+                                break;
+                              }
+                              case 'custom':
+                                label = 'EVENT';
+                                payload = <><span>{kind.custom.name}: </span><EventValueDisplay value={kind.custom.data} customRenderers={resultRenderers} /></>;
+                                colorCls = 'text-vsc-purple';
+                                break;
+                              case 'setTags':
+                                label = 'TAGS';
+                                payload = kind.setTags.tags.map(t => `${t.key}=${t.value}`).join(', ');
+                                colorCls = 'text-vsc-text-muted';
+                                break;
+                              default:
+                                return null;
+                            }
+
+                            // Check if cursor is within this event's source span
+                            const source = kind.$case === 'log' ? kind.log.source : undefined;
+                            const isCursorMatch = cursorOffset != null && source != null &&
+                              cursorOffset > source.startOffset && cursorOffset <= source.endOffset;
+
+                            return (
+                              <div
+                                key={`${evt.spanId}-${evtIdx}`}
+                                className={cn(
+                                  "flex items-start gap-1.5 text-[11px]",
+                                  isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1",
+                                  source && onNavigateToSource && "cursor-pointer hover:bg-vsc-bg-secondary"
+                                )}
+                                onClick={source && onNavigateToSource ? () => onNavigateToSource({ fileId: source.fileId, line: source.line, column: source.column }) : undefined}
+                              >
+                                <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
+                                <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {/* Inline io.input() prompts for this run */}
+                    {(pendingInputs.get(run.id) ?? []).map((req) => (
+                      <div key={req.id} className="flex items-center gap-2 px-[22px] py-1.5 border-b border-vsc-border bg-vsc-surface">
+                        <span className="text-vsc-text-faint text-xs shrink-0">{req.prompt ?? 'Input:'}</span>
+                        <input
+                          className="flex-1 bg-vsc-bg border border-vsc-border rounded px-2 py-1 text-xs text-vsc-text font-vsc-mono focus:outline-none focus:border-vsc-accent"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              submitInput(req.id, e.currentTarget.value, run.id);
+                            }
+                          }}
+                        />
+                      </div>
+                    ))}
                     {run.status === 'cancelled' && (
                       <div className="py-1.5 pr-2.5 pl-[22px]">
                         <div className="text-[11px] text-vsc-text-faint italic">Cancelled</div>
@@ -1140,7 +1400,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                     {run.result != null && (
                       <div className="py-1.5 pr-2.5 pl-[22px]">
                         <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">Result</div>
-                        <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                        <ResultDisplay result={run.result} customRenderers={resultRenderers} />
                       </div>
                     )}
                   </div>
@@ -1153,21 +1413,37 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               onValueChange={(v) => setActiveTab(v as typeof activeTab)}
               className="flex-1 flex flex-col min-h-0"
             >
-              <TabsList className="px-2.5 shrink-0 bg-vsc-surface">
-                <TabsTrigger value="run">Run</TabsTrigger>
-                <TabsTrigger value="graph">Graph</TabsTrigger>
-                {canPreviewPrompt && (
-                  <TabsTrigger value="prompt">
-                    Prompt
-                    {selectedFnInfo?.capabilities?.clientName && (
-                      <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
-                        {selectedFnInfo.capabilities.clientName}
-                      </span>
-                    )}
-                  </TabsTrigger>
+              <div className="flex items-center px-2.5 shrink-0 bg-vsc-surface">
+                <TabsList className="bg-transparent">
+                  <TabsTrigger value="run">Run</TabsTrigger>
+                  <TabsTrigger value="graph">Graph</TabsTrigger>
+                  {canPreviewPrompt && (
+                    <TabsTrigger value="prompt">
+                      Prompt
+                      {selectedFnInfo?.capabilities?.clientName && (
+                        <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
+                          {selectedFnInfo.capabilities.clientName}
+                        </span>
+                      )}
+                    </TabsTrigger>
+                  )}
+                  {canPreviewCurl && <TabsTrigger value="curl">cURL</TabsTrigger>}
+                </TabsList>
+                {runs.length > 0 && !isRunning && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto text-[10px] text-vsc-text-muted hover:text-vsc-text"
+                    onClick={() => {
+                      const runIds = runs.map((r) => r.id);
+                      port.postMessage({ type: 'clearHandles', runIds });
+                      setRuns([]);
+                    }}
+                  >
+                    Clear
+                  </Button>
                 )}
-                {canPreviewCurl && <TabsTrigger value="curl">cURL</TabsTrigger>}
-              </TabsList>
+              </div>
 
               {/* Graph view */}
               <TabsContent value="graph" className="flex-1 min-h-0 mt-0 flex flex-col" style={{ minHeight: 300 }}>
@@ -1221,7 +1497,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                     )}
                     <div ref={promptContentRef}>
                       {promptPreviewResult != null ? (
-                        <ResultDisplay resultJson={promptPreviewResult} customRenderers={resultRenderers} />
+                        <ResultDisplay result={promptPreviewResult} customRenderers={resultRenderers} />
                       ) : (
                         <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
                           {previewLoading ? 'Loading prompt preview...' : 'Enter args to preview prompt'}
@@ -1229,7 +1505,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                       )}
                     </div>
                   </div>
-                  {promptPreviewResult && <PromptStats text={promptPreviewResult} />}
+                  {promptPreviewResult && <PromptStats text={stringifyResult(promptPreviewResult)} />}
                 </TabsContent>
               )}
 
@@ -1237,7 +1513,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               {canPreviewCurl && (
                 <TabsContent value="curl" className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5 mt-0">
                   {curlPreviewResult != null ? (
-                    <ResultDisplay resultJson={curlPreviewResult} customRenderers={resultRenderers} />
+                    <ResultDisplay result={curlPreviewResult} customRenderers={resultRenderers} />
                   ) : curlPreviewError ? (
                     <div className="flex items-center justify-center text-vsc-error text-xs h-full">
                       {curlPreviewError}
@@ -1357,6 +1633,95 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                           );
                         })}
 
+                        {/* Runtime events (log.info, baml.events.send, etc.) */}
+                        {run.runtimeEvents.length > 0 && (
+                          <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                            <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
+                              Events ({run.runtimeEvents.length})
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              {run.runtimeEvents.map((evt, evtIdx) => {
+                                const kind = evt.event;
+                                if (!kind) return null;
+
+                                let label: string;
+                                let payload: ReactNode;
+                                let colorCls: string;
+
+                                switch (kind.$case) {
+                                  case 'functionStart':
+                                    label = 'START';
+                                    payload = kind.functionStart.name;
+                                    colorCls = 'text-vsc-green';
+                                    break;
+                                  case 'functionEnd':
+                                    label = 'END';
+                                    payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
+                                    colorCls = 'text-vsc-text-muted';
+                                    break;
+                                  case 'log': {
+                                    const lvl = kind.log.level;
+                                    label = lvl;
+                                    payload = <EventValueDisplay value={kind.log.data} customRenderers={resultRenderers} />;
+                                    colorCls = lvl === 'error' ? 'text-vsc-red'
+                                      : lvl === 'warn' ? 'text-vsc-yellow'
+                                      : lvl === 'debug' ? 'text-vsc-text-muted'
+                                      : 'text-vsc-blue';
+                                    break;
+                                  }
+                                  case 'custom':
+                                    label = 'EVENT';
+                                    payload = <><span>{kind.custom.name}: </span><EventValueDisplay value={kind.custom.data} customRenderers={resultRenderers} /></>;
+                                    colorCls = 'text-vsc-purple';
+                                    break;
+                                  case 'setTags':
+                                    label = 'TAGS';
+                                    payload = kind.setTags.tags.map(t => `${t.key}=${t.value}`).join(', ');
+                                    colorCls = 'text-vsc-text-muted';
+                                    break;
+                                  default:
+                                    return null;
+                                }
+
+                                // Check if cursor is within this event's source span
+                                const source = kind.$case === 'log' ? kind.log.source : undefined;
+                                const isCursorMatch = cursorOffset != null && source != null &&
+                                  cursorOffset > source.startOffset && cursorOffset <= source.endOffset;
+
+                                return (
+                                  <div
+                                    key={`${evt.spanId}-${evtIdx}`}
+                                    className={cn(
+                                      "flex items-start gap-1.5 text-[11px]",
+                                      isCursorMatch && "bg-vsc-yellow/20 rounded px-1 -mx-1",
+                                      source && onNavigateToSource && "cursor-pointer hover:bg-vsc-bg-secondary"
+                                    )}
+                                    onClick={source && onNavigateToSource ? () => onNavigateToSource({ fileId: source.fileId, line: source.line, column: source.column }) : undefined}
+                                  >
+                                    <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
+                                    <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {/* Inline io.input() prompts for this run */}
+                        {(pendingInputs.get(run.id) ?? []).map((req) => (
+                          <div key={req.id} className="flex items-center gap-2 px-[22px] py-1.5 border-b border-vsc-border bg-vsc-surface">
+                            <span className="text-vsc-text-faint text-xs shrink-0">{req.prompt ?? 'Input:'}</span>
+                            <input
+                              className="flex-1 bg-vsc-bg border border-vsc-border rounded px-2 py-1 text-xs text-vsc-text font-vsc-mono focus:outline-none focus:border-vsc-accent"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  submitInput(req.id, e.currentTarget.value, run.id);
+                                }
+                              }}
+                            />
+                          </div>
+                        ))}
+
                         {/* Result / Error / Cancelled for this run */}
                         {run.status === 'cancelled' && (
                           <div className="py-1.5 pr-2.5 pl-[22px]">
@@ -1388,13 +1753,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                   ]}
                                   size="sm"
                                 />
-                                <CopyButton text={run.result} iconSize={11} />
+                                <CopyButton text={stringifyResult(run.result)} iconSize={11} />
                               </div>
                               {(resultModes[run.id] ?? 'parsed') === 'parsed' ? (
-                                <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                                <ResultDisplay result={run.result} customRenderers={resultRenderers} />
                               ) : (
                                 <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[400px] overflow-auto">
-                                  {run.result}
+                                  {stringifyResult(run.result)}
                                 </pre>
                               )}
                             </div>
@@ -1416,6 +1781,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
       <ApiKeysDialog
         open={showApiKeysDialog}
+        envVars={envVars}
+        requiredKeys={knownRequiredKeys}
         onOpenChange={(open) => {
           setShowApiKeysDialog(open);
           showApiKeysDialogRef.current = open;
@@ -1429,11 +1796,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             pendingEnvRequestsRef.current.clear();
           }
         }}
-        envVars={envVars}
-        requiredKeys={knownRequiredKeys}
         onSetEnvVar={addEnvVar}
         onDeleteEnvVar={removeEnvVar}
-        onImportEnvVars={handleImportEnvVars}
+        onImportEnvVars={importEnvVars}
       />
     </>
   );

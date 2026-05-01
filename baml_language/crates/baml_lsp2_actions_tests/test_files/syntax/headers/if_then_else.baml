@@ -56,5 +56,5 @@ function ComplexHeaderTest(x: int) -> int {
 //     │     ┬  
 //     │     ╰── unresolved name: y
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯

@@ -47,14 +47,31 @@ fn generate_tests(manifest_dir: &str) {
     // diffs in insta snapshot metadata).
     let dest_path = Path::new(&manifest_dir).join("src/generated_tests.rs");
 
-    let project_modules: TokenStream = projects
-        .iter()
-        .map(|project| generate_project_tests(project, manifest_dir))
-        .collect();
+    // Group projects by tier
+    let mut tier_groups: std::collections::BTreeMap<&'static str, Vec<TokenStream>> =
+        std::collections::BTreeMap::new();
 
-    let test_modules: TokenStream = quote! {
-        #project_modules
-    };
+    for project in &projects {
+        let module = generate_project_tests(project, manifest_dir);
+        tier_groups
+            .entry(project.tier.dir_name())
+            .or_default()
+            .push(module);
+    }
+
+    // Emit nested modules: mod broken_syntax { mod project1 { ... } mod project2 { ... } }
+    let test_modules: TokenStream = tier_groups
+        .into_iter()
+        .map(|(tier_name, modules)| {
+            let tier_ident = format_ident!("{}", tier_name);
+            quote! {
+                #[cfg(test)]
+                mod #tier_ident {
+                    #(#modules)*
+                }
+            }
+        })
+        .collect();
 
     let header = "\
 // Auto-generated tests from projects/ by build.rs
@@ -112,11 +129,41 @@ fn write_formatted_code(path: &Path, code: TokenStream, header: &str) {
 }
 
 // Test-related structures and functions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Tier {
+    BrokenSyntax,
+    DiagnosticErrors,
+    Compiles,
+    Passing,
+    PassingLlm,
+}
+
+impl Tier {
+    fn dir_name(&self) -> &'static str {
+        match self {
+            Tier::BrokenSyntax => "broken_syntax",
+            Tier::DiagnosticErrors => "diagnostic_errors",
+            Tier::Compiles => "compiles",
+            Tier::Passing => "passing",
+            Tier::PassingLlm => "passing_llm",
+        }
+    }
+
+    const ALL: &[Tier] = &[
+        Tier::BrokenSyntax,
+        Tier::DiagnosticErrors,
+        Tier::Compiles,
+        Tier::Passing,
+        Tier::PassingLlm,
+    ];
+}
+
 struct TestProject {
     name: String,
     #[allow(dead_code)]
     path: PathBuf,
     files: Vec<BamlFile>,
+    tier: Tier,
 }
 
 struct BamlFile {
@@ -132,28 +179,43 @@ fn discover_projects(projects_dir: &Path) -> Vec<TestProject> {
         return projects;
     }
 
-    for entry in fs::read_dir(projects_dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-
-        if !path.is_dir() {
+    for tier in Tier::ALL {
+        let tier_dir = projects_dir.join(tier.dir_name());
+        if !tier_dir.exists() {
             continue;
         }
 
-        let name = path.file_name().unwrap().to_str().unwrap().to_string();
+        for entry in fs::read_dir(&tier_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
 
-        if name == "parser_stress" {
-            continue;
-        }
+            if !path.is_dir() {
+                continue;
+            }
 
-        let files = discover_baml_files(&path);
+            let name = path.file_name().unwrap().to_str().unwrap().to_string();
 
-        if !files.is_empty() {
-            projects.push(TestProject { name, path, files });
+            // parser_stress remains excluded (it would only appear if
+            // someone moved it into a tier directory by mistake)
+            if name == "parser_stress" {
+                continue;
+            }
+
+            let files = discover_baml_files(&path);
+
+            if !files.is_empty() {
+                projects.push(TestProject {
+                    name,
+                    path,
+                    files,
+                    tier: *tier,
+                });
+            }
         }
     }
 
-    projects.sort_by(|a, b| a.name.cmp(&b.name));
+    // Sort by tier first, then by name within each tier
+    projects.sort_by(|a, b| a.tier.cmp(&b.tier).then(a.name.cmp(&b.name)));
     projects
 }
 
@@ -189,8 +251,9 @@ fn discover_baml_files(dir: &Path) -> Vec<BamlFile> {
 fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStream {
     let module_name = format_ident!("{}", project.name.replace("-", "_"));
     let snapshot_path = format!(
-        "{}/snapshots/{}",
+        "{}/snapshots/{}/{}",
         manifest_dir.replace('\\', "/"),
+        project.tier.dir_name(),
         project.name
     );
 
@@ -207,18 +270,38 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
         None
     };
 
+    // All tiers get lexer and parser
     let lexer_tests: TokenStream = project.files.iter().map(generate_lexer_test).collect();
-
     let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
 
-    let hir_test = generate_hir_test(project, stdlib_package_filter);
-    let tir_test = generate_tir_test(project, stdlib_package_filter);
-    let mir_test = generate_mir_test(project, stdlib_package_filter);
-    let diagnostics_test = generate_diagnostics_test(project);
-    let codegen_test = generate_codegen_test(project, stdlib_package_filter);
+    // All tiers get diagnostics (with tier-specific invariant assertions)
+    let diagnostics_test = generate_diagnostics_test(project, project.tier);
 
-    let formatter_tests: TokenStream = project.files.iter().map(generate_formatter_test).collect();
+    // Tier-specific phases
+    let (hir_test, tir_test, mir_test, codegen_test, formatter_tests) = match project.tier {
+        Tier::BrokenSyntax => {
+            // Tier 1: lexer + parser + diagnostics only — no higher phases
+            (quote! {}, quote! {}, quote! {}, quote! {}, quote! {})
+        }
+        Tier::DiagnosticErrors => {
+            // Tier 2: HIR, TIR, formatter — no MIR, no codegen
+            let hir = generate_hir_test(project, stdlib_package_filter);
+            let tir = generate_tir_test(project, stdlib_package_filter);
+            let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
+            (hir, tir, quote! {}, quote! {}, fmt)
+        }
+        Tier::Compiles | Tier::Passing | Tier::PassingLlm => {
+            // Tier 3+: all compiler phases
+            let hir = generate_hir_test(project, stdlib_package_filter);
+            let tir = generate_tir_test(project, stdlib_package_filter);
+            let mir = generate_mir_test(project, stdlib_package_filter);
+            let cg = generate_codegen_test(project, stdlib_package_filter);
+            let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
+            (hir, tir, mir, cg, fmt)
+        }
+    };
 
+    // parser_-prefixed tests: only for parser_ projects regardless of tier
     let parser_specific_tests = if project.name.starts_with("parser_") {
         let incremental_tests: TokenStream = project
             .files
@@ -241,7 +324,6 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     };
 
     quote! {
-        #[cfg(test)]
         mod #module_name {
             use baml_db::*;
             use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
@@ -535,7 +617,7 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
                     functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
                     for (local_id, _func_data) in functions {
                         let func_loc = FunctionLoc::new(&db, sf, *local_id);
-                        let mir = lower_function(&db, func_loc);
+                        let mir = lower_function(&db, func_loc, OptLevel::Two);
                         writeln!(output, "{}", display_function(&mir)).unwrap();
                     }
                 }
@@ -549,7 +631,7 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
         #[test]
         fn test_04_5_mir() {
             use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
-            use baml_compiler2_mir::{lower_function, pretty::display_function};
+            use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
 
             let mut db = ProjectDatabase::new();
             let _root = db.set_project_root(std::path::Path::new("."));
@@ -566,7 +648,7 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
                 functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
                 for (local_id, _func_data) in functions {
                     let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
-                    let mir = lower_function(&db, func_loc);
+                    let mir = lower_function(&db, func_loc, OptLevel::Two);
                     writeln!(output, "{}", display_function(&mir)).unwrap();
                 }
             }
@@ -580,7 +662,7 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
     }
 }
 
-fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
+fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -602,6 +684,117 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             }
         })
         .collect();
+
+    let project_name = &project.name;
+    let tier_name = tier.dir_name();
+
+    let tier_assertion = match tier {
+        Tier::BrokenSyntax => quote! {
+            // Tier 1 invariant: at least one file must have parse errors
+            let has_parse_errors = diagnostics.iter().any(|d| {
+                d.phase == DiagnosticPhase::Parse
+                    && d.severity == baml_compiler_diagnostics::Severity::Error
+            });
+            let error_count = diagnostics.iter().filter(|d| d.severity == baml_compiler_diagnostics::Severity::Error).count();
+            let warning_count = diagnostics.iter().filter(|d| d.severity == baml_compiler_diagnostics::Severity::Warning).count();
+            assert!(
+                has_parse_errors,
+                "Tier invariant failed for project '{}' in '{}/'\n\
+                 \n\
+                 Expected: at least one parse-phase error (broken_syntax/ projects test invalid syntax)\n\
+                 Got:      {} error(s), {} warning(s), 0 parse errors\n\
+                 \n\
+                 This usually means a parser change fixed a syntax error this project was testing.\n\
+                 The snapshot above shows the actual diagnostics.\n\
+                 \n\
+                 To fix:\n\
+                 1. If intentional, update the .baml files to test a different syntax error\n\
+                 2. If the project now has only semantic errors, move it to diagnostic_errors/\n\
+                 3. If the project now compiles cleanly, move it to compiles/",
+                #project_name,
+                #tier_name,
+                error_count,
+                warning_count,
+            );
+        },
+        Tier::DiagnosticErrors => quote! {
+            // Tier 2 invariant: must have error diagnostics but no parse errors
+            let parse_error_count = diagnostics.iter().filter(|d| {
+                d.phase == DiagnosticPhase::Parse
+                    && d.severity == baml_compiler_diagnostics::Severity::Error
+            }).count();
+            let error_count = diagnostics.iter().filter(|d| d.severity == baml_compiler_diagnostics::Severity::Error).count();
+            let warning_count = diagnostics.iter().filter(|d| d.severity == baml_compiler_diagnostics::Severity::Warning).count();
+            assert!(
+                parse_error_count == 0,
+                "Tier invariant failed for project '{}' in '{}/'\n\
+                 \n\
+                 Expected: error diagnostics but no parse errors (diagnostic_errors/ projects have valid syntax with semantic errors)\n\
+                 Got:      {} parse error(s) out of {} total error(s), {} warning(s)\n\
+                 \n\
+                 This usually means a code change introduced a syntax error in this project.\n\
+                 The snapshot above shows the actual diagnostics.\n\
+                 \n\
+                 To fix:\n\
+                 1. If a code change broke parsing, fix the parser regression\n\
+                 2. If the .baml files were edited to have intentionally broken syntax, move it to broken_syntax/",
+                #project_name,
+                #tier_name,
+                parse_error_count,
+                error_count,
+                warning_count,
+            );
+            assert!(
+                error_count > 0,
+                "Tier invariant failed for project '{}' in '{}/'\n\
+                 \n\
+                 Expected: at least one error diagnostic (diagnostic_errors/ projects test semantic errors)\n\
+                 Got:      0 errors, {} warning(s)\n\
+                 \n\
+                 This usually means a compiler change resolved the errors this project was testing.\n\
+                 The snapshot above shows the actual diagnostics.\n\
+                 \n\
+                 To fix:\n\
+                 1. If intentional, update the .baml files to test a different semantic error\n\
+                 2. If the project now compiles cleanly, move it to compiles/",
+                #project_name,
+                #tier_name,
+                warning_count,
+            );
+        },
+        Tier::Compiles | Tier::Passing | Tier::PassingLlm => quote! {
+            // Tier 3+ invariant: zero error diagnostics (warnings OK)
+            let errors: Vec<_> = diagnostics
+                .iter()
+                .filter(|d| d.severity == baml_compiler_diagnostics::Severity::Error)
+                .collect();
+            let warning_count = diagnostics.iter().filter(|d| d.severity == baml_compiler_diagnostics::Severity::Warning).count();
+            let parse_error_count = errors.iter().filter(|d| d.phase == DiagnosticPhase::Parse).count();
+            let semantic_error_count = errors.len() - parse_error_count;
+            assert!(
+                errors.is_empty(),
+                "Tier invariant failed for project '{}' in '{}/'\n\
+                 \n\
+                 Expected: zero error diagnostics (compiles/ projects must compile cleanly, warnings OK)\n\
+                 Got:      {} error(s) ({} parse, {} semantic), {} warning(s)\n\
+                 \n\
+                 This usually means a compiler change introduced new errors for this project.\n\
+                 The snapshot above shows the actual diagnostics.\n\
+                 \n\
+                 To fix:\n\
+                 1. If this is a compiler regression, fix the underlying compiler issue\n\
+                 2. If the new errors are intentional, move the project to the appropriate tier:\n\
+                    - broken_syntax/ if it has parse errors\n\
+                    - diagnostic_errors/ if it has only semantic errors",
+                #project_name,
+                #tier_name,
+                errors.len(),
+                parse_error_count,
+                semantic_error_count,
+                warning_count,
+            );
+        },
+    };
 
     quote! {
         #[test]
@@ -650,6 +843,8 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("05_diagnostics", output);
             });
+
+            #tier_assertion
         }
     }
 }
@@ -681,7 +876,7 @@ fn generate_codegen_test(
         let pkg_prefix_lit = syn::LitStr::new(&pkg_prefix, proc_macro2::Span::call_site());
         quote! { |name: &&String| name.starts_with(#pkg_prefix_lit) }
     } else {
-        quote! { |name: &&String| !name.starts_with(BAML_STD_PREFIX) && !name.starts_with("env.") && !name.starts_with("testing.") && !name.starts_with("assert.") }
+        quote! { |name: &&String| !name.starts_with(BAML_STD_PREFIX) && !name.starts_with("env.") && !name.starts_with("testing.") && !name.starts_with("assert.") && !name.starts_with("log.") }
     };
 
     quote! {
@@ -692,44 +887,37 @@ fn generate_codegen_test(
 
             #file_loaders
 
-            let mut output = String::new();
-
             let options = baml_compiler2_emit::CompileOptions { emit_test_cases: false };
-            match baml_compiler2_emit::generate_project_bytecode(&db, &options) {
-                Ok(program) => {
-                    let mut func_names: Vec<_> = program.function_indices.keys()
-                        .filter(#filter_expr)
-                        .collect();
-                    func_names.sort();
+            let program = baml_compiler2_emit::generate_project_bytecode(&db, &options)
+                .expect("codegen should succeed for Tier 3+ projects");
 
-                    let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
-                        .iter()
-                        .map(|name| {
-                            let idx = *program.function_indices.get(*name).unwrap();
-                            match program.objects.get(idx) {
-                                Some(bex_vm_types::Object::Function(func)) => {
-                                    ((*name).clone(), func.as_ref())
-                                }
-                                other => {
-                                    panic!(
-                                        "function_indices entry '{}' (idx={}) is not a Function: {:?}",
-                                        name, idx, other.map(std::mem::discriminant)
-                                    );
-                                }
-                            }
-                        })
-                        .collect();
+            let mut func_names: Vec<_> = program.function_indices.keys()
+                .filter(#filter_expr)
+                .collect();
+            func_names.sort();
 
-                    output = bex_vm::debug::display_program(
-                        &functions,
-                        bex_vm::debug::BytecodeFormat::Textual,
-                    );
-                }
-                Err(err) => {
-                    writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").unwrap();
-                    writeln!(output, "Error: {:?}", err).unwrap();
-                }
-            }
+            let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
+                .iter()
+                .map(|name| {
+                    let idx = *program.function_indices.get(*name).unwrap();
+                    match program.objects.get(idx) {
+                        Some(bex_vm_types::Object::Function(func)) => {
+                            ((*name).clone(), func.as_ref())
+                        }
+                        other => {
+                            panic!(
+                                "function_indices entry '{}' (idx={}) is not a Function: {:?}",
+                                name, idx, other.map(std::mem::discriminant)
+                            );
+                        }
+                    }
+                })
+                .collect();
+
+            let output = bex_vm::debug::display_program(
+                &functions,
+                bex_vm::debug::BytecodeFormat::Textual,
+            );
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("06_codegen", output);

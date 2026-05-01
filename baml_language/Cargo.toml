@@ -3,7 +3,7 @@ members = [
   "crates/*",
   "rig_tests/crates/*",
 ]
-exclude = [  ]
+exclude = [ "crates/bridge_go" ]
 resolver = "2"
 
 [workspace.package]
@@ -29,7 +29,6 @@ baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
 baml_codegen_python = { path = "crates/baml_codegen_python" }
-baml_codegen_tests = { path = "crates/baml_codegen_tests" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
@@ -44,6 +43,7 @@ baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_project = { path = "crates/bex_project" }
 bex_engine = { path = "crates/bex_engine" }
+sys_glob = { path = "crates/sys_glob" }
 sys_llm = { path = "crates/sys_llm" }
 sys_ops = { path = "crates/sys_ops" }
 sys_types = { path = "crates/sys_types" }
@@ -97,6 +97,7 @@ aws-smithy-runtime-api = { git = "https://github.com/boundaryml/aws-sdk-rust.git
 aws-smithy-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
 aws-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
 axum = { version = "0.8.4", features = [ "ws" ] }
+bytes = "1"
 cargo_metadata = { version = "0.23.1" }
 cbindgen = "0.28.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
@@ -114,6 +115,7 @@ futures = { version = "0.3.30", features = [ "executor" ] }
 futures-timer = { version = "3.0.3", features = [ "wasm-bindgen" ] }
 graphviz-rust = { version = "0.9" }
 indexmap = { version = "2.1.0", features = [ "serde" ] }
+infer = "0.16.0"
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
 la-arena = { version = "0.3" }
 libc = "0.2.169"
@@ -150,13 +152,15 @@ salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18
   "inventory",
 ] }
 serde = { version = "1.0.197", features = [ "derive" ] }
-serde_json = { version = "1.0.113" }
+serde-wasm-bindgen = "0.6"
+serde_json = { version = "1.0.113", features = [ "preserve_order" ] }
 similar = { version = "2.4.0", features = [ "inline" ] }
 smol_str = { version = "0.3" }
 strsim = { version = "0.11.1" }
 syn = { version = "2", features = [ "full" ] }
 taplo = { version = "0.13" }
 tempfile = { version = "3" }
+time = { version = "0.3", features = [ "formatting", "macros" ] }
 text-size = { version = "1.1" }
 thiserror = { version = "2.0.0" }
 toml = { version = "0.8" }
@@ -185,6 +189,9 @@ strum = { version = "0.26", features = [ "derive" ] }
 pyo3 = { version = "0.23.3", default-features = false }
 pyo3-async-runtimes = { version = "0.23" }
 pyo3-build-config = "0.23"
+napi = { version = "3.8.4", default-features = false }
+napi-derive = "3.5.3"
+napi-build = "2.3.1"
 wee_alloc = "0.4"
 wiremock = "0.6"
 vfs = "0.12"

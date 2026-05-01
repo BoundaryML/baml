@@ -9,7 +9,7 @@
 use std::{io::Write, sync::Arc};
 
 use baml_builtins2::{PromptAst as BuiltinPromptAst, PromptAstSimple};
-use baml_tests::engine::compile_source;
+use baml_project::testing::compile_source;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_external_types::BexExternalAdt;
 use bex_vm_types::Program;
@@ -73,8 +73,13 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
 
     let snapshot = compile_for_engine(&source);
     let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), None)
-            .expect("Failed to create engine"),
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -202,8 +207,13 @@ function get_prompt() -> baml.llm.PromptAst {{
     for i in 0..3 {
         let snapshot = compile_for_engine(&source);
         let engine = Arc::new(
-            BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), None)
-                .expect("Failed to create engine"),
+            BexEngine::new(
+                snapshot,
+                Arc::new(sys_native::SysOps::native()),
+                None,
+                Vec::new(),
+            )
+            .expect("Failed to create engine"),
         );
 
         let result = engine

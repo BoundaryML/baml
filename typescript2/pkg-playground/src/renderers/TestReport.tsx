@@ -35,9 +35,13 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
-export const TestReportRenderer: FC<ResultRendererProps> = ({ value }) => {
+export const TestReportRenderer: FC<ResultRendererProps> = ({ value, displayMode }) => {
   if (!isTestReport(value)) {
     return <pre className="whitespace-pre font-vsc-mono text-xs p-3 rounded bg-vsc-bg border border-vsc-border text-vsc-text overflow-auto max-h-[400px] m-0">{JSON.stringify(value, null, 2)}</pre>;
+  }
+
+  if (displayMode === 'inline') {
+    return <span className="font-vsc-mono text-xs text-vsc-text">{value.outcome} ({value.runs?.length ?? 0} runs)</span>;
   }
 
   const info = outcomeIcon[value.outcome ?? ''] ?? outcomeIcon.error;

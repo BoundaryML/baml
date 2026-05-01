@@ -1,0 +1,32 @@
+// Test shell operations typecheck correctly
+
+function RunCommand() -> string {
+    baml.sys.shell("echo hello", null).stdout
+}
+
+function RunCommandWithVar() -> string {
+    let cmd = "ls -la";
+    baml.sys.shell(cmd, null).stdout
+}
+
+function ChainCommands() -> string {
+    let result1 = baml.sys.shell("pwd", null);
+    let result2 = baml.sys.shell("whoami", null);
+    result1.stdout + " - " + result2.stdout
+}
+
+function CheckExitCode() -> int {
+    baml.sys.shell("exit 42", null).exit_code
+}
+
+function CheckOk() -> bool {
+    baml.sys.shell("echo test", null).ok()
+}
+
+function ExecCommand() -> string {
+    baml.sys.exec("echo", ["hello"], null).stdout
+}
+
+function ExecWithOptions() -> string {
+    baml.sys.exec("pwd", null, baml.sys.ProcessOptions { cwd: "/tmp" }).stdout
+}

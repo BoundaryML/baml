@@ -4,13 +4,13 @@
 
 class TestRegistration {
   name string
-  body () -> null
+  body TestBody
   runner TestRunner?
 }
 
 class TestSetRegistration {
   name string
-  collector (TestCollector) -> null
+  collector TestSetBody
   runner TestSetRunner?
 }
 
@@ -23,7 +23,7 @@ class TestCollector {
     TestCollector { prefix: prefix, tests: [], testsets: [] }
   }
 
-  function register_test(self, name: string, body: () -> null, runner: TestRunner?) -> null {
+  function register_test(self, name: string, body: TestBody, runner: TestRunner?) -> void {
     let full_name = if (self.prefix == "") { name } else { self.prefix + "/" + name }
     let count = 0
     let hash_prefix = full_name + "#"
@@ -32,10 +32,9 @@ class TestCollector {
     }
     let final_name = if (count > 0) { full_name + "#" + baml.unstable.string(count + 1) } else { full_name }
     let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner })
-    null
   }
 
-  function register_test_set(self, name: string, collector: (TestCollector) -> null, runner: TestSetRunner?) -> null {
+  function register_test_set(self, name: string, collector: TestSetBody, runner: TestSetRunner?) -> void {
     let full_name = if (self.prefix == "") { name } else { self.prefix + "/" + name }
     let count = 0
     let hash_prefix = full_name + "#"
@@ -44,7 +43,6 @@ class TestCollector {
     }
     let final_name = if (count > 0) { full_name + "#" + baml.unstable.string(count + 1) } else { full_name }
     let _ = self.testsets.push(TestSetRegistration { name: final_name, collector: collector, runner: runner })
-    null
   }
 
   function find_testset(self, name: string) -> TestSetRegistration {
@@ -59,7 +57,7 @@ class TestCollector {
 
 // Bridge function for the runtime to invoke a testset collector closure.
 // call_function is name-based, so we need this thin wrapper to call closures.
-function $invoke_collector(collector: (TestCollector) -> null, c: TestCollector) -> null {
+function $invoke_collector(collector: TestSetBody, c: TestCollector) -> void {
   collector(c)
 }
 
@@ -171,8 +169,8 @@ class TestRegistry {
 }
 
 // Run a single test with error handling and optional runner middleware.
-function run_test(body: () -> null, runner: TestRunner?) -> TestReport {
-  let base_run = () -> TestReport {
+function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
+  let base_run: TestReportThunk = () -> TestReport {
     let start = baml.sys.now_ms()
     let result = {
       body()
@@ -187,18 +185,22 @@ function run_test(body: () -> null, runner: TestRunner?) -> TestReport {
       runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start }],
     }
   }
-  let effective_run = match (runner) {
-    null => base_run,
-    r: TestRunner => r(base_run)
+  match (runner) {
+    null => base_run(),
+    r: TestRunner => {
+      let wrapped: TestReportThunk = r(base_run)
+      wrapped()
+    }
   }
-  effective_run()
 }
 
 // Run all children of a testset with optional runner middleware.
-function run_testset(run_children: () -> TestSetReport, runner: TestSetRunner?) -> TestSetReport {
-  let effective_run = match (runner) {
-    null => run_children,
-    r: TestSetRunner => r(run_children)
+function run_testset(run_children: TestSetReportThunk, runner: TestSetRunner?) -> TestSetReport {
+  match (runner) {
+    null => run_children(),
+    r: TestSetRunner => {
+      let wrapped: TestSetReportThunk = r(run_children)
+      wrapped()
+    }
   }
-  effective_run()
 }

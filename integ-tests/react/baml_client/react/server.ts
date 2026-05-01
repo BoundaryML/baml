@@ -2502,6 +2502,27 @@ export const TestAws = async (
 };
 
 /**
+ * Executes the "TestAwsCaching" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestAwsCaching"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ * @param { string } not_cached - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestAwsCaching = async (
+  input: string,
+  not_cached: string,
+): Promise<string> => {
+  return b.TestAwsCaching(
+    input,
+    not_cached,
+  );
+};
+
+/**
  * Executes the "TestAwsClaude37" BAML action.
  *
  * This server action calls the underlying BAML function "TestAwsClaude37"
@@ -4144,6 +4165,24 @@ export const TestVertexClaude = async (
   input: string,
 ): Promise<string> => {
   return b.TestVertexClaude(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestVertexClaudeGlobal" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestVertexClaudeGlobal"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestVertexClaudeGlobal = async (
+  input: string,
+): Promise<string> => {
+  return b.TestVertexClaudeGlobal(
     input,
   );
 };

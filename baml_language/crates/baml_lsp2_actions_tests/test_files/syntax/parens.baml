@@ -641,23 +641,6 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Duplicate binding `a` in `foo`
-//     ╭─[ parens.baml:59:23 ]
-//     │
-//  55 │   ╭─▶    for let a in as {}
-//     ┆   ┆   
-//  57 │   ├─▶    for (let a in as {}
-//     │   │                            
-//     │   ╰──────────────────────────── first defined as binding here
-//     │ 
-//  59 │ ╭───▶    for let a in as) {}
-//     ┆ ┆     
-//  61 │ ├───▶    for (let a in as) {}
-//     │ │                               
-//     │ ╰─────────────────────────────── duplicate binding definition
-//     │       
-//     │       Note: Error code: E0012
-// ────╯
 // Error: unresolved name: i
 //     ╭─[ parens.baml:39:10 ]
 //     │
@@ -665,7 +648,7 @@ function foo() -> int {
 //     │          ┬  
 //     │          ╰── unresolved name: i
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: x
 //     ╭─[ parens.baml:39:15 ]
@@ -674,7 +657,7 @@ function foo() -> int {
 //     │               ┬  
 //     │               ╰── unresolved name: x
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: i
 //     ╭─[ parens.baml:41:10 ]
@@ -683,7 +666,7 @@ function foo() -> int {
 //     │          ┬  
 //     │          ╰── unresolved name: i
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: x
 //     ╭─[ parens.baml:49:14 ]
@@ -692,7 +675,7 @@ function foo() -> int {
 //     │              ┬  
 //     │              ╰── unresolved name: x
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: i
 //     ╭─[ parens.baml:49:10 ]
@@ -701,7 +684,7 @@ function foo() -> int {
 //     │          ┬  
 //     │          ╰── unresolved name: i
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: x
 //     ╭─[ parens.baml:49:14 ]
@@ -710,7 +693,7 @@ function foo() -> int {
 //     │              ┬  
 //     │              ╰── unresolved name: x
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: i
 //     ╭─[ parens.baml:51:10 ]
@@ -719,7 +702,7 @@ function foo() -> int {
 //     │          ┬  
 //     │          ╰── unresolved name: i
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: a
 //     ╭─[ parens.baml:55:12 ]
@@ -728,7 +711,7 @@ function foo() -> int {
 //     │            ┬  
 //     │            ╰── unresolved name: a
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: cannot iterate over type `unknown`
 //     ╭─[ parens.baml:57:18 ]
@@ -737,7 +720,16 @@ function foo() -> int {
 //     │                  ──┬──  
 //     │                    ╰──── cannot iterate over type `unknown`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0006
+// ────╯
+// Error: unresolved name: a
+//     ╭─[ parens.baml:59:12 ]
+//     │
+//  59 │    for let a in as) {}
+//     │            ┬  
+//     │            ╰── unresolved name: a
+//     │ 
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: as
 //     ╭─[ parens.baml:59:17 ]
@@ -746,7 +738,7 @@ function foo() -> int {
 //     │                 ─┬  
 //     │                  ╰── unresolved name: as
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: unresolved name: as
 //     ╭─[ parens.baml:61:18 ]
@@ -755,7 +747,7 @@ function foo() -> int {
 //     │                  ─┬  
 //     │                   ╰── unresolved name: as
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯
 // Error: cannot iterate over type `unknown`
 //     ╭─[ parens.baml:61:18 ]
@@ -764,7 +756,7 @@ function foo() -> int {
 //     │                  ─┬  
 //     │                   ╰── cannot iterate over type `unknown`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0006
 // ────╯
 // Error: missing return: expected `int`
 //     ╭─[ parens.baml:1:22 ]
@@ -775,5 +767,5 @@ function foo() -> int {
 //     │ │       
 //     │ ╰─────── missing return: expected `int`
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0029
 // ────╯

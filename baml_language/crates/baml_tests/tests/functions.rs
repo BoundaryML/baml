@@ -17,10 +17,10 @@ async fn return_literal_int() {
     );
 
     insta::assert_snapshot!(output.bytecode, @r"
-        function main() -> int {
-            load_const 42
-            return
-        }
+    function main() -> int {
+        load_const 42
+        return
+    }
     ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
@@ -37,10 +37,10 @@ async fn return_literal_bool() {
     );
 
     insta::assert_snapshot!(output.bytecode, @r"
-        function main() -> bool {
-            load_const true
-            return
-        }
+    function main() -> bool {
+        load_const true
+        return
+    }
     ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
@@ -57,10 +57,10 @@ async fn return_literal_string() {
     );
 
     insta::assert_snapshot!(output.bytecode, @r#"
-        function main() -> string {
-            load_const "hello"
-            return
-        }
+    function main() -> string {
+        load_const "hello"
+        return
+    }
     "#);
 
     assert_eq!(
@@ -143,14 +143,14 @@ async fn mutable_variables() {
     );
 
     insta::assert_snapshot!(output.bytecode, @r"
-        function main() -> int {
-            load_const 3
-            store_var y
-            load_const 5
-            store_var y
-            load_var y
-            return
-        }
+    function main() -> int {
+        load_const 3
+        store_var y
+        load_const 5
+        store_var y
+        load_var y
+        return
+    }
     ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(5)));
@@ -261,7 +261,6 @@ async fn early_return() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: duplicate binding error for let-in-nested-scope variables"]
 async fn early_return_from_nested_scopes() {
     let output = baml_test!(
         r#"
@@ -316,20 +315,22 @@ async fn early_return_from_nested_scopes() {
 
           L2:
             load_const 7
-            return
+            jump L6
 
           L3:
             load_const true
             pop_jump_if_false L1
             load_const 0
-            return
+            jump L6
 
           L4:
             load_const 0
-            return
+            jump L6
 
           L5:
             load_const 0
+
+          L6:
             return
         }
     ");
@@ -423,7 +424,7 @@ async fn function_as_value() {
         return
     }
 
-    function call_twice(f: (int, int) -> int, x: int, y: int) -> int {
+    function call_twice(f: (int, int) -> int throws never, x: int, y: int) -> int {
         load_var x
         load_var y
         load_var f

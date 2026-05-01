@@ -21,7 +21,7 @@ function CallsDedup() -> string {
 //    │             ─┬─  
 //    │              ╰─── unresolved name: Foo
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯
 // Error: unresolved name: Foo
 //    ╭─[ headers_duplicate_function_calls.baml:7:13 ]
@@ -30,7 +30,7 @@ function CallsDedup() -> string {
 //    │             ─┬─  
 //    │              ╰─── unresolved name: Foo
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯
 // Error: unresolved name: Foo
 //     ╭─[ headers_duplicate_function_calls.baml:10:13 ]
@@ -39,5 +39,5 @@ function CallsDedup() -> string {
 //     │             ─┬─  
 //     │              ╰─── unresolved name: Foo
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0003
 // ────╯

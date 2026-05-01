@@ -54,6 +54,12 @@ pub const PACKAGE_TESTING: &str = "testing";
 /// Package name for the assert package.
 pub const PACKAGE_ASSERT: &str = "assert";
 
+/// Absolute path to the `baml_std/` source tree, captured at compile time via
+/// `CARGO_MANIFEST_DIR`. Used by `baml_builtins2_codegen` to produce clickable
+/// file paths in build-script diagnostic messages (stderr only, never in
+/// generated code or committed artifacts).
+pub const BAML_STD_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/baml_std");
+
 /// Builtin registration macro: package, relative virtual path, filesystem include path.
 macro_rules! builtin {
     ($pkg:literal, $fs_path:literal) => {
@@ -75,21 +81,29 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "uint8array.baml"),
     // --- Namespaced (ns_* folders) ---
     builtin!("baml", "ns_errors/errors.baml"),
+    builtin!("baml", "ns_errors/stack_trace.baml"),
+    builtin!("baml", "ns_panics/panics.baml"),
     builtin!("baml", "ns_env/env.baml"),
+    builtin!("baml", "ns_io/io.baml"),
     builtin!("baml", "ns_http/http.baml"),
+    builtin!("baml", "ns_events/events.baml"),
     builtin!("baml", "ns_math/math.baml"),
     builtin!("baml", "ns_sys/sys.baml"),
     builtin!("baml", "ns_fs/fs.baml"),
+    builtin!("baml", "ns_glob/glob.baml"),
     builtin!("baml", "ns_net/net.baml"),
     builtin!("baml", "ns_media/media.baml"),
     builtin!("baml", "ns_unstable/unstable.baml"),
     builtin!("baml", "ns_llm/llm_types.baml"),
     builtin!("baml", "ns_llm/llm.baml"),
+    builtin!("baml", "ns_stream/stream.baml"),
     // --- testing package ---
     builtin!("testing", "registry.baml"),
     builtin!("testing", "types.baml"),
     // --- assert package ---
     builtin!("assert", "assert.baml"),
+    // --- log package ---
+    builtin!("log", "log.baml"),
 ];
 
 mod adt;

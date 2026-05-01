@@ -17,20 +17,20 @@ function ThrowsVariantViolation(x: int) -> string throws Errors {
 //----
 //- diagnostics
 // Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
-//     ╭─[ throw_throws_enum_variant_violation.baml:10:59 ]
+//     ╭─[ throw_throws_enum_variant_violation.baml:10:57 ]
 //     │
 //  10 │ function ThrowsVariantViolation(x: int) -> string throws Errors {
-//     │                                                           ───┬───  
-//     │                                                              ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
+//     │                                                         ───┬───  
+//     │                                                            ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0096
 // ────╯
 // Warning: extraneous throws declaration: user.Errors
-//     ╭─[ throw_throws_enum_variant_violation.baml:10:59 ]
+//     ╭─[ throw_throws_enum_variant_violation.baml:10:57 ]
 //     │
 //  10 │ function ThrowsVariantViolation(x: int) -> string throws Errors {
-//     │                                                           ───┬───  
-//     │                                                              ╰───── extraneous throws declaration: user.Errors
+//     │                                                         ───┬───  
+//     │                                                            ╰───── extraneous throws declaration: user.Errors
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0097
 // ────╯

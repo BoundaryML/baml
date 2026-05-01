@@ -91,6 +91,80 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
             None => native_result,
         }
     }
+
+    fn bytes(
+        &self,
+        heap: &Arc<BexHeap>,
+        call_id: CallId,
+        response: owned::http::Response,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        let state = self.0.clone();
+        let key = response_body_key(&response);
+        let fetch_info = state.response_to_fetch.lock().unwrap().remove(&key);
+
+        let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::bytes(
+            &sys_native::NativeSysOps,
+            heap,
+            call_id,
+            response,
+            ctx,
+        );
+
+        match fetch_info {
+            Some((cid, fetch_id)) => match native_result {
+                SysOpOutput::Async(fut) => SysOpOutput::async_op(async move {
+                    let bytes = fut.await?;
+                    let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
+                        call_id: cid,
+                        log_id: fetch_id,
+                        status: None,
+                        duration_ms: None,
+                        response_headers: None,
+                        response_body: Some(format!("<binary data: {} bytes>", bytes.len())),
+                        error: None,
+                    });
+                    Ok(bytes)
+                }),
+                other => other,
+            },
+            None => native_result,
+        }
+    }
+}
+
+impl io::IoClassHttpSseStream for PlaygroundHttp {
+    fn next(
+        &self,
+        heap: &Arc<BexHeap>,
+        call_id: CallId,
+        sse_stream: owned::http::SseStream,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        <sys_native::NativeSysOps as io::IoClassHttpSseStream>::next(
+            &sys_native::NativeSysOps,
+            heap,
+            call_id,
+            sse_stream,
+            ctx,
+        )
+    }
+
+    fn close(
+        &self,
+        heap: &Arc<BexHeap>,
+        call_id: CallId,
+        sse_stream: owned::http::SseStream,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        <sys_native::NativeSysOps as io::IoClassHttpSseStream>::close(
+            &sys_native::NativeSysOps,
+            heap,
+            call_id,
+            sse_stream,
+            ctx,
+        )
+    }
 }
 
 impl io::IoNamespaceHttp for PlaygroundHttp {
@@ -218,5 +292,22 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             body: String::new(),
         };
         self.send(heap, call_id, req, ctx)
+    }
+
+    fn fetch_sse(
+        &self,
+        heap: &Arc<BexHeap>,
+        call_id: CallId,
+        request: owned::http::Request,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::SseStream> {
+        // Delegate to native implementation — playground doesn't need SSE logging yet.
+        <sys_native::NativeSysOps as io::IoNamespaceHttp>::fetch_sse(
+            &sys_native::NativeSysOps,
+            heap,
+            call_id,
+            request,
+            ctx,
+        )
     }
 }

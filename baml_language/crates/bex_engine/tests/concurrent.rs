@@ -36,6 +36,7 @@ async fn test_concurrent_calls_no_race() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .expect("Failed to create engine"),
     );
@@ -84,6 +85,7 @@ async fn test_concurrent_allocations_no_overlap() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .expect("Failed to create engine"),
     );
@@ -149,6 +151,7 @@ async fn test_heap_stats_during_concurrent_execution() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .expect("Failed to create engine"),
     );
@@ -211,6 +214,7 @@ async fn test_concurrent_string_allocations() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .expect("Failed to create engine"),
     );
@@ -273,6 +277,7 @@ async fn test_concurrent_array_allocations() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .expect("Failed to create engine"),
     );
@@ -343,6 +348,7 @@ async fn test_call_function_with_external_args() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .expect("Failed to create engine"),
     );
@@ -396,4 +402,57 @@ async fn test_call_function_with_external_args() {
         .expect("call_function failed");
 
     assert_eq!(result, BexExternalValue::Int(42));
+}
+
+/// Test that closures created inside loops correctly capture loop variables.
+#[tokio::test]
+async fn test_closures_in_loop_vars() {
+    // Create a BAML program with a function that takes arguments
+    let source = r#"
+        function sum_array(arr: int[]) -> int {
+            let sum = 0;
+            let total = [];
+            for (let i in arr) {
+              total.push(() -> {
+                sum += i;
+              })
+            }
+            for (let cb in total) {
+                cb();
+            }
+            sum
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    // Test closures capturing loop variables
+    let result = engine
+        .call_function(
+            "sum_array",
+            vec![BexExternalValue::Array {
+                element_type: Ty::int(),
+                items: vec![
+                    BexExternalValue::from(1i64),
+                    BexExternalValue::from(2i64),
+                    BexExternalValue::from(3i64),
+                    BexExternalValue::from(4i64),
+                ],
+            }],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call_function failed");
+
+    assert_eq!(result, BexExternalValue::Int(10));
 }

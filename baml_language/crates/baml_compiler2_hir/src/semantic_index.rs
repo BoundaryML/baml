@@ -10,11 +10,35 @@ use baml_base::Name;
 use baml_compiler2_ast::{ExprId, LoweringDiagnostic, PatId, StmtId};
 use text_size::{TextRange, TextSize};
 
+// ── PathResolution ────────────────────────────────────────────────────────────
+
+/// Scope-level resolution of a multi-segment `Path` expression's root segment.
+///
+/// Produced during HIR scope building for `Path` nodes with ≥ 2 segments.
+/// Only distinguishes whether the root is a locally-declared variable/param
+/// (in which case segments[1..] are field accesses on the local) or not
+/// (in which case the path is a package-qualified name, to be resolved by TIR).
+///
+/// Note: Package-item resolution requires cross-file `package_items` queries
+/// that are not available during HIR building (would create a circular
+/// dependency: `file_semantic_index` → `package_items` → `file_semantic_index`).
+/// Full resolution (namespace vs package-item vs unknown) is done in TIR.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PathResolution {
+    /// Root segment is a local variable, parameter, or capture in the current scope.
+    /// Segments[1..] are field/method accesses on the local, resolved by TIR type
+    /// checking.
+    Local { name: Name },
+    /// Root segment is not a known local. May be a package name, namespace
+    /// shorthand, or truly unresolved — TIR determines which.
+    Unknown,
+}
+
 use crate::{
     contributions::FileSymbolContributions,
     diagnostic::Hir2Diagnostic,
     item_tree::{ItemTree, ItemTreeSourceMap},
-    scope::{FileScopeId, Scope, ScopeId},
+    scope::{FileScopeId, Scope, ScopeId, ScopeKind},
 };
 
 // ── DefinitionSite ───────────────────────────────────────────────────────────
@@ -30,7 +54,24 @@ pub enum DefinitionSite {
     PatternBinding(PatId),
 }
 
+// ── BindingId ────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BindingId {
+    pub scope: FileScopeId,
+    pub site: DefinitionSite,
+}
+
 // ── ScopeBindings ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalBinding {
+    pub name: Name,
+    pub site: DefinitionSite,
+    pub pattern: PatId,
+    pub name_range: TextRange,
+    pub visible_from: TextSize,
+}
 
 /// Per-scope local bindings — what names are introduced in this scope.
 ///
@@ -40,17 +81,17 @@ pub enum DefinitionSite {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeBindings {
     /// Let-bindings in this scope, in source order.
-    pub bindings: Vec<(Name, DefinitionSite, TextRange)>,
+    pub bindings: Vec<LocalBinding>,
     /// Parameters (for Function/Lambda scopes).
     pub params: Vec<(Name, usize)>, // (name, param_index)
     /// Variables captured from ancestor scopes (for Lambda scopes only).
     /// Each entry is `(name, definition_site)` to uniquely identify the
     /// captured declaration, even in the presence of shadowing.
     /// Populated by capture analysis in `SemanticIndexBuilder::walk_expr_body`.
-    pub captures: Vec<(Name, DefinitionSite)>,
-    /// Names in this scope that are captured by a descendant lambda.
+    pub captures: Vec<(Name, BindingId)>,
+    /// Bindings in this scope that are captured by a descendant lambda.
     /// Used by MIR lowering to decide which locals need cell wrapping.
-    pub captured_names: HashSet<Name>,
+    pub captured_bindings: HashSet<BindingId>,
 }
 
 impl ScopeBindings {
@@ -59,7 +100,7 @@ impl ScopeBindings {
             bindings: Vec::new(),
             params: Vec::new(),
             captures: Vec::new(),
-            captured_names: HashSet::new(),
+            captured_bindings: HashSet::new(),
         }
     }
 }
@@ -68,6 +109,48 @@ impl Default for ScopeBindings {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Shared local-binding lookup used while building and after indexing.
+///
+/// Keep this as the single source for parent-scope visibility semantics:
+/// skip ancestor class scopes, scan local bindings in reverse source order,
+/// check `visible_from`, then fall back to parameters.
+pub(crate) fn visible_binding_at_in_scopes(
+    scopes: &[Scope],
+    scope_bindings: &[ScopeBindings],
+    scope_id: FileScopeId,
+    at_offset: TextSize,
+    name: &Name,
+) -> Option<BindingId> {
+    let mut current = Some(scope_id);
+    while let Some(ancestor_id) = current {
+        let scope = &scopes[ancestor_id.index() as usize];
+        if matches!(scope.kind, ScopeKind::Class) && ancestor_id != scope_id {
+            current = scope.parent;
+            continue;
+        }
+
+        let bindings = &scope_bindings[ancestor_id.index() as usize];
+        for binding in bindings.bindings.iter().rev() {
+            if &binding.name == name && binding.visible_from <= at_offset {
+                return Some(BindingId {
+                    scope: ancestor_id,
+                    site: binding.site,
+                });
+            }
+        }
+        for (param_name, param_idx) in &bindings.params {
+            if param_name == name {
+                return Some(BindingId {
+                    scope: ancestor_id,
+                    site: DefinitionSite::Parameter(*param_idx),
+                });
+            }
+        }
+        current = scope.parent;
+    }
+    None
 }
 
 // ── SemanticIndexExtra ───────────────────────────────────────────────────────
@@ -120,6 +203,16 @@ pub struct FileSemanticIndex<'db> {
     /// Diagnostics and other rare data. Heap-allocated only when non-empty,
     /// following Ty's `Option<Box<Extra>>` pattern.
     pub extra: Option<Box<SemanticIndexExtra>>,
+
+    /// Root-segment resolution for multi-segment `Path` expressions.
+    ///
+    /// For each `Path` with ≥ 2 segments, records whether the root is a local
+    /// variable/parameter (`PathResolution::Local`) or not
+    /// (`PathResolution::Unknown`). Sorted by `ExprId` for binary-search lookup.
+    ///
+    /// Package-item resolution (namespace, split point) is deferred to TIR
+    /// since it requires cross-file `package_items` queries.
+    pub path_resolutions: Vec<(ExprId, PathResolution)>,
 }
 
 // ── salsa::Update impl ────────────────────────────────────────────────────────
@@ -151,6 +244,21 @@ unsafe impl salsa::Update for FileSemanticIndex<'_> {
 }
 
 impl FileSemanticIndex<'_> {
+    /// Find the `Lambda` scope whose range exactly matches `span`.
+    ///
+    /// Linear walk over the scope list (which is small in practice —
+    /// bounded by the number of lambda nestings in a file).
+    pub fn lambda_scope_for(&self, span: text_size::TextRange) -> Option<FileScopeId> {
+        self.scopes
+            .iter()
+            .enumerate()
+            .find(|(_, scope)| matches!(scope.kind, ScopeKind::Lambda) && scope.range == span)
+            .map(|(i, _)| {
+                #[allow(clippy::cast_possible_truncation)]
+                FileScopeId::new(i as u32)
+            })
+    }
+
     /// Find the innermost scope containing `offset`.
     ///
     /// Scopes are in DFS pre-order. We walk in reverse (deepest first)
@@ -223,10 +331,40 @@ impl FileSemanticIndex<'_> {
         ancestors
     }
 
+    pub fn binding_visible_at(&self, binding: &LocalBinding, at_offset: TextSize) -> bool {
+        binding.visible_from <= at_offset
+    }
+
+    pub fn visible_binding_at(
+        &self,
+        scope_id: FileScopeId,
+        at_offset: TextSize,
+        name: &Name,
+    ) -> Option<BindingId> {
+        visible_binding_at_in_scopes(
+            &self.scopes,
+            &self.scope_bindings,
+            scope_id,
+            at_offset,
+            name,
+        )
+    }
+
     pub fn diagnostics(&self) -> &[Hir2Diagnostic] {
         self.extra
             .as_ref()
             .map(|e| e.diagnostics.as_slice())
             .unwrap_or(&[])
+    }
+
+    /// Look up the path resolution for a multi-segment `Path` expression.
+    ///
+    /// Returns `None` if `expr_id` was not a multi-segment path (i.e., single-
+    /// segment paths and non-path expressions are not recorded here).
+    pub fn path_resolution(&self, expr_id: ExprId) -> Option<&PathResolution> {
+        self.path_resolutions
+            .binary_search_by_key(&expr_id, |(id, _)| *id)
+            .ok()
+            .map(|idx| &self.path_resolutions[idx].1)
     }
 }

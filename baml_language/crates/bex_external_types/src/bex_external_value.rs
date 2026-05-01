@@ -404,6 +404,32 @@ impl BexExternalValue {
             BexExternalValue::Handle(_) => "handle",
         }
     }
+
+    /// Return the inner string if this is a `String` value, peeling off any
+    /// surrounding `Union` wrapper.
+    ///
+    /// Useful when reading optional or union-typed fields from an `Instance`
+    /// (e.g. `ScanOptions { cwd: string? }`): the runtime stores the field as
+    /// `Union { value: String(...), .. }` for static-typed inputs and as
+    /// `String(...)` for ad-hoc literals, and consumers don't usually care
+    /// about that distinction.
+    pub fn as_string(&self) -> Option<String> {
+        match self {
+            BexExternalValue::String(value) => Some(value.clone()),
+            BexExternalValue::Union { value, .. } => value.as_string(),
+            _ => None,
+        }
+    }
+
+    /// Return the inner bool if this is a `Bool` value, peeling off any
+    /// surrounding `Union` wrapper. See [`Self::as_string`].
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            BexExternalValue::Bool(value) => Some(*value),
+            BexExternalValue::Union { value, .. } => value.as_bool(),
+            _ => None,
+        }
+    }
 }
 
 impl From<i64> for BexExternalValue {
@@ -536,6 +562,12 @@ impl AsBexExternalValue for Vec<String> {
             items: self.into_iter().map(BexExternalValue::String).collect(),
         }
         .into_bex_external_value()
+    }
+}
+
+impl AsBexExternalValue for Vec<u8> {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Uint8Array(self)
     }
 }
 

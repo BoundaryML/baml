@@ -1,5 +1,6 @@
 //! AWS Bedrock request authorization: credential resolution + `SigV4` signing.
 
+use std::sync::Arc;
 #[allow(clippy::disallowed_types)]
 use std::time::SystemTime;
 
@@ -17,9 +18,13 @@ use aws_smithy_runtime_api::{
 };
 use aws_smithy_types::body::SdkBody;
 use indexmap::IndexMap;
+#[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
+use sys_types::{
+    BexExternalValue,
+    runtime_io::{RuntimeIo, RuntimeIoError},
+};
 
 use crate::{
-    BuildRequestCallbacks, HttpSendFn,
     baml_std::{BedrockOptions, HttpRequest, PrimitiveClient, ProviderOptions},
     build_request::BuildRequestError,
 };
@@ -50,14 +55,14 @@ fn now() -> SystemTime {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native_providers {
-    use std::future::Future;
+    use std::{future::Future, sync::Arc};
 
     use aws_types::os_shim_internal::{ProvideEnv, ProvideFs};
 
-    use crate::{EnvReadFn, FsReadFn};
+    use super::{BexExternalValue, RuntimeIo};
 
     pub(super) struct BexEnvProvider {
-        pub env_read_fn: EnvReadFn,
+        pub io: Arc<dyn RuntimeIo>,
     }
 
     impl std::fmt::Debug for BexEnvProvider {
@@ -68,17 +73,17 @@ mod native_providers {
 
     impl ProvideEnv for BexEnvProvider {
         fn get(&self, k: &str) -> Result<String, std::env::VarError> {
-            let fut = (self.env_read_fn)(k.to_string());
-            // ProvideEnv::get is sync but EnvReadFn is async (and may contain
-            // real awaits). We can't block_on from inside the tokio runtime,
-            // and block_in_place only works on multi-threaded runtimes. A
-            // short-lived thread lets us call block_on from outside the runtime.
-            // This is a truly horrible workaround but I'm not sure what else to
-            // do here.
+            let io = self.io.clone();
+            let key = k.to_string();
+            // ProvideEnv::get is sync but RuntimeIo::env_get is async (and may
+            // contain real awaits). We can't block_on from inside the tokio
+            // runtime, and block_in_place only works on multi-threaded runtimes.
+            // A short-lived thread lets us call block_on from outside the
+            // runtime.
             let handle = tokio::runtime::Handle::current();
-            let result = std::thread::spawn(move || handle.block_on(fut))
+            let result = std::thread::spawn(move || handle.block_on(io.env_get(key)))
                 .join()
-                .unwrap_or(Err(crate::LlmOpError::Other("thread panicked".into())));
+                .unwrap_or(Err(super::RuntimeIoError::Other("thread panicked".into())));
             match result {
                 Ok(Some(v)) => Ok(v),
                 Ok(None) | Err(_) => Err(std::env::VarError::NotPresent),
@@ -87,7 +92,7 @@ mod native_providers {
     }
 
     pub(super) struct BexFsProvider {
-        pub fs_read_fn: FsReadFn,
+        pub io: Arc<dyn RuntimeIo>,
     }
 
     impl std::fmt::Debug for BexFsProvider {
@@ -101,15 +106,19 @@ mod native_providers {
             &self,
             path: &std::path::Path,
         ) -> std::pin::Pin<Box<dyn Future<Output = std::io::Result<Vec<u8>>> + Send + '_>> {
-            let fut = (self.fs_read_fn)(path.to_string_lossy().into_owned());
+            let io = self.io.clone();
+            let path_str = path.to_string_lossy().into_owned();
             Box::pin(async move {
-                match fut.await {
-                    Ok(v) => Ok(v),
-                    Err(_) => Err(std::io::Error::new(
-                        std::io::ErrorKind::NotFound,
-                        "file not found",
-                    )),
-                }
+                let file_handle = io
+                    .fs_open(path_str, BexExternalValue::String("r".to_string()))
+                    .await
+                    .map_err(|_| {
+                        std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
+                    })?;
+                let contents = io.fs_file_text(&file_handle).await.map_err(|_| {
+                    std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
+                })?;
+                Ok(contents.into_bytes())
             })
         }
 
@@ -129,16 +138,18 @@ mod native_providers {
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_providers {
+    use std::sync::Arc;
+
     use aws_credential_types::{
         Credentials,
         provider::{self, future::ProvideCredentials},
     };
 
-    use crate::EnvReadFn;
+    use super::RuntimeIo;
 
-    /// Async credential provider that reads AWS env vars via `EnvReadFn`.
+    /// Async credential provider that reads AWS env vars via `RuntimeIo`.
     pub(super) struct EnvCredentialProvider {
-        pub env_read: EnvReadFn,
+        pub io: Arc<dyn RuntimeIo>,
     }
 
     impl std::fmt::Debug for EnvCredentialProvider {
@@ -149,7 +160,9 @@ mod wasm_providers {
 
     impl EnvCredentialProvider {
         async fn resolve(&self) -> provider::Result {
-            let access_key_id = (self.env_read)("AWS_ACCESS_KEY_ID".into())
+            let access_key_id = self
+                .io
+                .env_get("AWS_ACCESS_KEY_ID".into())
                 .await
                 .ok()
                 .flatten()
@@ -157,7 +170,9 @@ mod wasm_providers {
                     provider::error::CredentialsError::unhandled("AWS_ACCESS_KEY_ID not set")
                 })?;
 
-            let secret_access_key = (self.env_read)("AWS_SECRET_ACCESS_KEY".into())
+            let secret_access_key = self
+                .io
+                .env_get("AWS_SECRET_ACCESS_KEY".into())
                 .await
                 .ok()
                 .flatten()
@@ -165,7 +180,9 @@ mod wasm_providers {
                     provider::error::CredentialsError::unhandled("AWS_SECRET_ACCESS_KEY not set")
                 })?;
 
-            let session_token = (self.env_read)("AWS_SESSION_TOKEN".into())
+            let session_token = self
+                .io
+                .env_get("AWS_SESSION_TOKEN".into())
                 .await
                 .ok()
                 .flatten();
@@ -191,16 +208,17 @@ mod wasm_providers {
 }
 
 // ---------------------------------------------------------------------------
-// Custom HTTP connector bridging to HttpSendFn
+// Custom HTTP connector bridging to RuntimeIo
 // ---------------------------------------------------------------------------
 
 /// An [`aws_smithy_runtime_api::client::http::HttpConnector`] that delegates
-/// all HTTP traffic to a BAML [`HttpSendFn`] closure.
+/// all HTTP traffic to a BAML [`RuntimeIo`] implementation.
 #[derive(Clone)]
 struct BamlHttpConnector {
-    send_fn: HttpSendFn,
+    io: Arc<dyn RuntimeIo>,
 }
 
+// The AWS SDK HttpConnector trait requires `UnwindSafe + RefUnwindSafe`.
 impl std::fmt::Debug for BamlHttpConnector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BamlHttpConnector").finish()
@@ -209,7 +227,7 @@ impl std::fmt::Debug for BamlHttpConnector {
 
 impl aws_smithy_runtime_api::client::http::HttpConnector for BamlHttpConnector {
     fn call(&self, request: smithy_http::Request) -> HttpConnectorFuture {
-        let send_fn = self.send_fn.clone();
+        let io = self.io.clone();
         HttpConnectorFuture::new(async move {
             let method = request.method().to_string();
             let url = request.uri().to_string();
@@ -223,20 +241,27 @@ impl aws_smithy_runtime_api::client::http::HttpConnector for BamlHttpConnector {
                 .map(|b| String::from_utf8_lossy(b).into_owned())
                 .unwrap_or_default();
 
-            let baml_req = HttpRequest {
+            let io_req = sys_types::generated::owned::http::Request {
                 method,
                 url,
                 headers,
                 body,
             };
 
-            let resp = send_fn(baml_req)
+            let resp = io
+                .http_send(io_req)
                 .await
-                .map_err(|e| ConnectorError::other(e.into(), None))?;
-
-            let status = smithy_http::StatusCode::try_from(resp.status_code)
                 .map_err(|e| ConnectorError::other(Box::new(e), None))?;
-            let sdk_body = SdkBody::from(resp.body);
+
+            let resp_body = io
+                .http_response_text(&resp)
+                .await
+                .map_err(|e| ConnectorError::other(Box::new(e), None))?;
+
+            let status =
+                smithy_http::StatusCode::try_from(u16::try_from(resp.status_code).unwrap_or(500))
+                    .map_err(|e| ConnectorError::other(Box::new(e), None))?;
+            let sdk_body = SdkBody::from(resp_body);
             let mut aws_resp = smithy_http::Response::new(status, sdk_body);
             for (name, value) in resp.headers {
                 aws_resp
@@ -250,9 +275,11 @@ impl aws_smithy_runtime_api::client::http::HttpConnector for BamlHttpConnector {
     }
 }
 
-fn baml_http_client(send_fn: HttpSendFn) -> aws_smithy_runtime_api::client::http::SharedHttpClient {
+fn baml_http_client(
+    io: Arc<dyn RuntimeIo>,
+) -> aws_smithy_runtime_api::client::http::SharedHttpClient {
     use aws_smithy_runtime_api::client::http::http_client_fn;
-    let connector = SharedHttpConnector::new(BamlHttpConnector { send_fn });
+    let connector = SharedHttpConnector::new(BamlHttpConnector { io });
     http_client_fn(move |_settings, _components| connector.clone())
 }
 
@@ -260,21 +287,24 @@ fn baml_http_client(send_fn: HttpSendFn) -> aws_smithy_runtime_api::client::http
 // AWS SDK config loading
 // ---------------------------------------------------------------------------
 
-/// Load the AWS SDK config using the provided callbacks for IO.
-async fn load_aws_sdk_config_with_callbacks(
+/// Load the AWS SDK config using the provided `RuntimeIo` for IO.
+///
+/// Accepts `Arc<dyn RuntimeIo>` because the AWS SDK config loader stores
+/// provider objects that capture the IO handle (they need owned handles).
+async fn load_aws_sdk_config(
     #[cfg_attr(target_arch = "wasm32", allow(unused))] bedrock_opts: &BedrockOptions,
-    callbacks: &BuildRequestCallbacks,
+    io: Arc<dyn RuntimeIo>,
 ) -> aws_config::SdkConfig {
     #[cfg(not(target_arch = "wasm32"))]
     {
         use aws_types::os_shim_internal::{Env, Fs};
         let mut loader = aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .http_client(baml_http_client(callbacks.http_send.clone()))
+            .http_client(baml_http_client(io.clone()))
             .env(Env::from_custom(native_providers::BexEnvProvider {
-                env_read_fn: callbacks.env_read.clone(),
+                io: io.clone(),
             }))
             .fs(Fs::from_custom(native_providers::BexFsProvider {
-                fs_read_fn: callbacks.fs_read.clone(),
+                io: io.clone(),
             }));
         if let Some(profile) = &bedrock_opts.profile {
             loader = loader.profile_name(profile);
@@ -287,10 +317,8 @@ async fn load_aws_sdk_config_with_callbacks(
         aws_config::defaults(aws_config::BehaviorVersion::latest())
             .sleep_impl(crate::wasm::BrowserSleep)
             .time_source(crate::wasm::BrowserTime)
-            .http_client(baml_http_client(callbacks.http_send.clone()))
-            .credentials_provider(wasm_providers::EnvCredentialProvider {
-                env_read: callbacks.env_read.clone(),
-            })
+            .http_client(baml_http_client(io.clone()))
+            .credentials_provider(wasm_providers::EnvCredentialProvider { io: io.clone() })
             .load()
             .await
     }
@@ -304,15 +332,15 @@ async fn load_aws_sdk_config_with_callbacks(
 pub(crate) async fn auth_bedrock(
     request: &mut HttpRequest,
     client: &PrimitiveClient,
-    callbacks: &BuildRequestCallbacks,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<(), BuildRequestError> {
     let bedrock_opts = match &client.provider_options {
         Some(ProviderOptions::Bedrock(opts)) => opts.clone(),
         _ => BedrockOptions::default(),
     };
 
-    let credentials = resolve_credentials(&bedrock_opts, callbacks).await?;
-    let region = resolve_region(&bedrock_opts, callbacks).await?;
+    let credentials = resolve_credentials(&bedrock_opts, io.clone()).await?;
+    let region = resolve_region(&bedrock_opts, io).await?;
 
     let signed_headers = sign_with_credentials(
         &credentials,
@@ -334,13 +362,13 @@ pub(crate) async fn auth_bedrock(
 /// Resolve the AWS region from explicit options or the default provider chain.
 pub(crate) async fn resolve_region(
     opts: &BedrockOptions,
-    callbacks: &BuildRequestCallbacks,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<String, BuildRequestError> {
     if let Some(region) = &opts.region {
         return Ok(region.clone());
     }
 
-    let sdk_config = load_aws_sdk_config_with_callbacks(opts, callbacks).await;
+    let sdk_config = load_aws_sdk_config(opts, io).await;
     sdk_config.region().map(ToString::to_string).ok_or_else(|| {
         BuildRequestError::AuthorizationFailed(
             "AWS region not found in default provider chain".into(),
@@ -351,15 +379,15 @@ pub(crate) async fn resolve_region(
 /// Resolve AWS credentials from explicit options or the default provider chain.
 async fn resolve_credentials(
     opts: &BedrockOptions,
-    callbacks: &BuildRequestCallbacks,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<Credentials, BuildRequestError> {
     // Prefer explicit credentials from client options.
     if let Some(creds) = credentials_from_options(opts) {
         return Ok(creds);
     }
 
-    // Fall back to the AWS provider chain via callbacks.
-    let sdk_config = load_aws_sdk_config_with_callbacks(opts, callbacks).await;
+    // Fall back to the AWS provider chain via RuntimeIo.
+    let sdk_config = load_aws_sdk_config(opts, io).await;
     let credentials_provider = sdk_config.credentials_provider().ok_or_else(|| {
         BuildRequestError::AuthorizationFailed(
             "AWS credentials provider not found in default provider chain".into(),
@@ -445,9 +473,14 @@ fn sign_with_credentials(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
+    use std::{
+        future::Future,
+        panic::{RefUnwindSafe, UnwindSafe},
+        pin::Pin,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
     };
 
     use bex_external_types::AsBexExternalValue;
@@ -489,90 +522,439 @@ mod tests {
         }
     }
 
-    fn stub_callbacks() -> BuildRequestCallbacks {
-        BuildRequestCallbacks {
-            http_send: Arc::new(|_req| {
-                Box::pin(async {
-                    Ok(crate::HttpSendResponse {
-                        status_code: 200,
-                        headers: IndexMap::new(),
-                        body: String::new(),
-                    })
+    /// A stub `RuntimeIo` that returns sensible defaults for Bedrock-relevant
+    /// operations and `Unsupported` for everything else.
+    struct StubIo;
+
+    impl RuntimeIo for StubIo {
+        fn http_send(
+            &self,
+            _request: sys_types::generated::owned::http::Request,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<sys_types::runtime_io::HttpResponseHandle, RuntimeIoError>,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async {
+                Ok(sys_types::runtime_io::HttpResponseHandle {
+                    raw: bex_external_types::BexExternalValue::Null,
+                    status_code: 200,
+                    headers: IndexMap::new(),
+                    url: String::new(),
                 })
-            }),
-            env_read: Arc::new(|_key| Box::pin(async { Ok(None) })),
-            fs_read: Arc::new(|_path| {
-                Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
-            }),
-            shell: Arc::new(|_cmd| {
-                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
-            }),
+            })
+        }
+
+        fn http_response_text(
+            &self,
+            _: &sys_types::runtime_io::HttpResponseHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            Box::pin(async { Ok(String::new()) })
+        }
+
+        fn env_get(
+            &self,
+            _key: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<String>, RuntimeIoError>> + Send + '_>>
+        {
+            Box::pin(async { Ok(None) })
+        }
+
+        fn fs_open(
+            &self,
+            _path: String,
+            _mode: BexExternalValue,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
+        }
+
+        fn fs_file_text(
+            &self,
+            _: &sys_types::runtime_io::FsFileHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
         }
     }
 
-    fn mock_http_send(call_count: Arc<AtomicUsize>, status: u16, body: &'static str) -> HttpSendFn {
-        Arc::new(move |_req| {
-            call_count.fetch_add(1, Ordering::SeqCst);
-            let body = body.to_string();
+    fn stub_io() -> Arc<dyn RuntimeIo> {
+        Arc::new(StubIo)
+    }
+
+    /// A mock `RuntimeIo` that tracks HTTP calls and returns configurable responses.
+    struct MockHttpIo {
+        call_count: Arc<AtomicUsize>,
+        status: u16,
+        body: &'static str,
+    }
+
+    impl RuntimeIo for MockHttpIo {
+        fn http_send(
+            &self,
+            _request: sys_types::generated::owned::http::Request,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<sys_types::runtime_io::HttpResponseHandle, RuntimeIoError>,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            self.call_count.fetch_add(1, Ordering::SeqCst);
+            let status = i64::from(self.status);
             Box::pin(async move {
-                Ok(crate::HttpSendResponse {
+                Ok(sys_types::runtime_io::HttpResponseHandle {
+                    raw: bex_external_types::BexExternalValue::Null,
                     status_code: status,
                     headers: IndexMap::new(),
-                    body,
+                    url: String::new(),
                 })
             })
+        }
+
+        fn http_response_text(
+            &self,
+            _: &sys_types::runtime_io::HttpResponseHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            let body = self.body.to_string();
+            Box::pin(async move { Ok(body) })
+        }
+
+        fn env_get(
+            &self,
+            _key: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<String>, RuntimeIoError>> + Send + '_>>
+        {
+            Box::pin(async { Ok(None) })
+        }
+
+        fn fs_open(
+            &self,
+            _path: String,
+            _mode: BexExternalValue,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
+        }
+
+        fn fs_file_text(
+            &self,
+            _: &sys_types::runtime_io::FsFileHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
+        }
+    }
+
+    fn mock_http_io(
+        call_count: Arc<AtomicUsize>,
+        status: u16,
+        body: &'static str,
+    ) -> Arc<dyn RuntimeIo> {
+        Arc::new(MockHttpIo {
+            call_count,
+            status,
+            body,
         })
     }
+
+    /// A mock `RuntimeIo` with custom `env_get` behavior.
+    struct EnvIo<F: Fn(String) -> Option<String> + Send + Sync> {
+        env_fn: F,
+    }
+
+    impl<F: Fn(String) -> Option<String> + Send + Sync + UnwindSafe + RefUnwindSafe> RuntimeIo
+        for EnvIo<F>
+    {
+        fn http_send(
+            &self,
+            _request: sys_types::generated::owned::http::Request,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<sys_types::runtime_io::HttpResponseHandle, RuntimeIoError>,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async {
+                Ok(sys_types::runtime_io::HttpResponseHandle {
+                    raw: bex_external_types::BexExternalValue::Null,
+                    status_code: 200,
+                    headers: IndexMap::new(),
+                    url: String::new(),
+                })
+            })
+        }
+
+        fn http_response_text(
+            &self,
+            _: &sys_types::runtime_io::HttpResponseHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            Box::pin(async { Ok(String::new()) })
+        }
+
+        fn env_get(
+            &self,
+            key: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<String>, RuntimeIoError>> + Send + '_>>
+        {
+            let result = (self.env_fn)(key);
+            Box::pin(async move { Ok(result) })
+        }
+
+        fn fs_open(
+            &self,
+            _path: String,
+            _mode: BexExternalValue,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
+        }
+
+        fn fs_file_text(
+            &self,
+            _: &sys_types::runtime_io::FsFileHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
+        }
+    }
+
+    /// A mock `RuntimeIo` with custom env + fs behavior that stores file
+    /// contents and tracks the last opened path.
+    struct EnvFsContentIo<E>
+    where
+        E: Fn(String) -> Option<String> + Send + Sync,
+    {
+        env_fn: E,
+        fs_contents: std::collections::HashMap<String, String>,
+        last_opened: std::sync::Mutex<Option<String>>,
+    }
+
+    impl<E> RuntimeIo for EnvFsContentIo<E>
+    where
+        E: Fn(String) -> Option<String> + Send + Sync + UnwindSafe + RefUnwindSafe,
+    {
+        fn http_send(
+            &self,
+            _request: sys_types::generated::owned::http::Request,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<sys_types::runtime_io::HttpResponseHandle, RuntimeIoError>,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async {
+                Ok(sys_types::runtime_io::HttpResponseHandle {
+                    raw: bex_external_types::BexExternalValue::Null,
+                    status_code: 200,
+                    headers: IndexMap::new(),
+                    url: String::new(),
+                })
+            })
+        }
+
+        fn http_response_text(
+            &self,
+            _: &sys_types::runtime_io::HttpResponseHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            Box::pin(async { Ok(String::new()) })
+        }
+
+        fn env_get(
+            &self,
+            key: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<String>, RuntimeIoError>> + Send + '_>>
+        {
+            let result = (self.env_fn)(key);
+            Box::pin(async move { Ok(result) })
+        }
+
+        fn fs_open(
+            &self,
+            path: String,
+            _mode: BexExternalValue,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            if self.fs_contents.contains_key(&path) {
+                *self.last_opened.lock().unwrap() = Some(path);
+                Box::pin(async {
+                    Ok(sys_types::runtime_io::FsFileHandle {
+                        raw: bex_external_types::BexExternalValue::Null,
+                    })
+                })
+            } else {
+                Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
+            }
+        }
+
+        fn fs_file_text(
+            &self,
+            _: &sys_types::runtime_io::FsFileHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            let path = self.last_opened.lock().unwrap().clone();
+            let content = path.and_then(|p| self.fs_contents.get(&p).cloned());
+            Box::pin(
+                async move { content.ok_or_else(|| RuntimeIoError::Other("not found".into())) },
+            )
+        }
+    }
+
+    /// A mock `RuntimeIo` with custom env + http behavior.
+    struct EnvHttpIo<E>
+    where
+        E: Fn(String) -> Option<String> + Send + Sync,
+    {
+        env_fn: E,
+        http_call_count: Arc<AtomicUsize>,
+        http_status: u16,
+        http_body: String,
+    }
+
+    impl<E> RuntimeIo for EnvHttpIo<E>
+    where
+        E: Fn(String) -> Option<String> + Send + Sync + UnwindSafe + RefUnwindSafe,
+    {
+        fn http_send(
+            &self,
+            _request: sys_types::generated::owned::http::Request,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<sys_types::runtime_io::HttpResponseHandle, RuntimeIoError>,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            self.http_call_count.fetch_add(1, Ordering::SeqCst);
+            let status = i64::from(self.http_status);
+            Box::pin(async move {
+                Ok(sys_types::runtime_io::HttpResponseHandle {
+                    raw: bex_external_types::BexExternalValue::Null,
+                    status_code: status,
+                    headers: IndexMap::new(),
+                    url: String::new(),
+                })
+            })
+        }
+
+        fn http_response_text(
+            &self,
+            _: &sys_types::runtime_io::HttpResponseHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            let body = self.http_body.clone();
+            Box::pin(async move { Ok(body) })
+        }
+
+        fn env_get(
+            &self,
+            key: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<String>, RuntimeIoError>> + Send + '_>>
+        {
+            let result = (self.env_fn)(key);
+            Box::pin(async move { Ok(result) })
+        }
+
+        fn fs_open(
+            &self,
+            _path: String,
+            _mode: BexExternalValue,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
+        }
+
+        fn fs_file_text(
+            &self,
+            _: &sys_types::runtime_io::FsFileHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Tests
+    // -----------------------------------------------------------------------
 
     #[tokio::test]
     async fn sigv4_headers_present() {
         let client = make_client(base_bedrock_opts());
         let mut req = fake_bedrock_request();
-        auth_bedrock(&mut req, &client, &BuildRequestCallbacks::noop())
-            .await
-            .unwrap();
+        auth_bedrock(
+            &mut req,
+            &client,
+            Arc::new(sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
         assert!(req.headers.contains_key("authorization"));
         assert!(req.headers.contains_key("x-amz-date"));
     }
 
     #[tokio::test]
-    async fn explicit_credentials_used_without_callbacks() {
+    async fn explicit_credentials_used_without_io() {
         let client = make_client(base_bedrock_opts());
         let mut req = fake_bedrock_request();
-        let result = auth_bedrock(&mut req, &client, &BuildRequestCallbacks::noop()).await;
+        let result = auth_bedrock(
+            &mut req,
+            &client,
+            Arc::new(sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
-    async fn fails_without_explicit_credentials_uses_callbacks() {
+    async fn fails_without_explicit_credentials_uses_io() {
         let call_count = Arc::new(AtomicUsize::new(0));
-        let send_fn = mock_http_send(call_count.clone(), 404, "");
-        let callbacks = BuildRequestCallbacks {
-            http_send: send_fn,
-            ..stub_callbacks()
-        };
+        let io = mock_http_io(call_count.clone(), 404, "");
         let client = make_client(BedrockOptions {
             region: Some("us-east-1".to_string()),
             ..Default::default()
         });
         let mut req = fake_bedrock_request();
-        let result = auth_bedrock(&mut req, &client, &callbacks).await;
+        let result = auth_bedrock(&mut req, &client, io.clone()).await;
         assert!(result.is_err());
-        // The callbacks were invoked during credential resolution.
+        // The IO was invoked during credential resolution.
         assert!(call_count.load(Ordering::SeqCst) > 0);
     }
 
     #[tokio::test]
     async fn http_send_not_invoked_with_explicit_credentials() {
         let call_count = Arc::new(AtomicUsize::new(0));
-        let send_fn = mock_http_send(call_count.clone(), 200, "");
-        let callbacks = BuildRequestCallbacks {
-            http_send: send_fn,
-            ..stub_callbacks()
-        };
+        let io = mock_http_io(call_count.clone(), 200, "");
         let client = make_client(base_bedrock_opts());
         let mut req = fake_bedrock_request();
-        let result = auth_bedrock(&mut req, &client, &callbacks).await;
+        let result = auth_bedrock(&mut req, &client, io.clone()).await;
         assert!(result.is_ok());
         assert_eq!(call_count.load(Ordering::SeqCst), 0);
     }
@@ -583,151 +965,110 @@ mod tests {
             region: Some("eu-west-1".into()),
             ..Default::default()
         };
-        let region = resolve_region(&opts, &BuildRequestCallbacks::noop())
+        let region = resolve_region(&opts, Arc::new(sys_types::runtime_io::NoopRuntimeIo))
             .await
             .unwrap();
         assert_eq!(region, "eu-west-1");
     }
 
     #[tokio::test]
-    async fn resolve_region_from_env_via_callbacks() {
-        let mut cb = stub_callbacks();
-        cb.env_read = Arc::new(|key| {
-            Box::pin(async move {
-                if key == "AWS_REGION" {
-                    Ok(Some("ap-southeast-1".into()))
-                } else {
-                    Ok(None)
-                }
-            })
+    async fn resolve_region_from_env_via_io() {
+        let io: Arc<dyn RuntimeIo> = Arc::new(EnvIo {
+            env_fn: |key| match key.as_str() {
+                "AWS_REGION" => Some("ap-southeast-1".into()),
+                _ => None,
+            },
         });
         let opts = BedrockOptions::default();
-        let region = resolve_region(&opts, &cb).await.unwrap();
+        let region = resolve_region(&opts, io.clone()).await.unwrap();
         assert_eq!(region, "ap-southeast-1");
     }
 
     #[tokio::test]
     async fn resolve_region_missing_with_empty_env() {
-        let cb = stub_callbacks();
+        let io = stub_io();
         let opts = BedrockOptions::default();
-        let result = resolve_region(&opts, &cb).await;
+        let result = resolve_region(&opts, io.clone()).await;
         assert!(result.is_err());
     }
 
-    /// Confirms the full injection flow: env callbacks provide AWS credentials
+    /// Confirms the full injection flow: env IO provides AWS credentials
     /// and region, which are resolved through the AWS SDK config loader and
     /// used to produce valid `SigV4` headers on the request.
     #[tokio::test]
-    async fn sigv4_headers_from_env_via_callbacks() {
-        let callbacks = BuildRequestCallbacks {
-            env_read: Arc::new(|key| {
-                Box::pin(async move {
-                    match key.as_str() {
-                        "AWS_ACCESS_KEY_ID" => Ok(Some("AKIAIOSFODNN7EXAMPLE".to_string())),
-                        "AWS_SECRET_ACCESS_KEY" => {
-                            Ok(Some("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".to_string()))
-                        }
-                        "AWS_REGION" => Ok(Some("us-east-1".to_string())),
-                        _ => Ok(None),
-                    }
-                })
-            }),
-            ..stub_callbacks()
-        };
+    async fn sigv4_headers_from_env_via_io() {
+        let io: Arc<dyn RuntimeIo> = Arc::new(EnvIo {
+            env_fn: |key| match key.as_str() {
+                "AWS_ACCESS_KEY_ID" => Some("AKIAIOSFODNN7EXAMPLE".to_string()),
+                "AWS_SECRET_ACCESS_KEY" => {
+                    Some("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".to_string())
+                }
+                "AWS_REGION" => Some("us-east-1".to_string()),
+                _ => None,
+            },
+        });
         let client = make_client(BedrockOptions::default());
         let mut req = fake_bedrock_request();
-        auth_bedrock(&mut req, &client, &callbacks).await.unwrap();
+        auth_bedrock(&mut req, &client, io.clone()).await.unwrap();
         assert!(req.headers.contains_key("authorization"));
         assert!(req.headers.contains_key("x-amz-date"));
     }
 
-    /// Confirms that the fs callback is used by the AWS SDK config loader.
+    /// Confirms that the fs IO is used by the AWS SDK config loader.
     #[tokio::test]
-    async fn sigv4_headers_from_credentials_file_via_fs_callback() {
+    async fn sigv4_headers_from_credentials_file_via_fs_io() {
         let credentials_file = "\
 [default]
 aws_access_key_id = AKIAIOSFODNN7EXAMPLE
 aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 ";
-        let callbacks = BuildRequestCallbacks {
-            env_read: Arc::new(|key| {
-                Box::pin(async move {
-                    match key.as_str() {
-                        "AWS_SHARED_CREDENTIALS_FILE" => {
-                            Ok(Some("/fake/aws/credentials".to_string()))
-                        }
-                        "AWS_REGION" => Ok(Some("us-east-1".to_string())),
-                        _ => Ok(None),
-                    }
-                })
-            }),
-            fs_read: {
-                let creds = credentials_file.to_string();
-                Arc::new(move |path| {
-                    let creds = creds.clone();
-                    Box::pin(async move {
-                        if path == "/fake/aws/credentials" {
-                            Ok(creds.into_bytes())
-                        } else {
-                            Err(crate::LlmOpError::Other("not found".into()))
-                        }
-                    })
-                })
+        let mut fs_contents = std::collections::HashMap::new();
+        fs_contents.insert(
+            "/fake/aws/credentials".to_string(),
+            credentials_file.to_string(),
+        );
+        let io: Arc<dyn RuntimeIo> = Arc::new(EnvFsContentIo {
+            env_fn: |key| match key.as_str() {
+                "AWS_SHARED_CREDENTIALS_FILE" => Some("/fake/aws/credentials".to_string()),
+                "AWS_REGION" => Some("us-east-1".to_string()),
+                _ => None,
             },
-            ..stub_callbacks()
-        };
+            fs_contents,
+            last_opened: std::sync::Mutex::new(None),
+        });
         let client = make_client(BedrockOptions::default());
         let mut req = fake_bedrock_request();
-        auth_bedrock(&mut req, &client, &callbacks).await.unwrap();
+        auth_bedrock(&mut req, &client, io.clone()).await.unwrap();
         assert!(req.headers.contains_key("authorization"));
         assert!(req.headers.contains_key("x-amz-date"));
     }
 
-    /// Confirms that the http callback is used when the AWS SDK falls back
+    /// Confirms that the http IO is used when the AWS SDK falls back
     /// to the container credentials provider.
     #[tokio::test]
-    async fn sigv4_headers_from_container_credentials_via_http_callback() {
+    async fn sigv4_headers_from_container_credentials_via_http_io() {
         let http_call_count = Arc::new(AtomicUsize::new(0));
-        let http_call_count_clone = http_call_count.clone();
-
-        let callbacks = BuildRequestCallbacks {
-            env_read: Arc::new(|key| {
-                Box::pin(async move {
-                    match key.as_str() {
-                        "AWS_CONTAINER_CREDENTIALS_FULL_URI" => {
-                            Ok(Some("http://169.254.170.23/creds".to_string()))
-                        }
-                        "AWS_REGION" => Ok(Some("us-east-1".to_string())),
-                        _ => Ok(None),
-                    }
-                })
-            }),
-            http_send: Arc::new(move |_req| {
-                http_call_count_clone.fetch_add(1, Ordering::SeqCst);
-                Box::pin(async {
-                    Ok(crate::HttpSendResponse {
-                        status_code: 200,
-                        headers: IndexMap::new(),
-                        body: serde_json::json!({
-                            "AccessKeyId": "AKIAIOSFODNN7EXAMPLE",
-                            "SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-                            "Token": "FwoGZXIvYXdzEBYaDH...",
-                            "Expiration": "2099-01-01T00:00:00Z",
-                        })
-                        .to_string(),
-                    })
-                })
-            }),
-            fs_read: Arc::new(|_path| {
-                Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
-            }),
-            shell: Arc::new(|_cmd| {
-                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
-            }),
-        };
+        let io: Arc<dyn RuntimeIo> = Arc::new(EnvHttpIo {
+            env_fn: |key| match key.as_str() {
+                "AWS_CONTAINER_CREDENTIALS_FULL_URI" => {
+                    Some("http://169.254.170.23/creds".to_string())
+                }
+                "AWS_REGION" => Some("us-east-1".to_string()),
+                _ => None,
+            },
+            http_call_count: http_call_count.clone(),
+            http_status: 200,
+            http_body: serde_json::json!({
+                "AccessKeyId": "AKIAIOSFODNN7EXAMPLE",
+                "SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                "Token": "FwoGZXIvYXdzEBYaDH...",
+                "Expiration": "2099-01-01T00:00:00Z",
+            })
+            .to_string(),
+        });
         let client = make_client(BedrockOptions::default());
         let mut req = fake_bedrock_request();
-        auth_bedrock(&mut req, &client, &callbacks).await.unwrap();
+        auth_bedrock(&mut req, &client, io.clone()).await.unwrap();
         assert!(http_call_count.load(Ordering::SeqCst) > 0);
         assert!(req.headers.contains_key("authorization"));
         assert!(req.headers.contains_key("x-amz-date"));

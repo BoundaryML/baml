@@ -399,6 +399,8 @@ baml_function_async!(TestAnthropicShorthand(input: impl AsRef<str> + BamlEncode,
 
 baml_function_async!(TestAws(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
 
+baml_function_async!(TestAwsCaching(input: impl AsRef<str> + BamlEncode, not_cached: impl AsRef<str> + BamlEncode, ) -> (String, String));
+
 baml_function_async!(TestAwsClaude37(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
 
 baml_function_async!(TestAwsInferenceProfile(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
@@ -582,6 +584,8 @@ baml_function_async!(TestUniverseQuestion(question: &types::UniverseQuestionInpu
 baml_function_async!(TestVertex(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
 
 baml_function_async!(TestVertexClaude(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
+
+baml_function_async!(TestVertexClaudeGlobal(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
 
 baml_function_async!(TestVertexWithSystemInstructions() -> (String, String));
 
@@ -991,6 +995,8 @@ pub struct BamlAsyncClient {
 
     pub TestAws: TestAws,
 
+    pub TestAwsCaching: TestAwsCaching,
+
     pub TestAwsClaude37: TestAwsClaude37,
 
     pub TestAwsInferenceProfile: TestAwsInferenceProfile,
@@ -1174,6 +1180,8 @@ pub struct BamlAsyncClient {
     pub TestVertex: TestVertex,
 
     pub TestVertexClaude: TestVertexClaude,
+
+    pub TestVertexClaudeGlobal: TestVertexClaudeGlobal,
 
     pub TestVertexWithSystemInstructions: TestVertexWithSystemInstructions,
 
@@ -1584,6 +1592,8 @@ impl BamlAsyncClient {
 
             TestAws: TestAws::new(),
 
+            TestAwsCaching: TestAwsCaching::new(),
+
             TestAwsClaude37: TestAwsClaude37::new(),
 
             TestAwsInferenceProfile: TestAwsInferenceProfile::new(),
@@ -1768,6 +1778,8 @@ impl BamlAsyncClient {
             TestVertex: TestVertex::new(),
 
             TestVertexClaude: TestVertexClaude::new(),
+
+            TestVertexClaudeGlobal: TestVertexClaudeGlobal::new(),
 
             TestVertexWithSystemInstructions: TestVertexWithSystemInstructions::new(),
 
@@ -2451,6 +2463,10 @@ impl BamlAsyncClient {
                 options: options.clone(),
             },
 
+            TestAwsCaching: TestAwsCaching {
+                options: options.clone(),
+            },
+
             TestAwsClaude37: TestAwsClaude37 {
                 options: options.clone(),
             },
@@ -2816,6 +2832,10 @@ impl BamlAsyncClient {
             },
 
             TestVertexClaude: TestVertexClaude {
+                options: options.clone(),
+            },
+
+            TestVertexClaudeGlobal: TestVertexClaudeGlobal {
                 options: options.clone(),
             },
 

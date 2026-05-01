@@ -16,7 +16,7 @@ function MayFail<[CURSOR](x: int) -> string throws Errors {
 //    │                                          ───┬───  
 //    │                                             ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0096
 // ───╯
 // Warning: extraneous throws declaration: user.Errors
 //    ╭─[ hover_function_throws.baml:6:42 ]
@@ -25,7 +25,7 @@ function MayFail<[CURSOR](x: int) -> string throws Errors {
 //    │                                          ───┬───  
 //    │                                             ╰───── extraneous throws declaration: user.Errors
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0097
 // ───╯
 //
 //- on_hover expressions

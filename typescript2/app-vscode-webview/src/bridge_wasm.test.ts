@@ -6,7 +6,7 @@
  * Body is only read when BAML calls response_text(); bodyPromise is awaited then.
  */
 import { describe, it, expect } from 'vitest';
-import { BamlWasmRuntime } from '@b/bridge_wasm';
+import { BamlWasmRuntime, type WasmFetchCallback } from '@b/bridge_wasm';
 
 const ROOT_PATH = '/project';
 const MINIMAL_BAML = `
@@ -76,21 +76,40 @@ function makeMinimalVfs() {
 describe('BamlWasmRuntime', () => {
   describe('create with fetch callback (new contract)', () => {
     it('accepts fetch callback returning status, headersJson, url, bodyPromise', () => {
-      const fetchCallback = async (
-        _method: string,
-        _url: string,
-        _headersJson: string,
-        _body: string
-      ): Promise<{ status: number; headersJson: string; url: string; bodyPromise: Promise<string> }> => ({
+      const fetchCallback: WasmFetchCallback = async (
+        _callId,
+        _method,
+        _url,
+        _headersJson,
+        _body
+      ) => ({
         status: 200,
         headersJson: '{}',
         url: 'https://example.com/',
         bodyPromise: Promise.resolve('response body'),
       });
 
+      const stubShellResult = async () => ({
+        stdout: '',
+        stderr: 'shell not supported in browser tests',
+        exit_code: 1,
+        stdout_bytes: new Uint8Array(),
+        stderr_bytes: new Uint8Array(),
+      });
+
       const callbacks = {
         fetch: fetchCallback,
         env: (_var: string) => undefined,
+        input: async () => '',
+        exec: async (
+          _program: string,
+          _args: string[] | undefined,
+          _optionsJson: string | undefined,
+        ) => stubShellResult(),
+        shell: async (
+          _command: string,
+          _optionsJson: string | undefined,
+        ) => stubShellResult(),
         lsp_send_notification: () => {},
         lsp_send_response: () => {},
         lsp_make_request: () => {},
@@ -106,12 +125,7 @@ describe('BamlWasmRuntime', () => {
 
     it('uses bodyPromise (not body) per contract', () => {
       let bodyPromiseResolved = false;
-      const fetchCallback = async (): Promise<{
-        status: number;
-        headersJson: string;
-        url: string;
-        bodyPromise: Promise<string>;
-      }> => ({
+      const fetchCallback: WasmFetchCallback = async () => ({
         status: 200,
         headersJson: '{}',
         url: '',
@@ -123,9 +137,27 @@ describe('BamlWasmRuntime', () => {
         }),
       });
 
+      const stubShellResult = async () => ({
+        stdout: '',
+        stderr: 'shell not supported in browser tests',
+        exit_code: 1,
+        stdout_bytes: new Uint8Array(),
+        stderr_bytes: new Uint8Array(),
+      });
+
       const callbacks = {
         fetch: fetchCallback,
         env: (_var: string) => undefined,
+        input: async () => '',
+        exec: async (
+          _program: string,
+          _args: string[] | undefined,
+          _optionsJson: string | undefined,
+        ) => stubShellResult(),
+        shell: async (
+          _command: string,
+          _optionsJson: string | undefined,
+        ) => stubShellResult(),
         lsp_send_notification: () => {},
         lsp_send_response: () => {},
         lsp_make_request: () => {},

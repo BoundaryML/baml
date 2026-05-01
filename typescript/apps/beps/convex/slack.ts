@@ -157,6 +157,8 @@ function getStatusEmoji(status: string): string {
       return "📝";
     case "proposed":
       return "📋";
+    case "pending":
+      return "⏳";
     case "accepted":
       return "✅";
     case "implemented":

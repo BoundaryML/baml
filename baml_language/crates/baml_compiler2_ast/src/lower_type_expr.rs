@@ -9,8 +9,10 @@
 use baml_base::Name;
 use baml_compiler_syntax::{FunctionTypeParam, SyntaxKind, ast::TypeExpr as CstTypeExpr};
 use rowan::ast::AstNode;
+use text_size::TextRange;
 
 use crate::{
+    LoweringDiagnostic,
     ast::{FunctionTypeParam as AstFunctionTypeParam, RawAttribute, TypeExpr},
     lower_cst::lower_attribute,
 };
@@ -164,9 +166,13 @@ fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
             .function_return_type()
             .map(|t| lower_type_expr_inner(&t, false))
             .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
+        let throws = type_expr
+            .function_throws_type()
+            .map(|t| Box::new(lower_type_expr_inner(&t, false)));
         return TypeExpr::Function {
             params,
             ret: Box::new(ret),
+            throws,
             attrs: vec![],
         };
     }
@@ -231,21 +237,23 @@ fn lower_base_type(type_expr: &CstTypeExpr) -> TypeExpr {
 
     // Check for map type with type args
     if let Some(name) = type_expr.dotted_name() {
-        if name == "map" {
-            let args = type_expr.type_arg_exprs();
-            if args.len() == 2 {
-                let key = lower_type_expr_inner(&args[0], false);
-                let value = lower_type_expr_inner(&args[1], false);
-                return TypeExpr::Map {
-                    key: Box::new(key),
-                    value: Box::new(value),
-                    attrs: vec![],
-                };
-            }
+        let args = type_expr.type_arg_exprs();
+        if name == "map" && args.len() == 2 {
+            let key = lower_type_expr_inner(&args[0], false);
+            let value = lower_type_expr_inner(&args[1], false);
+            return TypeExpr::Map {
+                key: Box::new(key),
+                value: Box::new(value),
+                attrs: vec![],
+            };
         }
 
-        // Named type (primitive or user-defined)
-        return lower_from_type_name(&name);
+        // Named type (primitive or user-defined), preserving generic args
+        let generic_args: Vec<TypeExpr> = args
+            .iter()
+            .map(|arg| lower_type_expr_inner(arg, false))
+            .collect();
+        return lower_from_type_name_with_generic_args(&name, generic_args);
     }
 
     TypeExpr::Unknown { attrs: vec![] }
@@ -345,6 +353,14 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
 
 /// Create a `TypeExpr` from a type name string (primitive or user-defined).
 fn lower_from_type_name(name: &str) -> TypeExpr {
+    lower_from_type_name_with_generic_args(name, vec![])
+}
+
+/// Create a `TypeExpr` from a type name string with optional generic arguments.
+///
+/// Generic args are preserved on `Path` types (e.g., `Stream<T>`). For primitive
+/// types, generic args are silently dropped (primitives can't be generic).
+fn lower_from_type_name_with_generic_args(name: &str, generic_args: Vec<TypeExpr>) -> TypeExpr {
     match name {
         "int" => TypeExpr::Int { attrs: vec![] },
         "float" => TypeExpr::Float { attrs: vec![] },
@@ -352,6 +368,7 @@ fn lower_from_type_name(name: &str) -> TypeExpr {
         "bool" => TypeExpr::Bool { attrs: vec![] },
         "null" => TypeExpr::Null { attrs: vec![] },
         "never" => TypeExpr::Never { attrs: vec![] },
+        "void" => TypeExpr::Void { attrs: vec![] },
         "unknown" => TypeExpr::BuiltinUnknown { attrs: vec![] },
         "type" => TypeExpr::Type { attrs: vec![] },
         "$rust_type" => TypeExpr::Rust { attrs: vec![] },
@@ -377,14 +394,88 @@ fn lower_from_type_name(name: &str) -> TypeExpr {
                 let segments: Vec<Name> = name.split('.').map(Name::new).collect();
                 TypeExpr::Path {
                     segments,
+                    generic_args,
                     attrs: vec![],
                 }
             } else {
                 TypeExpr::Path {
                     segments: vec![Name::new(name)],
+                    generic_args,
                     attrs: vec![],
                 }
             }
         }
+    }
+}
+
+/// Recursively check that `void` does not appear in a non-return-type position.
+///
+/// `void` is only valid as the *bare* return type of a function. It must not
+/// appear in parameter types, field types, union members, list/optional
+/// wrappers, or function-type parameter positions. When `void` IS used as the
+/// return type of a `TypeExpr::Function`, it is exempt.
+///
+/// Set `allow_root_void = true` when calling on a function return-type annotation
+/// to permit a bare `-> void` while still rejecting `-> void?` or `-> void[]`.
+///
+/// Emits `VoidInNonReturnPosition` for every invalid occurrence.
+pub(crate) fn check_void_type(
+    type_expr: &TypeExpr,
+    context: String,
+    span: TextRange,
+    allow_root_void: bool,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    match type_expr {
+        TypeExpr::Void { .. } => {
+            if !allow_root_void {
+                diags.push(LoweringDiagnostic::VoidInNonReturnPosition { context, span });
+            }
+        }
+        TypeExpr::Optional { inner, .. } => {
+            // Once inside a wrapper, void is never allowed (even in return position).
+            check_void_type(
+                inner,
+                "an optional type (`void?`)".to_string(),
+                span,
+                false,
+                diags,
+            );
+        }
+        TypeExpr::List { inner, .. } => {
+            check_void_type(
+                inner,
+                "a list type (`void[]`)".to_string(),
+                span,
+                false,
+                diags,
+            );
+        }
+        TypeExpr::Map { key, value, .. } => {
+            check_void_type(key, "a map key type".to_string(), span, false, diags);
+            check_void_type(value, "a map value type".to_string(), span, false, diags);
+        }
+        TypeExpr::Union { variants, .. } => {
+            for v in variants {
+                check_void_type(v, "a union member".to_string(), span, false, diags);
+            }
+        }
+        TypeExpr::Function {
+            params,
+            ret: _,
+            throws,
+            ..
+        } => {
+            // ret is exempt — void IS allowed as function-type return type.
+            // But void in param types is not allowed.
+            for p in params {
+                check_void_type(&p.ty, context.clone(), span, false, diags);
+            }
+            if let Some(throws) = throws {
+                check_void_type(throws, "a throws type".to_string(), span, false, diags);
+            }
+        }
+        // All other variants (primitives, path, etc.) cannot contain void.
+        _ => {}
     }
 }

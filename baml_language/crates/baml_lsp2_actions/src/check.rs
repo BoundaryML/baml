@@ -239,9 +239,6 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
 /// `RenderedTirDiagnostic` has already resolved arena IDs to `TextRange`.
 /// We add the `file_id` to form a full `Span` for the primary annotation.
 ///
-/// Note: `RenderedTirDiagnostic` carries only a string message, so we use
-/// `DiagnosticId::TypeMismatch` as a generic placeholder. A future improvement
-/// would add the error kind to `RenderedTirDiagnostic` for a more precise ID.
 fn tir_rendered_to_diagnostic(
     rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
     file_id: FileId,
@@ -251,14 +248,27 @@ fn tir_rendered_to_diagnostic(
         range: rendered.range,
     };
     let diag = match rendered.severity {
-        baml_compiler2_tir::infer_context::DiagnosticSeverity::Warning => {
-            Diagnostic::warning(DiagnosticId::TypeMismatch, rendered.message)
-        }
-        baml_compiler2_tir::infer_context::DiagnosticSeverity::Error => {
-            Diagnostic::error(DiagnosticId::TypeMismatch, rendered.message)
-        }
+        baml_compiler2_tir::infer_context::DiagnosticSeverity::Warning => Diagnostic::warning(
+            tir_type_error_to_diagnostic_id(&rendered.error),
+            rendered.message,
+        ),
+        baml_compiler2_tir::infer_context::DiagnosticSeverity::Error => Diagnostic::error(
+            tir_type_error_to_diagnostic_id(&rendered.error),
+            rendered.message,
+        ),
     };
-    diag.with_primary_span(span)
+    rendered
+        .related
+        .into_iter()
+        .fold(diag.with_primary_span(span), |diag, related| {
+            diag.with_related(
+                Span {
+                    file_id: related.file_id,
+                    range: related.range,
+                },
+                related.message,
+            )
+        })
         .with_phase(DiagnosticPhase::Type)
 }
 
@@ -276,6 +286,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::UnresolvedName { .. } => DiagnosticId::UnknownVariable,
         TirTypeError::DeadCode { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
+        TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
         TirTypeError::NotCallable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIterable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIndexable { .. } => DiagnosticId::NotIndexable,
@@ -289,10 +300,16 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::NonExhaustiveMatch { .. } => DiagnosticId::NonExhaustiveMatch,
         TirTypeError::UnreachableArm => DiagnosticId::UnreachableArm,
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
-        TirTypeError::ThrowsContractViolation { .. } => DiagnosticId::ThrowsContractViolation,
+        TirTypeError::ThrowsContractViolation { .. }
+        | TirTypeError::CallbackThrowsContractViolation { .. } => {
+            DiagnosticId::ThrowsContractViolation
+        }
         TirTypeError::ExtraneousThrowsDeclaration { .. } => DiagnosticId::ThrowsContractExtraneous,
         TirTypeError::CannotInferTypeParameter { .. } => DiagnosticId::UnknownType,
+        TirTypeError::TypeParamShadowed { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
+        TirTypeError::WrongNumberOfTypeArgs { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
         // Optional chaining diagnostics
         TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnnecessaryNullCoalesce { .. } => DiagnosticId::InvalidOperator,
@@ -309,6 +326,7 @@ mod tests {
     use text_size::{TextRange, TextSize};
 
     use super::*;
+    use crate::testing::CursorTest;
 
     fn dummy_file_id() -> FileId {
         // Use index 0 — sufficient for span construction in unit tests.
@@ -317,9 +335,18 @@ mod tests {
 
     fn dummy_rendered(severity: DiagnosticSeverity) -> RenderedTirDiagnostic {
         RenderedTirDiagnostic {
+            error: baml_compiler2_tir::infer_context::TirTypeError::TypeMismatch {
+                expected: baml_compiler2_tir::ty::Ty::Never {
+                    attr: baml_compiler2_tir::ty::TyAttr::default(),
+                },
+                got: baml_compiler2_tir::ty::Ty::Never {
+                    attr: baml_compiler2_tir::ty::TyAttr::default(),
+                },
+            },
             message: "test message".to_string(),
             range: TextRange::new(TextSize::from(0u32), TextSize::from(5u32)),
             severity,
+            related: Vec::new(),
         }
     }
 
@@ -342,6 +369,46 @@ mod tests {
             diag.severity,
             Severity::Error,
             "DiagnosticSeverity::Error must produce an error-level Diagnostic"
+        );
+    }
+
+    #[test]
+    fn check_file_preserves_callback_related_info() {
+        let test = CursorTest::new(
+            r#"function forward(cb: (x: int) -> int) -> int {
+  return cb(1)
+}
+
+function demo() -> int throws string {
+  return forward((x: int) -> int {
+    throw "boom"
+  })
+}
+<[CURSOR]"#,
+        );
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        let diag = diagnostics
+            .iter()
+            .find(|diag| {
+                diag.id == DiagnosticId::ThrowsContractViolation
+                    && diag
+                        .message
+                        .contains("this body may throw through callback `cb`")
+                    && diag.message.contains("declared throws is `string`")
+            })
+            .expect("callback-aware throws diagnostic");
+
+        assert_eq!(diag.related_info.len(), 2);
+        assert_eq!(
+            diag.related_info
+                .iter()
+                .map(|related| related.message.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "this call forwards whatever callback `cb` throws",
+                "this callback throws `string`",
+            ]
         );
     }
 }

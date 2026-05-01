@@ -237,7 +237,6 @@ async fn if_else_with_parameter() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: duplicate binding error for let-in-if-branch variables"]
 async fn if_else_return_expr_with_locals() {
     let output = baml_test! {
         baml: "
@@ -309,7 +308,6 @@ async fn if_else_assignment_with_param() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: duplicate binding error for let-in-if-branch variables"]
 async fn if_else_assignment_with_locals() {
     let output = baml_test! {
         baml: "
@@ -573,20 +571,16 @@ async fn else_if_assignment() {
 
       L1:
         load_const 3
-        store_var result
         jump L4
 
       L2:
         load_const 2
-        store_var result
         jump L4
 
       L3:
         load_const 1
-        store_var result
 
       L4:
-        load_var result
         return
     }
     ");
@@ -679,20 +673,16 @@ async fn else_if_assignment_with_locals() {
 
       L1:
         load_const 3
-        store_var result
         jump L4
 
       L2:
         load_const 2
-        store_var result
         jump L4
 
       L3:
         load_const 1
-        store_var result
 
       L4:
-        load_var result
         return
     }
     ");
@@ -792,14 +782,11 @@ async fn if_else_logical_and() {
     insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const true
-        store_var _1
+        jump_if_false L0
+        pop 1
         load_const true
-        pop_jump_if_false L0
-        load_const true
-        store_var _1
 
       L0:
-        load_var _1
         pop_jump_if_false L1
         jump L2
 
@@ -831,17 +818,14 @@ async fn if_else_logical_or() {
     insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const false
-        store_var _1
-        load_const false
-        pop_jump_if_false L0
+        jump_if_false L0
         jump L1
 
       L0:
+        pop 1
         load_const true
-        store_var _1
 
       L1:
-        load_var _1
         pop_jump_if_false L2
         jump L3
 
@@ -1214,7 +1198,6 @@ async fn block_expression() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "compiler2: duplicate binding error for let-in-if-branch variables"]
 async fn if_else_statement() {
     let output = baml_test! {
         baml: "
@@ -1253,18 +1236,14 @@ async fn if_else_statement() {
         jump L1
 
       L0:
-        load_const 3
-        store_var x
         load_const 4
-        call identity
+        call user.identity
         pop 1
         jump L2
 
       L1:
-        load_const 2
-        store_var y
         load_const 1
-        call identity
+        call user.identity
         pop 1
 
       L2:

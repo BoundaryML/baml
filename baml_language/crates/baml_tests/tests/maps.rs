@@ -74,12 +74,10 @@ async fn access_no_key() {
     }
     "#);
 
-    assert_eq!(
+    assert!(matches!(
         output.result,
-        Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::RuntimeError(bex_vm::errors::RuntimeError::NoSuchKeyInMap)
-        ))
-    );
+        Err(bex_engine::EngineError::UnhandledThrow { .. })
+    ));
 }
 
 #[tokio::test]

@@ -1,5 +1,5 @@
-// TODO: This CLI has been simplified to only support the LSP command for now.
-// Other commands that depend on baml_runtime are commented out.
+// This crate provides the BAML CLI, including the LSP server and
+// standalone execution via `baml run`.
 #![allow(
     dead_code,
     unreachable_pub,
@@ -10,9 +10,13 @@
 )]
 
 pub(crate) mod commands;
+pub(crate) mod describe_command;
 pub(crate) mod format;
 pub(crate) mod generate;
+pub(crate) mod grep_command;
 pub(crate) mod lsp;
+pub(crate) mod project_load;
+pub(crate) mod run_command;
 pub(crate) mod test_command;
 pub(crate) mod test_filter;
 
@@ -76,7 +80,10 @@ impl From<ExitCode> for u32 {
 }
 
 /// Run the CLI with the given arguments.
-/// This is a simplified version that only supports the LSP command.
+///
+/// Dispatches to one of: `run`, `describe`, `generate`, `grep`, `test`,
+/// `format`, or `language-server`. `baml run` is the top-level entry for
+/// standalone execution.
 pub fn run_cli(argv: Vec<String>) -> Result<ExitCode> {
     let cli = commands::RuntimeCli::parse_from_smart(argv);
     cli.run()

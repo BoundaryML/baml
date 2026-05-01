@@ -82,6 +82,20 @@ fn display_source_line_cell(function: &Function, pc: usize, last_line: &mut usiz
     }
 }
 
+fn sanitize_operand_text(text: &str) -> String {
+    let mut sanitized = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '\n' => sanitized.push_str("\\n"),
+            '\r' => sanitized.push_str("\\r"),
+            '\t' => sanitized.push_str("\\t"),
+            '\0' => sanitized.push_str("\\0"),
+            other => sanitized.push(other),
+        }
+    }
+    sanitized
+}
+
 /// Context aware instruction display.
 ///
 /// Instructions themselves are kinda "bare". For example, `LOAD_VAR 1`
@@ -142,22 +156,15 @@ pub(crate) fn display_instruction(
             Some(name) => format!("({name})"),
             None => "(?)".to_string(),
         },
-        Instruction::LoadField(_) | Instruction::StoreField(_) => operand_meta
-            .map(|m| format!("({})", m.as_str()))
-            .unwrap_or_default(),
-        Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
-            format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
+        Instruction::LoadField(_) | Instruction::StoreField(_) | Instruction::InitField(_) => {
+            operand_meta
+                .map(|m| format!("({})", m.as_str()))
+                .unwrap_or_default()
         }
-        Instruction::PushUnwind {
-            handler,
-            error_slot,
-        } => {
-            let target = instruction_ptr.wrapping_add_signed(*handler);
-            let slot_name = function
-                .local_names
-                .get(*error_slot)
-                .map_or_else(|| format!("slot {error_slot}"), std::clone::Clone::clone);
-            format!("(to {target}, {slot_name})")
+        Instruction::Jump(offset)
+        | Instruction::PopJumpIfFalse(offset)
+        | Instruction::JumpIfFalse(offset) => {
+            format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
         }
         Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
             // Look up the class/enum from the compile-time ObjectPool if available
@@ -178,6 +185,13 @@ pub(crate) fn display_instruction(
         Instruction::JumpTable { table_idx, default } => {
             format!("(table {table_idx}, default {default:+})")
         }
+        Instruction::DenseTag(table_idx) => {
+            if let Some(table) = function.bytecode.match_hash_tables.get(*table_idx) {
+                format!("({})", table.key_names.join(", "))
+            } else {
+                format!("(hash table {table_idx})")
+            }
+        }
         Instruction::Pop(_)
         | Instruction::Copy(_)
         | Instruction::BinOp(_)
@@ -191,19 +205,22 @@ pub(crate) fn display_instruction(
         | Instruction::StoreMapElement
         | Instruction::Await
         | Instruction::CallIndirect
-        | Instruction::PopUnwind
         | Instruction::Throw
         | Instruction::Discriminant
         | Instruction::TypeTag
+        | Instruction::IsType(_)
+        | Instruction::ThrowIfPanic
         | Instruction::Unreachable
         | Instruction::MakeClosure(_, _)
+        | Instruction::MakeBoundMethod(_)
         | Instruction::MakeCell
         | Instruction::LoadDeref(_)
         | Instruction::StoreDeref(_)
         | Instruction::LoadCapture(_)
         | Instruction::StoreCapture(_)
         | Instruction::CaptureRef(_)
-        | Instruction::Return => String::new(),
+        | Instruction::Return
+        | Instruction::SendEvent => String::new(),
     };
 
     (instruction.to_string(), metadata)
@@ -229,7 +246,7 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
     match value {
         bex_vm_types::ConstValue::Null => "null".to_string(),
         bex_vm_types::ConstValue::Int(i) => i.to_string(),
-        bex_vm_types::ConstValue::Float(f) => f.to_string(),
+        bex_vm_types::ConstValue::Float(f) => bex_vm_types::format_float(*f),
         bex_vm_types::ConstValue::Bool(b) => b.to_string(),
         bex_vm_types::ConstValue::Object(idx) => {
             if let Some(objs) = objects {
@@ -245,14 +262,7 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
 fn display_object_from_pool(index: usize, objects: &ObjectPool) -> String {
     if let Some(obj) = objects.get(index) {
         match obj {
-            Object::String(s) => {
-                let escaped = s
-                    .replace('\\', "\\\\")
-                    .replace('\n', "\\n")
-                    .replace('\r', "\\r")
-                    .replace('\t', "\\t");
-                format!("\"{escaped}\"")
-            }
+            Object::String(s) => format!("{s:?}"),
             Object::Function(f) => format!("<fn {}>", f.name),
             Object::Class(c) => format!("<class {}>", c.name),
             Object::Enum(e) => format!("<enum {}>", e.name),
@@ -267,6 +277,7 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
     // SAFETY: During debug display, we assume the pointer is valid
     let object = unsafe { ptr.get() };
     match object {
+        Object::String(string) => format!("{string:?}"),
         // This one's a bit tricky to print.
         Object::Instance(instance) => {
             // SAFETY: During debug display, we assume the pointer is valid
@@ -310,15 +321,17 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::StoreVar(_)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
+        | Instruction::InitField(_)
         | Instruction::StoreArrayElement
         | Instruction::StoreMapElement => Color::Green,
         Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
             Color::BrightBlue
         }
-        Instruction::Jump(_) | Instruction::PopJumpIfFalse(_) | Instruction::JumpTable { .. } => {
-            Color::Yellow
-        }
-        Instruction::PushUnwind { .. } | Instruction::PopUnwind => Color::Yellow,
+        Instruction::Jump(_)
+        | Instruction::PopJumpIfFalse(_)
+        | Instruction::JumpIfFalse(_)
+        | Instruction::JumpTable { .. }
+        | Instruction::DenseTag(_) => Color::Yellow,
         Instruction::Call(_) | Instruction::CallIndirect => Color::Magenta,
         Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) | Instruction::Throw => {
             Color::Red
@@ -332,13 +345,19 @@ fn instruction_color(instruction: &Instruction) -> Color {
             Color::BrightRed
         }
         Instruction::VizEnter(_) | Instruction::VizExit(_) => Color::BrightYellow,
-        Instruction::Discriminant | Instruction::TypeTag => Color::BrightBlue,
+        Instruction::Discriminant
+        | Instruction::TypeTag
+        | Instruction::IsType(_)
+        | Instruction::ThrowIfPanic => Color::BrightBlue,
         Instruction::Unreachable => Color::BrightRed,
-        Instruction::MakeClosure(_, _) | Instruction::MakeCell => Color::Cyan,
+        Instruction::MakeClosure(_, _)
+        | Instruction::MakeBoundMethod(_)
+        | Instruction::MakeCell => Color::Cyan,
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
             Color::Blue
         }
         Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Color::Green,
+        Instruction::SendEvent => Color::BrightGreen,
     }
 }
 
@@ -539,12 +558,10 @@ fn display_bytecode_textual(function: &Function) -> String {
 
     for (ip, instruction) in instructions.iter().enumerate() {
         match instruction {
-            Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
+            Instruction::Jump(offset)
+            | Instruction::PopJumpIfFalse(offset)
+            | Instruction::JumpIfFalse(offset) => {
                 let target = ip.wrapping_add_signed(*offset);
-                jump_targets.insert(target);
-            }
-            Instruction::PushUnwind { handler, .. } => {
-                let target = ip.wrapping_add_signed(*handler);
                 jump_targets.insert(target);
             }
             Instruction::JumpTable { table_idx, default } => {
@@ -614,13 +631,14 @@ fn display_instruction_textual(
 ) -> String {
     // Helper: get the operand string from metadata, with a fallback.
     let meta_str = |fallback: &dyn std::fmt::Display| -> String {
-        function
+        let raw = function
             .bytecode
             .meta
             .get(ip)
             .and_then(|m| m.operand.as_ref())
             .map(|o| o.as_str().to_string())
-            .unwrap_or_else(|| format!("?{fallback}"))
+            .unwrap_or_else(|| format!("?{fallback}"));
+        sanitize_operand_text(&raw)
     };
 
     match instruction {
@@ -644,6 +662,10 @@ fn display_instruction_textual(
             let name = meta_str(idx);
             format!("store_field .{name}")
         }
+        Instruction::InitField(idx) => {
+            let name = meta_str(idx);
+            format!("init_field .{name}")
+        }
 
         // --- Stack ---
         Instruction::Pop(n) => format!("pop {n}"),
@@ -665,6 +687,14 @@ fn display_instruction_textual(
                 .cloned()
                 .unwrap_or_else(|| format!("?{target}"));
             format!("pop_jump_if_false {label}")
+        }
+        Instruction::JumpIfFalse(offset) => {
+            let target = ip.wrapping_add_signed(*offset);
+            let label = label_map
+                .get(&target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{target}"));
+            format!("jump_if_false {label}")
         }
         Instruction::JumpTable { table_idx, default } => {
             let default_target = ip.wrapping_add_signed(*default);
@@ -700,18 +730,6 @@ fn display_instruction_textual(
             }
         }
 
-        Instruction::PushUnwind {
-            handler,
-            error_slot,
-        } => {
-            let target = ip.wrapping_add_signed(*handler);
-            let label = label_map
-                .get(&target)
-                .cloned()
-                .unwrap_or_else(|| format!("?{target}"));
-            format!("push_unwind {label}, slot {error_slot}")
-        }
-        Instruction::PopUnwind => "pop_unwind".to_string(),
         Instruction::Throw => "throw".to_string(),
 
         // --- Operators ---
@@ -772,11 +790,29 @@ fn display_instruction_textual(
         // --- Type introspection ---
         Instruction::Discriminant => "discriminant".to_string(),
         Instruction::TypeTag => "type_tag".to_string(),
+        Instruction::IsType(const_idx) => {
+            let name = meta_str(const_idx);
+            format!("is_type {name}")
+        }
+        Instruction::DenseTag(table_idx) => {
+            let names = function
+                .bytecode
+                .match_hash_tables
+                .get(*table_idx)
+                .map(|t| t.key_names.join(", "))
+                .unwrap_or_default();
+            format!("dense_tag [{names}]")
+        }
+        Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 
         // --- Closures and cells ---
         Instruction::MakeClosure(obj_idx, count) => {
             let name = meta_str(&obj_idx.raw());
             format!("make_closure {name}, {count}")
+        }
+        Instruction::MakeBoundMethod(_) => {
+            let name = meta_str(&"");
+            format!("make_bound_method {name}")
         }
         Instruction::MakeCell => "make_cell".to_string(),
         Instruction::LoadDeref(slot) => {
@@ -790,6 +826,7 @@ fn display_instruction_textual(
         Instruction::LoadCapture(idx) => format!("load_capture {idx}"),
         Instruction::StoreCapture(idx) => format!("store_capture {idx}"),
         Instruction::CaptureRef(idx) => format!("capture_ref {idx}"),
+        Instruction::SendEvent => "send_event".to_string(),
     }
 }
 
@@ -946,6 +983,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::StoreGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::StoreField(_)
+        | Instruction::InitField(_)
         | Instruction::Call(_)
         | Instruction::DispatchFuture(_)
         | Instruction::AllocInstance(_)
@@ -953,24 +991,15 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::Watch(_)
         | Instruction::Unwatch(_)
         | Instruction::Notify(_) => meta
-            .map(|m| format!("({})", m.as_str()))
+            .map(|m| format!("({})", sanitize_operand_text(m.as_str())))
             .unwrap_or_default(),
 
         // Jumps: show absolute target address.
-        Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
+        Instruction::Jump(offset)
+        | Instruction::PopJumpIfFalse(offset)
+        | Instruction::JumpIfFalse(offset) => {
             let target = ip.wrapping_add_signed(*offset);
             format!("(to {target})")
-        }
-
-        Instruction::PushUnwind {
-            handler,
-            error_slot,
-        } => {
-            let target = ip.wrapping_add_signed(*handler);
-            let slot_meta = meta
-                .map(|m| m.as_str().to_string())
-                .unwrap_or_else(|| format!("slot {error_slot}"));
-            format!("(to {target}, {slot_meta})")
         }
 
         // Jump tables: show all target addresses.

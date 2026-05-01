@@ -23,33 +23,48 @@
 //!
 //! # Garbage Collection Coordination
 //!
-//! The engine coordinates GC using an epoch-based system:
+//! The engine coordinates GC through a [`HeapPermitManager`]. Every
+//! `call_function` invocation holds an [`ActiveHeapPermit`] for the duration
+//! of its VM's execution; the permit is released at async safepoints (e.g.
+//! during `Await`). GC is a "request-and-wait" operation:
 //!
-//! 1. **Epoch tracking**: Each `call_function` registers with the current epoch
-//! 2. **GC trigger**: `collect_garbage()` increments epoch, causing old-epoch VMs to park
-//! 3. **Safe collection**: Once all VMs park, GC collects roots from:
-//!    - Handle table (objects returned to external code)
-//!    - Parked VM stacks (via VM pointer registry)
-//! 4. **Stack update**: GC updates parked VM stacks with forwarding pointers
-//! 5. **TLAB invalidation**: Parked VMs get TLABs invalidated before resuming
-//! 6. **Resume**: `gc_complete.notify_waiters()` releases parked VMs
+//! 1. **Trigger**: [`BexEngine::collect_garbage`] calls
+//!    [`HeapPermitManager::request_park`], which drains all semaphore permits.
+//! 2. **Park**: running VMs release their permits at the next safepoint; new
+//!    `call_function` invocations block in `HeapPermitManager::new_permit`
+//!    because the manager's holders mutex is held by the GC.
+//! 3. **Collect roots**: [`HeapGuard`] iterates the live permit holders (via
+//!    weak references) and calls each `RootHaver::collect_roots`, unioned
+//!    with `BexHeap::collect_handle_roots` for FFI-held objects.
+//! 4. **GC**: `BexHeap::collect_garbage_generational` runs under the guard;
+//!    produces a forwarding map.
+//! 5. **Fixup**: `HeapGuard` calls each parked holder's
+//!    `RootHaver::forward_roots`. The `BexVm` impl of `forward_roots` also
+//!    invalidates the VM's TLAB so post-GC allocations refill from the new
+//!    Gen0 cursor.
+//! 6. **Resume**: dropping the `HeapGuard` releases the semaphore; parked
+//!    VMs re-acquire and continue.
 //!
 //! ## Safety Invariants
 //!
-//! - VMs register pointers before parking, unregister after waking
-//! - GC only accesses VM stacks while holding `parked_vms` lock
-//! - Handles always resolve through table (no cached indices)
-//! - New calls wait for in-progress GC before processing handle args
+//! - A VM can only mutate its own heap state while holding an
+//!   [`ActiveHeapPermit`]. GC cannot start until every active permit has
+//!   been released.
+//! - Handles are registered in `BexHeap::handles` before any GC could
+//!   observe them, and the write lock on that table serializes against
+//!   GC's `update_handles`.
+//! - New `call_function` invocations block on the holders mutex during
+//!   GC, so no fresh permit enters circulation mid-collection.
 //!
 //! # Unsafe Code
 //!
 //! This module uses unsafe code for:
-//! - `VmPtr` Send implementation: Raw VM pointers stored for GC root collection
-//! - Direct heap access: Reading objects during value conversion (index from valid handle)
-//! - GC coordination: Dereferencing parked VM pointers to collect/update roots
-//! - Epoch guards: Creating guards after registering with the epoch system
+//! - `PermitCell<T>` Send/Sync: single-threaded access is enforced by the
+//!   semaphore/holders-mutex pair.
+//! - Direct heap access during value conversion (always under an active
+//!   permit, witnessed by a `PermitProof` parameter).
 //!
-//! Safety is ensured by the epoch-based GC coordination system described above.
+//! Safety is ensured by the permit/guard coordination system described above.
 
 #![allow(unsafe_code)]
 
@@ -57,36 +72,46 @@ mod conversion;
 mod function_call_context;
 use std::{
     collections::HashMap,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    },
+    sync::{Arc, Mutex, atomic::Ordering},
 };
 
-use async_trait::async_trait;
-pub use bex_events::HostSpanContext;
-use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
 // Re-export event types for callers.
-pub use bex_events::{RuntimeEvent, SpanId};
-pub use bex_external_types::{BexExternalValue, EpochGuard, Ty, TypeName, UnionMetadata};
+use ::bex_vm_types::RootHaver;
+use ::core::sync::atomic::AtomicBool;
+use async_trait::async_trait;
+use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
+pub use bex_events::{HostSpanContext, RuntimeEvent, SpanId};
+pub use bex_external_types::{BexExternalValue, Ty, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
+pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 use bex_vm::{BexVm, SpanNotification, VmExecState};
-use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
+use bex_vm_types::{FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SysOp, Value};
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
 pub use sys_types::CallId;
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
-use tokio::sync::{Notify, mpsc};
+use tokio::sync::mpsc;
 pub use tokio_util::sync::CancellationToken;
 use web_time::{Instant, SystemTime};
 
 // ============================================================================
 // Engine Types
 // ============================================================================
+
+/// Information about a user-callable function, used by `baml run --list`.
+#[derive(Debug, Clone)]
+pub struct UserFunctionInfo {
+    pub qualified_name: String,
+    pub display_name: String,
+    pub origin: FunctionOrigin,
+    pub param_names: Vec<String>,
+    pub param_types: Vec<Ty>,
+    pub return_type: Ty,
+}
 
 /// Result of an external future.
 struct FutureResult {
@@ -123,80 +148,6 @@ impl AbortHandlesGuard {
 impl Drop for AbortHandlesGuard {
     fn drop(&mut self) {
         self.abort_all();
-    }
-}
-
-/// Wrapper for VM pointer that implements Send.
-///
-/// # Safety
-///
-/// This is safe because:
-/// - The pointer is only used while holding the `parked_vms` lock
-/// - We only dereference when all VMs are parked at safepoints
-/// - The VM lives on the async task's stack and won't move/drop while parked
-struct VmPtr(*const BexVm);
-
-// SAFETY: We control all access through the mutex and only use while VMs are parked
-unsafe impl Send for VmPtr {}
-
-/// State for a single epoch slot.
-/// Used to track VMs that started in a particular epoch.
-struct EpochState {
-    /// Number of VMs started in this epoch that haven't completed.
-    active: AtomicUsize,
-    /// Number of VMs parked waiting for GC.
-    parked: AtomicUsize,
-    /// Pointers to parked VMs for root collection during GC.
-    ///
-    /// # Safety
-    ///
-    /// These raw pointers are valid because:
-    /// - VM is borrowed from `call_function`'s stack frame
-    /// - `.await` on `gc_complete` suspends but doesn't drop the VM
-    /// - GC only reads/writes while all VMs are parked
-    /// - VM unregisters before resuming execution
-    parked_vms: Mutex<Vec<VmPtr>>,
-}
-
-impl EpochState {
-    fn new() -> Self {
-        Self {
-            active: AtomicUsize::new(0),
-            parked: AtomicUsize::new(0),
-            parked_vms: Mutex::new(Vec::new()),
-        }
-    }
-}
-
-/// RAII guard: inserts (`call_id`, cancel) on construction and removes `call_id` on drop,
-/// so `active_calls` is cleaned up on all exit paths (success, early return, or panic).
-struct ActiveCallGuard<'a> {
-    active_calls: &'a Mutex<HashMap<CallId, CancellationToken>>,
-    call_id: CallId,
-}
-
-impl<'a> ActiveCallGuard<'a> {
-    fn new(
-        active_calls: &'a Mutex<HashMap<CallId, CancellationToken>>,
-        call_id: CallId,
-        cancel: &CancellationToken,
-    ) -> Result<Self, EngineError> {
-        let mut map = active_calls.lock().unwrap();
-        if map.contains_key(&call_id) {
-            return Err(EngineError::DuplicateCallId { call_id });
-        }
-        map.insert(call_id, cancel.clone());
-        Ok(Self {
-            active_calls,
-            call_id,
-        })
-    }
-}
-
-impl Drop for ActiveCallGuard<'_> {
-    fn drop(&mut self) {
-        let mut active_calls = self.active_calls.lock().unwrap();
-        active_calls.remove(&self.call_id);
     }
 }
 
@@ -242,11 +193,21 @@ pub enum EngineError {
     #[error("Future channel closed unexpectedly")]
     FutureChannelClosed,
 
-    #[error("VM error: {0}")]
-    VmError(#[from] bex_vm::errors::VmError),
+    #[error("VM internal error: {0}")]
+    VmInternalError(bex_vm::errors::VmInternalError),
 
-    #[error("Internal VM error: {0}")]
-    InternalVmError(#[from] bex_vm::InternalError),
+    #[error("{}", format_vm_internal_error(source, trace))]
+    TracedVmInternalError {
+        source: bex_vm::errors::VmInternalError,
+        trace: Vec<bex_vm::StackFrame>,
+    },
+
+    /// Either a BAML panic or a BAML error value.
+    #[error("{}", format_unhandled_throw(value, trace))]
+    UnhandledThrow {
+        value: Box<BexExternalValue>,
+        trace: Vec<bex_vm::StackFrame>,
+    },
 
     #[error("Cannot convert object of type {type_name}")]
     CannotConvert { type_name: String },
@@ -269,6 +230,33 @@ pub enum EngineError {
 
     #[error("Package initialization failed: {0}")]
     InitFailed(String),
+}
+
+fn format_vm_internal_error(
+    err: &bex_vm::errors::VmInternalError,
+    trace: &[bex_vm::StackFrame],
+) -> String {
+    use std::fmt::Write;
+    let mut out = bex_vm::format_traceback(
+        trace
+            .iter()
+            .map(|f| (f.file_path.as_str(), f.error_line, f.function_name.as_str())),
+    );
+    write!(out, "VM internal error: {err}").unwrap();
+    out
+}
+
+fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]) -> String {
+    use std::fmt::Write;
+    let mut out = bex_vm::format_traceback(trace.iter().map(|loc| {
+        (
+            loc.file_path.as_str(),
+            loc.error_line,
+            loc.function_name.as_str(),
+        )
+    }));
+    write!(out, "uncaught throw: {value:?}").unwrap();
+    out
 }
 
 // ============================================================================
@@ -357,21 +345,18 @@ pub struct BexEngine {
     event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     /// Compiled test cases from the BAML program.
     test_cases: Vec<bex_vm_types::TestCase>,
+    /// Process argv passed in at engine creation. Exposed to BAML via
+    /// `baml.sys.argv()`. Shared (cheap to clone) with each spawned VM.
+    argv: Arc<[String]>,
 
-    // --- Epoch-based GC coordination ---
-    /// Current epoch counter (monotonically increasing).
-    /// Incremented when GC is requested.
-    current_epoch: AtomicU64,
-    /// Epoch states - 2 slots indexed by epoch % 2.
-    /// (GC is synchronous, so max 2 active epochs at once)
-    epoch_states: [EpochState; 2],
-    /// Notified when an epoch's VMs have all parked or completed.
-    epoch_drained: Notify,
-    /// Notified when GC completes and parked VMs can resume.
-    gc_complete: Notify,
-    /// Flag indicating GC is currently in progress.
-    /// Used to prevent handle resolution races.
-    gc_in_progress: AtomicBool,
+    // --- GC coordination ---
+    heap_permit_manager: Arc<HeapPermitManager>,
+    /// Used to prevent multiple threads from trying to run GC at the same time.
+    /// Only one should run it, the rest should wait for it to complete.
+    checking_gc: AtomicBool,
+    /// Used to notify long-running threads that they should park the VM even if they aren't at a typical yield point.
+    #[cfg(not(target_arch = "wasm32"))]
+    park_requested: Arc<AtomicBool>,
 
     /// Map of active function calls by ID.
     active_calls: Mutex<HashMap<CallId, CancellationToken>>,
@@ -406,16 +391,23 @@ impl BexEngine {
     ///
     /// * `bytecode_program` - The compiled BAML program bytecode
     /// * `sys_ops` - System operations provider (use `sys_types_native::SysOps::native()` for default)
+    /// * `event_sink` - Optional event sink for persisting events.
+    /// * `argv` - Process-style argv values exposed to BAML via `baml.sys.argv()`.
+    ///   Pass `Vec::new()` when argv is not applicable (e.g. tests, IDE, library embedding).
     pub fn new(
         bytecode_program: bex_vm_types::Program,
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
+        argv: Vec<String>,
     ) -> Result<Self, EngineError> {
+        let argv: Arc<[String]> = Arc::from(argv);
+
         // Extract package_init_order before consuming bytecode_program.
         let package_init_order = bytecode_program.package_init_order.clone();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode = bex_vm::convert_program(bytecode_program)?;
+        let bytecode =
+            bex_vm::convert_program(bytecode_program).map_err(EngineError::VmInternalError)?;
 
         // Extract test cases before consuming other bytecode fields.
         let test_cases = bytecode.test_cases;
@@ -485,6 +477,9 @@ impl BexEngine {
             .collect();
         let mut globals = GlobalPool::from_vec(globals_vec);
 
+        #[cfg(not(target_arch = "wasm32"))]
+        let park_requested = Arc::new(AtomicBool::new(false));
+
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -498,6 +493,9 @@ impl BexEngine {
                         .iter()
                         .map(|(k, v)| (k.clone(), *v))
                         .collect(),
+                    #[cfg(not(target_arch = "wasm32"))]
+                    Arc::clone(&park_requested),
+                    Arc::clone(&argv),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -513,6 +511,13 @@ impl BexEngine {
                         }
                         Ok(VmExecState::Notify(_) | VmExecState::SpanNotify(_)) => {
                             // Ignore watch/span notifications during init.
+                            continue;
+                        }
+                        Ok(VmExecState::Event { .. }) => {
+                            // Handle events during $init: push null and continue.
+                            // No span context exists during init, so the event is dropped,
+                            // but we must push a return value to keep the stack balanced.
+                            vm.stack.push(Value::Null);
                             continue;
                         }
                         Ok(other) => {
@@ -538,6 +543,18 @@ impl BexEngine {
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
+        let heap_permit_manager = Arc::new(HeapPermitManager::new());
+
+        // Build a default RuntimeIo from the SysOps table with an empty context.
+        // This is replaced per-call in execute_sys_op with a live context that
+        // carries the correct cancellation token and spawner.
+        let runtime_io = sys_ops::build_runtime_io(
+            &sys_ops,
+            &heap,
+            &heap_permit_manager,
+            &sys_types::SysOpContext::empty(),
+        );
+
         let sys_op_ctx = sys_types::EngineSysOpContext {
             llm_functions: Arc::new(llm_functions),
             function_global_indices: Arc::new(bytecode.function_global_indices),
@@ -545,14 +562,7 @@ impl BexEngine {
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
             type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
-            io_callbacks: sys_types::SysOpIoCallbacks {
-                http_send: sys_ops.baml_http_send.clone(),
-                http_response_text: sys_ops.baml_http_response_text.clone(),
-                env_get: sys_ops.baml_env_get.clone(),
-                fs_open: sys_ops.baml_fs_open.clone(),
-                fs_file_read: sys_ops.baml_fs_file_read.clone(),
-                sys_shell: sys_ops.baml_sys_shell.clone(),
-            },
+            runtime_io,
         };
 
         Ok(Self {
@@ -565,12 +575,11 @@ impl BexEngine {
             sys_op_ctx,
             event_sink,
             test_cases,
-            // Initialize epoch tracking
-            current_epoch: AtomicU64::new(0),
-            epoch_states: [EpochState::new(), EpochState::new()],
-            epoch_drained: Notify::new(),
-            gc_complete: Notify::new(),
-            gc_in_progress: AtomicBool::new(false),
+            argv,
+            heap_permit_manager,
+            checking_gc: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            park_requested,
             active_calls: Mutex::new(HashMap::new()),
         })
     }
@@ -612,6 +621,7 @@ impl BexEngine {
                             prompt_template: prompt_template.clone(),
                             client_name: client.clone(),
                             return_type: func.return_type.clone(),
+                            stream_return_type: func.stream_return_type.clone(),
                         },
                     );
                 }
@@ -697,112 +707,65 @@ impl BexEngine {
         self.heap.stats()
     }
 
+    /// Get a reference to the heap permit manager.
+    pub fn heap_permit_manager(&self) -> &Arc<HeapPermitManager> {
+        &self.heap_permit_manager
+    }
+
+    /// Resolve a [`bex_external_types::Handle`] to its current [`HeapPtr`].
+    ///
+    /// The permit parameter proves GC cannot run while the caller is using the
+    /// returned pointer — holding any `ActiveHeapPermit<T>` keeps one of the
+    /// manager's semaphore tokens in scope, so `request_park` cannot proceed.
+    ///
+    /// Returns `None` if the handle has been invalidated.
+    pub fn resolve_handle(
+        &self,
+        _permit: bex_heap::PermitProof<'_>,
+        handle: &bex_external_types::Handle,
+    ) -> Option<HeapPtr> {
+        use bex_external_types::WeakHeapRef;
+        self.heap.resolve_handle_ptr(handle.slab_key())
+    }
+
     /// Explicitly trigger garbage collection.
     ///
-    /// This method:
-    /// 1. Increments the epoch (causing old-epoch VMs to park at yield points)
-    /// 2. Waits for all old-epoch VMs to park or complete
-    /// 3. Runs semi-space copy collection
-    /// 4. Releases parked VMs (they will get updated indices on resume)
-    ///
-    /// # Concurrent Safety
-    ///
-    /// New calls (epoch N+1) proceed normally while GC waits for epoch N VMs.
-    /// This minimizes latency impact - GC doesn't block new work.
+    /// Requests and waits for all heap permit holders to park.
+    /// Once they are parked, runs the GC.
     ///
     /// # Returns
     ///
     /// Statistics about the collection (live count, collected count, etc.)
-    pub async fn collect_garbage(&self) -> bex_heap::GcStats {
-        // Signal GC starting - new calls will wait
-        self.gc_in_progress.store(true, Ordering::Release);
-
-        // Increment epoch - new calls get the new epoch
-        let gc_epoch = self.current_epoch.fetch_add(1, Ordering::SeqCst);
-        let slot = (gc_epoch % 2) as usize;
-
-        // Wait for all VMs from this epoch to park or complete
-        loop {
-            let active = self.epoch_states[slot].active.load(Ordering::Acquire);
-            let parked = self.epoch_states[slot].parked.load(Ordering::Acquire);
-
-            if active == 0 {
-                // All VMs completed, nothing to collect
-                break;
-            }
-            if parked >= active {
-                // All active VMs are parked, safe to collect
-                break;
-            }
-
-            // Wait for more VMs to park or complete
-            self.epoch_drained.notified().await;
-        }
+    pub async fn collect_garbage(&self, level: bex_heap::CollectionLevel) -> bex_heap::GcStats {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.park_requested.store(true, Ordering::Relaxed);
+        let mut heap_guard = self.heap_permit_manager.request_park().await;
+        #[cfg(not(target_arch = "wasm32"))]
+        self.park_requested.store(false, Ordering::Relaxed);
 
         // Collect roots from handles (objects returned to external code)
         let mut all_roots = self.heap.collect_handle_roots();
 
-        // Acquire parked_vms lock - hold it through GC to update stacks
-        let parked_vms = self.epoch_states[slot].parked_vms.lock().unwrap();
-
-        // SAFETY: All VMs are parked (verified above), so we have exclusive read access
-        // to their stacks. The parked_vms vec contains valid pointers because VMs
-        // register before parking and unregister only after gc_complete is notified.
-        for vm_ptr in parked_vms.iter() {
-            let vm = unsafe { &*vm_ptr.0 };
-            all_roots.extend(Self::collect_vm_roots(vm));
-        }
+        heap_guard.collect_roots(&mut all_roots);
 
         tracing::debug!(
-            "GC: {} total roots from {} handles and {} parked VMs",
+            "GC: {} total roots from {} handles and {} parked heap permits",
             all_roots.len(),
             self.heap.stats().active_handles,
-            parked_vms.len()
+            heap_guard.num_permits(),
         );
 
-        // Run GC with forwarding map
+        // Run GC — always returns the forwarding map so we can update parked VM stacks.
         let (stats, _remapped_roots, forwarding) =
-            unsafe { self.heap.collect_garbage_with_forwarding(&all_roots) };
-
+            unsafe { self.heap.collect_garbage_generational(&all_roots, level) };
         // Update all parked VM stacks with forwarding pointers and invalidate TLABs
         // SAFETY: VMs are still parked (gc_complete not yet notified), we have
         // exclusive access via the parked_vms lock we're still holding
-        for vm_ptr in parked_vms.iter() {
-            let vm = unsafe { &mut *vm_ptr.0.cast_mut() };
-
-            // Update stack values
-            for value in &mut vm.stack.0 {
-                if let Value::Object(idx) = value {
-                    if let Some(&new_idx) = forwarding.get(idx) {
-                        *idx = new_idx;
-                    }
-                }
-            }
-
-            // Update watch state (graph NodeIds, RootState values)
-            vm.watch.apply_forwarding(&forwarding);
-
-            // Update frame function pointers (needed for closures)
-            vm.apply_frame_forwarding(&forwarding);
-
-            // Invalidate TLAB so next allocation gets chunk from new space
-            vm.tlab.invalidate();
-        }
-
-        // Release lock before notifying waiters
-        drop(parked_vms);
+        heap_guard.forward_roots(&forwarding);
 
         self.heap.verify_quick();
 
-        // Reset epoch state for reuse
-        self.epoch_states[slot].active.store(0, Ordering::Release);
-        self.epoch_states[slot].parked.store(0, Ordering::Release);
-
-        // Signal GC complete before releasing parked VMs
-        self.gc_in_progress.store(false, Ordering::Release);
-
-        // Release parked VMs
-        self.gc_complete.notify_waiters();
+        drop(heap_guard);
 
         tracing::debug!(
             "GC completed: {} live, {} collected",
@@ -860,12 +823,20 @@ impl BexEngine {
             return Err(EngineError::Cancelled);
         }
 
-        // Wait for any in-progress GC to complete.
-        while self.gc_in_progress.load(Ordering::Acquire) {
-            self.gc_complete.notified().await;
-        }
-
-        let _call_guard = ActiveCallGuard::new(&self.active_calls, call_id, &cancel)?;
+        // Create VM with shared heap (each VM gets its own TLAB)
+        let vm = BexVm::new(
+            Arc::clone(&self.heap),
+            self.globals.clone(),
+            self.resolved_class_names
+                .iter()
+                .map(|(k, v)| (k.clone(), *v))
+                .collect(),
+            #[cfg(not(target_arch = "wasm32"))]
+            Arc::clone(&self.park_requested),
+            Arc::clone(&self.argv),
+        );
+        let vm = self.heap_permit_manager.new_permit(vm).await;
+        let mut vm = vm.acquire().await;
 
         let function_index = self.lookup_function(function_name)?;
         let return_type = self
@@ -873,33 +844,14 @@ impl BexEngine {
             .unwrap_or(Ty::Null {
                 attr: baml_type::TyAttr::default(),
             });
-
-        // Register with current epoch
-        let my_epoch = self.current_epoch.load(Ordering::Acquire);
-        let slot = (my_epoch % 2) as usize;
-        self.epoch_states[slot]
-            .active
-            .fetch_add(1, Ordering::AcqRel);
-
-        // SAFETY: We just registered with the epoch above
-        let guard = unsafe { EpochGuard::new() };
-
-        // Create VM with shared heap (each VM gets its own TLAB)
-        let mut vm = BexVm::new(
-            Arc::clone(&self.heap),
-            self.globals.clone(),
-            self.resolved_class_names
-                .iter()
-                .map(|(k, v)| (k.clone(), *v))
-                .collect(),
-        );
+        let throws_type = self.function_throws_type(function_name);
 
         // Snapshot args for the root FunctionStart event before converting to VM values
         let args_snapshot = args.clone();
 
         let vm_args: Vec<Value> = args
             .into_iter()
-            .map(|arg| self.convert_external_to_vm_value(&mut vm, arg, &guard))
+            .map(|arg| self.convert_external_to_vm_value(&mut vm, arg))
             .collect();
 
         vm.set_entry_point(function_index, &vm_args);
@@ -950,6 +902,7 @@ impl BexEngine {
         };
 
         self.emit(RuntimeEvent {
+            call_id,
             ctx: root_ctx,
             call_stack,
             timestamp: SystemTime::now(),
@@ -972,32 +925,21 @@ impl BexEngine {
         });
 
         // Run the event loop with span tracking
-        let result = self
-            .run_event_loop_with_epoch(
-                return_type,
-                &mut vm,
-                my_epoch,
-                call_id,
-                &mut span_state,
-                &cancel,
-                copy_objects,
-            )
-            .await;
-
-        // Unregister from epoch
-        if self.epoch_states[slot]
-            .active
-            .fetch_sub(1, Ordering::AcqRel)
-            == 1
-        {
-            self.epoch_drained.notify_one();
-        }
+        self.run_event_loop(
+            return_type,
+            throws_type,
+            vm,
+            call_id,
+            &mut span_state,
+            &cancel,
+            copy_objects,
+        )
+        .await
 
         // active_calls cleanup is done by ActiveCallGuard on drop.
         //
         // Keep genuine engine errors intact. Cancellation is surfaced directly
         // by engine safepoints as `EngineError::Cancelled`.
-        result
     }
 
     /// Cancel a function call by its ID.
@@ -1066,6 +1008,18 @@ impl BexEngine {
         }
     }
 
+    /// Get the inferred throws type for a function by dereferencing its heap object.
+    fn function_throws_type(&self, name: &str) -> Option<Ty> {
+        let resolved = self.resolve_function_name(name)?;
+        let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
+        // SAFETY: ptr is from resolved_function_names, a compile-time object
+        let obj = unsafe { ptr.get() };
+        match obj {
+            Object::Function(func) => func.throws_type.clone(),
+            _ => None,
+        }
+    }
+
     /// Get parameter names and types for a function by dereferencing its heap object.
     pub fn function_params(&self, name: &str) -> Result<Vec<(&str, &Ty)>, EngineError> {
         let resolved = self
@@ -1092,6 +1046,38 @@ impl BexEngine {
                 message: format!("Expected Function, got {other:?}"),
             }),
         }
+    }
+
+    /// Check if a function exists by name (tries exact then "user." prefix).
+    pub fn function_exists(&self, name: &str) -> bool {
+        self.resolve_function_name(name).is_some()
+    }
+
+    /// List all user-callable functions with signature info.
+    pub fn user_functions(&self) -> Vec<UserFunctionInfo> {
+        self.resolved_function_names
+            .iter()
+            .filter_map(|(name, (ptr, kind))| {
+                if !matches!(kind, bex_vm_types::FunctionKind::Bytecode) {
+                    return None;
+                }
+                let obj = unsafe { ptr.get() };
+                match obj {
+                    Object::Function(func) if func.origin.is_user_callable() => {
+                        let display_name = name.strip_prefix("user.").unwrap_or(name).to_string();
+                        Some(UserFunctionInfo {
+                            qualified_name: name.clone(),
+                            display_name,
+                            origin: func.origin,
+                            param_names: func.param_names.clone(),
+                            param_types: func.param_types.clone(),
+                            return_type: func.return_type.clone(),
+                        })
+                    }
+                    _ => None,
+                }
+            })
+            .collect()
     }
 
     /// Get all compiled test cases.
@@ -1181,64 +1167,32 @@ impl BexEngine {
         Ok(registry)
     }
 
-    /// Collect roots from a yielded VM.
-    fn collect_vm_roots(vm: &BexVm) -> Vec<HeapPtr> {
-        let mut roots = Vec::new();
-
-        // Stack values
-        for value in &vm.stack.0 {
-            if let Value::Object(ptr) = value {
-                roots.push(*ptr);
+    /// Run GC if conditions are met (called at safepoints),
+    /// or yield if another thread is running GC.
+    ///
+    /// Uses the adaptive `should_collect()` policy to choose the appropriate
+    /// collection level (Minor or Major) based on live object counts and
+    /// allocation pressure.
+    async fn gc_safepoint<T: RootHaver>(
+        &self,
+        mut permit: ActiveHeapPermit<T>,
+    ) -> ActiveHeapPermit<T> {
+        let i_am_checking = self
+            .checking_gc
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok();
+        if i_am_checking {
+            // We won the CAS, so we own the GC check.
+            if let Some(level) = self.heap.should_collect() {
+                let inactive = permit.release();
+                self.collect_garbage(level).await;
+                permit = inactive.acquire().await;
             }
-        }
-
-        // Watch state (last_assigned/last_notified values that aren't on the stack)
-        vm.watch.collect_roots(&mut roots);
-
-        // Frame function pointers (needed once closures are heap-allocated)
-        roots.extend(vm.collect_frame_roots());
-
-        // Note: Frame locals are stored in the stack at the locals_offset position,
-        // so they're already included in the stack iteration above.
-
-        roots
-    }
-
-    /// Run GC if conditions are met (called at safepoints).
-    fn maybe_run_gc(&self, vm: &mut BexVm) {
-        self.heap.verify_quick();
-        if self.heap.should_gc() {
-            let roots = Self::collect_vm_roots(vm);
-            unsafe {
-                let (stats, _remapped_roots, forwarding) =
-                    self.heap.collect_garbage_with_forwarding(&roots);
-
-                // Update VM stack with forwarding pointers
-                for value in &mut vm.stack.0 {
-                    if let Value::Object(ptr) = value {
-                        if let Some(&new_ptr) = forwarding.get(ptr) {
-                            *ptr = new_ptr;
-                        }
-                    }
-                }
-
-                // Update watch state (graph NodeIds, RootState values)
-                vm.watch.apply_forwarding(&forwarding);
-
-                // Update frame function pointers (needed for closures)
-                vm.apply_frame_forwarding(&forwarding);
-
-                // Invalidate TLAB so next allocation gets chunk from new space
-                vm.tlab.invalidate();
-
-                self.heap.reset_gc_counter();
-                tracing::debug!(
-                    "GC completed: {} live, {} collected",
-                    stats.live_count,
-                    stats.collected_count
-                );
-            }
-            self.heap.verify_quick();
+            self.checking_gc.store(false, Ordering::Release);
+            permit
+        } else {
+            // Another thread is checking; park if they've requested it.
+            permit.renew().await
         }
     }
 
@@ -1257,16 +1211,19 @@ impl BexEngine {
         Ok(())
     }
 
-    /// Run the VM event loop until completion, with epoch tracking.
+    /// Drive the VM to completion, dispatching sys-ops, awaits, span
+    /// notifications, and early-yield events.
     ///
-    /// The `my_epoch` parameter is used to check if GC has been requested
-    /// (epoch advanced). VMs from old epochs will park at yield points.
+    /// The `vm` parameter is the permit for this invocation; it is released
+    /// at async safepoints (via `gc_safepoint`) and re-acquired after any
+    /// concurrent GC finishes. Each re-acquisition invalidates the VM's TLAB
+    /// through the post-GC `forward_roots` hook.
     #[allow(clippy::too_many_arguments)]
-    async fn run_event_loop_with_epoch(
+    async fn run_event_loop(
         self: &Arc<Self>,
         return_type: Ty,
-        vm: &mut BexVm,
-        my_epoch: u64,
+        throws_type: Option<Ty>,
+        mut vm: ActiveHeapPermit<BexVm>,
         call_id: CallId,
         span_state: &mut Option<SpanState>,
         cancel: &CancellationToken,
@@ -1297,7 +1254,39 @@ impl BexEngine {
         'vm_exec: loop {
             Self::cancellation_safepoint(cancel, &abort_handles)?;
 
-            match vm.exec()? {
+            // Update the VM's span context so native functions can read it.
+            vm.current_span_context = span_state.as_ref().map(Self::build_span_context_from_state);
+
+            let exec_result = match vm.exec() {
+                Ok(state) => state,
+                Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
+                    let external = if let Some(ref ty) = throws_type {
+                        self.convert_vm_value_to_external_with_type(&value, ty, vm.proof())?
+                    } else {
+                        self.vm_value_to_owned(vm.proof(), &value)
+                    };
+                    return Err(EngineError::UnhandledThrow {
+                        value: Box::new(external),
+                        trace,
+                    });
+                }
+                Err(bex_vm::errors::VmError::Thrown(value)) => {
+                    // Internal throw that escaped without unwinding — treat as
+                    // unhandled with no trace.
+                    let external = self.vm_value_to_owned(vm.proof(), &value);
+                    return Err(EngineError::UnhandledThrow {
+                        value: Box::new(external),
+                        trace: Vec::new(),
+                    });
+                }
+                Err(bex_vm::errors::VmError::InternalError(err)) => {
+                    return Err(EngineError::VmInternalError(err));
+                }
+                Err(bex_vm::errors::VmError::TracedInternalError { source, trace }) => {
+                    return Err(EngineError::TracedVmInternalError { source, trace });
+                }
+            };
+            match exec_result {
                 VmExecState::Complete(value) => {
                     // "Cancel wins" semantics: if cancellation races with a
                     // completed VM step, report `Cancelled` rather than
@@ -1313,11 +1302,12 @@ impl BexEngine {
                     // Emit FunctionEnd for the root entry-point span if tracing
                     if let Some(state) = span_state.as_mut() {
                         if let Some(root_span) = state.stack.pop() {
-                            let external_result = self.vm_value_to_owned(&value);
+                            let external_result = self.vm_value_to_owned(vm.proof(), &value);
                             let mut full_call_stack = state.host_call_stack.clone();
                             full_call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
                             full_call_stack.push(root_span.span_id.clone());
                             let end_event = RuntimeEvent {
+                                call_id,
                                 ctx: SpanContext {
                                     span_id: root_span.span_id,
                                     parent_span_id: root_span.parent_span_id,
@@ -1342,9 +1332,8 @@ impl BexEngine {
                     }
 
                     // When copy_objects: false and the result is a heap object,
-                    // create a Handle without holding with_gc_protection (which
-                    // takes a read lock on handles). create_handle takes a write
-                    // lock — the two cannot nest without deadlocking.
+                    // create a Handle. The `vm` permit is still live here and
+                    // proves GC-exclusion for the duration of this operation.
                     if !copy_objects {
                         if let Value::Object(ptr) = value {
                             let handle = self.heap.create_handle(ptr);
@@ -1353,18 +1342,19 @@ impl BexEngine {
                         // Non-object primitives fall through to normal conversion below.
                     }
 
-                    return self.heap.with_gc_protection(|protected| {
-                        // Normal deep-extraction: convert VM value to fully owned BexExternalValue.
-                        self.convert_vm_value_to_external_with_type(
-                            &value,
-                            &return_type,
-                            &protected.epoch_guard(),
-                        )
-                    });
+                    // Normal deep-extraction: convert VM value to fully owned BexExternalValue.
+                    // `vm` is still live here and holds the permit that proves GC-exclusion.
+                    return self.convert_vm_value_to_external_with_type(
+                        &value,
+                        &return_type,
+                        vm.proof(),
+                    );
                 }
 
                 VmExecState::ScheduleFuture(id) => {
-                    let pending = vm.pending_future(id)?;
+                    let pending = vm
+                        .pending_future(id)
+                        .map_err(EngineError::VmInternalError)?;
 
                     // Convert arguments to BexExternalValue
                     let args: Vec<BexExternalValue> = pending
@@ -1375,7 +1365,7 @@ impl BexEngine {
 
                     Self::cancellation_safepoint(cancel, &abort_handles)?;
                     let sys_op_result =
-                        self.execute_sys_op(pending.operation, &args, call_id, cancel);
+                        self.execute_sys_op(pending.operation, &args, call_id, cancel, vm.proof());
                     Self::cancellation_safepoint(cancel, &abort_handles)?;
 
                     match sys_op_result {
@@ -1387,15 +1377,10 @@ impl BexEngine {
                             // The VM will continue to the Await instruction which will
                             // extract the value from the Ready future.
                             let result = result.map_err(EngineError::from)?;
-                            let value = self.heap.with_gc_protection(|protected| {
-                                self.convert_external_to_vm_value(
-                                    vm,
-                                    result,
-                                    &protected.epoch_guard(),
-                                )
-                            });
+                            let value = self.convert_external_to_vm_value(&mut vm, result);
 
-                            vm.set_future_ready(id, value)?;
+                            vm.set_future_ready(id, value)
+                                .map_err(EngineError::VmInternalError)?;
                         }
                         SysOpResult::Async(fut) => {
                             // Guard the "spawn side effect" boundary.
@@ -1430,61 +1415,15 @@ impl BexEngine {
 
                 VmExecState::Await(future_id) => {
                     Self::cancellation_safepoint(cancel, &abort_handles)?;
-
-                    // Check if GC is waiting for our epoch to drain
-                    let current = self.current_epoch.load(Ordering::Acquire);
-                    if current > my_epoch {
-                        // GC has been requested - we need to park
-                        let slot = (my_epoch % 2) as usize;
-
-                        // Register VM pointer before parking
-                        // SAFETY: VM lives on our async task's stack and won't be dropped
-                        // until after we unregister (after gc_complete.notified().await returns)
-                        {
-                            let mut parked_vms = self.epoch_states[slot].parked_vms.lock().unwrap();
-                            parked_vms.push(VmPtr(std::ptr::from_ref(vm)));
-                        }
-
-                        // Increment parked count and notify GC
-                        self.epoch_states[slot]
-                            .parked
-                            .fetch_add(1, Ordering::AcqRel);
-                        self.epoch_drained.notify_one();
-
-                        // Wait for GC to complete
-                        // Note: GC will update our VM's stack with new object indices
-                        self.gc_complete.notified().await;
-
-                        // Unregister VM pointer after waking
-                        {
-                            let mut parked_vms = self.epoch_states[slot].parked_vms.lock().unwrap();
-                            let vm_ptr = std::ptr::from_ref(vm);
-                            parked_vms.retain(|p| p.0 != vm_ptr);
-                        }
-
-                        // Decrement parked count
-                        self.epoch_states[slot]
-                            .parked
-                            .fetch_sub(1, Ordering::AcqRel);
-                    }
-
-                    // VM is at a safepoint (yielded) - check if GC should run
-                    // (Only the triggering call runs GC, not parked VMs)
-                    if self.current_epoch.load(Ordering::Acquire) == my_epoch {
-                        self.maybe_run_gc(vm);
-                    }
+                    vm = self.gc_safepoint(vm).await;
 
                     // First, drain any already-completed futures.
                     while let Ok(future) = processed_futures.try_recv() {
                         let external = future.result?;
-                        let value = self.heap.with_gc_protection(|protected| {
-                            self.convert_external_to_vm_value(
-                                vm,
-                                external,
-                                &protected.epoch_guard(),
-                            )
-                        });
-                        vm.fulfil_future(future.id, value)?;
+                        let value = self.convert_external_to_vm_value(&mut vm, external);
+                        vm.fulfil_future(future.id, value)
+                            .map_err(EngineError::VmInternalError)?;
+
                         if future.id == future_id {
                             continue 'vm_exec;
                         }
@@ -1506,20 +1445,98 @@ impl BexEngine {
                                 let future = future
                                     .ok_or(EngineError::FutureChannelClosed)?;
                                 let external = future.result?;
-                                let value = self.heap.with_gc_protection(|protected| {
-                                    self.convert_external_to_vm_value(
-                                        vm,
-                                        external,
-                                        &protected.epoch_guard(),
-                                    )
-                                });
-                                vm.fulfil_future(future.id, value)?;
+                                let value = self.convert_external_to_vm_value(
+                                    &mut vm,
+                                    external,
+                                );
+                                vm.fulfil_future(future.id, value)
+                                    .map_err(EngineError::VmInternalError)?;
+
                                 if future.id == future_id {
                                     break;
                                 }
                             }
                         }
                     }
+                }
+
+                VmExecState::Event {
+                    event_name,
+                    data,
+                    source_location,
+                } => {
+                    // Emit a CustomEvent or LogEvent with the current span context.
+                    if let Some(state) = span_state.as_ref() {
+                        let ctx = Self::build_span_context_from_state(state);
+                        let mut call_stack = state.host_call_stack.clone();
+                        call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
+
+                        let external_data = self.vm_value_to_owned(vm.proof(), &data);
+
+                        // Convert source location tuple to SourceLocation struct.
+                        let source = source_location.map(
+                            |(file_id, line, column, start_offset, end_offset)| {
+                                bex_events::SourceLocation {
+                                    file_id,
+                                    line,
+                                    column,
+                                    start_offset,
+                                    end_offset,
+                                }
+                            },
+                        );
+
+                        // Check if this is a log event (emitted by log.info, log.debug, etc.)
+                        // Uses reserved name "$baml_log" to distinguish from user events.
+                        let event = if event_name == "$baml_log" {
+                            // Extract level and data from the log payload.
+                            if let BexExternalValue::Map { entries, .. } = &external_data {
+                                let level = entries
+                                    .get("level")
+                                    .and_then(|v| {
+                                        if let BexExternalValue::String(s) = v {
+                                            Some(s.clone())
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap_or_else(|| "info".to_string());
+                                let log_data = entries
+                                    .get("data")
+                                    .cloned()
+                                    .unwrap_or(BexExternalValue::Null);
+                                EventKind::Log(bex_events::LogEvent {
+                                    level,
+                                    data: log_data,
+                                    source,
+                                })
+                            } else {
+                                // Fallback: treat as custom event if structure is unexpected.
+                                EventKind::Custom(bex_events::CustomEvent {
+                                    name: event_name,
+                                    data: external_data,
+                                })
+                            }
+                        } else {
+                            EventKind::Custom(bex_events::CustomEvent {
+                                name: event_name,
+                                data: external_data,
+                            })
+                        };
+
+                        self.emit(RuntimeEvent {
+                            call_id,
+                            ctx,
+                            call_stack,
+                            timestamp: SystemTime::now(),
+                            event,
+                        });
+                    }
+                    // `baml.events.send()` returns null.  The SendEvent instruction
+                    // pops its two arguments but does not push a return value, so we
+                    // push null here before the VM resumes at the next instruction
+                    // (which will store or discard the return value).
+                    vm.stack.push(Value::Null);
                 }
 
                 VmExecState::Notify(_notification) => {
@@ -1543,10 +1560,13 @@ impl BexEngine {
                                 call_stack.push(span_id.clone());
 
                                 // Convert VM args to fully owned values for the event
-                                let external_args: Vec<BexExternalValue> =
-                                    args.iter().map(|v| self.vm_value_to_owned(v)).collect();
+                                let external_args: Vec<BexExternalValue> = args
+                                    .iter()
+                                    .map(|v| self.vm_value_to_owned(vm.proof(), v))
+                                    .collect();
 
                                 let enter_event = RuntimeEvent {
+                                    call_id,
                                     ctx: SpanContext {
                                         span_id: span_id.clone(),
                                         parent_span_id: parent_span_id.clone(),
@@ -1576,13 +1596,15 @@ impl BexEngine {
                                 result,
                             } => {
                                 if let Some(span) = state.stack.pop() {
-                                    let external_result = self.vm_value_to_owned(&result);
+                                    let external_result =
+                                        self.vm_value_to_owned(vm.proof(), &result);
                                     // call_stack: host prefix + remaining engine spans + exiting span
                                     let mut call_stack = state.host_call_stack.clone();
                                     call_stack
                                         .extend(state.stack.iter().map(|s| s.span_id.clone()));
                                     call_stack.push(span.span_id.clone());
                                     let exit_event = RuntimeEvent {
+                                        call_id,
                                         ctx: SpanContext {
                                             span_id: span.span_id,
                                             parent_span_id: span.parent_span_id,
@@ -1604,6 +1626,32 @@ impl BexEngine {
                         }
                     }
                 }
+                VmExecState::EarlyYield => {
+                    Self::cancellation_safepoint(cancel, &abort_handles)?;
+                    vm = self.gc_safepoint(vm).await;
+                }
+            }
+        }
+    }
+
+    /// Build a `SpanContext` from the current `SpanState`.
+    ///
+    /// Returns the context for the innermost active span, or uses the root span
+    /// if the stack is empty (e.g. between span transitions).
+    fn build_span_context_from_state(state: &SpanState) -> bex_events::SpanContext {
+        if let Some(current_span) = state.stack.last() {
+            bex_events::SpanContext {
+                span_id: current_span.span_id.clone(),
+                parent_span_id: current_span.parent_span_id.clone(),
+                root_span_id: state.root_span_id.clone(),
+            }
+        } else {
+            // Stack is empty (e.g. root span has not been pushed yet, or has been popped).
+            // Use the root span as a fallback.
+            bex_events::SpanContext {
+                span_id: state.root_span_id.clone(),
+                parent_span_id: None,
+                root_span_id: state.root_span_id.clone(),
             }
         }
     }
@@ -1622,11 +1670,16 @@ impl BexEngine {
         args: &[BexExternalValue],
         call_id: CallId,
         cancel: &CancellationToken,
+        permit: bex_heap::PermitProof<'_>,
     ) -> SysOpResult {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
-        let ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
-        let result = fn_ptr(&self.heap, args, &ctx, call_id);
+        let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        // Rebuild RuntimeIo with the live per-call context so IO calls
+        // (media resolution, auth) use the correct cancellation token.
+        ctx.runtime_io =
+            sys_ops::build_runtime_io(&self.sys_ops, &self.heap, &self.heap_permit_manager, &ctx);
+        let result = fn_ptr(&self.heap, permit, args, &ctx, call_id);
 
         match result {
             SysOpResult::Ready(Ok(v)) => SysOpResult::Ready(Ok(v)),

@@ -24,7 +24,7 @@
 pub mod io {
     use std::sync::Arc;
 
-    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
+    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
     pub use bex_vm_types::SysOp;
     // Owned structs are generated once in sys_types and re-exported here
     // so that `io::owned::llm::*` paths continue to work.
@@ -38,6 +38,54 @@ pub mod io {
 }
 
 // ============================================================================
+// RuntimeIo adapter (generated from .baml files via baml_builtins2_codegen)
+// ============================================================================
+// Every `$rust_io_function` in the ns_* .baml files is used by
+// `baml_builtins2_codegen` to generate the `RuntimeIo` trait (in
+// `sys_types::runtime_io`). RuntimeIo is a flat, typed async interface to all
+// sys-ops -- no VM plumbing (BexHeap, SysOpContext, CallId) in its signatures.
+// Crates like `sys_llm` take `&dyn RuntimeIo` to call into the runtime IO
+// layer (HTTP, env, filesystem, shell) without coupling to the VM.
+//
+// The generated `RuntimeIoAdapter` below bridges the trait to the underlying
+// `SysOpFn` pointers by marshaling typed args through `BexExternalValue`.
+//
+// The trait carries `UnwindSafe + RefUnwindSafe` bounds because the AWS SDK's
+// `HttpConnector` trait requires them on provider objects that store
+// `Arc<dyn RuntimeIo>`. The adapter has a manual `impl UnwindSafe` -- this is
+// safe because it holds only `Arc` clones (no interior mutability of its own)
+// and we never catch panics across the SysOpFn boundary.
+// ============================================================================
+
+#[allow(
+    dead_code,
+    unreachable_pub,
+    non_snake_case,
+    unused_imports,
+    unused_variables,
+    clippy::all,
+    clippy::redundant_closure_for_method_calls,
+    clippy::used_underscore_binding,
+    clippy::used_underscore_items
+)]
+mod io_adapter {
+    use std::{future::Future, pin::Pin, sync::Arc};
+
+    #[allow(unused_imports)]
+    pub use bex_external_types::BexExternalAdt;
+    pub use bex_heap::{BexValue, HeapPermitManager};
+    pub use sys_types::{
+        AsBexExternalValue, BexExternalValue, BexHeap, CallId, SysOpContext, SysOpFn, SysOpResult,
+        runtime_io::*,
+    };
+
+    use super::io::SysOps;
+
+    include!(concat!(env!("OUT_DIR"), "/io_adapter.rs"));
+}
+pub use io_adapter::build_runtime_io;
+
+// ============================================================================
 // Blanket IO LLM implementation (delegates to sys_llm)
 // ============================================================================
 
@@ -49,6 +97,14 @@ impl<T> io::IoClassLlmClient for T {
         client: io::owned::llm::Client,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
+        // `client.name` is the bare BAML identifier (`StubClient`); the
+        // synthesized `$new` function picks up the file's pkg + ns prefix
+        // later, landing as e.g. `user.lorem.StubClient$new`. Try the
+        // unqualified and `user.`-prefixed forms first, then fall back to
+        // a suffix scan over `.{name}$new` for clients declared inside a
+        // user namespace (`ns_<x>/`). Ambiguity surfaces as a hard error
+        // — clients are required to be unique within a package, so two
+        // matches mean a synthesis bug.
         let resolve_fn_name = format!("{}$new", client.name);
         let global_index = ctx
             .function_global_indices
@@ -57,6 +113,23 @@ impl<T> io::IoClassLlmClient for T {
                 ctx.function_global_indices
                     .get(&format!("user.{resolve_fn_name}"))
             });
+        let global_index = match global_index {
+            Some(idx) => Some(idx),
+            None => {
+                let suffix = format!(".{resolve_fn_name}");
+                let mut matches = ctx
+                    .function_global_indices
+                    .iter()
+                    .filter(|(k, _)| k.ends_with(&suffix));
+                let first = matches.next();
+                if matches.next().is_some() {
+                    return SysOpOutput::err(OpErrorKind::Other(format!(
+                        "Client resolve function {resolve_fn_name} matches multiple namespaced entries"
+                    )));
+                }
+                first.map(|(_, idx)| idx)
+            }
+        };
         let Some(global_index) = global_index else {
             return SysOpOutput::err(OpErrorKind::Other(format!(
                 "Client resolve function not found: {resolve_fn_name}"
@@ -66,6 +139,32 @@ impl<T> io::IoClassLlmClient for T {
             FunctionRef::<io::owned::llm::PrimitiveClient>::new(*global_index).into_external(),
         )
     }
+}
+
+fn shorthand_to_primitive_client(
+    shorthand: &str,
+) -> Result<io::owned::llm::PrimitiveClient, OpErrorKind> {
+    let shorthand = shorthand.trim();
+    let Some((provider, model)) = shorthand.split_once('/') else {
+        return Err(OpErrorKind::Other(format!(
+            "Invalid short hand name: {shorthand}"
+        )));
+    };
+    if provider.is_empty() || model.is_empty() {
+        return Err(OpErrorKind::Other(format!(
+            "Invalid short hand name: {shorthand}"
+        )));
+    }
+
+    Ok(io::owned::llm::PrimitiveClient {
+        name: shorthand.to_string(),
+        provider: provider.to_string(),
+        options: io::owned::llm::PrimitiveClientOptions {
+            model: Some(model.to_string()),
+            provider_options: BexExternalValue::Null,
+            ..Default::default()
+        },
+    })
 }
 
 /// Blanket impl — all types get real LLM behavior via `sys_llm` delegation.
@@ -125,7 +224,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
 
     fn build_request(
         &self,
-        heap: &std::sync::Arc<BexHeap>,
+        _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         prompt: io::owned::llm::PromptAst,
@@ -136,9 +235,9 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
             Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
         };
         let prompt_ast = unwrap_prompt_ast(&prompt);
-        let callbacks = build_io_callbacks(&ctx.io_callbacks, heap, ctx);
+        let io = ctx.runtime_io.clone();
         SysOpOutput::async_op(async move {
-            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast, &callbacks)
+            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast, io.clone())
                 .await
                 .map(|req| {
                     io::owned::http::Request {
@@ -172,16 +271,270 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
                 .map_err(OpErrorKind::from),
         )
     }
+
+    fn build_request_stream(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        prompt: io::owned::llm::PromptAst,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        let old_client = match convert_io_primitive_client(&client) {
+            Ok(c) => c,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+        };
+        let prompt_ast = unwrap_prompt_ast(&prompt);
+        let io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            sys_llm::execute_build_request_stream_from_owned(&old_client, prompt_ast, io)
+                .await
+                .map(|req| {
+                    io::owned::http::Request {
+                        method: req.method,
+                        url: req.url,
+                        headers: req.headers,
+                        body: req.body,
+                    }
+                    .into_bex_external_value()
+                })
+                .map_err(OpErrorKind::from)
+        })
+    }
+
+    fn new_stream_accumulator(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::StreamAccumulator> {
+        match sys_llm::stream_accumulator::new_accumulator(&client.provider) {
+            Ok(handle) => {
+                let handle: std::sync::Arc<dyn std::any::Any + Send + Sync> =
+                    std::sync::Arc::new(handle);
+                SysOpOutput::ok(io::owned::llm::StreamAccumulator { _handle: handle })
+            }
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn validate_finish_reason(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        finish_reason: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let old_client = match convert_io_primitive_client(&client) {
+            Ok(c) => c,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+        };
+        SysOpOutput::Ready(
+            sys_llm::execute_validate_finish_reason(&old_client, &finish_reason)
+                .map_err(OpErrorKind::from),
+        )
+    }
 }
 
-/// Look up an LLM function by name, trying the bare name first then "user.{name}".
+/// Look up an LLM function by name, trying the bare name first, then
+/// `user.{name}`, then a suffix scan over `.{name}` to handle functions
+/// declared inside a user namespace (e.g. `ns_lorem/`) — the synthesized
+/// companion passes the bare BAML identifier, not the FQN, so without
+/// the suffix scan a namespaced LLM function fails to resolve. Two
+/// matches mean a synthesis bug; surface that as a hard error.
 fn lookup_llm_function<'a>(
     function_name: &str,
     llm_functions: &'a std::collections::HashMap<String, LlmFunctionInfo>,
 ) -> Option<&'a LlmFunctionInfo> {
-    llm_functions
-        .get(function_name)
-        .or_else(|| llm_functions.get(&format!("user.{function_name}")))
+    if let Some(info) = llm_functions.get(function_name) {
+        return Some(info);
+    }
+    if let Some(info) = llm_functions.get(&format!("user.{function_name}")) {
+        return Some(info);
+    }
+    let suffix = format!(".{function_name}");
+    let mut matches = llm_functions.iter().filter(|(k, _)| k.ends_with(&suffix));
+    let first = matches.next()?;
+    if matches.next().is_some() {
+        // Ambiguous — let the caller treat this as "not found" so the
+        // existing error path surfaces. Cleaner than silently picking one.
+        return None;
+    }
+    Some(first.1)
+}
+
+/// Blanket impl — all types get real `StreamAccumulator` behavior via `sys_llm` delegation.
+impl<T> io::IoClassLlmStreamAccumulator for T {
+    fn add_events(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        events: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::add_events(&handle, &events) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn content(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_content(&handle) {
+            Ok(content) => SysOpOutput::ok(content),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn is_done(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::is_done(&handle) {
+            Ok(done) => SysOpOutput::ok(done),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn model(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_model(&handle) {
+            Ok(model) => SysOpOutput::ok(model),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn finish_reason(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_finish_reason(&handle) {
+            Ok(reason) => SysOpOutput::ok(reason),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn input_tokens(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<i64>> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_input_tokens(&handle) {
+            Ok(tokens) => SysOpOutput::ok(tokens.map(u64::cast_signed)),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn output_tokens(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<i64>> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_output_tokens(&handle) {
+            Ok(tokens) => SysOpOutput::ok(tokens.map(u64::cast_signed)),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+}
+
+/// Blanket impl — `StreamCache.new()` creates a SAP cache from a type descriptor.
+impl<T> io::IoClassLlmStreamCache for T {
+    fn new(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        target: baml_type::Ty,
+        stream_target: baml_type::Ty,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::StreamCache> {
+        let compiled =
+            match ::bex_sap::CompiledSapModel::from_sys_op_context(ctx, target, stream_target) {
+                Ok(compiled) => compiled,
+                Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+            };
+        let sap = ::sys_llm::SapStreamCache::new(compiled);
+        let data: std::sync::Arc<dyn std::any::Any + Send + Sync> = std::sync::Arc::new(sap);
+        SysOpOutput::ok(io::owned::llm::StreamCache { _data: data })
+    }
 }
 
 impl<T> io::IoNamespaceLlm for T {
@@ -221,17 +574,74 @@ impl<T> io::IoNamespaceLlm for T {
         SysOpOutput::ok(info.return_type.clone())
     }
 
-    fn __sap_parse(
+    fn get_stream_return_type(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<baml_type::Ty> {
+        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
+            return SysOpOutput::err(OpErrorKind::Other(format!(
+                "LLM function not found: {function_name}"
+            )));
+        };
+        SysOpOutput::ok(info.stream_return_type.clone())
+    }
+
+    fn from_shorthand(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        shorthand: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::PrimitiveClient> {
+        match shorthand_to_primitive_client(&shorthand) {
+            Ok(client) => SysOpOutput::ok(client),
+            Err(e) => SysOpOutput::err(e),
+        }
+    }
+
+    fn __sap_parse_final(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         json: String,
-        ty: baml_type::Ty,
+        cache: io::owned::llm::StreamCache,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
+        let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid StreamCache: expected SapStreamCache".into(),
+            ));
+        };
         SysOpOutput::Ready(
-            sys_llm::execute_sap_parse(&json, &ty, ctx, true).map_err(OpErrorKind::from),
+            sys_llm::execute_sap_parse_final(&json, &sap, ctx).map_err(OpErrorKind::from),
         )
+    }
+
+    fn __sap_parse_partial(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        json: String,
+        cache: io::owned::llm::StreamCache,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid StreamCache: expected SapStreamCache".into(),
+            ));
+        };
+        let result = match sys_llm::execute_sap_parse_partial(&json, &sap, ctx) {
+            Ok(Some(value)) => Ok(value),
+            Ok(None) => Ok(BexExternalValue::instance(
+                "baml.stream.StreamNoYield",
+                ::indexmap::IndexMap::new(),
+            )),
+            Err(e) => Err(OpErrorKind::from(e)),
+        };
+        SysOpOutput::Ready(result)
     }
 }
 
@@ -278,6 +688,7 @@ fn convert_io_primitive_client(
             remap_roles: options.remap_roles.clone(),
             api_key: options.api_key.clone(),
             provider_options: options.provider_options.clone(),
+            media_url_handler: options.media_url_handler.clone(),
             headers: options.headers.clone(),
             query_params: options.query_params.clone(),
             request_body: options.request_body.clone(),
@@ -294,13 +705,42 @@ fn convert_io_primitive_client(
 struct DefaultIoOps;
 
 impl io::IoClassFsFile for DefaultIoOps {
-    fn read(
+    fn text(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _f: io::owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn read(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _n: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn read_bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _n: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
     fn close(
@@ -312,6 +752,37 @@ impl io::IoClassFsFile for DefaultIoOps {
     ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
+    fn seek_from(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _whence: BexExternalValue,
+        _offset: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn write(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _data: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn write_bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
 }
 
 impl io::IoNamespaceFs for DefaultIoOps {
@@ -320,8 +791,92 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _h: &Arc<BexHeap>,
         _c: CallId,
         _path: String,
+        _mode: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::fs::File> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn exists(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn remove(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn size(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn read(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn write(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _content: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn write_bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _content: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn read_dir(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<io::owned::fs::DirEntry>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn mkdir(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _options: io::owned::fs::MkdirOptions,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
@@ -334,6 +889,36 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _r: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _r: io::owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoClassHttpSseStream for DefaultIoOps {
+    fn next(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::http::SseStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::http::SseStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
@@ -355,6 +940,15 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _req: io::owned::http::Request,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn fetch_sse(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _req: io::owned::http::Request,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
@@ -404,16 +998,42 @@ impl io::IoNamespaceEnv for DefaultIoOps {
     }
 }
 
+impl io::IoNamespaceIo for DefaultIoOps {
+    fn input(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _prompt: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
 impl io::IoNamespaceSys for DefaultIoOps {
+    fn exec(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _program: String,
+        _args: Option<Vec<String>>,
+        _options: Option<io::owned::sys::ProcessOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::ShellOutput> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
     fn shell(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _command: String,
+        _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
+    ) -> SysOpOutput<io::owned::sys::ShellOutput> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
+
     fn sleep(
         &self,
         _h: &Arc<BexHeap>,
@@ -423,13 +1043,40 @@ impl io::IoNamespaceSys for DefaultIoOps {
     ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
-    fn panic(
+}
+
+impl io::IoClassGlobGlob for DefaultIoOps {
+    fn scan(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _msg: String,
+        _glob: io::owned::glob::Glob,
+        _root: BexExternalValue,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
+    ) -> SysOpOutput<Vec<String>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn matches(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _glob: io::owned::glob::Glob,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoNamespaceGlob for DefaultIoOps {
+    fn new(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _pattern: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::glob::Glob> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
@@ -473,8 +1120,8 @@ impl IoSysOpsBuilder {
     ) -> Self {
         self.inner.baml_env_get = {
             let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_env_get(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_env_get(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -486,6 +1133,27 @@ impl IoSysOpsBuilder {
         self.with_env_instance(Arc::new(T::default()))
     }
 
+    /// Override the `io` namespace with a pre-built instance.
+    #[must_use]
+    pub fn with_io_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceIo + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_io_input = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_io_input(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the `io` namespace with a default-constructible type.
+    #[must_use]
+    pub fn with_io<T: io::IoNamespaceIo + Default + Send + Sync + 'static>(self) -> Self {
+        self.with_io_instance(Arc::new(T::default()))
+    }
+
     /// Override the `fs` namespace (including `fs.File` methods) with a pre-built instance.
     #[must_use]
     pub fn with_fs_instance(
@@ -494,20 +1162,104 @@ impl IoSysOpsBuilder {
     ) -> Self {
         self.inner.baml_fs_open = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_open(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_open(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_exists = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_exists(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_remove = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_remove(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_size = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_size(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_read = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_read(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_write = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_write(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_write_bytes = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_write_bytes(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_text = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_text(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_bytes = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_bytes(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_read = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_read(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_read(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_read_bytes = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_read_bytes(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_close = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_close(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_seek_from = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_seek_from(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_write = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_write(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_write_bytes = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_file_write_bytes(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_read_dir = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_read_dir(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_mkdir = {
             let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_close(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_mkdir(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -519,6 +1271,39 @@ impl IoSysOpsBuilder {
         self.with_fs_instance(Arc::new(T::default()))
     }
 
+    /// Override the `glob` namespace (including `glob.Glob` methods) with a pre-built instance.
+    #[must_use]
+    pub fn with_glob_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceGlob + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_glob_new = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_glob_new(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_glob_glob_scan = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_glob_glob_scan(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_glob_glob_matches = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_glob_glob_matches(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the `glob` namespace with a default-constructible type.
+    #[must_use]
+    pub fn with_glob<T: io::IoNamespaceGlob + Default + Send + Sync + 'static>(self) -> Self {
+        self.with_glob_instance(Arc::new(T::default()))
+    }
+
     /// Override the `http` namespace (including `http.Response` methods) with a pre-built instance.
     #[must_use]
     pub fn with_http_instance(
@@ -527,20 +1312,44 @@ impl IoSysOpsBuilder {
     ) -> Self {
         self.inner.baml_http_fetch = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_fetch(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_fetch(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_send = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_send(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_send(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_response_text = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_text(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_bytes = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_fetch_sse = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_fetch_sse(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_ssestream_next = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_ssestream_next(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_ssestream_close = {
             let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_response_text(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_ssestream_close(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -560,20 +1369,20 @@ impl IoSysOpsBuilder {
     ) -> Self {
         self.inner.baml_net_connect = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_net_connect(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_connect(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_net_socket_read = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_net_socket_read(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_socket_read(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_net_socket_close = {
             let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_net_socket_close(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_socket_close(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -586,27 +1395,28 @@ impl IoSysOpsBuilder {
     }
 
     /// Override the `sys` namespace with a pre-built instance.
+    #[allow(clippy::needless_pass_by_value)]
     #[must_use]
     pub fn with_sys_instance(
         mut self,
         instance: Arc<dyn io::IoNamespaceSys + Send + Sync + 'static>,
     ) -> Self {
+        self.inner.baml_sys_exec = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_exec(heap, permit, args, ctx, call_id)
+            })
+        };
         self.inner.baml_sys_shell = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_sys_shell(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_shell(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys_sleep = {
             let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_sys_sleep(heap, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys_panic = {
-            let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_sys_panic(heap, args, ctx, call_id)
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_sleep(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -625,247 +1435,14 @@ impl Default for IoSysOpsBuilder {
     }
 }
 
-use ::bex_heap::{BexExternalValue, BexHeap, BexValue};
+use ::bex_heap::{BexExternalValue, BexHeap};
 use ::std::sync::Arc;
 // Re-export io::SysOps as the primary SysOps type.
 use ::sys_types::{
     AsBexExternalValue as _, CallId, FunctionRef, LlmFunctionInfo, OpErrorKind, SysOpContext,
-    SysOpFn, SysOpIoCallbacks, SysOpOutput, SysOpResult,
+    SysOpOutput,
 };
 pub use io::SysOps;
-
-// ============================================================================
-// SysOpFn -> BuildRequestCallbacks adapter
-// ============================================================================
-
-/// Resolve a `SysOpResult` (sync or async) into the contained `BexExternalValue`.
-async fn resolve_sys_op_result(
-    result: SysOpResult,
-) -> Result<BexExternalValue, sys_llm::LlmOpError> {
-    match result {
-        SysOpResult::Ready(Ok(val)) => Ok(val),
-        SysOpResult::Ready(Err(e)) => Err(sys_llm::LlmOpError::Other(format!("{e:?}"))),
-        SysOpResult::Async(fut) => fut
-            .await
-            .map_err(|e| sys_llm::LlmOpError::Other(format!("{e:?}"))),
-    }
-}
-
-/// Build [`sys_llm::BuildRequestCallbacks`] by wrapping the `SysOpFn` pointers
-/// from [`SysOpIoCallbacks`]. Each callback marshals its args into
-/// `BexExternalValue`, calls the corresponding `SysOpFn`, and extracts the result.
-///
-/// The `AssertUnwindSafe` wrappers are needed because `SysOpFn` and `BexHeap`
-/// don't carry `UnwindSafe`/`RefUnwindSafe` bounds, but the AWS SDK callback
-/// traits require them. This is safe because we never actually catch panics
-/// across these boundaries.
-fn build_io_callbacks(
-    io: &SysOpIoCallbacks,
-    heap: &Arc<BexHeap>,
-    ctx: &SysOpContext,
-) -> sys_llm::BuildRequestCallbacks {
-    use std::panic::{RefUnwindSafe, UnwindSafe};
-
-    /// Wraps captured state so closures satisfy `UnwindSafe + RefUnwindSafe`.
-    /// SAFETY: We never catch panics across these closures; the bounds are only
-    /// required by the AWS SDK's `HttpConnector` trait.
-    #[derive(Clone)]
-    struct Env {
-        fn_ptr: SysOpFn,
-        heap: Arc<BexHeap>,
-        ctx: SysOpContext,
-    }
-    impl UnwindSafe for Env {}
-    impl RefUnwindSafe for Env {}
-
-    // -- env_read: String -> Option<String> ----------------------------------
-    let env_read: sys_llm::EnvReadFn = {
-        let env = Env {
-            fn_ptr: io.env_get.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        Arc::new(move |key: String| {
-            let env = env.clone();
-            Box::pin(async move {
-                let arg = BexExternalValue::String(key);
-                let result = (env.fn_ptr)(
-                    &env.heap,
-                    vec![BexValue::ExternalValue(&arg)],
-                    &env.ctx,
-                    CallId::next(),
-                );
-                let val = resolve_sys_op_result(result).await?;
-                match val {
-                    BexExternalValue::Null => Ok(None),
-                    BexExternalValue::String(s) => Ok(Some(s)),
-                    other => Err(sys_llm::LlmOpError::Other(format!(
-                        "env.get returned unexpected type: {}",
-                        other.type_name()
-                    ))),
-                }
-            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
-        })
-    };
-
-    // -- http_send: HttpRequest -> HttpSendResponse --------------------------
-    let http_send: sys_llm::HttpSendFn = {
-        let send_env = Env {
-            fn_ptr: io.http_send.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        let text_env = Env {
-            fn_ptr: io.http_response_text.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        Arc::new(move |req: sys_llm::baml_std::HttpRequest| {
-            let send_env = send_env.clone();
-            let text_env = text_env.clone();
-            Box::pin(async move {
-                // Convert HttpRequest to owned::http::Request -> BexExternalValue
-                let io_req = io::owned::http::Request {
-                    method: req.method,
-                    url: req.url,
-                    headers: req.headers,
-                    body: req.body,
-                };
-                let arg = io_req.into_bex_external_value();
-
-                // Call http.send
-                let result = (send_env.fn_ptr)(
-                    &send_env.heap,
-                    vec![BexValue::ExternalValue(&arg)],
-                    &send_env.ctx,
-                    CallId::next(),
-                );
-                let response_val = resolve_sys_op_result(result).await?;
-
-                // Extract status_code and headers from the response
-                let response = io::owned::http::Response::from_external(response_val.clone())
-                    .map_err(|e| {
-                        sys_llm::LlmOpError::Other(format!("http.send response parse error: {e:?}"))
-                    })?;
-                let status_code = u16::try_from(response.status_code).map_err(|_| {
-                    sys_llm::LlmOpError::Other(format!(
-                        "http.send returned invalid status_code: {}",
-                        response.status_code
-                    ))
-                })?;
-                let headers = response.headers;
-
-                // Call http.Response.text() to get the body
-                let text_result = (text_env.fn_ptr)(
-                    &text_env.heap,
-                    vec![BexValue::ExternalValue(&response_val)],
-                    &text_env.ctx,
-                    CallId::next(),
-                );
-                let body_val = resolve_sys_op_result(text_result).await?;
-                let body = match body_val {
-                    BexExternalValue::String(s) => s,
-                    other => {
-                        return Err(sys_llm::LlmOpError::Other(format!(
-                            "http.Response.text() returned unexpected type: {}",
-                            other.type_name()
-                        )));
-                    }
-                };
-
-                Ok(sys_llm::HttpSendResponse {
-                    status_code,
-                    headers,
-                    body,
-                })
-            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
-        })
-    };
-
-    // -- fs_read: String -> Vec<u8> ------------------------------------------
-    let fs_read: sys_llm::FsReadFn = {
-        let open_env = Env {
-            fn_ptr: io.fs_open.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        let read_env = Env {
-            fn_ptr: io.fs_file_read.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        Arc::new(move |path: String| {
-            let open_env = open_env.clone();
-            let read_env = read_env.clone();
-            Box::pin(async move {
-                // fs.open(path) -> File
-                let arg = BexExternalValue::String(path);
-                let result = (open_env.fn_ptr)(
-                    &open_env.heap,
-                    vec![BexValue::ExternalValue(&arg)],
-                    &open_env.ctx,
-                    CallId::next(),
-                );
-                let file_val = resolve_sys_op_result(result).await?;
-                io::owned::fs::File::from_external(file_val.clone()).map_err(|e| {
-                    sys_llm::LlmOpError::Other(format!("fs.open returned unexpected type: {e:?}"))
-                })?;
-
-                // fs.File.read() -> String
-                let result = (read_env.fn_ptr)(
-                    &read_env.heap,
-                    vec![BexValue::ExternalValue(&file_val)],
-                    &read_env.ctx,
-                    CallId::next(),
-                );
-                let content_val = resolve_sys_op_result(result).await?;
-                match content_val {
-                    BexExternalValue::String(s) => Ok(s.into_bytes()),
-                    other => Err(sys_llm::LlmOpError::Other(format!(
-                        "fs.File.read() returned unexpected type: {}",
-                        other.type_name()
-                    ))),
-                }
-            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
-        })
-    };
-
-    // -- shell: String -> String ---------------------------------------------
-    let shell: sys_llm::ShellFn = {
-        let env = Env {
-            fn_ptr: io.sys_shell.clone(),
-            heap: heap.clone(),
-            ctx: ctx.clone(),
-        };
-        Arc::new(move |command: String| {
-            let env = env.clone();
-            Box::pin(async move {
-                let arg = BexExternalValue::String(command);
-                let result = (env.fn_ptr)(
-                    &env.heap,
-                    vec![BexValue::ExternalValue(&arg)],
-                    &env.ctx,
-                    CallId::next(),
-                );
-                let val = resolve_sys_op_result(result).await?;
-                match val {
-                    BexExternalValue::String(s) => Ok(s),
-                    other => Err(sys_llm::LlmOpError::Other(format!(
-                        "sys.shell returned unexpected type: {}",
-                        other.type_name()
-                    ))),
-                }
-            }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
-        })
-    };
-
-    sys_llm::BuildRequestCallbacks {
-        http_send,
-        env_read,
-        fs_read,
-        shell,
-    }
-}
 
 /// Builder for composing a [`SysOps`] table by overriding namespaces.
 ///
@@ -887,14 +1464,23 @@ mod tests {
         SysOpContext::empty()
     }
 
-    #[test]
-    fn test_unsupported_returns_error() {
+    async fn test_permit() -> bex_heap::ActiveHeapPermit<()> {
+        bex_heap::HeapPermitManager::new()
+            .new_permit(())
+            .await
+            .acquire()
+            .await
+    }
+
+    #[tokio::test]
+    async fn test_unsupported_returns_error() {
         use sys_types::{OpErrorKind, SysOpResult};
 
         let heap = test_heap();
         let ctx = test_ctx();
         let op = SysOps::unsupported(SysOp::BamlSysShell);
-        let result = op(&heap, vec![], &ctx, CallId::next());
+        let permit = test_permit().await;
+        let result = op(&heap, permit.proof(), vec![], &ctx, CallId::next());
         match result {
             SysOpResult::Ready(Err(e)) => {
                 assert!(matches!(e.kind, OpErrorKind::Unsupported));
@@ -904,16 +1490,17 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_all_unsupported() {
+    #[tokio::test]
+    async fn test_all_unsupported() {
         use sys_types::{OpError, OpErrorKind, SysOpResult};
 
         let heap = test_heap();
         let ctx = test_ctx();
         let ops = SysOps::all_unsupported();
+        let permit = test_permit().await;
 
         // Test fs_open returns Unsupported
-        let result = (ops.baml_fs_open)(&heap, vec![], &ctx, CallId::next());
+        let result = (ops.baml_fs_open)(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
@@ -923,7 +1510,7 @@ mod tests {
         ));
 
         // Test shell returns Unsupported
-        let result = (ops.baml_sys_shell)(&heap, vec![], &ctx, CallId::next());
+        let result = (ops.baml_sys_shell)(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
@@ -933,304 +1520,39 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn test_sys_ops_get() {
+    #[tokio::test]
+    async fn test_sys_ops_get() {
         use sys_types::SysOpResult;
 
         let ops = SysOps::all_unsupported();
         let heap = test_heap();
         let ctx = test_ctx();
+        let permit = test_permit().await;
 
         // Test that get() returns the correct function pointer
         let fn_ptr = ops.get(SysOp::BamlFsOpen);
-        let result = fn_ptr(&heap, vec![], &ctx, CallId::next());
+        let result = fn_ptr(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(result, SysOpResult::Ready(Err(_))));
     }
 
-    // ========================================================================
-    // build_io_callbacks tests
-    // ========================================================================
+    #[test]
+    fn test_shorthand_to_primitive_client_uses_first_slash_only() {
+        let client = shorthand_to_primitive_client("openrouter/meta-llama/llama-3.1").unwrap();
 
-    /// Helper: build a `SysOpIoCallbacks` where every field is unsupported
-    /// except the ones the caller overrides.
-    fn test_io_callbacks() -> SysOpIoCallbacks {
-        SysOpIoCallbacks::unsupported()
-    }
-
-    // -- env_read -------------------------------------------------------------
-
-    #[tokio::test]
-    async fn test_env_read_returns_string() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.env_get = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(BexExternalValue::String("my_value".into())))
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let result = (cbs.env_read)("MY_KEY".into()).await;
-        assert_eq!(result.unwrap(), Some("my_value".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_env_read_returns_none_for_null() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.env_get =
-            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Null)));
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let result = (cbs.env_read)("MISSING".into()).await;
-        assert_eq!(result.unwrap(), None);
-    }
-
-    #[tokio::test]
-    async fn test_env_read_rejects_wrong_type() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.env_get =
-            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Int(42))));
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let err = (cbs.env_read)("KEY".into()).await.unwrap_err();
-        let msg = format!("{err:?}");
-        assert!(msg.contains("unexpected type"), "got: {msg}");
-    }
-
-    #[tokio::test]
-    async fn test_env_read_propagates_upstream_error() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.env_get = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Err(sys_types::OpError::new(
-                SysOp::BamlEnvGet,
-                sys_types::OpErrorKind::Unsupported,
-            )))
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        assert!((cbs.env_read)("KEY".into()).await.is_err());
-    }
-
-    // -- shell ----------------------------------------------------------------
-
-    #[tokio::test]
-    async fn test_shell_returns_string() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.sys_shell = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(BexExternalValue::String("hello\n".into())))
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let result = (cbs.shell)("echo hello".into()).await;
-        assert_eq!(result.unwrap(), "hello\n");
-    }
-
-    #[tokio::test]
-    async fn test_shell_rejects_wrong_type() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.sys_shell =
-            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Null)));
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let err = (cbs.shell)("cmd".into()).await.unwrap_err();
-        let msg = format!("{err:?}");
-        assert!(msg.contains("unexpected type"), "got: {msg}");
-    }
-
-    #[tokio::test]
-    async fn test_shell_propagates_upstream_error() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.sys_shell = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Err(sys_types::OpError::new(
-                SysOp::BamlSysShell,
-                sys_types::OpErrorKind::Unsupported,
-            )))
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        assert!((cbs.shell)("cmd".into()).await.is_err());
-    }
-
-    // -- fs_read --------------------------------------------------------------
-
-    #[tokio::test]
-    async fn test_fs_read_returns_bytes() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-
-        // fs.open returns a File instance that fs.File.read receives
-        io.fs_open = Arc::new(|_heap, _args, _ctx, _id| {
-            use io::AsBexExternalValue;
-            let file = io::owned::fs::File {
-                _handle: std::sync::Arc::new("file_handle".to_string()),
-            };
-            SysOpResult::Ready(Ok(file.into_bex_external_value()))
-        });
-        io.fs_file_read = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(BexExternalValue::String("file contents".into())))
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let result = (cbs.fs_read)("/tmp/test.txt".into()).await;
-        assert_eq!(result.unwrap(), b"file contents");
-    }
-
-    #[tokio::test]
-    async fn test_fs_read_rejects_wrong_type() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.fs_open = Arc::new(|_heap, _args, _ctx, _id| {
-            use io::AsBexExternalValue;
-            let file = io::owned::fs::File {
-                _handle: std::sync::Arc::new("handle".to_string()),
-            };
-            SysOpResult::Ready(Ok(file.into_bex_external_value()))
-        });
-        io.fs_file_read =
-            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Int(999))));
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let err = (cbs.fs_read)("path".into()).await.unwrap_err();
-        let msg = format!("{err:?}");
-        assert!(msg.contains("unexpected type"), "got: {msg}");
-    }
-
-    #[tokio::test]
-    async fn test_fs_read_propagates_open_error() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-        io.fs_open = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Err(sys_types::OpError::new(
-                SysOp::BamlFsOpen,
-                sys_types::OpErrorKind::Unsupported,
-            )))
-        });
-        // fs_file_read should never be called
-        io.fs_file_read = Arc::new(|_heap, _args, _ctx, _id| {
-            panic!("should not be called when open fails");
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        assert!((cbs.fs_read)("path".into()).await.is_err());
-    }
-
-    // -- http_send ------------------------------------------------------------
-
-    /// Build a fake `http.Response` as a `BexExternalValue::Instance`.
-    fn fake_http_response_value(status: i64) -> BexExternalValue {
-        use io::AsBexExternalValue;
-        io::owned::http::Response {
-            status_code: status,
-            headers: indexmap::indexmap! {
-                "content-type".to_string() => "application/json".to_string(),
-            },
-            url: "https://example.com".to_string(),
-            _body: std::sync::Arc::new(()),
-        }
-        .into_bex_external_value()
-    }
-
-    #[tokio::test]
-    async fn test_http_send_happy_path() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-
-        io.http_send = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(fake_http_response_value(200)))
-        });
-        io.http_response_text = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(BexExternalValue::String(r#"{"ok":true}"#.into())))
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let resp = (cbs.http_send)(sys_llm::baml_std::HttpRequest {
-            method: "GET".into(),
-            url: "https://example.com".into(),
-            headers: indexmap::IndexMap::new(),
-            body: String::new(),
-        })
-        .await
-        .unwrap();
-
-        assert_eq!(resp.status_code, 200);
-        assert_eq!(resp.body, r#"{"ok":true}"#);
+        assert_eq!(client.name, "openrouter/meta-llama/llama-3.1");
+        assert_eq!(client.provider, "openrouter");
         assert_eq!(
-            resp.headers.get("content-type").map(String::as_str),
-            Some("application/json")
+            client.options.model.as_deref(),
+            Some("meta-llama/llama-3.1")
         );
     }
 
-    #[tokio::test]
-    async fn test_http_send_rejects_wrong_body_type() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-
-        io.http_send = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Ok(fake_http_response_value(200)))
-        });
-        io.http_response_text =
-            Arc::new(|_heap, _args, _ctx, _id| SysOpResult::Ready(Ok(BexExternalValue::Int(42))));
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        let result = (cbs.http_send)(sys_llm::baml_std::HttpRequest {
-            method: "GET".into(),
-            url: "https://example.com".into(),
-            headers: indexmap::IndexMap::new(),
-            body: String::new(),
-        })
-        .await;
-
-        match result {
-            Err(e) => {
-                let msg = format!("{e:?}");
-                assert!(msg.contains("unexpected type"), "got: {msg}");
-            }
-            Ok(_) => panic!("expected error for wrong body type"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_http_send_propagates_send_error() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let mut io = test_io_callbacks();
-
-        io.http_send = Arc::new(|_heap, _args, _ctx, _id| {
-            SysOpResult::Ready(Err(sys_types::OpError::new(
-                SysOp::BamlHttpSend,
-                sys_types::OpErrorKind::Unsupported,
-            )))
-        });
-        io.http_response_text = Arc::new(|_heap, _args, _ctx, _id| {
-            panic!("should not be called when send fails");
-        });
-
-        let cbs = build_io_callbacks(&io, &heap, &ctx);
-        assert!(
-            (cbs.http_send)(sys_llm::baml_std::HttpRequest {
-                method: "GET".into(),
-                url: "https://example.com".into(),
-                headers: indexmap::IndexMap::new(),
-                body: String::new(),
-            })
-            .await
-            .is_err()
+    #[test]
+    fn test_shorthand_to_primitive_client_rejects_invalid_values() {
+        let err = shorthand_to_primitive_client("openai").unwrap_err();
+        assert_eq!(
+            err,
+            OpErrorKind::Other("Invalid short hand name: openai".to_string())
         );
     }
 }

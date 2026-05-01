@@ -24,8 +24,15 @@
 //! pure-Rust JWT signing (`rsa` + `sha2`). ADC and `gcloud` CLI are not
 //! available; credentials must be provided explicitly or via env vars.
 
+use std::sync::Arc;
+
+#[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
+use sys_types::{
+    BexExternalValue,
+    runtime_io::{RuntimeIo, RuntimeIoError},
+};
+
 use crate::{
-    BuildRequestCallbacks,
     baml_std::{HttpRequest, PrimitiveClient, ProviderOptions, VertexAiOptions},
     build_request::BuildRequestError,
 };
@@ -44,27 +51,31 @@ use crate::{
 pub(crate) async fn auth_vertex(
     request: &mut HttpRequest,
     client: &PrimitiveClient,
-    callbacks: &BuildRequestCallbacks,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<(), BuildRequestError> {
-    // If an API key is provided as a query param, skip token-based auth.
-    if client.options.query_params.contains_key("key") {
-        return Ok(());
-    }
-
     let vertex_opts = match &client.provider_options {
         Some(ProviderOptions::VertexAi(opts)) => Some(opts.clone()),
         _ => None,
     };
 
-    // Resolve credentials once.
-    let creds = resolve_credentials(vertex_opts.as_ref(), callbacks).await?;
+    // If an API key is provided as a query param, skip token-based auth
+    // but still resolve the project-id placeholder in the URL.
+    let api_key_auth = client.options.query_params.contains_key("key");
+    let needs_project_id = request
+        .url
+        .contains(crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER);
+
+    // With API-key auth and no project-id placeholder, no credentials needed.
+    if api_key_auth && !needs_project_id {
+        return Ok(());
+    }
+
+    // Resolve credentials once (needed for both project-id and token).
+    let creds = resolve_credentials(vertex_opts.as_ref(), io.clone()).await?;
 
     // Resolve project_id placeholder in the URL if needed.
-    if request
-        .url
-        .contains(crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER)
-    {
-        let project_id = project_id_from_credentials(&creds, callbacks)
+    if needs_project_id {
+        let project_id = project_id_from_credentials(&creds, &*io)
             .await
             .ok_or_else(|| {
                 BuildRequestError::Other(
@@ -80,7 +91,12 @@ pub(crate) async fn auth_vertex(
         );
     }
 
-    let token = token_from_credentials(&creds, callbacks).await?;
+    // API-key auth doesn't need a bearer token.
+    if api_key_auth {
+        return Ok(());
+    }
+
+    let token = token_from_credentials(&creds, io).await?;
 
     request
         .headers
@@ -146,7 +162,7 @@ enum ResolvedCredentials {
 /// 6. `gcloud` CLI
 async fn resolve_credentials(
     vertex_opts: Option<&VertexAiOptions>,
-    callbacks: &BuildRequestCallbacks,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<ResolvedCredentials, BuildRequestError> {
     // 1. credentials_content: always inline JSON.
     if let Some(json_str) = vertex_opts.and_then(|o| o.credentials_content.as_ref()) {
@@ -158,13 +174,15 @@ async fn resolve_credentials(
         if serde_json::from_str::<serde_json::Value>(creds).is_ok() {
             return Ok(ResolvedCredentials::ServiceAccountJson(creds.clone()));
         }
-        let json_str = read_credentials_file(creds, callbacks).await?;
+        let json_str = read_credentials_file(creds, &*io).await?;
         return Ok(ResolvedCredentials::ServiceAccountJson(json_str));
     }
 
     // 3. GOOGLE_APPLICATION_CREDENTIALS env var.
     // Inline JSON is handled here; file paths are deferred to ADC (step 5).
-    if let Ok(Some(val)) = (callbacks.env_read)("GOOGLE_APPLICATION_CREDENTIALS".to_string()).await
+    if let Ok(Some(val)) = io
+        .env_get("GOOGLE_APPLICATION_CREDENTIALS".to_string())
+        .await
     {
         let val = try_unwrap_quoted_json(val);
         if !val.is_empty() && serde_json::from_str::<serde_json::Value>(&val).is_ok() {
@@ -173,8 +191,9 @@ async fn resolve_credentials(
     }
 
     // 4. GOOGLE_APPLICATION_CREDENTIALS_CONTENT env var (BAML-specific).
-    if let Ok(Some(val)) =
-        (callbacks.env_read)("GOOGLE_APPLICATION_CREDENTIALS_CONTENT".to_string()).await
+    if let Ok(Some(val)) = io
+        .env_get("GOOGLE_APPLICATION_CREDENTIALS_CONTENT".to_string())
+        .await
     {
         let val = try_unwrap_quoted_json(val);
         if !val.is_empty() && serde_json::from_str::<serde_json::Value>(&val).is_ok() {
@@ -184,14 +203,18 @@ async fn resolve_credentials(
 
     // 5. ADC via google-cloud-auth (native only).
     #[cfg(not(target_arch = "wasm32"))]
-    if native::build_from_adc(callbacks).is_ok() {
+    if native::build_from_adc(io.clone()).is_ok() {
         return Ok(ResolvedCredentials::Adc);
     }
 
     // 6. gcloud CLI.
-    if (callbacks.shell)("gcloud auth print-access-token --quiet 2>/dev/null".to_string())
+    if io
+        .sys_shell(
+            "gcloud auth print-access-token --quiet 2>/dev/null".to_string(),
+            None,
+        )
         .await
-        .is_ok_and(|out| !out.trim().is_empty())
+        .is_ok_and(|out| !String::from_utf8_lossy(&out.stdout).trim().is_empty())
     {
         return Ok(ResolvedCredentials::GcloudCli);
     }
@@ -209,22 +232,23 @@ async fn resolve_credentials(
 
 async fn token_from_credentials(
     creds: &ResolvedCredentials,
-    callbacks: &BuildRequestCallbacks,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<String, BuildRequestError> {
     match creds {
         ResolvedCredentials::ServiceAccountJson(json_str) => {
-            token_from_service_account_json(json_str, callbacks).await
+            token_from_service_account_json(json_str, io).await
         }
-        ResolvedCredentials::Adc => token_from_adc(callbacks).await,
+        ResolvedCredentials::Adc => token_from_adc(io).await,
         ResolvedCredentials::GcloudCli => {
-            let output = (callbacks.shell)("gcloud auth print-access-token --quiet".to_string())
+            let output = io
+                .sys_shell("gcloud auth print-access-token --quiet".to_string(), None)
                 .await
                 .map_err(|e| {
                     BuildRequestError::AuthorizationFailed(format!(
                         "Google Cloud: gcloud auth print-access-token failed: {e}"
                     ))
                 })?;
-            let token = output.trim().to_string();
+            let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if token.is_empty() {
                 Err(BuildRequestError::AuthorizationFailed(
                     "Google Cloud: gcloud auth print-access-token returned empty".into(),
@@ -243,7 +267,7 @@ async fn token_from_credentials(
 /// Get `project_id` from the resolved credential source, with fallbacks.
 async fn project_id_from_credentials(
     creds: &ResolvedCredentials,
-    callbacks: &BuildRequestCallbacks,
+    io: &dyn RuntimeIo,
 ) -> Option<String> {
     // Try the credential source itself first.
     match creds {
@@ -253,10 +277,14 @@ async fn project_id_from_credentials(
             }
         }
         ResolvedCredentials::GcloudCli => {
-            if let Ok(output) =
-                (callbacks.shell)("gcloud config get-value project 2>/dev/null".to_string()).await
+            if let Ok(output) = io
+                .sys_shell(
+                    "gcloud config get-value project 2>/dev/null".to_string(),
+                    None,
+                )
+                .await
             {
-                let pid = output.trim().to_string();
+                let pid = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !pid.is_empty() {
                     return Some(pid);
                 }
@@ -265,8 +293,9 @@ async fn project_id_from_credentials(
         ResolvedCredentials::Adc => {
             // ADC was resolved by google-cloud-auth, which doesn't expose
             // project_id. Try reading the credentials file it used.
-            if let Ok(Some(val)) =
-                (callbacks.env_read)("GOOGLE_APPLICATION_CREDENTIALS".to_string()).await
+            if let Ok(Some(val)) = io
+                .env_get("GOOGLE_APPLICATION_CREDENTIALS".to_string())
+                .await
             {
                 if !val.is_empty() {
                     // Inline JSON?
@@ -274,9 +303,12 @@ async fn project_id_from_credentials(
                         return Some(pid);
                     }
                     // File path? Read and extract.
-                    if let Ok(bytes) = (callbacks.fs_read)(val).await {
-                        if let Ok(contents) = std::str::from_utf8(&bytes) {
-                            if let Some(pid) = extract_project_id_from_json(contents) {
+                    if let Ok(handle) = io
+                        .fs_open(val, BexExternalValue::String("r".to_string()))
+                        .await
+                    {
+                        if let Ok(contents) = io.fs_file_text(&handle).await {
+                            if let Some(pid) = extract_project_id_from_json(&contents) {
                                 return Some(pid);
                             }
                         }
@@ -289,19 +321,19 @@ async fn project_id_from_credentials(
     // Fallback chain for when the credential source didn't have project_id.
 
     // GOOGLE_CLOUD_PROJECT env var.
-    if let Ok(Some(val)) = (callbacks.env_read)("GOOGLE_CLOUD_PROJECT".to_string()).await {
+    if let Ok(Some(val)) = io.env_get("GOOGLE_CLOUD_PROJECT".to_string()).await {
         if !val.is_empty() && !val.starts_with('$') {
             return Some(val);
         }
     }
 
     // ADC config file -> quota_project_id.
-    if let Some(pid) = project_id_from_adc_config(callbacks).await {
+    if let Some(pid) = project_id_from_adc_config(io).await {
         return Some(pid);
     }
 
     // GCE metadata server.
-    let req = HttpRequest {
+    let req = sys_types::generated::owned::http::Request {
         method: "GET".to_string(),
         url: "http://metadata.google.internal/computeMetadata/v1/project/project-id".to_string(),
         headers: indexmap::indexmap! {
@@ -309,21 +341,27 @@ async fn project_id_from_credentials(
         },
         body: String::new(),
     };
-    if let Ok(resp) = (callbacks.http_send)(req).await {
+    if let Ok(resp) = io.http_send(req).await {
         if resp.status_code == 200 {
-            let pid = resp.body.trim().to_string();
-            if !pid.is_empty() {
-                return Some(pid);
+            if let Ok(body) = io.http_response_text(&resp).await {
+                let pid = body.trim().to_string();
+                if !pid.is_empty() {
+                    return Some(pid);
+                }
             }
         }
     }
 
     // gcloud CLI (if we haven't already tried it).
     if !matches!(creds, ResolvedCredentials::GcloudCli) {
-        if let Ok(output) =
-            (callbacks.shell)("gcloud config get-value project 2>/dev/null".to_string()).await
+        if let Ok(output) = io
+            .sys_shell(
+                "gcloud config get-value project 2>/dev/null".to_string(),
+                None,
+            )
+            .await
         {
-            let pid = output.trim().to_string();
+            let pid = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !pid.is_empty() {
                 return Some(pid);
             }
@@ -334,19 +372,22 @@ async fn project_id_from_credentials(
 }
 
 /// Read the ADC config file and extract `quota_project_id` (or `project_id`).
-async fn project_id_from_adc_config(callbacks: &BuildRequestCallbacks) -> Option<String> {
-    let config_dir = match (callbacks.env_read)("CLOUDSDK_CONFIG".to_string()).await {
+async fn project_id_from_adc_config(io: &dyn RuntimeIo) -> Option<String> {
+    let config_dir = match io.env_get("CLOUDSDK_CONFIG".to_string()).await {
         Ok(Some(dir)) if !dir.is_empty() => dir,
         _ => {
-            let home = (callbacks.env_read)("HOME".to_string()).await.ok()??;
+            let home = io.env_get("HOME".to_string()).await.ok()??;
             format!("{home}/.config/gcloud")
         }
     };
     let adc_path = format!("{config_dir}/application_default_credentials.json");
 
-    let bytes = (callbacks.fs_read)(adc_path).await.ok()?;
-    let contents = std::str::from_utf8(&bytes).ok()?;
-    let parsed: serde_json::Value = serde_json::from_str(contents).ok()?;
+    let handle = io
+        .fs_open(adc_path, BexExternalValue::String("r".to_string()))
+        .await
+        .ok()?;
+    let contents = io.fs_file_text(&handle).await.ok()?;
+    let parsed: serde_json::Value = serde_json::from_str(&contents).ok()?;
 
     parsed
         .get("quota_project_id")
@@ -355,19 +396,22 @@ async fn project_id_from_adc_config(callbacks: &BuildRequestCallbacks) -> Option
         .map(String::from)
 }
 
-/// Read a credentials file via the `FsReadFn` callback.
+/// Read a credentials file via `RuntimeIo`.
 async fn read_credentials_file(
     path: &str,
-    callbacks: &BuildRequestCallbacks,
+    io: &dyn RuntimeIo,
 ) -> Result<String, BuildRequestError> {
-    let bytes = (callbacks.fs_read)(path.to_string()).await.map_err(|e| {
+    let handle = io
+        .fs_open(path.to_string(), BexExternalValue::String("r".to_string()))
+        .await
+        .map_err(|e| {
+            BuildRequestError::AuthorizationFailed(format!(
+                "Google Cloud: failed to open credentials file '{path}': {e}"
+            ))
+        })?;
+    io.fs_file_text(&handle).await.map_err(|e| {
         BuildRequestError::AuthorizationFailed(format!(
             "Google Cloud: failed to read credentials file '{path}': {e}"
-        ))
-    })?;
-    String::from_utf8(bytes).map_err(|e| {
-        BuildRequestError::AuthorizationFailed(format!(
-            "Google Cloud: credentials file '{path}' is not valid UTF-8: {e}"
         ))
     })
 }
@@ -378,14 +422,16 @@ async fn read_credentials_file(
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
+    use std::sync::Arc;
+
     use google_cloud_auth::{credentials::Builder, io};
 
-    use super::{BuildRequestCallbacks, BuildRequestError, HttpRequest};
+    use super::{BexExternalValue, BuildRequestError, RuntimeIo, RuntimeIoError};
 
-    // -- IO provider adapters (callbacks -> google-cloud-auth traits) --
+    // -- IO provider adapters (RuntimeIo -> google-cloud-auth traits) --
 
     pub(super) struct BexEnvProvider {
-        pub env_read_fn: crate::EnvReadFn,
+        pub io: Arc<dyn RuntimeIo>,
     }
 
     impl std::fmt::Debug for BexEnvProvider {
@@ -394,16 +440,14 @@ mod native {
         }
     }
 
-    impl std::panic::UnwindSafe for BexEnvProvider {}
-    impl std::panic::RefUnwindSafe for BexEnvProvider {}
-
     impl io::EnvProvider for BexEnvProvider {
         fn var(&self, name: &str) -> Option<String> {
-            let fut = (self.env_read_fn)(name.to_string());
+            let io = self.io.clone();
+            let key = name.to_string();
             let handle = tokio::runtime::Handle::current();
-            let result = std::thread::spawn(move || handle.block_on(fut))
+            let result = std::thread::spawn(move || handle.block_on(io.env_get(key)))
                 .join()
-                .unwrap_or(Err(crate::LlmOpError::Other("thread panicked".into())));
+                .unwrap_or(Err(RuntimeIoError::Other("thread panicked".into())));
             match result {
                 Ok(Some(v)) => Some(v),
                 Ok(None) | Err(_) => None,
@@ -412,7 +456,7 @@ mod native {
     }
 
     pub(super) struct BexFsProvider {
-        pub fs_read_fn: crate::FsReadFn,
+        pub io: Arc<dyn RuntimeIo>,
     }
 
     impl std::fmt::Debug for BexFsProvider {
@@ -421,29 +465,31 @@ mod native {
         }
     }
 
-    impl std::panic::UnwindSafe for BexFsProvider {}
-    impl std::panic::RefUnwindSafe for BexFsProvider {}
-
     impl io::FsProvider for BexFsProvider {
         fn read_to_string(&self, path: &str) -> std::io::Result<String> {
-            let fut = (self.fs_read_fn)(path.to_string());
+            let io = self.io.clone();
+            let path = path.to_string();
             let handle = tokio::runtime::Handle::current();
-            let result = std::thread::spawn(move || handle.block_on(fut))
-                .join()
-                .unwrap_or(Err(crate::LlmOpError::Other("thread panicked".into())));
-            match result {
-                Ok(bytes) => String::from_utf8(bytes)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
-                Err(_) => Err(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "file not found",
-                )),
-            }
+            std::thread::spawn(move || {
+                handle.block_on(async {
+                    let file_handle = io
+                        .fs_open(path, BexExternalValue::String("r".to_string()))
+                        .await
+                        .map_err(|_| {
+                            std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
+                        })?;
+                    io.fs_file_text(&file_handle).await.map_err(|_| {
+                        std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")
+                    })
+                })
+            })
+            .join()
+            .unwrap_or(Err(std::io::Error::other("thread panicked")))
         }
     }
 
     pub(super) struct BexHttpClientProvider {
-        pub send_fn: crate::HttpSendFn,
+        pub io: Arc<dyn RuntimeIo>,
     }
 
     impl std::fmt::Debug for BexHttpClientProvider {
@@ -451,9 +497,6 @@ mod native {
             f.debug_struct("BexHttpClientProvider").finish()
         }
     }
-
-    impl std::panic::UnwindSafe for BexHttpClientProvider {}
-    impl std::panic::RefUnwindSafe for BexHttpClientProvider {}
 
     impl io::HttpClientProvider for BexHttpClientProvider {
         async fn execute(
@@ -498,7 +541,7 @@ mod native {
                 headers.insert(name.clone(), value.clone());
             }
 
-            let baml_req = HttpRequest {
+            let io_req = sys_types::generated::owned::http::Request {
                 method: method.to_string(),
                 url,
                 headers,
@@ -506,12 +549,21 @@ mod native {
                 body: String::from_utf8_lossy(&request.body).into_owned(),
             };
 
-            let resp = (self.send_fn)(baml_req)
+            let resp = self
+                .io
+                .http_send(io_req)
                 .await
                 .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
 
-            let status = io::StatusCode::from_u16(resp.status_code)
+            let resp_body = self
+                .io
+                .http_response_text(&resp)
+                .await
                 .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+
+            let status =
+                io::StatusCode::from_u16(u16::try_from(resp.status_code).unwrap_or(500))
+                    .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
 
             let mut response_headers = io::HeaderMap::new();
             for (name, value) in &resp.headers {
@@ -526,7 +578,7 @@ mod native {
             Ok(io::HttpResponse {
                 status,
                 headers: response_headers,
-                body: resp.body.into_bytes(),
+                body: resp_body.into_bytes(),
             })
         }
     }
@@ -535,7 +587,7 @@ mod native {
 
     pub(super) fn build_from_service_account_json(
         json_str: &str,
-        callbacks: &BuildRequestCallbacks,
+        io: Arc<dyn RuntimeIo>,
     ) -> Result<google_cloud_auth::credentials::AccessTokenCredentials, BuildRequestError> {
         let json_value: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -549,9 +601,7 @@ mod native {
                     "https://www.googleapis.com/auth/cloud-platform",
                 ]),
             )
-            .with_http_client_provider(BexHttpClientProvider {
-                send_fn: callbacks.http_send.clone(),
-            });
+            .with_http_client_provider(BexHttpClientProvider { io });
 
         builder.build_access_token_credentials().map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -561,19 +611,13 @@ mod native {
     }
 
     pub(super) fn build_from_adc(
-        callbacks: &BuildRequestCallbacks,
+        io: Arc<dyn RuntimeIo>,
     ) -> Result<google_cloud_auth::credentials::AccessTokenCredentials, BuildRequestError> {
         let builder = Builder::default()
             .with_scopes(["https://www.googleapis.com/auth/cloud-platform"])
-            .with_http_client_provider(BexHttpClientProvider {
-                send_fn: callbacks.http_send.clone(),
-            })
-            .with_env_provider(BexEnvProvider {
-                env_read_fn: callbacks.env_read.clone(),
-            })
-            .with_fs_provider(BexFsProvider {
-                fs_read_fn: callbacks.fs_read.clone(),
-            });
+            .with_http_client_provider(BexHttpClientProvider { io: io.clone() })
+            .with_env_provider(BexEnvProvider { io: io.clone() })
+            .with_fs_provider(BexFsProvider { io });
 
         builder.build_access_token_credentials().map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -586,9 +630,9 @@ mod native {
 #[cfg(not(target_arch = "wasm32"))]
 async fn token_from_service_account_json(
     json_str: &str,
-    callbacks: &BuildRequestCallbacks,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<String, BuildRequestError> {
-    let creds = native::build_from_service_account_json(json_str, callbacks)?;
+    let creds = native::build_from_service_account_json(json_str, io)?;
     let token = creds.access_token().await.map_err(|e| {
         BuildRequestError::AuthorizationFailed(format!(
             "Google Cloud: failed to obtain access token: {e}"
@@ -598,8 +642,8 @@ async fn token_from_service_account_json(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn token_from_adc(callbacks: &BuildRequestCallbacks) -> Result<String, BuildRequestError> {
-    let creds = native::build_from_adc(callbacks)?;
+async fn token_from_adc(io: Arc<dyn RuntimeIo>) -> Result<String, BuildRequestError> {
+    let creds = native::build_from_adc(io)?;
     let token = creds.access_token().await.map_err(|e| {
         BuildRequestError::AuthorizationFailed(format!(
             "Google Cloud ADC: failed to obtain access token: {e}"
@@ -620,7 +664,7 @@ mod wasm {
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use rsa::{RsaPrivateKey, pkcs8::DecodePrivateKey, signature::SignatureEncoding};
 
-    use super::{BuildRequestCallbacks, BuildRequestError, HttpRequest};
+    use super::{BuildRequestError, RuntimeIo};
 
     #[derive(serde::Deserialize)]
     pub(super) struct ServiceAccount {
@@ -632,10 +676,10 @@ mod wasm {
     }
 
     /// Parse service account JSON, sign a JWT with `rsa`/`sha2`, and exchange
-    /// it for an access token via `HttpSendFn`.
+    /// it for an access token via `RuntimeIo`.
     pub(super) async fn service_account_token(
         json_str: &str,
-        callbacks: &BuildRequestCallbacks,
+        io: &dyn RuntimeIo,
     ) -> Result<String, BuildRequestError> {
         let sa: ServiceAccount = serde_json::from_str(json_str).map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
@@ -644,7 +688,7 @@ mod wasm {
         })?;
 
         let jwt = sign_jwt(&sa)?;
-        exchange_jwt_for_token(&sa.token_uri, &jwt, callbacks).await
+        exchange_jwt_for_token(&sa.token_uri, &jwt, io).await
     }
 
     /// Sign a JWT using RSASSA-PKCS1-v1_5 with SHA-256 (pure Rust).
@@ -692,7 +736,7 @@ mod wasm {
     pub(super) async fn exchange_jwt_for_token(
         token_uri: &str,
         jwt: &str,
-        callbacks: &BuildRequestCallbacks,
+        io: &dyn RuntimeIo,
     ) -> Result<String, BuildRequestError> {
         let body = format!(
             "grant_type={}&assertion={}",
@@ -709,27 +753,33 @@ mod wasm {
             "application/x-www-form-urlencoded".to_string(),
         );
 
-        let req = HttpRequest {
+        let req = sys_types::generated::owned::http::Request {
             method: "POST".to_string(),
             url: token_uri.to_string(),
             headers,
             body,
         };
 
-        let resp = (callbacks.http_send)(req).await.map_err(|e| {
+        let resp = io.http_send(req).await.map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
                 "Google Cloud: token exchange HTTP request failed: {e}"
+            ))
+        })?;
+
+        let resp_body = io.http_response_text(&resp).await.map_err(|e| {
+            BuildRequestError::AuthorizationFailed(format!(
+                "Google Cloud: failed to read token exchange response body: {e}"
             ))
         })?;
 
         if resp.status_code < 200 || resp.status_code >= 300 {
             return Err(BuildRequestError::AuthorizationFailed(format!(
                 "Google Cloud: token exchange returned status {}: {}",
-                resp.status_code, resp.body,
+                resp.status_code, resp_body,
             )));
         }
 
-        let token_resp: serde_json::Value = serde_json::from_str(&resp.body).map_err(|e| {
+        let token_resp: serde_json::Value = serde_json::from_str(&resp_body).map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
                 "Google Cloud: failed to parse token exchange response: {e}"
             ))
@@ -748,11 +798,128 @@ mod wasm {
 
     #[cfg(test)]
     mod tests {
-        use std::sync::Arc;
+        use std::{future::Future, pin::Pin, sync::Arc};
 
+        use sys_types::runtime_io::{RuntimeIo, RuntimeIoError};
         use wasm_bindgen_test::wasm_bindgen_test;
 
         use super::*;
+
+        /// A mock RuntimeIo that returns a configurable token response body.
+        struct MockTokenIo {
+            status_code: i64,
+            body: String,
+        }
+
+        impl MockTokenIo {
+            fn success() -> Self {
+                Self {
+                    status_code: 200,
+                    body: serde_json::json!({
+                        "access_token": "ya29.wasm-test",
+                        "token_type": "Bearer",
+                        "expires_in": 3600,
+                    })
+                    .to_string(),
+                }
+            }
+        }
+
+        impl RuntimeIo for MockTokenIo {
+            fn http_send(
+                &self,
+                _request: sys_types::generated::owned::http::Request,
+            ) -> Pin<
+                Box<
+                    dyn Future<
+                            Output = Result<
+                                sys_types::runtime_io::HttpResponseHandle,
+                                RuntimeIoError,
+                            >,
+                        > + Send
+                        + '_,
+                >,
+            > {
+                let status_code = self.status_code;
+                Box::pin(async move {
+                    Ok(sys_types::runtime_io::HttpResponseHandle {
+                        raw: bex_external_types::BexExternalValue::Null,
+                        status_code,
+                        headers: indexmap::IndexMap::new(),
+                        url: String::new(),
+                    })
+                })
+            }
+
+            fn http_response_text(
+                &self,
+                _: &sys_types::runtime_io::HttpResponseHandle,
+            ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>>
+            {
+                let body = self.body.clone();
+                Box::pin(async move { Ok(body) })
+            }
+
+            fn env_get(
+                &self,
+                _key: String,
+            ) -> Pin<Box<dyn Future<Output = Result<Option<String>, RuntimeIoError>> + Send + '_>>
+            {
+                Box::pin(async { Ok(None) })
+            }
+        }
+
+        /// A mock RuntimeIo that captures HTTP requests and returns a configurable response.
+        struct CapturingIo {
+            captured: Arc<std::sync::Mutex<Option<sys_types::generated::owned::http::Request>>>,
+            status_code: i64,
+            body: String,
+        }
+
+        impl RuntimeIo for CapturingIo {
+            fn http_send(
+                &self,
+                request: sys_types::generated::owned::http::Request,
+            ) -> Pin<
+                Box<
+                    dyn Future<
+                            Output = Result<
+                                sys_types::runtime_io::HttpResponseHandle,
+                                RuntimeIoError,
+                            >,
+                        > + Send
+                        + '_,
+                >,
+            > {
+                *self.captured.lock().unwrap() = Some(request);
+                let status_code = self.status_code;
+                Box::pin(async move {
+                    Ok(sys_types::runtime_io::HttpResponseHandle {
+                        raw: bex_external_types::BexExternalValue::Null,
+                        status_code,
+                        headers: indexmap::IndexMap::new(),
+                        url: String::new(),
+                    })
+                })
+            }
+
+            fn http_response_text(
+                &self,
+                _: &sys_types::runtime_io::HttpResponseHandle,
+            ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>>
+            {
+                let body = self.body.clone();
+                Box::pin(async move { Ok(body) })
+            }
+
+            fn env_get(
+                &self,
+                _key: String,
+            ) -> Pin<Box<dyn Future<Output = Result<Option<String>, RuntimeIoError>> + Send + '_>>
+            {
+                Box::pin(async { Ok(None) })
+            }
+        }
 
         fn gen_test_private_key_pem() -> String {
             use rsa::pkcs8::EncodePrivateKey;
@@ -775,36 +942,6 @@ mod wasm {
                 "token_uri": "https://oauth2.googleapis.com/token",
             })
             .to_string()
-        }
-
-        fn mock_callbacks(http_send: crate::HttpSendFn) -> BuildRequestCallbacks {
-            BuildRequestCallbacks {
-                http_send,
-                env_read: Arc::new(|_key| Box::pin(async { Ok(None) })),
-                fs_read: Arc::new(|_path| {
-                    Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
-                }),
-                shell: Arc::new(|_cmd| {
-                    Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
-                }),
-            }
-        }
-
-        fn mock_token_http() -> crate::HttpSendFn {
-            Arc::new(|_req| {
-                Box::pin(async {
-                    Ok(crate::HttpSendResponse {
-                        status_code: 200,
-                        headers: indexmap::IndexMap::new(),
-                        body: serde_json::json!({
-                            "access_token": "ya29.wasm-test",
-                            "token_type": "Bearer",
-                            "expires_in": 3600,
-                        })
-                        .to_string(),
-                    })
-                })
-            })
         }
 
         #[wasm_bindgen_test]
@@ -880,36 +1017,32 @@ mod wasm {
 
         #[wasm_bindgen_test]
         async fn exchange_jwt_rejects_non_200() {
-            let cb = mock_callbacks(Arc::new(|_req| {
-                Box::pin(async {
-                    Ok(crate::HttpSendResponse {
-                        status_code: 401,
-                        headers: indexmap::IndexMap::new(),
-                        body: r#"{"error": "invalid_grant"}"#.to_string(),
-                    })
-                })
-            }));
-            let result =
-                exchange_jwt_for_token("https://oauth2.googleapis.com/token", "fake.jwt.here", &cb)
-                    .await;
+            let mock_io = MockTokenIo {
+                status_code: 401,
+                body: r#"{"error": "invalid_grant"}"#.to_string(),
+            };
+            let result = exchange_jwt_for_token(
+                "https://oauth2.googleapis.com/token",
+                "fake.jwt.here",
+                &mock_io,
+            )
+            .await;
             let err = result.unwrap_err().to_string();
             assert!(err.contains("401"), "should mention status: {err}");
         }
 
         #[wasm_bindgen_test]
         async fn exchange_jwt_rejects_missing_access_token() {
-            let cb = mock_callbacks(Arc::new(|_req| {
-                Box::pin(async {
-                    Ok(crate::HttpSendResponse {
-                        status_code: 200,
-                        headers: indexmap::IndexMap::new(),
-                        body: r#"{"token_type": "Bearer"}"#.to_string(),
-                    })
-                })
-            }));
-            let result =
-                exchange_jwt_for_token("https://oauth2.googleapis.com/token", "fake.jwt.here", &cb)
-                    .await;
+            let mock_io = MockTokenIo {
+                status_code: 200,
+                body: r#"{"token_type": "Bearer"}"#.to_string(),
+            };
+            let result = exchange_jwt_for_token(
+                "https://oauth2.googleapis.com/token",
+                "fake.jwt.here",
+                &mock_io,
+            )
+            .await;
             let err = result.unwrap_err().to_string();
             assert!(
                 err.contains("access_token"),
@@ -919,30 +1052,25 @@ mod wasm {
 
         #[wasm_bindgen_test]
         async fn exchange_jwt_sends_correct_request() {
-            use std::sync::Mutex;
-
-            let captured = Arc::new(Mutex::new(None));
-            let captured_clone = captured.clone();
-            let cb = mock_callbacks(Arc::new(move |req| {
-                *captured_clone.lock().unwrap() = Some(req.clone());
-                Box::pin(async {
-                    Ok(crate::HttpSendResponse {
-                        status_code: 200,
-                        headers: indexmap::IndexMap::new(),
-                        body: serde_json::json!({
-                            "access_token": "ya29.test",
-                            "token_type": "Bearer",
-                            "expires_in": 3600,
-                        })
-                        .to_string(),
-                    })
+            let captured = Arc::new(std::sync::Mutex::new(None));
+            let mock_io = CapturingIo {
+                captured: captured.clone(),
+                status_code: 200,
+                body: serde_json::json!({
+                    "access_token": "ya29.test",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
                 })
-            }));
+                .to_string(),
+            };
 
-            let token =
-                exchange_jwt_for_token("https://oauth2.googleapis.com/token", "my.test.jwt", &cb)
-                    .await
-                    .unwrap();
+            let token = exchange_jwt_for_token(
+                "https://oauth2.googleapis.com/token",
+                "my.test.jwt",
+                &mock_io,
+            )
+            .await
+            .unwrap();
             assert_eq!(token, "ya29.test");
 
             let req = captured.lock().unwrap().take().unwrap();
@@ -958,27 +1086,21 @@ mod wasm {
 
         #[wasm_bindgen_test]
         async fn service_account_token_full_flow() {
-            use std::sync::Mutex;
-
-            let captured = Arc::new(Mutex::new(None));
-            let captured_clone = captured.clone();
-            let cb = mock_callbacks(Arc::new(move |req| {
-                *captured_clone.lock().unwrap() = Some(req.clone());
-                Box::pin(async {
-                    Ok(crate::HttpSendResponse {
-                        status_code: 200,
-                        headers: indexmap::IndexMap::new(),
-                        body: serde_json::json!({
-                            "access_token": "ya29.wasm-full-flow",
-                            "token_type": "Bearer",
-                            "expires_in": 3600,
-                        })
-                        .to_string(),
-                    })
+            let captured = Arc::new(std::sync::Mutex::new(None));
+            let mock_io = CapturingIo {
+                captured: captured.clone(),
+                status_code: 200,
+                body: serde_json::json!({
+                    "access_token": "ya29.wasm-full-flow",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
                 })
-            }));
+                .to_string(),
+            };
 
-            let token = service_account_token(&test_sa_json(), &cb).await.unwrap();
+            let token = service_account_token(&test_sa_json(), &mock_io)
+                .await
+                .unwrap();
             assert_eq!(token, "ya29.wasm-full-flow");
 
             // Verify the HTTP request contained a real signed JWT
@@ -1002,8 +1124,8 @@ mod wasm {
 
         #[wasm_bindgen_test]
         async fn service_account_token_rejects_bad_json() {
-            let cb = mock_callbacks(mock_token_http());
-            let result = service_account_token("not json", &cb).await;
+            let mock_io = MockTokenIo::success();
+            let result = service_account_token("not json", &mock_io).await;
             assert!(result.is_err());
         }
     }
@@ -1012,14 +1134,14 @@ mod wasm {
 #[cfg(target_arch = "wasm32")]
 async fn token_from_service_account_json(
     json_str: &str,
-    callbacks: &BuildRequestCallbacks,
+    io: Arc<dyn RuntimeIo>,
 ) -> Result<String, BuildRequestError> {
-    wasm::service_account_token(json_str, callbacks).await
+    wasm::service_account_token(json_str, &*io).await
 }
 
 #[cfg(target_arch = "wasm32")]
 #[allow(clippy::unused_async)] // must be async to match native signature
-async fn token_from_adc(_callbacks: &BuildRequestCallbacks) -> Result<String, BuildRequestError> {
+async fn token_from_adc(_io: Arc<dyn RuntimeIo>) -> Result<String, BuildRequestError> {
     Err(BuildRequestError::AuthorizationFailed(
         "Google Cloud ADC is not supported on WASM. \
          Provide explicit credentials via 'credentials' or 'credentials_content'."
@@ -1033,10 +1155,315 @@ async fn token_from_adc(_callbacks: &BuildRequestCallbacks) -> Result<String, Bu
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{future::Future, pin::Pin, sync::Arc};
+
+    use indexmap::IndexMap;
 
     use super::*;
     use crate::baml_std::PrimitiveClientOptions;
+
+    /// A stub `RuntimeIo` that returns sensible defaults for Vertex-relevant
+    /// operations and `Unsupported` for everything else.
+    struct StubIo {
+        token_body: String,
+    }
+
+    impl StubIo {
+        fn with_token(token: &str) -> Self {
+            Self {
+                token_body: serde_json::json!({
+                    "access_token": token,
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                })
+                .to_string(),
+            }
+        }
+    }
+
+    impl RuntimeIo for StubIo {
+        fn http_send(
+            &self,
+            _request: sys_types::generated::owned::http::Request,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<sys_types::runtime_io::HttpResponseHandle, RuntimeIoError>,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async {
+                Ok(sys_types::runtime_io::HttpResponseHandle {
+                    raw: bex_external_types::BexExternalValue::Null,
+                    status_code: 200,
+                    headers: IndexMap::new(),
+                    url: String::new(),
+                })
+            })
+        }
+
+        fn http_response_text(
+            &self,
+            _: &sys_types::runtime_io::HttpResponseHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            let body = self.token_body.clone();
+            Box::pin(async move { Ok(body) })
+        }
+
+        fn env_get(
+            &self,
+            _key: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<String>, RuntimeIoError>> + Send + '_>>
+        {
+            Box::pin(async { Ok(None) })
+        }
+
+        fn fs_open(
+            &self,
+            _path: String,
+            _mode: BexExternalValue,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
+        }
+
+        fn fs_file_text(
+            &self,
+            _: &sys_types::runtime_io::FsFileHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
+        }
+
+        fn sys_shell(
+            &self,
+            _: String,
+            _options: Option<sys_types::generated::owned::sys::ProcessOptions>,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            sys_types::generated::owned::sys::ShellOutput,
+                            RuntimeIoError,
+                        >,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeIoError::Other("unsupported".into())) })
+        }
+    }
+
+    /// A mock `RuntimeIo` that serves credentials from a file and returns a
+    /// configurable token response.
+    struct FsIo {
+        expected_path: String,
+        file_contents: String,
+        token_body: String,
+    }
+
+    impl RuntimeIo for FsIo {
+        fn http_send(
+            &self,
+            _request: sys_types::generated::owned::http::Request,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<sys_types::runtime_io::HttpResponseHandle, RuntimeIoError>,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async {
+                Ok(sys_types::runtime_io::HttpResponseHandle {
+                    raw: bex_external_types::BexExternalValue::Null,
+                    status_code: 200,
+                    headers: IndexMap::new(),
+                    url: String::new(),
+                })
+            })
+        }
+
+        fn http_response_text(
+            &self,
+            _: &sys_types::runtime_io::HttpResponseHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            let body = self.token_body.clone();
+            Box::pin(async move { Ok(body) })
+        }
+
+        fn env_get(
+            &self,
+            _key: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<String>, RuntimeIoError>> + Send + '_>>
+        {
+            Box::pin(async { Ok(None) })
+        }
+
+        fn fs_open(
+            &self,
+            path: String,
+            _mode: BexExternalValue,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            let expected = self.expected_path.clone();
+            Box::pin(async move {
+                if path == expected {
+                    Ok(sys_types::runtime_io::FsFileHandle {
+                        raw: bex_external_types::BexExternalValue::Null,
+                    })
+                } else {
+                    Err(RuntimeIoError::Other("not found".into()))
+                }
+            })
+        }
+
+        fn fs_file_text(
+            &self,
+            _: &sys_types::runtime_io::FsFileHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            let contents = self.file_contents.clone();
+            Box::pin(async move { Ok(contents) })
+        }
+
+        fn sys_shell(
+            &self,
+            _: String,
+            _options: Option<sys_types::generated::owned::sys::ProcessOptions>,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            sys_types::generated::owned::sys::ShellOutput,
+                            RuntimeIoError,
+                        >,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeIoError::Other("unsupported".into())) })
+        }
+    }
+
+    /// A mock `RuntimeIo` for testing ADC with env vars pointing to credential files.
+    struct AdcIo {
+        http_call_count: Arc<std::sync::atomic::AtomicUsize>,
+        env_vars: std::collections::HashMap<String, String>,
+        files: std::collections::HashMap<String, String>,
+        token_body: String,
+    }
+
+    impl RuntimeIo for AdcIo {
+        fn http_send(
+            &self,
+            _request: sys_types::generated::owned::http::Request,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<sys_types::runtime_io::HttpResponseHandle, RuntimeIoError>,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            self.http_call_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Box::pin(async {
+                Ok(sys_types::runtime_io::HttpResponseHandle {
+                    raw: bex_external_types::BexExternalValue::Null,
+                    status_code: 200,
+                    headers: IndexMap::new(),
+                    url: String::new(),
+                })
+            })
+        }
+
+        fn http_response_text(
+            &self,
+            _: &sys_types::runtime_io::HttpResponseHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            let body = self.token_body.clone();
+            Box::pin(async move { Ok(body) })
+        }
+
+        fn env_get(
+            &self,
+            key: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<String>, RuntimeIoError>> + Send + '_>>
+        {
+            let val = self.env_vars.get(&key).cloned();
+            Box::pin(async move { Ok(val) })
+        }
+
+        fn fs_open(
+            &self,
+            path: String,
+            _mode: BexExternalValue,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            let exists = self.files.contains_key(&path);
+            Box::pin(async move {
+                if exists {
+                    Ok(sys_types::runtime_io::FsFileHandle {
+                        raw: bex_external_types::BexExternalValue::String(path),
+                    })
+                } else {
+                    Err(RuntimeIoError::Other("not found".into()))
+                }
+            })
+        }
+
+        fn fs_file_text(
+            &self,
+            handle: &sys_types::runtime_io::FsFileHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            // Extract the path from the handle's raw value.
+            let path = match &handle.raw {
+                bex_external_types::BexExternalValue::String(s) => s.clone(),
+                _ => return Box::pin(async { Err(RuntimeIoError::Other("bad handle".into())) }),
+            };
+            let contents = self.files.get(&path).cloned();
+            Box::pin(
+                async move { contents.ok_or_else(|| RuntimeIoError::Other("not found".into())) },
+            )
+        }
+
+        fn sys_shell(
+            &self,
+            _: String,
+            _options: Option<sys_types::generated::owned::sys::ProcessOptions>,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            sys_types::generated::owned::sys::ShellOutput,
+                            RuntimeIoError,
+                        >,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeIoError::Other("unsupported".into())) })
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
 
     fn make_client(provider: &str) -> PrimitiveClient {
         PrimitiveClient::new(
@@ -1057,32 +1484,6 @@ mod tests {
             headers: indexmap::IndexMap::new(),
             body: r#"{"contents":[]}"#.to_string(),
         }
-    }
-
-    #[tokio::test]
-    async fn fails_without_credentials() {
-        let callbacks = BuildRequestCallbacks {
-            http_send: Arc::new(|_req| {
-                Box::pin(async {
-                    Ok(crate::HttpSendResponse {
-                        status_code: 404,
-                        headers: indexmap::IndexMap::new(),
-                        body: String::new(),
-                    })
-                })
-            }),
-            env_read: Arc::new(|_key| Box::pin(async { Ok(None) })),
-            fs_read: Arc::new(|_path| {
-                Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
-            }),
-            shell: Arc::new(|_cmd| {
-                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
-            }),
-        };
-        let client = make_client("vertex-ai");
-        let mut req = fake_request();
-        let result = auth_vertex(&mut req, &client, &callbacks).await;
-        assert!(result.is_err());
     }
 
     fn gen_test_private_key_pem() -> String {
@@ -1122,36 +1523,6 @@ mod tests {
         .unwrap()
     }
 
-    fn mock_token_http() -> crate::HttpSendFn {
-        Arc::new(|_req| {
-            Box::pin(async {
-                Ok(crate::HttpSendResponse {
-                    status_code: 200,
-                    headers: indexmap::IndexMap::new(),
-                    body: serde_json::json!({
-                        "access_token": "ya29.from-service-account",
-                        "token_type": "Bearer",
-                        "expires_in": 3600,
-                    })
-                    .to_string(),
-                })
-            })
-        })
-    }
-
-    fn stub_callbacks_with_http(http_send: crate::HttpSendFn) -> BuildRequestCallbacks {
-        BuildRequestCallbacks {
-            http_send,
-            env_read: Arc::new(|_key| Box::pin(async { Ok(None) })),
-            fs_read: Arc::new(|_path| {
-                Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
-            }),
-            shell: Arc::new(|_cmd| {
-                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
-            }),
-        }
-    }
-
     fn assert_bearer_token(req: &HttpRequest) {
         let auth = req
             .headers
@@ -1163,6 +1534,100 @@ mod tests {
         );
     }
 
+    // -----------------------------------------------------------------------
+    // Tests
+    // -----------------------------------------------------------------------
+
+    /// A mock `RuntimeIo` where all operations fail, simulating an environment
+    /// with no credentials at all.
+    struct NoCredsIo;
+
+    impl RuntimeIo for NoCredsIo {
+        fn http_send(
+            &self,
+            _request: sys_types::generated::owned::http::Request,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<sys_types::runtime_io::HttpResponseHandle, RuntimeIoError>,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async {
+                Ok(sys_types::runtime_io::HttpResponseHandle {
+                    raw: bex_external_types::BexExternalValue::Null,
+                    status_code: 404,
+                    headers: IndexMap::new(),
+                    url: String::new(),
+                })
+            })
+        }
+
+        fn http_response_text(
+            &self,
+            _: &sys_types::runtime_io::HttpResponseHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            Box::pin(async { Ok(String::new()) })
+        }
+
+        fn env_get(
+            &self,
+            _key: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<String>, RuntimeIoError>> + Send + '_>>
+        {
+            Box::pin(async { Ok(None) })
+        }
+
+        fn fs_open(
+            &self,
+            _path: String,
+            _mode: BexExternalValue,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<sys_types::runtime_io::FsFileHandle, RuntimeIoError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
+        }
+
+        fn fs_file_text(
+            &self,
+            _: &sys_types::runtime_io::FsFileHandle,
+        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            Box::pin(async { Err(RuntimeIoError::Other("not found".into())) })
+        }
+
+        fn sys_shell(
+            &self,
+            _: String,
+            _options: Option<sys_types::generated::owned::sys::ProcessOptions>,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            sys_types::generated::owned::sys::ShellOutput,
+                            RuntimeIoError,
+                        >,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeIoError::Other("unsupported".into())) })
+        }
+    }
+
+    #[tokio::test]
+    async fn fails_without_credentials() {
+        let io = NoCredsIo;
+        let client = make_client("vertex-ai");
+        let mut req = fake_request();
+        let result = auth_vertex(&mut req, &client, Arc::new(io)).await;
+        assert!(result.is_err());
+    }
+
     #[tokio::test]
     async fn credentials_content_inline_json() {
         let client = make_client_with_vertex_opts(VertexAiOptions {
@@ -1171,9 +1636,9 @@ mod tests {
             location: None,
             project_id: None,
         });
-        let callbacks = stub_callbacks_with_http(mock_token_http());
+        let io = StubIo::with_token("ya29.from-service-account");
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, &callbacks).await.unwrap();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
         assert_bearer_token(&req);
     }
 
@@ -1185,9 +1650,9 @@ mod tests {
             location: None,
             project_id: None,
         });
-        let callbacks = stub_callbacks_with_http(mock_token_http());
+        let io = StubIo::with_token("ya29.from-service-account");
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, &callbacks).await.unwrap();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
         assert_bearer_token(&req);
     }
 
@@ -1200,25 +1665,18 @@ mod tests {
             location: None,
             project_id: None,
         });
-        let callbacks = BuildRequestCallbacks {
-            http_send: mock_token_http(),
-            env_read: Arc::new(|_key| Box::pin(async { Ok(None) })),
-            fs_read: Arc::new(move |path| {
-                let sa_json = sa_json.clone();
-                Box::pin(async move {
-                    if path == "/fake/service-account.json" {
-                        Ok(sa_json.into_bytes())
-                    } else {
-                        Err(crate::LlmOpError::Other("not found".into()))
-                    }
-                })
-            }),
-            shell: Arc::new(|_cmd| {
-                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
-            }),
+        let io = FsIo {
+            expected_path: "/fake/service-account.json".to_string(),
+            file_contents: sa_json,
+            token_body: serde_json::json!({
+                "access_token": "ya29.from-service-account",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            })
+            .to_string(),
         };
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, &callbacks).await.unwrap();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
         assert_bearer_token(&req);
     }
 
@@ -1230,9 +1688,9 @@ mod tests {
             location: None,
             project_id: None,
         });
-        let callbacks = stub_callbacks_with_http(mock_token_http());
+        let io = StubIo::with_token("ya29.from-service-account");
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, &callbacks).await.unwrap();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
         assert_bearer_token(&req);
     }
 
@@ -1251,22 +1709,9 @@ mod tests {
             },
         )
         .unwrap();
-        let callbacks = BuildRequestCallbacks {
-            http_send: Arc::new(|_req| {
-                Box::pin(async {
-                    panic!("http_send should not be called when key query param is set");
-                })
-            }),
-            env_read: Arc::new(|_key| Box::pin(async { Ok(None) })),
-            fs_read: Arc::new(|_path| {
-                Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
-            }),
-            shell: Arc::new(|_cmd| {
-                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
-            }),
-        };
+        let io = StubIo::with_token("");
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, &callbacks).await.unwrap();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
         assert!(!req.headers.contains_key("authorization"));
     }
 
@@ -1277,7 +1722,6 @@ mod tests {
         use std::sync::atomic::{AtomicUsize, Ordering};
 
         let http_call_count = Arc::new(AtomicUsize::new(0));
-        let http_call_count_clone = http_call_count.clone();
 
         let adc_json = serde_json::json!({
             "client_id": "test-client-id",
@@ -1288,48 +1732,24 @@ mod tests {
         })
         .to_string();
 
-        let callbacks = BuildRequestCallbacks {
-            http_send: Arc::new(move |_req| {
-                http_call_count_clone.fetch_add(1, Ordering::SeqCst);
-                Box::pin(async {
-                    Ok(crate::HttpSendResponse {
-                        status_code: 200,
-                        headers: indexmap::IndexMap::new(),
-                        body: serde_json::json!({
-                            "access_token": "ya29.fake-test-token",
-                            "token_type": "Bearer",
-                            "expires_in": 3600,
-                        })
-                        .to_string(),
-                    })
-                })
-            }),
-            env_read: Arc::new(|key| {
-                Box::pin(async move {
-                    match key.as_str() {
-                        "GOOGLE_APPLICATION_CREDENTIALS" => Ok(Some("/fake/adc.json".to_string())),
-                        _ => Ok(None),
-                    }
-                })
-            }),
-            fs_read: Arc::new(move |path| {
-                let adc_json = adc_json.clone();
-                Box::pin(async move {
-                    if path == "/fake/adc.json" {
-                        Ok(adc_json.into_bytes())
-                    } else {
-                        Err(crate::LlmOpError::Other("not found".into()))
-                    }
-                })
-            }),
-            shell: Arc::new(|_cmd| {
-                Box::pin(async { Err(crate::LlmOpError::Other("unsupported".into())) })
-            }),
+        let io = AdcIo {
+            http_call_count: http_call_count.clone(),
+            env_vars: std::collections::HashMap::from([(
+                "GOOGLE_APPLICATION_CREDENTIALS".to_string(),
+                "/fake/adc.json".to_string(),
+            )]),
+            files: std::collections::HashMap::from([("/fake/adc.json".to_string(), adc_json)]),
+            token_body: serde_json::json!({
+                "access_token": "ya29.fake-test-token",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            })
+            .to_string(),
         };
 
         let client = make_client("vertex-ai");
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, &callbacks).await.unwrap();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
 
         assert!(http_call_count.load(Ordering::SeqCst) > 0);
         assert_eq!(

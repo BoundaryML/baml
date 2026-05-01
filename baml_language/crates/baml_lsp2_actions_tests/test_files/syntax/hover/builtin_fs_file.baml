@@ -1,8 +1,8 @@
 // Test hover on File type and methods
 
 function TestFileRead() -> string {
-    let f<[CURSOR] = baml.fs.open("example.txt");
-    f.read()
+    let f<[CURSOR] = baml.fs.open("example.txt", "r");
+    f.text()
 }
 
 //----

@@ -1,0 +1,49 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "risky"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "void"
+      WORD "void"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "string"
+        WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_STMT
+          THROW_EXPR
+            KW_THROW "throw"
+            STRING_LITERAL "boom"
+              QUOTE """
+              WORD "boom"
+              QUOTE """
+        R_BRACE "}"
+  TEST_EXPR_DEF
+    KW_TEST "test"
+    STRING_LITERAL "throwing body becomes failure"
+      QUOTE """
+      WORD "throwing"
+      WORD "body"
+      WORD "becomes"
+      WORD "failure"
+      QUOTE """
+    BLOCK_EXPR
+      L_BRACE "{"
+      CALL_EXPR
+        WORD "risky"
+        CALL_ARGS "()"
+          L_PAREN "("
+          R_PAREN ")"
+      R_BRACE "}"
+
+=== ERRORS ===
+None

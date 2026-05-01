@@ -19,7 +19,7 @@ function server(req: Request) -> bool {
   {
     getProfile(req)
   } catch (e) {
-    Errors.AuthenticationError => { throw e }
+    AuthenticationError => { throw e }
     _ => { false }
   }
 }
@@ -31,13 +31,13 @@ function getProfile(req: Request) -> bool throws Errors {
 //----
 //- diagnostics
 // Warning: unreachable arm
-//     ╭─[ throw_throws_type_alias_repro.baml:22:34 ]
+//     ╭─[ throw_throws_type_alias_repro.baml:22:27 ]
 //     │
-//  22 │     Errors.AuthenticationError => { throw e }
-//     │                                  ──────┬─────  
-//     │                                        ╰─────── unreachable arm
+//  22 │     AuthenticationError => { throw e }
+//     │                           ──────┬─────  
+//     │                                 ╰─────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0063
 // ────╯
 // Warning: extraneous throws declaration: user.Errors
 //     ╭─[ throw_throws_type_alias_repro.baml:27:49 ]
@@ -46,5 +46,5 @@ function getProfile(req: Request) -> bool throws Errors {
 //     │                                                 ───┬───  
 //     │                                                    ╰───── extraneous throws declaration: user.Errors
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0097
 // ────╯

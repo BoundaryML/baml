@@ -20,10 +20,13 @@ workspace = true
 baml_codegen_python = { workspace = true }
 baml_db = { workspace = true }
 baml_fmt = { workspace = true }
+baml_lsp2_actions = { workspace = true }
 baml_lsp_server = { workspace = true }
 baml_project = { workspace = true }
 baml_workspace = { workspace = true }
 bex_engine = { workspace = true }
+bex_events = { workspace = true }
+bex_events_native = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_native = { workspace = true }
 anyhow = { workspace = true }
@@ -31,7 +34,11 @@ clap = { workspace = true, features = [ "color", "env" ] }
 clap-cargo = { workspace = true }
 ctrlc = { workspace = true }
 regex = { workspace = true }
+serde_json = { workspace = true }
+strsim = { workspace = true }
+text-size = { workspace = true }
 tokio = { workspace = true }
+toml = { workspace = true }
 
 [features]
 default = [ "native-tls" ]
@@ -41,7 +48,10 @@ defaults = [  ]
 internal = [  ]
 skip-integ-tests = [  ]
 
-# [dev-dependencies]
+[dev-dependencies]
+baml_tests = { workspace = true }
+tempfile = { workspace = true }
+
 # assert_cmd = "2"
 # console_log = "1"
 # dissimilar = "1.0.4"

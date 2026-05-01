@@ -11,14 +11,16 @@
     "build:wasm": "wasm-pack build ../../baml_language/crates/bridge_wasm --target web --out-dir ../../../typescript2/pkg-playground/wasm --release",
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/react": "^18.3.26",
     "@types/react-dom": "^18.3.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
   },
   "peerDependencies": {
     "react": "^18.3.1",
@@ -32,6 +34,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "elkjs": "^0.9.3",
+    "jotai": "^2.15.1",
     "lucide-react": "^0.468.0",
     "prism-react-renderer": "^2.4.1",
     "radix-ui": "^1.4.3",

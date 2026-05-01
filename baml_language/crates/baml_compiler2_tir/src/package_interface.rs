@@ -12,8 +12,8 @@ use baml_base::Name;
 use baml_compiler2_ast::BuiltinKind;
 use baml_compiler2_hir::{
     contributions::Definition,
-    file_item_tree, file_package,
-    package::{PackageId, PackageItems, package_dependencies, package_items},
+    file_package,
+    package::{PackageId, PackageItems, package_dependencies},
 };
 use rustc_hash::FxHashMap;
 
@@ -62,7 +62,10 @@ pub struct ExportedFunction {
     pub name: Name,
     pub params: Vec<(Name, Ty)>,
     pub return_type: Ty,
-    pub throws: Option<Ty>,
+    pub declared_throws: Option<Ty>,
+    pub callable_throws: Ty,
+    /// Function-level generic parameters, including any synthetic callback
+    /// effect parameters introduced by bounded signature elaboration.
     pub generic_params: Vec<Name>,
     pub builtin_kind: Option<BuiltinKind>,
 }
@@ -81,7 +84,8 @@ pub struct ResolvedFunction {
     pub name: Name,
     pub params: Vec<(Name, Ty)>,
     pub return_type: Ty,
-    pub throws: Option<Ty>,
+    pub declared_throws: Option<Ty>,
+    pub callable_throws: Ty,
     pub generic_params: Vec<Name>,
     pub builtin_kind: Option<BuiltinKind>,
 }
@@ -95,23 +99,16 @@ pub struct ResolvedMethod {
 
 /// Bundles a package's own items with its dependencies' pre-resolved interfaces.
 /// All cross-package lookups go through this context's methods.
+///
+/// This query result intentionally owns its contents. Storing borrowed refs to
+/// other `returns(ref)` queries here made incremental invalidation unsound
+/// under rapid edits, because the cached context could outlive the referenced
+/// query storage across revisions.
+#[derive(Debug, Clone, PartialEq)]
 pub struct PackageResolutionContext<'db> {
-    pub own_items: &'db PackageItems<'db>,
-    pub dep_interfaces: Vec<(Name, &'db PackageInterface)>,
+    pub own_items: PackageItems<'db>,
+    pub dep_interfaces: Vec<(Name, PackageInterface)>,
     pub own_package_name: Name,
-}
-
-impl PartialEq for PackageResolutionContext<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.own_items, other.own_items)
-            && self.own_package_name == other.own_package_name
-            && self.dep_interfaces.len() == other.dep_interfaces.len()
-            && self
-                .dep_interfaces
-                .iter()
-                .zip(other.dep_interfaces.iter())
-                .all(|((n1, i1), (n2, i2))| n1 == n2 && std::ptr::eq(*i1, *i2))
-    }
 }
 
 // ── Salsa Update impls ─────────────────────────────────────────────────────
@@ -138,11 +135,17 @@ unsafe impl salsa::Update for PackageInterface {
 unsafe impl salsa::Update for PackageResolutionContext<'_> {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
         #[allow(unsafe_code)]
-        unsafe {
-            std::ptr::drop_in_place(old_pointer);
-            std::ptr::write(old_pointer, new_value);
+        let old_ref = unsafe { &*old_pointer };
+        if *old_ref == new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
         }
-        true
     }
 }
 
@@ -174,7 +177,7 @@ impl ExportedType {
     /// Convert to a Ty (for type resolution results).
     pub fn to_ty(&self) -> Ty {
         match self {
-            ExportedType::Class { qtn, .. } => Ty::Class(qtn.clone(), TyAttr::default()),
+            ExportedType::Class { qtn, .. } => Ty::Class(qtn.clone(), vec![], TyAttr::default()),
             ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone(), TyAttr::default()),
             ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone(), TyAttr::default()),
         }
@@ -185,7 +188,7 @@ impl ExportedType {
 
 #[salsa::tracked(returns(ref))]
 pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -> PackageInterface {
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let mut types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>> = FxHashMap::default();
     let mut functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>> =
@@ -196,7 +199,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
         for (name, def) in &ns_items.types {
             let exported = match def {
                 Definition::Class(class_loc) => {
-                    let item_tree = file_item_tree(db, class_loc.file(db));
+                    let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
                     let class_data = &item_tree[class_loc.id(db)];
                     let class_ns =
                         file_package::file_package(db, class_loc.file(db)).namespace_path;
@@ -234,11 +237,13 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             *method_id,
                         );
                         let method_data = &item_tree[*method_id];
-                        let sig = baml_compiler2_hir::signature::function_signature(db, method_loc);
-                        let body = baml_compiler2_hir::body::function_body(db, method_loc);
+                        let sig =
+                            baml_compiler2_ppir::elaborated_function_signature(db, method_loc);
+                        let body = baml_compiler2_ppir::function_body(db, method_loc);
 
                         let mut all_generic_params = class_data.generic_params.clone();
-                        all_generic_params.extend(method_data.generic_params.iter().cloned());
+                        all_generic_params.extend(sig.user_generic_params.iter().cloned());
+                        all_generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
                         let mut params = Vec::new();
                         for (param_name, param_te) in &sig.params {
@@ -275,7 +280,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             },
                         );
 
-                        let throws = sig.throws.as_ref().map(|te| {
+                        let declared_throws = sig.throws.as_ref().map(|te| {
                             lower_type_expr_in_ns(
                                 db,
                                 te,
@@ -285,6 +290,8 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                                 &mut diags,
                             )
                         });
+                        let callable_throws =
+                            crate::callable::callable_throws(db, method_loc).clone();
 
                         let builtin_kind = match body.as_ref() {
                             baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
@@ -295,8 +302,14 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             name: method_data.name.clone(),
                             params,
                             return_type,
-                            throws,
-                            generic_params: method_data.generic_params.clone(),
+                            declared_throws,
+                            callable_throws,
+                            generic_params: sig
+                                .user_generic_params
+                                .iter()
+                                .chain(sig.synthetic_effect_params.iter())
+                                .cloned()
+                                .collect(),
                             builtin_kind,
                         });
                     }
@@ -310,7 +323,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                     }
                 }
                 Definition::Enum(enum_loc) => {
-                    let item_tree = file_item_tree(db, enum_loc.file(db));
+                    let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
                     let enum_data = &item_tree[enum_loc.id(db)];
                     let qtn = qualify_def(db, *def, name);
                     ExportedType::Enum {
@@ -319,7 +332,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                     }
                 }
                 Definition::TypeAlias(ta_loc) => {
-                    let item_tree = file_item_tree(db, ta_loc.file(db));
+                    let item_tree = baml_compiler2_ppir::file_item_tree(db, ta_loc.file(db));
                     let ta_data = &item_tree[ta_loc.id(db)];
                     let ta_ns = file_package::file_package(db, ta_loc.file(db)).namespace_path;
                     let mut diags = Vec::new();
@@ -348,12 +361,16 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
             let Definition::Function(func_loc) = def else {
                 continue;
             };
-            let item_tree = file_item_tree(db, func_loc.file(db));
-            let func_data = &item_tree[func_loc.id(db)];
             let func_ns = file_package::file_package(db, func_loc.file(db)).namespace_path;
-            let sig = baml_compiler2_hir::signature::function_signature(db, *func_loc);
-            let body = baml_compiler2_hir::body::function_body(db, *func_loc);
+            let sig = baml_compiler2_ppir::elaborated_function_signature(db, *func_loc);
+            let body = baml_compiler2_ppir::function_body(db, *func_loc);
             let mut diags = Vec::new();
+            let function_generic_params: Vec<Name> = sig
+                .user_generic_params
+                .iter()
+                .chain(sig.synthetic_effect_params.iter())
+                .cloned()
+                .collect();
 
             let mut params = Vec::new();
             for (param_name, param_te) in &sig.params {
@@ -362,7 +379,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                     param_te,
                     pkg_items,
                     &func_ns,
-                    &func_data.generic_params,
+                    &function_generic_params,
                     &mut diags,
                 );
                 params.push((param_name.clone(), param_ty));
@@ -378,22 +395,23 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                         te,
                         pkg_items,
                         &func_ns,
-                        &func_data.generic_params,
+                        &function_generic_params,
                         &mut diags,
                     )
                 },
             );
 
-            let throws = sig.throws.as_ref().map(|te| {
+            let declared_throws = sig.throws.as_ref().map(|te| {
                 lower_type_expr_in_ns(
                     db,
                     te,
                     pkg_items,
                     &func_ns,
-                    &func_data.generic_params,
+                    &function_generic_params,
                     &mut diags,
                 )
             });
+            let callable_throws = crate::callable::callable_throws(db, *func_loc).clone();
 
             let builtin_kind = match body.as_ref() {
                 baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
@@ -406,8 +424,9 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                     name: name.clone(),
                     params,
                     return_type,
-                    throws,
-                    generic_params: func_data.generic_params.clone(),
+                    declared_throws,
+                    callable_throws,
+                    generic_params: function_generic_params,
                     builtin_kind,
                 },
             );
@@ -456,7 +475,7 @@ fn build_self_type_for_class(
                 class_data.name.clone(),
                 class_data.generic_params.clone(),
             );
-            Ty::Class(qtn, TyAttr::default())
+            Ty::Class(qtn, vec![], TyAttr::default())
         }
     }
 }
@@ -468,13 +487,13 @@ pub fn package_resolution_context<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> PackageResolutionContext<'db> {
-    let own_items = package_items(db, pkg_id);
+    let own_items = baml_compiler2_ppir::package_items(db, pkg_id).clone();
     let deps = package_dependencies(db, pkg_id);
-    let dep_interfaces: Vec<(Name, &PackageInterface)> = deps
+    let dep_interfaces: Vec<(Name, PackageInterface)> = deps
         .iter()
         .map(|dep_id| {
             let name = dep_id.name(db);
-            let iface = package_interface(db, *dep_id);
+            let iface = package_interface(db, *dep_id).clone();
             (name, iface)
         })
         .collect();
@@ -493,19 +512,19 @@ impl<'db> PackageResolutionContext<'db> {
     /// Returns `Some` for the own package and any declared dependency,
     /// `None` for undeclared packages.
     pub fn items_for_package(
-        &self,
+        &'db self,
         db: &'db dyn crate::Db,
         pkg_name: &Name,
     ) -> Option<&'db PackageItems<'db>> {
         if pkg_name.as_str() == self.own_package_name.as_str() {
-            Some(self.own_items)
+            Some(&self.own_items)
         } else if self
             .dep_interfaces
             .iter()
             .any(|(n, _)| n.as_str() == pkg_name.as_str())
         {
             let pkg_id = PackageId::new(db, pkg_name.clone());
-            Some(package_items(db, pkg_id))
+            Some(baml_compiler2_ppir::package_items(db, pkg_id))
         } else {
             None
         }
@@ -615,7 +634,7 @@ impl<'db> PackageResolutionContext<'db> {
             for (dep_name, _dep_iface) in &self.dep_interfaces {
                 if &path[0] == dep_name {
                     let dep_pkg_id = PackageId::new(db, dep_name.clone());
-                    let dep_items = package_items(db, dep_pkg_id);
+                    let dep_items = baml_compiler2_ppir::package_items(db, dep_pkg_id);
                     if let Some(def) = dep_items.lookup_value(&path[1..path.len() - 1], item) {
                         return Some((ResolvedSource::Builtin, def));
                     }
@@ -689,7 +708,8 @@ impl<'db> PackageResolutionContext<'db> {
                                 name: method.name.clone(),
                                 params: method.params.clone(),
                                 return_type: method.return_type.clone(),
-                                throws: method.throws.clone(),
+                                declared_throws: method.declared_throws.clone(),
+                                callable_throws: method.callable_throws.clone(),
                                 generic_params: method.generic_params.clone(),
                                 builtin_kind: method.builtin_kind,
                             },
@@ -717,7 +737,7 @@ impl<'db> PackageResolutionContext<'db> {
         let Definition::Class(class_loc) = def else {
             return Vec::new();
         };
-        let item_tree = file_item_tree(db, class_loc.file(db));
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
         let class_data = &item_tree[class_loc.id(db)];
         let ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
         let mut diags = Vec::new();
@@ -727,7 +747,7 @@ impl<'db> PackageResolutionContext<'db> {
                 let field_ty = lower_type_expr_in_ns(
                     db,
                     &te.expr,
-                    self.own_items,
+                    &self.own_items,
                     &ns,
                     &class_data.generic_params,
                     &mut diags,
@@ -757,7 +777,7 @@ impl<'db> PackageResolutionContext<'db> {
         let Definition::Class(class_loc) = def else {
             return None;
         };
-        let item_tree = file_item_tree(db, class_loc.file(db));
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
         let class_data = &item_tree[class_loc.id(db)];
         let ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
         let mut diags = Vec::new();
@@ -769,18 +789,19 @@ impl<'db> PackageResolutionContext<'db> {
             }
             let method_loc =
                 baml_compiler2_hir::loc::FunctionLoc::new(db, class_loc.file(db), *method_id);
-            let sig = baml_compiler2_hir::signature::function_signature(db, method_loc);
-            let body = baml_compiler2_hir::body::function_body(db, method_loc);
+            let sig = baml_compiler2_ppir::elaborated_function_signature(db, method_loc);
+            let body = baml_compiler2_ppir::function_body(db, method_loc);
 
             let mut all_generic_params = class_data.generic_params.clone();
-            all_generic_params.extend(method_data.generic_params.iter().cloned());
+            all_generic_params.extend(sig.user_generic_params.iter().cloned());
+            all_generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
             let mut params = Vec::new();
             for (param_name, param_te) in &sig.params {
                 let param_ty = lower_type_expr_in_ns(
                     db,
                     param_te,
-                    self.own_items,
+                    &self.own_items,
                     &ns,
                     &all_generic_params,
                     &mut diags,
@@ -795,16 +816,24 @@ impl<'db> PackageResolutionContext<'db> {
                     lower_type_expr_in_ns(
                         db,
                         te,
-                        self.own_items,
+                        &self.own_items,
                         &ns,
                         &all_generic_params,
                         &mut diags,
                     )
                 },
             );
-            let throws = sig.throws.as_ref().map(|te| {
-                lower_type_expr_in_ns(db, te, self.own_items, &ns, &all_generic_params, &mut diags)
+            let declared_throws = sig.throws.as_ref().map(|te| {
+                lower_type_expr_in_ns(
+                    db,
+                    te,
+                    &self.own_items,
+                    &ns,
+                    &all_generic_params,
+                    &mut diags,
+                )
             });
+            let callable_throws = crate::callable::callable_throws(db, method_loc).clone();
 
             let builtin_kind = match body.as_ref() {
                 baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
@@ -816,8 +845,14 @@ impl<'db> PackageResolutionContext<'db> {
                     name: method_data.name.clone(),
                     params,
                     return_type,
-                    throws,
-                    generic_params: method_data.generic_params.clone(),
+                    declared_throws,
+                    callable_throws,
+                    generic_params: sig
+                        .user_generic_params
+                        .iter()
+                        .chain(sig.synthetic_effect_params.iter())
+                        .cloned()
+                        .collect(),
                     builtin_kind,
                 },
                 class_name: class_name.name().clone(),
@@ -832,17 +867,17 @@ impl<'db> PackageResolutionContext<'db> {
 fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
     let name = match def {
         Definition::Class(loc) => {
-            let item_tree = file_item_tree(db, loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
             data.name.clone()
         }
         Definition::Enum(loc) => {
-            let item_tree = file_item_tree(db, loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
             data.name.clone()
         }
         Definition::TypeAlias(loc) => {
-            let item_tree = file_item_tree(db, loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
             data.name.clone()
         }
@@ -853,7 +888,7 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
         }
     };
     match def {
-        Definition::Class(_) => Ty::Class(qualify_def(db, def, &name), TyAttr::default()),
+        Definition::Class(_) => Ty::Class(qualify_def(db, def, &name), vec![], TyAttr::default()),
         Definition::Enum(_) => Ty::Enum(qualify_def(db, def, &name), TyAttr::default()),
         Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, &name), TyAttr::default()),
         _ => Ty::Unknown {

@@ -11,7 +11,7 @@
 use std::sync::Arc;
 
 use bex_vm_types::{
-    HeapPtr, Object, ObjectIndex, Value,
+    HeapPtr, Object, Value,
     types::{Instance, Variant},
 };
 use indexmap::IndexMap;
@@ -133,42 +133,12 @@ impl Tlab {
         // Track allocation for GC heuristic
         self.heap.record_alloc();
 
-        // Get the pointer to the newly written object
-        // SAFETY: We just wrote to runtime_idx, so it's valid
-        let ptr = unsafe {
-            (*self.heap.spaces[self.heap.active_space_index()].get()).get_ptr(runtime_idx)
-        };
+        // Get the pointer to the newly written object in Gen0.
+        // SAFETY: We just wrote to runtime_idx in Gen0, so it's valid.
+        let ptr = unsafe { (*self.heap.gen0.get()).get_ptr(runtime_idx) };
 
         // SAFETY: The pointer is valid and points to a valid object we just wrote
         unsafe { self.heap.make_heap_ptr(ptr) }
-    }
-
-    /// Allocate an object, returning its ObjectIndex.
-    ///
-    /// This is for backward compatibility during the transition.
-    #[inline]
-    pub fn alloc_index(&mut self, obj: Object) -> ObjectIndex {
-        if self.alloc_ptr >= self.alloc_limit {
-            self.refill();
-        }
-
-        let global_idx = self.alloc_ptr;
-        self.alloc_ptr += 1;
-
-        // Convert global index to runtime-relative index for writing to active space
-        let runtime_idx = global_idx - self.heap.compile_time_len();
-
-        // SAFETY: This TLAB has exclusive access to indices in [chunk.start, chunk.end)
-        // and we've ensured alloc_ptr < alloc_limit after potential refill.
-        // ChunkedVec guarantees stable pointers during concurrent growth.
-        unsafe {
-            self.heap.write_runtime_object(runtime_idx, obj);
-        }
-
-        // Track allocation for GC heuristic
-        self.heap.record_alloc();
-
-        self.heap.make_object_index(global_idx)
     }
 
     /// Allocate a string object.
@@ -252,6 +222,13 @@ impl Tlab {
     /// - The pointer must be valid (not collected by GC)
     /// - Caller must ensure exclusive access to this object
     /// - Only runtime objects can be written (compile-time objects are immutable)
+    ///
+    /// # Write Barrier
+    ///
+    /// If `ptr` points to an older-generation object, callers must fire the
+    /// generational write barrier for any `HeapPtr` references in `obj` that
+    /// point into a younger generation. During normal execution this is called
+    /// only for Gen0 objects (newly allocated), so no barrier is needed.
     pub unsafe fn set_object(&mut self, ptr: HeapPtr, obj: Object) {
         // SAFETY: Caller ensures exclusive access
         // Direct write to the object through the pointer
@@ -294,8 +271,8 @@ mod tests {
         let canary_idx = ct_len + heap.tlab_size();
         let runtime_idx = canary_idx - ct_len;
         unsafe {
-            let space = &*heap.spaces[heap.active_space_index()].get();
-            space.set(runtime_idx, Object::String("clobbered".to_string()));
+            let gen0 = &*heap.gen0.get();
+            gen0.set(runtime_idx, Object::String("clobbered".to_string()));
         }
 
         let result = catch_unwind(AssertUnwindSafe(|| {
@@ -309,8 +286,7 @@ mod tests {
         let heap = BexHeap::with_tlab_size(vec![], 100);
         let mut tlab = Tlab::new(heap);
 
-        let idx = tlab.alloc_index(Object::String("hello".to_string()));
-        assert_eq!(idx, ObjectIndex::from_raw(0));
+        let _ptr = tlab.alloc(Object::String("hello".to_string()));
         assert_eq!(tlab.remaining(), 99);
     }
 
@@ -320,8 +296,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         for i in 0..10 {
-            let idx = tlab.alloc_index(Object::String(format!("obj{i}")));
-            assert_eq!(idx, ObjectIndex::from_raw(i));
+            let _ptr = tlab.alloc(Object::String(format!("obj{i}")));
         }
         assert_eq!(tlab.remaining(), 90);
     }
@@ -333,14 +308,12 @@ mod tests {
 
         // Allocate 5 objects (fills first chunk)
         for i in 0..5 {
-            let idx = tlab.alloc_index(Object::String(format!("obj{i}")));
-            assert_eq!(idx, ObjectIndex::from_raw(i));
+            let _ptr = tlab.alloc(Object::String(format!("obj{i}")));
         }
         assert_eq!(tlab.remaining(), 0);
 
         // Next allocation triggers refill
-        let idx = tlab.alloc_index(Object::String("obj5".to_string()));
-        assert_eq!(idx, ObjectIndex::from_raw(5));
+        let _ptr = tlab.alloc(Object::String("obj5".to_string()));
         assert_eq!(tlab.remaining(), 4);
     }
 
@@ -351,11 +324,14 @@ mod tests {
             Object::String("builtin2".to_string()),
         ];
         let heap = BexHeap::with_tlab_size(compile_time, 100);
-        let mut tlab = Tlab::new(heap);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        // First runtime allocation starts after compile-time objects
-        let idx = tlab.alloc_index(Object::String("runtime".to_string()));
-        assert_eq!(idx, ObjectIndex::from_raw(2));
+        // First runtime allocation must land outside the compile-time region.
+        let ptr = tlab.alloc(Object::String("runtime".to_string()));
+        assert!(
+            !heap.is_compile_time_ptr(ptr),
+            "runtime allocation must not overlap compile-time objects"
+        );
     }
 
     #[test]
@@ -367,12 +343,11 @@ mod tests {
         let mut tlab2 = Tlab::new(heap2);
 
         // Allocate from both TLABs
-        let idx1 = tlab1.alloc_index(Object::String("from_tlab1".to_string()));
-        let idx2 = tlab2.alloc_index(Object::String("from_tlab2".to_string()));
+        let ptr1 = tlab1.alloc(Object::String("from_tlab1".to_string()));
+        let ptr2 = tlab2.alloc(Object::String("from_tlab2".to_string()));
 
-        // They should get different regions
-        assert_eq!(idx1, ObjectIndex::from_raw(0));
-        assert_eq!(idx2, ObjectIndex::from_raw(10));
+        // They should get different pointers (different TLAB regions).
+        assert_ne!(ptr1, ptr2);
     }
 
     #[test]
@@ -454,7 +429,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         // Simulate a class at index 0
-        let class_ptr = tlab.alloc(Object::Class(Class {
+        let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             name: baml_type::TypeName::local(baml_type::Name::new("TestClass")),
             fields: vec![
                 bex_vm_types::ClassField {
@@ -480,7 +455,7 @@ mod tests {
             alias: None,
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
-        }));
+        })));
 
         // Allocate an instance of that class
         let fields = vec![Value::Int(10), Value::Int(20)];
@@ -506,7 +481,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         // Simulate an enum at index 0
-        let enum_ptr = tlab.alloc(Object::Enum(Enum {
+        let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             name: baml_type::TypeName::local(baml_type::Name::new("Color")),
             variants: vec![
                 bex_vm_types::EnumVariant {
@@ -531,7 +506,7 @@ mod tests {
             description: None,
             alias: None,
             ty_attr: baml_type::TyAttr::default(),
-        }));
+        })));
 
         // Allocate a variant (Color::Green = index 1)
         let variant_ptr = tlab.alloc_variant(enum_ptr, 1);
@@ -564,9 +539,6 @@ mod tests {
     /// 2. GC runs, moves objects to new space, invalidates TLAB
     /// 3. VM continues allocating (TLAB refills from new space)
     ///
-    /// TODO: Re-enable once GC is updated to use HeapPtr instead of ObjectIndex.
-    /// The test needs `collect_garbage_with_forwarding` to return a
-    /// `HashMap<HeapPtr, HeapPtr>` forwarding table.
     #[test]
     fn test_miri_tlab_invalidation_and_refill() {
         let heap = BexHeap::with_tlab_size(vec![], 10);
@@ -578,8 +550,7 @@ mod tests {
 
         assert!(tlab.is_valid());
 
-        let (stats, _remapped, _forwarding) =
-            unsafe { heap.collect_garbage_with_forwarding(&[obj1, obj2]) };
+        let (stats, _remapped, _forwarding) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
         assert_eq!(stats.live_count, 2);
 
         // Invalidate TLAB (what bex_engine does after GC)
@@ -739,27 +710,27 @@ mod tests {
 
                     // Allocate more objects than fit in one TLAB chunk
                     // to force multiple refills
-                    let mut indices = Vec::new();
+                    let mut pointers = Vec::new();
                     for i in 0..20 {
-                        let idx = tlab.alloc_index(Object::String(format!("t{thread_id}_o{i}")));
-                        indices.push(idx);
+                        let ptr = tlab.alloc(Object::String(format!("t{thread_id}_o{i}")));
+                        pointers.push(ptr);
                     }
 
-                    indices
+                    pointers
                 })
             })
             .collect();
 
-        let all_indices: Vec<Vec<ObjectIndex>> =
+        let all_pointers: Vec<Vec<HeapPtr>> =
             handles.into_iter().map(|h| h.join().unwrap()).collect();
 
-        // Verify no overlaps
+        // Verify no overlaps - each pointer should be unique across all threads.
         let mut seen = std::collections::HashSet::new();
-        for thread_indices in &all_indices {
-            for idx in thread_indices {
+        for thread_pointers in &all_pointers {
+            for ptr in thread_pointers {
                 assert!(
-                    seen.insert(idx.into_raw()),
-                    "Duplicate index from concurrent refill"
+                    seen.insert(*ptr),
+                    "Duplicate pointer from concurrent refill"
                 );
             }
         }

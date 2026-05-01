@@ -1,4 +1,4 @@
-// Multiple catch clauses chained on same expression — no diagnostics expected
+// Multiple catch clauses chained on same expression — unreachable because MayFail never throws
 function MayFail(x: int) -> string {
   "ok"
 }
@@ -25,42 +25,47 @@ function TripleChainedCatch(x: int) -> string {
 //----
 //- diagnostics
 // Warning: unreachable arm
-//    ╭─[ catch_chained_catch.baml:8:20 ]
+//    ╭─[ catch_chained_catch.baml:8:18 ]
 //    │
-//  8 │ ╭─▶     _: string => "string error"
-//  9 │ ├─▶   } catch (e2) {
-//    │ │                      
-//    │ ╰────────────────────── unreachable arm
-//    │     
-//    │     Note: Error code: E0001
+//  8 │     _: string => "string error"
+//    │                  ───────┬──────  
+//    │                         ╰──────── unreachable arm
+//    │ 
+//    │ Note: Error code: E0063
 // ───╯
 // Warning: unreachable arm
-//     ╭─[ catch_chained_catch.baml:10:17 ]
+//     ╭─[ catch_chained_catch.baml:10:15 ]
 //     │
-//  10 │ ╭─▶     _: int => "int error"
-//  11 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── unreachable arm
-//     │     
-//     │     Note: Error code: E0001
+//  10 │     _: int => "int error"
+//     │               ─────┬─────  
+//     │                    ╰─────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0063
 // ────╯
 // Warning: unreachable arm
-//     ╭─[ catch_chained_catch.baml:17:20 ]
+//     ╭─[ catch_chained_catch.baml:17:18 ]
 //     │
-//  17 │ ╭─▶     _: string => "first"
-//  18 │ ├─▶   } catch (e2) {
-//     │ │                      
-//     │ ╰────────────────────── unreachable arm
-//     │     
-//     │     Note: Error code: E0001
+//  17 │     _: string => "first"
+//     │                  ───┬───  
+//     │                     ╰───── unreachable arm
+//     │ 
+//     │ Note: Error code: E0063
 // ────╯
 // Warning: unreachable arm
-//     ╭─[ catch_chained_catch.baml:19:17 ]
+//     ╭─[ catch_chained_catch.baml:19:15 ]
 //     │
-//  19 │ ╭─▶     _: int => "second"
-//  20 │ ├─▶   } catch (e3) {
-//     │ │                      
-//     │ ╰────────────────────── unreachable arm
-//     │     
-//     │     Note: Error code: E0001
+//  19 │     _: int => "second"
+//     │               ────┬───  
+//     │                   ╰───── unreachable arm
+//     │ 
+//     │ Note: Error code: E0063
+// ────╯
+// Warning: unreachable arm
+//     ╭─[ catch_chained_catch.baml:21:10 ]
+//     │
+//  21 │     _ => "third"
+//     │          ───┬───  
+//     │             ╰───── unreachable arm
+//     │ 
+//     │ Note: Error code: E0063
 // ────╯

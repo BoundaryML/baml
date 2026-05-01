@@ -162,7 +162,7 @@ function Foo6(arg: int) -> float {
 //    │ │       
 //    │ ╰─────── unresolved name: Foo
 //    │     
-//    │     Note: Error code: E0001
+//    │     Note: Error code: E0003
 // ───╯
 // Error: unresolved name: Foo
 //    ╭─[ functions_v2_invalid2.baml:1:1 ]
@@ -173,7 +173,7 @@ function Foo6(arg: int) -> float {
 //    │ │       
 //    │ ╰─────── unresolved name: Foo
 //    │     
-//    │     Note: Error code: E0001
+//    │     Note: Error code: E0003
 // ───╯
 // Error: type mismatch: expected baml.llm.Client, got null
 //    ╭─[ functions_v2_invalid2.baml:5:33 ]
@@ -206,7 +206,7 @@ function Foo6(arg: int) -> float {
 //     │ │       
 //     │ ╰─────── unresolved name: bar
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0003
 // ────╯
 // Error: unresolved name: bar
 //     ╭─[ functions_v2_invalid2.baml:7:2 ]
@@ -217,7 +217,7 @@ function Foo6(arg: int) -> float {
 //     │ │       
 //     │ ╰─────── unresolved name: bar
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0003
 // ────╯
 // Error: unresolved name: bar
 //     ╭─[ functions_v2_invalid2.baml:15:33 ]
@@ -228,7 +228,7 @@ function Foo6(arg: int) -> float {
 //     │ │       
 //     │ ╰─────── unresolved name: bar
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0003
 // ────╯
 // Error: unresolved name: bar
 //     ╭─[ functions_v2_invalid2.baml:12:2 ]
@@ -239,7 +239,7 @@ function Foo6(arg: int) -> float {
 //     │ │       
 //     │ ╰─────── unresolved name: bar
 //     │     
-//     │     Note: Error code: E0001
+//     │     Note: Error code: E0003
 // ────╯
 // Error: type mismatch: expected baml.llm.Client, got null
 //     ╭─[ functions_v2_invalid2.baml:21:33 ]

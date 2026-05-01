@@ -1,5 +1,6 @@
-// TODO: This file has been simplified to only support the LSP command for now.
-// Other commands that depend on baml_runtime are commented out.
+// Wires up the BAML CLI subcommands: Run, Describe, Generate, Grep, Test,
+// Format, and LanguageServer. `baml run` is the top-level entry for
+// standalone execution.
 
 use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
@@ -45,7 +46,7 @@ pub(crate) enum Commands {
 
     // #[command(about = "Login to Boundary Cloud (alias for `baml auth login`)", hide = true)]
     // Login(crate::auth::LoginArgs),
-    #[command(about = "Format BAML source files", name = "fmt", hide = true)]
+    #[command(about = "Format BAML source files", name = "fmt")]
     Format(crate::format::FormatArgs),
 
     // #[command(about = "Run BAML tests")]
@@ -56,11 +57,20 @@ pub(crate) enum Commands {
 
     // #[command(about = "Print Bytecode from BAML files", hide = true)]
     // DumpBytecode(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
+    #[command(about = "Describe a BAML symbol", name = "describe")]
+    Describe(crate::describe_command::DescribeArgs),
+
     #[command(about = "Generate client code from BAML definitions")]
     Generate(crate::generate::GenerateArgs),
 
+    #[command(about = "Semantic code search for BAML files", name = "grep")]
+    Grep(crate::grep_command::GrepArgs),
+
     #[command(about = "Run BAML tests")]
     Test(crate::test_command::TestArgs),
+
+    #[command(about = "Run a BAML function or script", disable_help_flag = true)]
+    Run(crate::run_command::RunArgs),
 
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
@@ -114,7 +124,10 @@ impl RuntimeCli {
 
     pub fn run(&self) -> Result<crate::ExitCode> {
         match &self.command {
+            Commands::Run(args) => args.run(),
+            Commands::Describe(args) => args.run(),
             Commands::Generate(args) => args.run(),
+            Commands::Grep(args) => args.run(),
             Commands::Test(args) => args.run(),
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),

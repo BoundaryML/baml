@@ -57,6 +57,8 @@ pub enum TypeInfo {
         name: String,
         params: Vec<(String, String)>,
         return_type: Option<String>,
+        throws: Option<String>,
+        note: Option<String>,
     },
     /// A class definition: name, fields (name + type string).
     Class {
@@ -85,6 +87,8 @@ impl TypeInfo {
                 name,
                 params,
                 return_type,
+                throws,
+                note,
             } => {
                 let param_strs: Vec<String> =
                     params.iter().map(|(n, t)| format!("{n}: {t}")).collect();
@@ -92,12 +96,21 @@ impl TypeInfo {
                     .as_deref()
                     .map(|r| format!(" -> {r}"))
                     .unwrap_or_default();
-                format!(
-                    "```baml\nfunction {}({}){}\n```",
+                let throws = throws
+                    .as_deref()
+                    .map(|t| format!(" throws {t}"))
+                    .unwrap_or_default();
+                let mut out = format!(
+                    "```baml\nfunction {}({}){}{throws}\n```",
                     name,
                     param_strs.join(", "),
-                    ret
-                )
+                    ret,
+                );
+                if let Some(note) = note {
+                    out.push_str("\n\n");
+                    out.push_str(note);
+                }
+                out
             }
             TypeInfo::Class { name, fields } => {
                 let field_strs: Vec<String> = fields
@@ -163,6 +176,13 @@ pub fn type_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<TypeIn
     let name_text = token.text();
     let name = Name::new(name_text);
 
+    // A let/for binding is not visible to expression resolution until after its
+    // declaration statement. Hovers on the declaration token itself still need
+    // to describe that binding.
+    if let Some((site, lookup_offset)) = declaration_site_at(db, file, offset, &name) {
+        return local_type_info(db, file, lookup_offset, &name, site);
+    }
+
     // ── Step 2: resolve the name in scope ─────────────────────────────────────
     let resolved = baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &name);
 
@@ -186,28 +206,89 @@ pub fn type_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<TypeIn
     }
 }
 
+fn declaration_site_at(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+    name: &Name,
+) -> Option<(DefinitionSite, TextSize)> {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let scope_id = index.scope_at_offset(offset, None);
+
+    for ancestor_id in index.ancestor_scopes(scope_id) {
+        let bindings = &index.scope_bindings[ancestor_id.index() as usize];
+        for binding in bindings.bindings.iter().rev() {
+            if &binding.name == name
+                && (binding.name_range.contains(offset) || binding.name_range.end() == offset)
+            {
+                return Some((binding.site, binding.name_range.end()));
+            }
+        }
+    }
+
+    None
+}
+
 // ── type_info_for_definition ──────────────────────────────────────────────────
 
 /// Build `TypeInfo` for a top-level item definition.
-fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
+pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
     match def {
         Definition::Function(func_loc) => {
+            let file = func_loc.file(db);
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+            let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+            let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-            let params = sig
+            let function_name = sig.name.clone();
+
+            let fallback = || {
+                let params = sig
+                    .params
+                    .iter()
+                    .map(|(param_name, type_expr)| {
+                        (
+                            param_name.as_str().to_string(),
+                            utils::display_type_expr(type_expr),
+                        )
+                    })
+                    .collect();
+                let return_type = sig.return_type.as_ref().map(utils::display_type_expr);
+                TypeInfo::Function {
+                    name: sig.name.as_str().to_string(),
+                    params,
+                    return_type,
+                    throws: sig.throws.as_ref().map(utils::display_type_expr),
+                    note: None,
+                }
+            };
+
+            let Some(exported) = iface.lookup_function(&pkg_info.namespace_path, &function_name)
+            else {
+                return fallback();
+            };
+
+            let params = exported
                 .params
                 .iter()
-                .map(|(param_name, type_expr)| {
-                    (
-                        param_name.as_str().to_string(),
-                        utils::display_type_expr(type_expr),
-                    )
-                })
+                .map(|(param_name, ty)| (param_name.as_str().to_string(), display_surface_ty(ty)))
                 .collect();
-            let return_type = sig.return_type.as_ref().map(utils::display_type_expr);
+            let return_type = Some(display_surface_ty(&exported.return_type));
+            let throws = if exported.declared_throws.is_some()
+                || !matches!(
+                    exported.callable_throws,
+                    baml_compiler2_tir::ty::Ty::Never { .. }
+                ) {
+                Some(display_surface_ty(&exported.callable_throws))
+            } else {
+                None
+            };
             TypeInfo::Function {
-                name: sig.name.as_str().to_string(),
+                name: exported.name.as_str().to_string(),
                 params,
                 return_type,
+                throws,
+                note: callback_forwarding_note(exported),
             }
         }
 
@@ -321,6 +402,81 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
     }
 }
 
+fn display_surface_ty(ty: &baml_compiler2_tir::ty::Ty) -> String {
+    let rendered = utils::display_ty(ty);
+    rendered.replace("user.", "").replace("baml.", "")
+}
+
+fn is_synthetic_effect_param_name(name: &Name) -> bool {
+    name.as_str()
+        .strip_prefix("__effect_param_")
+        .is_some_and(|suffix| !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit()))
+}
+
+fn function_param_matches_effect_slot(ty: &baml_compiler2_tir::ty::Ty, effect_name: &Name) -> bool {
+    use baml_compiler2_tir::ty::Ty;
+
+    match ty {
+        Ty::Function { throws, .. } => matches!(
+            throws.as_ref(),
+            Ty::TypeVar(name, _) if name == effect_name
+        ),
+        Ty::Optional(inner, _) => function_param_matches_effect_slot(inner, effect_name),
+        Ty::Union(members, _) => {
+            let mut matched = false;
+            for member in members {
+                if matches!(
+                    member,
+                    Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::Null, _)
+                ) {
+                    continue;
+                }
+                if !function_param_matches_effect_slot(member, effect_name) {
+                    return false;
+                }
+                matched = true;
+            }
+            matched
+        }
+        _ => false,
+    }
+}
+
+fn callback_forwarding_note(
+    exported: &baml_compiler2_tir::package_interface::ExportedFunction,
+) -> Option<String> {
+    use baml_compiler2_tir::ty::Ty;
+
+    let throws_facts =
+        baml_compiler2_tir::throw_inference::flatten_ty_to_facts(&exported.callable_throws);
+    let throw_fact_refs = throws_facts.iter().collect::<Vec<_>>();
+    let [only_fact] = throw_fact_refs.as_slice() else {
+        return None;
+    };
+    let Ty::TypeVar(effect_name, _) = only_fact else {
+        return None;
+    };
+    if !is_synthetic_effect_param_name(effect_name) {
+        return None;
+    }
+
+    let mut matching_params = exported
+        .params
+        .iter()
+        .filter(|(_, ty)| function_param_matches_effect_slot(ty, effect_name))
+        .map(|(name, _)| name)
+        .collect::<Vec<_>>();
+
+    if matching_params.len() == 1 {
+        let callback_name = matching_params.pop().expect("len checked");
+        Some(format!(
+            "Forwards whatever callback `{callback_name}` throws."
+        ))
+    } else {
+        None
+    }
+}
+
 // ── local_type_info ───────────────────────────────────────────────────────────
 
 /// Build `TypeInfo::LocalVar` for a local variable (let binding or parameter).
@@ -389,8 +545,13 @@ fn local_type_info(
                 .binding_type(pat_id)
                 .map(utils::display_ty)
                 .unwrap_or_else(|| {
-                    // Try child scopes if the binding is in a nested block.
-                    find_binding_ty_in_scopes(db, index, pat_id)
+                    // Try the use-site's ancestor scope chain — restricts the
+                    // lookup to inferences for bodies that share the
+                    // use-site's pattern arena. Iterating *every* scope in
+                    // the file would, under PatId collisions across nested
+                    // ExprBodies (e.g. two lambdas with the same arena
+                    // index), surface the wrong type for hover/inlay hints.
+                    find_binding_ty_in_scopes(db, index, scope_id, pat_id)
                         .unwrap_or_else(|| "unknown".to_string())
                 });
 
@@ -412,7 +573,7 @@ fn local_type_info(
 
 /// Extract the `PatId` for the binding introduced by `stmt_id`.
 ///
-/// For `Stmt::Let { pattern, .. }` statements, returns the pattern ID.
+/// For local declaration statements, returns the pattern ID.
 /// Returns `None` for other statement kinds.
 fn body_stmt_to_pat_id(
     body: &baml_compiler2_hir::body::FunctionBody,
@@ -422,25 +583,36 @@ fn body_stmt_to_pat_id(
     let FunctionBody::Expr(expr_body) = body else {
         return None;
     };
+
     let stmt = &expr_body.stmts[stmt_id];
     match stmt {
-        baml_compiler2_ast::Stmt::Let { pattern, .. } => Some(*pattern),
+        baml_compiler2_ast::Stmt::Let { pattern, .. }
+        | baml_compiler2_ast::Stmt::For {
+            binding: pattern, ..
+        } => Some(*pattern),
         _ => None,
     }
 }
 
-/// Search all scopes in the file for the binding type of `pat_id`.
+/// Search the use-site's ancestor-scope chain for the binding type of
+/// `pat_id`.
 ///
-/// Used as a fallback when the let binding is in a nested block scope (not
-/// directly in the enclosing function scope). Iterates all scope IDs in the
-/// file index.
+/// `PatId`s are arena-local to a function/lambda body, so iterating *all*
+/// scopes in the file can surface a wrong-arena hit if two bodies happen to
+/// allocate the same `PatId` index. Walking ancestors only — Function or
+/// Lambda scopes that enclose `from_scope` — restricts the lookup to
+/// inferences whose binding maps were populated from the use-site's own
+/// arena. Mirrors the structure already used by
+/// `completions.rs::find_binding_ty_for_local`.
 fn find_binding_ty_in_scopes(
     db: &dyn Db,
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+    from_scope: baml_compiler2_hir::scope::FileScopeId,
     pat_id: baml_compiler2_ast::PatId,
 ) -> Option<String> {
-    for scope_id in &index.scope_ids {
-        let inference = baml_compiler2_tir::inference::infer_scope_types(db, *scope_id);
+    for ancestor_id in index.ancestor_scopes(from_scope) {
+        let scope_id = index.scope_ids[ancestor_id.index() as usize];
+        let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
         if let Some(ty) = inference.binding_type(pat_id) {
             return Some(utils::display_ty(ty));
         }

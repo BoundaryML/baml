@@ -6,8 +6,8 @@
 
 use ::bex_vm_types::ObjectType;
 use baml_type::Literal;
-use bex_external_types::{BexExternalAdt, BexExternalValue, EpochGuard, Ty, UnionMetadata};
-use bex_heap::BexValue;
+use bex_external_types::{BexExternalAdt, BexExternalValue, Ty, UnionMetadata};
+use bex_heap::{ActiveHeapPermit, BexValue, PermitProof};
 use bex_vm::BexVm;
 use bex_vm_types::{HeapPtr, Object, Value};
 
@@ -25,7 +25,7 @@ impl BexEngine {
         &self,
         value: &Value,
         declared_type: &Ty,
-        guard: &EpochGuard<'_>,
+        permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
         // If declared type is a union, find which member matches the actual value
         let effective_type = resolve_effective_type(value, declared_type);
@@ -36,7 +36,7 @@ impl BexEngine {
             Value::Float(f) => BexExternalValue::Float(*f),
             Value::Bool(b) => BexExternalValue::Bool(*b),
             Value::Object(idx) => {
-                self.convert_heap_ptr_to_external_with_type(*idx, effective_type, guard)?
+                self.convert_heap_ptr_to_external_with_type(*idx, effective_type, permit)?
             }
         };
 
@@ -55,7 +55,7 @@ impl BexEngine {
         &self,
         ptr: HeapPtr,
         effective_type: &Ty,
-        guard: &EpochGuard<'_>,
+        permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
         // SAFETY: We only read objects, and the pointer comes from a valid handle.
         let obj = unsafe { ptr.get() };
@@ -76,7 +76,7 @@ impl BexEngine {
 
                 let items: Result<Vec<_>, _> = arr
                     .iter()
-                    .map(|v| self.convert_vm_value_to_external_with_type(v, element_type, guard))
+                    .map(|v| self.convert_vm_value_to_external_with_type(v, element_type, permit))
                     .collect();
                 Ok(BexExternalValue::Array {
                     element_type: element_type.clone(),
@@ -105,7 +105,7 @@ impl BexEngine {
                         .map(|(k, v)| {
                             Ok((
                                 k.clone(),
-                                self.convert_vm_value_to_external_with_type(v, value_type, guard)?,
+                                self.convert_vm_value_to_external_with_type(v, value_type, permit)?,
                             ))
                         })
                         .collect();
@@ -144,7 +144,7 @@ impl BexEngine {
                                 self.convert_vm_value_to_external_with_type(
                                     value,
                                     &class_field.field_type,
-                                    guard,
+                                    permit,
                                 )?,
                             ))
                         })
@@ -195,17 +195,15 @@ impl BexEngine {
                 type_name: "future".to_string(),
             }),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
-            Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
+            Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
-            Object::RustData(arc) => {
-                bex_external_types::try_convert_rust_data(arc).ok_or_else(|| {
-                    EngineError::CannotConvert {
-                        type_name: "rust_data".to_string(),
-                    }
-                })
-            }
+            Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
+                .unwrap_or_else(|| BexExternalValue::RustData(arc.clone()))),
             Object::Closure(_) => Err(EngineError::CannotConvert {
                 type_name: "closure".to_string(),
+            }),
+            Object::BoundMethod(_) => Err(EngineError::CannotConvert {
+                type_name: "bound_method".to_string(),
             }),
             Object::Cell(_) => Err(EngineError::CannotConvert {
                 type_name: "cell".to_string(),
@@ -226,14 +224,12 @@ impl BexEngine {
     /// Convert a `BexExternalValue` result from sys ops back to a VM Value.
     pub(crate) fn convert_external_to_vm_value(
         &self,
-        vm: &mut BexVm,
+        vm: &mut ActiveHeapPermit<BexVm>,
         external: BexExternalValue,
-        guard: &EpochGuard<'_>,
     ) -> Value {
         match external {
             BexExternalValue::Handle(handle) => Value::Object(
-                handle
-                    .object_ptr(guard)
+                self.resolve_handle(vm.proof(), &handle)
                     .expect("Handle should be valid - object was returned to external code"),
             ),
             BexExternalValue::Null => Value::Null,
@@ -244,14 +240,14 @@ impl BexEngine {
             BexExternalValue::Array { items, .. } => {
                 let values: Vec<Value> = items
                     .into_iter()
-                    .map(|v| self.convert_external_to_vm_value(vm, v, guard))
+                    .map(|v| self.convert_external_to_vm_value(vm, v))
                     .collect();
                 vm.alloc_array(values)
             }
             BexExternalValue::Map { entries, .. } => {
                 let values: indexmap::IndexMap<String, Value> = entries
                     .into_iter()
-                    .map(|(k, v)| (k, self.convert_external_to_vm_value(vm, v, guard)))
+                    .map(|(k, v)| (k, self.convert_external_to_vm_value(vm, v)))
                     .collect();
                 vm.alloc_map(values)
             }
@@ -262,6 +258,7 @@ impl BexEngine {
                 let class_ptr = self
                     .resolved_class_names
                     .get(&class_name)
+                    .or_else(|| resolve_named_object(&self.resolved_class_names, &class_name))
                     .unwrap_or_else(|| {
                         panic!("Class '{class_name}' not found in resolved_class_names")
                     });
@@ -278,7 +275,7 @@ impl BexEngine {
                     let ext = fields.get(&class_field.name).unwrap_or_else(|| {
                         panic!("missing field '{}' in Instance", class_field.name)
                     });
-                    values.push(self.convert_external_to_vm_value(vm, ext.clone(), guard));
+                    values.push(self.convert_external_to_vm_value(vm, ext.clone()));
                 }
                 vm.alloc_instance(*class_ptr, values)
             }
@@ -286,9 +283,13 @@ impl BexEngine {
                 enum_name,
                 variant_name,
             } => {
-                let enum_ptr = self.resolved_enum_names.get(&enum_name).unwrap_or_else(|| {
-                    panic!("Enum '{enum_name}' not found in resolved_enum_names")
-                });
+                let enum_ptr = self
+                    .resolved_enum_names
+                    .get(&enum_name)
+                    .or_else(|| resolve_named_object(&self.resolved_enum_names, &enum_name))
+                    .unwrap_or_else(|| {
+                        panic!("Enum '{enum_name}' not found in resolved_enum_names")
+                    });
                 #[allow(unsafe_code)]
                 let bex_vm_types::Object::Enum(enum_obj) = (unsafe { enum_ptr.get() }) else {
                     panic!("Expected Object::Enum for '{enum_name}'");
@@ -302,9 +303,7 @@ impl BexEngine {
                     });
                 vm.alloc_variant(*enum_ptr, index)
             }
-            BexExternalValue::Union { value, .. } => {
-                self.convert_external_to_vm_value(vm, *value, guard)
-            }
+            BexExternalValue::Union { value, .. } => self.convert_external_to_vm_value(vm, *value),
             BexExternalValue::Adt(BexExternalAdt::Collector(c)) => vm.alloc_collector(c),
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => vm.alloc_type(ty),
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
@@ -350,23 +349,28 @@ impl BexEngine {
     /// Unlike `vm_arg_to_bex_value` which creates `Handle` references for objects,
     /// this method deep-copies heap objects into standalone values. Use this for
     /// trace event payloads that escape the engine scope (e.g. event collectors).
-    pub(crate) fn vm_value_to_owned(&self, value: &Value) -> BexExternalValue {
+    pub(crate) fn vm_value_to_owned(
+        &self,
+        permit: PermitProof<'_>,
+        value: &Value,
+    ) -> BexExternalValue {
         match value {
             Value::Null => BexExternalValue::Null,
             Value::Int(i) => BexExternalValue::Int(*i),
             Value::Float(f) => BexExternalValue::Float(*f),
             Value::Bool(b) => BexExternalValue::Bool(*b),
-            Value::Object(ptr) => self
-                .heap
-                .with_gc_protection(|protected| {
-                    BexValue::HeapPtr(ptr).as_owned_but_very_slow(&protected)
-                })
-                .unwrap_or_else(|_| {
-                    #[allow(clippy::print_stderr)]
-                    {
-                        eprintln!("Failed to deep-copy VM value for trace payload");
-                    }
-                    BexExternalValue::Null
+            Value::Object(ptr) => BexValue::HeapPtr(ptr)
+                .as_owned_for_trace(&self.heap, permit)
+                .unwrap_or_else(|e| {
+                    // Remaining errors here (InvalidHandle, TypeMismatch,
+                    // FieldNotFound) indicate engine-level invariant
+                    // violations — they shouldn't happen in normal operation.
+                    // Surface via structured tracing rather than stderr so
+                    // they're visible in logs without polluting CLI output,
+                    // and embed the error in the trace payload so it shows
+                    // up wherever traces are consumed.
+                    tracing::error!(error = %e, "trace payload deep-copy failed");
+                    BexExternalValue::String(format!("<trace-error: {e}>"))
                 }),
         }
     }
@@ -429,6 +433,48 @@ fn find_matching_member(value: &BexExternalValue, members: &[Ty]) -> Result<Ty, 
     })
 }
 
+fn type_name_matches_external_name(external_name: &str, type_name: &baml_type::TypeName) -> bool {
+    if external_name == type_name.display_name.as_str() {
+        return true;
+    }
+
+    if type_name.module_path.is_empty() {
+        return external_name == type_name.name.as_str();
+    }
+
+    let qualified_name = type_name
+        .module_path
+        .iter()
+        .map(baml_type::Name::as_str)
+        .chain(std::iter::once(type_name.name.as_str()))
+        .collect::<Vec<_>>()
+        .join(".");
+
+    external_name == qualified_name
+}
+
+fn resolve_named_object<'a>(
+    objects: &'a indexmap::IndexMap<String, HeapPtr>,
+    name: &str,
+) -> Option<&'a HeapPtr> {
+    // Direct hit (engine FQN, e.g., "user.lorem.MyLorem" or
+    // "baml.http.Response").
+    if let Some(found) = objects.get(name) {
+        return Some(found);
+    }
+    // MIR's `qtn_to_type_name` strips the `user.` prefix from
+    // `display_name` for user-package types, so an `Instance` arriving
+    // from `coerce_arg_to_declared_type` may carry `lorem.MyLorem` while
+    // the engine registered `user.lorem.MyLorem`. Try the `user.`
+    // prefix as a fallback before giving up. Builtin/vendor types keep
+    // their full FQN so this only fires for user-package classes.
+    let user_qualified = format!("user.{name}");
+    if let Some(found) = objects.get(&user_qualified) {
+        return Some(found);
+    }
+    None
+}
+
 /// Check if a value matches a declared type.
 fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
     match (value, ty) {
@@ -446,10 +492,10 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Array { .. }, Ty::List(_, _)) => true,
         (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
         (BexExternalValue::Instance { class_name, .. }, Ty::Class(tn, _)) => {
-            class_name.as_str() == tn.display_name.as_str()
+            type_name_matches_external_name(class_name, tn)
         }
         (BexExternalValue::Variant { enum_name, .. }, Ty::Enum(tn, _)) => {
-            enum_name.as_str() == tn.display_name.as_str()
+            type_name_matches_external_name(enum_name, tn)
         }
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
         (BexExternalValue::Adt(BexExternalAdt::Type(_)), ty)
@@ -547,6 +593,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                 // Types that don't participate in union discrimination.
                 Object::Function(_)
                 | Object::Closure(_)
+                | Object::BoundMethod(_)
                 | Object::Cell(_)
                 | Object::Class(_)
                 | Object::Enum(_)
@@ -643,6 +690,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                 // These types should not appear as sys op arguments.
                 Object::Function(_)
                 | Object::Closure(_)
+                | Object::BoundMethod(_)
                 | Object::Cell(_)
                 | Object::Class(_)
                 | Object::Enum(_)

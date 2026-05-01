@@ -17,6 +17,7 @@ import './views-workbench.css';
 import { type IFileWriteOptions } from '@codingame/monaco-vscode-files-service-override';
 import { blobUrlsAtom } from './PlaygroundProvider';
 import type { Dimension } from '@codingame/monaco-vscode-api/vscode/vs/base/browser/dom';
+import type { DecorationOptions, TextEditor } from 'vscode';
 
 // ---------------------------------------------------------------------------
 // Media file helpers
@@ -206,6 +207,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         storageOverride,
         vscode,
         { default: bamlTmLanguageGrammar },
+        { default: jinjaTmLanguageGrammar },
       ] = await Promise.all([
         import('monaco-languageclient/vscodeApiWrapper'),
         import('monaco-languageclient/vscodeApiLocales'),
@@ -226,6 +228,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         import('@codingame/monaco-vscode-storage-service-override'),
         import('vscode'),
         import('./baml.tmLanguage.json'),
+        import('./jinja.tmLanguage.json'),
       ]);
 
       if (disposed || !containerRef.current) return;
@@ -421,16 +424,76 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
                 id: 'baml',
                 extensions: ['.baml'],
                 aliases: ['BAML', 'baml'],
+                configuration: './language-configuration.json',
+              }, {
+                id: 'baml-jinja',
+                aliases: ['Jinja baml', 'jinja baml'],
+                configuration: './jinja-language-configuration.json',
               }],
               grammars: [{
                 language: 'baml',
                 scopeName: 'source.baml',
                 path: './baml.tmLanguage.json',
+                embeddedLanguages: {
+                  'source.baml-jinja': 'baml-jinja',
+                  'string.quoted.block.baml.prompt': 'baml-jinja',
+                },
+              }, {
+                language: 'baml-jinja',
+                scopeName: 'source.baml-jinja',
+                path: './jinja.tmLanguage.json',
               }],
             },
           },
           filesOrContents: new Map<string, string | URL>([
             ['./baml.tmLanguage.json', JSON.stringify(bamlTmLanguageGrammar)],
+            ['./jinja.tmLanguage.json', JSON.stringify(jinjaTmLanguageGrammar)],
+            ['./language-configuration.json', JSON.stringify({
+              comments: {
+                lineComment: '//',
+                blockComment: ['{//', '//}'],
+              },
+              brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+              autoClosingPairs: [
+                ['{', '}'],
+                ['[', ']'],
+                ['(', ')'],
+                { open: '"', close: '"' },
+                ['#"', '"#'],
+                ["'", "'"],
+                ['{#', '}'],
+                ['{//', '//}'],
+              ],
+              surroundingPairs: [
+                ['{', '}'],
+                ['[', ']'],
+                ['(', ')'],
+                ['"', '"'],
+                ["'", "'"],
+              ],
+            })],
+            ['./jinja-language-configuration.json', JSON.stringify({
+              comments: {
+                blockComment: ['{#', '#}'],
+              },
+              brackets: [['{{', '}}'], ['{%', '%}'], ['{#', '#}'], ['(', ')'], ['[', ']']],
+              autoClosingPairs: [
+                ['{{', '}}'],
+                ['{%', '%}'],
+                ['{#', '#}'],
+                ['(', ')'],
+                ['[', ']'],
+                { open: '"', close: '"' },
+                ["'", "'"],
+              ],
+              surroundingPairs: [
+                ['{#', '#}'],
+                ['(', ')'],
+                ['[', ']'],
+                ['"', '"'],
+                ["'", "'"],
+              ],
+            })],
           ]),
         }],
       });
@@ -876,13 +939,133 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         await workerReadyPromise;
         if (disposed) { worker.terminate(); return; }
 
-        const { setRuntimePort } = await import('./ExecutionPanelPane');
+        const { setRuntimePort, setReloadCallback, setNavigateToSource } = await import('./ExecutionPanelPane');
         const { WorkerRuntimePort } = await import('@b/pkg-playground');
+        const vscode = await import('vscode');
 
         const runtimePort = new WorkerRuntimePort(worker!);
         workerLspDisposables.push(runtimePort);
         onWorkerReadyRef.current?.(worker!);
         setRuntimePort(runtimePort, { connectionVersion: connectionVersionRef.current });
+        setReloadCallback(() => restartWorkerRef.current?.());
+        setNavigateToSource((source) => {
+          // Find a visible BAML editor to navigate to.
+          // NOTE: The WASM runtime exposes runtime.resolveFileId(fileId) which returns the
+          // full file path. To use it from here, we'd need to add RPC from main thread → worker.
+          // For now, we search visible BAML editors as a fallback since promptfiddle typically
+          // has a single .baml file open.
+          const bamlEditor = vscode.window.visibleTextEditors.find(
+            (e) => e.document.uri.path.endsWith('.baml') || e.document.languageId === 'baml'
+          );
+          const editor = bamlEditor ?? vscode.window.activeTextEditor;
+          if (editor) {
+            const position = new vscode.Position(source.line, source.column);
+            editor.selection = new vscode.Selection(position, position);
+            editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+          }
+        });
+
+        // ── Log decorations (inline display like ErrorLens) ───────────────
+        // Create decoration types for each log level with inline after-text
+        let lastDecoratedEditor: TextEditor | undefined;
+        const logDecorationTypes = {
+          debug: vscode.window.createTextEditorDecorationType({
+            after: { color: '#888888', margin: '0 0 0 1em' },
+            isWholeLine: true,
+          }),
+          info: vscode.window.createTextEditorDecorationType({
+            after: { color: '#3794ff', margin: '0 0 0 1em' },
+            isWholeLine: true,
+          }),
+          warn: vscode.window.createTextEditorDecorationType({
+            after: { color: '#cca700', margin: '0 0 0 1em' },
+            isWholeLine: true,
+          }),
+          error: vscode.window.createTextEditorDecorationType({
+            after: { color: '#f14c4c', margin: '0 0 0 1em' },
+            isWholeLine: true,
+          }),
+        };
+        workerLspDisposables.push(
+          { dispose: () => logDecorationTypes.debug.dispose() },
+          { dispose: () => logDecorationTypes.info.dispose() },
+          { dispose: () => logDecorationTypes.warn.dispose() },
+          { dispose: () => logDecorationTypes.error.dispose() },
+        );
+
+        // Apply log decorations to the active editor
+        const applyLogDecorations = (decorations: Array<{ line: number; level: string; message: string; count: number }>) => {
+          try {
+            // Try activeTextEditor first, fall back to visibleTextEditors
+            let editor = vscode.window.activeTextEditor;
+
+            if (!editor) {
+              // Find a BAML editor from visible editors
+              editor = vscode.window.visibleTextEditors.find(e => e.document.uri.path.endsWith('.baml'));
+            }
+
+            if (!editor) {
+              return;
+            }
+
+            // Track this editor so we can clear its decorations later
+            lastDecoratedEditor = editor;
+
+            // Group decorations by level
+            const byLevel: Record<string, DecorationOptions[]> = {
+              debug: [], info: [], warn: [], error: [],
+            };
+
+            for (const dec of decorations) {
+              const level = dec.level as keyof typeof byLevel;
+              if (!(level in byLevel)) continue;
+
+              const line = dec.line - 1; // Convert to 0-indexed
+              if (line < 0) continue;
+
+              const countSuffix = dec.count > 1 ? ` ×${dec.count}` : '';
+              const text = `  // ${dec.level}: ${dec.message}${countSuffix}`;
+
+              byLevel[level].push({
+                range: new vscode.Range(line, 0, line, 0),
+                renderOptions: {
+                  after: { contentText: text },
+                },
+              });
+            }
+
+            // Apply decorations for each level
+            editor.setDecorations(logDecorationTypes.debug, byLevel.debug);
+            editor.setDecorations(logDecorationTypes.info, byLevel.info);
+            editor.setDecorations(logDecorationTypes.warn, byLevel.warn);
+            editor.setDecorations(logDecorationTypes.error, byLevel.error);
+          } catch {
+            // Silently ignore decoration errors
+          }
+        };
+
+        // Clear all log decorations on the editor that received them
+        const clearLogDecorations = () => {
+          if (!lastDecoratedEditor) return;
+          lastDecoratedEditor.setDecorations(logDecorationTypes.debug, []);
+          lastDecoratedEditor.setDecorations(logDecorationTypes.info, []);
+          lastDecoratedEditor.setDecorations(logDecorationTypes.warn, []);
+          lastDecoratedEditor.setDecorations(logDecorationTypes.error, []);
+          lastDecoratedEditor = undefined;
+        };
+
+        // Listen for log decoration messages from the worker
+        const onLogDecorations = (event: MessageEvent) => {
+          if (disposed) return;
+          const data = event.data;
+          if (data?.type === 'logDecorations') {
+            applyLogDecorations(data.decorations);
+          } else if (data?.type === 'clearLogDecorations') {
+            clearLogDecorations();
+          }
+        };
+        worker!.addEventListener('message', onLogDecorations);
+        workerLspDisposables.push({ dispose: () => worker?.removeEventListener('message', onLogDecorations) });
 
         connectionVersionRef.current += 1;
       };

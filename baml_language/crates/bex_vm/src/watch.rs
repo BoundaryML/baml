@@ -153,6 +153,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use ::bex_vm_types::RootHaver;
 use bex_vm_types::{HeapPtr, Object, StackIndex, Value};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -548,13 +549,13 @@ fn remap_node_set(
     }
 }
 
-impl Watch {
+impl RootHaver for Watch {
     /// Collects GC roots from Watch state.
     ///
     /// Only `last_assigned` and `last_notified` need to be roots — `value`
     /// is always a copy of the stack slot (already a root), and graph `NodeId`s
     /// point to objects transitively reachable from stack values.
-    pub fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         for state in self.roots.values() {
             if let Some(Value::Object(ptr)) = state.last_assigned {
                 roots.push(ptr);
@@ -569,7 +570,7 @@ impl Watch {
     ///
     /// After a copying GC, all heap objects may have moved. This updates
     /// `RootState` values and rebuilds the graph maps with new pointers.
-    pub fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward_roots(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         if forwarding.is_empty() || self.roots.is_empty() {
             return;
         }

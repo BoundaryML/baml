@@ -21,6 +21,8 @@ pub use bex_heap::BexHeap;
 pub use bex_vm_types::SysOp;
 pub use tokio_util::sync::CancellationToken;
 
+pub mod sse;
+
 /// Types generated from `llm_types.baml`.
 /// NOTE: sys_ops also generates the same code via its own build.rs because the
 /// generated IO traits contain blanket impls that must live in the crate that
@@ -30,7 +32,7 @@ pub use tokio_util::sync::CancellationToken;
 pub mod generated {
 
     pub use bex_external_types::{AsBexExternalValue, BexExternalValue};
-    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
+    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
     pub use bex_vm_types::SysOp;
 
     pub use crate::{
@@ -38,6 +40,20 @@ pub mod generated {
     };
 
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
+}
+
+/// Typed async IO trait generated from `.baml` `$rust_io_function` definitions.
+///
+/// Provides a clean async interface to all sys-ops without VM plumbing
+/// (`BexHeap`, `SysOpContext`, `CallId`). The adapter implementation lives in
+/// `sys_ops` and bridges to the `SysOpFn` pointers.
+#[allow(warnings, clippy::all, clippy::pedantic)]
+pub mod runtime_io {
+    pub use bex_external_types::BexExternalValue;
+
+    pub use super::generated::owned;
+
+    include!(concat!(env!("OUT_DIR"), "/runtime_io.rs"));
 }
 
 // ============================================================================
@@ -154,6 +170,9 @@ pub enum OpErrorKind {
     #[error("Access error: {0}")]
     AccessError(#[from] bex_heap::AccessError),
 
+    #[error("IO error: {message}")]
+    Io { message: String },
+
     #[error("Operation cancelled")]
     Cancelled,
 
@@ -182,6 +201,7 @@ impl OpErrorKind {
             Self::Unsupported => SysOpErrorCategory::Unsupported,
             Self::RenderPrompt(_) => SysOpErrorCategory::RenderPrompt,
             Self::AccessError(_) => SysOpErrorCategory::AccessError,
+            Self::Io { .. } => SysOpErrorCategory::Io,
             Self::Cancelled => SysOpErrorCategory::Io,
             Self::Timeout { .. } => SysOpErrorCategory::Timeout,
             Self::NotImplemented { .. } => SysOpErrorCategory::NotImplemented,
@@ -318,6 +338,26 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
     }
 }
 
+impl<T: Send + 'static> SysOpOutput<T> {
+    /// Convert to [`SysOpResult`] using a custom value mapping function.
+    ///
+    /// Used by generated glue code for return types that don't implement
+    /// [`AsBexExternalValue`] directly (e.g. `Vec<ClassName>`).
+    pub fn into_result_mapped(
+        self,
+        op: SysOp,
+        f: impl Fn(T) -> BexExternalValue + Send + 'static,
+    ) -> SysOpResult {
+        match self {
+            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(f(v))),
+            Self::Ready(Err(kind)) => SysOpResult::Ready(Err(OpError::new(op, kind))),
+            Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
+                fut.await.map(f).map_err(|kind| OpError::new(op, kind))
+            })),
+        }
+    }
+}
+
 // ============================================================================
 // System Operations Table
 // ============================================================================
@@ -327,7 +367,8 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
 /// Each operation takes a heap reference, arguments, and a context reference,
 /// returning a `SysOpResult` which is either an immediate result or a future to await.
 ///
-/// The heap reference allows ops to access instance fields via `with_gc_protection`.
+/// The heap reference plus a [`PermitProof`](bex_heap::PermitProof) (proving GC-exclusion) lets ops
+/// safely access instance fields via the heap accessor APIs.
 /// Arguments are `BexValue` which can be either:
 /// - `BexValue::External(...)` for primitives/strings copied from VM
 /// - `BexValue::Opaque(Handle)` for heap objects (instances, arrays, maps)
@@ -335,7 +376,13 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
 /// The context reference provides engine-level information (e.g., function metadata)
 /// that some `sys_ops` need. Ops that don't need it simply ignore the parameter.
 pub type SysOpFn = Arc<
-    dyn for<'a> Fn(&Arc<BexHeap>, Vec<bex_heap::BexValue<'a>>, &SysOpContext, CallId) -> SysOpResult
+    dyn for<'a> Fn(
+            &Arc<BexHeap>,
+            bex_heap::PermitProof<'a>,
+            Vec<bex_heap::BexValue<'a>>,
+            &SysOpContext,
+            CallId,
+        ) -> SysOpResult
         + Send
         + Sync,
 >;
@@ -414,12 +461,9 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Can be used to spawn new VMs.
     pub spawner: Arc<dyn VmSpawner<E>>,
 
-    /// IO function pointers copied from the `SysOps` table by the engine.
-    /// Allows sys-op implementations (e.g. `build_request` auth for Bedrock/Vertex)
-    /// to call back into the runtime IO layer without needing direct access to the
-    /// ops table. Other sys-ops that need runtime IO in the future can use these
-    /// as well.
-    pub io_callbacks: SysOpIoCallbacks,
+    /// Typed async IO interface for calling back into the runtime IO layer.
+    /// Built once by the engine from the `SysOps` table and shared across calls.
+    pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
 }
 
 impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
@@ -433,42 +477,7 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
             enum_definitions: self.enum_definitions.clone(),
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner: self.spawner.clone(),
-            io_callbacks: self.io_callbacks.clone(),
-        }
-    }
-}
-
-/// IO function pointers available to sys-op implementations.
-///
-/// Copied from the `SysOps` table during engine construction so that ops like
-/// `build_request` can call back into the runtime IO layer (e.g. for credential
-/// resolution) without needing direct access to the ops table.
-#[derive(Clone)]
-pub struct SysOpIoCallbacks {
-    pub http_send: SysOpFn,
-    pub http_response_text: SysOpFn,
-    pub env_get: SysOpFn,
-    pub fs_open: SysOpFn,
-    pub fs_file_read: SysOpFn,
-    pub sys_shell: SysOpFn,
-}
-
-impl SysOpIoCallbacks {
-    /// Create a context where all IO ops return `Unsupported`.
-    /// Used by tests and contexts where no real IO is available.
-    pub fn unsupported() -> Self {
-        fn make_unsupported(op: SysOp) -> SysOpFn {
-            Arc::new(move |_, _, _, _| {
-                SysOpResult::Ready(Err(OpError::new(op, OpErrorKind::Unsupported)))
-            })
-        }
-        Self {
-            http_send: make_unsupported(SysOp::BamlHttpSend),
-            http_response_text: make_unsupported(SysOp::BamlHttpResponseText),
-            env_get: make_unsupported(SysOp::BamlEnvGet),
-            fs_open: make_unsupported(SysOp::BamlFsOpen),
-            fs_file_read: make_unsupported(SysOp::BamlFsFileRead),
-            sys_shell: make_unsupported(SysOp::BamlSysShell),
+            runtime_io: self.runtime_io.clone(),
         }
     }
 }
@@ -502,9 +511,8 @@ pub struct EngineSysOpContext {
     /// Maps alias name → target type.
     pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>>,
 
-    /// IO function pointers copied from the `SysOps` table by the engine.
-    /// See [`SysOpIoCallbacks`] for details.
-    pub io_callbacks: SysOpIoCallbacks,
+    /// Typed async IO interface, built from the `SysOps` table at engine init.
+    pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
 }
 
 /// Pre-extracted metadata for an LLM function.
@@ -518,6 +526,9 @@ pub struct LlmFunctionInfo {
     pub client_name: String,
     /// The expected return type, used for response parsing.
     pub return_type: baml_type::Ty,
+    /// The stream-expanded return type (e.g. `null | MyClass$stream`).
+    /// Used by `get_stream_return_type` for constructing `StreamCache`.
+    pub stream_return_type: baml_type::Ty,
 }
 
 /// Pre-extracted class definition for output format rendering.
@@ -589,7 +600,7 @@ impl SysOpContext {
                 baml_type::Ty,
             >::new()),
             spawner: Arc::new(NeverSpawner),
-            io_callbacks: SysOpIoCallbacks::unsupported(),
+            runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
         }
     }
 }
@@ -610,7 +621,7 @@ impl EngineSysOpContext {
             enum_definitions: self.enum_definitions.clone(),
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner,
-            io_callbacks: self.io_callbacks.clone(),
+            runtime_io: self.runtime_io.clone(),
         }
     }
 }
@@ -758,12 +769,7 @@ mod tests {
     #[test]
     fn all_sys_ops_have_contract_metadata() {
         use bex_vm_types::SysOp;
-        let ops = [
-            SysOp::BamlFsOpen,
-            SysOp::BamlHttpFetch,
-            SysOp::BamlSysPanic,
-            SysOp::BamlEnvGet,
-        ];
+        let ops = [SysOp::BamlFsOpen, SysOp::BamlHttpFetch, SysOp::BamlEnvGet];
         for op in ops {
             let cats = op.allowed_error_categories();
             let panics = op.allowed_panic_categories();
@@ -794,6 +800,9 @@ mod tests {
             OpErrorKind::ResourceTypeMismatch { expected: "File" },
             OpErrorKind::Unsupported,
             OpErrorKind::RenderPrompt("err".into()),
+            OpErrorKind::Io {
+                message: "io error".into(),
+            },
             OpErrorKind::Cancelled,
             OpErrorKind::Timeout {
                 message: "t".into(),

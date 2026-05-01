@@ -1,0 +1,104 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function $init() -> null {
+    call $init_let_0
+    store_global user.MyClient
+    load_const null
+    return
+}
+
+function user.MyClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    load_const "MyClient"
+    init_field .name
+    load_const "openai"
+    init_field .provider
+    alloc_instance baml.llm.PrimitiveClientOptions
+    load_const null
+    init_field .model
+    load_const null
+    init_field .base_url
+    load_const null
+    init_field .allowed_role_metadata
+    load_const null
+    init_field .finish_reason_allow_list
+    load_const null
+    init_field .finish_reason_deny_list
+    load_const null
+    init_field .supports_streaming
+    load_const null
+    init_field .default_role
+    load_const null
+    init_field .allowed_roles
+    load_const null
+    init_field .remap_roles
+    load_const null
+    init_field .api_key
+    load_const null
+    init_field .provider_options
+    load_const null
+    init_field .media_url_handler
+    alloc_map 0
+    init_field .headers
+    alloc_map 0
+    init_field .query_params
+    load_const 100
+    load_const "abc"
+    load_const "abc"
+    load_const "ccc"
+    alloc_array 3
+    load_const "somerandomvalue"
+    load_const "world"
+    load_const "hello"
+    load_const "#hellotheremyfriend#"
+    load_const "#inlinerawstring,,#"
+    load_const true
+    load_const true
+    load_const "one"
+    load_const "two"
+    alloc_array 2
+    load_const "one"
+    load_const "two"
+    alloc_array 2
+    load_const null
+    load_const null
+    load_const null
+    alloc_array 3
+    load_const "value"
+    load_const "value2"
+    load_const "yes"
+    load_const "queen"
+    alloc_array 2
+    load_const 10
+    load_const "key"
+    load_const "key2"
+    load_const "nestedArray"
+    load_const "number"
+    alloc_map 4
+    load_const "value"
+    load_const 100
+    alloc_array 0
+    load_const "#hellotheremyfriend{#acommentinaprompt#}#"
+    load_const "max_tokens"
+    load_const "array_key_with_quoted_unquoted"
+    load_const "key2"
+    load_const "hello"
+    load_const "thing"
+    load_const "block_string"
+    load_const "inline_raw_string"
+    load_const "booleanValue"
+    load_const "stringKey"
+    load_const "array1"
+    load_const "array2"
+    load_const "array3Numbers"
+    load_const "nestedKey"
+    load_const "oneMoreValueToTestBrokenness"
+    load_const "myInteger"
+    load_const "tools"
+    load_const "block_string"
+    alloc_map 17
+    init_field .request_body
+    init_field .options
+    return
+}

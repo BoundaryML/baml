@@ -102,6 +102,26 @@ mod lambda_format_tests {
     }
 
     #[test]
+    fn test_function_type_with_throws_formatting() {
+        let source = "type Callback = (x: int) -> string throws never\n";
+        let options = FormatOptions::default();
+        let formatted =
+            format(source, &options).expect("formatter should succeed on function-type throws");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_top_level_function_with_throws_formatting() {
+        let source = "function risky(x: int) -> int throws string {\n    throw \"boom\"\n}\n";
+        let options = FormatOptions::default();
+        let formatted =
+            format(source, &options).expect("formatter should succeed on top-level throws");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
     fn test_generic_lambda_formatting() {
         let source = "function test_generic() -> int {\n    let identity = <T>(x: T) -> T { x }\n    identity(42)\n}\n";
         let options = FormatOptions::default();

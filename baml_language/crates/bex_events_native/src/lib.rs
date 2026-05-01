@@ -1,8 +1,12 @@
-//! Native `EventSink` implementation: background thread + bounded channel + JSONL file writer.
+//! Native `EventSink` implementation: background thread + bounded channel,
+//! optional JSONL file writer, and stderr rendering for runtime `log.*` events.
 //!
 //! Call `start(path)` to create a `NativeEventSink` and spawn the publisher thread.
-//! Events are buffered in-memory and written to the given JSONL file path
-//! on `flush()` or when the channel is closed (process shutdown).
+//! When a trace file is configured, all runtime events are buffered in-memory
+//! and written as JSONL on `flush()` or when the channel is closed.
+//! Structured `log.info()` / `log.debug()` / `log.warn()` / `log.error()` events
+//! are additionally rendered to stderr immediately using the same debug format
+//! as the `typescript2` playground.
 //!
 //! **Guaranteed delivery:** Callers must call `flush()` before process shutdown (e.g. before
 //! dropping the sink or exiting) to ensure all buffered events are written. The LSP and CFFI
@@ -21,7 +25,8 @@ use std::{
     time::Duration,
 };
 
-use bex_events::{EventSink, RuntimeEvent};
+use bex_events::{EventKind, EventSink, RuntimeEvent};
+use time::{OffsetDateTime, format_description::FormatItem, macros::format_description};
 
 /// Messages sent to the publisher thread.
 #[allow(clippy::large_enum_variant)]
@@ -34,6 +39,8 @@ enum PublisherMessage {
 
 const AUTO_FLUSH_INTERVAL: Duration = Duration::from_secs(5);
 const AUTO_FLUSH_THRESHOLD: usize = 1024;
+const TIMESTAMP_FORMAT: &[FormatItem<'static>] =
+    format_description!("[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3]Z");
 
 /// Native event sink backed by a bounded channel and a background thread.
 ///
@@ -64,17 +71,24 @@ impl EventSink for NativeEventSink {
     }
 }
 
-/// Start the native event sink: spawn a `"bex-publisher"` background thread
-/// that writes JSONL to `trace_file`, and return an `Arc<dyn EventSink>`.
+/// Start the native event sink with a JSONL file target.
 ///
-/// The caller is responsible for determining the file path (e.g. by reading
-/// `BAML_TRACE_FILE` env var). This crate does not read env vars.
+/// Structured `log.*` events are always mirrored to stderr.
 pub fn start(trace_file: PathBuf) -> Arc<dyn EventSink> {
+    start_inner(Some(trace_file))
+}
+
+/// Start the native event sink with stderr-only logging.
+pub fn start_stderr() -> Arc<dyn EventSink> {
+    start_inner(None)
+}
+
+fn start_inner(trace_file: Option<PathBuf>) -> Arc<dyn EventSink> {
     let (tx, rx) = mpsc::sync_channel::<PublisherMessage>(4096);
 
     std::thread::Builder::new()
         .name("bex-publisher".into())
-        .spawn(move || publisher_loop(rx, &trace_file))
+        .spawn(move || publisher_loop(rx, trace_file))
         .expect("failed to spawn bex-publisher thread");
 
     Arc::new(NativeEventSink {
@@ -89,13 +103,18 @@ pub fn start(trace_file: PathBuf) -> Arc<dyn EventSink> {
 /// when `AUTO_FLUSH_INTERVAL` elapses without an explicit flush, preventing
 /// unbounded buffer growth.
 #[allow(clippy::needless_pass_by_value)] // rx is moved into this thread and must be owned
-fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>, trace_file: &Path) {
+fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>, trace_file: Option<PathBuf>) {
     let mut buffer: Vec<RuntimeEvent> = Vec::new();
 
     // Block on the first message so we don't spin when idle.
     let first = rx.recv();
     match first {
-        Ok(PublisherMessage::Event(e)) => buffer.push(e),
+        Ok(PublisherMessage::Event(e)) => {
+            write_log_event_to_stderr(&e);
+            if trace_file.is_some() {
+                buffer.push(e);
+            }
+        }
         Ok(PublisherMessage::Flush(ack)) => {
             let _ = ack.send(());
         }
@@ -105,23 +124,28 @@ fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>, trace_file: &Path) {
     loop {
         match rx.recv_timeout(AUTO_FLUSH_INTERVAL) {
             Ok(PublisherMessage::Event(e)) => {
-                buffer.push(e);
-                if buffer.len() >= AUTO_FLUSH_THRESHOLD {
-                    write_jsonl_to_file(&buffer, trace_file);
-                    buffer.clear();
+                write_log_event_to_stderr(&e);
+                if trace_file.is_some() {
+                    buffer.push(e);
+                    if buffer.len() >= AUTO_FLUSH_THRESHOLD {
+                        flush_buffer(&mut buffer, trace_file.as_deref());
+                    }
                 }
             }
             Ok(PublisherMessage::Flush(ack)) => {
-                write_jsonl_to_file(&buffer, trace_file);
-                buffer.clear();
+                flush_buffer(&mut buffer, trace_file.as_deref());
                 let _ = ack.send(());
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                write_jsonl_to_file(&buffer, trace_file);
-                buffer.clear();
+                flush_buffer(&mut buffer, trace_file.as_deref());
                 // Park until the next message so we don't spin on timeouts when idle.
                 match rx.recv() {
-                    Ok(PublisherMessage::Event(e)) => buffer.push(e),
+                    Ok(PublisherMessage::Event(e)) => {
+                        write_log_event_to_stderr(&e);
+                        if trace_file.is_some() {
+                            buffer.push(e);
+                        }
+                    }
                     Ok(PublisherMessage::Flush(ack)) => {
                         let _ = ack.send(());
                     }
@@ -129,11 +153,60 @@ fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>, trace_file: &Path) {
                 }
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
-                write_jsonl_to_file(&buffer, trace_file);
+                flush_buffer(&mut buffer, trace_file.as_deref());
                 break;
             }
         }
     }
+}
+
+fn flush_buffer(buffer: &mut Vec<RuntimeEvent>, trace_file: Option<&Path>) {
+    if let Some(trace_file) = trace_file {
+        write_jsonl_to_file(buffer, trace_file);
+    }
+    buffer.clear();
+}
+
+fn write_log_event_to_stderr(event: &RuntimeEvent) {
+    if let Some(line) = format_log_event_for_stderr(event) {
+        #[allow(clippy::print_stderr)]
+        {
+            eprintln!("{line}");
+        }
+    }
+}
+
+fn format_log_event_for_stderr(event: &RuntimeEvent) -> Option<String> {
+    let EventKind::Log(log) = &event.event else {
+        return None;
+    };
+
+    let timestamp = format_timestamp(event.timestamp);
+    let payload = bex_events::serialize::bex_value_to_debug_string(&log.data);
+    Some(format!(
+        "[{timestamp}] {} {payload}",
+        log.level.to_uppercase()
+    ))
+}
+
+fn format_timestamp(timestamp: web_time::SystemTime) -> String {
+    let Ok(duration) = timestamp.duration_since(web_time::UNIX_EPOCH) else {
+        return "unix:0.000".into();
+    };
+
+    let nanos =
+        i128::from(duration.as_secs()) * 1_000_000_000 + i128::from(duration.subsec_nanos());
+
+    OffsetDateTime::from_unix_timestamp_nanos(nanos)
+        .ok()
+        .and_then(|dt| dt.format(TIMESTAMP_FORMAT).ok())
+        .unwrap_or_else(|| {
+            format!(
+                "unix:{}.{:03}",
+                duration.as_secs(),
+                duration.subsec_millis()
+            )
+        })
 }
 
 /// Write buffered events to the given JSONL file (append mode).
@@ -161,13 +234,18 @@ fn write_jsonl_to_file(events: &[RuntimeEvent], trace_file: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use bex_events::{EventKind, FunctionEvent, FunctionStart, RuntimeEvent, SpanContext, SpanId};
+    use std::time::Duration;
+
+    use bex_events::{
+        CallId, EventKind, FunctionEvent, FunctionStart, RuntimeEvent, SpanContext, SpanId,
+    };
     use web_time::SystemTime;
 
     use super::*;
 
     fn make_event(span_id: SpanId) -> RuntimeEvent {
         RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -196,5 +274,86 @@ mod tests {
         let contents = std::fs::read_to_string(&trace_path).unwrap();
         assert!(!contents.is_empty(), "trace file should have content");
         assert!(contents.contains("test_fn"));
+    }
+
+    #[test]
+    fn test_format_log_event_for_stderr() {
+        let span_id = SpanId::new();
+        let event = RuntimeEvent {
+            call_id: CallId(0),
+            ctx: SpanContext {
+                span_id: span_id.clone(),
+                parent_span_id: None,
+                root_span_id: span_id,
+            },
+            call_stack: vec![],
+            timestamp: web_time::UNIX_EPOCH + Duration::from_millis(1_234),
+            event: EventKind::Log(bex_events::LogEvent {
+                level: "info".into(),
+                data: bex_external_types::BexExternalValue::Map {
+                    key_type: baml_type::Ty::string(),
+                    value_type: baml_type::Ty::string(),
+                    entries: indexmap::IndexMap::from([
+                        (
+                            "status".into(),
+                            bex_external_types::BexExternalValue::Variant {
+                                enum_name: "State".into(),
+                                variant_name: "Ready".into(),
+                            },
+                        ),
+                        (
+                            "user".into(),
+                            bex_external_types::BexExternalValue::Instance {
+                                class_name: "Person".into(),
+                                fields: indexmap::IndexMap::from([(
+                                    "name".into(),
+                                    bex_external_types::BexExternalValue::String("Alice".into()),
+                                )]),
+                            },
+                        ),
+                    ]),
+                },
+                source: None,
+            }),
+        };
+
+        let line = format_log_event_for_stderr(&event).expect("log events should render");
+        assert_eq!(
+            line,
+            "[1970-01-01T00:00:01.234Z] INFO {status: State.Ready, user: Person { name: \"Alice\" }}"
+        );
+    }
+
+    #[test]
+    fn test_format_log_event_for_stderr_escapes_newlines() {
+        // Log payloads that contain literal newlines/tabs must render on a
+        // single line, otherwise stderr log readers see the payload split
+        // across multiple lines.
+        let span_id = SpanId::new();
+        let event = RuntimeEvent {
+            call_id: CallId(0),
+            ctx: SpanContext {
+                span_id: span_id.clone(),
+                parent_span_id: None,
+                root_span_id: span_id,
+            },
+            call_stack: vec![],
+            timestamp: web_time::UNIX_EPOCH + Duration::from_millis(0),
+            event: EventKind::Log(bex_events::LogEvent {
+                level: "info".into(),
+                data: bex_external_types::BexExternalValue::String("first\nsecond\tthird".into()),
+                source: None,
+            }),
+        };
+
+        let line = format_log_event_for_stderr(&event).expect("log events should render");
+        assert!(
+            !line.contains('\n'),
+            "stderr log line must not contain raw newlines: {line:?}"
+        );
+        assert!(
+            line.contains("\\n") && line.contains("\\t"),
+            "newline/tab should be escaped in output: {line:?}"
+        );
     }
 }

@@ -19,20 +19,20 @@ function ThrowsVariantExact(x: int) -> string throws Errors {
 //----
 //- diagnostics
 // Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
-//     ╭─[ throw_throws_enum_variant_precise.baml:12:55 ]
+//     ╭─[ throw_throws_enum_variant_precise.baml:12:53 ]
 //     │
 //  12 │ function ThrowsVariantExact(x: int) -> string throws Errors {
-//     │                                                       ───┬───  
-//     │                                                          ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
+//     │                                                     ───┬───  
+//     │                                                        ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0096
 // ────╯
 // Warning: extraneous throws declaration: user.Errors
-//     ╭─[ throw_throws_enum_variant_precise.baml:12:55 ]
+//     ╭─[ throw_throws_enum_variant_precise.baml:12:53 ]
 //     │
 //  12 │ function ThrowsVariantExact(x: int) -> string throws Errors {
-//     │                                                       ───┬───  
-//     │                                                          ╰───── extraneous throws declaration: user.Errors
+//     │                                                     ───┬───  
+//     │                                                        ╰───── extraneous throws declaration: user.Errors
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0097
 // ────╯

@@ -13,20 +13,20 @@ function ThrowsEnumExtraneous(x: int) -> string throws Errors {
 //----
 //- diagnostics
 // Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError
-//    ╭─[ throw_throws_enum_extraneous.baml:9:57 ]
+//    ╭─[ throw_throws_enum_extraneous.baml:9:55 ]
 //    │
 //  9 │ function ThrowsEnumExtraneous(x: int) -> string throws Errors {
-//    │                                                         ───┬───  
-//    │                                                            ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError
+//    │                                                       ───┬───  
+//    │                                                          ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0096
 // ───╯
 // Warning: extraneous throws declaration: user.Errors
-//    ╭─[ throw_throws_enum_extraneous.baml:9:57 ]
+//    ╭─[ throw_throws_enum_extraneous.baml:9:55 ]
 //    │
 //  9 │ function ThrowsEnumExtraneous(x: int) -> string throws Errors {
-//    │                                                         ───┬───  
-//    │                                                            ╰───── extraneous throws declaration: user.Errors
+//    │                                                       ───┬───  
+//    │                                                          ╰───── extraneous throws declaration: user.Errors
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0097
 // ───╯

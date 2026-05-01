@@ -10,7 +10,10 @@
 //! Per-item queries (`resolve_class_fields`, `resolve_type_alias`) provide
 //! Salsa-cached structural type resolution for class fields and type aliases.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
 use baml_base::Name;
 use baml_compiler2_ast::{AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId};
@@ -19,7 +22,8 @@ use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, EnumLoc, FunctionLoc, LetLoc, TypeAliasLoc},
     package::{PackageId, PackageItems},
-    scope::{ScopeId, ScopeKind},
+    scope::{FileScopeId, ScopeId, ScopeKind},
+    semantic_index::{BindingId, DefinitionSite},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
@@ -29,6 +33,25 @@ use crate::{
     infer_context::{InferContext, TypeCheckDiagnostics},
     ty::{Ty, TyAttr},
 };
+
+fn inference_owner_scope(
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+    mut scope_id: FileScopeId,
+) -> FileScopeId {
+    loop {
+        let scope = &index.scopes[scope_id.index() as usize];
+        if matches!(
+            scope.kind,
+            ScopeKind::Function | ScopeKind::Let | ScopeKind::Lambda
+        ) {
+            return scope_id;
+        }
+        let Some(parent) = scope.parent else {
+            return scope_id;
+        };
+        scope_id = parent;
+    }
+}
 
 // ── Member Resolution ─────────────────────────────────────────────────────
 
@@ -50,12 +73,17 @@ pub enum MemberResolution<'db> {
         variant_name: Name,
     },
     /// A free item accessed via a package/namespace path.
-    /// e.g. `env.get` → package="env", namespace=[], name="get"
+    /// e.g. `baml.env.get` → package=`baml`, namespace=[`env`], name=`get`
     Free { func_loc: FunctionLoc<'db> },
-    /// A method on a class (user-defined or builtin).
-    /// e.g. `arr.length` → package="baml", namespace=[], class="Array", name="length"
-    /// e.g. `baz.Greeting` → package="user", namespace=[], class="Baz", name="Greeting"
-    Method {
+    /// A bound method reference: root is a value (local variable or field chain).
+    /// e.g. `p.get_name` where `p` is a local — type has `self` stripped.
+    BoundMethod {
+        class_loc: ClassLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
+    /// An unbound method reference: root is a type name.
+    /// e.g. `Person.get_name` where `Person` is a class type — type keeps `self`.
+    UnboundMethod {
         class_loc: ClassLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
@@ -83,8 +111,35 @@ pub struct ScopeInference<'db> {
     /// structural path so MIR can emit the correct `QualifiedName` and LSP
     /// can navigate to the definition.
     resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
+    /// Residual throw facts for each catch expression after its arms have been
+    /// applied. This lets downstream throw-surface queries reuse the same catch
+    /// semantics as the main type-checking builder instead of over-approximating.
+    catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
     /// Match expressions that the exhaustiveness checker determined cover all cases.
     exhaustive_matches: FxHashSet<ExprId>,
+    /// TIR-inferred root segment type for each multi-segment `Path` expression.
+    /// Populated in `infer_path` so that MIR can chain field projections even
+    /// when the MIR local was declared with a coarser type (e.g. catch variables
+    /// are declared as `BuiltinUnknown` by `lower_catch` before `bind_pattern`
+    /// has a chance to refine them).
+    path_root_types: FxHashMap<ExprId, Ty>,
+    /// Per-segment member resolutions for multi-segment local-rooted `Path` expressions.
+    ///
+    /// For `obj.a.b` (`Path(["obj", "a", "b"])`), contains resolutions for segments
+    /// [1..] i.e., "a" (index 0) and "b" (index 1). Parallel to `segments[1..]`.
+    ///
+    /// Used by MIR to emit chained `Place::Field` projections and by LSP to
+    /// navigate to field definitions from within multi-segment paths.
+    path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
+    /// Lambda span → `Ty::Function` for every lambda expression encountered
+    /// during inline body inference (including nested lambdas). Allows nested
+    /// lambda scopes to look up their contextual param types without calling
+    /// `infer_scope_types` on intermediate Lambda ancestors (which would cycle).
+    nested_lambda_types: FxHashMap<FileScopeId, Ty>,
+    /// Lambda/function parameter types by index (name, inferred type).
+    /// Populated for lambda scopes so LSP can resolve unannotated lambda
+    /// parameter types (e.g. `items.map((item) -> { item. })`).
+    param_types: Vec<(Name, Ty)>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
 }
@@ -121,10 +176,22 @@ impl<'db> ScopeInference<'db> {
         self.expressions.get(&expr_id)
     }
 
+    /// Look up the `Ty::Function` type assigned to a nested lambda by its span.
+    /// Used by nested Lambda scopes to get contextual param types without
+    /// calling `infer_scope_types` on intermediate Lambda ancestors.
+    pub fn nested_lambda_type(&self, fsi: FileScopeId) -> Option<&Ty> {
+        self.nested_lambda_types.get(&fsi)
+    }
+
     /// Look up the binding type for a pattern (the type the variable is bound to,
     /// which may differ from the initializer expression type due to widening).
     pub fn binding_type(&self, pat_id: PatId) -> Option<&Ty> {
         self.bindings.get(&pat_id)
+    }
+
+    /// Look up the type of a parameter by index.
+    pub fn param_type(&self, param_idx: usize) -> Option<&Ty> {
+        self.param_types.get(param_idx).map(|(_, ty)| ty)
     }
 
     /// Iterate over all (`ExprId`, Ty) pairs for expressions in this scope.
@@ -142,6 +209,12 @@ impl<'db> ScopeInference<'db> {
         self.resolutions.get(&expr_id)
     }
 
+    /// Look up residual throw facts for a catch expression after handled arms
+    /// have been removed.
+    pub fn catch_residual_throws(&self, expr_id: ExprId) -> Option<&BTreeSet<Ty>> {
+        self.catch_residual_throws.get(&expr_id)
+    }
+
     /// Iterate over all (`ExprId`, `MemberResolution`) pairs for this scope.
     pub fn iter_resolutions(&self) -> impl Iterator<Item = (&ExprId, &MemberResolution<'db>)> {
         self.resolutions.iter()
@@ -155,6 +228,33 @@ impl<'db> ScopeInference<'db> {
     /// Iterate over all exhaustive match `ExprIds` in this scope.
     pub fn iter_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
         self.exhaustive_matches.iter()
+    }
+
+    /// Look up the TIR-inferred root segment type for a multi-segment Path expression.
+    pub fn path_root_type(&self, expr_id: ExprId) -> Option<&Ty> {
+        self.path_root_types.get(&expr_id)
+    }
+
+    /// Iterate over all (`ExprId`, root `Ty`) pairs for multi-segment paths in this scope.
+    pub fn iter_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
+        self.path_root_types.iter()
+    }
+
+    /// Look up per-segment member resolutions for a multi-segment local-rooted
+    /// `Path` expression. Returns `None` if not recorded (e.g. package-rooted
+    /// paths or paths with only a single segment).
+    pub fn path_member_resolution(&self, expr_id: ExprId) -> Option<&[MemberResolution<'db>]> {
+        self.path_member_resolutions
+            .get(&expr_id)
+            .map(Vec::as_slice)
+    }
+
+    /// Iterate over all (`ExprId`, per-segment resolutions) for multi-segment
+    /// local-rooted paths in this scope.
+    pub fn iter_path_member_resolutions(
+        &self,
+    ) -> impl Iterator<Item = (&ExprId, &Vec<MemberResolution<'db>>)> {
+        self.path_member_resolutions.iter()
     }
 
     /// Get diagnostics for this scope (empty slice if none).
@@ -226,7 +326,26 @@ fn find_lambda_by_span<'a>(
 /// Keyed by `ScopeId<'db>` (tracked: `File + FileScopeId`), so Salsa caches
 /// independently per scope. Editing lambda A does NOT invalidate the enclosing
 /// function's `ScopeInference`.
-#[salsa::tracked(returns(ref))]
+fn infer_scope_types_cycle_initial<'db>(
+    _db: &'db dyn crate::Db,
+    _id: salsa::Id,
+    _scope_id: ScopeId<'db>,
+) -> ScopeInference<'db> {
+    ScopeInference {
+        expressions: FxHashMap::default(),
+        bindings: FxHashMap::default(),
+        resolutions: FxHashMap::default(),
+        catch_residual_throws: FxHashMap::default(),
+        exhaustive_matches: FxHashSet::default(),
+        path_root_types: FxHashMap::default(),
+        path_member_resolutions: FxHashMap::default(),
+        nested_lambda_types: FxHashMap::default(),
+        param_types: Vec::new(),
+        extra: None,
+    }
+}
+
+#[salsa::tracked(returns(ref), cycle_initial=infer_scope_types_cycle_initial)]
 pub fn infer_scope_types<'db>(
     db: &'db dyn crate::Db,
     scope_id: ScopeId<'db>,
@@ -240,7 +359,7 @@ pub fn infer_scope_types<'db>(
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
-    let pkg_items = res_ctx.own_items;
+    let pkg_items = &res_ctx.own_items;
 
     let mut aliases = collect_type_aliases(db, pkg_items);
     // Also collect type aliases from dependency packages so that e.g.
@@ -270,18 +389,31 @@ pub fn infer_scope_types<'db>(
             for (local_id, func_data) in &item_tree.functions {
                 if func_data.span == scope.range && scope.name.as_ref() == Some(&func_data.name) {
                     let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
-                    let body = baml_compiler2_hir::body::function_body(db, func_loc);
-                    let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                    let body = baml_compiler2_ppir::function_body(db, func_loc);
+                    let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
 
                     // Compute the generic params for this function scope.
                     // If this is a method inside a class, also include the class's generic params.
-                    let mut generic_params = func_data.generic_params.clone();
+                    let mut generic_params = sig.user_generic_params.clone();
+                    generic_params.extend(sig.synthetic_effect_params.iter().cloned());
                     if let Some(parent_idx) = scope.parent {
                         let parent = &index.scopes[parent_idx.index() as usize];
                         if matches!(parent.kind, ScopeKind::Class) {
                             if let Some(class_name) = &parent.name {
                                 for class_data in item_tree.classes.values() {
                                     if class_data.name == *class_name {
+                                        // Check for method-level type params that shadow class-level ones.
+                                        for mp in &sig.user_generic_params {
+                                            if class_data.generic_params.iter().any(|cp| cp == mp) {
+                                                builder.report_at_span(
+                                                    crate::infer_context::TirTypeError::TypeParamShadowed {
+                                                        param_name: mp.clone(),
+                                                        class_name: class_name.clone(),
+                                                    },
+                                                    func_data.span,
+                                                );
+                                            }
+                                        }
                                         let mut merged = class_data.generic_params.clone();
                                         merged.extend(generic_params);
                                         generic_params = merged;
@@ -316,7 +448,7 @@ pub fn infer_scope_types<'db>(
                         // Report unresolved type diagnostics for return type
                         if !diags.is_empty() {
                             let sig_sm =
-                                baml_compiler2_hir::signature::function_signature_source_map(
+                                baml_compiler2_ppir::elaborated_function_signature_source_map(
                                     db, func_loc,
                                 );
                             if let Some(ret_span) = sig_sm.return_type_span {
@@ -341,7 +473,7 @@ pub fn infer_scope_types<'db>(
                             });
 
                         // Add parameter bindings as locals
-                        let sig_sm = baml_compiler2_hir::signature::function_signature_source_map(
+                        let sig_sm = baml_compiler2_ppir::elaborated_function_signature_source_map(
                             db, func_loc,
                         );
                         for (i, (param_name, param_te)) in sig.params.iter().enumerate() {
@@ -356,6 +488,7 @@ pub fn infer_scope_types<'db>(
                                         pkg_items.lookup_type(ns_path, cn).map(|def| {
                                             Ty::Class(
                                                 crate::lower_type_expr::qualify_def(db, def, cn),
+                                                vec![],
                                                 TyAttr::default(),
                                             )
                                         })
@@ -387,7 +520,8 @@ pub fn infer_scope_types<'db>(
                                 }
                                 ty
                             };
-                            builder.add_local(param_name.clone(), param_ty);
+                            builder.add_local(param_name.clone(), param_ty.clone());
+                            builder.param_types.push((param_name.clone(), param_ty));
                         }
 
                         // Check root expression against declared return type
@@ -407,7 +541,20 @@ pub fn infer_scope_types<'db>(
                     break;
                 }
             }
-            let _ = found;
+            if !found {
+                // Template strings create ScopeKind::Function scopes but are
+                // stored in item_tree.template_strings, not item_tree.functions.
+                // They have no expression body to type-check, so skip silently.
+                let is_template_string = item_tree
+                    .template_strings
+                    .values()
+                    .any(|ts| scope.name.as_ref() == Some(&ts.name));
+                debug_assert!(
+                    is_template_string,
+                    "TIR: no item_tree function matched scope (name={:?}, range={:?})",
+                    scope.name, scope.range
+                );
+            }
         }
         ScopeKind::Lambda => {
             // Find the enclosing Function (or Let) scope by walking ancestors.
@@ -419,15 +566,104 @@ pub fn infer_scope_types<'db>(
 
             // Seed captured variables as Ty::Unknown so that the lambda's builder
             // can resolve references to captures without reporting "unresolved name"
-            // diagnostics. Proper capture types will be propagated in a later phase.
+            // diagnostics. The loop below will override these with proper types.
             let captures = &index.scope_bindings[file_scope.index() as usize].captures;
-            for (capture_name, _def_site) in captures {
+            for (capture_name, _binding_id) in captures {
                 builder.add_local(
                     capture_name.clone(),
                     Ty::Unknown {
                         attr: TyAttr::default(),
                     },
                 );
+            }
+
+            // Re-seed captured variables with their actual types by walking ALL
+            // ancestor scopes (including Lambda ancestors). Each ancestor scope's
+            // ScopeInference holds types for declarations in that specific scope.
+            // A capture's DefinitionSite identifies which ancestor scope owns it:
+            // - PatternBinding(pat_id): pat_id valid in the ancestor's inference
+            // - Parameter(idx): ancestor's param_types[idx]
+            // - Statement(stmt_id): stmt_id in the ancestor's body, but we detect
+            //   ownership by checking the ancestor's scope_bindings.
+            //
+            // We walk all ancestors so that captures from intermediate lambda scopes
+            // (not just the enclosing Function/Let) are also resolved correctly.
+            {
+                let captures = &index.scope_bindings[file_scope.index() as usize].captures;
+                let mut inferred_owner_scopes = Vec::new();
+                for ancestor_fsi in index.ancestor_scopes(file_scope) {
+                    let anc_bindings = &index.scope_bindings[ancestor_fsi.index() as usize];
+                    let inference_fsi = inference_owner_scope(index, ancestor_fsi);
+                    let inference_scope_id = index.scope_ids[inference_fsi.index() as usize];
+                    let capture_declared_in_ancestor =
+                        |_capture_name: &Name, binding_id: &BindingId| -> bool {
+                            // Under the (scope, site) constraint, a same-name
+                            // distinct binding cannot co-exist: parameter
+                            // indices are unique within their scope and
+                            // DefinitionSite::Statement/PatternBinding carry
+                            // the scope-unique AST id directly. Capture
+                            // resolution is identity-keyed; `capture_name` is
+                            // not load-bearing here.
+                            binding_id.scope == ancestor_fsi
+                                && match binding_id.site {
+                                    DefinitionSite::Parameter(idx) => {
+                                        anc_bindings.params.iter().any(|(_, i)| *i == idx)
+                                    }
+                                    DefinitionSite::Statement(_)
+                                    | DefinitionSite::PatternBinding(_) => anc_bindings
+                                        .bindings
+                                        .iter()
+                                        .any(|binding| binding.site == binding_id.site),
+                                }
+                        };
+                    // Only call infer_scope_types if this ancestor has any of
+                    // the captures we still need (avoids unnecessary Salsa calls).
+                    // For efficiency, check if any capture is declared in this scope.
+                    let has_relevant_capture = captures
+                        .iter()
+                        .any(|(name, binding_id)| capture_declared_in_ancestor(name, binding_id));
+                    if !has_relevant_capture {
+                        continue;
+                    }
+                    let anc_inference = if let Some(idx) = inferred_owner_scopes
+                        .iter()
+                        .position(|(scope_id, _)| scope_id == &inference_scope_id)
+                    {
+                        inferred_owner_scopes[idx].1
+                    } else {
+                        let inference = infer_scope_types(db, inference_scope_id);
+                        inferred_owner_scopes.push((inference_scope_id, inference));
+                        inference
+                    };
+                    for (capture_name, binding_id) in captures {
+                        let def_site = binding_id.site;
+                        let is_declared_here =
+                            capture_declared_in_ancestor(capture_name, binding_id);
+                        if !is_declared_here {
+                            continue;
+                        }
+                        let actual_ty = match def_site {
+                            DefinitionSite::Parameter(idx) => {
+                                anc_inference.param_type(idx).cloned()
+                            }
+                            DefinitionSite::Statement(_) | DefinitionSite::PatternBinding(_) => {
+                                // `binding.site == def_site` uniquely
+                                // identifies the binding under shadowing —
+                                // a name tiebreaker would be redundant.
+                                anc_bindings
+                                    .bindings
+                                    .iter()
+                                    .find(|binding| binding.site == def_site)
+                                    .and_then(|binding| {
+                                        anc_inference.binding_type(binding.pattern).cloned()
+                                    })
+                            }
+                        };
+                        if let Some(ty) = actual_ty {
+                            builder.add_local(capture_name.clone(), ty);
+                        }
+                    }
+                }
             }
 
             // Walk ancestors to find a Function or Let scope that has a body.
@@ -452,10 +688,28 @@ pub fn infer_scope_types<'db>(
                                 if let Some((func_def, lambda_body, _lambda_sm, _lambda_expr_id)) =
                                     find_lambda_by_span(func_body, func_sm, lambda_span)
                                 {
+                                    // Look up contextual param types via the lambda's FileScopeId
+                                    // in the parent scope's nested_lambda_types map. This works
+                                    // for arbitrarily nested lambdas without calling
+                                    // infer_scope_types on intermediate Lambda ancestors (which
+                                    // would create a Salsa cycle through package_interface).
+                                    let parent_scope_id =
+                                        index.scope_ids[ancestor_fsi.index() as usize];
+                                    let parent_inference = infer_scope_types(db, parent_scope_id);
+                                    let contextual_param_tys = parent_inference
+                                        .nested_lambda_type(file_scope)
+                                        .and_then(|ty| {
+                                            if let Ty::Function { params, .. } = ty {
+                                                Some(params.clone())
+                                            } else {
+                                                None
+                                            }
+                                        });
+
                                     // Seed builder with lambda params
                                     let generic_params: Vec<Name> = func_def.generic_params.clone();
                                     builder.set_generic_params(generic_params.clone());
-                                    for param in &func_def.params {
+                                    for (i, param) in func_def.params.iter().enumerate() {
                                         let param_ty = param
                                             .type_expr
                                             .as_ref()
@@ -469,10 +723,18 @@ pub fn infer_scope_types<'db>(
                                                     &mut Vec::new(),
                                                 )
                                             })
+                                            .or_else(|| {
+                                                // Fall back to contextual type from parent inference
+                                                contextual_param_tys
+                                                    .as_ref()
+                                                    .and_then(|pts| pts.get(i))
+                                                    .map(|(_, ty)| ty.clone())
+                                            })
                                             .unwrap_or(Ty::Unknown {
                                                 attr: TyAttr::default(),
                                             });
-                                        builder.add_local(param.name.clone(), param_ty);
+                                        builder.add_local(param.name.clone(), param_ty.clone());
+                                        builder.param_types.push((param.name.clone(), param_ty));
                                     }
                                     // Infer the lambda body
                                     if let Some(root_expr) = lambda_body.root_expr {
@@ -502,10 +764,24 @@ pub fn infer_scope_types<'db>(
                                 if let Some((func_def, lambda_body, _lambda_sm, _lambda_expr_id)) =
                                     find_lambda_by_span(let_body, &let_sm, lambda_span)
                                 {
+                                    // Look up contextual param types via FileScopeId (same as Function branch).
+                                    let parent_scope_id =
+                                        index.scope_ids[ancestor_fsi.index() as usize];
+                                    let parent_inference = infer_scope_types(db, parent_scope_id);
+                                    let contextual_param_tys = parent_inference
+                                        .nested_lambda_type(file_scope)
+                                        .and_then(|ty| {
+                                            if let Ty::Function { params, .. } = ty {
+                                                Some(params.clone())
+                                            } else {
+                                                None
+                                            }
+                                        });
+
                                     // Seed builder with lambda params
                                     let generic_params: Vec<Name> = func_def.generic_params.clone();
                                     builder.set_generic_params(generic_params.clone());
-                                    for param in &func_def.params {
+                                    for (i, param) in func_def.params.iter().enumerate() {
                                         let param_ty = param
                                             .type_expr
                                             .as_ref()
@@ -519,10 +795,17 @@ pub fn infer_scope_types<'db>(
                                                     &mut Vec::new(),
                                                 )
                                             })
+                                            .or_else(|| {
+                                                contextual_param_tys
+                                                    .as_ref()
+                                                    .and_then(|pts| pts.get(i))
+                                                    .map(|(_, ty)| ty.clone())
+                                            })
                                             .unwrap_or(Ty::Unknown {
                                                 attr: TyAttr::default(),
                                             });
-                                        builder.add_local(param.name.clone(), param_ty);
+                                        builder.add_local(param.name.clone(), param_ty.clone());
+                                        builder.param_types.push((param.name.clone(), param_ty));
                                     }
                                     if let Some(root_expr) = lambda_body.root_expr {
                                         builder.infer_expr(root_expr, lambda_body);
@@ -568,7 +851,18 @@ pub fn infer_scope_types<'db>(
         }
     }
 
-    let (expressions, bindings, resolutions, exhaustive_matches, diagnostics) = builder.finish();
+    let (
+        expressions,
+        bindings,
+        resolutions,
+        catch_residual_throws,
+        exhaustive_matches,
+        diagnostics,
+        path_root_types,
+        path_member_resolutions,
+        param_types,
+        nested_lambda_types,
+    ) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
         None
@@ -580,7 +874,12 @@ pub fn infer_scope_types<'db>(
         expressions,
         bindings,
         resolutions,
+        catch_residual_throws,
         exhaustive_matches,
+        path_root_types,
+        path_member_resolutions,
+        nested_lambda_types,
+        param_types,
         extra,
     }
 }
@@ -887,15 +1186,17 @@ pub fn render_scope_diagnostics<'db>(
         }
         _ => {
             // For Function/Let scopes, find the source map directly.
+            // Use PPIR's canonical version so PPIR-synthesized functions are found.
             item_tree
                 .functions
                 .iter()
                 .find(|(_, f)| f.span == scope.range && scope.name.as_ref() == Some(&f.name))
                 .and_then(|(local_id, _)| {
                     let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
-                    baml_compiler2_hir::body::function_body_source_map(db, func_loc)
+                    baml_compiler2_ppir::function_body_source_map(db, func_loc)
                 })
                 .or_else(|| {
+                    // Also search let bindings.
                     item_tree
                         .lets
                         .iter()
@@ -911,7 +1212,7 @@ pub fn render_scope_diagnostics<'db>(
     diags
         .diagnostics
         .iter()
-        .map(|d| d.render(source_map.as_ref()))
+        .map(|d| d.render(db, file, source_map.as_ref()))
         .collect()
 }
 

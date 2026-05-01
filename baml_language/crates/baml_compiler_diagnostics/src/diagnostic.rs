@@ -198,6 +198,9 @@ pub enum DiagnosticId {
 
     // Byte string literal errors (E0109)
     InvalidByteStringEscape,
+
+    // Void type position errors (E0110)
+    VoidInNonReturnPosition,
 }
 
 impl DiagnosticId {
@@ -349,6 +352,9 @@ impl DiagnosticId {
 
             // Byte string literal errors
             DiagnosticId::InvalidByteStringEscape => "E0109",
+
+            // Void type position errors
+            DiagnosticId::VoidInNonReturnPosition => "E0110",
         }
     }
 }

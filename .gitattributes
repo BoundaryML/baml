@@ -5,3 +5,6 @@
 **/baml_client/** merge=baml_client
 **/baml_client/** linguist-generated=true
 **/*.lfs.baml filter=lfs diff=lfs merge=lfs -text
+# Force LF line endings for .baml files so include_str! embeds consistent
+# content on all platforms (avoids CRLF line-number shifts on Windows CI).
+*.baml text eol=lf

@@ -98,12 +98,11 @@ async fn cross_block_field_mutation() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Box
-        copy 0
+        alloc_instance user.Box
         load_const 1
-        store_field .v
+        init_field .v
         store_var b
         load_var b
         load_field .v
@@ -309,5 +308,11 @@ async fn multiple_defs_preserve_side_effects() {
         return
     }
     ");
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call baml.sys.panic: assertion failed: expected true");
+    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 8, in user.main
+      File "test.baml", line 3, in user.fail
+      File "<builtin>/assert/assert.baml", line 5, in assert.is_true
+    uncaught throw: Instance { class_name: "baml.panics.UserPanic", fields: {"message": String("assertion failed: expected true")} }
+    "#);
 }

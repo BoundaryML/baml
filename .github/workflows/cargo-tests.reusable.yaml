@@ -23,9 +23,7 @@ env:
 jobs:
   cargo-test-linux:
     name: "cargo test (linux)"
-    # Bumped to ubuntu-32gb: ubuntu-latest was hitting resource issues, using
-    # this overkill runner until we can root-cause and right-size.
-    runs-on: ubuntu-32gb
+    runs-on: blacksmith-16vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
@@ -62,7 +60,7 @@ jobs:
         working-directory: baml_language
 
       - name: "Run snapshot tests with insta"
-        run: cargo insta test --workspace --all-features --unreferenced reject --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended
+        run: cargo insta test --workspace --all-features --unreferenced reject
         working-directory: baml_language
 
       - name: "Check documentation"
@@ -117,7 +115,7 @@ jobs:
 
   cargo-test-windows:
     name: "cargo test (windows)"
-    runs-on: windows-latest
+    runs-on: blacksmith-4vcpu-windows-2025
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
@@ -155,7 +153,7 @@ jobs:
 
   cargo-test-wasm:
     name: "cargo test (wasm)"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
@@ -192,7 +190,7 @@ jobs:
 
   size-gate-linux:
     name: "size-gate (linux)"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 20
     steps:
@@ -282,7 +280,7 @@ jobs:
 
   size-gate-windows:
     name: "size-gate (windows)"
-    runs-on: windows-latest
+    runs-on: blacksmith-4vcpu-windows-2025
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
@@ -291,6 +289,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: "Install LLVM tools (llvm-strip)"
+        run: |
+          choco install llvm -y
+          echo 'C:\Program Files\LLVM\bin' >> $GITHUB_PATH
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -325,7 +328,7 @@ jobs:
 
   size-gate-wasm:
     name: "size-gate (wasm)"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
@@ -368,7 +371,7 @@ jobs:
 
   size-gate-report:
     name: "size-gate (report)"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ always() && (inputs.code_changed == 'true' || inputs.run_all) }}
     needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
     permissions:
@@ -426,9 +429,7 @@ jobs:
 
   cargo-build-msrv:
     name: "cargo build (msrv)"
-    # Bumped to ubuntu-32gb: ubuntu-latest was hitting resource issues, using
-    # this overkill runner until we can root-cause and right-size.
-    runs-on: ubuntu-32gb
+    runs-on: blacksmith-16vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
@@ -465,7 +466,7 @@ jobs:
 
   check-dependencies:
     name: "check dependencies"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     steps:
       - uses: actions/checkout@v4
@@ -488,9 +489,15 @@ jobs:
 
   snapshot-tests:
     name: "snapshot tests"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 30
+    env:
+      # Disable Python + pipx tools: mise 2025.12.12 downloads a broken
+      # freethreaded Python build that's missing a lib/ directory.
+      # Rig test scripts use system Python via uv (the standalone uv binary
+      # mise installs handles its own Python via `uv run`).
+      MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
       - uses: actions/checkout@v4
         with:
@@ -512,10 +519,17 @@ jobs:
         with:
           tool: cargo-insta
 
+      - name: "Install mise"
+        uses: jdx/mise-action@v2
+        # Pinning to old version because newer versions time out on the npm backend,
+        # see https://github.com/jdx/mise/discussions/7630
+        with:
+          version: 2025.12.12
+
       - name: "Run snapshot tests"
         run: |
-          cargo insta test --workspace --all-features --unreferenced=reject --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended
-          cargo insta test --workspace --all-features --review --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended
+          cargo insta test --workspace --all-features --unreferenced=reject
+          cargo insta test --workspace --all-features --review
         working-directory: baml_language
 
       - name: "Check for snapshot changes"

@@ -19,7 +19,7 @@ use crate::sap_model::{
 impl crate::sap_model::TypeIdent for TypeName {}
 
 #[derive(thiserror::Error, Debug)]
-pub enum ConvertError<'t> {
+pub enum ConvertError {
     #[error("Failed to parse float: {0}")]
     ParseFloat(#[from] std::num::ParseFloatError),
     #[error("Unknown media kind")]
@@ -27,7 +27,7 @@ pub enum ConvertError<'t> {
     #[error("Float literals cannot be parsed")]
     FloatLiteral,
     #[error("Non-parsable type: {0:?}")]
-    NonParsableType(&'t baml_type::Ty),
+    NonParsableType(Box<baml_type::Ty>),
     #[error("Unknown class: {0}")]
     UnknownClass(baml_type::TypeName),
     #[error("Unknown enum: {0}")]
@@ -48,6 +48,8 @@ pub enum ConvertError<'t> {
     #[error("Internal error (please report): {0}")]
     InternalError(&'static str),
 }
+
+const MAX_RECURSION_DEPTH: usize = 16;
 
 /// Contains stuff from [`sys_types::SysOpContext`] that we need for converting to the sap model.
 ///
@@ -147,8 +149,24 @@ impl TypeCtx {
         }
     }
 
+    pub fn from_sys_op_context<E: Send + Sync + 'static>(
+        ctx: &::sys_types::SysOpContext<E>,
+    ) -> Self {
+        let type_alias_definitions = ctx
+            .type_alias_definitions
+            .iter()
+            .map(|(name, ty)| (name.clone(), ty.clone()))
+            .collect();
+
+        Self::new(
+            &ctx.class_definitions,
+            ctx.enum_definitions.clone(),
+            &type_alias_definitions,
+        )
+    }
+
     /// Constructs a full [`TypeRefDb`] from the given context with all types converted.
-    pub fn build_db(&self) -> Result<TypeRefDb<'_, TypeName>, ConvertError<'_>> {
+    pub fn build_db(&self) -> Result<TypeRefDb<'_, TypeName>, ConvertError> {
         let mut db = TypeRefDb::new();
         for (name, cls) in &self.class_definitions {
             if self.sap_parseable.get(name).is_some_and(|v| !v) {
@@ -178,7 +196,7 @@ impl TypeCtx {
         &'a self,
         name: &baml_type::TypeName,
         class_def: &'a ::sys_types::ClassDefinition,
-    ) -> Result<ClassTy<'a, TypeName>, ConvertError<'a>> {
+    ) -> Result<ClassTy<'a, TypeName>, ConvertError> {
         let fields = class_def
             .fields
             .iter()
@@ -250,8 +268,8 @@ impl TypeCtx {
         name: &baml_type::TypeName,
         alias_ty: &'a baml_type::Ty,
         recursion_depth: usize,
-    ) -> Result<TyResolved<'a, TypeName>, ConvertError<'a>> {
-        if recursion_depth > 16 {
+    ) -> Result<TyResolved<'a, TypeName>, ConvertError> {
+        if recursion_depth > MAX_RECURSION_DEPTH {
             return Err(ConvertError::RecursionDepthExceeded("type alias"));
         }
 
@@ -294,7 +312,7 @@ impl TypeCtx {
     pub fn convert_ty<'a>(
         &'a self,
         ty: &'a baml_type::Ty,
-    ) -> Result<AnnotatedTy<'a, TypeName>, ConvertError<'a>> {
+    ) -> Result<AnnotatedTy<'a, TypeName>, ConvertError> {
         let ty = match ty {
             baml_type::Ty::Int { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
@@ -350,7 +368,7 @@ impl TypeCtx {
             ),
             baml_type::Ty::Class(type_name, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
-                    return Err(ConvertError::NonParsableType(ty));
+                    return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
                 TyWithMeta::new(
                     // currently [`ClassDefinition`] does not have attributes attached to it.
@@ -442,7 +460,7 @@ impl TypeCtx {
             }
             baml_type::Ty::TypeAlias(type_name, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
-                    return Err(ConvertError::NonParsableType(ty));
+                    return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
                 // if it hasn't already, we flatten type aliases:
                 // with `type A = B; type B = C; class C { ... }`,
@@ -488,7 +506,7 @@ impl TypeCtx {
             | baml_type::Ty::WatchAccessor(_, _)
             | baml_type::Ty::BuiltinUnknown { .. }
             | baml_type::Ty::Future(_, _)) => {
-                return Err(ConvertError::NonParsableType(unparsable));
+                return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
         Ok(ty)
@@ -515,8 +533,8 @@ impl TypeCtx {
         &'a self,
         field_type: &'a ::baml_type::Ty,
         recursion_depth: usize,
-    ) -> Result<(AttrLiteral<'a, TypeName>, AttrLiteral<'a, TypeName>), ConvertError<'a>> {
-        if recursion_depth > 16 {
+    ) -> Result<(AttrLiteral<'a, TypeName>, AttrLiteral<'a, TypeName>), ConvertError> {
+        if recursion_depth > MAX_RECURSION_DEPTH {
             return Err(ConvertError::RecursionDepthExceeded(
                 "class field attribute derivation",
             ));
@@ -525,6 +543,10 @@ impl TypeCtx {
         let attrs = field_type.attr();
         if matches!(attrs.sap_pending_never, TyAttrValue::Set) {
             return Ok((AttrLiteral::Never, AttrLiteral::Never));
+        }
+
+        if self.field_type_is_nullable(field_type)? {
+            return Ok((AttrLiteral::Null, AttrLiteral::Null));
         }
 
         let field_attrs = match field_type {
@@ -539,7 +561,7 @@ impl TypeCtx {
             | ::baml_type::Ty::Enum(..)
             | ::baml_type::Ty::EnumVariant(..) => (AttrLiteral::Never, AttrLiteral::Never),
             ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => {
-                (AttrLiteral::Null, AttrLiteral::Null)
+                unreachable!("nullable fields should be returned before field attr derivation")
             }
             ::baml_type::Ty::List(..) => (
                 AttrLiteral::Array(Vec::new()),
@@ -566,10 +588,64 @@ impl TypeCtx {
             | ::baml_type::Ty::WatchAccessor(_, _)
             | ::baml_type::Ty::BuiltinUnknown { .. }
             | ::baml_type::Ty::Future(_, _)) => {
-                return Err(ConvertError::NonParsableType(unparsable));
+                return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
         Ok(field_attrs)
+    }
+
+    fn field_type_is_nullable(&self, field_type: &::baml_type::Ty) -> Result<bool, ConvertError> {
+        self.field_type_is_nullable_inner(field_type, &mut HashSet::new(), 0)
+    }
+
+    fn field_type_is_nullable_inner(
+        &self,
+        field_type: &::baml_type::Ty,
+        aliases_in_progress: &mut HashSet<TypeName>,
+        recursion_depth: usize,
+    ) -> Result<bool, ConvertError> {
+        if recursion_depth > MAX_RECURSION_DEPTH {
+            return Err(ConvertError::RecursionDepthExceeded(
+                "class field nullability derivation",
+            ));
+        }
+
+        Ok(match field_type {
+            ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => true,
+            ::baml_type::Ty::Union(members, ..) => {
+                let mut is_nullable = false;
+                for member in members {
+                    if self.field_type_is_nullable_inner(
+                        member,
+                        aliases_in_progress,
+                        recursion_depth + 1,
+                    )? {
+                        is_nullable = true;
+                        break;
+                    }
+                }
+                is_nullable
+            }
+            ::baml_type::Ty::TypeAlias(name, ..) => {
+                if !aliases_in_progress.insert(name.clone()) {
+                    // A cycle by itself does not prove nullability for this branch.
+                    false
+                } else {
+                    let Some(alias_ty) = self.type_alias_definitions.get(name) else {
+                        aliases_in_progress.remove(name);
+                        return Err(ConvertError::UnknownTypeAlias(name.clone()));
+                    };
+                    let is_nullable = self.field_type_is_nullable_inner(
+                        alias_ty,
+                        aliases_in_progress,
+                        recursion_depth + 1,
+                    )?;
+                    aliases_in_progress.remove(name);
+                    is_nullable
+                }
+            }
+            _ => false,
+        })
     }
 }
 
@@ -579,7 +655,7 @@ impl TypeCtx {
 )]
 fn convert_ty_attrs(
     attrs: &baml_type::TyAttr,
-) -> Result<TypeAnnotations<'static, TypeName>, ConvertError<'static>> {
+) -> Result<TypeAnnotations<'static, TypeName>, ConvertError> {
     let in_progress = match attrs.sap_pending_never {
         TyAttrValue::Set => Some(AttrLiteral::Never),
         TyAttrValue::Unset => None,
@@ -702,5 +778,84 @@ fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
         | baml_type::Ty::WatchAccessor(..)
         | baml_type::Ty::BuiltinUnknown { .. }
         | baml_type::Ty::Future(..) => Err(()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_type::{Ty, TyAttr};
+
+    use super::*;
+
+    fn local_type(name: &str) -> TypeName {
+        TypeName::local(name.into())
+    }
+
+    #[test]
+    fn field_type_is_nullable_handles_recursive_alias_cycle_with_null_branch() {
+        let maybe_text = local_type("MaybeText");
+        let text_ref = local_type("TextRef");
+        let alias_attr = TyAttr::default();
+
+        let type_alias_definitions = HashMap::from([
+            (
+                maybe_text.clone(),
+                Ty::union([
+                    Ty::TypeAlias(text_ref.clone(), alias_attr.clone()),
+                    Ty::null(),
+                ]),
+            ),
+            (
+                text_ref,
+                Ty::TypeAlias(maybe_text.clone(), alias_attr.clone()),
+            ),
+        ]);
+
+        let ctx = TypeCtx::new(
+            &IndexMap::new(),
+            Arc::new(IndexMap::new()),
+            &type_alias_definitions,
+        );
+
+        assert!(
+            ctx.field_type_is_nullable(&Ty::TypeAlias(maybe_text, alias_attr))
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn field_type_is_nullable_errors_on_deep_alias_union_chain() {
+        let alias_attr = TyAttr::default();
+        let chain_len = MAX_RECURSION_DEPTH + 2;
+        let names: Vec<_> = (0..chain_len)
+            .map(|idx| local_type(&format!("DepthAlias{idx}")))
+            .collect();
+
+        let mut type_alias_definitions = HashMap::new();
+        for window in names.windows(2) {
+            let current = window[0].clone();
+            let next = window[1].clone();
+            type_alias_definitions.insert(
+                current,
+                Ty::union([Ty::TypeAlias(next, alias_attr.clone()), Ty::string()]),
+            );
+        }
+        type_alias_definitions.insert(
+            names.last().cloned().unwrap(),
+            Ty::union([Ty::string(), Ty::bool()]),
+        );
+
+        let ctx = TypeCtx::new(
+            &IndexMap::new(),
+            Arc::new(IndexMap::new()),
+            &type_alias_definitions,
+        );
+
+        assert!(matches!(
+            ctx.field_type_is_nullable(&Ty::TypeAlias(names[0].clone(), alias_attr)),
+            Err(ConvertError::RecursionDepthExceeded(
+                "class field nullability derivation"
+            ))
+        ));
     }
 }

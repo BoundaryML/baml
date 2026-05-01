@@ -22,6 +22,16 @@ import {
   type Connection,
 } from "vscode-languageserver/browser.js";
 
+import { installWasmPanicHook, onWasmPanic, isWasmPanic, getWasmError } from "@b/pkg-playground/wasm-panic";
+
+// Install panic hook before any WASM code runs
+installWasmPanicHook();
+
+// Register callback to notify main thread of any WASM panic
+onWasmPanic((message) => {
+  self.postMessage({ type: 'wasmPanic', message });
+});
+
 import initWasm, {
   BamlWasmRuntime,
   BamlHandle,
@@ -38,11 +48,18 @@ import type {
   WorkerInMessage,
   WorkerInitMessage,
   PlaygroundNotification as WorkerPlaygroundNotification,
+  LogDecoration,
+  LogLevel,
 } from "@b/pkg-playground";
 
-import { decodeCallResult } from "@b/pkg-proto";
+import { decodeCallResult, RuntimeEvent } from "@b/pkg-proto";
+import { truncateMessage, normalizeLogLevel } from "@b/pkg-playground/shared/log-decorations";
+import { formatValue } from "@b/pkg-playground/shared/format-value";
+import { deserializeRuntimeEvent } from "@b/pkg-playground/shared/deserialize-event";
 
 import { BamlVfs } from "./vfs";
+import { Bash, InMemoryFs, MountableFs } from "just-bash/browser";
+import { BamlVfsAdapter } from "./baml-vfs-adapter";
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -60,6 +77,11 @@ function dispose(): void {
     resolve(undefined);
   }
   pendingEnvResolvers.clear();
+  // Resolve any pending input requests with empty string so awaiting callers don't hang
+  for (const entry of pendingInputResolvers.values()) {
+    entry.resolve("");
+  }
+  pendingInputResolvers.clear();
   if (connection) {
     connection.dispose();
     connection = null;
@@ -98,6 +120,146 @@ function resolveEnv(variable: string): Promise<string | undefined> {
   });
 }
 
+let nextInputReqId = 0;
+const pendingInputResolvers = new Map<number, { callId: number; resolve: (value: string) => void }>();
+
+function resolveInput(callId: number, prompt: string | undefined): Promise<string> {
+  return new Promise<string>((resolve) => {
+    const id = nextInputReqId++;
+    pendingInputResolvers.set(id, { callId, resolve });
+    postOut({ type: "inputRequest", id, prompt, callId });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Shell callbacks (just-bash powered)
+// ---------------------------------------------------------------------------
+
+/** Shared Bash instance, created lazily on first use. */
+let bashInstance: Bash | null = null;
+
+function getOrCreateBash(): Bash {
+  if (!bashInstance) {
+    const base = new InMemoryFs();
+    const mountable = new MountableFs({ base });
+    mountable.mount("/workspace", new BamlVfsAdapter(vfs.wasmVfs));
+    bashInstance = new Bash({ fs: mountable, cwd: "/workspace" });
+  }
+  return bashInstance;
+}
+
+/** Shell result shape expected by the Rust WASM bridge. */
+interface ShellResult {
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+  stdout_bytes: Uint8Array;
+  stderr_bytes: Uint8Array;
+}
+
+/** Options passed from Rust as a JSON string. */
+interface ProcessOptionsJson {
+  cwd?: string;
+  env?: Record<string, string>;
+  timeout_ms?: number;
+  stdin?: string;
+}
+
+async function executeShell(
+  command: string,
+  optionsJson: string | undefined,
+): Promise<ShellResult> {
+  const bash = getOrCreateBash();
+  const options: ProcessOptionsJson | undefined = optionsJson
+    ? (JSON.parse(optionsJson) as ProcessOptionsJson)
+    : undefined;
+
+  const execOptions: Parameters<Bash["exec"]>[1] = {
+    cwd: options?.cwd,
+    env: options?.env,
+    stdin: options?.stdin,
+    ...(options?.env ? { replaceEnv: false } : {}),
+    ...(options?.timeout_ms != null
+      ? { signal: AbortSignal.timeout(options.timeout_ms) }
+      : {}),
+  };
+
+  const result = await bash.exec(command, execOptions);
+  const encoder = new TextEncoder();
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exit_code: result.exitCode,
+    stdout_bytes: encoder.encode(result.stdout),
+    stderr_bytes: encoder.encode(result.stderr),
+  };
+}
+
+async function executeExec(
+  program: string,
+  args: string[] | undefined,
+  optionsJson: string | undefined,
+): Promise<ShellResult> {
+  const bash = getOrCreateBash();
+  const options: ProcessOptionsJson | undefined = optionsJson
+    ? (JSON.parse(optionsJson) as ProcessOptionsJson)
+    : undefined;
+
+  // Build the command line: program + args joined. just-bash executes this
+  // as a shell script so we must quote args to prevent shell splitting.
+  const quotedArgs = (args ?? [])
+    .map((a) => "'" + a.replace(/'/g, "'\\''") + "'")
+    .join(" ");
+  const commandLine = quotedArgs ? `${program} ${quotedArgs}` : program;
+
+  const execOptions: Parameters<Bash["exec"]>[1] = {
+    cwd: options?.cwd,
+    env: options?.env,
+    stdin: options?.stdin,
+    ...(options?.env ? { replaceEnv: false } : {}),
+    ...(options?.timeout_ms != null
+      ? { signal: AbortSignal.timeout(options.timeout_ms) }
+      : {}),
+  };
+
+  const result = await bash.exec(commandLine, execOptions);
+  const encoder = new TextEncoder();
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exit_code: result.exitCode,
+    stdout_bytes: encoder.encode(result.stdout),
+    stderr_bytes: encoder.encode(result.stderr),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Log decorations (inline display like ErrorLens)
+// ---------------------------------------------------------------------------
+
+/** Decorations aggregated by line number. Each entry tracks the latest message and count. */
+const decorationsByLine = new Map<number, { level: LogLevel; message: string; count: number }>();
+
+/** Emit current decorations to the main thread. */
+function emitLogDecorations(): void {
+  const decorations: LogDecoration[] = [];
+  for (const [line, data] of decorationsByLine) {
+    decorations.push({
+      line,
+      level: data.level,
+      message: truncateMessage(data.message),
+      count: data.count,
+    });
+  }
+  postOut({ type: 'logDecorations', decorations });
+}
+
+/** Clear all decorations and notify the main thread. */
+function clearLogDecorations(): void {
+  decorationsByLine.clear();
+  postOut({ type: 'clearLogDecorations' });
+}
+
 // ---------------------------------------------------------------------------
 // Typed postMessage helper
 // ---------------------------------------------------------------------------
@@ -115,6 +277,7 @@ function postOut(msg: WorkerOutMessage, transfer?: Transferable[]): void {
 // ---------------------------------------------------------------------------
 
 let nextLogId = 0;
+const activeCallIds = new Set<number>();
 
 async function loggingFetch(
   callId: number,
@@ -262,6 +425,52 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         context: notification.context,
       });
       break;
+    case "runtimeEvent": {
+      try {
+        // Decode and pass the raw proto through
+        const bytes = new Uint8Array(notification.data);
+        const event = RuntimeEvent.decode(bytes);
+        let callId = notification.callId ?? null;
+        if (callId == null) {
+          if (activeCallIds.size === 1) {
+            callId = [...activeCallIds][0] ?? null;
+          } else if (activeCallIds.size > 1) {
+            console.warn('[Worker] runtimeEvent missing callId from server with', activeCallIds.size, 'concurrent calls — event will not be associated with a run');
+          }
+        }
+        const deserialized = deserializeRuntimeEvent(event);
+        postOut({ type: "runtimeEventNew", event: deserialized, callId });
+
+        // Extract log events and update decorations
+        const kind = deserialized.event;
+        if (kind?.$case === 'log' && kind.log.source) {
+          const source = kind.log.source;
+          const line = source.line;
+          const level = normalizeLogLevel(kind.log.level);
+          const message = formatValue(kind.log.data, 'inline-hint');
+
+          // Heuristic: only show decoration if the formatted output is longer than the source span.
+          // This filters out constant literals (where output ≈ source) and shows expanded variables.
+          const sourceSpanLength = source.endOffset - source.startOffset;
+          const isLikelyVariable = message.length > sourceSpanLength + 5;
+
+          if (isLikelyVariable) {
+            const existing = decorationsByLine.get(line);
+            if (existing) {
+              existing.message = message;
+              existing.level = level;
+              existing.count += 1;
+            } else {
+              decorationsByLine.set(line, { level, message, count: 1 });
+            }
+            emitLogDecorations();
+          }
+        }
+      } catch (err) {
+        postOut({ type: "runtimeEventError", error: String(err) });
+      }
+      break;
+    }
     default:
       // Cast to worker-protocol type: the WASM-generated type uses `string` for severity
       // while the protocol narrows it to a literal union; the runtime values are always valid.
@@ -358,6 +567,9 @@ self.onmessage = async (event: MessageEvent) => {
       {
         fetch: loggingFetch,
         env: resolveEnv,
+        input: resolveInput,
+        exec: executeExec,
+        shell: executeShell,
         lsp_send_notification: (notification: LspNotification) => {
           notification = mapsToRecordsDeep(notification);
 
@@ -417,7 +629,13 @@ self.onmessage = async (event: MessageEvent) => {
         try {
           runtime?.handleLspRequest({ id, method: "initialize", params });
         } catch (e) {
-          console.error("[LSP] initialize request failed:", e);
+          if (e instanceof Error && isWasmPanic(e)) {
+            const { message, stack } = getWasmError(e);
+            console.error("[LSP] initialize request WASM panic:", message);
+            postOut({ type: 'wasmPanic', message, stack });
+          } else {
+            console.error("[LSP] initialize request failed:", e);
+          }
           requestPromises.delete(id);
           reject(e);
         }
@@ -429,7 +647,13 @@ self.onmessage = async (event: MessageEvent) => {
       try {
         runtime?.handleLspNotification({ method, params });
       } catch (e) {
-        console.error(`[LSP] notification "${method}" failed:`, e);
+        if (e instanceof Error && isWasmPanic(e)) {
+          const { message, stack } = getWasmError(e);
+          console.error(`[LSP] notification "${method}" WASM panic:`, message);
+          postOut({ type: 'wasmPanic', message, stack });
+        } else {
+          console.error(`[LSP] notification "${method}" failed:`, e);
+        }
       }
     });
 
@@ -449,7 +673,13 @@ self.onmessage = async (event: MessageEvent) => {
       try {
         runtime?.handleLspRequest({ id, method, params });
       } catch (e) {
-        console.error(`[LSP] request "${method}" failed:`, e);
+        if (e instanceof Error && isWasmPanic(e)) {
+          const { message, stack } = getWasmError(e);
+          console.error(`[LSP] request "${method}" WASM panic:`, message);
+          postOut({ type: 'wasmPanic', message, stack });
+        } else {
+          console.error(`[LSP] request "${method}" failed:`, e);
+        }
         requestPromises.delete(id);
         return Promise.reject(e);
       }
@@ -473,6 +703,9 @@ self.onmessage = async (event: MessageEvent) => {
 
   switch (msg.type) {
     case "callFunction": {
+      // Clear previous decorations when starting a new call
+      clearLogDecorations();
+
       if (!runtime) {
         postOut({
           type: "callFunctionError",
@@ -481,6 +714,7 @@ self.onmessage = async (event: MessageEvent) => {
         });
         return;
       }
+      activeCallIds.add(msg.id);
       try {
         const resultBytes = await runtime.callFunction(
           msg.id,
@@ -493,7 +727,7 @@ self.onmessage = async (event: MessageEvent) => {
         const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
           const h = new BamlHandle(key.toString(), handleType);
           handles.push(h);
-          return h;
+          return { handle_key: key, handle_type: handleType, type_name: typeName };
         });
         const existing = liveHandles.get(msg.id);
         if (existing) {
@@ -504,22 +738,39 @@ self.onmessage = async (event: MessageEvent) => {
         } else {
           liveHandles.delete(msg.id);
         }
-        const result = JSON.stringify(decoded, null, 2);
-        postOut({ type: "callFunctionResult", id: msg.id, result });
+        postOut({ type: "callFunctionResult", id: msg.id, result: decoded });
       } catch (e) {
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
+        let errorMessage: string;
+        if (e instanceof Error && isWasmPanic(e)) {
+          const { message, stack } = getWasmError(e);
+          errorMessage = `WASM panic: ${message}`;
+          console.error('[Worker] WASM panic in callFunction:', message);
+          postOut({ type: 'wasmPanic', message, stack });
+        } else {
+          errorMessage = e instanceof Error ? e.message : String(e);
+        }
         postOut({
           type: "callFunctionError",
           id: msg.id,
-          error: e instanceof Error ? e.message : String(e),
+          error: errorMessage,
           cancelled: isCancelled || undefined,
         });
+      } finally {
+        activeCallIds.delete(msg.id);
       }
       return;
     }
 
     case "cancelCall": {
       if (!runtime) return;
+      // Resolve any pending input requests for this call so they don't hang
+      for (const [reqId, pending] of pendingInputResolvers) {
+        if (pending.callId === msg.id) {
+          pending.resolve("");
+          pendingInputResolvers.delete(reqId);
+        }
+      }
       try {
         runtime.cancelCall(msg.project, msg.id);
       } catch (e) {
@@ -540,6 +791,15 @@ self.onmessage = async (event: MessageEvent) => {
       return;
     }
 
+    case "inputResponse": {
+      const pending = pendingInputResolvers.get(msg.id);
+      if (pending) {
+        pendingInputResolvers.delete(msg.id);
+        pending.resolve(msg.value);
+      }
+      return;
+    }
+
     case "setEnvVar":
       envVars[msg.key] = msg.value;
       return;
@@ -550,6 +810,8 @@ self.onmessage = async (event: MessageEvent) => {
 
     case "filesChanged": {
       vfs.setFiles(msg.files);
+      // Clear decorations when files change
+      clearLogDecorations();
       return;
     }
 
@@ -574,6 +836,9 @@ self.onmessage = async (event: MessageEvent) => {
       return;
 
     case "callTestFunction": {
+      // Clear previous decorations when starting a new test run.
+      clearLogDecorations();
+
       if (!runtime) {
         postOut({
           type: "callFunctionError",
@@ -591,7 +856,7 @@ self.onmessage = async (event: MessageEvent) => {
         const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
           const h = new BamlHandle(key.toString(), handleType);
           handles.push(h);
-          return h;
+          return { handle_key: key, handle_type: handleType, type_name: typeName };
         });
         const existing = liveHandles.get(msg.id);
         if (existing) {
@@ -602,17 +867,23 @@ self.onmessage = async (event: MessageEvent) => {
         } else {
           liveHandles.delete(msg.id);
         }
-        postOut({
-          type: "callFunctionResult",
-          id: msg.id,
-          result: JSON.stringify(decoded, null, 2),
-        });
+        postOut({ type: "callFunctionResult", id: msg.id, result: decoded });
       } catch (e: any) {
+        const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
+        let errorMessage: string;
+        if (e instanceof Error && isWasmPanic(e)) {
+          const { message, stack } = getWasmError(e);
+          errorMessage = `WASM panic: ${message}`;
+          console.error('[Worker] WASM panic in callTestFunction:', message);
+          postOut({ type: 'wasmPanic', message, stack });
+        } else {
+          errorMessage = e instanceof Error ? e.message : String(e);
+        }
         postOut({
           type: "callFunctionError",
           id: msg.id,
-          error: e instanceof Error ? e.message : String(e),
-          cancelled: e instanceof Error && (e as any).name === "BamlCancelledError" ? true : undefined,
+          error: errorMessage,
+          cancelled: isCancelled ? true : undefined,
         });
       }
       return;

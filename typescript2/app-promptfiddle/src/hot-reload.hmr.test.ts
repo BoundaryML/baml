@@ -68,7 +68,7 @@ function waitForOutput(
  */
 async function startDevServer(): Promise<DevServer> {
   // Clear Next.js cache so it picks up fresh WASM binaries
-  rmSync(resolve(projectRoot, '.next'), { recursive: true, force: true })
+  rmSync(resolve(projectRoot, '.next-dev'), { recursive: true, force: true })
 
   const randomPort = Math.floor(Math.random() * 100) + 4900
   console.log(`[next] Starting dev server in ${projectRoot} on port ${randomPort}`)

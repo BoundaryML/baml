@@ -14,7 +14,7 @@ async fn builtin_method_call() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 2
@@ -40,7 +40,7 @@ async fn bind_method_call() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 2
@@ -88,34 +88,27 @@ async fn any_value_to_string() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        alloc_instance Person
-        copy 0
+        alloc_instance user.Person
         load_const "Alice"
-        store_field .name
-        copy 0
+        init_field .name
         load_const 25
-        store_field .age
-        copy 0
-        alloc_instance Point
-        copy 0
+        init_field .age
+        alloc_instance user.Point
         load_const 10
-        store_field .x
-        copy 0
+        init_field .x
         load_const 20
-        store_field .y
-        store_field .location
-        copy 0
+        init_field .y
+        init_field .location
         load_const "reading"
         load_const "coding"
         alloc_array 2
-        store_field .hobbies
-        copy 0
+        init_field .hobbies
         load_const 95
         load_const 88
         load_const "math"
         load_const "english"
         alloc_map 2
-        store_field .scores
+        init_field .scores
         call baml.unstable.string
         return
     }
@@ -124,10 +117,10 @@ async fn any_value_to_string() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"Person {
+            r#"user.Person {
     name: "Alice"
     age: 25
-    location: Point {
+    location: user.Point {
         x: 10
         y: 20
     }
@@ -139,5 +132,26 @@ async fn any_value_to_string() {
 }"#
             .to_string()
         ))
+    );
+}
+
+#[tokio::test]
+async fn float_to_string_preserves_decimal() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let a = baml.unstable.string(1.0);
+            let b = baml.unstable.string(0.0);
+            let c = baml.unstable.string(-1.0);
+            let d = baml.unstable.string(3.14);
+            let e = baml.unstable.string(2);
+            a + " " + b + " " + c + " " + d + " " + e
+        }
+    "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("1.0 0.0 -1.0 3.14 2".to_string()))
     );
 }

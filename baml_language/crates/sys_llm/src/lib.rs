@@ -14,20 +14,15 @@ mod model_features;
 pub(crate) mod parse_response;
 mod provider;
 mod render_prompt;
+pub(crate) mod resolve_media;
 mod specialize_prompt;
+pub mod stream_accumulator;
 pub(crate) mod types;
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm;
 
-use std::{
-    future::Future,
-    panic::{RefUnwindSafe, UnwindSafe},
-    pin::Pin,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{str::FromStr, sync::Arc};
 
-use ::core::ops::Deref;
 use bex_external_types::BexExternalValue;
 // Used by bex_engine tests
 pub use jinja::{
@@ -36,98 +31,11 @@ pub use jinja::{
 };
 // --- Crate-internal re-exports (used by submodules via `crate::`) ---
 pub(crate) use model_features::{AllowedMetadata, ModelFeatures};
-// --- Public API: only what sys_types and bex_engine tests actually use ---
-
 // Used by sys_types (From<LlmOpError> for OpErrorKind)
 pub use provider::LlmProvider;
 pub use types::LlmOpError;
-
-// ============================================================================
-// Callback types for IO operations (used by auth_request, especially Bedrock)
-// ============================================================================
-
-/// Response from an HTTP send callback.
-pub struct HttpSendResponse {
-    pub status_code: u16,
-    pub headers: indexmap::IndexMap<String, String>,
-    pub body: String,
-}
-
-/// Async closure that sends an HTTP request and returns a response.
-///
-/// `UnwindSafe + RefUnwindSafe` bounds are required by the AWS SDK's
-/// `HttpConnector` trait.
-pub type HttpSendFn = Arc<
-    dyn Fn(
-            baml_std::HttpRequest,
-        ) -> Pin<Box<dyn Future<Output = Result<HttpSendResponse, LlmOpError>> + Send>>
-        + Send
-        + Sync
-        + UnwindSafe
-        + RefUnwindSafe,
->;
-
-/// Async closure that reads an environment variable by name.
-///
-/// `UnwindSafe + RefUnwindSafe` bounds are required for compatibility with
-/// the AWS SDK provider chain.
-pub type EnvReadFn = Arc<
-    dyn Fn(String) -> Pin<Box<dyn Future<Output = Result<Option<String>, LlmOpError>> + Send>>
-        + Send
-        + Sync
-        + UnwindSafe
-        + RefUnwindSafe,
->;
-
-/// Async closure that reads a file by path, returning its raw bytes.
-///
-/// `UnwindSafe + RefUnwindSafe` bounds are required for compatibility with
-/// the AWS SDK provider chain.
-pub type FsReadFn = Arc<
-    dyn Fn(String) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, LlmOpError>> + Send>>
-        + Send
-        + Sync
-        + UnwindSafe
-        + RefUnwindSafe,
->;
-
-/// Async closure that runs a shell command and returns stdout.
-///
-/// `UnwindSafe + RefUnwindSafe` bounds are required for consistency with
-/// other callback types.
-pub type ShellFn = Arc<
-    dyn Fn(String) -> Pin<Box<dyn Future<Output = Result<String, LlmOpError>> + Send>>
-        + Send
-        + Sync
-        + UnwindSafe
-        + RefUnwindSafe,
->;
-
-/// IO callbacks needed by `auth_request` (especially Bedrock credential resolution).
-///
-/// These bridge the BAML runtime's IO capabilities into the auth pipeline,
-/// allowing credential resolution to work on both native and WASM targets.
-pub struct BuildRequestCallbacks {
-    pub http_send: HttpSendFn,
-    pub env_read: EnvReadFn,
-    pub fs_read: FsReadFn,
-    pub shell: ShellFn,
-}
-
-impl BuildRequestCallbacks {
-    /// Returns a no-op callbacks instance where every operation fails or returns
-    /// nothing. Useful for tests targeting providers that don't need IO callbacks.
-    #[cfg(test)]
-    pub(crate) fn noop() -> Self {
-        use std::sync::Arc;
-        Self {
-            http_send: Arc::new(|_| Box::pin(async { Err(LlmOpError::Other("noop".into())) })),
-            env_read: Arc::new(|_| Box::pin(async { Ok(None) })),
-            fs_read: Arc::new(|_| Box::pin(async { Err(LlmOpError::Other("noop".into())) })),
-            shell: Arc::new(|_| Box::pin(async { Err(LlmOpError::Other("noop".into())) })),
-        }
-    }
-}
+// --- Public API: only what sys_types and bex_engine tests actually use ---
+pub use types::SapStreamCache;
 
 // ============================================================================
 // Clean (owned-type) entry points for trait-based dispatch
@@ -318,20 +226,65 @@ pub fn execute_specialize_prompt_from_owned(
 
 /// Build an HTTP request from a prompt given already-extracted owned types.
 ///
-/// `callbacks` provides IO bridges for auth steps that need HTTP, env, or
-/// filesystem access (e.g. Bedrock `SigV4` credential resolution, Vertex AI
+/// `io` provides typed async IO operations for auth steps that need HTTP, env,
+/// or filesystem access (e.g. Bedrock `SigV4` credential resolution, Vertex AI
 /// service account token exchange).
 pub async fn execute_build_request_from_owned(
     client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-    callbacks: &BuildRequestCallbacks,
+    io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<baml_std::HttpRequest, LlmOpError> {
-    build_request::build_request(client, prompt, callbacks)
+    build_request::build_request(client, prompt, io)
         .await
         .map_err(|e| LlmOpError::Other(e.to_string()))
 }
 
-/// Parse an LLM response and extract the return value given already-extracted owned types.
+/// Build an HTTP request with streaming enabled.
+///
+/// Same as `execute_build_request_from_owned` but adds `"stream": true` to the body.
+pub async fn execute_build_request_stream_from_owned(
+    client: &baml_std::PrimitiveClient,
+    prompt: bex_vm_types::PromptAst,
+    io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
+) -> Result<baml_std::HttpRequest, LlmOpError> {
+    let mut request = execute_build_request_from_owned(client, prompt, io).await?;
+    request.body = add_stream_flag_to_request_body(&request.body)?;
+    Ok(request)
+}
+
+fn add_stream_flag_to_request_body(body: &str) -> Result<String, LlmOpError> {
+    let mut body: serde_json::Value = serde_json::from_str(body)
+        .map_err(|e| LlmOpError::Other(format!("Failed to parse request body: {e}")))?;
+    let obj = body.as_object_mut().ok_or_else(|| {
+        LlmOpError::Other("Request body must be a JSON object to enable streaming".into())
+    })?;
+    obj.insert("stream".to_string(), serde_json::Value::Bool(true));
+    serde_json::to_string(&body)
+        .map_err(|e| LlmOpError::Other(format!("Failed to serialize request body: {e}")))
+}
+
+/// Validate a finish reason against the client's allow/deny policy.
+pub fn execute_validate_finish_reason(
+    client: &baml_std::PrimitiveClient,
+    finish_reason: &str,
+) -> Result<(), LlmOpError> {
+    let finish_reason = if finish_reason.is_empty() {
+        None
+    } else {
+        Some(finish_reason)
+    };
+
+    if client.is_finish_reason_allowed(finish_reason) {
+        return Ok(());
+    }
+
+    Err(LlmOpError::ParseResponseError(format!(
+        "Finish reason not allowed: {}",
+        finish_reason.unwrap_or("unknown")
+    )))
+}
+
+/// Parse a full LLM response and extract the return value given already-extracted owned types.
 pub fn execute_parse_response_from_owned(
     client: &baml_std::PrimitiveClient,
     response: &str,
@@ -349,64 +302,80 @@ pub fn execute_parse_response_from_owned(
     let response = parse_response::parse_response(provider, response)
         .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
 
-    if !client.is_finish_reason_allowed(response.finish_reason_raw.as_deref()) {
+    // Normalize empty finish_reason to None so oneshot and streaming paths agree
+    // (matches `execute_validate_finish_reason`'s behavior above).
+    let finish_reason = response
+        .finish_reason_raw
+        .as_deref()
+        .filter(|s| !s.is_empty());
+    if !client.is_finish_reason_allowed(finish_reason) {
         return Err(LlmOpError::ParseResponseError(format!(
             "Finish reason not allowed: {}",
-            response.finish_reason_raw.as_deref().unwrap_or("unknown")
+            finish_reason.unwrap_or("unknown")
         )));
     }
 
-    let is_done = response.finish_reason_raw.is_some();
-    execute_sap_parse(&response.content, return_type, ctx, is_done)
+    let compiled = bex_sap::CompiledSapModel::from_sys_op_context(
+        ctx,
+        return_type.clone(),
+        baml_type::Ty::null(), // no streaming
+    )
+    .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
+    let sap = SapStreamCache::new(compiled);
+    execute_sap_parse_final(&response.content, &sap, ctx)
 }
 
-pub fn execute_sap_parse(
+pub fn execute_sap_parse_final(
     json: &str,
-    ty: &baml_type::Ty,
-    ctx: &::sys_types::SysOpContext,
-    is_done: bool,
+    sap: &SapStreamCache,
+    _ctx: &::sys_types::SysOpContext,
 ) -> Result<bex_external_types::BexExternalValue, LlmOpError> {
     // === Jsonish ===
     let jsonish_options = ::bex_sap::jsonish::ParseOptions::default();
-    let jsonish = ::bex_sap::jsonish::parse(json, jsonish_options, is_done)
+    let jsonish =
+        ::bex_sap::jsonish::parse(json, jsonish_options, true).map_err(LlmOpError::JsonishError)?;
+
+    let parse_ctx = ::bex_sap::deserializer::coercer::ParsingContext::new(sap.db());
+    let target = sap
+        .ty_resolved()
+        .map_err(|err| parse_ctx.error_type_resolution(err))
+        .map_err(LlmOpError::SapError)?;
+    let parsed = ::bex_sap::sap_model::TyResolvedRef::coerce(&parse_ctx, target, &jsonish)
+        .map_err(LlmOpError::SapError)?
+        .ok_or_else(|| {
+            LlmOpError::ParseResponseError("SAP parse returned no value when complete".to_string())
+        })?;
+
+    // === Convert back to baml ===
+    Ok(::bex_sap::to_external::baml_value_to_external(&parsed))
+}
+
+pub fn execute_sap_parse_partial(
+    json: &str,
+    sap: &SapStreamCache,
+    _ctx: &::sys_types::SysOpContext,
+) -> Result<Option<bex_external_types::BexExternalValue>, LlmOpError> {
+    // === Jsonish ===
+    let jsonish_options = ::bex_sap::jsonish::ParseOptions::default();
+    let jsonish = ::bex_sap::jsonish::parse(json, jsonish_options, false)
         .map_err(LlmOpError::JsonishError)?;
 
-    // === SAP type conversion ===
-    // TODO: a lot of caching
-    let type_alias_definitions = ctx
-        .type_alias_definitions
-        .deref()
-        .clone()
-        .into_iter()
-        .collect();
-    let type_ctx = ::bex_sap::sap_model::TypeCtx::new(
-        &ctx.class_definitions,
-        ctx.enum_definitions.clone(),
-        &type_alias_definitions,
-    );
-    let db = type_ctx
-        .build_db()
-        .map_err(|e| LlmOpError::Other(format!("Failed to build type database: {e}")))?;
-    let target = type_ctx
-        .convert_ty(ty)
-        .map_err(|e| LlmOpError::Other(format!("Failed to convert target type: {e}")))?;
-
-    // === SAP parsing ===
-    let parse_ctx = ::bex_sap::deserializer::coercer::ParsingContext::new(&db);
-    let target = db
-        .resolve_with_meta(target.as_ref())
-        .map_err(|n| parse_ctx.error_type_resolution(n))
+    // === SAP parsing (use the streaming type for partial results) ===
+    let parse_ctx = ::bex_sap::deserializer::coercer::ParsingContext::new(sap.db());
+    let target = sap
+        .stream_ty_resolved()
+        .map_err(|err| parse_ctx.error_type_resolution(err))
         .map_err(LlmOpError::SapError)?;
     let parsed = ::bex_sap::sap_model::TyResolvedRef::coerce(&parse_ctx, target, &jsonish)
         .map_err(LlmOpError::SapError)?;
-    let Some(parsed) = parsed else {
-        // TODO: streaming currently does not exist
-        return Err(LlmOpError::Other("NO YIELD".to_string()));
-    };
-
     // === Convert back to baml ===
-    let converted = ::bex_sap::to_external::baml_value_to_external(&parsed);
-    Ok(converted)
+    match parsed {
+        Some(parsed) => {
+            let converted = ::bex_sap::to_external::baml_value_to_external(&parsed);
+            Ok(Some(converted))
+        }
+        None => Ok(None),
+    }
 }
 
 #[cfg(test)]

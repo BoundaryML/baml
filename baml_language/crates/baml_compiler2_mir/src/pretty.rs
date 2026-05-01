@@ -23,8 +23,9 @@
 use std::fmt::{self, Write};
 
 use crate::{
-    AggregateKind, BasicBlock, BuiltinKind, Constant, Local, LocalDecl, MirFunction,
-    MirFunctionBody, MirFunctionKind, Operand, Rvalue, Statement, StatementKind, Terminator,
+    AggregateKind, BasicBlock, BuiltinKind, Constant, IntrinsicOp, Local, LocalDecl, LogLevel,
+    MirFunction, MirFunctionBody, MirFunctionKind, Operand, Rvalue, Statement, StatementKind,
+    Terminator,
 };
 
 /// Pretty print a MIR function.
@@ -41,6 +42,7 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
             let kind_str = match kind {
                 BuiltinKind::Io => "io",
                 BuiltinKind::Vm => "vm",
+                BuiltinKind::Intrinsic => "intrinsic",
             };
             writeln!(f, "fn {} = builtin({kind_str})", func.item_ref)
         }
@@ -177,6 +179,26 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
         StatementKind::VizExit(idx) => {
             write!(f, "viz_exit({idx});")
         }
+        StatementKind::FreshCell(local) => {
+            write!(f, "fresh_cell({local});")
+        }
+        StatementKind::Intrinsic { op, args } => {
+            let op_str = match op {
+                IntrinsicOp::Log(LogLevel::Info) => "log_info",
+                IntrinsicOp::Log(LogLevel::Debug) => "log_debug",
+                IntrinsicOp::Log(LogLevel::Warn) => "log_warn",
+                IntrinsicOp::Log(LogLevel::Error) => "log_error",
+                IntrinsicOp::SendEvent => "send_event",
+            };
+            write!(f, "intrinsic {op_str}(")?;
+            for (i, arg) in args.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write_operand(f, arg)?;
+            }
+            write!(f, ");")
+        }
         StatementKind::Nop => {
             write!(f, "nop;")
         }
@@ -289,6 +311,23 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write_operand(f, value)?;
             write!(f, ";")
         }
+        Terminator::ThrowIfPanic { value, otherwise } => {
+            write!(f, "throw_if_panic ")?;
+            write_operand(f, value)?;
+            write!(f, " -> {otherwise};")
+        }
+        Terminator::ShortCircuit {
+            operand,
+            is_and,
+            destination,
+            eval_rhs,
+            join,
+        } => {
+            let op = if *is_and { "&&" } else { "||" };
+            write!(f, "{destination} = short_circuit({op}) ")?;
+            write_operand(f, operand)?;
+            write!(f, " -> [eval: {eval_rhs}, join: {join}];")
+        }
     }
 }
 
@@ -371,6 +410,11 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             }
             write!(f, ")")
         }
+        Rvalue::MakeBoundMethod { item_ref, receiver } => {
+            write!(f, "make_bound_method {item_ref}(")?;
+            write_operand(f, receiver)?;
+            write!(f, ")")
+        }
     }
 }
 
@@ -391,7 +435,6 @@ fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
         Constant::Null => write!(f, "const null"),
         Constant::Function(qn) => write!(f, "const fn {qn}"),
         Constant::EnumVariant { enum_ref, variant } => write!(f, "const {enum_ref}.{variant}"),
-        Constant::Ty(ty) => write!(f, "const type {ty:?}"),
     }
 }
 

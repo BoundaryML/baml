@@ -6,7 +6,7 @@ fn user.f() -> Point {
     let _0: Point // _0 // return
 
     bb0: {
-        _0 = Point { const 1_i64, const 2_i64 };
+        _0 = user.Point { const 1_i64, const 2_i64 };
         goto -> bb1;
     }
 

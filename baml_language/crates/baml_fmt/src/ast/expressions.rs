@@ -307,6 +307,9 @@ impl Printable for Literal {
 pub struct PathExpr {
     pub first: t::Word,
     pub rest: Vec<(t::Dot, t::Word)>,
+    /// Trailing generic arguments, e.g. the `<int, string>` in `f<int, string>`
+    /// or `baml.fetch_as<Todo>`. Only present at the tail of the path.
+    pub generic_args: Option<GenericArgs>,
 }
 
 impl FromCST for PathExpr {
@@ -316,6 +319,7 @@ impl FromCST for PathExpr {
             return Ok(PathExpr {
                 first,
                 rest: Vec::new(),
+                generic_args: None,
             });
         }
         let node = StrongAstError::assert_is_node(elem)?;
@@ -323,27 +327,69 @@ impl FromCST for PathExpr {
 
         let mut it = SyntaxNodeIter::new(&node);
 
-        // First WORD
-        let first = it.expect_parse()?;
+        // First child: either a WORD, or a nested PATH_EXPR (the parser wraps
+        // an existing path expr when it adds GENERIC_ARGS as a postfix).
+        let next = it
+            .next()
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, it.parent))?;
 
-        let mut rest = Vec::new();
-
-        // Collect DOT WORD pairs
-        while let Some(elem) = it.next() {
-            if elem.kind() == SyntaxKind::DOT {
-                let dot = t::Dot::from_cst(elem)?;
-                let word = it.expect_parse()?;
-
-                rest.push((dot, word));
-            } else {
+        let (first, mut rest) = match next.kind() {
+            SyntaxKind::WORD => (t::Word::from_cst(next)?, Vec::new()),
+            SyntaxKind::PATH_EXPR => {
+                let nested = PathExpr::from_cst(next)?;
+                if nested.generic_args.is_some() {
+                    return Err(StrongAstError::UnexpectedAdditionalElement {
+                        parent: it.parent,
+                        at: nested
+                            .generic_args
+                            .as_ref()
+                            .map_or_else(rowan::TextRange::default, |g| g.open_angle.span()),
+                    });
+                }
+                (nested.first, nested.rest)
+            }
+            _ => {
                 return Err(StrongAstError::UnexpectedAdditionalElement {
                     parent: it.parent,
-                    at: elem.text_range(),
+                    at: next.text_range(),
                 });
+            }
+        };
+
+        let mut generic_args: Option<GenericArgs> = None;
+
+        // Then: DOT WORD pairs, optionally followed by a single GENERIC_ARGS.
+        while let Some(elem) = it.next() {
+            match elem.kind() {
+                SyntaxKind::DOT => {
+                    let dot = t::Dot::from_cst(elem)?;
+                    let word = it.expect_parse()?;
+                    rest.push((dot, word));
+                }
+                SyntaxKind::GENERIC_ARGS => {
+                    generic_args = Some(GenericArgs::from_cst(elem)?);
+                    if let Some(extra) = it.next() {
+                        return Err(StrongAstError::UnexpectedAdditionalElement {
+                            parent: it.parent,
+                            at: extra.text_range(),
+                        });
+                    }
+                    break;
+                }
+                _ => {
+                    return Err(StrongAstError::UnexpectedAdditionalElement {
+                        parent: it.parent,
+                        at: elem.text_range(),
+                    });
+                }
             }
         }
 
-        Ok(PathExpr { first, rest })
+        Ok(PathExpr {
+            first,
+            rest,
+            generic_args,
+        })
     }
 }
 
@@ -356,6 +402,9 @@ impl PathExpr {
         for (dot, word) in &self.rest {
             len += usize::from(dot.span().len()) + usize::from(word.span().len());
         }
+        if let Some(ref ga) = self.generic_args {
+            len += ga.formatted_single_line_width();
+        }
         Some(len)
     }
 }
@@ -364,11 +413,15 @@ impl Printable for PathExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         if self.rest.is_empty() {
             printer.print_raw_token(&self.first);
+            if let Some(ref ga) = self.generic_args {
+                printer.print(ga, shape);
+            }
             return PrintInfo::default_single_line();
         }
         let first = Expression::Path(PathExpr {
             first: self.first.clone(),
             rest: Vec::new(),
+            generic_args: None,
         });
         let chain_members = self
             .rest
@@ -379,12 +432,19 @@ impl Printable for PathExpr {
             first: &first,
             chain_members,
         };
-        chain.print(shape, printer)
+        let info = chain.print(shape.clone(), printer);
+        if let Some(ref ga) = self.generic_args {
+            printer.print(ga, shape);
+        }
+        info
     }
     fn leftmost_token(&self) -> TextRange {
         self.first.span()
     }
     fn rightmost_token(&self) -> TextRange {
+        if let Some(ref ga) = self.generic_args {
+            return ga.close_angle.span();
+        }
         self.rest
             .last()
             .map_or(&self.first, |(_, word)| word)
@@ -866,7 +926,9 @@ impl Printable for UnaryExpr {
 #[derive(Debug)]
 pub struct IfExpr {
     pub keyword: t::If,
-    pub condition: ParenExpr,
+    /// The condition expression. Parens are optional in Baml, so this can be
+    /// any expression — `if (a == b)` and `if a == b` are both valid.
+    pub condition: Box<Expression>,
     pub block: BlockExpr,
     pub else_branch: Option<(t::Else, ElseExpr)>,
 }
@@ -881,8 +943,9 @@ impl FromCST for IfExpr {
         // KW_IF
         let keyword = it.expect_parse()?;
 
-        // PAREN_EXPR
-        let condition: ParenExpr = it.expect_parse()?;
+        // Condition: any expression (parens are optional in Baml).
+        let condition_elem = it.expect_next("an if condition expression")?;
+        let condition = Box::new(Expression::from_cst(condition_elem)?);
 
         // BLOCK_EXPR
         let block: BlockExpr = it.expect_parse()?;
@@ -934,7 +997,27 @@ impl Printable for IfExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
-        printer.print(&self.condition, shape.clone());
+        // Always print parens around the condition. Source may omit them
+        // (Baml allows `if cond { ... }`), but emitting them keeps formatter
+        // output consistent with the canonical form.
+        let needs_parens = !matches!(*self.condition, Expression::Paren(_));
+        let cond_shape = if needs_parens {
+            // Reserve room for the synthetic `( )` so a barely-fitting
+            // condition doesn't push the line past the width budget once
+            // we wrap parens around it.
+            let mut s = shape.clone();
+            s.width = s.width.saturating_sub(2);
+            s
+        } else {
+            shape.clone()
+        };
+        if needs_parens {
+            printer.print_str("(");
+        }
+        printer.print(&*self.condition, cond_shape);
+        if needs_parens {
+            printer.print_str(")");
+        }
         printer.print_str(" ");
         printer.print(&self.block, shape.clone());
 
@@ -3228,6 +3311,111 @@ impl Printable for GenericParamList {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::GENERIC_ARGS`] node.
+///
+/// Contains `<Type1, Type2, ...>` generic arguments at a call site
+/// or generic-typed path (e.g. `f<int, string>(...)`, `Box<int> { ... }`).
+#[derive(Debug)]
+pub struct GenericArgs {
+    pub open_angle: t::Less,
+    /// Comma-separated type arguments.
+    pub args: Vec<(crate::ast::Type, Option<t::Comma>)>,
+    pub close_angle: t::Greater,
+}
+
+impl FromCST for GenericArgs {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::GENERIC_ARGS)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let open_angle: t::Less = it.expect_parse()?;
+
+        let mut args = Vec::new();
+        let close_angle = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(SyntaxKind::GREATER, it.parent));
+            };
+            match elem.kind() {
+                SyntaxKind::GREATER => {
+                    break t::Greater::from_cst(elem)?;
+                }
+                SyntaxKind::TYPE_EXPR => {
+                    let ty = crate::ast::Type::from_cst(elem)?;
+                    let comma = it
+                        .next_if_kind(SyntaxKind::COMMA)
+                        .map(t::Comma::from_cst)
+                        .transpose()?;
+                    args.push((ty, comma));
+                }
+                _ => {
+                    return Err(StrongAstError::UnexpectedAdditionalElement {
+                        parent: it.parent,
+                        at: elem.text_range(),
+                    });
+                }
+            }
+        };
+
+        it.expect_end()?;
+
+        Ok(GenericArgs {
+            open_angle,
+            args,
+            close_angle,
+        })
+    }
+}
+
+impl GenericArgs {
+    /// Width that the formatter would emit on a single line, ignoring any
+    /// internal trivia in the source. Used by single-line-width estimators
+    /// upstream to decide whether a host expression fits on one line.
+    ///
+    /// Format is `<T1, T2, T3>`: 2 chars for `<>`, plus each type argument's
+    /// source-text width, plus `, ` (2 chars) between arguments. Source
+    /// types may contain whitespace, but for typical cases this is a tight
+    /// upper bound and tracks what the printer actually emits.
+    pub(crate) fn formatted_single_line_width(&self) -> usize {
+        let mut len: usize = 2; // `<` and `>`
+        for (i, (ty, _)) in self.args.iter().enumerate() {
+            let arg_span = ty.rightmost_token().end() - ty.leftmost_token().start();
+            len += usize::from(arg_span);
+            if i + 1 < self.args.len() {
+                len += 2; // `, `
+            }
+        }
+        len
+    }
+}
+
+impl KnownKind for GenericArgs {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::GENERIC_ARGS
+    }
+}
+
+impl Printable for GenericArgs {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_angle);
+        for (i, (ty, _comma)) in self.args.iter().enumerate() {
+            printer.print(ty, shape.clone());
+            if i + 1 < self.args.len() {
+                printer.print_str(", ");
+            }
+        }
+        printer.print_raw_token(&self.close_angle);
+        PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_angle.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_angle.span()
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::THROWS_CLAUSE`] node.
 ///
 /// Contains `throws <type>`.
@@ -3273,14 +3461,65 @@ impl Printable for ThrowsClause {
     }
 }
 
+/// Arrow token in a lambda expression. Accepts either `->` (canonical) or
+/// `=>` (accepted permissively for ergonomic parity with JS/TS arrow functions);
+/// the formatter always emits `->`.
+#[derive(Debug)]
+pub enum LambdaArrow {
+    Arrow(t::Arrow),
+    FatArrow(t::FatArrow),
+}
+
+impl LambdaArrow {
+    #[must_use]
+    pub fn span(&self) -> TextRange {
+        match self {
+            LambdaArrow::Arrow(t) => t.span(),
+            LambdaArrow::FatArrow(t) => t.span(),
+        }
+    }
+
+    /// Returns true if the source used `=>` instead of the canonical `->`.
+    #[must_use]
+    pub fn is_fat_arrow(&self) -> bool {
+        matches!(self, LambdaArrow::FatArrow(_))
+    }
+}
+
+impl FromCST for LambdaArrow {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(elem)?;
+        match token.kind() {
+            SyntaxKind::ARROW => Ok(LambdaArrow::Arrow(t::Arrow::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::FAT_ARROW => Ok(LambdaArrow::FatArrow(t::FatArrow::new_from_span(
+                token.text_range(),
+            ))),
+            _ => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "ARROW or FAT_ARROW".into(),
+                found: token.kind(),
+                at: token.text_range(),
+            }),
+        }
+    }
+}
+
+impl KnownKind for LambdaArrow {
+    fn kind() -> SyntaxKind {
+        // Primary/canonical kind; `from_cst` also accepts FAT_ARROW.
+        SyntaxKind::ARROW
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::LAMBDA_EXPR`] node.
 ///
-/// Syntax: `[<T, U>] (params) -> [RetType] [throws E] { body }`
+/// Syntax: `[<T, U>] (params) (-> | =>) [RetType] [throws E] { body }`
 #[derive(Debug)]
 pub struct LambdaExpr {
     pub generic_params: Option<GenericParamList>,
     pub param_list: super::FunctionParamList,
-    pub arrow: t::Arrow,
+    pub arrow: LambdaArrow,
     pub return_type: Option<crate::ast::Type>,
     pub throws: Option<ThrowsClause>,
     pub block: BlockExpr,
@@ -3306,8 +3545,8 @@ impl FromCST for LambdaExpr {
         // Parameter list: (x: int, y: string) or ()
         let param_list: super::FunctionParamList = it.expect_parse()?;
 
-        // Arrow: ->
-        let arrow: t::Arrow = it.expect_parse()?;
+        // Arrow: `->` or `=>` (formatter normalizes to `->`)
+        let arrow: LambdaArrow = it.expect_parse()?;
 
         // Optional return type: TYPE_EXPR before THROWS_CLAUSE or BLOCK_EXPR
         let return_type = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::TYPE_EXPR) {
@@ -3357,9 +3596,8 @@ impl Printable for LambdaExpr {
         // Parameter list
         printer.print(&self.param_list, shape.clone());
 
-        // Space + arrow
-        printer.print_str(" ");
-        printer.print_raw_token(&self.arrow);
+        // Space + arrow (always normalize to canonical `->`)
+        printer.print_str(" ->");
 
         // Optional return type
         if let Some(ref ret) = self.return_type {
@@ -3406,14 +3644,20 @@ impl<'a> PrintChain<'a> {
     #[must_use]
     pub fn new(from: &'a Expression) -> Self {
         match from {
-            Expression::Path(path_expr) => Self {
-                first: from,
-                chain_members: path_expr
+            Expression::Path(path_expr) => {
+                let mut chain_members: Vec<PrintChainItem<'a>> = path_expr
                     .rest
                     .iter()
                     .map(|(dot, word)| PrintChainItem::FieldAccess(dot, word))
-                    .collect(),
-            },
+                    .collect();
+                if let Some(ref ga) = path_expr.generic_args {
+                    chain_members.push(PrintChainItem::GenericArgs(ga));
+                }
+                Self {
+                    first: from,
+                    chain_members,
+                }
+            }
             Expression::Call(call_expr) => {
                 let mut chain = Self::new(&call_expr.callee);
                 if chain.chain_members.is_empty() {
@@ -3509,7 +3753,23 @@ impl PrintMultiLine for PrintChain<'_> {
         };
 
         let offset = printer.current_line_len().saturating_sub(shape.indent);
-        let should_indent_chain = first_single_line || offset > printer.config.indent_width;
+        // Only indent the chain when it actually has somewhere to break across
+        // lines — i.e. it has multiple field-access steps, or the first chunk
+        // already pushed past one indent. Single-call chains like
+        // `f(longarg)` or `obj.method(longarg)` should let the trailing
+        // `(args)` wrap at the *outer* indent rather than chain_indent + 4.
+        let field_access_steps = self
+            .chain_members
+            .iter()
+            .filter(|m| {
+                matches!(
+                    m,
+                    PrintChainItem::FieldAccess(..) | PrintChainItem::OptionalFieldAccess(..)
+                )
+            })
+            .count();
+        let should_indent_chain =
+            (first_single_line && field_access_steps > 1) || offset > printer.config.indent_width;
         let chain_indent = if should_indent_chain {
             shape.indent + printer.config.indent_width
         } else {
@@ -3643,6 +3903,15 @@ impl PrintChain<'_> {
                 printer.print(call_args, call_shape);
                 *line_remaining_width = printer.current_line_remaining_width();
             }
+            &PrintChainItem::GenericArgs(generic_args) => {
+                let ga_shape = Shape {
+                    width: *line_remaining_width,
+                    indent: chain_indent,
+                    first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
+                };
+                printer.print(generic_args, ga_shape);
+                *line_remaining_width = printer.current_line_remaining_width();
+            }
             _ => unreachable!("print_non_field_item called with field-access item"),
         }
     }
@@ -3713,6 +3982,9 @@ impl PrintChain<'_> {
                     printer.print_raw_token(qd);
                     call_args.try_print_single_line(shape, printer)?;
                 }
+                &PrintChainItem::GenericArgs(generic_args) => {
+                    printer.print(generic_args, Shape::unlimited_single_line());
+                }
             }
         }
         if printer.output.len() > shape.width {
@@ -3743,6 +4015,7 @@ impl Printable for PrintChain<'_> {
             Some(PrintChainItem::Call(call_args) | PrintChainItem::OptionalCall(_, call_args)) => {
                 call_args.rightmost_token()
             }
+            Some(PrintChainItem::GenericArgs(ga)) => ga.close_angle.span(),
             None => self.first.rightmost_token(),
         }
     }
@@ -3756,4 +4029,5 @@ enum PrintChainItem<'a> {
     OptionalIndex(&'a t::QuestionDot, IndexArgs<'a>),
     Call(&'a CallArgs),
     OptionalCall(&'a t::QuestionDot, &'a CallArgs),
+    GenericArgs(&'a GenericArgs),
 }

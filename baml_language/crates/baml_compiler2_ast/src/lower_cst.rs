@@ -8,7 +8,7 @@
 //! No LLM function expansion, no attribute validation, no duplicate detection —
 //! all of that moves downstream.
 
-use baml_base::Name;
+use baml_base::{Name, TypePath};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, ast};
 use rowan::ast::AstNode;
 
@@ -193,6 +193,14 @@ fn lower_function(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Opt
         let expr = lower_type_expr::lower_type_expr_node(&te);
         let te_span = te.syntax().text_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
+        // void is allowed as a bare return type, but not wrapped (void?, void[], etc.).
+        lower_type_expr::check_void_type(
+            &expr,
+            format!("return type of `{name}`"),
+            te_span,
+            true,
+            diags,
+        );
         SpannedTypeExpr {
             expr,
             span: te_span,
@@ -245,6 +253,7 @@ fn lower_function(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Opt
         throws,
         body,
         declarative_meta,
+        origin: crate::ast::FunctionOrigin::UserDefined,
         attributes,
         span: node.text_range(),
         name_span,
@@ -274,6 +283,7 @@ fn check_builtin_body(expr_body_node: &SyntaxNode) -> Option<BuiltinKind> {
         match text {
             "$rust_function" => return Some(BuiltinKind::Vm),
             "$rust_io_function" => return Some(BuiltinKind::Io),
+            "$compiler_intrinsic" => return Some(BuiltinKind::Intrinsic),
             _ => {}
         }
     }
@@ -312,6 +322,13 @@ pub(crate) fn lower_param(
                 &expr,
                 format!("parameter `{param_name_str}` in `{function_name}`"),
                 te_span,
+                diags,
+            );
+            lower_type_expr::check_void_type(
+                &expr,
+                "a parameter type".to_string(),
+                te_span,
+                false,
                 diags,
             );
             SpannedTypeExpr {
@@ -356,7 +373,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
 /// use `client_name = None` and keep their existing 2-argument signature.
 ///
 /// All synthetic spans point to `span`.
-pub(crate) fn synthesize_llm_builtin_call(
+pub fn synthesize_llm_builtin_call(
     builtin_name: &str,
     function_name: &str,
     param_names: &[Name],
@@ -405,20 +422,17 @@ pub(crate) fn synthesize_llm_builtin_call(
         Some(name) if name.contains('/') => {
             // Shorthand client (e.g. "openai/gpt-4o"): build an inline Client object.
             let name_lit = alloc(Expr::Literal(Literal::String(name.to_string())));
-            let ct_path = alloc(Expr::Path(vec![
+            let ct_variant = alloc(Expr::Path(vec![
                 Name::new("baml"),
                 Name::new("llm"),
                 Name::new("ClientType"),
+                Name::new("Primitive"),
             ]));
-            let ct_variant = alloc(Expr::FieldAccess {
-                base: ct_path,
-                field: Name::new("Primitive"),
-            });
             let sub = alloc(Expr::Array { elements: vec![] });
             let retry = alloc(Expr::Null);
             let counter = alloc(Expr::Literal(Literal::Int(0)));
             alloc(Expr::Object {
-                type_name: Some(Name::new("baml.llm.Client")),
+                type_name: Some(TypePath::from_dotted("baml.llm.Client")),
                 fields: vec![
                     (Name::new("name"), name_lit),
                     (Name::new("client_type"), ct_variant),
@@ -460,7 +474,8 @@ pub(crate) fn synthesize_llm_builtin_call(
         match_arm_spans: Arena::new(),
         type_annotation_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
-        field_access_member_spans: std::collections::HashMap::new(),
+        member_access_member_spans: std::collections::HashMap::new(),
+        path_segment_spans: std::collections::HashMap::new(),
     };
 
     (body, source_map)
@@ -523,7 +538,100 @@ pub(crate) fn synthesize_llm_parse_call(
         match_arm_spans: Arena::new(),
         type_annotation_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
-        field_access_member_spans: std::collections::HashMap::new(),
+        member_access_member_spans: std::collections::HashMap::new(),
+        path_segment_spans: std::collections::HashMap::new(),
+    };
+
+    (body, source_map)
+}
+
+/// Synthesize a `CLIENT.__make_stream(sse, "FunctionName")` method call.
+///
+/// Used by the PPIR to generate `$parse_stream` companion function bodies.
+pub fn synthesize_llm_make_stream_call(
+    function_name: &str,
+    client_name: &str,
+    span: text_size::TextRange,
+) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
+    use la_arena::Arena;
+
+    use crate::ast::{AstSourceMap, Expr, ExprBody, Literal};
+
+    let mut exprs = Arena::new();
+    let mut expr_spans = Arena::new();
+
+    let mut alloc = |expr: Expr| -> crate::ast::ExprId {
+        let id = exprs.alloc(expr);
+        expr_spans.alloc(span);
+        id
+    };
+
+    // 1. `sse` parameter reference
+    let sse_expr = alloc(Expr::Path(vec![Name::new("sse")]));
+
+    // 2. Function name literal: "FunctionName"
+    let fn_name_expr = alloc(Expr::Literal(Literal::String(function_name.to_string())));
+
+    // 3. Client argument (same logic as synthesize_llm_builtin_call)
+    let client_arg = if client_name.contains('/') {
+        let name_lit = alloc(Expr::Literal(Literal::String(client_name.to_string())));
+        let ct_path = alloc(Expr::Path(vec![
+            Name::new("baml"),
+            Name::new("llm"),
+            Name::new("ClientType"),
+        ]));
+        let ct_variant = alloc(Expr::MemberAccess {
+            base: ct_path,
+            member: Name::new("Primitive"),
+        });
+        let sub = alloc(Expr::Array { elements: vec![] });
+        let retry = alloc(Expr::Null);
+        let counter = alloc(Expr::Literal(Literal::Int(0)));
+        alloc(Expr::Object {
+            type_name: Some(TypePath::from_dotted("baml.llm.Client")),
+            fields: vec![
+                (Name::new("name"), name_lit),
+                (Name::new("client_type"), ct_variant),
+                (Name::new("sub_clients"), sub),
+                (Name::new("retry"), retry),
+                (Name::new("counter"), counter),
+            ],
+            spreads: vec![],
+        })
+    } else {
+        alloc(Expr::Path(vec![Name::new(client_name)]))
+    };
+
+    // 4. Callee: CLIENT.__make_stream (method call on the client)
+    let callee = alloc(Expr::MemberAccess {
+        base: client_arg,
+        member: Name::new("__make_stream"),
+    });
+
+    let call = alloc(Expr::Call {
+        callee,
+        args: vec![sse_expr, fn_name_expr],
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: Arena::new(),
+        patterns: Arena::new(),
+        match_arms: Arena::new(),
+        catch_arms: Arena::new(),
+        type_annotations: Arena::new(),
+        root_expr: Some(call),
+    };
+
+    let source_map = AstSourceMap {
+        expr_spans,
+        stmt_spans: Arena::new(),
+        pattern_spans: Arena::new(),
+        match_arm_spans: Arena::new(),
+        type_annotation_spans: Arena::new(),
+        catch_arm_spans: Arena::new(),
+        member_access_member_spans: std::collections::HashMap::new(),
+        path_segment_spans: std::collections::HashMap::new(),
     };
 
     (body, source_map)
@@ -609,6 +717,13 @@ fn lower_class(
                     &expr,
                     format!("field `{class_name}.{field_name_str}`"),
                     te_span,
+                    diags,
+                );
+                lower_type_expr::check_void_type(
+                    &expr,
+                    "a class field type".to_string(),
+                    te_span,
+                    false,
                     diags,
                 );
 
@@ -754,6 +869,13 @@ fn lower_type_alias(
             let expr = lower_type_expr::lower_type_expr_node(&te);
             let te_span = te.syntax().text_range();
             check_unknown_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
+            lower_type_expr::check_void_type(
+                &expr,
+                "a type alias".to_string(),
+                te_span,
+                false,
+                diags,
+            );
             SpannedTypeExpr {
                 expr,
                 span: te_span,
@@ -953,6 +1075,7 @@ fn synthesize_init_test_function(
         type_expr: Some(SpannedTypeExpr {
             expr: crate::ast::TypeExpr::Path {
                 segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                generic_args: vec![],
                 attrs: vec![],
             },
             span,
@@ -969,6 +1092,7 @@ fn synthesize_init_test_function(
         throws: None,
         body: Some(FunctionBodyDef::Expr(body, source_map)),
         declarative_meta: None,
+        origin: crate::ast::FunctionOrigin::Internal,
         attributes: vec![],
         span,
         name_span: span,
@@ -998,22 +1122,22 @@ fn synthesize_register_call(
                 name: Name::new("<test body>"),
                 generic_params: vec![],
                 params: vec![],
-                return_type: None,
+                return_type: Some(SpannedTypeExpr {
+                    expr: crate::ast::TypeExpr::Void { attrs: vec![] },
+                    span,
+                }),
                 throws: None,
                 body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
                 declarative_meta: None,
+                origin: crate::ast::FunctionOrigin::Internal,
                 attributes: vec![],
                 span,
                 name_span: span,
             };
 
             // registry.register_test
-            let registry_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("registry")]), span);
             let method_call_target = ctx.alloc_expr(
-                Expr::FieldAccess {
-                    base: registry_ref,
-                    field: Name::new("register_test"),
-                },
+                Expr::Path(vec![Name::new("registry"), Name::new("register_test")]),
                 span,
             );
 
@@ -1053,6 +1177,7 @@ fn synthesize_register_call(
                 type_expr: Some(SpannedTypeExpr {
                     expr: crate::ast::TypeExpr::Path {
                         segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                        generic_args: vec![],
                         attrs: vec![],
                     },
                     span,
@@ -1065,29 +1190,30 @@ fn synthesize_register_call(
                 name: Name::new("<testset collector>"),
                 generic_params: vec![],
                 params: vec![testset_param],
-                return_type: None,
+                return_type: Some(SpannedTypeExpr {
+                    expr: crate::ast::TypeExpr::Void { attrs: vec![] },
+                    span,
+                }),
                 throws: None,
                 body: Some(FunctionBodyDef::Expr(collector_exprs, collector_source_map)),
                 declarative_meta: None,
+                origin: crate::ast::FunctionOrigin::Internal,
                 attributes: vec![],
                 span,
                 name_span: span,
             };
 
             // registry.register_test_set
-            let registry_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("registry")]), span);
             let method_call_target = ctx.alloc_expr(
-                Expr::FieldAccess {
-                    base: registry_ref,
-                    field: Name::new("register_test_set"),
-                },
+                Expr::Path(vec![Name::new("registry"), Name::new("register_test_set")]),
                 span,
             );
 
             // Args: (name_expr, collector_lambda, runner_or_null)
             let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
-            // Use a unique synthetic span for the collector lambda.
-            let collector_lambda_span = ctx.next_lambda_span();
+            // Use the testset body's real CST range so HIR scope lookup works
+            // correctly for name resolution inside the collector lambda body.
+            let collector_lambda_span = body_node.text_range();
             let collector_arg =
                 ctx.alloc_expr(Expr::Lambda(Box::new(collector_def)), collector_lambda_span);
             let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
@@ -1227,7 +1353,7 @@ fn synthesize_retry_policy_let(
         .collect();
 
     let root = alloc(Expr::Object {
-        type_name: Some(Name::new("RetryPolicy")),
+        type_name: Some(TypePath::bare(Name::new("RetryPolicy"))),
         fields,
         spreads: vec![],
     });
@@ -1248,7 +1374,8 @@ fn synthesize_retry_policy_let(
         match_arm_spans: la_arena::Arena::new(),
         type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
-        field_access_member_spans: std::collections::HashMap::new(),
+        member_access_member_spans: std::collections::HashMap::new(),
+        path_segment_spans: std::collections::HashMap::new(),
     };
 
     Some(Item::Let(LetDef {
@@ -1304,7 +1431,7 @@ fn synthesize_client_items(
 
     // Validate provider name.
     if let Some(p) = &provider {
-        if !VALID_PROVIDERS.contains(&p.as_str()) {
+        if !is_valid_provider(p.as_str()) {
             diags.push(LoweringDiagnostic::UnknownProvider {
                 client_name: client_name.clone(),
                 provider: p.clone(),
@@ -1429,11 +1556,6 @@ fn synthesize_client_let(
     let name_expr = alloc(Expr::Literal(Literal::String(client_name.to_string())));
 
     // client_type: baml.llm.ClientType.Primitive (or Fallback / RoundRobin)
-    let client_type_path = alloc(Expr::Path(vec![
-        Name::new("baml"),
-        Name::new("llm"),
-        Name::new("ClientType"),
-    ]));
     let variant_name = if is_fallback {
         "Fallback"
     } else if is_round_robin {
@@ -1441,10 +1563,12 @@ fn synthesize_client_let(
     } else {
         "Primitive"
     };
-    let client_type_expr = alloc(Expr::FieldAccess {
-        base: client_type_path,
-        field: Name::new(variant_name),
-    });
+    let client_type_expr = alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("ClientType"),
+        Name::new(variant_name),
+    ]));
 
     // sub_clients: [A, B, ...] for composites, [] for primitive
     let sub_clients_expr = alloc(Expr::Array {
@@ -1464,7 +1588,7 @@ fn synthesize_client_let(
 
     // Client { name, client_type, sub_clients, retry, counter }
     let root = alloc(Expr::Object {
-        type_name: Some(Name::new("Client")),
+        type_name: Some(TypePath::bare(Name::new("Client"))),
         fields: vec![
             (Name::new("name"), name_expr),
             (Name::new("client_type"), client_type_expr),
@@ -1491,7 +1615,8 @@ fn synthesize_client_let(
         match_arm_spans: la_arena::Arena::new(),
         type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
-        field_access_member_spans: std::collections::HashMap::new(),
+        member_access_member_spans: std::collections::HashMap::new(),
+        path_segment_spans: std::collections::HashMap::new(),
     };
 
     Item::Let(LetDef {
@@ -1543,41 +1668,40 @@ fn synthesize_client_new_companion(
 
     let config = provider
         .map(String::as_str)
-        .filter(|p| VALID_PROVIDERS.contains(p))
-        .map(provider_config_for);
+        .filter(|p| is_valid_provider(p))
+        .and_then(provider_config_for);
 
-    // ── 1. Seed the unified value map from provider defaults ────
+    // ── 1. Seed known fields as null/empty ─────────────────────
     //
-    // All known fields (top-level AND provider-specific) go into one map.
-    // The split into PrimitiveClientOptions vs provider sub-object only
-    // happens at assembly time.
+    // All known fields go into one map, seeded as Null (or EmptyMap for
+    // map-typed fields). No provider-specific defaults are injected --
+    // those are applied at runtime in sys_llm.
 
     let mut values: std::collections::HashMap<String, ExprId> = std::collections::HashMap::new();
-    let top_level_names: std::collections::HashSet<&str> =
-        TOP_LEVEL_FIELDS.iter().map(|(n, _)| *n).collect();
-
-    // Provider-specific field names: anything in config.fields not in TOP_LEVEL_FIELDS.
+    // Provider-specific field names (from the generated config).
     let provider_field_set: std::collections::HashSet<&str> = config
-        .as_ref()
-        .map(|c| {
-            c.fields
-                .iter()
-                .map(|(n, _)| *n)
-                .filter(|n| !top_level_names.contains(n))
-                .collect()
-        })
+        .map(|c| c.fields.iter().copied().collect())
         .unwrap_or_default();
 
-    // Seed top-level fields with their base defaults.
-    for &(name, ref default) in TOP_LEVEL_FIELDS {
-        values.insert(name.to_string(), alloc_field_default(default, &mut alloc));
+    // Seed top-level fields as null / empty map.
+    // Skip provider_options and request_body -- they're assembled separately.
+    for &name in CLIENT_OPTION_FIELDS {
+        if SEPARATELY_ASSEMBLED_FIELDS.contains(&name) {
+            continue;
+        }
+        let expr = if EMPTY_MAP_FIELDS.contains(&name) {
+            alloc(Expr::Map { entries: vec![] })
+        } else {
+            alloc(Expr::Null)
+        };
+        values.insert(name.to_string(), expr);
     }
 
-    // Apply provider field defaults on top (both top-level overrides and provider-specific).
-    if let Some(cfg) = &config {
-        for &(name, ref default) in cfg.fields {
-            values.insert(name.to_string(), alloc_field_default(default, &mut alloc));
-        }
+    // Seed provider-specific fields as null (so they're recognized as known).
+    for &name in &provider_field_set {
+        values
+            .entry(name.to_string())
+            .or_insert_with(|| alloc(Expr::Null));
     }
 
     // ── 2. Override from user config ────────────────────────────
@@ -1594,18 +1718,10 @@ fn synthesize_client_new_companion(
 
     let mut has_base_url = false;
     let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
-    // Track which provider fields have been set to non-null values (by defaults
-    // or by user). Used by validate_client_options and assembly.
-    let mut provider_fields_set: std::collections::HashSet<String> = config
-        .as_ref()
-        .map(|c| {
-            c.fields
-                .iter()
-                .filter(|(name, default)| provider_field_set.contains(*name) && !default.is_null())
-                .map(|(name, _)| name.to_string())
-                .collect()
-        })
-        .unwrap_or_default();
+    // Track which provider fields have been set to non-null values by the user.
+    // No compile-time defaults, so this starts empty.
+    let mut provider_fields_set: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
 
     if let Some(options_item) = config_block
         .items()
@@ -1660,39 +1776,36 @@ fn synthesize_client_new_companion(
 
     // Build provider options sub-object from provider-specific fields.
     let null_expr = alloc(Expr::Null);
-    let provider_options =
-        if let Some(type_name) = config.as_ref().and_then(|c| c.provider_options_type) {
-            let prov_fields: Vec<(Name, ExprId)> = config
-                .as_ref()
-                .unwrap()
-                .fields
-                .iter()
-                .filter(|(name, _)| !top_level_names.contains(name))
-                .map(|&(name, _)| {
-                    let val = values.remove(name).unwrap_or_else(|| alloc(Expr::Null));
-                    (Name::new(name), val)
-                })
-                .collect();
-            if !provider_fields_set.is_empty() {
-                alloc(Expr::Object {
-                    type_name: Some(Name::new(type_name)),
-                    fields: prov_fields,
-                    spreads: vec![],
-                })
-            } else {
-                null_expr
-            }
+    let provider_options = if let Some(type_name) = config.and_then(|c| c.options_type) {
+        let prov_fields: Vec<(Name, ExprId)> = config
+            .unwrap()
+            .fields
+            .iter()
+            .map(|&name| {
+                let val = values.remove(name).unwrap_or_else(|| alloc(Expr::Null));
+                (Name::new(name), val)
+            })
+            .collect();
+        if !provider_fields_set.is_empty() {
+            alloc(Expr::Object {
+                type_name: Some(TypePath::from_dotted(type_name)),
+                fields: prov_fields,
+                spreads: vec![],
+            })
         } else {
             null_expr
-        };
+        }
+    } else {
+        null_expr
+    };
 
     // Extract top-level fields in class-definition order.
-    let mut options_fields: Vec<(Name, ExprId)> = TOP_LEVEL_FIELDS
+    // Skip provider_options and request_body -- they're inserted separately below.
+    let mut options_fields: Vec<(Name, ExprId)> = CLIENT_OPTION_FIELDS
         .iter()
-        .map(|&(name, ref default)| {
-            let val = values
-                .remove(name)
-                .unwrap_or_else(|| alloc_field_default(default, &mut alloc));
+        .filter(|name| !SEPARATELY_ASSEMBLED_FIELDS.contains(name))
+        .map(|&name| {
+            let val = values.remove(name).unwrap_or_else(|| alloc(Expr::Null));
             (Name::new(name), val)
         })
         .collect();
@@ -1701,20 +1814,25 @@ fn synthesize_client_new_companion(
         entries: request_body_entries,
     });
 
-    // Insert provider_options before "headers" to match PrimitiveClientOptions
+    // Insert provider_options before "media_url_handler" to match PrimitiveClientOptions
     // class-definition order, then append request_body at the end.
-    let headers_pos = options_fields
+    let insert_pos = options_fields
         .iter()
-        .position(|(n, _)| n.as_str() == "headers")
-        .unwrap_or(options_fields.len());
+        .position(|(n, _)| n.as_str() == "media_url_handler")
+        .unwrap_or_else(|| {
+            options_fields
+                .iter()
+                .position(|(n, _)| n.as_str() == "headers")
+                .unwrap_or(options_fields.len())
+        });
     options_fields.insert(
-        headers_pos,
+        insert_pos,
         (Name::new("provider_options"), provider_options),
     );
     options_fields.push((Name::new("request_body"), request_body));
 
     let options_expr = alloc(Expr::Object {
-        type_name: Some(Name::new("baml.llm.PrimitiveClientOptions")),
+        type_name: Some(TypePath::from_dotted("baml.llm.PrimitiveClientOptions")),
         fields: options_fields,
         spreads: vec![],
     });
@@ -1725,7 +1843,7 @@ fn synthesize_client_new_companion(
         provider.map_or("unknown", |s| s.as_str()).to_string(),
     )));
     let root = alloc(Expr::Object {
-        type_name: Some(Name::new("baml.llm.PrimitiveClient")),
+        type_name: Some(TypePath::from_dotted("baml.llm.PrimitiveClient")),
         fields: vec![
             (Name::new("name"), name_lit),
             (Name::new("provider"), provider_lit),
@@ -1750,7 +1868,8 @@ fn synthesize_client_new_companion(
         match_arm_spans: la_arena::Arena::new(),
         type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
-        field_access_member_spans: std::collections::HashMap::new(),
+        member_access_member_spans: std::collections::HashMap::new(),
+        path_segment_spans: std::collections::HashMap::new(),
     };
 
     let func_name = format!("{client_name}$new");
@@ -1762,245 +1881,44 @@ fn synthesize_client_new_companion(
         throws: None,
         body: Some(FunctionBodyDef::Expr(body, source_map)),
         declarative_meta: None,
+        origin: crate::ast::FunctionOrigin::Internal,
         attributes: vec![],
         span,
         name_span: name_token.text_range(),
     }
 }
 
-// ── Helpers ─────────────────────────────────────────────────────
-
-/// Default value for a field -- covers both "unset" sentinels (`Null`, `EmptyMap`)
-/// used in [`TOP_LEVEL_FIELDS`] and concrete provider defaults used in per-provider
-/// field consts like [`ANTHROPIC_FIELDS`].
-enum FieldDefault {
-    /// Null / unset.
-    Null,
-    /// Empty map literal (used as the unset default for `headers`, `query_params`).
-    EmptyMap,
-    /// Literal string.
-    Str(&'static str),
-    /// Literal integer.
-    Int(i64),
-    /// Array of strings.
-    StrArray(&'static [&'static str]),
-    /// Map of string pairs.
-    StrPairMap(&'static [(&'static str, &'static str)]),
-}
-
-impl FieldDefault {
-    fn is_null(&self) -> bool {
-        matches!(self, Self::Null)
-    }
-}
-
-/// Allocate an `Expr` tree for a [`FieldDefault`] value.
-fn alloc_field_default(default: &FieldDefault, alloc: &mut impl FnMut(Expr) -> ExprId) -> ExprId {
-    use baml_base::Literal;
-    match default {
-        FieldDefault::Null => alloc(Expr::Null),
-        FieldDefault::EmptyMap => alloc(Expr::Map { entries: vec![] }),
-        FieldDefault::Str(s) => alloc(Expr::Literal(Literal::String(s.to_string()))),
-        FieldDefault::Int(v) => alloc(Expr::Literal(Literal::Int(*v))),
-        FieldDefault::StrArray(items) => {
-            let elements: Vec<ExprId> = items
-                .iter()
-                .map(|s| alloc(Expr::Literal(Literal::String(s.to_string()))))
-                .collect();
-            alloc(Expr::Array { elements })
-        }
-        FieldDefault::StrPairMap(pairs) => {
-            let entries: Vec<(ExprId, ExprId)> = pairs
-                .iter()
-                .map(|(k, v)| {
-                    let ke = alloc(Expr::Literal(Literal::String(k.to_string())));
-                    let ve = alloc(Expr::Literal(Literal::String(v.to_string())));
-                    (ke, ve)
-                })
-                .collect();
-            alloc(Expr::Map { entries })
-        }
-    }
-}
-
-/// Top-level fields on `PrimitiveClientOptions`, in class-definition order.
-///
-/// To add a new top-level option, add it here and in the `PrimitiveClientOptions`
-/// class in `llm_types.baml`. The seed, take, and assembly stages all derive
-/// from this list automatically.
-const TOP_LEVEL_FIELDS: &[(&str, FieldDefault)] = &[
-    ("model", FieldDefault::Null),
-    ("base_url", FieldDefault::Null),
-    ("allowed_role_metadata", FieldDefault::Null),
-    ("finish_reason_allow_list", FieldDefault::Null),
-    ("finish_reason_deny_list", FieldDefault::Null),
-    ("supports_streaming", FieldDefault::Null),
-    ("default_role", FieldDefault::Null),
-    ("allowed_roles", FieldDefault::Null),
-    ("remap_roles", FieldDefault::Null),
-    ("api_key", FieldDefault::Null),
-    ("headers", FieldDefault::EmptyMap),
-    ("query_params", FieldDefault::EmptyMap),
-];
-
-// ── Per-provider field definitions ─────────────────────────────
+// ── Generated field lists & provider config ────────────────────
 //
-// Each const lists ALL fields the provider cares about -- both top-level
-// overrides (e.g. base_url, default_role) and provider-specific fields
-// (e.g. max_tokens, region). Fields not in TOP_LEVEL_FIELDS are
-// automatically treated as provider-specific and grouped into the typed
-// sub-object at assembly time.
-//
-// To add a new provider:
-//   1. Add its name to VALID_PROVIDERS.
-//   2. Add a PROVIDER_FIELDS const here.
-//   3. Add an arm to provider_config_for().
-//   4. If it needs compile-time validation, add checks to validate_client_options().
+// Extracted from llm_types.baml by build.rs. To add a new field or provider,
+// edit the BAML file (and its @providers annotations) -- the compiler picks it
+// up automatically.
 
-const SAU: &[&str] = &["system", "user", "assistant"];
-const UA: &[&str] = &["user", "assistant"];
+#[allow(dead_code)]
+mod generated_client_fields {
+    include!(concat!(env!("OUT_DIR"), "/client_fields_generated.rs"));
+}
+use generated_client_fields::{CLIENT_OPTION_FIELDS, PROVIDER_CONFIGS, ProviderFieldConfig};
 
-const ANTHROPIC_FIELDS: &[(&str, FieldDefault)] = &[
-    ("base_url", FieldDefault::Str("https://api.anthropic.com")),
-    ("default_role", FieldDefault::Str("user")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-    ("max_tokens", FieldDefault::Int(4096)),
-];
+/// Map fields that should be seeded as empty maps rather than null.
+const EMPTY_MAP_FIELDS: &[&str] = &["headers", "query_params"];
 
-const OPENAI_FIELDS: &[(&str, FieldDefault)] = &[
-    ("base_url", FieldDefault::Str("https://api.openai.com/v1")),
-    ("default_role", FieldDefault::Str("system")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-];
+/// Fields that are assembled separately (not seeded/extracted with normal top-level fields).
+const SEPARATELY_ASSEMBLED_FIELDS: &[&str] = &["provider_options", "request_body"];
 
-const OLLAMA_FIELDS: &[(&str, FieldDefault)] = &[
-    ("base_url", FieldDefault::Str("http://localhost:11434")),
-    ("default_role", FieldDefault::Str("user")),
-    ("allowed_roles", FieldDefault::StrArray(UA)),
-];
-
-const OPENROUTER_FIELDS: &[(&str, FieldDefault)] = &[
-    (
-        "base_url",
-        FieldDefault::Str("https://openrouter.ai/api/v1"),
-    ),
-    ("default_role", FieldDefault::Str("system")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-];
-
-const AZURE_OPENAI_FIELDS: &[(&str, FieldDefault)] = &[
-    ("default_role", FieldDefault::Str("system")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-    ("resource_name", FieldDefault::Null),
-    ("deployment_id", FieldDefault::Null),
-    ("api_version", FieldDefault::Null),
-    ("max_tokens", FieldDefault::Int(4096)),
-];
-
-const BEDROCK_FIELDS: &[(&str, FieldDefault)] = &[
-    ("default_role", FieldDefault::Str("user")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-    ("region", FieldDefault::Null),
-    ("endpoint_url", FieldDefault::Null),
-    ("access_key_id", FieldDefault::Null),
-    ("secret_access_key", FieldDefault::Null),
-    ("session_token", FieldDefault::Null),
-    ("profile", FieldDefault::Null),
-    ("stop_sequences", FieldDefault::Null),
-    ("max_tokens", FieldDefault::Null),
-    ("temperature", FieldDefault::Null),
-    ("top_p", FieldDefault::Null),
-];
-
-const GOOGLE_AI_FIELDS: &[(&str, FieldDefault)] = &[
-    (
-        "base_url",
-        FieldDefault::Str("https://generativelanguage.googleapis.com/v1beta"),
-    ),
-    ("default_role", FieldDefault::Str("user")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-    (
-        "remap_roles",
-        FieldDefault::StrPairMap(&[("assistant", "model")]),
-    ),
-];
-
-const VERTEX_AI_FIELDS: &[(&str, FieldDefault)] = &[
-    ("default_role", FieldDefault::Str("user")),
-    ("allowed_roles", FieldDefault::StrArray(SAU)),
-    (
-        "remap_roles",
-        FieldDefault::StrPairMap(&[("assistant", "model")]),
-    ),
-    ("credentials", FieldDefault::Null),
-    ("credentials_content", FieldDefault::Null),
-    ("location", FieldDefault::Null),
-    ("project_id", FieldDefault::Null),
-];
-
-/// Provider configuration: field definitions and optional typed sub-object.
-///
-/// Fields not present in [`TOP_LEVEL_FIELDS`] are automatically treated as
-/// provider-specific and assembled into a typed `Expr::Object`.
-struct ProviderConfig {
-    /// All fields this provider defines (top-level overrides + provider-specific).
-    fields: &'static [(&'static str, FieldDefault)],
-    /// Type name for the provider-specific options sub-object, if any.
-    provider_options_type: Option<&'static str>,
+/// Look up the provider config for a given provider name.
+fn provider_config_for(provider: &str) -> Option<&'static ProviderFieldConfig> {
+    PROVIDER_CONFIGS
+        .iter()
+        .find(|c| c.providers.contains(&provider))
 }
 
-fn provider_config_for(provider: &str) -> ProviderConfig {
-    match provider {
-        "anthropic" => ProviderConfig {
-            fields: ANTHROPIC_FIELDS,
-            provider_options_type: Some("baml.llm.AnthropicOptions"),
-        },
-        "openai" | "openai-generic" | "openai-responses" => ProviderConfig {
-            fields: OPENAI_FIELDS,
-            provider_options_type: None,
-        },
-        "ollama" => ProviderConfig {
-            fields: OLLAMA_FIELDS,
-            provider_options_type: None,
-        },
-        "openrouter" => ProviderConfig {
-            fields: OPENROUTER_FIELDS,
-            provider_options_type: None,
-        },
-        "azure-openai" => ProviderConfig {
-            fields: AZURE_OPENAI_FIELDS,
-            provider_options_type: Some("baml.llm.AzureOpenAiOptions"),
-        },
-        "aws-bedrock" => ProviderConfig {
-            fields: BEDROCK_FIELDS,
-            provider_options_type: Some("baml.llm.BedrockOptions"),
-        },
-        "google-ai" => ProviderConfig {
-            fields: GOOGLE_AI_FIELDS,
-            provider_options_type: None,
-        },
-        "vertex-ai" => ProviderConfig {
-            fields: VERTEX_AI_FIELDS,
-            provider_options_type: Some("baml.llm.VertexAiOptions"),
-        },
-        _ => unreachable!("unknown provider {provider:?}: add it to provider_config_for"),
-    }
+/// Check whether a provider name is known.
+fn is_valid_provider(provider: &str) -> bool {
+    PROVIDER_CONFIGS
+        .iter()
+        .any(|c| c.providers.contains(&provider))
 }
-
-const VALID_PROVIDERS: &[&str] = &[
-    "anthropic",
-    "azure-openai",
-    "aws-bedrock",
-    "openai",
-    "openai-generic",
-    "openai-responses",
-    "ollama",
-    "openrouter",
-    "google-ai",
-    "vertex-ai",
-    "fallback",
-    "round-robin",
-];
 
 /// Validate provider-specific option constraints at compile time.
 fn validate_client_options(

@@ -14,13 +14,10 @@ pub use bridge_ctypes::baml;
 pub use engine::{flush_event_sink, get_event_sink};
 pub use error::BridgeError;
 pub use ffi::{
-    callbacks::{CallbackFn, OnTickCallbackFn, register_callbacks},
-    functions::{
-        call_function_from_c, call_function_parse_from_c, call_function_stream_from_c,
-        cancel_function_call,
-    },
+    callbacks::{CallbackFn, register_callback},
+    functions::{call_function, cancel_function_call},
     handle::{clone_handle, release_handle},
-    objects::free_buffer,
+    objects::{flush_events, free_buffer},
     runtime::{create_baml_runtime, destroy_baml_runtime, invoke_runtime_cli, version},
 };
 

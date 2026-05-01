@@ -12,7 +12,7 @@ use super::support::{make_db, render_tir};
 fn union_normalization_deduplicates() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f(x: int | int) -> int { return x; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: int | int) -> int throws never {
       { : never
         return x : int | int
@@ -28,7 +28,7 @@ fn union_normalization_alias() {
         "test.baml",
         "type A = int | string\nfunction f(x: A) -> string { return x; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.A = int | string
     function user.f(x: user.A) -> string throws never {
       { : never
@@ -49,7 +49,7 @@ fn unknown_type_in_param() {
         "test.baml",
         "function f(x: Nonexistent) -> int { return 0; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: unknown) -> int throws never {
       { : never
         return 0 : 0
@@ -63,7 +63,7 @@ fn unknown_type_in_param() {
 fn unknown_type_in_return() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> DoesNotExist { return 0; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> unknown throws never {
       { : never
         return 0 : 0
@@ -82,7 +82,7 @@ fn unresolved_variable() {
         "test.baml",
         "function f() -> int { return nonexistent_var; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
         return nonexistent_var : unknown
@@ -99,7 +99,7 @@ fn unresolved_variable_in_let() {
         "test.baml",
         "function f() -> int { let x = unknown_thing; return x; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
         let x = unknown_thing : unknown
@@ -119,7 +119,7 @@ fn too_many_args() {
         "test.baml",
         "function add(a: int, b: int) -> int { return a + b; }\nfunction f() -> int { return add(1, 2, 3); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.add(a: int, b: int) -> int throws never {
       { : never
         return a + b : int
@@ -141,7 +141,7 @@ fn too_few_args() {
         "test.baml",
         "function add(a: int, b: int) -> int { return a + b; }\nfunction f() -> int { return add(1); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.add(a: int, b: int) -> int throws never {
       { : never
         return a + b : int
@@ -165,7 +165,7 @@ fn calling_non_function() {
         "test.baml",
         "function f() -> int { let x = 42; return x(1); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
         let x = 42 : 42 -> int
@@ -183,7 +183,7 @@ fn calling_class_as_function() {
         "test.baml",
         "class Foo { name string }\nfunction f() -> int { return Foo(1); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Foo {
       name: string
     }
@@ -205,7 +205,7 @@ fn calling_class_as_function() {
 fn missing_return() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> int { let x = 1; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : int
         let x = 1 : 1 -> int
@@ -249,7 +249,7 @@ fn invalid_binary_op_string_minus_int() {
 fn invalid_binary_op_bool_add() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> int { return true + false; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
         return true + false : unknown
@@ -279,7 +279,7 @@ fn invalid_unary_op_neg_string() {
 fn indexing_bool() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f(x: bool) -> int { return x[0]; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: bool) -> int throws never {
       { : never
         return x[0] : unknown
@@ -293,7 +293,7 @@ fn indexing_bool() {
 fn indexing_int() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f(x: int) -> int { return x[0]; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: int) -> int throws never {
       { : never
         return x[0] : unknown
@@ -312,7 +312,7 @@ fn float_literal_in_annotation() {
         "test.baml",
         "function f(x: 3.14 | 2.72) -> float { return x; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: 3.14 | 2.72) -> float throws never {
       { : never
         return x : 3.14 | 2.72
@@ -330,7 +330,7 @@ fn if_without_else_optional() {
         "test.baml",
         "function f(x: bool) -> int? { return if (x) { 5 }; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: bool) -> int? throws never {
       { : never
         return : void
@@ -351,7 +351,7 @@ fn if_without_else_let_binding() {
         "test.baml",
         "function f(x: bool) -> int { let y = if (x) { 5 }; return y ?? 0; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: bool) -> int throws never {
       { : never
         let y = : void
@@ -414,7 +414,7 @@ fn match_catch_all() {
   };
 }"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: int) -> int throws never {
       { : never
         return : int
@@ -439,7 +439,7 @@ class Dog { name string
 legs int }
 function f(x: Cat | Dog) -> string { return x.name; }"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Cat {
       name: string
       legs: int
@@ -475,7 +475,7 @@ class Dog { name string
 tail bool }
 function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Cat {
       name: string
       whiskers: int
@@ -512,7 +512,7 @@ class C { age int }
 function f(x: A | B | C) -> string { return x.name; }"#,
     );
     // C has no `name` field → error on the whole union
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       name: string
     }
@@ -551,7 +551,7 @@ class C { age int }
 function f(x: A | B | C) -> string { return x.name; }"#,
     );
     // C has no `name` field → error on the whole union
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       name: string
     }
@@ -590,7 +590,7 @@ class B { value string }
 function f(x: A | B) -> string { return x.value; }"#,
     );
     // Both have `value` but different types → union of field types
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       value: int
     }
@@ -622,7 +622,7 @@ class B { name string }
 function f(x: A | B | null) -> string { return x.name; }"#,
     );
     // null in union → can't access field (needs narrowing first)
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       name: string
     }
@@ -651,7 +651,7 @@ function f(x: A | B | null) -> string { return x.name; }"#,
 fn null_coalesce_unwraps_optional() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f(x: int?) -> int { x ?? 0 }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: int?) -> int throws never {
       { : int
         x ?? 0 : int
@@ -664,7 +664,7 @@ fn null_coalesce_unwraps_optional() {
 fn null_coalesce_with_variable_default() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f(x: int?, y: int) -> int { x ?? y }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: int?, y: int) -> int throws never {
       { : int
         x ?? y : int
@@ -730,4 +730,186 @@ function f(u: User?) -> string? { u?.address?.street }
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn optional_method_call_basic() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class User {
+    function getName(self) -> string { self.name }
+    name string
+}
+function f(u: User?) -> string? { u?.getName() }
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn optional_call_chain_continues() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class User { name string }
+function f(callback: (() -> User)?) -> string? {
+    callback?.()?.name
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn optional_field_access_through_optional_alias() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class User { name string }
+type MaybeUser = User?
+function f(u: MaybeUser) -> string? { u?.name }
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn optional_index_through_optional_alias() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+type MaybeInts = int[]?
+function f(xs: MaybeInts) -> int? { xs?.[0] }
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+// ── Void return type ───────────────────────────────────────────────────────
+
+#[test]
+fn void_function_basic() {
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "function f() -> void { }");
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> void throws never {
+      { : void
+      }
+    }
+    ");
+}
+
+#[test]
+fn void_function_bare_return() {
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "function f() -> void { return; }");
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> void throws never {
+      { : never
+        return
+      }
+    }
+    ");
+}
+
+#[test]
+fn void_function_return_value_error() {
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "function f() -> void { return 42; }");
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> void throws never {
+      { : never
+        return 42 : 42
+      }
+      !! 30..32: type mismatch: expected void, got 42
+    }
+    ");
+}
+
+#[test]
+fn void_function_result_used_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function g() -> void { }
+function f() -> int { let x = g(); 1 }
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.g() -> void throws never {
+      { : void
+      }
+    }
+    function user.f() -> int throws never {
+      { : 1
+        let x = g() : void
+        1 : 1
+      }
+      !! 56..59: cannot use return value of a void function
+    }
+    ");
+}
+
+#[test]
+fn void_function_bare_call_ok() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function g() -> void { }
+function f() -> int { g(); 1 }
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.g() -> void throws never {
+      { : void
+      }
+    }
+    function user.f() -> int throws never {
+      { : 1
+        g() : void
+        1 : 1
+      }
+    }
+    ");
+}
+
+#[test]
+fn lambda_checks_against_aliased_and_optional_function_contexts() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+type Body = () -> void throws never
+
+function takes_direct(cb: Body) -> void {
+    cb()
+}
+
+function takes_optional(cb: Body?) -> void {
+    cb?.()
+}
+
+function main() -> void {
+    takes_direct(() -> { assert.is_true(true); })
+    takes_optional(() -> { assert.is_true(true); })
+}
+"#,
+    );
+
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("type mismatch"),
+        "expected lambda alias checking without mismatches, got:\n{tir}"
+    );
+    assert!(
+        tir.contains("() -> { ... } : () -> void throws never"),
+        "expected lambdas to inherit void-returning aliased function context, got:\n{tir}"
+    );
 }

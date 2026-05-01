@@ -10,14 +10,6 @@ fn main() -> Result<()> {
 
     let argv: Vec<String> = std::env::args().collect();
 
-    baml_cli::run_cli(argv)?;
-
-    // TODO: Original code with RuntimeCliDefaults
-    // baml_cli::run_cli(
-    //     argv,
-    //     RuntimeCliDefaults {
-    //         output_type: baml_types::GeneratorOutputType::OpenApi,
-    //     },
-    // )?;
-    Ok(())
+    let exit_code = baml_cli::run_cli(argv)?;
+    std::process::exit(exit_code.into());
 }

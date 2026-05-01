@@ -1,8 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-// Duplicate definition of Response in the same llm namespace — should conflict
-class Response {
-    body: string
-    status: int
-}

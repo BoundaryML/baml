@@ -18,8 +18,37 @@ pub mod lowering_diagnostic;
 
 pub use ast::*;
 pub use disambiguate::is_field_attr;
-pub use lower_cst::{lower_file, lower_file_with_file_id};
+pub use lower_cst::{
+    lower_file, lower_file_with_file_id, synthesize_llm_builtin_call,
+    synthesize_llm_make_stream_call,
+};
 pub use lowering_diagnostic::LoweringDiagnostic;
+
+/// Decode common escape sequences in a quoted string literal body.
+pub fn unescape_string_literal(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut chars = input.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => result.push('\n'),
+                Some('t') => result.push('\t'),
+                Some('r') => result.push('\r'),
+                Some('0') => result.push('\0'),
+                Some('\\') => result.push('\\'),
+                Some('"') => result.push('"'),
+                Some(other) => {
+                    result.push('\\');
+                    result.push(other);
+                }
+                None => result.push('\\'),
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
 
 #[cfg(test)]
 mod tests {
@@ -31,7 +60,35 @@ mod tests {
     use crate::{
         ast::{BuiltinKind, Expr, FunctionBodyDef, Item, Stmt, TypeExpr},
         lower_cst::lower_file,
+        unescape_string_literal,
     };
+
+    #[test]
+    fn unescape_string_literal_decodes_supported_escapes() {
+        assert_eq!(unescape_string_literal(r"line\nbreak"), "line\nbreak");
+        assert_eq!(unescape_string_literal(r"tab\there"), "tab\there");
+        assert_eq!(unescape_string_literal(r"cr\rhere"), "cr\rhere");
+        assert_eq!(unescape_string_literal(r"nul\0here"), "nul\0here");
+        assert_eq!(unescape_string_literal(r"back\\slash"), "back\\slash");
+        assert_eq!(unescape_string_literal(r#"a\"b"#), "a\"b");
+    }
+
+    #[test]
+    fn unescape_string_literal_preserves_unknown_sequences() {
+        assert_eq!(unescape_string_literal(r"\x41"), "\\x41");
+        assert_eq!(unescape_string_literal(r"\u0041"), "\\u0041");
+    }
+
+    #[test]
+    fn unescape_string_literal_preserves_trailing_backslash() {
+        assert_eq!(unescape_string_literal("trailing\\"), "trailing\\");
+    }
+
+    #[test]
+    fn unescape_string_literal_handles_empty_and_plain_text() {
+        assert_eq!(unescape_string_literal(""), "");
+        assert_eq!(unescape_string_literal("plain text"), "plain text");
+    }
 
     /// Build a `TypeExpr` value for use in `assert_eq!` comparisons.
     /// All spans are zeroed. Attrs go inside the variant constructor:
@@ -65,6 +122,7 @@ mod tests {
         (Path($name:expr $(, Attr($a:expr))*)) => {
             TypeExpr::Path {
                 segments: vec![baml_base::Name::new($name)],
+                generic_args: vec![],
                 attrs: type_expr!(@attrs $(, Attr($a))*),
             }
         };
@@ -150,11 +208,19 @@ mod tests {
             TypeExpr::Never { attrs } => TypeExpr::Never {
                 attrs: strip_attrs(attrs),
             },
+            TypeExpr::Void { attrs } => TypeExpr::Void {
+                attrs: strip_attrs(attrs),
+            },
             TypeExpr::Rust { attrs } => TypeExpr::Rust {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Path { segments, attrs } => TypeExpr::Path {
+            TypeExpr::Path {
+                segments,
+                generic_args,
+                attrs,
+            } => TypeExpr::Path {
                 segments: segments.clone(),
+                generic_args: generic_args.iter().map(strip_spans).collect(),
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
@@ -178,7 +244,12 @@ mod tests {
                 value: value.clone(),
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Function { params, ret, attrs } => TypeExpr::Function {
+            TypeExpr::Function {
+                params,
+                ret,
+                throws,
+                attrs,
+            } => TypeExpr::Function {
                 params: params
                     .iter()
                     .map(|p| crate::ast::FunctionTypeParam {
@@ -187,6 +258,7 @@ mod tests {
                     })
                     .collect(),
                 ret: Box::new(strip_spans(ret)),
+                throws: throws.as_ref().map(|throws| Box::new(strip_spans(throws))),
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Media { kind, attrs } => TypeExpr::Media {
@@ -286,6 +358,7 @@ class Response {
                     baml_base::Name::new("errors"),
                     baml_base::Name::new("Io"),
                 ],
+                generic_args: vec![],
                 attrs: vec![]
             }
         );
@@ -894,6 +967,40 @@ function f() -> int {
     }
 
     #[test]
+    fn function_type_throws_preserves_omission_vs_explicit_never() {
+        let omitted = first_type_alias(parse_and_lower(
+            "type Omitted = (cb: (value: int) -> string) -> void\n",
+        ));
+        let explicit = first_type_alias(parse_and_lower(
+            "type Explicit = (cb: (value: int) -> string throws never) -> void\n",
+        ));
+
+        let omitted_outer = omitted.type_expr.expect("expected type alias body");
+        let TypeExpr::Function { params, .. } = &omitted_outer.expr else {
+            panic!("expected outer function type for omitted case");
+        };
+        let TypeExpr::Function { throws, .. } = &params[0].ty else {
+            panic!("expected inner function type for omitted case");
+        };
+        assert!(
+            throws.is_none(),
+            "expected omitted nested throws to stay None in raw AST, got {throws:?}"
+        );
+
+        let explicit_outer = explicit.type_expr.expect("expected type alias body");
+        let TypeExpr::Function { params, .. } = &explicit_outer.expr else {
+            panic!("expected outer function type for explicit case");
+        };
+        let TypeExpr::Function { throws, .. } = &params[0].ty else {
+            panic!("expected inner function type for explicit case");
+        };
+        assert!(
+            matches!(throws.as_deref(), Some(TypeExpr::Never { .. })),
+            "expected explicit nested throws never to be preserved, got {throws:?}"
+        );
+    }
+
+    #[test]
     fn type_expr_paren_union_array() {
         // (int | string)[] = List(Union(Int, String))
         let ta = first_type_alias(parse_and_lower("type T = (int | string)[]\n"));
@@ -973,7 +1080,7 @@ retry_policy MyRetry {
         };
 
         assert_eq!(
-            type_name.as_ref().map(smol_str::SmolStr::as_str),
+            type_name.as_ref().map(ToString::to_string).as_deref(),
             Some("RetryPolicy"),
             "expected type_name to be RetryPolicy"
         );
@@ -1036,6 +1143,31 @@ retry_policy Simple {
         assert_eq!(let_def.name.as_str(), "Simple");
         assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
         assert!(let_def.initializer.is_some(), "expected an initializer");
+    }
+
+    #[test]
+    fn quoted_string_literals_decode_escape_sequences() {
+        let source = r#"
+function main() -> string {
+  "\n"
+}
+"#;
+
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+
+        let root = body.root_expr.expect("expected root expr");
+        let Expr::Block { tail_expr, .. } = &body.exprs[root] else {
+            panic!("expected block root expression");
+        };
+        let tail = tail_expr.expect("expected tail expression");
+
+        assert_eq!(
+            &body.exprs[tail],
+            &Expr::Literal(crate::ast::Literal::String("\n".to_string()))
+        );
     }
 
     // ── Type attribute tests ─────────────────────────────────────────────────

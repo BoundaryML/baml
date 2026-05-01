@@ -141,6 +141,67 @@ impl ariadne::Span for Span {
 /// An interned string - used for identifiers, keywords, etc.
 pub type Name = SmolStr;
 
+/// A possibly-qualified type-path identifier as written in source
+/// (e.g., `MyClass`, `baml.errors.DevOther`, `root.http.Response`).
+///
+/// Stored as a `Vec<Name>` so consumers (TIR resolution, MIR field-order
+/// lookup) can read the segments directly, rather than re-splitting a dotted
+/// `Name`. A bare name is `vec![n]` — `is_qualified` is the structural
+/// `len() > 1` check, not a substring scan.
+///
+/// `Display` joins with `.` for diagnostics and for places that key off the
+/// dotted form (the bytecode emitter's class registry, debug snapshots).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TypePath(pub Vec<Name>);
+
+impl TypePath {
+    pub fn new(segments: Vec<Name>) -> Self {
+        debug_assert!(
+            !segments.is_empty(),
+            "TypePath must have at least one segment"
+        );
+        Self(segments)
+    }
+
+    pub fn bare(name: Name) -> Self {
+        Self(vec![name])
+    }
+
+    /// Build a `TypePath` from a compile-time dotted literal like `"baml.llm.Client"`.
+    /// Use only at synthetic construction sites; runtime input should come from
+    /// already-segmented data (e.g., parser tokens).
+    pub fn from_dotted(s: &str) -> Self {
+        Self(s.split('.').map(Name::new).collect())
+    }
+
+    pub fn segments(&self) -> &[Name] {
+        &self.0
+    }
+
+    pub fn is_qualified(&self) -> bool {
+        self.0.len() > 1
+    }
+
+    /// The unqualified leaf (e.g., `Response` for `root.http.Response`).
+    pub fn leaf(&self) -> &Name {
+        self.0.last().expect("TypePath is non-empty")
+    }
+}
+
+impl fmt::Display for TypePath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut first = true;
+        for seg in &self.0 {
+            if !first {
+                f.write_str(".")?;
+            }
+            f.write_str(seg.as_str())?;
+            first = false;
+        }
+        Ok(())
+    }
+}
+
 /// The types of media we support
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub enum MediaKind {
@@ -174,7 +235,7 @@ pub enum Literal {
 impl fmt::Display for Literal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Literal::String(s) => write!(f, "\"{s}\""),
+            Literal::String(s) => write!(f, "{s:?}"),
             Literal::Int(i) => write!(f, "{i}"),
             Literal::Float(s) => write!(f, "{s}"),
             Literal::Bool(b) => write!(f, "{b}"),

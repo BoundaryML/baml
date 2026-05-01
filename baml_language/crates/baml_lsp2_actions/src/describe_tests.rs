@@ -1,0 +1,168 @@
+//! Snapshot tests for `describe()`.
+
+use crate::testing::ProjectTest;
+
+fn make_project() -> ProjectTest {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "types.baml",
+        r#"
+class Point {
+    x int
+    y int
+}
+
+class Person {
+    name string
+    age int
+}
+
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+"#,
+    );
+    builder.source(
+        "funcs.baml",
+        r#"
+/// Extract a point from text.
+function ExtractPoint(text: string) -> Point {
+    let result = Point { x: 0, y: 0 };
+    return result;
+}
+
+function MakePerson(n: string, a: int) -> Person {
+    return Person { name: n, age: a };
+}
+
+function UseColor(c: Color) -> string {
+    match (c) {
+        Red => "red"
+        Green => "green"
+        Blue => "blue"
+    }
+}
+"#,
+    );
+    builder.build()
+}
+
+#[test]
+fn describe_class() {
+    let project = make_project();
+    let descs = project.describe("Point");
+    assert_eq!(descs.len(), 1);
+    insta::assert_snapshot!(project.format_description(&descs[0]));
+}
+
+#[test]
+fn describe_class_with_refs() {
+    let project = make_project();
+    let descs = project.describe("Person");
+    assert_eq!(descs.len(), 1);
+    insta::assert_snapshot!(project.format_description(&descs[0]));
+}
+
+#[test]
+fn describe_enum() {
+    let project = make_project();
+    let descs = project.describe("Color");
+    assert_eq!(descs.len(), 1);
+    insta::assert_snapshot!(project.format_description(&descs[0]));
+}
+
+#[test]
+fn describe_function() {
+    let project = make_project();
+    let descs = project.describe("ExtractPoint");
+    assert_eq!(descs.len(), 1);
+    insta::assert_snapshot!(project.format_description(&descs[0]));
+}
+
+#[test]
+fn describe_function_with_enum_param() {
+    let project = make_project();
+    let descs = project.describe("UseColor");
+    assert_eq!(descs.len(), 1);
+    insta::assert_snapshot!(project.format_description(&descs[0]));
+}
+
+#[test]
+fn describe_nonexistent() {
+    let project = make_project();
+    let descs = project.describe("DoesNotExist");
+    assert!(descs.is_empty());
+}
+
+#[test]
+fn describe_builtin_string_with_compiler2_visible_files() {
+    let project = make_project();
+    let descs = project.describe_compiler2_visible("String");
+
+    assert_eq!(descs.len(), 1);
+    assert_eq!(descs[0].name, "String");
+    insta::assert_snapshot!(project.format_description(&descs[0]));
+}
+
+#[test]
+fn describe_builtin_deep_copy_with_compiler2_visible_files() {
+    let project = make_project();
+    let descs = project.describe_compiler2_visible("deep_copy");
+
+    assert_eq!(descs.len(), 1);
+    assert_eq!(descs[0].name, "deep_copy");
+    insta::assert_snapshot!(project.format_description(&descs[0]));
+}
+
+#[test]
+fn user_only_describe_still_does_not_search_builtins() {
+    let project = make_project();
+    let descs = project.describe("String");
+
+    assert!(descs.is_empty());
+}
+
+#[test]
+fn list_symbols_compiler2_visible_includes_selected_builtins() {
+    let project = make_project();
+    let symbols = project.list_symbols_compiler2_visible();
+
+    assert!(symbols.iter().any(|sym| sym.name == "String"));
+    assert!(symbols.iter().any(|sym| sym.name == "Array"));
+    assert!(symbols.iter().any(|sym| sym.name == "deep_copy"));
+}
+
+#[test]
+fn describe_is_case_sensitive() {
+    let project = make_project();
+    // "point" should not match "Point"
+    let descs = project.describe("point");
+    assert!(descs.is_empty());
+}
+
+#[test]
+fn describe_lambda_local_binding_uses_lambda_body() {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "lambda.baml",
+        r#"
+function LambdaLocalDescribe() -> string {
+    let f = () -> string {
+        let ignored = 1
+        let target = "lambda"
+        target
+    }
+    f()
+}
+"#,
+    );
+    let project = builder.build();
+
+    let descs = project.describe("target");
+
+    assert_eq!(descs.len(), 1);
+    assert_eq!(descs[0].shape, "let target: string");
+    assert_eq!(descs[0].resolved_type.as_deref(), Some("string"));
+}

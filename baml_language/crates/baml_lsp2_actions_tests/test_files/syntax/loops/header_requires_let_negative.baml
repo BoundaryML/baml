@@ -102,13 +102,22 @@ function MissingLetAfter() -> int {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: unresolved name: i
+//    ╭─[ loops_header_requires_let_negative.baml:4:14 ]
+//    │
+//  4 │     for (i = 0; i < 3; i += 1) {
+//    │                 ┬  
+//    │                 ╰── unresolved name: i
+//    │ 
+//    │ Note: Error code: E0003
+// ───╯
+// Error: unresolved name: i
 //    ╭─[ loops_header_requires_let_negative.baml:4:21 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
 //    │                        ┬  
 //    │                        ╰── unresolved name: i
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯
 // Error: unresolved name: i
 //    ╭─[ loops_header_requires_let_negative.baml:5:8 ]
@@ -117,5 +126,14 @@ function MissingLetAfter() -> int {
 //    │             ┬  
 //    │             ╰── unresolved name: i
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0003
 // ───╯
+// Error: unresolved name: i
+//     ╭─[ loops_header_requires_let_negative.baml:14:16 ]
+//     │
+//  14 │     for (; s < 2; i += 1) {
+//     │                   ┬  
+//     │                   ╰── unresolved name: i
+//     │ 
+//     │ Note: Error code: E0003
+// ────╯

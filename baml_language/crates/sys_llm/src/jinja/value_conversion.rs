@@ -3,13 +3,20 @@ use bex_vm_types::MediaValue;
 use indexmap::IndexMap;
 use minijinja::value::Value as JinjaValue;
 
-use super::RenderPromptError;
+use super::{MAGIC_MEDIA_DELIMITER, RenderPromptError};
+
+/// Check if a class name corresponds to a media wrapper class (baml.media.{Image,Audio,Video,Pdf}).
+fn is_media_wrapper_class(class_name: &str) -> bool {
+    matches!(
+        class_name,
+        "baml.media.Image" | "baml.media.Audio" | "baml.media.Video" | "baml.media.Pdf"
+    )
+}
 
 /// Convert a `BexExternalValue` to a minijinja Value.
 ///
 /// `BexExternalValue` is already fully extracted from the VM heap,
 /// so no heap access is needed here.
-#[allow(clippy::only_used_in_recursion)] // media_handles will be used when media support is re-enabled
 pub(crate) fn external_value_to_jinja(
     value: &BexExternalValue,
     media_handles: &mut std::collections::HashMap<usize, MediaValue>,
@@ -40,7 +47,20 @@ pub(crate) fn external_value_to_jinja(
             Ok(JinjaValue::from_iter(jinja_map))
         }
 
-        BexExternalValue::Instance { fields, .. } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
+            // Media wrapper instances (e.g. baml.media.Image) should be unwrapped
+            // to their inner _data field and rendered as inline media content.
+            if is_media_wrapper_class(class_name) {
+                let data =
+                    fields
+                        .get("_data")
+                        .ok_or_else(|| RenderPromptError::ConversionError {
+                            reason: format!("Media wrapper `{class_name}` missing _data field"),
+                        })?;
+                return external_value_to_jinja(data, media_handles);
+            }
             // Convert instance fields to a map for Jinja access
             let jinja_map: IndexMap<String, JinjaValue> = fields
                 .iter()
@@ -62,14 +82,14 @@ pub(crate) fn external_value_to_jinja(
             external_value_to_jinja(value, media_handles)
         }
 
-        // TODO: Do this with rust types.
-        // BexExternalValue::Adt(BexExternalAdt::Media(media)) => {
-        //     let media_id = media.random_id;
-        //     media_handles.insert(media_id, media.clone());
-        //     Ok(JinjaValue::from(format!(
-        //         "{MAGIC_MEDIA_DELIMITER}:baml-start-media:{media_id}:baml-end-media:{MAGIC_MEDIA_DELIMITER}"
-        //     )))
-        // }
+        BexExternalValue::Adt(BexExternalAdt::Media(media)) => {
+            let media_id = media.random_id;
+            media_handles.insert(media_id, media.clone());
+            Ok(JinjaValue::from(format!(
+                "{MAGIC_MEDIA_DELIMITER}:baml-start-media:{media_id}:baml-end-media:{MAGIC_MEDIA_DELIMITER}"
+            )))
+        }
+
         BexExternalValue::Uint8Array(_) => Err(RenderPromptError::ConversionError {
             reason: "uint8array cannot be passed to Jinja templates".to_string(),
         }),
@@ -90,12 +110,6 @@ pub(crate) fn external_value_to_jinja(
         BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
             Err(RenderPromptError::ConversionError {
                 reason: "PromptAst should not be passed to Jinja templates".to_string(),
-            })
-        }
-
-        BexExternalValue::Adt(BexExternalAdt::Media(_)) => {
-            Err(RenderPromptError::ConversionError {
-                reason: "Media values should not be passed to Jinja templates directly".to_string(),
             })
         }
 

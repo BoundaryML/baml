@@ -80,6 +80,12 @@ pub enum LoweringDiagnostic {
 
     /// A byte string literal contains an invalid escape sequence.
     InvalidByteStringEscape { message: String, span: TextRange },
+
+    /// The `instanceof` operator was used; it has been removed. Use `match` instead.
+    InstanceofRemoved { span: TextRange },
+
+    /// `void` was used outside of a function return type position.
+    VoidInNonReturnPosition { context: String, span: TextRange },
 }
 
 impl LoweringDiagnostic {
@@ -182,6 +188,18 @@ impl LoweringDiagnostic {
                 format!("invalid byte string literal: {message}"),
                 *span,
                 "invalid escape",
+            ),
+            LoweringDiagnostic::InstanceofRemoved { span } => (
+                DiagnosticId::InstanceofRemoved,
+                "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
+                *span,
+                "use `match` instead",
+            ),
+            LoweringDiagnostic::VoidInNonReturnPosition { context, span } => (
+                DiagnosticId::VoidInNonReturnPosition,
+                format!("`void` can only be used as a function return type, not as {context}"),
+                *span,
+                "`void` not allowed here",
             ),
         };
 

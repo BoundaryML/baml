@@ -11,17 +11,17 @@ mod verifier;
 use std::collections::HashMap;
 
 pub use analysis::OptLevel;
-use baml_base::Span;
+use baml_base::{Name, Span};
 use baml_compiler2_ast::TypeExpr;
 use baml_compiler2_hir::{
     compiler2_all_files,
     contributions::Definition,
     file_package::file_package,
     loc::{FunctionLoc, LetLoc},
-    package::{PackageId, package_items},
+    package::PackageId,
 };
 use baml_compiler2_mir::{
-    BuiltinKind, MirFunctionKind, def_to_item_ref, lower_function, lower_let_body,
+    BuiltinKind, MirFunctionKind, ResolvedAliases, def_to_item_ref, lower_function, lower_let_body,
 };
 // Use the PPIR item tree (which includes synthetic *$stream items) rather than
 // the bare HIR item tree, to stay consistent with TIR's LocalItemId indices.
@@ -29,9 +29,47 @@ use baml_compiler2_ppir::file_item_tree;
 use baml_type::TyAttr;
 use bex_vm_types::{
     Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
-    FunctionMeta, Instruction, Object, ObjectIndex, ObjectPool, Program,
+    FunctionMeta, FunctionOrigin, Instruction, Object, ObjectIndex, ObjectPool, Program,
 };
+
+/// Build a per-package `ResolvedAliases` cache, keyed by package name.
+fn build_alias_caches(
+    db: &dyn baml_compiler2_mir::Db,
+    all_files: &[baml_base::SourceFile],
+) -> HashMap<Name, ResolvedAliases> {
+    let mut caches: HashMap<Name, ResolvedAliases> = HashMap::new();
+    for file in all_files {
+        let pkg_info = file_package(db, *file);
+        caches.entry(pkg_info.package.clone()).or_insert_with(|| {
+            let pkg_id = PackageId::new(db, pkg_info.package.clone());
+            ResolvedAliases::for_package(db, pkg_id)
+        });
+    }
+    caches
+}
 pub(crate) use emit::compile_mir_function;
+
+fn is_builtin_function_name(name: &str) -> bool {
+    matches!(
+        name.split('.').next(),
+        Some("baml" | "assert" | "testing" | "log" | "env")
+    )
+}
+
+fn emitted_function_origin(
+    fq_name: &str,
+    origin: baml_compiler2_ast::FunctionOrigin,
+) -> FunctionOrigin {
+    if is_builtin_function_name(fq_name) {
+        FunctionOrigin::Builtin
+    } else {
+        match origin {
+            baml_compiler2_ast::FunctionOrigin::UserDefined => FunctionOrigin::UserDefined,
+            baml_compiler2_ast::FunctionOrigin::Companion => FunctionOrigin::Companion,
+            baml_compiler2_ast::FunctionOrigin::Internal => FunctionOrigin::Internal,
+        }
+    }
+}
 
 /// Context for MIR codegen.
 pub(crate) struct MirCodegenContext<'ctx, 'obj> {
@@ -74,31 +112,6 @@ impl std::fmt::Display for LoweringError {
 
 impl std::error::Error for LoweringError {}
 
-/// Unescape common escape sequences in a string literal body (without surrounding quotes).
-fn unescape_string_literal(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let mut chars = s.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            match chars.next() {
-                Some('n') => result.push('\n'),
-                Some('t') => result.push('\t'),
-                Some('r') => result.push('\r'),
-                Some('\\') => result.push('\\'),
-                Some('"') => result.push('"'),
-                Some(other) => {
-                    result.push('\\');
-                    result.push(other);
-                }
-                None => result.push('\\'),
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    result
-}
-
 /// Parse a string attribute value, handling both regular strings (`"text"`)
 /// and raw strings (`#"text"#`, `##"text"##`, etc.).
 ///
@@ -106,11 +119,15 @@ fn unescape_string_literal(s: &str) -> String {
 fn parse_string_attr_value(raw: &str) -> Option<String> {
     // Double-quoted string: "text"
     if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
-        return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
+        return Some(baml_compiler2_ast::unescape_string_literal(
+            &raw[1..raw.len() - 1],
+        ));
     }
     // Single-quoted string: 'text'
     if raw.starts_with('\'') && raw.ends_with('\'') && raw.len() >= 2 {
-        return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
+        return Some(baml_compiler2_ast::unescape_string_literal(
+            &raw[1..raw.len() - 1],
+        ));
     }
 
     // Raw string: #"text"#, ##"text"##, etc.
@@ -167,13 +184,11 @@ pub use bex_vm_types::Program as ProgramAlias;
 
 /// Build a `TypeName` from a fully-qualified dotted path.
 ///
-/// For user-defined types (package `"user"`), the display name omits the
-/// package prefix so that `class_name` and type signatures in tests/output
-/// show `"Point"` rather than `"user.Point"`.  For builtins (e.g. `"baml.*"`),
-/// the full FQ path is kept.
+/// Emit always fully qualifies — `display_name` keeps the literal package
+/// prefix (`"user.Point"`, `"baml.http.Response"`, `"<vendor>.<…>"`). The
+/// codegen-output Python and the runtime see the same `<pkg>.<…>` form
+/// end-to-end. See `12a-namespace-rules.md §5` for the rationale.
 fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
-    // Strip the "user." prefix from the display name for user-defined types.
-    let display = fq.strip_prefix("user.").unwrap_or(fq);
     let segments: Vec<&str> = fq.split('.').collect();
     let name = baml_base::Name::new(*segments.last().expect("non-empty fq name"));
     let module_path = segments[..segments.len() - 1]
@@ -183,17 +198,27 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
     baml_type::TypeName {
         name,
         module_path,
-        display_name: baml_base::Name::new(display),
+        display_name: baml_base::Name::new(fq),
     }
 }
 
-/// Generate bytecode for the entire project.
+/// Generate bytecode for the entire project (default: `OptLevel::Two`).
 pub fn generate_project_bytecode(
     db: &dyn baml_compiler2_mir::Db,
     options: &CompileOptions,
 ) -> Result<Program, LoweringError> {
+    generate_project_bytecode_with_opt(db, options, OptLevel::Two)
+}
+
+/// Generate bytecode for the entire project with a specific optimization level.
+pub fn generate_project_bytecode_with_opt(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+) -> Result<Program, LoweringError> {
     let mut program = Program::new();
     let all_files = compiler2_all_files(db);
+    let alias_caches = build_alias_caches(db, &all_files);
 
     // --- Pass 1: Build globals map (function name -> global index) ---
     // Functions are allocated first (slots 0..N-1), then let bindings (slots N..M-1).
@@ -203,11 +228,19 @@ pub fn generate_project_bytecode(
     let mut global_idx = 0usize;
 
     // First sub-pass: assign slots to all functions across all files.
+    // Intrinsic functions are skipped: they are lowered to StatementKind::Intrinsic
+    // at call sites and never appear as callable objects in the globals pool.
+    // Including them here would create a mismatch between Pass-1 indices and the
+    // actual program.globals array built in Pass 4 (which also skips intrinsics).
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
         for local_id in item_tree.functions.keys() {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc);
+            let mir = lower_function(db, func_loc, opt);
+            // Skip intrinsic functions — they are never called via Call instruction.
+            if matches!(mir.kind, MirFunctionKind::Builtin(BuiltinKind::Intrinsic)) {
+                continue;
+            }
             let fq_name = mir.item_ref.to_string();
             globals.entry(fq_name).or_insert_with(|| {
                 let idx = global_idx;
@@ -243,10 +276,8 @@ pub fn generate_project_bytecode(
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items = package_items(db, pkg_id);
-        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-        let recursive_aliases =
-            baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+        let cache = &alias_caches[&pkg_info.package];
         for class_data in item_tree.classes.values() {
             // Build fully-qualified name: "user.MyClass" or "baml.ns.MyClass"
             let fq_name = if pkg_info.namespace_path.is_empty() {
@@ -269,18 +300,24 @@ pub fn generate_project_bytecode(
                     .as_ref()
                     .map(|te| {
                         let mut diags = Vec::new();
-                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                        // Use `lower_type_expr_in_ns` so unqualified field types
+                        // (e.g. `addresses Address[]` inside a `lorem.Resume`
+                        // declared under `ns_lorem/`) resolve against the
+                        // defining file's namespace. Plain `lower_type_expr`
+                        // passes `&[]` as ns context, leaving sibling-namespace
+                        // class refs unresolved → `Ty::Unknown` → `Ty::Void`,
+                        // which trips the FFI encoder when the class is later
+                        // returned. Mirrors the same fix in
+                        // `compute_function_metadata_from_item_tree` below.
+                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                             db,
                             &te.expr,
                             pkg_items,
+                            &pkg_info.namespace_path,
                             &[],
                             &mut diags,
                         );
-                        baml_compiler2_mir::convert_tir2_ty(
-                            &tir_ty,
-                            &type_aliases,
-                            &recursive_aliases,
-                        )
+                        cache.convert(&tir_ty)
                     })
                     .unwrap_or_else(|| baml_type::Ty::Null {
                         attr: baml_type::TyAttr::default(),
@@ -301,14 +338,14 @@ pub fn generate_project_bytecode(
             let type_tag = bex_vm_types::type_tags::CLASS_BASE + class_type_tag_counter;
             class_type_tag_counter += 1;
 
-            let class_obj_idx = program.add_object(Object::Class(Class {
+            let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
                 name: fq_to_type_name(&fq_name),
                 fields,
                 description: class_desc,
                 alias: class_alias,
                 type_tag,
                 ty_attr: TyAttr::default(),
-            }));
+            })));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
             classes.insert(fq_name, field_indices);
@@ -364,13 +401,13 @@ pub fn generate_project_bytecode(
 
             let (enum_desc, enum_alias, _enum_skip) = extract_schema_attrs(&enum_data.attributes);
 
-            let enum_obj_idx = program.add_object(Object::Enum(Enum {
+            let enum_obj_idx = program.add_object(Object::Enum(Box::new(Enum {
                 name: fq_to_type_name(&fq_name),
                 variants,
                 description: enum_desc,
                 alias: enum_alias,
                 ty_attr: TyAttr::default(),
-            }));
+            })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
             enum_variants.insert(fq_name, variant_map);
         }
@@ -380,23 +417,28 @@ pub fn generate_project_bytecode(
     for file in &all_files {
         let line_starts = build_line_starts(file.text(db));
         let item_tree = file_item_tree(db, *file);
+        let pkg_info_pass4 = file_package(db, *file);
+        let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
         for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc);
+            let mir = lower_function(db, func_loc, opt);
             let fq_name = mir.item_ref.to_string();
 
             let mut compiled_fn = match &mir.kind {
                 MirFunctionKind::Bytecode(body) => {
                     // Compile lambda children first, collecting their ObjectPool indices.
+                    let source_file = file.path(db).display().to_string();
                     let lambda_info = compile_lambdas_flat(
                         &mir.lambdas,
                         &line_starts,
+                        &source_file,
                         &globals,
                         &classes,
                         &class_object_indices,
                         &enum_object_indices,
                         &enum_variants,
                         &mut program.objects,
+                        opt,
                     );
                     let lambda_obj_indices: Vec<usize> =
                         lambda_info.iter().map(|(idx, _)| *idx).collect();
@@ -413,15 +455,22 @@ pub fn generate_project_bytecode(
                         lambda_names: &lambda_names_vec,
                     };
                     let mut f =
-                        compile_mir_function(body, mir.arity, &line_starts, ctx, OptLevel::One);
+                        compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
                     f.name.clone_from(&fq_name);
+                    f.source_file.clone_from(&source_file);
                     f
+                }
+                MirFunctionKind::Builtin(BuiltinKind::Intrinsic) => {
+                    // Intrinsic functions have no callable body — call sites use
+                    // StatementKind::Intrinsic directly. Skip compilation entirely.
+                    continue;
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Io) => {
                     let sys_op = bex_vm_types::sys_op_for_path(&fq_name)
                         .unwrap_or_else(|| panic!("unknown sys_op path: {fq_name}"));
                     Function {
                         name: fq_name.clone(),
+                        source_file: String::new(), // builtins have no source file
                         arity: mir.arity,
                         real_local_count: 0,
                         bytecode: Bytecode::default(),
@@ -434,14 +483,20 @@ pub fn generate_project_bytecode(
                         return_type: baml_type::Ty::Null {
                             attr: baml_type::TyAttr::default(),
                         },
+                        stream_return_type: baml_type::Ty::Null {
+                            attr: baml_type::TyAttr::default(),
+                        },
                         param_names: Vec::new(),
                         param_types: Vec::new(),
+                        throws_type: None,
+                        origin: FunctionOrigin::Builtin,
                         body_meta: None,
                         trace: false,
                     }
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Vm) => Function {
                     name: fq_name.clone(),
+                    source_file: String::new(), // builtins have no source file
                     arity: mir.arity,
                     real_local_count: 0,
                     bytecode: Bytecode::default(),
@@ -454,8 +509,13 @@ pub fn generate_project_bytecode(
                     return_type: baml_type::Ty::Null {
                         attr: baml_type::TyAttr::default(),
                     },
+                    stream_return_type: baml_type::Ty::Null {
+                        attr: baml_type::TyAttr::default(),
+                    },
                     param_names: Vec::new(),
                     param_types: Vec::new(),
+                    throws_type: None,
+                    origin: FunctionOrigin::Builtin,
                     body_meta: None,
                     trace: false,
                 },
@@ -463,15 +523,29 @@ pub fn generate_project_bytecode(
 
             // Set function metadata from signature
             let (param_names, param_types, return_type) =
-                compute_function_metadata_from_item_tree(db, *file, func_data);
+                compute_function_metadata_from_item_tree(db, *file, func_data, cache_pass4);
             compiled_fn.return_type = return_type;
             compiled_fn.param_names = param_names;
             compiled_fn.param_types = param_types;
+
+            // Set inferred throws type from TIR throw inference
+            compiled_fn.throws_type = compute_throws_type(db, *file, &func_data.name, cache_pass4);
+            compiled_fn.origin = emitted_function_origin(&fq_name, func_data.origin);
 
             // Set LLM-specific body_meta if this is an LLM function
             if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
                 &func_data.declarative_meta
             {
+                // Look up the PPIR's pre-computed stream-expanded return type.
+                let expansion = baml_compiler2_ppir::ppir_expansion_items(db, *file);
+                for (name, stream_te) in expansion.stream_return_types(db) {
+                    if *name == fq_name {
+                        compiled_fn.stream_return_type =
+                            compute_stream_return_type(db, *file, stream_te, cache_pass4);
+                        break;
+                    }
+                }
+
                 if let (Some(client), Some(prompt)) = (&llm_meta.client, &llm_meta.prompt) {
                     compiled_fn.body_meta = Some(FunctionMeta::Llm {
                         prompt_template: prompt.text.clone(),
@@ -546,6 +620,7 @@ pub fn generate_project_bytecode(
                 &enum_object_indices,
                 &enum_variants,
                 &mut program,
+                opt,
             )?;
 
             let init_fq_name = if pkg_name.as_str() == "user" {
@@ -643,6 +718,7 @@ pub fn generate_project_bytecode(
             // $init synthesis at compile_init_function (lib.rs:1085-1103).
             let chainer_fn = Function {
                 name: "$init_test".to_string(),
+                source_file: String::new(), // synthesized, no source file
                 arity: 1,
                 real_local_count: 1, // the registry param
                 bytecode,
@@ -658,8 +734,13 @@ pub fn generate_project_bytecode(
                 return_type: baml_type::Ty::Null {
                     attr: baml_type::TyAttr::default(),
                 },
+                stream_return_type: baml_type::Ty::Null {
+                    attr: baml_type::TyAttr::default(),
+                },
                 param_names: vec!["registry".to_string()],
                 param_types: Vec::new(), // type not needed for chainer dispatch
+                throws_type: None,
+                origin: FunctionOrigin::Internal,
                 body_meta: None,
                 trace: false,
             };
@@ -716,29 +797,12 @@ pub fn generate_project_bytecode(
     // Mirrors the legacy pipeline: only recursive aliases are stored in
     // `Program.recursive_type_alias_defs`; non-recursive aliases are expanded inline
     // by `convert_tir2_ty`. This is required for correct output_format rendering at runtime.
-    {
-        use std::collections::HashSet as _HashSet;
-        let mut seen_packages: _HashSet<String> = _HashSet::new();
-        for file in &all_files {
-            let pkg_info = file_package(db, *file);
-            if seen_packages.insert(pkg_info.package.to_string()) {
-                let pkg_id = PackageId::new(db, pkg_info.package.clone());
-                let pkg_items = package_items(db, pkg_id);
-                let type_aliases =
-                    baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-                let recursive_aliases =
-                    baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
-                for (qtn, tir_ty) in &type_aliases {
-                    if recursive_aliases.contains(qtn) {
-                        let mir_ty = baml_compiler2_mir::convert_tir2_ty(
-                            tir_ty,
-                            &type_aliases,
-                            &recursive_aliases,
-                        );
-                        let type_name = baml_compiler2_mir::qtn_to_type_name(qtn);
-                        program.recursive_type_alias_defs.insert(type_name, mir_ty);
-                    }
-                }
+    for cache in alias_caches.values() {
+        for (qtn, tir_ty) in &cache.aliases {
+            if cache.recursive.contains(qtn) {
+                let mir_ty = cache.convert(tir_ty);
+                let type_name = baml_compiler2_mir::qtn_to_type_name(qtn);
+                program.recursive_type_alias_defs.insert(type_name, mir_ty);
             }
         }
     }
@@ -808,6 +872,39 @@ fn convert_test_arg_value(
     }
 }
 
+/// Compute the inferred throws type for a function by querying TIR throw inference.
+///
+/// Returns `Some(ty)` if the function (or its callees) may throw, `None` otherwise.
+fn compute_throws_type(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    func_name: &baml_base::Name,
+    cache: &ResolvedAliases,
+) -> Option<baml_type::Ty> {
+    let pkg_info = file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package);
+    let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
+
+    let key =
+        baml_compiler2_tir::throw_inference::throw_set_key(&pkg_info.namespace_path, func_name);
+
+    let facts = throw_sets.transitive_for(&key)?;
+    if facts.is_empty() {
+        return None;
+    }
+
+    let converted: Vec<baml_type::Ty> = facts.iter().map(|tir_ty| cache.convert(tir_ty)).collect();
+
+    if converted.len() == 1 {
+        Some(converted.into_iter().next().unwrap())
+    } else {
+        Some(baml_type::Ty::Union(
+            converted,
+            baml_type::TyAttr::default(),
+        ))
+    }
+}
+
 /// Extract param names, param types, and return type from an `item_tree` Function.
 ///
 /// Type resolution delegates to TIR's `lower_type_expr` (single source of truth)
@@ -816,6 +913,7 @@ fn compute_function_metadata_from_item_tree(
     db: &dyn baml_compiler2_mir::Db,
     file: baml_base::SourceFile,
     func_data: &baml_compiler2_hir::item_tree::Function,
+    cache: &ResolvedAliases,
 ) -> (Vec<String>, Vec<baml_type::Ty>, baml_type::Ty) {
     let param_names: Vec<String> = func_data
         .params
@@ -825,23 +923,29 @@ fn compute_function_metadata_from_item_tree(
 
     let pkg_info = file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package);
-    let pkg_items = package_items(db, pkg_id);
-    let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-    let recursive_aliases = baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let null_ty = || baml_type::Ty::Null {
         attr: baml_type::TyAttr::default(),
     };
 
     let resolve = |te: &TypeExpr| -> baml_type::Ty {
         let mut diags = Vec::new();
-        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+        // Use `lower_type_expr_in_ns` so unqualified references (e.g. `MyLorem`
+        // in a function signature under `ns_lorem/`) resolve against the
+        // defining file's namespace before falling back to the package root.
+        // `lower_type_expr` passes `&[]` as the ns context, which would lose
+        // parameter types to `Ty::Unknown` → `Ty::Void` for any non-root-ns
+        // class — surfacing as "expected instance, got map" in the runtime
+        // because the coercion layer can't see the declared type.
+        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
             te,
             pkg_items,
+            &pkg_info.namespace_path,
             &[],
             &mut diags,
         );
-        baml_compiler2_mir::convert_tir2_ty(&tir_ty, &type_aliases, &recursive_aliases)
+        cache.convert(&tir_ty)
     };
 
     let param_types: Vec<baml_type::Ty> = func_data
@@ -862,6 +966,37 @@ fn compute_function_metadata_from_item_tree(
         .unwrap_or_else(null_ty);
 
     (param_names, param_types, return_type)
+}
+
+/// Lower a PPIR-computed stream-expanded `TypeExpr` to `baml_type::Ty`.
+///
+/// Reuses the same TIR lowering + MIR conversion pipeline as
+/// `compute_function_metadata_from_item_tree`.
+fn compute_stream_return_type(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    type_expr: &baml_compiler2_ast::TypeExpr,
+    cache: &ResolvedAliases,
+) -> baml_type::Ty {
+    use baml_compiler2_hir::{file_package::file_package, package::PackageId};
+
+    let pkg_info = file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+
+    let mut diags = Vec::new();
+    let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+        db,
+        type_expr,
+        pkg_items,
+        &pkg_info.namespace_path,
+        &mut diags,
+    );
+    // Diagnostics are intentionally discarded here — same as
+    // compute_function_metadata_from_item_tree. Type errors in stream-expanded
+    // types are reported upstream by TIR's infer_scope_types via
+    // builder.report_at_span().
+    baml_compiler2_mir::convert_tir2_ty(&tir_ty, cache)
 }
 
 /// Build a table of byte offsets where each line starts in the source text.
@@ -1017,12 +1152,14 @@ fn topological_sort_lets<'db>(
 fn compile_lambdas_flat(
     lambdas: &[baml_compiler2_mir::MirFunction],
     line_starts: &[u32],
+    source_file: &str,
     globals: &HashMap<String, usize>,
     classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
     enum_variants: &HashMap<String, HashMap<String, usize>>,
     objects: &mut ObjectPool,
+    opt: OptLevel,
 ) -> Vec<(usize, String)> {
     let mut result = Vec::with_capacity(lambdas.len());
     for lambda in lambdas {
@@ -1033,12 +1170,14 @@ fn compile_lambdas_flat(
                 let nested_info = compile_lambdas_flat(
                     &lambda.lambdas,
                     line_starts,
+                    source_file,
                     globals,
                     classes,
                     class_object_indices,
                     enum_object_indices,
                     enum_variants,
                     objects,
+                    opt,
                 );
                 let nested_obj_indices: Vec<usize> =
                     nested_info.iter().map(|(idx, _)| *idx).collect();
@@ -1055,8 +1194,9 @@ fn compile_lambdas_flat(
                     lambda_names: &nested_names,
                 };
                 let mut f =
-                    compile_mir_function(body, lambda.arity, line_starts, ctx, OptLevel::One);
+                    compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
                 f.name.clone_from(&lambda_name);
+                f.source_file = source_file.to_string();
                 let idx = objects.len();
                 objects.push(Object::Function(Box::new(f)));
                 idx
@@ -1088,9 +1228,11 @@ fn compile_init_function<'db>(
     enum_object_indices: &HashMap<String, usize>,
     enum_variants: &HashMap<String, HashMap<String, usize>>,
     program: &mut Program,
+    opt: OptLevel,
 ) -> Result<Function, LoweringError> {
     // Build the $init bytecode: a sequence of Call + StoreGlobal pairs.
     let mut init_instructions: Vec<Instruction> = Vec::new();
+    let mut init_meta: Vec<bex_vm_types::bytecode::InstructionMeta> = Vec::new();
     let mut init_constants: Vec<bex_vm_types::ConstValue> = Vec::new();
 
     for (i, (fq_name, let_loc, file)) in sorted_bindings.iter().enumerate() {
@@ -1102,21 +1244,24 @@ fn compile_init_function<'db>(
         };
 
         // Lower the let initializer through MIR → MirFunctionBody (+ any lambda children).
-        let maybe_body = lower_let_body(db, *let_loc);
+        let maybe_body = lower_let_body(db, *let_loc, opt);
 
         let helper_fn = match maybe_body {
             Some((mir_body, lambdas)) => {
                 let line_starts = build_line_starts(file.text(db));
                 // Compile lambda children first and collect their object indices.
+                let source_file = file.path(db).display().to_string();
                 let lambda_info = compile_lambdas_flat(
                     &lambdas,
                     &line_starts,
+                    &source_file,
                     globals,
                     classes,
                     class_object_indices,
                     enum_object_indices,
                     enum_variants,
                     &mut program.objects,
+                    opt,
                 );
                 let lambda_let_obj_indices: Vec<usize> =
                     lambda_info.iter().map(|(idx, _)| *idx).collect();
@@ -1132,9 +1277,9 @@ fn compile_init_function<'db>(
                     lambda_object_indices: &lambda_let_obj_indices,
                     lambda_names: &lambda_let_names,
                 };
-                let mut helper =
-                    compile_mir_function(&mir_body, 0, &line_starts, ctx, OptLevel::One);
+                let mut helper = compile_mir_function(&mir_body, 0, None, &line_starts, ctx, opt);
                 helper.name = format!("$init_let_{i}");
+                helper.source_file.clone_from(&source_file);
                 helper.arity = 0;
                 helper
             }
@@ -1147,6 +1292,7 @@ fn compile_init_function<'db>(
                 bytecode.instructions.push(Instruction::Return);
                 Function {
                     name: format!("$init_let_{i}"),
+                    source_file: String::new(), // synthesized, no source file
                     arity: 0,
                     real_local_count: 0,
                     bytecode,
@@ -1159,8 +1305,13 @@ fn compile_init_function<'db>(
                     return_type: baml_type::Ty::Null {
                         attr: baml_type::TyAttr::default(),
                     },
+                    stream_return_type: baml_type::Ty::Null {
+                        attr: baml_type::TyAttr::default(),
+                    },
                     param_names: Vec::new(),
                     param_types: Vec::new(),
+                    throws_type: None,
+                    origin: FunctionOrigin::Internal,
                     body_meta: None,
                     trace: false,
                 }
@@ -1179,25 +1330,41 @@ fn compile_init_function<'db>(
         init_instructions.push(Instruction::Call(bex_vm_types::GlobalIndex::from_raw(
             helper_global_slot,
         )));
+        init_meta.push(bex_vm_types::bytecode::InstructionMeta {
+            operand: Some(bex_vm_types::bytecode::OperandMeta::Callable(format!(
+                "$init_let_{i}"
+            ))),
+        });
         init_instructions.push(Instruction::StoreGlobal(
             bex_vm_types::GlobalIndex::from_raw(let_slot),
         ));
+        init_meta.push(bex_vm_types::bytecode::InstructionMeta {
+            operand: Some(bex_vm_types::bytecode::OperandMeta::Global(fq_name.clone())),
+        });
     }
 
     // Final: push Null and Return (Return pops the top of the eval stack).
     let null_const_idx = init_constants.len();
     init_constants.push(bex_vm_types::ConstValue::Null);
     init_instructions.push(Instruction::LoadConst(null_const_idx));
+    init_meta.push(bex_vm_types::bytecode::InstructionMeta {
+        operand: Some(bex_vm_types::bytecode::OperandMeta::Const(
+            "null".to_string(),
+        )),
+    });
     init_instructions.push(Instruction::Return);
+    init_meta.push(bex_vm_types::bytecode::InstructionMeta::default());
 
     let bytecode = Bytecode {
         instructions: init_instructions,
         constants: init_constants,
+        meta: init_meta,
         ..Bytecode::default()
     };
 
     Ok(Function {
         name: "$init".to_string(),
+        source_file: String::new(), // synthesized, no source file
         arity: 0,
         real_local_count: 0,
         bytecode,
@@ -1210,8 +1377,13 @@ fn compile_init_function<'db>(
         return_type: baml_type::Ty::Null {
             attr: baml_type::TyAttr::default(),
         },
+        stream_return_type: baml_type::Ty::Null {
+            attr: baml_type::TyAttr::default(),
+        },
         param_names: Vec::new(),
         param_types: Vec::new(),
+        throws_type: None,
+        origin: FunctionOrigin::Internal,
         body_meta: None,
         trace: false,
     })
@@ -1222,38 +1394,6 @@ mod tests {
     use baml_compiler2_hir::item_tree::{Attribute, AttributeArg};
 
     use super::*;
-
-    // ── unescape_string_literal ─────────────────────────────────────────
-
-    #[test]
-    fn unescape_common_sequences() {
-        assert_eq!(unescape_string_literal(r"hello\nworld"), "hello\nworld");
-        assert_eq!(unescape_string_literal(r"tab\there"), "tab\there");
-        assert_eq!(unescape_string_literal(r"cr\rhere"), "cr\rhere");
-        assert_eq!(unescape_string_literal(r"back\\slash"), "back\\slash");
-        assert_eq!(unescape_string_literal(r#"a\"b"#), "a\"b");
-    }
-
-    #[test]
-    fn unescape_unknown_sequence_preserved() {
-        assert_eq!(unescape_string_literal(r"\x41"), "\\x41");
-        assert_eq!(unescape_string_literal(r"\u0041"), "\\u0041");
-    }
-
-    #[test]
-    fn unescape_trailing_backslash() {
-        assert_eq!(unescape_string_literal("trailing\\"), "trailing\\");
-    }
-
-    #[test]
-    fn unescape_empty() {
-        assert_eq!(unescape_string_literal(""), "");
-    }
-
-    #[test]
-    fn unescape_no_escapes() {
-        assert_eq!(unescape_string_literal("plain text"), "plain text");
-    }
 
     // ── parse_string_attr_value ─────────────────────────────────────────
 
@@ -1270,6 +1410,18 @@ mod tests {
         assert_eq!(
             parse_string_attr_value(r#""line\nbreak""#),
             Some("line\nbreak".to_string())
+        );
+        assert_eq!(
+            parse_string_attr_value(r#""tab\tstop""#),
+            Some("tab\tstop".to_string())
+        );
+        assert_eq!(
+            parse_string_attr_value(r#""a\\b""#),
+            Some(r"a\b".to_string())
+        );
+        assert_eq!(
+            parse_string_attr_value(r#""a\"b""#),
+            Some(r#"a"b"#.to_string())
         );
     }
 
@@ -1409,6 +1561,13 @@ mod tests {
         let attrs = vec![mk_attr("description", &["#\"raw desc\"#"])];
         let (desc, _, _) = extract_schema_attrs(&attrs);
         assert_eq!(desc, Some("raw desc".to_string()));
+    }
+
+    #[test]
+    fn extract_regular_string_attr_decodes_escapes() {
+        let attrs = vec![mk_attr("description", &[r#""a\nb\tc\\d\"e""#])];
+        let (desc, _, _) = extract_schema_attrs(&attrs);
+        assert_eq!(desc, Some("a\nb\tc\\d\"e".to_string()));
     }
 
     #[test]

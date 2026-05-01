@@ -1,0 +1,56 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+
+=== TIR2 (package assert) ===
+
+--- <builtin>/assert/assert.baml ---
+function assert.is_true(condition: bool) -> null throws never {
+  { : null
+    if (Not condition : bool) : null
+      { : never
+        baml.sys.panic("assertion failed:...") : never
+      }
+    else
+      { : null
+        null : null
+      }
+  }
+}
+function assert.not_null(value: unknown?) -> null throws never {
+  { : null
+    if (value == null : bool) : null
+      { : never
+        baml.sys.panic("assertion failed:...") : never
+      }
+    else
+      { : null
+        null : null
+      }
+  }
+}
+function assert.equal(actual: unknown, expected: unknown) -> null throws never {
+  { : null
+    if (actual != expected : bool) : null
+      { : never
+        baml.sys.panic("assertion failed:...") : never
+      }
+    else
+      { : null
+        null : null
+      }
+  }
+}
+function assert.contains(haystack: string, needle: string) -> null throws never {
+  { : null
+    if (Not haystack.includes(needle) : bool) : null
+      { : never
+        baml.sys.panic("assertion failed:...") : never
+      }
+    else
+      { : null
+        null : null
+      }
+  }
+}

@@ -18,7 +18,12 @@ use crate::{
 
 type CompanionExpander = fn(&FunctionDef) -> Option<FunctionDef>;
 
-const COMPANIONS: &[CompanionExpander] = &[llm_render_prompt, llm_build_request, llm_parse];
+const COMPANIONS: &[CompanionExpander] = &[
+    llm_render_prompt,
+    llm_build_request,
+    llm_build_request_stream,
+    llm_parse,
+];
 
 /// Run all companion expanders on the given function.
 /// Works identically for top-level functions and class methods.
@@ -49,6 +54,17 @@ fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
     Some(make_llm_companion(
         parent,
         "build_request",
+        &["baml", "http", "Request"],
+    ))
+}
+
+fn llm_build_request_stream(parent: &FunctionDef) -> Option<FunctionDef> {
+    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
+        return None;
+    }
+    Some(make_llm_companion(
+        parent,
+        "build_request_stream",
         &["baml", "http", "Request"],
     ))
 }
@@ -85,6 +101,7 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
         throws: None,
         body: Some(FunctionBodyDef::Expr(body, source_map)),
         declarative_meta: None,
+        origin: crate::ast::FunctionOrigin::Companion,
         attributes: vec![],
         span: parent.span,
         name_span: parent.name_span,
@@ -100,6 +117,7 @@ fn make_llm_companion(
     let return_type = SpannedTypeExpr {
         expr: TypeExpr::Path {
             segments: return_type_path.iter().map(Name::new).collect(),
+            generic_args: vec![],
             attrs: vec![],
         },
         span: parent.span,
@@ -125,6 +143,7 @@ fn make_llm_companion(
         throws: None,
         body: Some(FunctionBodyDef::Expr(body, source_map)),
         declarative_meta: None,
+        origin: crate::ast::FunctionOrigin::Companion,
         attributes: vec![],
         span: parent.span,
         name_span: parent.name_span,

@@ -14,20 +14,10 @@
 
 use std::collections::{HashMap, HashSet};
 
+pub use baml_compiler2_mir::OptLevel;
 use baml_compiler2_mir::{
     BlockId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
 };
-
-/// Optimization level for bytecode generation.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum OptLevel {
-    /// No inlining of user-named locals. Compiler temps are still optimized.
-    /// Produces bytecode that closely mirrors the source structure.
-    Zero,
-    /// Full optimization: inline single-use locals, copy propagation, stack carry.
-    #[default]
-    One,
-}
 
 use crate::stack_carry;
 
@@ -306,9 +296,25 @@ fn compute_rpo(body: &MirFunctionBody) -> Vec<BlockId> {
     let mut visited = HashSet::new();
     let mut postorder = Vec::new();
 
+    // Phase 1: DFS from the entry block. Handlers reachable via CFG edges
+    // (Call/Await unwind targets) are visited as descendants of their
+    // try-body entry blocks, so body_entry is a DFS ancestor of handler →
+    // body_entry is pushed AFTER handler in postorder → BEFORE handler in
+    // the reversed RPO. This satisfies start_pc < handler_pc.
     rpo_dfs(body, body.entry, &mut visited, &mut postorder);
-    postorder.reverse();
-    postorder
+
+    // Phase 2: Seed handlers NOT reachable from entry (same-frame panics
+    // like division-by-zero where there's no Call/Await with an unwind
+    // edge). Prepend their subtrees to the postorder so they appear AFTER
+    // all entry-reachable blocks in the reversed RPO (handler_pc > body_pc).
+    let mut handler_postorder = Vec::new();
+    for region in &body.catch_regions {
+        rpo_dfs(body, region.handler, &mut visited, &mut handler_postorder);
+    }
+    handler_postorder.append(&mut postorder);
+
+    handler_postorder.reverse();
+    handler_postorder
 }
 
 // ============================================================================
@@ -589,6 +595,12 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
                 StatementKind::NotifyBlock { .. } => {
                     // NotifyBlock doesn't use any locals - it's a pure side effect
                 }
+                StatementKind::Intrinsic { args, .. } => {
+                    // Intrinsic args are reads — record uses for each operand
+                    for arg in args {
+                        collect_uses_in_operand(arg, block.id, stmt_ref, &mut def_use);
+                    }
+                }
                 StatementKind::WatchOptions { local, filter } => {
                     // WatchOptions uses the local and the filter operand
                     def_use.get_mut(local).unwrap().uses.push(UseLocation {
@@ -604,6 +616,17 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
                         statement_ref: stmt_ref,
                     });
                 }
+                StatementKind::FreshCell(local) => {
+                    // FreshCell only has an effect when the local is captured
+                    // (it replaces the cell). For non-captured locals it's a no-op,
+                    // so don't add a use that would prevent Virtual classification.
+                    if body.local(*local).is_captured {
+                        def_use.get_mut(local).unwrap().uses.push(UseLocation {
+                            block: block.id,
+                            statement_ref: stmt_ref,
+                        });
+                    }
+                }
                 StatementKind::VizEnter(_) | StatementKind::VizExit(_) => {
                     // VizEnter/VizExit don't use any locals
                 }
@@ -617,11 +640,11 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
         }
     }
 
-    // Unwind error locals are implicitly used by PushUnwind instructions —
+    // Unwind error locals are implicitly used by the exception table —
     // the VM writes into these slots when an exception is caught. Without
     // this, the locals may have zero recorded uses and get classified Dead,
     // causing a panic when the emitter tries to allocate a slot for them.
-    for (&block_id, &local) in &body.unwind_error_locals {
+    for (block_id, local) in body.unwind_error_locals() {
         if let Some(du) = def_use.get_mut(&local) {
             du.uses.push(UseLocation {
                 block: block_id,
@@ -689,11 +712,16 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
         Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
             walk_place_locals(place, f);
         }
-        Rvalue::IsType { operand, .. } => walk_operand_locals(operand, f),
+        Rvalue::IsType { operand, .. } => {
+            walk_operand_locals(operand, f);
+        }
         Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 walk_operand_locals(cap, f);
             }
+        }
+        Rvalue::MakeBoundMethod { receiver, .. } => {
+            walk_operand_locals(receiver, f);
         }
     }
 }
@@ -838,8 +866,26 @@ fn collect_uses_in_terminator(
                 }
             }
         }
-        Terminator::Throw { value } => {
+        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
             collect_uses_in_operand(value, block, StatementRef::Terminator, def_use);
+        }
+        Terminator::ShortCircuit {
+            operand,
+            destination,
+            ..
+        } => {
+            collect_uses_in_operand(operand, block, StatementRef::Terminator, def_use);
+            // Record the def for the destination
+            if let Place::Local(local) = destination {
+                if let Some(du) = def_use.get_mut(local) {
+                    du.def = Some(DefLocation {
+                        block,
+                        statement_ref: StatementRef::Terminator,
+                        rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
+                    });
+                    du.all_defs.push((block, StatementRef::Terminator));
+                }
+            }
         }
     }
 }
@@ -920,6 +966,12 @@ fn classify_locals(
             }
         } else if is_phi_like(local, du, body, predecessors, def_use) {
             // Stack-carry candidate validated in a later stack simulation pass.
+            stack_carry_candidates.insert(local, stack_carry::StackCarryKind::PhiLike);
+            LocalClassification::Real
+        } else if is_short_circuit_phi(local, du, body) {
+            // ShortCircuit destination: the JumpIfFalse keeps lhs on TOS on the
+            // short-circuit path, and the rhs block leaves its result on TOS.
+            // Treated like PhiLike — value stays on the stack, no store/load.
             stack_carry_candidates.insert(local, stack_carry::StackCarryKind::PhiLike);
             LocalClassification::Real
         } else if is_return_phi(local, body, def_use, redirect_targets) {
@@ -1031,6 +1083,25 @@ fn is_phi_like(
     true
 }
 
+/// Check if a local is the destination of a `ShortCircuit` terminator and has
+/// exactly one use in the join block. The `JumpIfFalse` peek instruction keeps
+/// the LHS on TOS for the short-circuit path, while the rhs block leaves its
+/// result on TOS. At the join, the value is on TOS from whichever path ran.
+fn is_short_circuit_phi(local: Local, du: &LocalDefUse, body: &MirFunctionBody) -> bool {
+    if du.uses.len() != 1 {
+        return false;
+    }
+
+    // One of the defs must be a ShortCircuit terminator targeting this local.
+    du.all_defs.iter().any(|&(block_id, ref stmt_ref)| {
+        *stmt_ref == StatementRef::Terminator
+            && matches!(
+                &body.block(block_id).terminator,
+                Some(Terminator::ShortCircuit { destination: Place::Local(l), .. }) if *l == local
+            )
+    })
+}
+
 /// Check if a MIR statement is stack-neutral (doesn't push or pop from the eval stack).
 ///
 /// Stack-neutral statements can safely execute while a value meant for return sits on
@@ -1043,6 +1114,9 @@ fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true,
         StatementKind::NotifyBlock { .. } => true,
         StatementKind::WatchNotify(_) => true,
+        StatementKind::FreshCell(_) => true,
+        // Intrinsics push args then SendEvent consumes them - net neutral
+        StatementKind::Intrinsic { .. } => true,
         StatementKind::Nop => true,
 
         // WatchOptions pushes 2 (channel, filter) then Watch pops 2 - net neutral
@@ -1365,6 +1439,7 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         }
         Rvalue::IsType { operand, .. } => operand_has_projection(operand),
         Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
+        Rvalue::MakeBoundMethod { receiver, .. } => operand_has_projection(receiver),
     }
 }
 
@@ -1460,7 +1535,9 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
         StatementKind::NotifyBlock { .. } => true, // NotifyBlock has side effects (emits notification)
         StatementKind::WatchOptions { .. } => true, // WatchOptions has side effects on watch graph
         StatementKind::WatchNotify(_) => true, // WatchNotify has side effects (emits notification)
+        StatementKind::FreshCell(local) => rvalue_reads.contains(local),
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
+        StatementKind::Intrinsic { .. } => true, // Intrinsics emit events — observable side effect
         StatementKind::Nop => false,
     }
 }

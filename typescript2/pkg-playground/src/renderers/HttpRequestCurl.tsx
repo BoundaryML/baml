@@ -27,7 +27,7 @@ function preserveExactBody(req: HttpRequestShape): boolean {
   return (req.url ?? '').includes('bedrock-runtime');
 }
 
-function isHttpRequest(value: unknown): value is HttpRequestShape {
+export function isHttpRequest(value: unknown): value is HttpRequestShape {
   if (value == null || typeof value !== 'object') return false;
   const o = value as Record<string, unknown>;
   return typeof o.url === 'string' && typeof o.method === 'string';
@@ -262,7 +262,7 @@ export function httpRequestToCurl(req: HttpRequestShape): string {
 const preCls =
   'whitespace-pre font-vsc-mono text-xs leading-relaxed p-3 rounded bg-vsc-bg border border-vsc-border text-vsc-text overflow-auto max-h-[400px] m-0';
 
-export const HttpRequestCurlRenderer: FC<ResultRendererProps> = ({ value }) => {
+export const HttpRequestCurlRenderer: FC<ResultRendererProps> = ({ value, displayMode }) => {
   const [copied, setCopied] = useState(false);
   const [format, setFormat] = useState<HttpRequestSnippetFormat>('curl');
   const httpReq = isHttpRequest(value) ? value : null;
@@ -284,6 +284,10 @@ export const HttpRequestCurlRenderer: FC<ResultRendererProps> = ({ value }) => {
 
   if (!httpReq) {
     return <pre className={preCls}>{JSON.stringify(value, null, 2)}</pre>;
+  }
+
+  if (displayMode === 'inline') {
+    return <span className="font-vsc-mono text-xs text-vsc-text">{httpReq.method} {httpReq.url}</span>;
   }
 
   return (

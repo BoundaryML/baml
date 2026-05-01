@@ -49,6 +49,7 @@ fn deep_copy_value_recursive(
                         new_values.push(deep_copy_value_recursive(vm, value, copied_objects));
                     }
 
+                    // no GC write barrier because it is all in gen0
                     *vm.get_object_mut(placeholder_ptr) = Object::Array(new_values);
                     placeholder_ptr
                 }
@@ -63,6 +64,7 @@ fn deep_copy_value_recursive(
                         new_map.insert(key.clone(), new_value);
                     }
 
+                    // no GC write barrier because it is all in gen0
                     *vm.get_object_mut(placeholder_ptr) = Object::Map(new_map);
                     placeholder_ptr
                 }
@@ -79,10 +81,12 @@ fn deep_copy_value_recursive(
                         new_fields.push(deep_copy_value_recursive(vm, field, copied_objects));
                     }
 
-                    *vm.get_object_mut(placeholder_ptr) = Object::Instance(Instance {
+                    let new_instance = Instance {
                         class: instance.class,
                         fields: new_fields,
-                    });
+                    };
+                    // no GC write barrier because it is all in gen0
+                    *vm.get_object_mut(placeholder_ptr) = Object::Instance(new_instance);
                     placeholder_ptr
                 }
 
@@ -94,9 +98,10 @@ fn deep_copy_value_recursive(
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
                 Object::Collector(c) => vm.tlab.alloc(Object::Collector(c)),
                 Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),
-                // Closures and cells are shallow-copied: the captured state is shared
-                // by design (mutation semantics).
+                // Closures, bound methods, and cells are shallow-copied: the captured
+                // state is shared by design (mutation semantics).
                 Object::Closure(c) => vm.tlab.alloc(Object::Closure(c)),
+                Object::BoundMethod(bm) => vm.tlab.alloc(Object::BoundMethod(bm)),
                 Object::Cell(cell) => vm.tlab.alloc(Object::Cell(cell)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),

@@ -261,11 +261,31 @@ pub enum FunctionMeta {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FunctionOrigin {
+    UserDefined,
+    Companion,
+    Internal,
+    Builtin,
+}
+
+impl FunctionOrigin {
+    pub const fn is_user_callable(self) -> bool {
+        matches!(self, Self::UserDefined | Self::Companion)
+    }
+}
+
 /// Represents any Baml function.
 #[derive(Clone, Debug)]
 pub struct Function {
     /// Function name.
     pub name: String,
+
+    /// Source file path where this function is defined.
+    ///
+    /// Set at emit time for bytecode functions. Empty string for builtins and
+    /// synthesized functions that have no source file.
+    pub source_file: String,
 
     /// Number of arguments the function accepts.
     pub arity: usize,
@@ -313,11 +333,24 @@ pub struct Function {
     /// Return type of the function.
     pub return_type: Ty,
 
+    /// Stream-expanded return type (e.g. `null | MyClass$stream` for a function
+    /// returning `MyClass`). Only meaningful for LLM functions; set to `Null` for
+    /// non-LLM functions. See `PpirExpansionItems::stream_return_types`.
+    pub stream_return_type: Ty,
+
     /// Parameter names in declaration order.
     pub param_names: Vec<String>,
 
     /// Parameter types in declaration order.
     pub param_types: Vec<Ty>,
+
+    /// Inferred throws type — the union of all types this function (and its callees)
+    /// may throw. `None` if the function never throws. Used by the engine to convert
+    /// uncaught throw values to `BexExternalValue`.
+    pub throws_type: Option<Ty>,
+
+    /// Provenance of this function in the compiler/runtime pipeline.
+    pub origin: FunctionOrigin,
 
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
@@ -501,17 +534,57 @@ pub enum Value {
     Object(HeapPtr),
 }
 
+impl Value {
+    /// Returns the [`HeapPtr`] if this is an [`Object`].
+    pub const fn as_object_ptr(&self) -> Option<HeapPtr> {
+        match self {
+            Value::Object(ptr) => Some(*ptr),
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Null => write!(f, "null"),
             Value::Int(int) => write!(f, "{int}"),
-            Value::Float(float) => write!(f, "{float}"),
+            Value::Float(float) => write!(f, "{}", format_float(*float)),
             Value::Bool(bool) => write!(f, "{bool}"),
             Value::Object(ptr) => write!(f, "{ptr}"),
         }
     }
 }
+
+/// Format an f64 to string, following JS/TS conventions for special values
+/// and preserving `.0` for whole-number floats.
+///
+/// - `1.0` → `"1.0"` (not `"1"` — preserves float identity)
+/// - `3.14` → `"3.14"`
+/// - `f64::INFINITY` → `"Infinity"` (JS-style)
+/// - `f64::NEG_INFINITY` → `"-Infinity"` (JS-style)
+/// - `f64::NAN` → `"NaN"` (JS-style)
+pub fn format_float(f: f64) -> String {
+    if f.is_nan() {
+        return "NaN".to_string();
+    }
+    if f.is_infinite() {
+        return if f.is_sign_positive() {
+            "Infinity".to_string()
+        } else {
+            "-Infinity".to_string()
+        };
+    }
+    let s = f.to_string();
+    if s.contains('.') { s } else { format!("{s}.0") }
+}
+
+// Error class / instance enums — generated from `errors.baml` class definitions.
+// ErrorClass (tag enum), ErrorInstance (with Value fields), associated methods.
+include!(concat!(env!("OUT_DIR"), "/errors_generated.rs"));
+// Panic class / instance enums — generated from `panics.baml` class definitions.
+// PanicClass (tag enum), PanicInstance (with Value fields), associated methods.
+include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
 
 // ============================================================================
 // Test Cases
@@ -617,19 +690,24 @@ pub enum Object {
     Function(Box<Function>),
 
     /// Class object.
-    Class(Class),
+    Class(Box<Class>),
 
     /// Class instance object.
     Instance(Instance),
 
     /// Enum object.
-    Enum(Enum),
+    Enum(Box<Enum>),
 
     /// Enum value object.
     Variant(Variant),
 
     /// A closure: a function paired with captured variable cells.
     Closure(Closure),
+
+    /// A method bound to a specific receiver instance.
+    /// Created by `MakeBoundMethod`. The receiver is inserted as `self`
+    /// at call time by `CallIndirect`.
+    BoundMethod(BoundMethod),
 
     /// A mutable cell holding a single captured value.
     Cell(Cell),
@@ -664,11 +742,16 @@ pub enum Object {
     Collector(CollectorRef),
 
     /// A type descriptor value — wraps a `baml_type::Ty`.
-    Type(baml_type::Ty),
+    Type(Box<baml_type::Ty>),
 
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
 }
+
+const _: () = assert!(
+    std::mem::size_of::<Object>() <= 80,
+    "Object enum size regression — expected <= 80 bytes"
+);
 
 /// A closure: a function object paired with a list of captured variable cells.
 #[derive(Clone, Debug)]
@@ -677,6 +760,18 @@ pub struct Closure {
     pub function: HeapPtr,
     /// Captured cells, one per closed-over variable (each is `Object::Cell`).
     pub captures: Vec<Value>,
+}
+
+/// A method bound to a specific receiver instance.
+///
+/// Created by `MakeBoundMethod`. The receiver is inserted as `self`
+/// at call time by `CallIndirect`.
+#[derive(Clone, Debug)]
+pub struct BoundMethod {
+    /// Pointer to the underlying `Object::Function`.
+    pub function: HeapPtr,
+    /// The receiver value (inserted as `self` at call time).
+    pub receiver: Value,
 }
 
 /// A mutable cell wrapping a single captured value.
@@ -700,6 +795,7 @@ impl std::fmt::Display for Object {
                 let captures_len = closure.captures.len();
                 write!(f, "<closure captures={captures_len}>")
             }
+            Object::BoundMethod(_) => write!(f, "<bound_method>"),
             Object::Cell(cell) => write!(f, "<cell {}>", cell.value),
             Object::String(string) => string.fmt(f),
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
@@ -815,6 +911,7 @@ impl ObjectType {
         match ob {
             Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
             Object::Closure(_) => Self::Closure,
+            Object::BoundMethod(_) => Self::Closure, // Treat as callable like closures
             Object::Cell(_) => Self::Cell,
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,
@@ -922,5 +1019,30 @@ impl From<&Future> for FutureType {
             Future::Pending(_) => Self::Pending,
             Future::Ready(_) => Self::Ready,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_float;
+
+    #[test]
+    fn test_format_float() {
+        // Whole-number floats must include ".0"
+        assert_eq!(format_float(0.0), "0.0");
+        assert_eq!(format_float(1.0), "1.0");
+        assert_eq!(format_float(-1.0), "-1.0");
+        assert_eq!(format_float(100.0), "100.0");
+        assert_eq!(format_float(999_999_999_999_999.0), "999999999999999.0");
+
+        // Fractional floats unchanged
+        assert_eq!(format_float(2.5), "2.5");
+        assert_eq!(format_float(0.1), "0.1");
+        assert_eq!(format_float(-0.001), "-0.001");
+
+        // Non-finite values: JS-style names, no ".0"
+        assert_eq!(format_float(f64::INFINITY), "Infinity");
+        assert_eq!(format_float(f64::NEG_INFINITY), "-Infinity");
+        assert_eq!(format_float(f64::NAN), "NaN");
     }
 }

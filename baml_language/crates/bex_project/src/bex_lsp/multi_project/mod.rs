@@ -7,6 +7,7 @@ mod wasm_helpers;
 use std::collections::HashMap;
 
 use ::std::sync::Arc;
+pub use wasm_helpers::BackgroundSpawner;
 
 /// Factory that creates [`sys_ops::SysOps`] for a given project root.
 type SysOpFactory =
@@ -54,6 +55,8 @@ struct BexMulitProject {
 
     /// The VFS path to the project root.
     fs: crate::fs::BamlVFS,
+
+    spawner: BackgroundSpawner,
 }
 
 pub trait LspClientSenderTrait {
@@ -173,6 +176,7 @@ impl BexMulitProject {
         playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
         fs: crate::fs::BamlVFS,
         event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
+        spawner: BackgroundSpawner,
     ) -> Self {
         Self {
             projects: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
@@ -186,6 +190,7 @@ impl BexMulitProject {
             position_encoding: PositionEncoding::UTF8,
             workspace_roots: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             fs,
+            spawner,
         }
     }
 
@@ -607,7 +612,7 @@ impl BexMulitProject {
         let call_id = sys_types::CallId::next();
 
         // Spawn async collection task
-        wasm_helpers::run_async_in_background(async move {
+        self.spawner.spawn(async move {
             match engine
                 .collect_tests(&package, call_id, cancel.clone())
                 .await
@@ -624,19 +629,36 @@ impl BexMulitProject {
                             );
                             false
                         } else {
-                            // Extract Handle from BexExternalValue::Handle
+                            // Extract Handle from BexExternalValue::Handle.
+                            // Null means the project has no tests ($init_test absent).
                             let handle = match &registry {
-                                bex_engine::BexExternalValue::Handle(h) => h.clone(),
+                                bex_engine::BexExternalValue::Handle(h) => Some(h.clone()),
+                                bex_engine::BexExternalValue::Null => None,
                                 _ => {
-                                    log::error!("[collect_tests] unexpected non-Handle result");
+                                    log::error!("[collect_tests] unexpected result type");
                                     return;
                                 }
                             };
-                            state.registry = Some(handle);
+                            state.registry = handle;
                             true
                         }
                     };
                     if !should_continue {
+                        return;
+                    }
+
+                    // If the project has no tests, send an empty test tree.
+                    if matches!(registry, bex_engine::BexExternalValue::Null) {
+                        sender.send_playground_notification(
+                            crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                                project,
+                                generation,
+                                call_id: call_id.0,
+                                data: serde_json::to_vec(&serde_json::json!([]))
+                                    .unwrap_or_default(),
+                                expand_error: None,
+                            },
+                        );
                         return;
                     }
 
@@ -662,6 +684,7 @@ impl BexMulitProject {
                                     generation,
                                     call_id: call_id.0,
                                     data,
+                                    expand_error: None,
                                 },
                             );
                         }
@@ -674,6 +697,7 @@ impl BexMulitProject {
                                     call_id: call_id.0,
                                     data: serde_json::to_vec(&serde_json::json!([]))
                                         .unwrap_or_default(),
+                                    expand_error: None,
                                 },
                             );
                         }
@@ -688,6 +712,7 @@ impl BexMulitProject {
                             generation,
                             call_id: call_id.0,
                             data: serde_json::to_vec(&serde_json::json!([])).unwrap_or_default(),
+                            expand_error: None,
                         },
                     );
                 }
@@ -787,27 +812,66 @@ impl BexMulitProject {
         let project = project_root_str.to_string();
         let name = testset_name.to_string();
 
-        wasm_helpers::run_async_in_background(async move {
+        self.spawner.spawn(async move {
             let ctx = bex_engine::FunctionCallContextBuilder::new(call_id)
                 .with_cancel_token(cancel.clone())
                 .build();
 
             // Expand — mutates registry.expansions in-place on the heap
+            log::info!("[expand_test_set] expanding testset: {name}");
             if let Err(e) = engine
                 .call_function(
                     "testing.TestRegistry.expand_set",
                     vec![
                         registry_value.clone(),
-                        bex_engine::BexExternalValue::String(name),
+                        bex_engine::BexExternalValue::String(name.clone()),
                     ],
                     ctx,
                     true,
                 )
                 .await
             {
-                log::error!("[expand_test_set] expand failed: {e}");
+                log::error!("[expand_test_set] expand failed for testset '{name}': {e}");
+                // Re-serialize and send the current (pre-expansion) state so the
+                // UI unblocks from the loading spinner instead of spinning forever.
+                let ctx_resend =
+                    bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
+                        .with_cancel_token(cancel)
+                        .build();
+                let data = match engine
+                    .call_function(
+                        "testing.TestRegistry.serialize",
+                        vec![registry_value],
+                        ctx_resend,
+                        true,
+                    )
+                    .await
+                {
+                    Ok(serialized) => {
+                        serde_json::to_vec(&bex_value_to_json(&serialized)).unwrap_or_default()
+                    }
+                    Err(serialize_err) => {
+                        log::error!(
+                            "[expand_test_set] serialize after failed expand for '{name}' also failed: {serialize_err}"
+                        );
+                        serde_json::to_vec(&serde_json::json!([])).unwrap_or_default()
+                    }
+                };
+                sender.send_playground_notification(
+                    crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                        project,
+                        generation,
+                        call_id: call_id.0,
+                        data,
+                        expand_error: Some(crate::bex_lsp::TestExpandError {
+                            testset_name: name.clone(),
+                            message: format!("{e}"),
+                        }),
+                    },
+                );
                 return;
             }
+            log::info!("[expand_test_set] expanded testset '{name}' successfully");
 
             // Re-serialize full state
             let ctx2 = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -831,10 +895,23 @@ impl BexMulitProject {
                             generation,
                             call_id: call_id.0,
                             data,
+                            expand_error: None,
                         },
                     );
                 }
-                Err(e) => log::error!("[expand_test_set] serialize after expand failed: {e}"),
+                Err(e) => {
+                    log::error!("[expand_test_set] serialize after expanding '{name}' failed: {e}");
+                    // Send empty result so the UI unblocks
+                    sender.send_playground_notification(
+                        crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
+                            project,
+                            generation,
+                            call_id: call_id.0,
+                            data: serde_json::to_vec(&serde_json::json!([])).unwrap_or_default(),
+                            expand_error: None,
+                        },
+                    );
+                }
             }
         });
     }
@@ -947,6 +1024,7 @@ impl super::BexLsp for BexMulitProject {
             source_expr_id: None,
             source_expr_candidates: vec![],
             test_name: None,
+            cursor_offset: None,
         };
 
         let Ok(projects) = self.projects.lock() else {
@@ -1006,6 +1084,17 @@ impl super::BexLsp for BexMulitProject {
     fn expand_test_set(&self, project: &str, generation: u64, testset_name: &str) {
         self.expand_test_set_impl(project, generation, testset_name);
     }
+
+    fn resolve_file_id(&self, file_id: u32) -> Option<String> {
+        let projects = self.projects.lock().unwrap();
+        for project in projects.values() {
+            let db = project.project.db.lock().unwrap();
+            if let Some(path) = db.file_id_to_path(baml_base::FileId::new(file_id)) {
+                return Some(path.to_string_lossy().to_string());
+            }
+        }
+        None
+    }
 }
 
 pub fn new_lsp(
@@ -1014,6 +1103,14 @@ pub fn new_lsp(
     playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
     fs: crate::fs::BamlVFS,
     event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
+    spawner: BackgroundSpawner,
 ) -> impl crate::bex_lsp::BexLsp {
-    BexMulitProject::new(sys_op_factory, sender, playground_sender, fs, event_sink)
+    BexMulitProject::new(
+        sys_op_factory,
+        sender,
+        playground_sender,
+        fs,
+        event_sink,
+        spawner,
+    )
 }

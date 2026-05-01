@@ -4,7 +4,10 @@ node_modules/
 # Build outputs
 dist/
 .next/
+.next-build/
+.next-dev/
 .turbo/
+.next-build/
 
 # WASM output (built by wasm-pack)
 pkg-playground/wasm/

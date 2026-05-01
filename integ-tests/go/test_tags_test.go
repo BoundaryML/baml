@@ -17,10 +17,10 @@ func TestTagsPassthrough(t *testing.T) {
 
 	// Test function call with tags - this verifies the tags parameter works
 	functionTags := map[string]string{
-		"callId":     "first",
-		"version":    "v1",
-		"test_type":  "go_integration",
-		"component":  "baml_client",
+		"callId":    "first",
+		"version":   "v1",
+		"test_type": "go_integration",
+		"component": "baml_client",
 	}
 
 	// First call with tags

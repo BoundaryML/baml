@@ -11,16 +11,16 @@ use std::{
 
 use baml_base::Span;
 use baml_compiler2_mir::{
-    BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunctionBody, Operand, Place,
-    Rvalue, StatementKind, Terminator, UnaryOp,
+    BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
+    Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
 use baml_type::Ty;
 use bex_vm_types::{
-    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, GlobalIndex,
-    Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
+    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
+    GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
         BlockNotification, BlockNotificationType, DebugLocalScope, InstructionMeta, JumpTableData,
-        LineTableEntry, OperandMeta,
+        LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
     },
 };
 
@@ -35,6 +35,9 @@ enum SwitchStrategy {
     JumpTable { min: i64, max: i64 },
     /// Use binary search tree (O(log n) comparisons) for sparse integers.
     BinarySearch,
+    /// Use perfect hash + dense jump table (O(1) dispatch) for sparse ≥4-arm switches.
+    /// Replaces `BinarySearch` when a compile-time perfect hash is found.
+    PerfectHash(PerfectHashResult),
     /// Use linear if-else chain (O(n) comparisons).
     IfElseChain,
 }
@@ -86,14 +89,121 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
     {
         SwitchStrategy::JumpTable { min, max }
     }
-    // Use binary search for sparse but large switch
+    // Use binary search for sparse but large switch, with perfect hash
+    // preferred when a compile-time hash is found (O(1) vs O(log K)).
+    //
+    // Perfect hashing is always attempted here. It's only reached when
+    // density is too low for JumpTable, so it won't interfere with dense
+    // enum discriminant switches. See `find_perfect_hash` for algorithm
+    // details and references.
     else if arms.len() >= BINARY_SEARCH_MIN_ARMS {
-        SwitchStrategy::BinarySearch
+        let keys: Vec<(i64, usize)> = arms.iter().enumerate().map(|(i, (v, _))| (*v, i)).collect();
+        if let Some(result) = find_perfect_hash(&keys) {
+            SwitchStrategy::PerfectHash(result)
+        } else {
+            SwitchStrategy::BinarySearch
+        }
     }
     // Default to if-else chain for small switches
     else {
         SwitchStrategy::IfElseChain
     }
+}
+
+/// Result of a successful perfect hash search.
+#[derive(Debug)]
+struct PerfectHashResult {
+    multiply: u64,
+    shift: u8,
+    mask: u8,
+    /// Verification + dispatch entries indexed by hash slot.
+    entries: Vec<MatchHashEntry>,
+}
+
+/// Find a minimal perfect hash for a small set of integer keys.
+///
+/// Searches for constants `(M, S, mask)` such that
+///   `h(x) = ((x as u64).wrapping_mul(M) >> S) & mask`
+/// maps all keys to distinct slots in `[0, table_size)`.
+///
+/// The search tries increasing table sizes (`next_power_of_two(K)`, then 2x)
+/// and brute-forces M values with all 64 shift values. For K ≤ 20 this
+/// completes in microseconds.
+///
+/// Returns `None` if no perfect hash is found (practically impossible for
+/// K ≤ 20, but handled for safety).
+///
+/// # Algorithm
+///
+/// This implements the multiply-shift hash family described in:
+/// - Neumann & Göbbert, "Improving Switch Statement Performance with Hashing
+///   Optimized at Compile Time"
+/// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
+///
+/// The approach has been proposed for production compilers: LLVM issue #96971,
+/// Roslyn #66604, Go #34381.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless
+)]
+fn find_perfect_hash(keys: &[(i64, usize)]) -> Option<PerfectHashResult> {
+    let k = keys.len();
+    // Cap at 128: `MatchHashEntry::dense_index` is a `u8` (max 255), and
+    // the birthday paradox makes collision-free hashing increasingly unlikely
+    // past ~128 keys in a 256-slot table. Beyond this threshold the brute-force
+    // search would waste ~20-40ms of compile time before giving up. Falls back
+    // to binary search (O(log K)) which is fine at this scale.
+    if k == 0 || k > 128 {
+        return None;
+    }
+
+    // Try table sizes: tight (next power of 2), then 2x for easier search.
+    for table_size in [k.next_power_of_two(), (k.next_power_of_two() * 2).min(256)] {
+        let mask = (table_size - 1) as u8;
+        let mut slots = vec![false; table_size];
+
+        for m in 1u64..10_000 {
+            for s in 0u8..64 {
+                // Test if (m, s) produces distinct hashes for all keys.
+                slots.fill(false);
+                let mut ok = true;
+                for &(key, _) in keys {
+                    let h = ((key as u64).wrapping_mul(m) >> s) & mask as u64;
+                    let h = h as usize;
+                    if h >= table_size || slots[h] {
+                        ok = false;
+                        break;
+                    }
+                    slots[h] = true;
+                }
+                if ok {
+                    // Build the verification + dispatch table.
+                    let mut entries = vec![
+                        MatchHashEntry {
+                            expected_tag: i64::MIN, // sentinel for empty slots
+                            dense_index: 0,
+                        };
+                        table_size
+                    ];
+                    for (dense_idx, &(key, _arm_idx)) in keys.iter().enumerate() {
+                        let h = ((key as u64).wrapping_mul(m) >> s) & mask as u64;
+                        entries[h as usize] = MatchHashEntry {
+                            expected_tag: key,
+                            dense_index: dense_idx as u8,
+                        };
+                    }
+                    return Some(PerfectHashResult {
+                        multiply: m,
+                        shift: s,
+                        mask,
+                        entries,
+                    });
+                }
+            }
+        }
+    }
+    None
 }
 
 use crate::{
@@ -120,14 +230,6 @@ struct PendingJumpTable {
     otherwise: PendingJumpTarget,
     /// The jump table data being built.
     table: JumpTableData,
-}
-
-/// Pending unwind handler instruction that needs handler-offset patching.
-struct PendingUnwind {
-    /// Instruction index where `PushUnwind` was emitted.
-    instruction_idx: usize,
-    /// Handler target block (resolved later to a concrete PC).
-    target: PendingJumpTarget,
 }
 
 /// Target kind for a pending jump patch.
@@ -176,9 +278,6 @@ struct StackifyCodegen<'ctx, 'obj> {
 
     /// Pending jumps that need patching: (`instruction_index`, `target_block`).
     pending_jumps: Vec<(usize, PendingJumpTarget)>,
-
-    /// Pending unwind handlers that need offset patching.
-    pending_unwinds: Vec<PendingUnwind>,
 
     /// Pending jump tables that need patching after all blocks are emitted.
     pending_jump_tables: Vec<PendingJumpTable>,
@@ -238,6 +337,10 @@ struct StackifyCodegen<'ctx, 'obj> {
 }
 
 impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
+    fn display_string_operand(value: &str) -> String {
+        format!("{value:?}")
+    }
+
     /// Create a new stackification codegen instance.
     #[allow(clippy::needless_pass_by_value)] // ctx is destructured into self fields
     fn new(
@@ -262,7 +365,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             real_local_count: 0,
             block_addresses: HashMap::new(),
             pending_jumps: Vec::new(),
-            pending_unwinds: Vec::new(),
             pending_jump_tables: Vec::new(),
             dead_unreachable_blocks: HashSet::new(),
             trap_pc: None,
@@ -452,10 +554,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // 3. Patch all jump targets and jump tables
         self.patch_jumps();
-        self.patch_unwinds();
         self.patch_jump_tables();
 
-        // 4. Convert MIR VizNodes to VM VizNodeMeta
+        // 4. Build exception table from MIR catch regions
+        self.build_exception_table(mir);
+
+        // 5. Convert MIR VizNodes to VM VizNodeMeta
         let viz_nodes = mir
             .viz_nodes
             .iter()
@@ -471,9 +575,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         let debug_locals = Self::build_debug_locals(mir, &self.local_slots);
 
         // 5. Build the Function
-        // Note: `name` and `span` are set by the caller after `compile_mir_function` returns.
+        // Note: `name` is set by the caller after `compile_mir_function` returns.
+        // `span` is set by `compile_mir_function` from the MIR function span.
         Function {
             name: String::new(),
+            source_file: String::new(), // caller sets this after compile_mir_function returns
             arity: self.arity,
             real_local_count: self.real_local_count,
             bytecode: self.bytecode,
@@ -486,8 +592,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             return_type: baml_type::Ty::Null {
                 attr: baml_type::TyAttr::default(),
             },
+            stream_return_type: baml_type::Ty::Null {
+                attr: baml_type::TyAttr::default(),
+            },
             param_names: Vec::new(),
             param_types: Vec::new(),
+            throws_type: None,
+            origin: FunctionOrigin::Internal,
             body_meta: None,
             trace: false,
         }
@@ -724,10 +835,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             .pending_jumps
             .iter()
             .any(|(_, target)| matches!(target, PendingJumpTarget::Trap))
-            || self
-                .pending_unwinds
-                .iter()
-                .any(|pending| matches!(pending.target, PendingJumpTarget::Trap))
             || self.pending_jump_tables.iter().any(|pending| {
                 matches!(pending.otherwise, PendingJumpTarget::Trap)
                     || pending
@@ -860,6 +967,102 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             StatementKind::VizExit(node_idx) => {
                 self.emit(Instruction::VizExit(*node_idx));
             }
+            StatementKind::FreshCell(local) => {
+                if self.captured_locals.contains(local) {
+                    if let Some(&slot) = self.local_slots.get(local) {
+                        let null_idx = self.add_constant(ConstValue::Null);
+                        let inst = self.emit(Instruction::LoadConst(null_idx));
+                        self.set_operand(inst, OperandMeta::Const("null".to_string()));
+                        self.emit(Instruction::MakeCell);
+                        let inst = self.emit(Instruction::StoreVar(slot));
+                        self.set_var_operand(inst, slot);
+                    }
+                }
+            }
+            StatementKind::Intrinsic { op, args } => {
+                match op {
+                    IntrinsicOp::SendEvent => {
+                        // Same bytecode as the old baml.events.send string-match arm:
+                        // push args (event_name, data), then SendEvent.
+                        unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                        self.emit(Instruction::SendEvent);
+                        // The engine pushes `null` after resuming from SendEvent.
+                        // Since this is a statement (not an rvalue), discard it.
+                        self.emit(Instruction::Pop(1));
+                    }
+                    IntrinsicOp::Log(level) => {
+                        // Same bytecode as the old log.* string-match arm:
+                        // Synthesize SendEvent with "$baml_log" event name and
+                        // { level: "<level>", data: <user_arg> } payload.
+
+                        // Save call-site span — walking args may overwrite current_debug_span
+                        let call_site_span = self.current_debug_span;
+
+                        // 1. Push event name "$baml_log"
+                        let log_str_idx = self.objects.len();
+                        self.objects.push(Object::String("$baml_log".to_string()));
+                        let log_const_idx = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(log_str_idx)));
+                        let inst = self.emit(Instruction::LoadConst(log_const_idx));
+                        self.set_operand(
+                            inst,
+                            OperandMeta::Const(Self::display_string_operand("$baml_log")),
+                        );
+
+                        // 2. Push level value string
+                        let level_str = match level {
+                            LogLevel::Info => "info",
+                            LogLevel::Debug => "debug",
+                            LogLevel::Warn => "warn",
+                            LogLevel::Error => "error",
+                        };
+                        let level_val_idx = self.objects.len();
+                        self.objects.push(Object::String(level_str.to_string()));
+                        let level_val_const_idx = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_val_idx)));
+                        let inst = self.emit(Instruction::LoadConst(level_val_const_idx));
+                        self.set_operand(
+                            inst,
+                            OperandMeta::Const(Self::display_string_operand(level_str)),
+                        );
+
+                        // 3. Push user data argument
+                        unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+
+                        // 4. Push key "level"
+                        let level_key_idx = self.objects.len();
+                        self.objects.push(Object::String("level".to_string()));
+                        let level_key_const_idx = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_key_idx)));
+                        let inst = self.emit(Instruction::LoadConst(level_key_const_idx));
+                        self.set_operand(
+                            inst,
+                            OperandMeta::Const(Self::display_string_operand("level")),
+                        );
+
+                        // 5. Push key "data"
+                        let data_key_idx = self.objects.len();
+                        self.objects.push(Object::String("data".to_string()));
+                        let data_key_const_idx = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(data_key_idx)));
+                        let inst = self.emit(Instruction::LoadConst(data_key_const_idx));
+                        self.set_operand(
+                            inst,
+                            OperandMeta::Const(Self::display_string_operand("data")),
+                        );
+
+                        // 6. AllocMap(2) -> { level: "info", data: <user_data> }
+                        self.emit(Instruction::AllocMap(2));
+
+                        // 7. Restore call-site span and emit SendEvent
+                        self.set_debug_span(call_site_span, true);
+                        self.emit(Instruction::SendEvent);
+                        // The engine pushes `null` after resuming from SendEvent.
+                        // Since this is a statement (not an rvalue), discard it.
+                        self.emit(Instruction::Pop(1));
+                    }
+                }
+            }
             StatementKind::Nop => {}
         }
     }
@@ -895,6 +1098,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             unwrap_infallible(self.make_closure(*lambda_idx, captures.len()));
             return;
         }
+        if let Rvalue::MakeBoundMethod { item_ref, receiver } = rvalue {
+            // Emit the receiver onto the stack first.
+            self.emit_operand_pull(receiver);
+            // Resolve the item_ref to a GlobalIndex.
+            let func_name = item_ref.to_string();
+            let global_idx = *self
+                .globals
+                .get(&func_name)
+                .unwrap_or_else(|| panic!("MakeBoundMethod: global not found for {func_name}"));
+            let inst = self.emit(Instruction::MakeBoundMethod(GlobalIndex::from_raw(
+                global_idx,
+            )));
+            self.set_operand(inst, OperandMeta::Global(func_name));
+            return;
+        }
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
@@ -909,15 +1127,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Constant::Float(v) => {
                 let idx = self.add_constant(ConstValue::Float(*v));
                 let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(v.to_string()));
+                self.set_operand(inst, OperandMeta::Const(bex_vm_types::format_float(*v)));
             }
             Constant::String(s) => {
-                let escaped = s
-                    .replace('\\', "\\\\")
-                    .replace('\n', "\\n")
-                    .replace('\r', "\\r")
-                    .replace('\t', "\\t");
-                let display = format!("\"{escaped}\"");
+                let display = Self::display_string_operand(s);
                 let obj_idx = self.objects.len();
                 self.objects.push(Object::String(s.clone()));
                 let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
@@ -942,11 +1155,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     .unwrap_or_else(|| panic!("undefined function: {name_str}"));
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(*global_idx)));
                 self.set_operand(inst, OperandMeta::Global(name_str));
-            }
-            Constant::Ty(_) => {
-                let idx = self.add_constant(ConstValue::Null);
-                let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const("null".to_string()));
             }
             Constant::EnumVariant { enum_ref, variant } => {
                 let enum_name_str = enum_ref.to_string();
@@ -1093,6 +1301,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             &name_map,
                         );
                     }
+                    SwitchStrategy::PerfectHash(hash_result) => {
+                        self.emit_switch_perfect_hash(
+                            discriminant,
+                            arms,
+                            *otherwise,
+                            hash_result,
+                            &name_map,
+                        );
+                    }
                     SwitchStrategy::BinarySearch => {
                         self.emit_switch_binary_search(
                             discriminant,
@@ -1125,12 +1342,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 args,
                 destination,
                 target,
-                unwind,
+                unwind: _,
             } => {
-                if let Some(unwind_target) = unwind {
-                    self.emit_push_unwind_handler(*unwind_target);
-                }
-
                 let func_name = pull_semantics::resolve_constant_function_name(
                     callee,
                     &self.analysis.classifications,
@@ -1147,19 +1360,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     if let Some(name) = &func_name {
                         self.set_operand(inst, OperandMeta::Callable(name.clone()));
                     }
+                    self.emit_store_place(destination);
+                    self.emit_jump_unless_fallthrough(*target);
                 } else {
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
                     self.emit(Instruction::CallIndirect);
+                    self.emit_store_place(destination);
+                    self.emit_jump_unless_fallthrough(*target);
                 }
-
-                if unwind.is_some() {
-                    self.emit(Instruction::PopUnwind);
-                }
-
-                self.emit_store_place(destination);
-                self.emit_jump_unless_fallthrough(*target);
             }
 
             Terminator::Unreachable => {
@@ -1204,18 +1414,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 future,
                 destination,
                 target,
-                unwind,
+                unwind: _,
             } => {
-                if let Some(unwind_target) = unwind {
-                    self.emit_push_unwind_handler(*unwind_target);
-                }
-
                 unwrap_infallible(pull_semantics::walk_await_future(self, future));
                 self.emit(Instruction::Await);
-
-                if unwind.is_some() {
-                    self.emit(Instruction::PopUnwind);
-                }
 
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
@@ -1224,6 +1426,46 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::Throw { value } => {
                 self.emit_operand_pull(value);
                 self.emit(Instruction::Throw);
+            }
+
+            Terminator::ThrowIfPanic { value, otherwise } => {
+                self.emit_operand_pull(value);
+                self.emit(Instruction::ThrowIfPanic);
+                self.emit_jump_unless_fallthrough(*otherwise);
+            }
+
+            Terminator::ShortCircuit {
+                operand,
+                is_and,
+                destination: _,
+                eval_rhs,
+                join,
+            } => {
+                // Legacy-style short-circuit using JumpIfFalse (peek, no pop).
+                // The destination local is PhiLike — value stays on TOS, no store/load.
+                self.emit_operand_pull(operand);
+
+                if *is_and {
+                    // &&: false → short-circuit (value stays on TOS), jump to join.
+                    //     true → pop, evaluate rhs.
+                    let sc_jump = self.emit(Instruction::JumpIfFalse(0));
+                    let resolved_join = self.resolve_pending_target(*join);
+                    self.pending_jumps.push((sc_jump, resolved_join));
+                    self.emit(Instruction::Pop(1));
+                    self.emit_jump_unless_fallthrough(*eval_rhs);
+                } else {
+                    // ||: false → pop, evaluate rhs.
+                    //     true → value stays on TOS, jump to join.
+                    let false_jump = self.emit(Instruction::JumpIfFalse(0));
+                    let resolved_join = self.resolve_pending_target(*join);
+                    let true_jump = self.emit(Instruction::Jump(0));
+                    self.pending_jumps.push((true_jump, resolved_join));
+                    // False landing: patch JumpIfFalse to here, pop, fall to eval_rhs.
+                    let false_pc = self.bytecode.instructions.len();
+                    self.patch_jump_to(false_jump, false_pc);
+                    self.emit(Instruction::Pop(1));
+                    self.emit_jump_unless_fallthrough(*eval_rhs);
+                }
             }
         }
     }
@@ -1237,24 +1479,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         for (instruction_idx, target) in self.pending_jumps.clone() {
             let target_pc = self.resolve_pending_target_pc(target);
             self.patch_jump_to(instruction_idx, target_pc);
-        }
-    }
-
-    /// Patch all pending unwind handlers with actual handler addresses.
-    #[allow(clippy::cast_possible_wrap)]
-    fn patch_unwinds(&mut self) {
-        for pending in std::mem::take(&mut self.pending_unwinds) {
-            let target_pc = self.resolve_pending_target_pc(pending.target);
-            let offset = target_pc as isize - pending.instruction_idx as isize;
-            match &mut self.bytecode.instructions[pending.instruction_idx] {
-                Instruction::PushUnwind { handler, .. } => {
-                    *handler = offset;
-                }
-                _ => panic!(
-                    "expected PUSH_UNWIND at instruction index {}",
-                    pending.instruction_idx
-                ),
-            }
         }
     }
 
@@ -1284,6 +1508,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Instruction::PopJumpIfFalse(_) => {
                 self.bytecode.instructions[instruction_idx] = Instruction::PopJumpIfFalse(offset);
+            }
+            Instruction::JumpIfFalse(_) => {
+                self.bytecode.instructions[instruction_idx] = Instruction::JumpIfFalse(offset);
             }
             _ => panic!("expected jump instruction at index {instruction_idx}"),
         }
@@ -1318,6 +1545,71 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    /// Build the bytecode exception table from MIR catch regions.
+    ///
+    /// Each `CatchRegion` maps a try-body entry block and handler block to PC
+    /// ranges. The try body spans from the entry block's first instruction up
+    /// to (but not including) the handler block's first instruction.
+    fn build_exception_table(&mut self, mir: &MirFunctionBody) {
+        use bex_vm_types::bytecode::ExceptionTableEntry;
+
+        for region in &mir.catch_regions {
+            let body_entry = self.analysis.resolve_jump_target(region.body_entry);
+            let handler = self.analysis.resolve_jump_target(region.handler);
+
+            let &start_pc = self.block_addresses.get(&body_entry).unwrap_or_else(|| {
+                unreachable!(
+                    "exception table: body entry block {body_entry:?} has no PC address — \
+                     catch region was emitted but its body block was dropped"
+                )
+            });
+            let &handler_pc = self.block_addresses.get(&handler).unwrap_or_else(|| {
+                unreachable!(
+                    "exception table: handler block {handler:?} has no PC address — \
+                     catch region was emitted but its handler block was dropped"
+                )
+            });
+            // If the error local was optimized away (e.g. an inline
+            // `throw X catch ...` that the MIR lowers as a direct jump),
+            // the catch region doesn't need a VM-level exception table entry.
+            let Some(&error_slot) = self.local_slots.get(&region.error_local) else {
+                log::debug!(
+                    "exception table: error local {:?} has no slot (optimized away)",
+                    region.error_local,
+                );
+                continue;
+            };
+
+            // The RPO seeds the entry block first so that body_entry is
+            // always a DFS ancestor of handler, guaranteeing start_pc <
+            // handler_pc.
+            debug_assert!(
+                start_pc < handler_pc,
+                "exception table: handler {handler:?} (pc {handler_pc}) placed before \
+                 body entry {body_entry:?} (pc {start_pc}) — RPO ordering bug"
+            );
+
+            let stack_trace_slot = region
+                .stack_trace_local
+                .and_then(|local| self.local_slots.get(&local).copied())
+                .unwrap_or(ExceptionTableEntry::NO_STACK_TRACE);
+
+            self.bytecode.exception_table.push(ExceptionTableEntry {
+                start_pc,
+                end_pc: handler_pc,
+                handler_pc,
+                error_slot,
+                stack_trace_slot,
+            });
+        }
+
+        // Sort by start_pc so the VM can do a linear scan from most-specific
+        // (innermost) to least-specific. For nested catch blocks the inner
+        // region has a later start_pc, so reverse-sorted order gives innermost
+        // first during a reverse linear scan.
+        self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
+    }
+
     // ========================================================================
     // Switch Emission Strategies
     // ========================================================================
@@ -1336,36 +1628,37 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         exhaustive: bool,
         name_map: &std::collections::HashMap<i64, &str>,
     ) {
-        self.emit_operand_pull(discriminant);
+        // Single exhaustive arm: no comparison needed, skip the discriminant entirely.
+        if exhaustive && arms.len() == 1 {
+            self.emit_jump_unless_fallthrough(arms[0].1);
+            return;
+        }
 
+        // Each arm re-loads the discriminant from the operand instead of
+        // keeping it on the stack with copy/pop. This makes each arm
+        // self-contained and avoids stack cleanup instructions.
         let num_arms = arms.len();
         for (i, (value, target)) in arms.iter().enumerate() {
             let is_last = i == num_arms - 1;
 
-            // For exhaustive switches, skip the last arm's comparison
+            // For exhaustive switches, skip the last arm's comparison.
             if exhaustive && is_last {
-                self.emit(Instruction::Pop(1)); // Pop discriminant
                 self.emit_jump_unless_fallthrough(*target);
                 return;
             }
 
-            self.emit(Instruction::Copy(0));
+            let label = Self::switch_label(*value, name_map);
+            self.emit_operand_pull(discriminant);
             let idx = self.add_constant(ConstValue::Int(*value));
             let inst = self.emit(Instruction::LoadConst(idx));
-            let label = name_map
-                .get(value)
-                .map(|n| (*n).to_string())
-                .unwrap_or_else(|| value.to_string());
             self.set_operand(inst, OperandMeta::Const(label));
             self.emit(Instruction::CmpOp(CmpOp::Eq));
             let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
-            self.emit(Instruction::Pop(1));
             self.emit_jump_unless_fallthrough(*target);
             let skip_to = self.current_pc();
             self.patch_jump_to(jump_idx, skip_to);
         }
 
-        self.emit(Instruction::Pop(1));
         self.emit_jump_unless_fallthrough(otherwise);
     }
 
@@ -1458,45 +1751,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         otherwise: BlockId,
         name_map: &std::collections::HashMap<i64, &str>,
     ) {
-        let label_for = |value: &i64| -> String {
-            name_map
-                .get(value)
-                .map(|n| (*n).to_string())
-                .unwrap_or_else(|| value.to_string())
-        };
-
         match arms.len() {
             0 => {
                 // No arms left - just fall through to otherwise
                 // (already handled by caller)
             }
-            1 => {
-                // Single arm - emit direct comparison
-                let (value, target) = &arms[0];
-                self.emit(Instruction::Copy(0));
-                let idx = self.add_constant(ConstValue::Int(*value));
-                let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(label_for(value)));
-                self.emit(Instruction::CmpOp(CmpOp::Eq));
-                let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
-                self.emit(Instruction::Pop(1));
-                self.emit_jump_unless_fallthrough(*target);
-                let skip_to = self.current_pc();
-                self.patch_jump_to(jump_idx, skip_to);
-            }
-            2 => {
-                // Two arms - emit both comparisons sequentially
+            1 | 2 => {
+                // One or two arms - emit direct comparisons sequentially
                 for (value, target) in arms {
-                    self.emit(Instruction::Copy(0));
-                    let idx = self.add_constant(ConstValue::Int(*value));
-                    let inst = self.emit(Instruction::LoadConst(idx));
-                    self.set_operand(inst, OperandMeta::Const(label_for(value)));
-                    self.emit(Instruction::CmpOp(CmpOp::Eq));
-                    let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
-                    self.emit(Instruction::Pop(1));
-                    self.emit_jump_unless_fallthrough(*target);
-                    let skip_to = self.current_pc();
-                    self.patch_jump_to(jump_idx, skip_to);
+                    let label = Self::switch_label(*value, name_map);
+                    self.emit_compare_and_branch(*value, *target, label);
                 }
             }
             _ => {
@@ -1506,24 +1770,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let left = &arms[..mid];
                 let right = &arms[mid + 1..];
 
-                // Compare with pivot
-                self.emit(Instruction::Copy(0));
-                let idx = self.add_constant(ConstValue::Int(*value));
-                let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(label_for(value)));
-                self.emit(Instruction::CmpOp(CmpOp::Eq));
-                let eq_jump = self.emit(Instruction::PopJumpIfFalse(0));
-
-                // If equal, jump to target
-                self.emit(Instruction::Pop(1));
-                self.emit_jump_unless_fallthrough(*target);
-                let after_eq = self.current_pc();
-                self.patch_jump_to(eq_jump, after_eq);
+                // Compare with pivot — if equal, pop discriminant and jump
+                let label = Self::switch_label(*value, name_map);
+                self.emit_compare_and_branch(*value, *target, label.clone());
 
                 // Compare < pivot for left subtree
                 self.emit(Instruction::Copy(0));
+                let idx = self.add_constant(ConstValue::Int(*value));
                 let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(label_for(value)));
+                self.set_operand(inst, OperandMeta::Const(label));
                 self.emit(Instruction::CmpOp(CmpOp::Lt));
                 let lt_jump = self.emit(Instruction::PopJumpIfFalse(0));
 
@@ -1539,179 +1794,136 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    /// Emit switch using perfect hash + dense jump table (O(1) dispatch).
+    ///
+    /// The `MatchHash` instruction remaps the sparse type tag to a dense
+    /// `[0, K-1]` index via a compile-time minimal perfect hash. A subsequent
+    /// `JumpTable` dispatches on the dense index. `MatchHash` pushes `-1` for
+    /// unknown tags, which falls to the jump table's default arm.
+    ///
+    /// This replaces O(log K) `BinarySearch` (which emits ~4K instructions for
+    /// K=8) with just 3 instructions: `type_tag` + `match_hash` + `jump_table`.
+    ///
+    /// The perfect hash uses the multiply-shift family:
+    ///   `h(tag) = ((tag as u64).wrapping_mul(M) >> S) & mask`
+    ///
+    /// References:
+    /// - Neumann & Göbbert, "Improving Switch Statement Performance with
+    ///   Hashing Optimized at Compile Time"
+    /// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
+    /// - Proposed for LLVM (#96971), Roslyn (#66604), Go (#34381)
+    #[allow(clippy::cast_possible_wrap)]
+    fn emit_switch_perfect_hash(
+        &mut self,
+        discriminant: &Operand,
+        arms: &[(i64, BlockId)],
+        otherwise: BlockId,
+        hash_result: PerfectHashResult,
+        name_map: &std::collections::HashMap<i64, &str>,
+    ) {
+        // 1. Push discriminant (type tag) onto stack — consumed by DenseTag.
+        self.emit_operand_pull(discriminant);
+
+        // 2. Store the MatchHashTable in bytecode and emit DenseTag instruction.
+        let key_names: Vec<String> = arms
+            .iter()
+            .map(|(v, _)| {
+                name_map
+                    .get(v)
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| v.to_string())
+            })
+            .collect();
+        let table = MatchHashTable {
+            multiply: hash_result.multiply,
+            shift: hash_result.shift,
+            mask: hash_result.mask,
+            entries: hash_result.entries,
+            key_names,
+        };
+        let hash_table_idx = self.bytecode.match_hash_tables.len();
+        self.bytecode.match_hash_tables.push(table);
+        self.emit(Instruction::DenseTag(hash_table_idx));
+
+        // 3. Emit a dense JumpTable over [0, K-1].
+        //    The DenseTag output is dense by construction, so this is always
+        //    a compact table with no holes. We emit the JumpTable directly
+        //    (not via emit_switch_jump_table) because the dense index is
+        //    already on the stack from DenseTag — we must not re-push the
+        //    original discriminant.
+        let k = arms.len();
+        let dense_min = 0i64;
+        let dense_max = (k - 1) as i64;
+
+        let jt_table_idx = self.pending_jump_tables.len();
+        let mut jt = JumpTableData::new(dense_min, dense_max);
+
+        // Set symbolic names from the original arm names.
+        for (dense_idx, (orig_value, _)) in arms.iter().enumerate() {
+            if let Some(&name) = name_map.get(orig_value) {
+                jt.set_name(dense_idx as i64, name.to_string());
+            }
+        }
+
+        // Build dense arm mapping: dense_index → original BlockId.
+        let resolved_arms: Vec<(i64, PendingJumpTarget)> = arms
+            .iter()
+            .enumerate()
+            .map(|(dense_idx, (_, target))| {
+                (dense_idx as i64, self.resolve_pending_target(*target))
+            })
+            .collect();
+        let resolved_otherwise = self.resolve_pending_target(otherwise);
+
+        let jump_table_pc = self.emit(Instruction::JumpTable {
+            table_idx: jt_table_idx,
+            default: 0, // Will be patched later.
+        });
+
+        self.pending_jump_tables.push(PendingJumpTable {
+            table_idx: jt_table_idx,
+            jump_table_pc,
+            arms: resolved_arms,
+            otherwise: resolved_otherwise,
+            table: jt,
+        });
+    }
+
+    // ========================================================================
+    // Switch helpers
+    // ========================================================================
+
+    /// Resolve a label for a switch arm value from the name map,
+    /// falling back to the integer's string representation.
+    fn switch_label(value: i64, name_map: &std::collections::HashMap<i64, &str>) -> String {
+        name_map
+            .get(&value)
+            .map(|n| (*n).to_string())
+            .unwrap_or_else(|| value.to_string())
+    }
+
+    /// Emit: copy TOS, compare with `value` for equality; if equal, pop
+    /// discriminant and jump to `target`. On mismatch, fall through.
+    ///
+    /// Used by binary search where the discriminant stays on the stack across
+    /// the tree traversal. The if-else chain uses a different strategy
+    /// (re-loading the discriminant per arm) to avoid copy/pop overhead.
+    fn emit_compare_and_branch(&mut self, value: i64, target: BlockId, label: String) {
+        self.emit(Instruction::Copy(0));
+        let idx = self.add_constant(ConstValue::Int(value));
+        let inst = self.emit(Instruction::LoadConst(idx));
+        self.set_operand(inst, OperandMeta::Const(label));
+        self.emit(Instruction::CmpOp(CmpOp::Eq));
+        let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
+        self.emit(Instruction::Pop(1));
+        self.emit_jump_unless_fallthrough(target);
+        let skip_to = self.current_pc();
+        self.patch_jump_to(jump_idx, skip_to);
+    }
+
     // ========================================================================
     // Helpers
     // ========================================================================
-
-    /// Emit a `PushUnwind` instruction for a MIR unwind edge.
-    fn emit_push_unwind_handler(&mut self, unwind_block: BlockId) {
-        let error_local = self.resolve_unwind_error_local(unwind_block);
-        let error_slot = self.local_slot_or_panic(error_local, "PUSH_UNWIND error local");
-        let target = self.resolve_pending_target(unwind_block);
-        let inst = self.emit(Instruction::PushUnwind {
-            handler: 0,
-            error_slot,
-        });
-        self.set_var_operand(inst, error_slot);
-        self.pending_unwinds.push(PendingUnwind {
-            instruction_idx: inst,
-            target,
-        });
-    }
-
-    /// Look up the error local for a catch handler block.
-    ///
-    /// Uses the explicit metadata from MIR lowering (`unwind_error_locals`).
-    /// Falls back to heuristic inference for backwards compatibility with
-    /// MIR produced without the metadata (should not happen in practice).
-    fn resolve_unwind_error_local(&self, unwind_block: BlockId) -> Local {
-        if let Some(&local) = self.body.unwind_error_locals.get(&unwind_block) {
-            return local;
-        }
-
-        self.infer_unwind_error_local(unwind_block)
-    }
-
-    /// Heuristic fallback: infer the catch error local by scanning handler
-    /// block reads. Prefer locals with no definition (the synthetic error slot).
-    fn infer_unwind_error_local(&self, unwind_block: BlockId) -> Local {
-        let block = self.body.block(unwind_block);
-        let mut reads = Vec::new();
-
-        for stmt in &block.statements {
-            Self::collect_locals_read_in_statement(&stmt.kind, &mut reads);
-        }
-        if let Some(term) = &block.terminator {
-            Self::collect_locals_read_in_terminator(term, &mut reads);
-        }
-
-        let mut seen = HashSet::new();
-        reads.retain(|local| seen.insert(*local));
-
-        if let Some(local) = reads.iter().copied().find(|local| {
-            let is_parameter = matches!(
-                self.analysis.classifications.get(local),
-                Some(LocalClassification::Parameter)
-            );
-            let has_no_def = self
-                .analysis
-                .def_use
-                .get(local)
-                .is_some_and(|du| du.def.is_none());
-            !is_parameter && has_no_def
-        }) {
-            return local;
-        }
-
-        reads.first().copied().unwrap_or_else(|| {
-            panic!(
-                "unable to infer unwind error local for handler block {unwind_block:?}; no locals read"
-            )
-        })
-    }
-
-    fn collect_locals_in_place(place: &Place, out: &mut Vec<Local>) {
-        match place {
-            Place::Local(local) => out.push(*local),
-            Place::Capture(_) => {}
-            Place::Field { base, .. } => Self::collect_locals_in_place(base, out),
-            Place::Index { base, index, .. } => {
-                Self::collect_locals_in_place(base, out);
-                out.push(*index);
-            }
-        }
-    }
-
-    fn collect_locals_in_operand(operand: &Operand, out: &mut Vec<Local>) {
-        match operand {
-            Operand::Copy(place) | Operand::Move(place) => {
-                Self::collect_locals_in_place(place, out);
-            }
-            Operand::Constant(_) => {}
-        }
-    }
-
-    fn collect_locals_in_rvalue(rvalue: &Rvalue, out: &mut Vec<Local>) {
-        match rvalue {
-            Rvalue::Use(operand) => Self::collect_locals_in_operand(operand, out),
-            Rvalue::BinaryOp { left, right, .. } => {
-                Self::collect_locals_in_operand(left, out);
-                Self::collect_locals_in_operand(right, out);
-            }
-            Rvalue::UnaryOp { operand, .. } => Self::collect_locals_in_operand(operand, out),
-            Rvalue::Array(elements) => {
-                for operand in elements {
-                    Self::collect_locals_in_operand(operand, out);
-                }
-            }
-            Rvalue::Uint8Array(_) => {} // No locals referenced — data is inline
-            Rvalue::Map(entries) => {
-                for (key, value) in entries {
-                    Self::collect_locals_in_operand(key, out);
-                    Self::collect_locals_in_operand(value, out);
-                }
-            }
-            Rvalue::Aggregate { fields, .. } => {
-                for field in fields {
-                    Self::collect_locals_in_operand(field, out);
-                }
-            }
-            Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
-                Self::collect_locals_in_place(place, out);
-            }
-            Rvalue::IsType { operand, .. } => Self::collect_locals_in_operand(operand, out),
-            Rvalue::MakeClosure { captures, .. } => {
-                for cap in captures {
-                    Self::collect_locals_in_operand(cap, out);
-                }
-            }
-        }
-    }
-
-    fn collect_locals_read_in_statement(kind: &StatementKind, out: &mut Vec<Local>) {
-        match kind {
-            StatementKind::Assign { destination, value } => {
-                Self::collect_locals_in_rvalue(value, out);
-                match destination {
-                    Place::Local(_) | Place::Capture(_) => {}
-                    Place::Field { base, .. } => Self::collect_locals_in_place(base, out),
-                    Place::Index { base, index, .. } => {
-                        Self::collect_locals_in_place(base, out);
-                        out.push(*index);
-                    }
-                }
-            }
-            StatementKind::Drop(place) => Self::collect_locals_in_place(place, out),
-            StatementKind::Unwatch(local) | StatementKind::WatchNotify(local) => out.push(*local),
-            StatementKind::WatchOptions { local, filter } => {
-                out.push(*local);
-                Self::collect_locals_in_operand(filter, out);
-            }
-            StatementKind::NotifyBlock { .. }
-            | StatementKind::VizEnter(_)
-            | StatementKind::VizExit(_)
-            | StatementKind::Nop => {}
-        }
-    }
-
-    fn collect_locals_read_in_terminator(term: &Terminator, out: &mut Vec<Local>) {
-        match term {
-            Terminator::Goto { .. } | Terminator::Unreachable | Terminator::Return => {}
-            Terminator::Branch { condition, .. } => Self::collect_locals_in_operand(condition, out),
-            Terminator::Switch { discriminant, .. } => {
-                Self::collect_locals_in_operand(discriminant, out);
-            }
-            Terminator::Call { callee, args, .. }
-            | Terminator::DispatchFuture { callee, args, .. } => {
-                Self::collect_locals_in_operand(callee, out);
-                for arg in args {
-                    Self::collect_locals_in_operand(arg, out);
-                }
-            }
-            Terminator::Await { future, .. } => Self::collect_locals_in_place(future, out),
-            Terminator::Throw { value } => Self::collect_locals_in_operand(value, out),
-        }
-    }
 
     /// Convert MIR `BinOp` to VM instruction.
     fn binop_instruction(op: BinOp) -> Instruction {
@@ -1833,7 +2045,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // cell pointers (LoadVar) not cell values (LoadDeref). We intercept
                 // here so that `emit_rvalue_pull` (which sets loading_for_closure_capture)
                 // is called rather than the generic `walk_rvalue_pull` inlining path.
-                if matches!(rvalue, Rvalue::MakeClosure { .. }) {
+                // MakeBoundMethod must also be handled specially: it is not handled by
+                // `walk_rvalue_pull` (which panics on it), so route through `emit_rvalue_pull`.
+                if matches!(
+                    rvalue,
+                    Rvalue::MakeClosure { .. } | Rvalue::MakeBoundMethod { .. }
+                ) {
                     self.emit_rvalue_pull(&rvalue);
                     return Ok(LocalPullAction::Done);
                 }
@@ -1956,13 +2173,8 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
-    fn copy_top(&mut self, offset: usize) -> Result<(), Self::Error> {
-        self.emit(Instruction::Copy(offset));
-        Ok(())
-    }
-
-    fn store_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error> {
-        let idx = self.emit(Instruction::StoreField(field_idx));
+    fn init_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error> {
+        let idx = self.emit(Instruction::InitField(field_idx));
         self.set_operand(idx, OperandMeta::Field(name.to_string()));
         Ok(())
     }
@@ -2019,15 +2231,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error> {
-        // Emit instanceof check for nominal class checks.
         if let Ty::Class(tn, _) | Ty::TypeAlias(tn, _) = ty {
             let class_name_str = tn.display_name.as_str();
             if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
-                let class_const =
-                    self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
-                let inst = self.emit(Instruction::LoadConst(class_const));
+                let c = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
+                let inst = self.emit(Instruction::IsType(c));
                 self.set_operand(inst, OperandMeta::Const(class_name_str.to_string()));
-                self.emit(Instruction::CmpOp(CmpOp::InstanceOf));
             } else {
                 self.emit(Instruction::Pop(1));
                 let idx = self.add_constant(ConstValue::Bool(false));
@@ -2037,7 +2246,6 @@ impl PullSink for StackifyCodegen<'_, '_> {
             return Ok(());
         }
 
-        // Primitive and builtin runtime kinds use type tags.
         let type_tag = match ty {
             Ty::Int { .. } => Some(baml_type::typetag::INT),
             Ty::String { .. } => Some(baml_type::typetag::STRING),
@@ -2059,11 +2267,9 @@ impl PullSink for StackifyCodegen<'_, '_> {
         };
 
         if let Some(tag) = type_tag {
-            self.emit(Instruction::TypeTag);
-            let idx = self.add_constant(ConstValue::Int(tag));
-            let inst = self.emit(Instruction::LoadConst(idx));
-            self.set_operand(inst, OperandMeta::Const(tag.to_string()));
-            self.emit(Instruction::CmpOp(CmpOp::Eq));
+            let c = self.add_constant(ConstValue::Int(tag));
+            let inst = self.emit(Instruction::IsType(c));
+            self.set_operand(inst, OperandMeta::Const(ty.to_string()));
         } else {
             self.emit(Instruction::Pop(1));
             let idx = self.add_constant(ConstValue::Bool(false));
@@ -2158,7 +2364,10 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
         let channel_const_idx =
             self.add_constant(ConstValue::Object(ObjectIndex::from_raw(channel_obj_idx)));
         let inst = self.emit(Instruction::LoadConst(channel_const_idx));
-        self.set_operand(inst, OperandMeta::Const(format!("\"{channel}\"")));
+        self.set_operand(
+            inst,
+            OperandMeta::Const(Self::display_string_operand(&channel)),
+        );
         Ok(())
     }
 
@@ -2177,11 +2386,12 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
 /// Compile a MIR function body to bytecode using stackification.
 ///
 /// This is the main entry point for the optimized MIR-based code generation.
-/// The caller is responsible for filling in `Function::name` and `Function::span`
-/// after this returns.
+/// The caller is responsible for filling in `Function::name` after this returns.
+/// If `mir_span` is provided, it is used to set `Function::span`.
 pub(crate) fn compile_mir_function<'mir>(
     body: &'mir MirFunctionBody,
     arity: usize,
+    mir_span: Option<baml_base::Span>,
     line_starts: &'mir [u32],
     ctx: MirCodegenContext<'mir, '_>,
     opt: crate::analysis::OptLevel,
@@ -2193,5 +2403,9 @@ pub(crate) fn compile_mir_function<'mir>(
 
     // Compile with stackification
     let codegen = StackifyCodegen::new(body, arity, line_starts, ctx, analysis);
-    codegen.compile()
+    let mut f = codegen.compile();
+    if let Some(span) = mir_span {
+        f.span = span;
+    }
+    f
 }

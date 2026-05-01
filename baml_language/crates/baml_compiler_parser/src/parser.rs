@@ -298,6 +298,10 @@ impl<'a> Parser<'a> {
         self.current().is_none()
     }
 
+    fn at_end_raw(&self) -> bool {
+        self.current_raw().is_none()
+    }
+
     /// Check if current token matches the given kind
     fn at(&self, kind: TokenKind) -> bool {
         self.current().map(|t| t.kind == kind).unwrap_or(false)
@@ -1351,9 +1355,12 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::STRING_LITERAL, |p| {
             p.bump(); // Opening quote
 
-            // Collect all tokens until closing quote
+            // Collect all tokens until closing quote.
+            // Use at_end_raw / at_raw / bump_raw throughout so that `*/`
+            // and `//` inside the string are kept as literal content instead
+            // of being mis-recognised as comment delimiters.
             let mut loop_counter = 0;
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 loop_counter += 1;
                 if loop_counter > 100_000 {
                     p.error_unexpected_token("String parsing exceeded iteration limit".to_string());
@@ -1362,27 +1369,19 @@ impl<'a> Parser<'a> {
 
                 if p.at_raw(TokenKind::Backslash) {
                     p.bump_raw(); // Consume backslash
-                    if let Some(directly_after) = p.tokens.get(p.current)
-                        && directly_after.kind == TokenKind::Quote
-                    {
-                        p.bump_raw(); // Consume quote without ending string
+                    if p.current < p.tokens.len() {
+                        p.bump_raw(); // Consume the escaped character (whatever it is)
                     }
                     continue;
                 }
 
-                // Check if next token is the closing quote
-                // Use at_raw to avoid skipping // as comments - we want the actual next token
                 if p.at_raw(TokenKind::Quote) {
                     p.bump_raw(); // Consume closing quote
                     return;
                 }
-                // Not a quote - consume as string content
-                // Use bump_raw() to avoid treating // as comments inside strings
                 p.bump_raw();
             }
 
-            // If we get here, we reached EOF without finding closing quote
-            // eprintln!("[PARSE_STRING] Reached EOF without closing quote");
             p.error_unexpected_token("Unclosed string literal".to_string());
         });
 
@@ -1417,7 +1416,7 @@ impl<'a> Parser<'a> {
 
             // Collect all tokens until closing quote (same logic as parse_string).
             let mut loop_counter = 0;
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 loop_counter += 1;
                 if loop_counter > 100_000 {
                     p.error_unexpected_token(
@@ -1428,10 +1427,8 @@ impl<'a> Parser<'a> {
 
                 if p.at_raw(TokenKind::Backslash) {
                     p.bump_raw(); // Consume backslash
-                    if let Some(directly_after) = p.tokens.get(p.current)
-                        && directly_after.kind == TokenKind::Quote
-                    {
-                        p.bump_raw(); // Consume escaped quote
+                    if p.current < p.tokens.len() {
+                        p.bump_raw(); // Consume the escaped character (whatever it is)
                     }
                     continue;
                 }
@@ -1502,7 +1499,7 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            if self.at_end() {
+            if self.at_end_raw() {
                 self.error_unexpected_token(format!(
                     "Unclosed raw string (expected \"{}\")",
                     "#".repeat(opening_hashes)
@@ -1515,9 +1512,9 @@ impl<'a> Parser<'a> {
                 let closing_hashes = self.count_consecutive_hashes_after_quote();
                 if closing_hashes == opening_hashes {
                     // Found matching closing delimiter
-                    self.bump(); // Closing "
+                    self.bump_raw(); // Closing "
                     for _ in 0..closing_hashes {
-                        self.bump(); // #
+                        self.bump_raw(); // #
                     }
                     break;
                 }
@@ -1558,12 +1555,12 @@ impl<'a> Parser<'a> {
     /// Parse a Jinja expression: {{ ... }}
     fn parse_jinja_expression(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::TEMPLATE_INTERPOLATION, |p| {
-            p.bump(); // {
-            p.bump(); // {
+            p.bump_raw(); // {
+            p.bump_raw(); // {
 
             // Collect tokens until we find }}
             let mut depth = 1;
-            while !p.at_end() && depth > 0 {
+            while !p.at_end_raw() && depth > 0 {
                 if p.at_raw(TokenKind::Quote)
                     && p.count_consecutive_hashes_after_quote() == opening_hashes
                 {
@@ -1581,8 +1578,8 @@ impl<'a> Parser<'a> {
                 {
                     depth -= 1;
                     if depth == 0 {
-                        p.bump(); // }
-                        p.bump(); // }
+                        p.bump_raw(); // }
+                        p.bump_raw(); // }
                         break;
                     }
                     p.bump_raw();
@@ -1601,11 +1598,11 @@ impl<'a> Parser<'a> {
     /// Parse a Jinja statement: {% ... %}
     fn parse_jinja_statement(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::TEMPLATE_CONTROL, |p| {
-            p.bump(); // {
-            p.bump(); // %
+            p.bump_raw(); // {
+            p.bump_raw(); // %
 
             // Collect tokens until we find %}
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 if p.at_raw(TokenKind::Quote)
                     && p.count_consecutive_hashes_after_quote() == opening_hashes
                 {
@@ -1615,8 +1612,8 @@ impl<'a> Parser<'a> {
                 if p.at_raw(TokenKind::Percent)
                     && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
                 {
-                    p.bump(); // %
-                    p.bump(); // }
+                    p.bump_raw(); // %
+                    p.bump_raw(); // }
                     break;
                 }
                 p.bump_raw();
@@ -1627,11 +1624,11 @@ impl<'a> Parser<'a> {
     /// Parse a Jinja comment: {# ... #}
     fn parse_jinja_comment(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::TEMPLATE_COMMENT, |p| {
-            p.bump(); // {
-            p.bump(); // #
+            p.bump_raw(); // {
+            p.bump_raw(); // #
 
             // Collect tokens until we find #}
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 if p.at_raw(TokenKind::Quote)
                     && p.count_consecutive_hashes_after_quote() == opening_hashes
                 {
@@ -1641,8 +1638,8 @@ impl<'a> Parser<'a> {
                 if p.at_raw(TokenKind::Hash)
                     && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
                 {
-                    p.bump(); // #
-                    p.bump(); // }
+                    p.bump_raw(); // #
+                    p.bump_raw(); // }
                     break;
                 }
                 p.bump_raw();
@@ -1656,7 +1653,7 @@ impl<'a> Parser<'a> {
     fn parse_prompt_text(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::PROMPT_TEXT, |p| {
             // Collect tokens until we hit a Jinja construct or closing delimiter
-            while !p.at_end() {
+            while !p.at_end_raw() {
                 // Check for closing delimiter
                 if p.at_raw(TokenKind::Quote) {
                     let closing_hashes = p.count_consecutive_hashes_after_quote();
@@ -2011,6 +2008,12 @@ impl<'a> Parser<'a> {
             // Note: The tokens are already emitted, we just need to parse the return type
             self.bump(); // ->
             self.parse_type(); // return type
+            if self.at(TokenKind::Throws) {
+                self.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
+                    p.bump(); // throws
+                    p.parse_type();
+                });
+            }
         // The caller's with_node(TYPE_EXPR) will wrap this appropriately
         } else {
             // Not a function type - should be a parenthesized type
@@ -2233,6 +2236,9 @@ impl<'a> Parser<'a> {
                 } else if p.at(TokenKind::Word) {
                     // Field declaration
                     p.parse_field();
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
                 } else {
                     // Skip unexpected token
                     p.error_unexpected_token("Unexpected token in class body".to_string());
@@ -2299,7 +2305,6 @@ impl<'a> Parser<'a> {
                     p.error(format!("field '{name}' is missing a type annotation"), span);
                 }
             }
-            // TODO: once we decide which, parse optional comma or semicolon
         });
     }
 
@@ -2410,16 +2415,21 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("parameter name".to_string());
             }
 
-            // Type annotation - requires "name: type" syntax
+            // Type annotation - colon is optional per BEP-019
             // 'self' parameter does not have a type annotation
             if is_self {
                 // No type annotation for self
-            } else if p.eat(TokenKind::Colon) {
+                return;
+            }
+
+            let has_colon = p.eat(TokenKind::Colon);
+
+            // Check if there's a newline before the next token.
+            // Consistent with class field parsing: if no colon, type must be on the same line.
+            let newline_before_type = p.has_newline_ahead();
+            let has_type = p.is_at_type_start() && (!newline_before_type || has_colon);
+            if has_type {
                 p.parse_type();
-            } else if p.is_at_type_start() {
-                // Heuristic for if they're trying to do a type annotation without a colon
-                p.error_unexpected_token("':'".to_string());
-                p.parse_type(); // Parse the type anyway, so errors don't cascade
             } else {
                 p.error_unexpected_token("type annotation".to_string());
             }
@@ -2611,8 +2621,10 @@ impl<'a> Parser<'a> {
             // Lambda params have optional type annotations (unlike function params)
             p.parse_lambda_parameter_list();
 
-            // Arrow is required
-            if !p.eat(TokenKind::Arrow) {
+            // Arrow is required. Accept `->` (canonical) or `=>` (formatter
+            // will normalize to `->`, matching the optional-colon pattern for
+            // function parameters).
+            if !p.eat(TokenKind::Arrow) && !p.eat(TokenKind::FatArrow) {
                 p.error_unexpected_token("'->' after lambda parameters".to_string());
             }
 
@@ -2821,8 +2833,8 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::RETURN_STMT, |p| {
             p.expect(TokenKind::Return);
 
-            // Optional return value
-            if !p.at(TokenKind::RBrace) && !p.at_end() {
+            // Optional return value — bare `return;` is valid (e.g. in void functions).
+            if !p.at(TokenKind::Semicolon) && !p.at(TokenKind::RBrace) && !p.at_end() {
                 p.parse_expr();
             }
 
@@ -3116,6 +3128,13 @@ impl<'a> Parser<'a> {
                 return;
             }
             p.parse_catch_pattern();
+            // Optional second binding: catch (e, stack_trace)
+            if p.at(TokenKind::Comma) {
+                p.bump(); // consume ','
+                p.with_node(SyntaxKind::CATCH_STACK_TRACE_BINDING, |p| {
+                    p.expect(TokenKind::Word);
+                });
+            }
             p.expect(TokenKind::RParen);
 
             if !p.at(TokenKind::LBrace) {
@@ -3885,35 +3904,89 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Check if < starts generic arguments rather than a comparison
-    /// Generic args: foo<Type>, foo<A, B>
-    /// Comparison: a < b
+    /// Check if `<` starts generic arguments rather than a comparison.
+    ///
+    /// TypeScript-style disambiguation: scan ahead to balance `<...>`,
+    /// allowing only tokens that could appear inside a type-argument list,
+    /// and commit to generic only if the token after the closing `>` is one
+    /// that can't follow a comparison expression — `(`, `{`, or `.`.
+    ///
+    /// Examples:
+    ///   - `f<K, V>(x)`        → `>` followed by `(` → generic call
+    ///   - `Box<int> { ... }`  → `>` followed by `{` → generic constructor
+    ///   - `Wrapper<T>.of(x)`  → `>` followed by `.` → generic-qualified path
+    ///   - `[a < b, c > d]`    → `>` followed by `d` (Word) → comparisons
+    ///   - `a < b()`           → contains `(` inside → comparison
     fn looks_like_generic_args(&self) -> bool {
         if !self.at(TokenKind::Less) {
             return false;
         }
 
-        // Look ahead to see if it's a type name followed by > or ,
-        if let Some(token_after_less) = self.peek(1) {
-            // Must be a word (type name)
-            if token_after_less.kind == TokenKind::Word {
-                // Check what comes after the word
-                if let Some(token_after_word) = self.peek(2) {
-                    // Generic args end with > or have comma for multiple args
-                    if token_after_word.kind == TokenKind::Greater
-                        || token_after_word.kind == TokenKind::Comma
-                    {
-                        return true;
-                    }
-                    // Could also have nested generics: Foo<Bar<T>>
-                    if token_after_word.kind == TokenKind::Less {
-                        return true;
+        let mut depth: i32 = 1;
+        let mut i: usize = 1;
+        loop {
+            let Some(tok) = self.peek(i) else {
+                return false;
+            };
+            match tok.kind {
+                TokenKind::Less => depth += 1,
+                TokenKind::Greater => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Self::is_generic_args_follow(self.peek(i + 1).map(|t| t.kind));
                     }
                 }
+                // `>>` closes two levels at once. Only treat it as a dual
+                // closer when there are actually two levels open — otherwise
+                // it's a shift/comparison sequence (e.g. `a < b >> c`).
+                TokenKind::GreaterGreater => {
+                    if depth < 2 {
+                        return false;
+                    }
+                    depth -= 2;
+                    if depth == 0 {
+                        return Self::is_generic_args_follow(self.peek(i + 1).map(|t| t.kind));
+                    }
+                }
+                // Tokens that can legally appear inside a type-argument
+                // list. Mirror the start tokens accepted by `parse_type` /
+                // `parse_type_primary`:
+                // - `Word` / `Dot` for type names and qualified paths
+                // - `Comma` between args
+                // - `LBracket` / `RBracket` for array suffix `T[]`
+                // - `Question` for optional `T?`
+                // - `Pipe` for unions `A | B`
+                // - `IntegerLiteral` / `FloatLiteral` for literal-union members
+                // - `Quote` / `Hash` for string-literal types (`"a"`,
+                //   `#"raw"#`)
+                // - `LParen` / `RParen` for parenthesized union types
+                //   (`(int | string)`)
+                TokenKind::Word
+                | TokenKind::Dot
+                | TokenKind::Comma
+                | TokenKind::LBracket
+                | TokenKind::RBracket
+                | TokenKind::Question
+                | TokenKind::Pipe
+                | TokenKind::IntegerLiteral
+                | TokenKind::FloatLiteral
+                | TokenKind::Quote
+                | TokenKind::Hash
+                | TokenKind::LParen
+                | TokenKind::RParen => {}
+                // Anything else — operators, braces, EOF-ish tokens — can't
+                // appear in a type, so this `<` is a comparison.
+                _ => return false,
             }
+            i += 1;
         }
+    }
 
-        false
+    fn is_generic_args_follow(kind: Option<TokenKind>) -> bool {
+        matches!(
+            kind,
+            Some(TokenKind::LParen | TokenKind::LBrace | TokenKind::Dot)
+        )
     }
 
     /// Parse generic arguments: <Type1, Type2, ...>
@@ -4025,9 +4098,12 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        // `( ) ->` → zero-param lambda
+        // `( ) ->` or `( ) =>` → zero-param lambda
         if self.peek(1).map(|t| t.kind) == Some(TokenKind::RParen)
-            && self.peek(2).map(|t| t.kind) == Some(TokenKind::Arrow)
+            && matches!(
+                self.peek(2).map(|t| t.kind),
+                Some(TokenKind::Arrow | TokenKind::FatArrow)
+            )
         {
             return true;
         }
@@ -4052,8 +4128,11 @@ impl<'a> Parser<'a> {
                 TokenKind::RParen => {
                     depth -= 1;
                     if depth == 0 {
-                        // Check if `->` follows the closing `)`
-                        return self.peek(offset + 1).map(|t| t.kind) == Some(TokenKind::Arrow);
+                        // Check if `->` or `=>` follows the closing `)`
+                        return matches!(
+                            self.peek(offset + 1).map(|t| t.kind),
+                            Some(TokenKind::Arrow | TokenKind::FatArrow)
+                        );
                     }
                 }
                 _ => {}
@@ -5097,9 +5176,9 @@ mod tests {
     }
 
     #[test]
-    fn error_on_parameter_type_without_colon() {
-        // When the user writes `x int` instead of `x: int`, the parser should
-        // report a missing ':' error but still parse the type to avoid cascading errors.
+    fn accepts_parameter_type_without_colon() {
+        // BEP-019: colons are optional in function parameters.
+        // `x int` is valid syntax (formatter will add the colon).
         let source = r#"
 function Demo(x int) -> int {
   x
@@ -5108,19 +5187,10 @@ function Demo(x int) -> int {
 
         let (root, errors) = parse_source(source);
 
-        // Should report a missing ':' error
-        assert!(
-            errors.iter().any(|error| {
-                matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. }
-                        if expected == "':'"
-                )
-            }),
-            "expected an error about missing ':', got: {errors:#?}"
-        );
+        // No errors expected - colons are optional
+        assert_no_errors(&errors);
 
-        // The parameter node should still contain the type
+        // The parameter node should contain the type
         let param = root
             .descendants()
             .find(|n| n.kind() == SyntaxKind::PARAMETER)
@@ -5128,7 +5198,7 @@ function Demo(x int) -> int {
         let param_text = param.text().to_string();
         assert!(
             param_text.contains("int"),
-            "parameter should still contain the type 'int', got: {param_text:?}"
+            "parameter should contain the type 'int', got: {param_text:?}"
         );
     }
 
@@ -5188,6 +5258,31 @@ class Response {
     }
 
     #[test]
+    fn raw_string_keeps_comment_markers_as_text() {
+        for marker in ["//", "*/"] {
+            let source = format!(
+                r##"
+function Demo() -> string {{
+  #"{marker}"#
+}}
+"##
+            );
+
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+
+            let raw_string = root
+                .descendants()
+                .find(|n| n.kind() == SyntaxKind::RAW_STRING_LITERAL)
+                .expect("expected raw string literal");
+            assert!(
+                raw_string.text().to_string().contains(marker),
+                "raw string should retain marker {marker:?}: {raw_string:?}"
+            );
+        }
+    }
+
+    #[test]
     fn parses_function_with_client_as_parameter_name() {
         // `client` is a keyword (KW_CLIENT); it must still be valid as a parameter name.
         let source = r#"
@@ -5244,8 +5339,9 @@ function f() -> int {
     }
 
     #[test]
-    fn error_on_parameter_parenthesized_type_without_colon() {
-        // When the user writes `x (int | string)` instead of `x: (int | string)`,
+    fn accepts_parameter_parenthesized_type_without_colon() {
+        // BEP-019: colons are optional in function parameters.
+        // `x (int | string)` is valid syntax.
         let source = r#"
 function Demo(x (int | string)) -> int {
   1
@@ -5254,16 +5350,7 @@ function Demo(x (int | string)) -> int {
 
         let (root, errors) = parse_source(source);
 
-        assert!(
-            errors.iter().any(|error| {
-                matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. }
-                        if expected == "':'"
-                )
-            }),
-            "expected an error about missing ':', got: {errors:#?}"
-        );
+        assert_no_errors(&errors);
 
         let param = root
             .descendants()
@@ -5272,13 +5359,14 @@ function Demo(x (int | string)) -> int {
         let param_text = param.text().to_string();
         assert!(
             param_text.contains("int"),
-            "parameter should still contain parsed type, got: {param_text:?}"
+            "parameter should contain parsed type, got: {param_text:?}"
         );
     }
 
     #[test]
-    fn error_on_parameter_string_literal_type_without_colon() {
-        // When the user writes `x "hello"` instead of `x: "hello"`,
+    fn accepts_parameter_string_literal_type_without_colon() {
+        // BEP-019: colons are optional in function parameters.
+        // `x "hello"` is valid syntax.
         let source = r#"
 function Demo(x "hello") -> int {
   1
@@ -5287,16 +5375,7 @@ function Demo(x "hello") -> int {
 
         let (root, errors) = parse_source(source);
 
-        assert!(
-            errors.iter().any(|error| {
-                matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. }
-                        if expected == "':'"
-                )
-            }),
-            "expected an error about missing ':', got: {errors:#?}"
-        );
+        assert_no_errors(&errors);
 
         let param = root
             .descendants()
@@ -5305,13 +5384,14 @@ function Demo(x "hello") -> int {
         let param_text = param.text().to_string();
         assert!(
             param_text.contains("hello"),
-            "parameter should still contain parsed type, got: {param_text:?}"
+            "parameter should contain parsed type, got: {param_text:?}"
         );
     }
 
     #[test]
-    fn error_on_parameter_raw_string_type_without_colon() {
-        // When the user writes `x #"hello"#` instead of `x: #"hello"#`,
+    fn accepts_parameter_raw_string_type_without_colon() {
+        // BEP-019: colons are optional in function parameters.
+        // `x #"hello"#` is valid syntax.
         let source = r##"
 function Demo(x #"hello"#) -> int {
   1
@@ -5320,16 +5400,7 @@ function Demo(x #"hello"#) -> int {
 
         let (root, errors) = parse_source(source);
 
-        assert!(
-            errors.iter().any(|error| {
-                matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. }
-                        if expected == "':'"
-                )
-            }),
-            "expected an error about missing ':', got: {errors:#?}"
-        );
+        assert_no_errors(&errors);
 
         let param = root
             .descendants()
@@ -5338,13 +5409,14 @@ function Demo(x #"hello"#) -> int {
         let param_text = param.text().to_string();
         assert!(
             param_text.contains("hello"),
-            "parameter should still contain parsed type, got: {param_text:?}"
+            "parameter should contain parsed type, got: {param_text:?}"
         );
     }
 
     #[test]
-    fn error_on_parameter_integer_literal_type_without_colon() {
-        // When the user writes `x 200` instead of `x: 200`,
+    fn accepts_parameter_integer_literal_type_without_colon() {
+        // BEP-019: colons are optional in function parameters.
+        // `x 200` is valid syntax.
         let source = r#"
 function Demo(x 200) -> int {
   1
@@ -5353,16 +5425,7 @@ function Demo(x 200) -> int {
 
         let (root, errors) = parse_source(source);
 
-        assert!(
-            errors.iter().any(|error| {
-                matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. }
-                        if expected == "':'"
-                )
-            }),
-            "expected an error about missing ':', got: {errors:#?}"
-        );
+        assert_no_errors(&errors);
 
         let param = root
             .descendants()
@@ -5371,40 +5434,7 @@ function Demo(x 200) -> int {
         let param_text = param.text().to_string();
         assert!(
             param_text.contains("200"),
-            "parameter should still contain parsed type, got: {param_text:?}"
-        );
-    }
-
-    #[test]
-    fn error_on_parameter_float_literal_type_without_colon() {
-        // When the user writes `x 3.14` instead of `x: 3.14`,
-        let source = r#"
-function Demo(x 3.14) -> int {
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-
-        assert!(
-            errors.iter().any(|error| {
-                matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. }
-                        if expected == "':'"
-                )
-            }),
-            "expected an error about missing ':', got: {errors:#?}"
-        );
-
-        let param = root
-            .descendants()
-            .find(|n| n.kind() == SyntaxKind::PARAMETER)
-            .expect("expected PARAMETER node");
-        let param_text = param.text().to_string();
-        assert!(
-            param_text.contains("3.14"),
-            "parameter should still contain parsed type, got: {param_text:?}"
+            "parameter should contain parsed type, got: {param_text:?}"
         );
     }
 
@@ -5585,5 +5615,38 @@ function Demo() -> int {
         let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
         assert_eq!(child_kinds[0], SyntaxKind::THROW_EXPR);
         assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
+    }
+
+    #[test]
+    fn parses_function_type_throws_clause() {
+        let source = r#"
+type Callback = (value: int) -> string throws Foo
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let function_type =
+            root.descendants()
+                .find(|n| {
+                    n.kind() == SyntaxKind::TYPE_EXPR && n.children_with_tokens().any(|child| {
+                        matches!(
+                            child,
+                            rowan::NodeOrToken::Token(token) if token.kind() == SyntaxKind::ARROW
+                        )
+                    })
+                })
+                .expect("expected function TYPE_EXPR");
+
+        let throws = function_type
+            .children()
+            .find(|n| n.kind() == SyntaxKind::THROWS_CLAUSE)
+            .expect("expected THROWS_CLAUSE under function type");
+
+        assert!(
+            throws.text().to_string().contains("throws Foo"),
+            "expected function type throws clause text, got {:?}",
+            throws.text().to_string()
+        );
     }
 }

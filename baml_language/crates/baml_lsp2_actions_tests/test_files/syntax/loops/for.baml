@@ -67,5 +67,5 @@ function SumUnknownType(xs: int, b: string) -> int {
 //     │                   ─┬  
 //     │                    ╰── cannot iterate over type `int`
 //     │ 
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0006
 // ────╯

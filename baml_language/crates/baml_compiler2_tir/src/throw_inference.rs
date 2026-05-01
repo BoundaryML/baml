@@ -8,10 +8,10 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, TypeExpr};
+use baml_compiler2_ast::{Expr, ExprBody, Literal, TypeExpr};
 use baml_compiler2_hir::{
     contributions::Definition,
-    package::{PackageId, PackageItems, package_dependencies, package_items},
+    package::{PackageId, PackageItems, package_dependencies},
 };
 
 use crate::{
@@ -63,7 +63,7 @@ pub fn function_throw_sets<'db>(
     db: &'db dyn crate::Db,
     package_id: PackageId<'db>,
 ) -> FunctionThrowSets {
-    let pkg_items = package_items(db, package_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, package_id);
     // Load dependency interfaces for cross-package throw lookup
     let dep_interfaces: Vec<(Name, &crate::package_interface::PackageInterface)> =
         package_dependencies(db, package_id)
@@ -90,14 +90,14 @@ pub fn function_throw_sets<'db>(
             };
 
             let key = function_key(db, *func_loc, short_name);
-            let sig = baml_compiler2_hir::signature::function_signature(db, *func_loc);
-            let body = baml_compiler2_hir::body::function_body(db, *func_loc);
+            let sig = baml_compiler2_ppir::function_signature(db, *func_loc);
+            let body = baml_compiler2_ppir::function_body(db, *func_loc);
             let func_ns = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
                 .namespace_path;
 
             let declared_throws = sig.throws.as_ref().map(|te| {
                 let mut diags = Vec::new();
-                let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
+                let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
                 let func_data = &item_tree[func_loc.id(db)];
                 let lowered = lower_type_expr_in_ns(
                     db,
@@ -133,7 +133,7 @@ pub fn function_throw_sets<'db>(
                 continue;
             };
             let file = class_loc.file(db);
-            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
             let class_data = &item_tree[class_loc.id(db)];
 
             for &method_id in &class_data.methods {
@@ -144,8 +144,8 @@ pub fn function_throw_sets<'db>(
                 let method_short = Name::new(format!("{class_name}.{method_name}"));
                 let key = function_key(db, func_loc, &method_short);
 
-                let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-                let body = baml_compiler2_hir::body::function_body(db, func_loc);
+                let sig = baml_compiler2_ppir::function_signature(db, func_loc);
+                let body = baml_compiler2_ppir::function_body(db, func_loc);
 
                 let method_ns =
                     baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
@@ -241,6 +241,23 @@ pub fn function_throw_sets<'db>(
     FunctionThrowSets { direct, transitive }
 }
 
+/// Build the throw-set lookup key for a function given its namespace path and short name.
+///
+/// For top-level functions the key is just the short name; for namespaced
+/// functions it is `"ns1.ns2.name"`.
+pub fn throw_set_key(namespace_path: &[Name], short_name: &Name) -> Name {
+    if namespace_path.is_empty() {
+        short_name.clone()
+    } else {
+        let mut parts: Vec<String> = namespace_path
+            .iter()
+            .map(|n| n.as_str().to_string())
+            .collect();
+        parts.push(short_name.as_str().to_string());
+        Name::new(parts.join("."))
+    }
+}
+
 fn function_key<'db>(
     db: &'db dyn crate::Db,
     func: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -248,17 +265,7 @@ fn function_key<'db>(
 ) -> Name {
     let file = func.file(db);
     let pkg = baml_compiler2_hir::file_package::file_package(db, file);
-    if pkg.namespace_path.is_empty() {
-        short_name.clone()
-    } else {
-        let mut parts: Vec<String> = pkg
-            .namespace_path
-            .iter()
-            .map(|n| n.as_str().to_string())
-            .collect();
-        parts.push(short_name.as_str().to_string());
-        Name::new(parts.join("."))
-    }
+    throw_set_key(&pkg.namespace_path, short_name)
 }
 
 pub fn collect_direct_throws<'db>(
@@ -302,7 +309,7 @@ pub fn collect_direct_throws<'db>(
 fn fact_display_name(fact: &Ty) -> String {
     match fact {
         Ty::Primitive(p, _) => p.to_string(),
-        Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
+        Ty::Class(qn, _, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
         Ty::EnumVariant(qn, variant, _) => format!("{qn}.{variant}"),
         Ty::Unknown { .. } => "unknown".to_string(),
         _ => format!("{fact}"),
@@ -342,31 +349,15 @@ fn throw_fact_from_expr<'db>(
         Expr::Path(segments) if !segments.is_empty() => {
             resolve_path_to_ty(db, pkg_items, ns_context, segments)
         }
-        Expr::FieldAccess { .. } => expr_to_path(expr_id, body)
+        Expr::MemberAccess { .. } => expr_to_path(expr_id, body)
             .map(|segments| resolve_path_to_ty(db, pkg_items, ns_context, &segments))
             .unwrap_or(Ty::Unknown {
                 attr: TyAttr::default(),
             }),
         Expr::Object {
-            type_name: Some(name),
+            type_name: Some(path),
             ..
-        } => {
-            if let Some(def) = pkg_items.lookup_type(ns_context, name) {
-                match def {
-                    Definition::Class(_) => {
-                        Ty::Class(qualify_def(db, def, name), TyAttr::default())
-                    }
-                    Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
-                    _ => Ty::Unknown {
-                        attr: TyAttr::default(),
-                    },
-                }
-            } else {
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
-            }
-        }
+        } => resolve_path_to_ty(db, pkg_items, ns_context, path.segments()),
         _ => Ty::Unknown {
             attr: TyAttr::default(),
         },
@@ -428,9 +419,28 @@ fn resolve_path_to_ty<'db>(
     } else {
         pkg_items.lookup_type(seg_ns, name)
     };
+    // Cross-package fallback for qualified paths whose first segment names
+    // either the literal `root` package (own-package alias) or another
+    // package the resolver knows about. Mirrors `lower_type_expr_in_ns` so
+    // throw-set type recovery works for `root.http.Response { ... }` literals
+    // and `baml.errors.DevOther` references inside throw expressions.
+    let def = def.or_else(|| {
+        if segments.len() < 2 {
+            return None;
+        }
+        if segments[0].as_str() == "root" {
+            pkg_items.lookup_type(&segments[1..segments.len() - 1], name)
+        } else {
+            let pkg_id = PackageId::new(db, segments[0].clone());
+            let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+            pkg.lookup_type(&segments[1..segments.len() - 1], name)
+        }
+    });
     if let Some(def) = def {
         return match def {
-            Definition::Class(_) => Ty::Class(qualify_def(db, def, name), TyAttr::default()),
+            Definition::Class(_) => {
+                Ty::Class(qualify_def(db, def, name), vec![], TyAttr::default())
+            }
             Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
             Definition::TypeAlias(_) => {
                 Ty::TypeAlias(qualify_def(db, def, name), TyAttr::default())
@@ -451,11 +461,8 @@ fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
     for (_, expr) in body.exprs.iter() {
         if let Expr::Catch { clauses, .. } = expr {
             for clause in clauses {
-                match &body.patterns[clause.binding] {
-                    Pattern::Binding(name) | Pattern::TypedBinding { name, .. } => {
-                        names.insert(name.as_str());
-                    }
-                    _ => {}
+                if let Some(name) = body.patterns[clause.binding].binding_name() {
+                    names.insert(name.as_str());
                 }
             }
         }
@@ -466,9 +473,9 @@ fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
 fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<Vec<Name>> {
     match &body.exprs[expr_id] {
         Expr::Path(segments) if !segments.is_empty() => Some(segments.clone()),
-        Expr::FieldAccess { base, field } => {
+        Expr::MemberAccess { base, member } => {
             let mut base_path = expr_to_path(*base, body)?;
-            base_path.push(field.clone());
+            base_path.push(member.clone());
             Some(base_path)
         }
         _ => None,

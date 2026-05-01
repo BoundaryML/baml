@@ -6,8 +6,6 @@
 
 use std::sync::Arc;
 
-use crate::EpochGuard;
-
 /// Trait for releasing handles back to the heap.
 ///
 /// This is implemented by `BexHeap` to allow handles to clean up
@@ -93,31 +91,6 @@ impl Handle {
         }
     }
 
-    /// Get a raw pointer to the object this handle points to.
-    ///
-    /// Requires an `EpochGuard` to prove the caller is in epoch-protected code.
-    /// This ensures GC cannot run and invalidate the returned pointer before
-    /// the caller uses it.
-    ///
-    /// # When to use
-    ///
-    /// Use this method when you need the HeapPtr for VM operations.
-    /// Only callable from epoch-protected code paths.
-    ///
-    /// # For external code
-    ///
-    /// External code (`baml_sys`) should use the heap accessor API instead:
-    /// - `heap.read_string(handle)`
-    /// - `heap.with_object(handle, |obj| ...)`
-    ///
-    /// Returns None if the handle has been invalidated.
-    pub fn object_ptr(&self, _guard: &EpochGuard<'_>) -> Option<bex_vm_types::HeapPtr> {
-        self.inner
-            .heap
-            .as_ref()?
-            .resolve_handle_ptr(self.inner.slab_key)
-    }
-
     /// Get the slab key for this handle.
     ///
     /// This is primarily for internal use by `bex_heap`.
@@ -154,7 +127,6 @@ mod tests {
 
         assert_eq!(handle1.slab_key(), 42);
         assert_eq!(handle2.slab_key(), 42);
-        // Note: object_ptr() requires EpochGuard and returns None for detached handles
     }
 
     #[test]

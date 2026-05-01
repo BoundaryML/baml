@@ -177,6 +177,22 @@ impl BexProject {
 
     fn update_bex(&self) -> Result<(), RuntimeError> {
         self.set_bex_outdated();
+
+        // Skip bytecode generation if there are any diagnostic errors.
+        {
+            let db = self.db.lock().unwrap();
+            let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
+            let has_errors = diagnostics
+                .iter()
+                .any(|d| d.severity == baml_compiler_diagnostics::Severity::Error);
+            if has_errors {
+                log::info!("update_bex: skipping — diagnostic errors present");
+                return Err(RuntimeError::Compilation {
+                    message: "Cannot generate bytecode: diagnostic errors present".to_string(),
+                });
+            }
+        }
+
         let bytecode = match self.get_bytecode() {
             Ok(bc) => bc,
             Err(e) => {
@@ -186,8 +202,12 @@ impl BexProject {
                 });
             }
         };
-        let runtime = match BexEngine::new(bytecode, self.sys_ops.clone(), self.event_sink.clone())
-        {
+        let runtime = match BexEngine::new(
+            bytecode,
+            self.sys_ops.clone(),
+            self.event_sink.clone(),
+            Vec::new(),
+        ) {
             Ok(r) => r,
             Err(e) => {
                 log::warn!("update_bex: BexEngine::new failed: {e}");

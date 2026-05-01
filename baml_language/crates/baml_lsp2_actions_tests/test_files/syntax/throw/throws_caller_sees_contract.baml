@@ -27,7 +27,7 @@ function Caller(x: int) -> string {
 //    │                                          ───┬───  
 //    │                                             ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0096
 // ───╯
 // Warning: extraneous throws declaration: user.Errors
 //    ╭─[ throw_throws_caller_sees_contract.baml:9:42 ]
@@ -36,23 +36,5 @@ function Caller(x: int) -> string {
 //    │                                          ───┬───  
 //    │                                             ╰───── extraneous throws declaration: user.Errors
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0097
 // ───╯
-// Warning: unreachable arm
-//     ╭─[ throw_throws_caller_sees_contract.baml:16:29 ]
-//     │
-//  16 │     Errors.NotFoundError => "notfound",
-//     │                             ─────┬────  
-//     │                                  ╰────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Warning: unreachable arm
-//     ╭─[ throw_throws_caller_sees_contract.baml:17:29 ]
-//     │
-//  17 │     Errors.InternalError => "internal"
-//     │                             ─────┬────  
-//     │                                  ╰────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯

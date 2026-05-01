@@ -1,0 +1,112 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+
+=== MIR2 (package assert) ===
+fn assert.contains(haystack: string, needle: string) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: string // haystack // param
+    let _2: string // needle // param
+    let _3: bool
+    let _4: bool
+
+    bb0: {
+        _4 = call const fn baml.String.includes(copy _1, copy _2) -> [bb1];
+    }
+
+    bb1: {
+        _3 = !copy _4;
+        branch copy _3 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _0 = const null;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = call const fn baml.sys.panic(const "assertion failed: string does not contain expected substring") -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn assert.equal(actual: unknown, expected: unknown) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: unknown // actual // param
+    let _2: unknown // expected // param
+    let _3: bool
+
+    bb0: {
+        _3 = copy _1 != copy _2;
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = call const fn baml.sys.panic(const "assertion failed: expected equal values") -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn assert.is_true(condition: bool) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: bool // condition // param
+    let _2: bool
+
+    bb0: {
+        _2 = !copy _1;
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = call const fn baml.sys.panic(const "assertion failed: expected true") -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn assert.not_null(value: unknown?) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: unknown? // value // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 == const null;
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = call const fn baml.sys.panic(const "assertion failed: expected non-null value") -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}

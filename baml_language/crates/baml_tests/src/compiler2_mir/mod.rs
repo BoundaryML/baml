@@ -6,7 +6,7 @@
 use std::fmt::Write;
 
 use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
-use baml_compiler2_mir::{lower_function, pretty::display_function};
+use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
 use baml_project::ProjectDatabase;
 use insta::{assert_snapshot, with_settings};
 
@@ -25,7 +25,7 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
 
     for (local_id, _func_data) in item_tree.functions.iter() {
         let func_loc = FunctionLoc::new(db, file, *local_id);
-        let mir = lower_function(db, func_loc);
+        let mir = lower_function(db, func_loc, OptLevel::Two);
         writeln!(output, "{}", display_function(&mir)).unwrap();
     }
 

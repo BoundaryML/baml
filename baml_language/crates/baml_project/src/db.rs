@@ -36,6 +36,10 @@ pub struct CursorContext {
     #[serde(default)]
     pub source_expr_candidates: Vec<u32>,
     pub test_name: Option<String>,
+    /// Byte offset of the cursor position in the source file.
+    /// Used for cursor ↔ event matching via span containment.
+    #[serde(default)]
+    pub cursor_offset: Option<u32>,
 }
 
 // Note: Builtin BAML files (like llm.baml) are loaded in set_project_root().
@@ -400,7 +404,7 @@ impl ProjectDatabase {
 
                 let func_loc =
                     baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
-                let body = baml_compiler2_hir::body::function_body(self, func_loc);
+                let body = baml_compiler2_ppir::function_body(self, func_loc);
 
                 // Check if this is an LLM function via declarative_meta (not body variant,
                 // since compiler2 desugars LLM functions to Expr bodies).
@@ -450,6 +454,7 @@ impl ProjectDatabase {
             source_expr_id: None,
             source_expr_candidates: vec![],
             test_name: None,
+            cursor_offset: Some(byte_offset),
         };
 
         // 1. Find the SourceFile matching file_path
@@ -542,6 +547,7 @@ impl ProjectDatabase {
             source_expr_id,
             source_expr_candidates,
             test_name: None,
+            cursor_offset: Some(u32::from(offset)),
         }
     }
 
@@ -556,9 +562,9 @@ impl ProjectDatabase {
 
         match def {
             Definition::Function(func_loc) => {
-                let sig = baml_compiler2_hir::signature::function_signature(self, func_loc);
+                let sig = baml_compiler2_ppir::function_signature(self, func_loc);
                 let func_name = sig.name.to_string();
-                let body = baml_compiler2_hir::body::function_body(self, func_loc);
+                let body = baml_compiler2_ppir::function_body(self, func_loc);
                 let is_workflow = matches!(
                     body.as_ref(),
                     baml_compiler2_hir::body::FunctionBody::Expr(_)
@@ -578,6 +584,7 @@ impl ProjectDatabase {
                     source_expr_id,
                     source_expr_candidates,
                     test_name: None,
+                    cursor_offset: Some(u32::from(offset)),
                 }
             }
             _ => {
@@ -589,6 +596,7 @@ impl ProjectDatabase {
                     source_expr_id: None,
                     source_expr_candidates: vec![],
                     test_name: None,
+                    cursor_offset: Some(u32::from(offset)),
                 }
             }
         }
@@ -621,6 +629,7 @@ impl ProjectDatabase {
             source_expr_id,
             source_expr_candidates,
             test_name: None,
+            cursor_offset: Some(u32::from(offset)),
         }
     }
 
@@ -672,8 +681,8 @@ impl ProjectDatabase {
             if func_data.span == func_scope_range {
                 let func_loc =
                     baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
-                let sig = baml_compiler2_hir::signature::function_signature(self, func_loc);
-                let body = baml_compiler2_hir::body::function_body(self, func_loc);
+                let sig = baml_compiler2_ppir::function_signature(self, func_loc);
+                let body = baml_compiler2_ppir::function_body(self, func_loc);
                 let is_workflow = matches!(
                     body.as_ref(),
                     baml_compiler2_hir::body::FunctionBody::Expr(_)
@@ -698,7 +707,7 @@ impl ProjectDatabase {
 
                 let func_loc =
                     baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
-                let body = baml_compiler2_hir::body::function_body(self, func_loc);
+                let body = baml_compiler2_ppir::function_body(self, func_loc);
 
                 // Only workflow (Expr) functions can call other functions
                 if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
@@ -782,7 +791,7 @@ impl ProjectDatabase {
             else {
                 return (None, vec![]);
             };
-            let body = baml_compiler2_hir::body::function_body(self, func_loc);
+            let body = baml_compiler2_ppir::function_body(self, func_loc);
             let expr_body = match body.as_ref() {
                 baml_compiler2_hir::body::FunctionBody::Expr(eb) => Some(eb),
                 _ => None,

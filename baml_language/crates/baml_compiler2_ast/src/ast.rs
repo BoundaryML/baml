@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use baml_base::Name;
+use baml_base::{Name, TypePath};
 use la_arena::{Arena, Idx};
 use text_size::TextRange;
 
@@ -38,9 +38,11 @@ pub struct RawAttributeArg {
 /// happens once during `lower_file` and is never repeated.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeExpr {
-    /// Named type path: `User`, `baml.http.Request`
+    /// Named type path: `User`, `baml.http.Request`, `Stream<T>`
     Path {
         segments: Vec<Name>,
+        /// Generic type arguments (e.g., `<T>` in `Stream<T>`). Empty for non-generic paths.
+        generic_args: Vec<TypeExpr>,
         attrs: Vec<RawAttribute>,
     },
     /// Primitive types
@@ -60,6 +62,10 @@ pub enum TypeExpr {
         attrs: Vec<RawAttribute>,
     },
     Never {
+        attrs: Vec<RawAttribute>,
+    },
+    /// The `void` type — valid only as a function return type.
+    Void {
         attrs: Vec<RawAttribute>,
     },
     /// `Uint8Array` (binary data) type
@@ -101,6 +107,7 @@ pub enum TypeExpr {
     Function {
         params: Vec<FunctionTypeParam>,
         ret: Box<TypeExpr>,
+        throws: Option<Box<TypeExpr>>,
         attrs: Vec<RawAttribute>,
     },
     /// The `unknown` keyword type
@@ -136,6 +143,7 @@ impl TypeExpr {
             | Self::Bool { attrs }
             | Self::Null { attrs }
             | Self::Never { attrs }
+            | Self::Void { attrs }
             | Self::Uint8Array { attrs }
             | Self::Media { attrs, .. }
             | Self::Optional { attrs, .. }
@@ -162,6 +170,7 @@ impl TypeExpr {
             | Self::Bool { attrs }
             | Self::Null { attrs }
             | Self::Never { attrs }
+            | Self::Void { attrs }
             | Self::Uint8Array { attrs }
             | Self::Media { attrs, .. }
             | Self::Optional { attrs, .. }
@@ -175,6 +184,113 @@ impl TypeExpr {
             | Self::Rust { attrs }
             | Self::Error { attrs }
             | Self::Unknown { attrs } => attrs,
+        }
+    }
+}
+
+impl std::fmt::Display for TypeExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn needs_parens(ty: &TypeExpr) -> bool {
+            matches!(ty, TypeExpr::Union { .. } | TypeExpr::Function { .. })
+        }
+
+        fn write_postfix_base(f: &mut std::fmt::Formatter<'_>, ty: &TypeExpr) -> std::fmt::Result {
+            if needs_parens(ty) {
+                write!(f, "({ty})")
+            } else {
+                write!(f, "{ty}")
+            }
+        }
+
+        match self {
+            TypeExpr::Path {
+                segments,
+                generic_args,
+                ..
+            } => {
+                let path = segments
+                    .iter()
+                    .map(smol_str::SmolStr::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                write!(f, "{path}")?;
+                if !generic_args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, arg) in generic_args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{arg}")?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+            TypeExpr::Int { .. } => write!(f, "int"),
+            TypeExpr::Float { .. } => write!(f, "float"),
+            TypeExpr::String { .. } => write!(f, "string"),
+            TypeExpr::Bool { .. } => write!(f, "bool"),
+            TypeExpr::Null { .. } => write!(f, "null"),
+            TypeExpr::Never { .. } => write!(f, "never"),
+            TypeExpr::Void { .. } => write!(f, "void"),
+            TypeExpr::Uint8Array { .. } => write!(f, "uint8array"),
+            TypeExpr::Media { kind, .. } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
+            TypeExpr::Optional { inner, .. } => {
+                write_postfix_base(f, inner)?;
+                write!(f, "?")
+            }
+            TypeExpr::List { inner, .. } => {
+                write_postfix_base(f, inner)?;
+                write!(f, "[]")
+            }
+            TypeExpr::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
+            TypeExpr::Union { variants, .. } => {
+                for (i, v) in variants.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " | ")?;
+                    }
+                    if matches!(v, TypeExpr::Function { .. }) {
+                        write!(f, "({v})")?;
+                    } else {
+                        write!(f, "{v}")?;
+                    }
+                }
+                Ok(())
+            }
+            TypeExpr::Literal { value, .. } => write!(f, "{value}"),
+            TypeExpr::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                write!(f, "(")?;
+                for (i, p) in params.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    if let Some(name) = &p.name {
+                        write!(f, "{}: {}", name.as_str(), p.ty)?;
+                    } else {
+                        write!(f, "{}", p.ty)?;
+                    }
+                }
+                write!(f, ") -> ")?;
+                if matches!(**ret, TypeExpr::Function { .. }) {
+                    write!(f, "({ret})")?;
+                } else {
+                    write!(f, "{ret}")?;
+                }
+                if let Some(throws) = throws {
+                    write!(f, " throws {throws}")?;
+                }
+                Ok(())
+            }
+            TypeExpr::BuiltinUnknown { .. } => write!(f, "unknown"),
+            TypeExpr::Type { .. } => write!(f, "type"),
+            TypeExpr::Rust { .. } => write!(f, "$rust_type"),
+            TypeExpr::Error { .. } => write!(f, "error"),
+            TypeExpr::Unknown { .. } => write!(f, "?"),
         }
     }
 }
@@ -239,11 +355,11 @@ impl ExprBody {
                 .map(smol_str::SmolStr::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
-            Expr::FieldAccess { base, field } => {
-                format!("{}.{field}", self.display_expr_inner(*base, depth + 1))
+            Expr::MemberAccess { base, member } => {
+                format!("{}.{member}", self.display_expr_inner(*base, depth + 1))
             }
-            Expr::OptionalFieldAccess { base, field } => {
-                format!("{}?.{field}", self.display_expr_inner(*base, depth + 1))
+            Expr::OptionalMemberAccess { base, member } => {
+                format!("{}?.{member}", self.display_expr_inner(*base, depth + 1))
             }
             Expr::Index { base, index } => {
                 format!(
@@ -307,8 +423,11 @@ pub struct AstSourceMap {
     pub match_arm_spans: Arena<TextRange>,
     pub type_annotation_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
-    /// For `FieldAccess` expressions, the span of just the member name (after the dot).
-    pub field_access_member_spans: HashMap<ExprId, TextRange>,
+    /// For `MemberAccess` expressions, the span of just the member name (after the dot).
+    pub member_access_member_spans: HashMap<ExprId, TextRange>,
+    /// For multi-segment `Path` expressions, per-segment spans.
+    /// `path_segment_spans[expr_id][i]` is the `TextRange` of `segments[i]`.
+    pub path_segment_spans: HashMap<ExprId, Vec<TextRange>>,
 }
 
 impl AstSourceMap {
@@ -320,7 +439,8 @@ impl AstSourceMap {
             match_arm_spans: Arena::new(),
             type_annotation_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
-            field_access_member_spans: HashMap::new(),
+            member_access_member_spans: HashMap::new(),
+            path_segment_spans: HashMap::new(),
         }
     }
 
@@ -347,12 +467,22 @@ impl AstSourceMap {
             .unwrap_or_default()
     }
 
-    /// Look up the member-name span for a `FieldAccess` expression.
+    /// Look up the member-name span for a `MemberAccess` expression.
     /// Returns the full expression span as fallback if no member span was recorded.
-    pub fn field_access_member_span(&self, id: ExprId) -> TextRange {
-        self.field_access_member_spans
+    pub fn member_access_member_span(&self, id: ExprId) -> TextRange {
+        self.member_access_member_spans
             .get(&id)
             .copied()
+            .unwrap_or_else(|| self.expr_span(id))
+    }
+
+    /// Look up the per-segment spans for a multi-segment `Path` expression.
+    /// `path_segment_span(id, i)` returns the `TextRange` of `segments[i]`.
+    /// Returns the full expression span as fallback if no segment span was recorded.
+    pub fn path_segment_span(&self, id: ExprId, segment_idx: usize) -> TextRange {
+        self.path_segment_spans
+            .get(&id)
+            .and_then(|spans| spans.get(segment_idx).copied())
             .unwrap_or_else(|| self.expr_span(id))
     }
 
@@ -444,7 +574,7 @@ pub enum Expr {
         args: Vec<ExprId>,
     },
     Object {
-        type_name: Option<Name>,
+        type_name: Option<TypePath>,
         fields: Vec<(Name, ExprId)>,
         spreads: Vec<SpreadField>,
     },
@@ -459,16 +589,16 @@ pub enum Expr {
         tail_expr: Option<ExprId>,
     },
     // These nodes are constructed purely in the HIR layer AFTER
-    // name resolution as we can't know if it's a field access
+    // name resolution as we can't know if it's a member access
     // until we know how to resolve the path
-    FieldAccess {
+    MemberAccess {
         base: ExprId,
-        field: Name,
+        member: Name,
     },
-    /// Optional field access: `obj?.field` — short-circuits to null if base is null.
-    OptionalFieldAccess {
+    /// Optional member access: `obj?.member` — short-circuits to null if base is null.
+    OptionalMemberAccess {
         base: ExprId,
-        field: Name,
+        member: Name,
     },
     Index {
         base: ExprId,
@@ -553,14 +683,153 @@ pub enum Stmt {
 }
 
 /// Patterns — modeled after `Pattern` in `body.rs`.
+///
+/// A pattern is `kind` plus an optional trailing `: T` narrow per BEP-015.
+/// Narrow currently carries the type-ascription part of `let x: T = ...`
+/// (and is also where future second-colon narrowing on structural patterns
+/// will land). All other shape lives in [`PatternKind`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Pattern {
-    Binding(Name),
-    TypedBinding { name: Name, ty: TypeExpr },
+pub struct Pattern {
+    pub kind: PatternKind,
+    /// Trailing `: T` narrow. For irrefutable `let`, the scrutinee's static
+    /// type must equal this type; checked in TIR, not at the AST level.
+    pub narrow: Option<TypeExpr>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PatternKind {
+    /// `_` — wildcard. Always irrefutable. Binds nothing.
+    Wildcard,
+    /// `x` (with `inner: None`) or `let x: <inner>` (with `inner: Some(_)`).
+    /// Binds `name` to the matched value; if `inner` is set, the value must
+    /// also satisfy the inner pattern.
+    Bind { name: Name, inner: Option<PatId> },
+    /// `User { f1, f2: <pat>, ... }` — class destructure. Future variant,
+    /// not yet emitted by the parser.
+    Class { class: Name, fields: Vec<FieldPat> },
+    /// Bare type-match in pattern position (e.g. an arm `int =>`). Future
+    /// variant, not yet emitted by the parser.
+    Type(TypeExpr),
+    /// `42`, `"hi"`, `true`, etc. Refutable.
     Literal(Literal),
+    /// `null` literal pattern. Refutable.
     Null,
-    EnumVariant { enum_name: Name, variant: Name },
-    Union(Vec<PatId>),
+    /// `Status.Active` or `baml.panics.DivideByZero` style enum variant.
+    /// `enum_name` carries the dotted path as proper segments (no string
+    /// round-tripping); the trailing identifier is `variant`. Refutable.
+    EnumVariant { enum_name: Vec<Name>, variant: Name },
+    /// `a | b | c` (formerly `Union`). Refutable in general (each part may be).
+    Or(Vec<PatId>),
+}
+
+/// Single field inside a class destructure pattern: `{ field: <pat> }`.
+/// `pat: None` is shorthand syntax `{ field }` and lowers to a `Bind` of
+/// `field`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldPat {
+    pub field: Name,
+    pub pat: Option<PatId>,
+}
+
+impl Pattern {
+    pub fn wildcard() -> Self {
+        Pattern {
+            kind: PatternKind::Wildcard,
+            narrow: None,
+        }
+    }
+
+    /// Plain binding `x`. Name `"_"` is canonicalized to a wildcard so the
+    /// AST never carries a `Bind { name: "_" }`.
+    pub fn binding(name: Name) -> Self {
+        if name.as_str() == "_" {
+            return Pattern::wildcard();
+        }
+        Pattern {
+            kind: PatternKind::Bind { name, inner: None },
+            narrow: None,
+        }
+    }
+
+    /// `Bind { name }` with `narrow: Some(ty)` — the legacy
+    /// `Pattern::TypedBinding { name, ty }` shape. Same `_`-canonicalization
+    /// rule as [`Pattern::binding`]: `typed_binding("_", T)` is a wildcard
+    /// carrying `narrow: Some(T)` (so `let _: int = e` still asserts `int`).
+    pub fn typed_binding(name: Name, ty: TypeExpr) -> Self {
+        if name.as_str() == "_" {
+            return Pattern {
+                kind: PatternKind::Wildcard,
+                narrow: Some(ty),
+            };
+        }
+        Pattern {
+            kind: PatternKind::Bind { name, inner: None },
+            narrow: Some(ty),
+        }
+    }
+
+    pub fn null() -> Self {
+        Pattern {
+            kind: PatternKind::Null,
+            narrow: None,
+        }
+    }
+
+    pub fn literal(lit: Literal) -> Self {
+        Pattern {
+            kind: PatternKind::Literal(lit),
+            narrow: None,
+        }
+    }
+
+    pub fn enum_variant(enum_name: Vec<Name>, variant: Name) -> Self {
+        Pattern {
+            kind: PatternKind::EnumVariant { enum_name, variant },
+            narrow: None,
+        }
+    }
+
+    pub fn or(parts: Vec<PatId>) -> Self {
+        Pattern {
+            kind: PatternKind::Or(parts),
+            narrow: None,
+        }
+    }
+
+    /// If this pattern is a simple `Bind`, return the bound name.
+    pub fn binding_name(&self) -> Option<&Name> {
+        match &self.kind {
+            PatternKind::Bind { name, .. } => Some(name),
+            _ => None,
+        }
+    }
+
+    /// True iff this pattern is structurally guaranteed to match every value
+    /// at its position. **Pure structural check** — does not consider the
+    /// scrutinee's static type. The TIR layer is responsible for verifying
+    /// `narrow` and `Class`/`Type` assertions against the scrutinee type.
+    ///
+    /// Used by the let-stmt validator to reject patterns that can fail at
+    /// runtime; refutable patterns belong in `match` / `if let` / `let-else`.
+    pub fn is_irrefutable(&self, body: &ExprBody) -> bool {
+        match &self.kind {
+            PatternKind::Wildcard => true,
+            PatternKind::Bind { inner, .. } => {
+                inner.is_none_or(|id| body.patterns[id].is_irrefutable(body))
+            }
+            PatternKind::Class { fields, .. } => fields.iter().all(|f| {
+                f.pat
+                    .is_none_or(|id| body.patterns[id].is_irrefutable(body))
+            }),
+            // `Type(T)` is structurally fine; whether the value is actually
+            // a `T` is a typing concern, not a pattern concern.
+            PatternKind::Type(_) => true,
+            PatternKind::Literal(_)
+            | PatternKind::Null
+            | PatternKind::EnumVariant { .. }
+            | PatternKind::Or(_) => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -581,6 +850,8 @@ pub enum CatchClauseKind {
 pub struct CatchClause {
     pub kind: CatchClauseKind,
     pub binding: PatId,
+    /// Optional second binding for the stack trace: `catch (e, st) { ... }`
+    pub stack_trace_binding: Option<PatId>,
     pub arms: Vec<CatchArmId>,
 }
 
@@ -605,6 +876,13 @@ pub enum LetOrigin {
     Compiler,
     Client,
     RetryPolicy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionOrigin {
+    UserDefined,
+    Companion,
+    Internal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -634,7 +912,6 @@ pub enum BinaryOp {
     BitXor,
     Shl,
     Shr,
-    Instanceof,
     /// Null coalescing: `a ?? b` — returns `a` if non-null, else `b`.
     NullCoalesce,
 }
@@ -660,7 +937,6 @@ impl std::fmt::Display for BinaryOp {
             BinaryOp::BitXor => "^",
             BinaryOp::Shl => "<<",
             BinaryOp::Shr => ">>",
-            BinaryOp::Instanceof => "instanceof",
             BinaryOp::NullCoalesce => "??",
         };
         write!(f, "{s}")
@@ -725,6 +1001,7 @@ pub struct FunctionDef {
     pub throws: Option<SpannedTypeExpr>,
     pub body: Option<FunctionBodyDef>,
     pub declarative_meta: Option<DeclarativeMeta>,
+    pub origin: FunctionOrigin,
     pub attributes: Vec<RawAttribute>,
     pub span: TextRange,
     pub name_span: TextRange,
@@ -745,6 +1022,9 @@ pub enum BuiltinKind {
     Vm,
     /// I/O operation — may be async, may fail with I/O errors.
     Io,
+    /// Compiler intrinsic — lowered to `StatementKind::Intrinsic` in MIR,
+    /// not compiled as a callable function.
+    Intrinsic,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

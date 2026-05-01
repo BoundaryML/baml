@@ -383,8 +383,10 @@ fn simulate_statement_stack(
         StatementKind::Unwatch(_)
         | StatementKind::NotifyBlock { .. }
         | StatementKind::WatchNotify(_)
+        | StatementKind::FreshCell(_)
         | StatementKind::VizEnter(_)
         | StatementKind::VizExit(_)
+        | StatementKind::Intrinsic { .. }
         | StatementKind::Nop => true,
         StatementKind::WatchOptions { local, filter } => {
             let mut sink = StackCarryPullSink {
@@ -530,6 +532,38 @@ fn simulate_terminator_stack(
             // THROW consumes the thrown value from the stack when unwinding.
             sim.pop_n(1)
         }
+        Terminator::ThrowIfPanic { value, .. } => {
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            if pull_semantics::walk_operand_pull(&mut sink, value).is_err() {
+                return false;
+            }
+            // ThrowIfPanic loads the value, checks it, and either throws (consuming it)
+            // or continues (consuming it). Either way the stack is clean after.
+            sim.pop_n(1)
+        }
+        Terminator::ShortCircuit { operand, .. } => {
+            // ShortCircuit peeks the operand (stays on TOS), then conditionally
+            // keeps or pops+evaluates-rhs. If the carried local is the operand,
+            // the peek consumes its stack-carry lifecycle — the short-circuit
+            // mechanism takes ownership of the value on TOS. If the carried local
+            // was consumed by an earlier statement, the operand pull just adds to
+            // the stack which is fine at block-end.
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            if pull_semantics::walk_operand_pull(&mut sink, operand).is_err() {
+                return false;
+            }
+            true
+        }
     }
 }
 
@@ -578,6 +612,25 @@ fn simulate_rvalue_pull_stack(
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
+    // MakeBoundMethod: pops receiver (1 value), pushes bound_method (1 value).
+    // Net stack effect: 0 (receiver consumed, bound_method produced).
+    if let Rvalue::MakeBoundMethod { receiver, .. } = rvalue {
+        let mut sink = StackCarryPullSink {
+            sim,
+            carried_local,
+            classifications,
+            def_use,
+        };
+        if pull_semantics::walk_operand_pull(&mut sink, receiver).is_err() {
+            return false;
+        }
+        // Pop receiver, push bound_method (net zero: pop then push).
+        if !sim.pop_n(1) {
+            return false;
+        }
+        sim.push();
+        return true;
+    }
     let mut sink = StackCarryPullSink {
         sim,
         carried_local,
@@ -699,16 +752,9 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn copy_top(&mut self, _offset: usize) -> Result<(), Self::Error> {
-        // Copy duplicates a stack value without consuming the source.
-        self.sim.push();
-        Ok(())
-    }
-
-    fn store_field(&mut self, _field_idx: usize, _name: &str) -> Result<(), Self::Error> {
-        // StoreField consumes object + value; class construction leaves original
-        // instance below those two entries.
-        if !self.sim.pop_n(2) {
+    fn init_field(&mut self, _field_idx: usize, _name: &str) -> Result<(), Self::Error> {
+        // InitField pops only the value; the instance stays on the stack.
+        if !self.sim.pop_n(1) {
             return Err(());
         }
         Ok(())

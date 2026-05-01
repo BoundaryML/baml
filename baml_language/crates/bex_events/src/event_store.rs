@@ -28,6 +28,31 @@ pub trait EventSink: Send + Sync {
     fn flush(&self);
 }
 
+/// Composite `EventSink` that forwards events to multiple inner sinks.
+pub struct FanOutEventSink {
+    sinks: Vec<std::sync::Arc<dyn EventSink>>,
+}
+
+impl FanOutEventSink {
+    pub fn new(sinks: Vec<std::sync::Arc<dyn EventSink>>) -> Self {
+        Self { sinks }
+    }
+}
+
+impl EventSink for FanOutEventSink {
+    fn send(&self, event: RuntimeEvent) {
+        for sink in &self.sinks {
+            sink.send(event.clone());
+        }
+    }
+
+    fn flush(&self) {
+        for sink in &self.sinks {
+            sink.flush();
+        }
+    }
+}
+
 // ─────────────────────────── Collector Store ─────────────────────────────
 
 /// In-memory storage for tracked engine span IDs (collector use case).
@@ -120,11 +145,12 @@ mod tests {
     use web_time::SystemTime;
 
     use super::*;
-    use crate::{EventKind, FunctionEvent, FunctionStart, SpanContext};
+    use crate::{CallId, EventKind, FunctionEvent, FunctionStart, SpanContext};
 
     /// Create an event whose `span_id` matches the given ID (function's own event).
     fn make_event(span_id: SpanId) -> RuntimeEvent {
         RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -143,6 +169,7 @@ mod tests {
     /// Create a child event whose `parent_span_id` matches the given parent.
     fn make_child_event(parent_span_id: SpanId, root_span_id: SpanId) -> RuntimeEvent {
         RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: SpanId::new(),
                 parent_span_id: Some(parent_span_id),

@@ -8,10 +8,17 @@ import { v } from "convex/values";
 export const bepStatus = v.union(
   v.literal("draft"),
   v.literal("proposed"),
+  v.literal("pending"),
   v.literal("accepted"),
   v.literal("implemented"),
   v.literal("rejected"),
   v.literal("superseded")
+);
+
+export const userStance = v.union(
+  v.literal("support"),
+  v.literal("neutral"),
+  v.literal("oppose")
 );
 
 export const commentType = v.union(
@@ -56,9 +63,12 @@ export default defineSchema({
     isSpecialAccount: v.optional(v.boolean()),
     boundaryEmail: v.optional(v.string()),
     slackUserId: v.optional(v.string()),
+    // API token for agent access
+    apiToken: v.optional(v.string()),
   })
     .index("by_name", ["name"])
-    .index("by_github_id", ["githubId"]),
+    .index("by_github_id", ["githubId"])
+    .index("by_api_token", ["apiToken"]),
 
   // ─────────────────────────────────────────────────────────────────────────
   // BEPs (main proposals)
@@ -84,8 +94,14 @@ export default defineSchema({
     updatedAt: v.number(),
     supersededBy: v.optional(v.id("beps")),
 
+    // Who implemented this BEP (optional, set when status becomes implemented)
+    implementedBy: v.optional(v.array(v.id("users"))),
+
     // Slack integration - thread_ts for #beps channel notifications
     slackThreadTs: v.optional(v.string()),
+
+    // Good reference flag - marks this BEP as a good example for writing style
+    isGoodReference: v.optional(v.boolean()),
   })
     .index("by_number", ["number"])
     .index("by_status", ["status"])
@@ -312,6 +328,27 @@ export default defineSchema({
     .index("by_bep", ["bepId"])
     .index("by_version", ["versionId"])
     .index("by_status", ["status"]),
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // USER STANCES (personal status on BEP versions)
+  // Tracks individual user opinions/acceptance for historical analysis
+  // ─────────────────────────────────────────────────────────────────────────
+  userStances: defineTable({
+    bepId: v.id("beps"),
+    versionId: v.id("bepVersions"),           // Which version this stance is for
+    userId: v.id("users"),
+
+    stance: userStance,                        // support, neutral, oppose
+    comment: v.optional(v.string()),           // Optional brief comment explaining stance
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_bep", ["bepId"])
+    .index("by_bep_version", ["bepId", "versionId"])
+    .index("by_user", ["userId"])
+    .index("by_bep_user", ["bepId", "userId"])
+    .index("by_version_user", ["versionId", "userId"]),
 
   // ─────────────────────────────────────────────────────────────────────────
   // SUMMARIES (AI-generated)

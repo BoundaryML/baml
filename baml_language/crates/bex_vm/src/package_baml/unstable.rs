@@ -1,38 +1,49 @@
 use std::fmt::Write;
 
-use bex_vm_types::types::{Object, Value};
+use bex_vm_types::types::{Object, Value, format_float};
 
 use super::{BamlNamespaceUnstable, PackageBamlImpl};
 use crate::{
     BexVm,
-    errors::{RuntimeError, VmError},
+    errors::{VmInternalError, VmPanic, VmRustFnError},
 };
 
 impl BamlNamespaceUnstable for PackageBamlImpl {
-    fn string(vm: &mut BexVm, value: &Value) -> Result<String, VmError> {
+    fn string(vm: &mut BexVm, value: &Value) -> Result<String, VmRustFnError> {
         format_value_recursive(vm, value, 0)
     }
 }
 
-fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result<String, VmError> {
+fn format_value_recursive(
+    vm: &mut BexVm,
+    value: &Value,
+    depth: usize,
+) -> Result<String, VmRustFnError> {
     let available_frames = crate::vm::MAX_FRAMES.saturating_sub(vm.frames.len());
 
     if depth >= available_frames {
-        return Err(VmError::RuntimeError(RuntimeError::StackOverflow));
+        return Err(VmPanic::StackOverflow.into());
     }
 
     match value {
         Value::Null => Ok("null".to_string()),
         Value::Int(i) => Ok(i.to_string()),
-        Value::Float(f) => Ok(f.to_string()),
+        Value::Float(f) => Ok(format_float(*f)),
         Value::Bool(b) => Ok(b.to_string()),
 
         Value::Object(obj_idx) => match vm.get_object(*obj_idx) {
             Object::Instance(instance) => {
-                let Object::Class(class) = vm.get_object(instance.class) else {
-                    return Err(VmError::RuntimeError(RuntimeError::Other(
-                        "Invalid class reference".to_string(),
-                    )));
+                let class = vm.get_object(instance.class);
+                let Object::Class(class) = class else {
+                    return Err(VmInternalError::TypeError {
+                        expected: ::bex_vm_types::types::Type::Object(
+                            ::bex_vm_types::ObjectType::Class,
+                        ),
+                        got: ::bex_vm_types::types::Type::Object(::bex_vm_types::ObjectType::of(
+                            class,
+                        )),
+                    }
+                    .into());
                 };
 
                 let class_name = class.name.clone();
@@ -93,10 +104,17 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::String(s) => Ok(format!("\"{s}\"")),
             Object::Enum(e) => Ok(e.name.display_name.to_string()),
             Object::Variant(variant) => {
-                let Object::Enum(enm) = vm.get_object(variant.enm) else {
-                    return Err(VmError::RuntimeError(RuntimeError::Other(
-                        "Invalid enum reference".to_string(),
-                    )));
+                let enm = vm.get_object(variant.enm);
+                let Object::Enum(enm) = enm else {
+                    return Err(VmInternalError::TypeError {
+                        expected: ::bex_vm_types::types::Type::Object(
+                            ::bex_vm_types::ObjectType::Enum,
+                        ),
+                        got: ::bex_vm_types::types::Type::Object(::bex_vm_types::ObjectType::of(
+                            enm,
+                        )),
+                    }
+                    .into());
                 };
 
                 let variant_name = match enm.variants.get(variant.index) {
@@ -115,6 +133,7 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::Closure(closure) => {
                 Ok(format!("<closure captures={}>", closure.captures.len()))
             }
+            Object::BoundMethod(_) => Ok("<bound_method>".to_string()),
             Object::Cell(cell) => Ok(format!("<cell {}>", cell.value)),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Ok("<sentinel>".to_string()),

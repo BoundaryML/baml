@@ -20,7 +20,7 @@ concurrency:
 jobs:
   check-beps:
     name: "check beps"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.beps_changed == 'true' || inputs.is_canary }}
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
 
   deploy-beps-canary:
     name: "deploy beps (canary)"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: check-beps
     if: inputs.is_canary && !inputs.is_pr
     permissions:
@@ -132,7 +132,7 @@ jobs:
 
   deploy-beps-preview:
     name: "deploy beps (preview)"
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: check-beps
     if: inputs.is_pr && inputs.beps_changed == 'true'
     permissions:

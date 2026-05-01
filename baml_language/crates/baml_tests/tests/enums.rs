@@ -19,7 +19,7 @@ async fn return_enum_variant() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> Shape {
         load_const user.Shape.Rectangle
         alloc_variant user.Shape
@@ -29,7 +29,7 @@ async fn return_enum_variant() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::variant("Shape", "Rectangle"))
+        Ok(BexExternalValue::variant("user.Shape", "Rectangle"))
     );
 }
 
@@ -50,7 +50,7 @@ async fn assign_enum_variant() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> Shape {
         load_const user.Shape.Rectangle
         alloc_variant user.Shape
@@ -60,7 +60,7 @@ async fn assign_enum_variant() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::variant("Shape", "Rectangle"))
+        Ok(BexExternalValue::variant("user.Shape", "Rectangle"))
     );
 }
 
@@ -84,7 +84,7 @@ async fn pass_enum_variant_to_function() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> Shape {
         load_const user.Shape.Rectangle
         alloc_variant user.Shape
@@ -100,6 +100,6 @@ async fn pass_enum_variant_to_function() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::variant("Shape", "Rectangle"))
+        Ok(BexExternalValue::variant("user.Shape", "Rectangle"))
     );
 }

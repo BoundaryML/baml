@@ -25,22 +25,11 @@ pub(crate) fn specialize_prompt_from_owned(
     let prompt = transformations::merge_adjacent_roles(prompt);
     let prompt = transformations::consolidate_system_prompts(prompt, &features);
 
-    // Vertex AI sets remap_roles: {assistant: model} at compile time, but
-    // Anthropic models on Vertex expect "assistant" not "model". Skip the
-    // remap when the model is Anthropic.
-    //
-    // TODO(avery): provider defaults (base_url, remap_roles, etc.) should be
-    // resolved at runtime rather than compile time, so model-dependent defaults
-    // like this don't need special-casing. That's a larger refactor of
-    // lower_cst.rs.
-    let remap = if provider == LlmProvider::VertexAi
-        && crate::build_request::is_anthropic_model(&client.model)
-    {
-        None
-    } else {
-        client.options.remap_roles.as_ref()
-    };
-    let prompt = transformations::validate_and_remap_roles(prompt, &client.allowed_roles, remap)?;
+    let prompt = transformations::validate_and_remap_roles(
+        prompt,
+        &client.allowed_roles,
+        client.options.remap_roles.as_ref(),
+    )?;
 
     Ok(transformations::filter_metadata(prompt, &features))
 }
@@ -73,9 +62,6 @@ mod tests {
             "vertex-ai".to_string(),
             crate::baml_std::PrimitiveClientOptions {
                 model: Some(model.to_string()),
-                remap_roles: Some(indexmap::indexmap! {
-                    "assistant".to_string() => "model".to_string(),
-                }),
                 ..Default::default()
             },
         )

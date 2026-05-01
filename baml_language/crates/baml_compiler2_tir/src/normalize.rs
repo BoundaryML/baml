@@ -58,7 +58,9 @@ enum StructuralTy {
     // Literal
     Literal(baml_base::Literal),
     // User-defined (resolved by qualified name)
-    Class(QualifiedTypeName),
+    /// Generic class arguments are compared invariantly — `Foo<int>` and `Foo<string>`
+    /// are not subtypes of each other.
+    Class(QualifiedTypeName, Vec<StructuralTy>),
     Enum(QualifiedTypeName),
     EnumVariant(QualifiedTypeName, Name),
     // Constructors
@@ -72,6 +74,7 @@ enum StructuralTy {
     Function {
         params: Vec<StructuralTy>,
         ret: Box<StructuralTy>,
+        throws: Box<StructuralTy>,
     },
     // Recursion
     Mu {
@@ -122,13 +125,6 @@ impl StructuralTy {
         // If self is BuiltinUnknown and other is not BuiltinUnknown (reflexivity
         // already handled equal case above), it's not a subtype.
         if matches!(self, StructuralTy::BuiltinUnknown) {
-            return false;
-        }
-
-        // TypeVar (generic parameter) is opaque — only subtypes itself (reflexivity
-        // above) and BuiltinUnknown (above). Never (bottom) is already handled above.
-        // Must come before Unknown/Error check to avoid bidirectional compatibility.
-        if matches!(self, StructuralTy::TypeVar(_)) || matches!(other, StructuralTy::TypeVar(_)) {
             return false;
         }
 
@@ -234,16 +230,21 @@ impl StructuralTy {
                 StructuralTy::Function {
                     params: params1,
                     ret: ret1,
+                    throws: throws1,
                 },
                 StructuralTy::Function {
                     params: params2,
                     ret: ret2,
+                    throws: throws2,
                 },
             ) => {
                 if !ret1.is_subtype_of(ret2, assumptions) {
                     return false;
                 }
-                if params2.len() > params1.len() {
+                if !throws1.is_subtype_of(throws2, assumptions) {
+                    return false;
+                }
+                if params1.len() != params2.len() {
                     return false;
                 }
                 for (p1, p2) in params1.iter().zip(params2.iter()) {
@@ -253,6 +254,12 @@ impl StructuralTy {
                 }
                 true
             }
+
+            // TypeVar (generic parameter) is opaque — only subtypes itself
+            // (reflexivity above) and BuiltinUnknown (early check above).
+            // Placed here rather than as an early guard so that Union/Optional
+            // decomposition rules above can match first (e.g. T <: T | U).
+            (StructuralTy::TypeVar(v1), StructuralTy::TypeVar(v2)) => v1 == v2,
 
             _ => false,
         };
@@ -286,13 +293,24 @@ fn substitute(
                 .map(|t| substitute(t, var, replacement))
                 .collect(),
         ),
-        StructuralTy::Function { params, ret } => StructuralTy::Function {
+        StructuralTy::Function {
+            params,
+            ret,
+            throws,
+        } => StructuralTy::Function {
             params: params
                 .iter()
                 .map(|t| substitute(t, var, replacement))
                 .collect(),
             ret: Box::new(substitute(ret, var, replacement)),
+            throws: Box::new(substitute(throws, var, replacement)),
         },
+        StructuralTy::Class(qn, args) => StructuralTy::Class(
+            qn.clone(),
+            args.iter()
+                .map(|t| substitute(t, var, replacement))
+                .collect(),
+        ),
         StructuralTy::Mu { var: v, body } if v != var => StructuralTy::Mu {
             var: v.clone(),
             body: Box::new(substitute(body, var, replacement)),
@@ -339,7 +357,13 @@ fn normalize_impl(
         Ty::Unknown { .. } => StructuralTy::Unknown,
         Ty::Error { .. } => StructuralTy::Error,
         Ty::Literal(lit, _freshness, _) => StructuralTy::Literal(lit.clone()),
-        Ty::Class(qn, _) => StructuralTy::Class(qn.clone()),
+        Ty::Class(qn, type_args, _) => {
+            let args = type_args
+                .iter()
+                .map(|t| normalize_impl(t, aliases, recursive, expanding))
+                .collect();
+            StructuralTy::Class(qn.clone(), args)
+        }
         Ty::Enum(qn, _) => StructuralTy::Enum(qn.clone()),
         Ty::EnumVariant(qn, v, _) => StructuralTy::EnumVariant(qn.clone(), v.clone()),
 
@@ -381,12 +405,18 @@ fn normalize_impl(
                 .map(|t| normalize_impl(t, aliases, recursive, expanding))
                 .collect(),
         ),
-        Ty::Function { params, ret, .. } => StructuralTy::Function {
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => StructuralTy::Function {
             params: params
                 .iter()
                 .map(|(_, t)| normalize_impl(t, aliases, recursive, expanding))
                 .collect(),
             ret: Box::new(normalize_impl(ret, aliases, recursive, expanding)),
+            throws: Box::new(normalize_impl(throws, aliases, recursive, expanding)),
         },
         Ty::TypeVar(name, _) => StructuralTy::TypeVar(name.clone()),
         // `$rust_type` — opaque Rust-managed state. Treated as Unknown
@@ -440,11 +470,20 @@ fn ty_has_cycle(
         Ty::Union(types, _) => types
             .iter()
             .any(|t| ty_has_cycle(t, aliases, visited, stack)),
-        Ty::Function { params, ret, .. } => {
+        Ty::Class(_, type_args, _) => type_args
+            .iter()
+            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             params
                 .iter()
                 .any(|(_, t)| ty_has_cycle(t, aliases, visited, stack))
                 || ty_has_cycle(ret, aliases, visited, stack)
+                || ty_has_cycle(throws, aliases, visited, stack)
         }
         _ => false,
     }
@@ -577,11 +616,25 @@ fn extract_type_alias_deps(
                     visit(m, aliases, non_structural, structural, in_structural);
                 }
             }
-            Ty::Function { params, ret, .. } => {
+            Ty::Class(_, type_args, _) => {
+                // Class type_args are pass-through for cycle classification.
+                // A user-defined class is not itself a structural guard like List/Map,
+                // so its generic arguments inherit the surrounding context.
+                for t in type_args {
+                    visit(t, aliases, non_structural, structural, in_structural);
+                }
+            }
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 for (_, t) in params {
                     visit(t, aliases, non_structural, structural, in_structural);
                 }
                 visit(ret, aliases, non_structural, structural, in_structural);
+                visit(throws, aliases, non_structural, structural, in_structural);
             }
             _ => {}
         }
@@ -814,7 +867,7 @@ fn extract_required_class_deps(
     visiting: &mut HashSet<QualifiedTypeName>,
 ) {
     match ty {
-        Ty::Class(qn, _) => {
+        Ty::Class(qn, _, _) => {
             // Only add if the field is truly required
             if !optional && !in_list_or_map && class_fields.contains_key(qn) {
                 deps.insert(qn.clone());
@@ -1060,7 +1113,7 @@ mod tests {
             &Ty::Never {
                 attr: TyAttr::default()
             },
-            &Ty::Class(qn("Foo"), TyAttr::default()),
+            &Ty::Class(qn("Foo"), vec![], TyAttr::default()),
             &aliases
         ));
         assert!(is_subtype_of(
@@ -1147,11 +1200,17 @@ mod tests {
         let f1 = Ty::Function {
             params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
             ret: Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
             params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
             ret: Box::new(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
             attr: TyAttr::default(),
         };
         assert!(is_subtype_of(&f1, &f2, &aliases));
@@ -1164,11 +1223,44 @@ mod tests {
         let f1 = Ty::Function {
             params: vec![(None, Ty::Primitive(PrimitiveType::Float, TyAttr::default()))],
             ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
             params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
             ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        assert!(is_subtype_of(&f1, &f2, &aliases));
+        assert!(!is_subtype_of(&f2, &f1, &aliases));
+    }
+
+    #[test]
+    fn test_function_covariant_throws() {
+        let aliases = HashMap::new();
+        let f1 = Ty::Function {
+            params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let f2 = Ty::Function {
+            params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
+            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            throws: Box::new(Ty::Union(
+                vec![
+                    Ty::Enum(qn("IoError"), TyAttr::default()),
+                    Ty::Enum(qn("Timeout"), TyAttr::default()),
+                ],
+                TyAttr::default(),
+            )),
             attr: TyAttr::default(),
         };
         assert!(is_subtype_of(&f1, &f2, &aliases));
@@ -1611,5 +1703,80 @@ mod tests {
         );
         let sup = Ty::Primitive(PrimitiveType::Float, TyAttr::default());
         assert!(is_subtype_of(&sub, &sup, &aliases));
+    }
+
+    #[test]
+    fn test_typevar_subtype_of_union_containing_same_typevar() {
+        let aliases = HashMap::new();
+        let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
+        let union = Ty::Union(
+            vec![
+                t.clone(),
+                Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        // T <: T | String should hold
+        assert!(is_subtype_of(&t, &union, &aliases));
+    }
+
+    #[test]
+    fn test_typevar_not_subtype_of_union_without_same_typevar() {
+        let aliases = HashMap::new();
+        let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
+        let union = Ty::Union(
+            vec![
+                Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+                Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        // T <: Int | String should NOT hold (T is opaque)
+        assert!(!is_subtype_of(&t, &union, &aliases));
+    }
+
+    #[test]
+    fn test_typevar_subtype_of_optional_same_typevar() {
+        let aliases = HashMap::new();
+        let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
+        let opt_t = Ty::Optional(Box::new(t.clone()), TyAttr::default());
+        // T <: T? should hold
+        assert!(is_subtype_of(&t, &opt_t, &aliases));
+    }
+
+    #[test]
+    fn test_typevar_not_subtype_of_concrete() {
+        let aliases = HashMap::new();
+        let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
+        // T <: Int should NOT hold
+        assert!(!is_subtype_of(
+            &t,
+            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            &aliases
+        ));
+        // Int <: T should NOT hold
+        assert!(!is_subtype_of(
+            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            &t,
+            &aliases
+        ));
+    }
+
+    #[test]
+    fn test_recursive_alias_through_class_type_arg_is_detected() {
+        // `type A = Box<A>` — recursion goes through a class generic argument.
+        // Without descending into class type_args, cycle detection would miss
+        // this and normalization would recurse forever.
+        let mut aliases = HashMap::new();
+        aliases.insert(
+            qn("A"),
+            Ty::Class(qn("Box"), vec![type_alias("A")], TyAttr::default()),
+        );
+
+        let recursive = find_recursive_aliases(&aliases);
+        assert!(
+            recursive.contains(&qn("A")),
+            "expected `type A = Box<A>` to be detected as recursive, got {recursive:?}"
+        );
     }
 }

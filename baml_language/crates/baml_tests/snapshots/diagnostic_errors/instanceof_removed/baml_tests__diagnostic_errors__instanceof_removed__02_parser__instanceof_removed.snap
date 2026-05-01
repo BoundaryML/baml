@@ -1,0 +1,93 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Cat"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Dog"
+    L_BRACE "{"
+    FIELD
+      WORD "breed"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "check_instanceof"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "Cat | Dog"
+          WORD "Cat"
+          PIPE "|"
+          WORD "Dog"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "bool"
+      WORD "bool"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR "x instanceof Cat"
+          WORD "x"
+          KW_INSTANCEOF "instanceof"
+          WORD "Cat"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "check_instanceof_in_if"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "Cat | Dog"
+          WORD "Cat"
+          PIPE "|"
+          WORD "Dog"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "x instanceof Dog"
+              WORD "x"
+              KW_INSTANCEOF "instanceof"
+              WORD "Dog"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT
+              KW_RETURN "return"
+              STRING_LITERAL "dog"
+                QUOTE """
+                WORD "dog"
+                QUOTE """
+              SEMICOLON ";"
+            R_BRACE "}"
+        STRING_LITERAL "cat"
+          QUOTE """
+          WORD "cat"
+          QUOTE """
+        R_BRACE "}"
+
+=== ERRORS ===
+None

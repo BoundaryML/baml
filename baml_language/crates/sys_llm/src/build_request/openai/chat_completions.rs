@@ -223,20 +223,20 @@ fn openai_media_part(
 
     match media.kind {
         MediaKind::Image => media.read_content(|c| {
-            let url = content_to_data_url(c, mime)?;
+            let url = content_to_data_url(c, &mime)?;
             Ok(ContentPart::ImageUrl {
                 image_url: ImageUrl { url },
             })
         }),
         MediaKind::Audio => media.read_content(|c| {
             let data = content_to_base64(c)?;
-            let format = audio_format_from_mime(mime)?;
+            let format = audio_format_from_mime(&mime)?;
             Ok(ContentPart::InputAudio {
                 input_audio: InputAudio { data, format },
             })
         }),
         MediaKind::Pdf => media.read_content(|c| {
-            let data_url = content_to_data_url(c, mime)?;
+            let data_url = content_to_data_url(c, &mime)?;
             Ok(ContentPart::File {
                 file: FileRef {
                     file_id: None,

@@ -69,8 +69,8 @@ export const getByNumber = query({
 
     if (!bep) return null;
 
-    // Get pages, comments, decisions, issues, versions, and shepherds
-    const [pages, comments, decisions, issues, versions, shepherds] =
+    // Get pages, comments, decisions, issues, versions, shepherds, and implementers
+    const [pages, comments, decisions, issues, versions, shepherds, implementers] =
       await Promise.all([
         ctx.db
           .query("bepPages")
@@ -94,6 +94,9 @@ export const getByNumber = query({
           .order("desc")
           .take(10),
         Promise.all(bep.shepherds.map((id) => ctx.db.get(id))),
+        bep.implementedBy
+          ? Promise.all(bep.implementedBy.map((id) => ctx.db.get(id)))
+          : Promise.resolve([]),
       ]);
 
     return {
@@ -104,6 +107,7 @@ export const getByNumber = query({
       issues,
       versions,
       shepherdNames: shepherds.filter((s) => s !== null).map((s) => s!.name),
+      implementedByNames: implementers.filter((i) => i !== null).map((i) => i!.name),
     };
   },
 });
@@ -501,18 +505,42 @@ export const updateStatus = mutation({
   args: {
     id: v.id("beps"),
     status: bepStatus,
+    implementedBy: v.optional(v.array(v.id("users"))),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, {
+    const updates: Record<string, unknown> = {
       status: args.status,
       updatedAt: Date.now(),
-    });
+    };
+
+    // Only set implementedBy when status is 'implemented' and it's provided
+    if (args.status === "implemented" && args.implementedBy !== undefined) {
+      updates.implementedBy = args.implementedBy;
+    }
+
+    await ctx.db.patch(args.id, updates);
 
     // Notify Slack about the status change
     await ctx.scheduler.runAfter(0, internal.slack.notifyStatusChanged, {
       bepId: args.id,
       newStatus: args.status,
     });
+  },
+});
+
+export const toggleGoodReference = mutation({
+  args: {
+    id: v.id("beps"),
+  },
+  handler: async (ctx, args) => {
+    const bep = await ctx.db.get(args.id);
+    if (!bep) throw new Error("BEP not found");
+
+    await ctx.db.patch(args.id, {
+      isGoodReference: !bep.isGoodReference,
+    });
+
+    return { isGoodReference: !bep.isGoodReference };
   },
 });
 
@@ -684,11 +712,24 @@ export const importVersion = mutation({
       order: number;
     }> = [];
 
+    // Create a set of imported page slugs for efficient lookup
+    const importedSlugs = new Set(args.pages.map((p) => p.slug));
+
+    // Delete existing pages that are not in the import bundle
+    // This ensures the new version fully replaces the old content
+    const pagesDeleted: string[] = [];
+    for (const existingPage of existingPages) {
+      if (!importedSlugs.has(existingPage.slug)) {
+        await ctx.db.delete(existingPage._id);
+        pagesDeleted.push(existingPage.slug);
+      }
+    }
+
     for (const importedPage of args.pages) {
       const existingPage = existingPagesBySlug.get(importedPage.slug);
 
       if (existingPage) {
-        // Update existing page
+        // Update existing page, preserving its order
         await ctx.db.patch(existingPage._id, {
           title: importedPage.title,
           content: importedPage.content,
@@ -701,7 +742,7 @@ export const importVersion = mutation({
           order: existingPage.order,
         });
       } else {
-        // Create new page
+        // Create new page with incremental order
         maxOrder += 1;
         await ctx.db.insert("bepPages", {
           bepId: args.bepId,
@@ -717,18 +758,6 @@ export const importVersion = mutation({
           title: importedPage.title,
           content: importedPage.content,
           order: maxOrder,
-        });
-      }
-    }
-
-    // Include existing pages that weren't in the import
-    for (const existingPage of existingPages) {
-      if (!args.pages.some((p) => p.slug === existingPage.slug)) {
-        processedPages.push({
-          slug: existingPage.slug,
-          title: existingPage.title,
-          content: existingPage.content,
-          order: existingPage.order,
         });
       }
     }
@@ -777,6 +806,7 @@ export const importVersion = mutation({
         versionAction: "created" as const,
         pagesCreated,
         pagesUpdated,
+        pagesDeleted: pagesDeleted.length,
       };
     }
 
@@ -800,6 +830,7 @@ export const importVersion = mutation({
       versionAction: "updated" as const,
       pagesCreated,
       pagesUpdated,
+      pagesDeleted: pagesDeleted.length,
     };
   },
 });

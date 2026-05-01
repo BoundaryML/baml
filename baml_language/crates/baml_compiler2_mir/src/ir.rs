@@ -10,8 +10,46 @@ pub use baml_compiler2_ast::BuiltinKind;
 use baml_type::Ty;
 
 // ============================================================================
+// Optimization Level
+// ============================================================================
+
+/// Optimization level controlling both MIR lowering and bytecode emission.
+///
+/// - `Zero`: No inlining of user-named locals. Compiler temps are still optimized.
+///   Produces bytecode that closely mirrors the source structure.
+/// - `One` (default): Full emit optimization — inline single-use locals, copy
+///   propagation, stack carry — but no MIR-level constant folding. Useful for
+///   testing individual instructions (e.g. `unary_op -` for `-5`).
+/// - `Two`: Everything in `One` plus MIR-level constant folding and future
+///   advanced transforms (e.g. type-tag switch dispatch).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum OptLevel {
+    Zero,
+    #[default]
+    One,
+    Two,
+}
+
+// ============================================================================
 // Function
 // ============================================================================
+
+/// A catch region recorded during MIR lowering.
+///
+/// Describes the try-body entry block and the handler block for a `catch`
+/// expression. The emitter uses this to build the bytecode exception table.
+#[derive(Debug, Clone)]
+pub struct CatchRegion {
+    /// First block of the try body.
+    pub body_entry: BlockId,
+    /// Handler block that receives the exception.
+    pub handler: BlockId,
+    /// Frame-local slot for the caught error value.
+    pub error_local: Local,
+    /// Frame-local slot for the stack trace value, if the catch clause
+    /// has a second binding: `catch (e, st) { ... }`
+    pub stack_trace_local: Option<Local>,
+}
 
 /// The bytecode body of a MIR function — blocks, locals, and associated data.
 ///
@@ -26,9 +64,9 @@ pub struct MirFunctionBody {
     pub entry: BlockId,
     /// Local variable declarations.
     pub locals: Vec<LocalDecl>,
-    /// Maps unwind handler block IDs to the error local that receives the error value.
-    /// Populated during catch lowering so the emitter doesn't have to infer it.
-    pub unwind_error_locals: std::collections::HashMap<BlockId, Local>,
+    /// Catch regions mapping try-body extents to handler blocks.
+    /// Populated during catch lowering; used by the emitter to build exception tables.
+    pub catch_regions: Vec<CatchRegion>,
     /// Visualization nodes for control flow visualization.
     pub viz_nodes: Vec<VizNode>,
 }
@@ -47,6 +85,15 @@ impl MirFunctionBody {
     /// Get a local declaration by ID.
     pub fn local(&self, id: Local) -> &LocalDecl {
         &self.locals[id.0]
+    }
+
+    /// Iterate `(handler_block, error_local)` pairs derived from catch regions.
+    ///
+    /// Yields one entry per handler.
+    pub fn unwind_error_locals(&self) -> impl Iterator<Item = (BlockId, Local)> + '_ {
+        self.catch_regions
+            .iter()
+            .map(|r| (r.handler, r.error_local))
     }
 }
 
@@ -179,6 +226,29 @@ pub struct Statement {
     pub span: Option<Span>,
 }
 
+/// Log level for the `Log` intrinsic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogLevel {
+    Info,
+    Debug,
+    Warn,
+    Error,
+}
+
+/// Compiler intrinsic operations.
+///
+/// These are lowered from calls to `$compiler_intrinsic` functions during
+/// MIR construction. They produce `StatementKind::Intrinsic` instead of
+/// `Terminator::Call`, emitting inline side effects without splitting the
+/// control-flow graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntrinsicOp {
+    /// `log.info`, `log.debug`, `log.warn`, `log.error` — emit a `$baml_log` event.
+    Log(LogLevel),
+    /// `baml.events.send` — emit a custom user event.
+    SendEvent,
+}
+
 /// The kind of a MIR statement.
 #[derive(Debug, Clone)]
 pub enum StatementKind {
@@ -221,6 +291,15 @@ pub enum StatementKind {
     /// Exit a visualization node.
     /// Emitted at the end of control flow structures.
     VizExit(usize),
+
+    /// Replace a captured local's cell with a fresh one.
+    /// Emitted at the top of for-loop iteration bodies so each iteration's
+    /// closures capture a distinct cell.
+    FreshCell(Local),
+
+    /// Compiler intrinsic — a void side effect (log, send event).
+    /// Lowered from calls to `$compiler_intrinsic` functions.
+    Intrinsic { op: IntrinsicOp, args: Vec<Operand> },
 
     /// No-op (placeholder for removed statements).
     Nop,
@@ -324,6 +403,31 @@ pub enum Terminator {
         /// The error value to throw.
         value: Operand,
     },
+
+    /// If the value is a panic instance (`baml.panics.*`), throw it.
+    /// Otherwise continue to `otherwise` block.
+    ///
+    /// Used before wildcard catch arms to prevent them from swallowing
+    /// panics the programmer didn't explicitly name.
+    ThrowIfPanic { value: Operand, otherwise: BlockId },
+
+    /// Short-circuit `&&` / `||`.
+    ///
+    /// Evaluates `operand` and peeks at the result (without popping):
+    /// - `&&` (`is_and = true`): if false, jump to `join` (value stays on stack);
+    ///   if true, pop and fall through to `eval_rhs`.
+    /// - `||` (`is_and = false`): if true, jump to `join` (value stays on stack);
+    ///   if false, pop and fall through to `eval_rhs`.
+    ///
+    /// The `eval_rhs` block must assign to `destination` and then goto `join`.
+    /// At `join`, `destination` is on TOS from whichever path executed.
+    ShortCircuit {
+        operand: Operand,
+        is_and: bool,
+        destination: Place,
+        eval_rhs: BlockId,
+        join: BlockId,
+    },
 }
 
 impl Terminator {
@@ -361,6 +465,8 @@ impl Terminator {
                 succs
             }
             Terminator::Throw { .. } => vec![],
+            Terminator::ThrowIfPanic { otherwise, .. } => vec![*otherwise],
+            Terminator::ShortCircuit { eval_rhs, join, .. } => vec![*eval_rhs, *join],
         }
     }
 }
@@ -494,7 +600,7 @@ pub enum Rvalue {
 
     /// Extract runtime type tag from any value: `type_tag(_1)`
     ///
-    /// Used for jump table dispatch on union types (instanceof patterns).
+    /// Used for jump table dispatch on union types (type patterns in match).
     /// Type tags are global constants:
     /// - Primitives: `int=0`, `string=1`, `bool=2`, `null=3`, `float=4`
     /// - Classes: assigned unique IDs starting at 100
@@ -513,6 +619,15 @@ pub enum Rvalue {
     MakeClosure {
         lambda_idx: usize,
         captures: Vec<Operand>,
+    },
+
+    /// Create a bound method value from a method reference and its receiver.
+    ///
+    /// `item_ref` identifies the method (class + name).
+    /// `receiver` is the instance the method is bound to.
+    MakeBoundMethod {
+        item_ref: ItemRef,
+        receiver: Operand,
     },
 }
 
@@ -585,9 +700,6 @@ pub enum Constant {
         /// The variant name within the enum.
         variant: Name,
     },
-    /// Placeholder for type info when needed.
-    #[allow(dead_code)]
-    Ty(Ty),
 }
 
 /// A structured reference to a named item (function, method, enum type).
@@ -596,7 +708,7 @@ pub enum Constant {
 /// No string-path encoding or display-logic special-casing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ItemRef {
-    /// A free function or top-level item: `env.get`, `Foo`, `baml.sys.panic`
+    /// A free function or top-level item: `baml.env.get`, `Foo`, `baml.sys.panic`
     Free {
         package: Name,
         namespace: Vec<Name>,

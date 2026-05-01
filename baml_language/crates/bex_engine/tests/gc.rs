@@ -7,6 +7,7 @@ mod common;
 
 use std::sync::Arc;
 
+use ::bex_heap::CollectionLevel;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -34,6 +35,7 @@ async fn test_handle_prevents_gc_collection() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .unwrap(),
     );
@@ -54,7 +56,7 @@ async fn test_handle_prevents_gc_collection() {
     );
 
     // Trigger GC
-    let _stats = engine.collect_garbage().await;
+    let _stats = engine.collect_garbage(CollectionLevel::Major).await;
 
     // Value should still be correct after GC (basic local-binding check)
     assert_eq!(
@@ -97,6 +99,7 @@ async fn test_array_preserved_through_gc() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .unwrap(),
     );
@@ -117,7 +120,7 @@ async fn test_array_preserved_through_gc() {
     );
 
     // Trigger GC
-    let _stats = engine.collect_garbage().await;
+    let _stats = engine.collect_garbage(CollectionLevel::Major).await;
 
     // Array and all its elements should be preserved
     match result {
@@ -154,6 +157,7 @@ async fn test_gc_updates_forwarding_pointers() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .unwrap(),
     );
@@ -171,7 +175,7 @@ async fn test_gc_updates_forwarding_pointers() {
 
     // Trigger multiple GC cycles to ensure forwarding works
     for _ in 0..3 {
-        let _stats = engine.collect_garbage().await;
+        let _stats = engine.collect_garbage(CollectionLevel::Major).await;
     }
 
     // Objects should still be accessible with correct values
@@ -203,6 +207,7 @@ async fn test_multiple_handles_survive_gc() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .unwrap(),
     );
@@ -237,12 +242,126 @@ async fn test_multiple_handles_survive_gc() {
         .unwrap();
 
     // Trigger GC
-    let _stats = engine.collect_garbage().await;
+    let _stats = engine.collect_garbage(CollectionLevel::Major).await;
 
     // All handles should still be valid
     assert_eq!(h1, BexExternalValue::String("hello".to_string()));
     assert_eq!(h2, BexExternalValue::String("world".to_string()));
     assert_eq!(h3, BexExternalValue::String("test".to_string()));
+}
+
+/// Test that nested class instances (Outer → Inner) survive GC and remain
+/// correctly accessible through the engine.
+#[tokio::test]
+async fn test_gc_with_nested_class_instances() {
+    let source = r#"
+        class Inner {
+            value int
+        }
+        class Outer {
+            inner Inner
+            name string
+        }
+        function make_nested() -> Outer {
+            Outer { inner: Inner { value: 42 }, name: "outer" }
+        }
+        function get_inner_value(o: Outer) -> int {
+            o.inner.value
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+
+    let outer = engine
+        .call_function(
+            "user.make_nested",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+
+    // Force GC to move objects and test that forwarding works correctly.
+    let _stats = engine.collect_garbage(CollectionLevel::Major).await;
+
+    // Access nested field through the GC'd handle.  If Gen2 fixup is broken
+    // the inner pointer will be stale and the engine will return wrong data.
+    let result = engine
+        .call_function(
+            "user.get_inner_value",
+            vec![outer],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result, BexExternalValue::Int(42));
+}
+
+/// Test that an enum variant survives GC and can be echoed back through
+/// the engine correctly.
+#[tokio::test]
+async fn test_gc_with_enum_variant_round_trip() {
+    let source = r#"
+        enum Color {
+            Red
+            Green
+            Blue
+        }
+        function make_color() -> Color {
+            Color.Green
+        }
+        function echo_color(c: Color) -> Color {
+            c
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+
+    let color = engine
+        .call_function(
+            "user.make_color",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+
+    // Force GC.
+    let _stats = engine.collect_garbage(CollectionLevel::Major).await;
+
+    let echoed = engine
+        .call_function(
+            "user.echo_color",
+            vec![color.clone()],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(echoed, color);
 }
 
 /// Test primitive return values (should be `BexExternalValue`, not Handle).
@@ -266,6 +385,7 @@ async fn test_primitive_returns_are_external_values() {
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
             None,
+            Vec::new(),
         )
         .unwrap(),
     );

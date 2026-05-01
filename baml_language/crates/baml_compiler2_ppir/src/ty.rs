@@ -239,6 +239,7 @@ impl PpirTy {
             TypeExpr::Bool { .. } => PpirTy::Bool { attrs },
             TypeExpr::Null { .. } => PpirTy::Null { attrs },
             TypeExpr::Never { .. } => PpirTy::Never { attrs },
+            TypeExpr::Void { .. } => PpirTy::Never { attrs },
             TypeExpr::Path { segments, .. } => PpirTy::Named {
                 path: segments.clone(),
                 attrs,
@@ -301,6 +302,7 @@ impl PpirTy {
         match self {
             PpirTy::Named { path, .. } => TypeExpr::Path {
                 segments: path.clone(),
+                generic_args: vec![],
                 attrs: vec![],
             },
             PpirTy::Int { .. } => TypeExpr::Int { attrs: vec![] },
@@ -383,6 +385,7 @@ mod tests {
     fn ppir_reads_stream_done_from_type_expr() {
         let type_expr = TypeExpr::Path {
             segments: vec![Name::new("Fizz")],
+            generic_args: vec![],
             attrs: vec![make_attr("stream.done")],
         };
         let ppir_ty = PpirTy::from_type_expr(&type_expr);

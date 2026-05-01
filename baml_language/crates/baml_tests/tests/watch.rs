@@ -35,6 +35,7 @@ async fn watch_primitive() {
         load_const 1
         store_var value
         load_var value
+        unwatch value
         return
     }
     "#);
@@ -71,6 +72,7 @@ async fn watch_primitive_nested_scope() {
 
       L0:
         load_var value
+        unwatch value
         return
     }
     "#);
@@ -105,6 +107,7 @@ async fn watch_default_filter() {
         load_const 6
         store_var value
         load_var value
+        unwatch value
         return
     }
     "#);
@@ -231,13 +234,11 @@ async fn watch_alias() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Point
-        copy 0
+        alloc_instance user.Point
         load_const 0
-        store_field .x
-        copy 0
+        init_field .x
         load_const 0
-        store_field .y
+        init_field .y
         store_var point
         load_const "point"
         load_const null
@@ -247,6 +248,7 @@ async fn watch_alias() {
         store_field .x
         load_var point
         load_field .x
+        unwatch point
         return
     }
     "#);
@@ -274,13 +276,11 @@ async fn watch_alias_nested_scope() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Point
-        copy 0
+        alloc_instance user.Point
         load_const 0
-        store_field .x
-        copy 0
+        init_field .x
         load_const 0
-        store_field .y
+        init_field .y
         store_var point
         load_const "point"
         load_const null
@@ -294,6 +294,7 @@ async fn watch_alias_nested_scope() {
       L0:
         load_var point
         load_field .x
+        unwatch point
         return
     }
     "#);
@@ -323,13 +324,11 @@ async fn watch_scope_exit() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Point
-        copy 0
+        alloc_instance user.Point
         load_const 0
-        store_field .x
-        copy 0
+        init_field .x
         load_const 0
-        store_field .y
+        init_field .y
         store_var point
         load_const "point"
         load_const null
@@ -339,6 +338,7 @@ async fn watch_scope_exit() {
         store_field .x
         load_var point
         store_var outter_point
+        unwatch point
         load_var outter_point
         load_const 2
         store_field .x
@@ -349,6 +349,921 @@ async fn watch_scope_exit() {
     "#);
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+// ============================================================================
+// Watch teardown across abnormal exits
+// ============================================================================
+//
+// These tests pin the `unwatch` emission for `break`, `continue`, and early
+// `return` so the helper that consolidates them (folding the inline
+// loops into `emit_unwatch_to_depth`) cannot regress behavior. They also
+// document the per-iteration semantic for `continue`: the watch is re-issued
+// at the top of the next iteration, not held for the whole loop.
+
+#[tokio::test]
+async fn watch_break_unwatches() {
+    // Expected notifications: [["x"]]
+    // (iter 1 assigns x = 10 → notify; iter 2 hits break before any assignment.)
+    //
+    // unwatch x must precede the goto to the loop exit so the watcher is
+    // torn down before iteration ends.
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let total = 0;
+            for (let i in [1, 2, 3]) {
+                watch let x = i;
+                if (x > 1) {
+                    break;
+                }
+                x = x + 9;
+                total = total + x;
+            }
+            total
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 0
+        store_var total
+        load_const 1
+        load_const 2
+        load_const 3
+        alloc_array 3
+        store_var _2
+        load_const 0
+        store_var __for_idx
+
+      L0:
+        load_var __for_idx
+        load_var _2
+        call baml.Array.length
+        cmp_op <
+        pop_jump_if_false L3
+        load_var _2
+        load_var __for_idx
+        load_array_element
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_var x
+        load_const 1
+        cmp_op >
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var x
+        load_const 9
+        bin_op +
+        store_var x
+        load_var total
+        load_var x
+        bin_op +
+        store_var total
+        unwatch x
+        load_var __for_idx
+        load_const 1
+        bin_op +
+        store_var __for_idx
+        jump L0
+
+      L2:
+        unwatch x
+
+      L3:
+        load_var total
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(10)));
+}
+
+#[tokio::test]
+async fn watch_continue_unwatches() {
+    // Expected notifications: [["x"], ["x"]]
+    // (iter 1 assigns x = 11; iter 2 hits continue before assigning; iter 3
+    // assigns x = 13. Each `watch let x = i` re-issues the watcher at the top
+    // of its iteration, so unwatch on continue is per-iteration, not
+    // permanent for the loop.)
+    //
+    // unwatch x must precede the goto to the continue target (the increment
+    // step), AND must also fire on normal fallthrough at end of body.
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let total = 0;
+            for (let i in [1, 2, 3]) {
+                watch let x = i;
+                if (x == 2) {
+                    continue;
+                }
+                x = x + 10;
+                total = total + x;
+            }
+            total
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 0
+        store_var total
+        load_const 1
+        load_const 2
+        load_const 3
+        alloc_array 3
+        store_var _2
+        load_const 0
+        store_var __for_idx
+
+      L0:
+        load_var __for_idx
+        load_var _2
+        call baml.Array.length
+        cmp_op <
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var total
+        return
+
+      L2:
+        load_var _2
+        load_var __for_idx
+        load_array_element
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_var x
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_var x
+        load_const 10
+        bin_op +
+        store_var x
+        load_var total
+        load_var x
+        bin_op +
+        store_var total
+        unwatch x
+        jump L5
+
+      L4:
+        unwatch x
+
+      L5:
+        load_var __for_idx
+        load_const 1
+        bin_op +
+        store_var __for_idx
+        jump L0
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(24)));
+}
+
+#[tokio::test]
+async fn watch_early_return_unwatches() {
+    // Expected notifications: [["x"]]
+    // (x = 42 notifies; the return path then unwatches before exiting.)
+    //
+    // unwatch x must precede the goto to the function's exit block.
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            watch let x = 0;
+            x = 42;
+            if (true) {
+                return x;
+            }
+            x = 99;
+            x
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 0
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_const 42
+        store_var x
+        load_const true
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 99
+        store_var x
+        load_var x
+        unwatch x
+        jump L2
+
+      L1:
+        load_var x
+        unwatch x
+
+      L2:
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+// ============================================================================
+// Watch teardown across throw and arm-body fallthrough
+// ============================================================================
+//
+// `throw` and match/catch arm-body fallthrough are exit paths that previously
+// did not emit `unwatch` ops:
+//   - `Stmt::Throw` in MIR went straight to a dead block (lower.rs:3884-3889).
+//   - Match arm bodies (lower.rs:4769-4775, 4785-4797) and catch arm bodies
+//     (lower.rs:5343-5354) only restored locals; they did not unwatch
+//     arm-declared `watch let`s before the goto-to-join.
+//
+// These tests pin the corrected behavior via bytecode snapshots and verify
+// the function still produces the expected runtime result.
+
+#[tokio::test]
+async fn watch_throw_unwatches() {
+    // Expected notifications: [["x"]]
+    // (x = 5 notifies before throw; the unwatch then runs before the throw
+    // terminator so the watcher is torn down on the divergent path.)
+    let output = baml_test!(
+        r#"
+        function fails() -> int {
+            watch let x = 0;
+            x = 5;
+            throw "boom";
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                "boom" => 99,
+                _ => -1,
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const 0
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_const 5
+        store_var x
+        unwatch x
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L2
+        load_var e
+        load_const "boom"
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 1
+        unary_op -
+        jump L2
+
+      L1:
+        load_const 99
+
+      L2:
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+#[tokio::test]
+async fn watch_for_throw_unwatches() {
+    // Expected notifications: [["x"]]
+    // (iter 1 assigns x = 10 → notify; iter 2 throws — the throw must unwatch
+    // x before the throw terminator. The watch is also re-issued each iteration.)
+    let output = baml_test!(
+        r#"
+        function fails() -> int {
+            for (let i in [1, 2, 3]) {
+                watch let x = i;
+                if (x == 2) {
+                    throw "boom";
+                }
+                x = x + 9;
+            }
+            0
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                "boom" => 99,
+                _ => -1,
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const 1
+        load_const 2
+        load_const 3
+        alloc_array 3
+        store_var _1
+        load_const 0
+        store_var __for_idx
+
+      L0:
+        load_var __for_idx
+        load_var _1
+        call baml.Array.length
+        cmp_op <
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_const 0
+        return
+
+      L2:
+        load_var _1
+        load_var __for_idx
+        load_array_element
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_var x
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_var x
+        load_const 9
+        bin_op +
+        store_var x
+        unwatch x
+        load_var __for_idx
+        load_const 1
+        bin_op +
+        store_var __for_idx
+        jump L0
+
+      L4:
+        unwatch x
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L2
+        load_var e
+        load_const "boom"
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 1
+        unary_op -
+        jump L2
+
+      L1:
+        load_const 99
+
+      L2:
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+#[tokio::test]
+async fn watch_while_throw_unwatches() {
+    // Expected notifications: [["x"]]
+    // (Same shape as `watch_for_throw_unwatches` but with a `while` loop.
+    // The MIR's while-body lowering pushes a Block expression for the body,
+    // so the `watch let x` snapshot/teardown is anchored at the MIR layer.)
+    let output = baml_test!(
+        r#"
+        function fails() -> int {
+            let i = 0;
+            while (i < 3) {
+                watch let x = i;
+                if (x == 1) {
+                    throw "boom";
+                }
+                x = x + 10;
+                i = i + 1;
+            }
+            0
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                "boom" => 99,
+                _ => -1,
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const 0
+        store_var i
+
+      L0:
+        load_var i
+        load_const 3
+        cmp_op <
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_const 0
+        return
+
+      L2:
+        load_var i
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_var x
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_var x
+        load_const 10
+        bin_op +
+        store_var x
+        load_var i
+        load_const 1
+        bin_op +
+        store_var i
+        unwatch x
+        jump L0
+
+      L4:
+        unwatch x
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L2
+        load_var e
+        load_const "boom"
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 1
+        unary_op -
+        jump L2
+
+      L1:
+        load_const 99
+
+      L2:
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+#[tokio::test]
+async fn watch_match_arm_throw_unwatches() {
+    // Expected notifications: [["x"]]
+    // (The match arm declares a watch and assigns to it before throwing.
+    // The throw path must unwatch x before the throw terminator.)
+    let output = baml_test!(
+        r#"
+        function fails(input: int) -> int {
+            match (input) {
+                1 => {
+                    watch let x = 0;
+                    x = 5;
+                    throw "boom"
+                }
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            fails(1) catch (e) {
+                "boom" => 99,
+                _ => -1,
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(input: int) -> int {
+        load_var input
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 0
+        return
+
+      L1:
+        load_const 0
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_const 5
+        store_var x
+        unwatch x
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L2
+        load_var e
+        load_const "boom"
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 1
+        unary_op -
+        jump L2
+
+      L1:
+        load_const 99
+
+      L2:
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+#[tokio::test]
+async fn watch_catch_arm_throw_unwatches() {
+    // Expected notifications: [["x"]]
+    // (The catch arm body declares a watch, assigns to it, then re-throws.
+    // The throw path must unwatch x before re-throwing — otherwise the
+    // arm-scoped watch leaks past the function.)
+    let output = baml_test!(
+        r#"
+        function inner() -> int {
+            throw "first";
+        }
+
+        function fails() -> int {
+            inner() catch (e) {
+                _ => {
+                    watch let x = 0;
+                    x = 5;
+                    throw "boom"
+                }
+            }
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                "boom" => 99,
+                _ => -1,
+            }
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        call user.inner
+        jump L0
+        load_var e
+        throw_if_panic
+        load_const 0
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_const 5
+        store_var x
+        unwatch x
+        load_const "boom"
+        throw
+
+      L0:
+        return
+    }
+
+    function inner() -> int {
+        load_const "first"
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L2
+        load_var e
+        load_const "boom"
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var e
+        throw_if_panic
+        load_const 1
+        unary_op -
+        jump L2
+
+      L1:
+        load_const 99
+
+      L2:
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+#[tokio::test]
+async fn watch_match_arm_fallthrough_unwatches() {
+    // Expected notifications: [["x"]]
+    // (The match arm declares a watch let, assigns to it, and falls through
+    // to the join. `unwatch x` must precede the goto to the join, otherwise
+    // the arm-scoped watch leaks for the rest of the function.)
+    //
+    // After the match expression returns, a subsequent assignment to a
+    // distinct outer var must NOT notify on channel "x".
+    let output = baml_test!(
+        r#"
+        function entry(input: int) -> int {
+            let result = match (input) {
+                1 => {
+                    watch let x = 0;
+                    x = 5;
+                    x
+                }
+                _ => 0
+            };
+            // If the arm-scoped watch leaked, this assignment would be
+            // observed by an `x` watcher. After the arm, x must already be
+            // unwatched.
+            let result2 = result + 1;
+            result2
+        }
+
+        function main() -> int {
+            entry(1)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function entry(input: int) -> int {
+        load_var input
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 0
+        store_var result
+        jump L2
+
+      L1:
+        load_const 0
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_const 5
+        store_var x
+        load_var x
+        store_var result
+        unwatch x
+
+      L2:
+        load_var result
+        load_const 1
+        bin_op +
+        return
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.entry
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
+}
+
+#[tokio::test]
+async fn watch_switch_arm_fallthrough_unwatches() {
+    // Expected notifications: [["x"]]
+    //
+    // Four dense int arms drive `try_lower_as_switch` (lower.rs:4351), which
+    // emits a Switch terminator and lowers the matching arm body in
+    // `try_lower_as_switch` itself rather than `lower_match_chain`. The arm
+    // body declares a `watch let x` and falls through to the join — the
+    // watcher must be torn down before the goto-to-join so it does not leak
+    // past the arm. After the match returns, an assignment to a distinct
+    // outer variable must NOT be observed by an `x` watcher.
+    let output = baml_test!(
+        r#"
+        function entry(input: int) -> int {
+            let result = match (input) {
+                0 => 100,
+                1 => {
+                    watch let x = 0;
+                    x = 5;
+                    x
+                }
+                2 => 102,
+                3 => 103,
+                _ => 999
+            };
+            // If the arm-scoped watch leaked past the arm, this assignment
+            // would be observed by an `x` watcher. After the arm, x must
+            // already be unwatched.
+            let result2 = result + 1;
+            result2
+        }
+
+        function main() -> int {
+            entry(1)
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function entry(input: int) -> int {
+        load_var input
+        jump_table [L4, L3, L2, L1], default L0
+
+      L0:
+        load_const 999
+        store_var result
+        jump L5
+
+      L1: 3
+        load_const 103
+        store_var result
+        jump L5
+
+      L2: 2
+        load_const 102
+        store_var result
+        jump L5
+
+      L3: 1
+        load_const 0
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_const 5
+        store_var x
+        load_var x
+        store_var result
+        unwatch x
+        jump L5
+
+      L4: 0
+        load_const 100
+        store_var result
+
+      L5:
+        load_var result
+        load_const 1
+        bin_op +
+        return
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.entry
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
+}
+
+#[tokio::test]
+async fn watch_catch_arm_fallthrough_unwatches() {
+    // Expected notifications: [["x"]]
+    // (Same shape as watch_match_arm_fallthrough_unwatches, but the watch
+    // is declared inside a catch arm body that falls through to the join.)
+    let output = baml_test!(
+        r#"
+        function fails() -> int {
+            throw "boom";
+        }
+
+        function main() -> int {
+            let result = fails() catch (e) {
+                _ => {
+                    watch let x = 0;
+                    x = 5;
+                    x
+                }
+            };
+            let result2 = result + 1;
+            result2
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        store_var result
+        jump L0
+        load_var e
+        throw_if_panic
+        load_const 0
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_const 5
+        store_var x
+        load_var x
+        store_var result
+        unwatch x
+
+      L0:
+        load_var result
+        load_const 1
+        bin_op +
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
 }
 
 // ============================================================================
@@ -393,13 +1308,11 @@ async fn watch_function_call_modifications() {
     }
 
     function main() -> int {
-        alloc_instance Point
-        copy 0
+        alloc_instance user.Point
         load_const 0
-        store_field .x
-        copy 0
+        init_field .x
         load_const 0
-        store_field .y
+        init_field .y
         store_var point
         load_const "point"
         load_const null
@@ -414,6 +1327,7 @@ async fn watch_function_call_modifications() {
         load_var point
         load_field .y
         bin_op +
+        unwatch point
         return
     }
     "#);
@@ -446,54 +1360,40 @@ async fn watch_nested_object_added() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Vec2D
-        copy 0
-        alloc_instance Point
-        copy 0
-        alloc_instance Value
-        copy 0
+        alloc_instance user.Vec2D
+        alloc_instance user.Point
+        alloc_instance user.Value
         load_const 0
-        store_field .value
-        store_field .x
-        copy 0
-        alloc_instance Value
-        copy 0
+        init_field .value
+        init_field .x
+        alloc_instance user.Value
         load_const 0
-        store_field .value
-        store_field .y
-        store_field .p
-        copy 0
-        alloc_instance Point
-        copy 0
-        alloc_instance Value
-        copy 0
+        init_field .value
+        init_field .y
+        init_field .p
+        alloc_instance user.Point
+        alloc_instance user.Value
         load_const 0
-        store_field .value
-        store_field .x
-        copy 0
-        alloc_instance Value
-        copy 0
+        init_field .value
+        init_field .x
+        alloc_instance user.Value
         load_const 0
-        store_field .value
-        store_field .y
-        store_field .q
+        init_field .value
+        init_field .y
+        init_field .q
         store_var vec
         load_const "vec"
         load_const null
         watch vec
-        alloc_instance Point
-        copy 0
-        alloc_instance Value
-        copy 0
+        alloc_instance user.Point
+        alloc_instance user.Value
         load_const 1
-        store_field .value
-        store_field .x
-        copy 0
-        alloc_instance Value
-        copy 0
+        init_field .value
+        init_field .x
+        alloc_instance user.Value
         load_const 1
-        store_field .value
-        store_field .y
+        init_field .value
+        init_field .y
         store_var p
         load_var vec
         load_var p
@@ -506,6 +1406,7 @@ async fn watch_nested_object_added() {
         load_field .p
         load_field .x
         load_field .value
+        unwatch vec
         return
     }
     "#);
@@ -539,37 +1440,27 @@ async fn watch_nested_object_removed() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Vec2D
-        copy 0
-        alloc_instance Point
-        copy 0
-        alloc_instance Value
-        copy 0
+        alloc_instance user.Vec2D
+        alloc_instance user.Point
+        alloc_instance user.Value
         load_const 0
-        store_field .value
-        store_field .x
-        copy 0
-        alloc_instance Value
-        copy 0
+        init_field .value
+        init_field .x
+        alloc_instance user.Value
         load_const 0
-        store_field .value
-        store_field .y
-        store_field .p
-        copy 0
-        alloc_instance Point
-        copy 0
-        alloc_instance Value
-        copy 0
+        init_field .value
+        init_field .y
+        init_field .p
+        alloc_instance user.Point
+        alloc_instance user.Value
         load_const 0
-        store_field .value
-        store_field .x
-        copy 0
-        alloc_instance Value
-        copy 0
+        init_field .value
+        init_field .x
+        alloc_instance user.Value
         load_const 0
-        store_field .value
-        store_field .y
-        store_field .q
+        init_field .value
+        init_field .y
+        init_field .q
         store_var vec
         load_const "vec"
         load_const null
@@ -578,19 +1469,15 @@ async fn watch_nested_object_removed() {
         load_field .p
         store_var p
         load_var vec
-        alloc_instance Point
-        copy 0
-        alloc_instance Value
-        copy 0
+        alloc_instance user.Point
+        alloc_instance user.Value
         load_const 1
-        store_field .value
-        store_field .x
-        copy 0
-        alloc_instance Value
-        copy 0
+        init_field .value
+        init_field .x
+        alloc_instance user.Value
         load_const 1
-        store_field .value
-        store_field .y
+        init_field .value
+        init_field .y
         store_field .p
         load_var p
         load_field .x
@@ -600,6 +1487,7 @@ async fn watch_nested_object_removed() {
         load_field .p
         load_field .x
         load_field .value
+        unwatch vec
         return
     }
     "#);
@@ -649,40 +1537,32 @@ async fn watch_cyclic_graph() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Vertex
-        copy 0
+        alloc_instance user.Vertex
+        alloc_array 0
+        init_field .edges
         load_const 1
-        store_field .edges
-        copy 0
-        alloc_array 0
-        store_field .value
+        init_field .value
         store_var v1
-        alloc_instance Vertex
-        copy 0
-        load_const 2
-        store_field .edges
-        copy 0
+        alloc_instance user.Vertex
         alloc_array 0
-        store_field .value
+        init_field .edges
+        load_const 2
+        init_field .value
         store_var v2
         load_const "v2"
         load_const null
         watch v2
-        alloc_instance Vertex
-        copy 0
+        alloc_instance user.Vertex
+        alloc_array 0
+        init_field .edges
         load_const 3
-        store_field .edges
-        copy 0
-        alloc_array 0
-        store_field .value
+        init_field .value
         store_var v3
-        alloc_instance Vertex
-        copy 0
-        load_const 4
-        store_field .edges
-        copy 0
+        alloc_instance user.Vertex
         alloc_array 0
-        store_field .value
+        init_field .edges
+        load_const 4
+        init_field .value
         store_var v4
         load_const "v4"
         load_const null
@@ -712,6 +1592,8 @@ async fn watch_cyclic_graph() {
         load_var v3
         load_const 30
         store_field .value
+        unwatch v4
+        unwatch v2
         load_const 0
         return
     }
@@ -738,7 +1620,7 @@ async fn block_notification_basic() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         notify_block entering_computation
         load_const 1
@@ -768,7 +1650,7 @@ async fn block_notification_multiple() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         notify_block first_block
         notify_block second_block
@@ -806,7 +1688,7 @@ async fn viz_header_before_if() {
         entry: "header_before_if",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function header_before_if() -> int {
         notify_block MyHeader
         load_const true
@@ -848,7 +1730,7 @@ async fn viz_header_before_while() {
         entry: "header_before_while",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function header_before_while() -> int {
         load_const 0
         store_var x
@@ -892,7 +1774,7 @@ async fn viz_standalone_header_no_viz_events() {
         entry: "standalone_header",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function standalone_header() -> int {
         notify_block JustAHeader
         load_const 5
@@ -926,7 +1808,7 @@ async fn viz_multiple_headers_only_one_before_if() {
         entry: "multiple_headers",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function multiple_headers() -> int {
         notify_block FirstHeader
         notify_block SecondHeader
@@ -967,7 +1849,7 @@ async fn viz_if_without_header_no_viz() {
         entry: "if_no_header",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function if_no_header() -> int {
         load_const true
         pop_jump_if_false L0

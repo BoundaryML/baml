@@ -125,4 +125,12 @@ pub enum WsOutMessage {
     },
     #[serde(rename = "cursorContext")]
     CursorContext { context: serde_json::Value },
+    /// A runtime event was emitted during execution (protobuf-encoded).
+    #[serde(rename = "runtimeEvent")]
+    RuntimeEvent {
+        /// Base64-encoded protobuf RuntimeEvent bytes
+        data: String,
+        #[serde(rename = "callId")]
+        call_id: u64,
+    },
 }

@@ -197,10 +197,7 @@ async fn iife_returns_closure_counter() {
 
 /// Closure passed to .map() with a captured offset.
 /// [1, 2, 3].map(x -> x + offset) where offset = 10 returns [11, 12, 13].
-// Ignored: Array.map() is not yet implemented in the VM (panics "not yet implemented").
-// The lambda compilation itself is correct; this test is blocked on VM work.
 #[tokio::test]
-#[ignore = "Array.map() not yet implemented in VM"]
 async fn closure_in_map_with_captured_offset() {
     let output = baml_test!(
         "
@@ -269,6 +266,44 @@ async fn multiple_closures_share_cell_deep_copy() {
     "
     );
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+#[tokio::test]
+async fn explicit_throwing_lambda_catches_error() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let risky = (x: int) -> int throws string {
+                if (x < 0) { throw "negative" }
+                x
+            }
+            risky(-1) catch (e) {
+                "negative" => -1,
+                _ => -2
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+}
+
+#[tokio::test]
+async fn lambda_inside_catch_base_keeps_parameter_scope() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            {
+                let f = (x: int) -> int {
+                    if (x == 7) { x } else { 0 }
+                }
+                f(7)
+            } catch (x) {
+                _ => x
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
 }
 
 /// Deep nesting (3 levels) with transitive captures at each level.
@@ -343,7 +378,6 @@ async fn issue_e_method_resolution_different_types() {
 /// let x = 1; let g captures x (=1); let x = "shadow"; let f captures x (="shadow")
 /// Both lambdas should capture the correct x for their position.
 #[tokio::test]
-#[ignore = "BAML disallows variable shadowing; test kept for when shadowing is added"]
 async fn issue_f_shadowing_capture_correct_binding() {
     let output = baml_test!(
         "
@@ -363,7 +397,6 @@ async fn issue_f_shadowing_capture_correct_binding() {
 /// Issue F (variant): shadowed capture with mutation.
 /// The first x should be independently cell-wrapped from the second x.
 #[tokio::test]
-#[ignore = "BAML disallows variable shadowing; test kept for when shadowing is added"]
 async fn issue_f_shadowing_capture_independent_cells() {
     let output = baml_test!(
         "
@@ -510,4 +543,32 @@ async fn issue_b_watch_let_mutated_by_parent_and_lambda() {
     );
     // counter: 0 → 1 (parent) → 11 (lambda)
     assert_eq!(output.result, Ok(BexExternalValue::Int(11)));
+}
+
+/// Lambda parameter shadowing an annotated outer let. The lambda param's
+/// declared type must replace any outer entry in `declared_types` so that
+/// assignments to the param inside the body type-check against the param's
+/// type, not the shadowed outer's. Previously `infer_lambda_body` seeded
+/// params via `add_local`, which used `or_insert_with` for `declared_types`
+/// and therefore preserved the outer entry — causing a phantom TypeMismatch
+/// when the param is reassigned to a value of its declared type. With the
+/// bug present, `compile_source` would panic via `assert_no_diagnostic_errors`
+/// before reaching execution.
+#[tokio::test]
+async fn lambda_param_shadows_annotated_outer_local() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let x: int = 7;
+            let f = (x: string) -> int {
+                x = "world";
+                x.length()
+            };
+            f("hi") + x
+        }
+    "#
+    );
+    // Inside f, x is reassigned to "world" (length 5). Outer x is unchanged
+    // (the lambda param shadows the outer binding entirely). 5 + 7 = 12.
+    assert_eq!(output.result, Ok(BexExternalValue::Int(12)));
 }

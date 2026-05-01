@@ -77,15 +77,12 @@ pub fn resolve_name_at_in_scope<'db>(
         let bindings = &index.scope_bindings[ancestor_id.index() as usize];
 
         // Check let-bindings in this scope (reverse order for shadowing)
-        for (binding_name, def_site, binding_range) in bindings.bindings.iter().rev() {
-            if binding_name == name {
-                // Only visible if the binding precedes the use site
-                if binding_range.start() <= at_offset {
-                    return ResolvedName::Local {
-                        name: name.clone(),
-                        definition_site: Some(*def_site),
-                    };
-                }
+        for binding in bindings.bindings.iter().rev() {
+            if &binding.name == name && index.binding_visible_at(binding, at_offset) {
+                return ResolvedName::Local {
+                    name: name.clone(),
+                    definition_site: Some(binding.site),
+                };
             }
         }
 
@@ -118,7 +115,7 @@ pub fn resolve_name_at_in_scope<'db>(
             if let Some((_source, _ty)) =
                 res_ctx.resolve_type(db, name_path, &pkg_info.namespace_path)
             {
-                let pkg_items = res_ctx.own_items;
+                let pkg_items = &res_ctx.own_items;
                 if let Some(def) = pkg_items.lookup_type(&pkg_info.namespace_path, name) {
                     return ResolvedName::Item(def);
                 }
