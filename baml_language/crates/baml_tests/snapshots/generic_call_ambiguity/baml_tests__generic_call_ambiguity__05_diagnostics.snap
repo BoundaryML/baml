@@ -11,3 +11,13 @@ source: crates/baml_tests/src/generated_tests.rs
     │ 
     │ Note: Error code: E0001
 ────╯
+
+  [type] Error: type mismatch: expected "assistant", got "a"
+    ╭─[ generic_call.baml:23:28 ]
+    │
+ 23 │     f<"assistant", string>("a", "b")
+    │                            ─┬─  
+    │                             ╰─── type mismatch: expected "assistant", got "a"
+    │ 
+    │ Note: Error code: E0001
+────╯

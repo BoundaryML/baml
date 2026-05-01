@@ -454,6 +454,7 @@ pub fn synthesize_llm_builtin_call(
     };
     let call = alloc(Expr::Call {
         callee,
+        type_args: vec![],
         args: vec![client_arg, fn_name_expr, args_map],
     });
 
@@ -518,6 +519,7 @@ pub(crate) fn synthesize_llm_parse_call(
 
     let call = alloc(Expr::Call {
         callee,
+        type_args: vec![],
         args: vec![fn_name_expr, json_expr],
     });
 
@@ -610,6 +612,7 @@ pub fn synthesize_llm_make_stream_call(
 
     let call = alloc(Expr::Call {
         callee,
+        type_args: vec![],
         args: vec![sse_expr, fn_name_expr],
     });
 
@@ -1152,6 +1155,7 @@ fn synthesize_register_call(
             ctx.alloc_expr(
                 Expr::Call {
                     callee: method_call_target,
+                    type_args: vec![],
                     args: vec![name_arg, lambda_arg, runner_arg],
                 },
                 span,
@@ -1221,6 +1225,7 @@ fn synthesize_register_call(
             ctx.alloc_expr(
                 Expr::Call {
                     callee: method_call_target,
+                    type_args: vec![],
                     args: vec![name_arg, collector_arg, runner_arg],
                 },
                 span,

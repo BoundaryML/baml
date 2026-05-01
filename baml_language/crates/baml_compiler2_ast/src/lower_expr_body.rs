@@ -1543,6 +1543,21 @@ impl LoweringContext {
         // CALL_EXPR structure: callee expr node (or WORD token), then CALL_ARGS node
         let callee_node = node.children().find(|n| n.kind() != SyntaxKind::CALL_ARGS);
 
+        // Extract explicit type arguments from the callee node.
+        // When `foo<T, U>(args)` is parsed, the parser emits a PATH_EXPR containing
+        // the callee tokens and a GENERIC_ARGS child node. We walk that node to
+        // collect each TYPE_EXPR child and lower it to an AST TypeExpr.
+        let type_args: Vec<TypeExpr> = callee_node
+            .iter()
+            .flat_map(rowan::SyntaxNode::children)
+            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+            .into_iter()
+            .flat_map(|args_node| args_node.children())
+            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+            .collect();
+
         let callee = if let Some(n) = callee_node {
             self.lower_expr_in_chain(&n)
         } else {
@@ -1619,7 +1634,14 @@ impl LoweringContext {
             })
             .unwrap_or_default();
 
-        let id = self.alloc_expr(Expr::Call { callee, args }, node.text_range());
+        let id = self.alloc_expr(
+            Expr::Call {
+                callee,
+                type_args,
+                args,
+            },
+            node.text_range(),
+        );
         if self.needs_chain_wrap.remove(&callee) {
             self.needs_chain_wrap.insert(id);
         }
@@ -1731,6 +1753,7 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Call {
                 callee,
+                type_args: vec![],
                 args: vec![arg],
             },
             range,
@@ -2804,6 +2827,7 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Call {
                 callee: method_target,
+                type_args: vec![],
                 args: vec![name_expr, lambda_arg, runner_arg],
             },
             span,
@@ -2890,6 +2914,7 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Call {
                 callee: method_target,
+                type_args: vec![],
                 args: vec![name_expr, sub_collector_arg, runner_arg],
             },
             span,

@@ -762,7 +762,7 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                 render_expr_compact_ast(body, *index)
             )
         }
-        ast::Expr::Call { callee, args } => {
+        ast::Expr::Call { callee, args, .. } => {
             let callee_str = render_expr_compact_ast(body, *callee);
             let args_str: Vec<_> = args
                 .iter()
@@ -1158,6 +1158,7 @@ mod tests {
             let arg = exprs.alloc(ast::Expr::Path(vec!["text".into()]));
             let call = exprs.alloc(ast::Expr::Call {
                 callee,
+                type_args: vec![],
                 args: vec![arg],
             });
             Some(call)
@@ -1321,6 +1322,7 @@ mod tests {
             let arg = exprs.alloc(ast::Expr::Path(vec!["input".into()]));
             let call = exprs.alloc(ast::Expr::Call {
                 callee,
+                type_args: vec![],
                 args: vec![arg],
             });
             let ret = stmts.alloc(ast::Stmt::Return(Some(call)));

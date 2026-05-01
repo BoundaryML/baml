@@ -375,14 +375,25 @@ impl ExprBody {
                     self.display_expr_inner(*index, depth + 1)
                 )
             }
-            Expr::Call { callee, args } => {
+            Expr::Call {
+                callee,
+                type_args,
+                args,
+            } => {
+                let ty_args_str = if type_args.is_empty() {
+                    String::new()
+                } else {
+                    let tys: Vec<_> = type_args.iter().map(ToString::to_string).collect();
+                    format!("<{}>", tys.join(", "))
+                };
                 let args_str: Vec<_> = args
                     .iter()
                     .map(|a| self.display_expr_inner(*a, depth + 1))
                     .collect();
                 format!(
-                    "{}({})",
+                    "{}{}({})",
                     self.display_expr_inner(*callee, depth + 1),
+                    ty_args_str,
                     args_str.join(", ")
                 )
             }
@@ -571,6 +582,9 @@ pub enum Expr {
     },
     Call {
         callee: ExprId,
+        /// Explicit type arguments at the call site, e.g. `foo<int, string>(x)`.
+        /// Empty vec when no `<...>` was written.
+        type_args: Vec<TypeExpr>,
         args: Vec<ExprId>,
     },
     Object {

@@ -1735,7 +1735,7 @@ impl LoweringContext<'_> {
                 self.lower_unary(expr_id, op, expr, dest);
             }
 
-            AstExpr::Call { callee, args } => {
+            AstExpr::Call { callee, args, .. } => {
                 self.lower_call(expr_id, callee, &args, dest);
             }
 

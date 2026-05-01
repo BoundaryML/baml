@@ -204,6 +204,10 @@ struct CallCheckRequest<'a> {
     callee_ty: Ty,
     is_method_call: bool,
     is_optional_call: bool,
+    /// Pre-computed type-arg bindings when explicit `<T1, T2, ...>` were written at the call
+    /// site. `Some(map)` means the caller already validated arity and resolved each `TypeExpr`;
+    /// `None` means use the existing forward/reverse inference paths.
+    explicit_type_arg_bindings: Option<FxHashMap<Name, Ty>>,
 }
 
 #[derive(Clone, Copy)]
@@ -761,7 +765,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         for (expr_id, expr) in body.exprs.iter() {
             let (callee_expr_id, args, unwrap_optional_callee) = match expr {
-                Expr::Call { callee, args } => (*callee, args.as_slice(), false),
+                Expr::Call { callee, args, .. } => (*callee, args.as_slice(), false),
                 Expr::OptionalCall { callee, args } => (*callee, args.as_slice(), true),
                 _ => continue,
             };
@@ -977,6 +981,69 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Resolve explicit type arguments written at a call site (e.g. `foo<int, string>(x)`).
+    ///
+    /// Returns `Some(bindings)` when all type args are valid, where `bindings` maps each
+    /// declared type-param name to its resolved `Ty`. Returns `None` when:
+    /// - The callee is not a known free function (no resolution recorded), or
+    /// - The arity is wrong (a `WrongTypeArgArity` diagnostic is emitted).
+    ///
+    /// Emits `WrongTypeArgArity` when the count of provided type args does not match the
+    /// count of declared user generic params for the callee.
+    fn resolve_explicit_type_args(
+        &mut self,
+        callee_id: ExprId,
+        type_args: &[TypeExpr],
+        call_expr_id: ExprId,
+    ) -> Option<FxHashMap<Name, Ty>> {
+        // Look up the callee's resolution to find the declared generic param names.
+        let resolution = self.resolutions.get(&callee_id).cloned()?;
+        let func_loc = match resolution {
+            crate::inference::MemberResolution::Free { func_loc } => func_loc,
+            crate::inference::MemberResolution::BoundMethod { func_loc, .. } => func_loc,
+            crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => func_loc,
+            _ => return None,
+        };
+        let db = self.context.db();
+        let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+        // Only user-declared generic params are supplied explicitly; synthetic effect params
+        // are always inferred.
+        let declared_params: Vec<Name> = sig.user_generic_params.clone();
+
+        if type_args.len() != declared_params.len() {
+            self.context.report_simple(
+                TirTypeError::WrongTypeArgArity {
+                    callee_name: sig.name.clone(),
+                    expected: declared_params.len(),
+                    got: type_args.len(),
+                },
+                call_expr_id,
+            );
+            return None;
+        }
+
+        // Resolve each type argument in the current namespace context.
+        let mut bindings = FxHashMap::default();
+        let ns = self.ns_context.clone();
+        let caller_generic_params = self.generic_params.clone();
+        for (param_name, type_arg_expr) in declared_params.iter().zip(type_args.iter()) {
+            let mut diags = Vec::new();
+            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                type_arg_expr,
+                self.package_items,
+                &ns,
+                &caller_generic_params,
+                &mut diags,
+            );
+            for d in diags {
+                self.context.report_simple(d, call_expr_id);
+            }
+            bindings.insert(param_name.clone(), ty);
+        }
+        Some(bindings)
+    }
+
     /// Shared call pipeline: alias expansion, function matching, `skip_self_param`,
     /// arity check, two-pass generic inference, return type substitution.
     ///
@@ -993,6 +1060,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             callee_ty,
             is_method_call,
             is_optional_call,
+            explicit_type_arg_bindings,
         } = request;
         let callee_ty = self.expand_alias_chains(callee_ty);
 
@@ -1014,7 +1082,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                 }
 
-                let mut bindings = FxHashMap::default();
+                // When explicit type args were provided at the call site (e.g. `foo<int>(x)`),
+                // skip Phase 0/1a/1b inference and use the pre-computed bindings directly.
+                // This avoids ambiguity when the user has been explicit about type instantiation.
+                let mut bindings: FxHashMap<Name, Ty> =
+                    explicit_type_arg_bindings.unwrap_or_default();
+
+                // Only run Phase 0/1a/1b when we don't have explicit type-arg bindings.
+                let run_inference_phases = bindings.is_empty();
 
                 let phase0_expected = if is_optional_call
                     && !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
@@ -1033,57 +1108,72 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
 
                 // Phase 0: reverse-infer from expected return type (low priority).
-                // Skip when expected is Unknown/Error — it provides no information
-                // and would pollute forward-inferred bindings.
-                if let Some(phase0_expected) = phase0_expected.as_ref() {
-                    if crate::generics::contains_typevar(ret)
-                        && !matches!(phase0_expected, Ty::Unknown { .. } | Ty::Error { .. })
-                    {
-                        crate::generics::infer_bindings(ret, phase0_expected, &mut bindings);
+                // Skip when expected is Unknown/Error, or when explicit type args were given.
+                if run_inference_phases {
+                    if let Some(phase0_expected) = phase0_expected.as_ref() {
+                        if crate::generics::contains_typevar(ret)
+                            && !matches!(phase0_expected, Ty::Unknown { .. } | Ty::Error { .. })
+                        {
+                            crate::generics::infer_bindings(ret, phase0_expected, &mut bindings);
+                        }
                     }
                 }
 
                 // Phase 1: forward-infer from arguments (high priority, overrides).
                 // Two-pass: first process non-lambda args to bind type vars,
                 // then process lambda args with resolved bindings.
+                // Skip when explicit type args were provided — bindings are already set.
                 let param_arg_pairs: Vec<_> = effective_params.iter().zip(args.iter()).collect();
 
-                for ((_, param_ty), arg) in &param_arg_pairs {
-                    if matches!(&body.exprs[**arg], Expr::Lambda(_)) {
-                        continue;
-                    }
-                    let substituted = crate::generics::substitute_ty(param_ty, &bindings);
-                    let arg_ty = if !crate::generics::contains_typevar(&substituted) {
-                        self.check_expr(**arg, body, &substituted)
-                    } else {
-                        self.infer_expr(**arg, body)
-                    };
-                    crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
-                }
-
-                for ((_, param_ty), arg) in &param_arg_pairs {
-                    if !matches!(&body.exprs[**arg], Expr::Lambda(_)) {
-                        continue;
-                    }
-                    let substituted = crate::generics::substitute_ty(param_ty, &bindings);
-                    let arg_ty = if !crate::generics::contains_typevar(&substituted) {
-                        self.check_expr(**arg, body, &substituted)
-                    } else if let Some(Ty::Function {
-                        params: fn_params, ..
-                    }) = self.expected_lambda_function_ty(&substituted)
-                    {
-                        let all_params_concrete = fn_params
-                            .iter()
-                            .all(|(_, t)| !crate::generics::contains_typevar(t));
-                        if all_params_concrete {
+                if run_inference_phases {
+                    for ((_, param_ty), arg) in &param_arg_pairs {
+                        if matches!(&body.exprs[**arg], Expr::Lambda(_)) {
+                            continue;
+                        }
+                        let substituted = crate::generics::substitute_ty(param_ty, &bindings);
+                        let arg_ty = if !crate::generics::contains_typevar(&substituted) {
                             self.check_expr(**arg, body, &substituted)
                         } else {
                             self.infer_expr(**arg, body)
+                        };
+                        crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
+                    }
+
+                    for ((_, param_ty), arg) in &param_arg_pairs {
+                        if !matches!(&body.exprs[**arg], Expr::Lambda(_)) {
+                            continue;
                         }
-                    } else {
-                        self.infer_expr(**arg, body)
-                    };
-                    crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
+                        let substituted = crate::generics::substitute_ty(param_ty, &bindings);
+                        let arg_ty = if !crate::generics::contains_typevar(&substituted) {
+                            self.check_expr(**arg, body, &substituted)
+                        } else if let Some(Ty::Function {
+                            params: fn_params, ..
+                        }) = self.expected_lambda_function_ty(&substituted)
+                        {
+                            let all_params_concrete = fn_params
+                                .iter()
+                                .all(|(_, t)| !crate::generics::contains_typevar(t));
+                            if all_params_concrete {
+                                self.check_expr(**arg, body, &substituted)
+                            } else {
+                                self.infer_expr(**arg, body)
+                            }
+                        } else {
+                            self.infer_expr(**arg, body)
+                        };
+                        crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
+                    }
+                } else {
+                    // Explicit type args: still need to type-check all value arguments.
+                    // Use the substituted param types (now concrete) for checking.
+                    for ((_, param_ty), arg) in &param_arg_pairs {
+                        let substituted = crate::generics::substitute_ty(param_ty, &bindings);
+                        if !crate::generics::contains_typevar(&substituted) {
+                            self.check_expr(**arg, body, &substituted);
+                        } else {
+                            self.infer_expr(**arg, body);
+                        }
+                    }
                 }
 
                 // Infer any extra args beyond param count (error recovery)
@@ -1221,6 +1311,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             callee_ty: callee_info.inner,
             is_method_call,
             is_optional_call: true,
+            explicit_type_arg_bindings: None,
         });
         let final_ty = Self::make_optional(checked.result);
         self.report_result_type_mismatch(expr_id, &final_ty, expected);
@@ -1899,7 +1990,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             // Call expressions: generic type inference + argument checking.
-            Expr::Call { callee, args } => {
+            Expr::Call {
+                callee,
+                type_args,
+                args,
+            } => {
                 if matches!(&body.exprs[*callee], Expr::OptionalMemberAccess { .. })
                     && self.in_optional_chain > 0
                 {
@@ -1945,6 +2040,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 let callee_ty = self.infer_expr(*callee, body);
 
+                // When explicit type args are written at the call site (e.g. `foo<int, T>(x)`),
+                // validate arity and resolve them to a pre-computed bindings map.
+                let explicit_type_arg_bindings = if !type_args.is_empty() {
+                    self.resolve_explicit_type_args(*callee, type_args, expr_id)
+                } else {
+                    None
+                };
+
                 let checked = self.check_call_inner(CallCheckRequest {
                     context: CallContext {
                         expr_id,
@@ -1955,6 +2058,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     callee_ty,
                     is_method_call,
                     is_optional_call: false,
+                    explicit_type_arg_bindings,
                 });
 
                 if !checked.had_bindings {
@@ -3380,7 +3484,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_throw_facts_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);
             }
-            Expr::Call { callee, args } => {
+            Expr::Call { callee, args, .. } => {
                 self.collect_throw_facts_from_expr(*callee, body, out);
                 for arg in args {
                     self.collect_throw_facts_from_expr(*arg, body, out);
@@ -3612,6 +3716,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         if segments.len() == 1 {
             let name = &segments[0];
             let ty = self.infer_single_name(name);
+            // Record free-function resolution so that explicit type-arg binding
+            // (`resolve_explicit_type_args`) can later retrieve the `FunctionLoc`
+            // without re-doing a package lookup.
+            if !self.locals.contains_key(name) {
+                if let Some(Definition::Function(func_loc)) =
+                    self.package_items.lookup_value(&self.ns_context, name)
+                {
+                    self.resolutions.insert(
+                        expr_id,
+                        crate::inference::MemberResolution::Free { func_loc },
+                    );
+                }
+            }
             // Don't report "unresolved name" for dependency package names —
             // they'll be resolved by the parent FieldAccess expression.
             let is_dep_package = self.res_ctx.dep_interfaces.iter().any(|(n, _)| n == name);

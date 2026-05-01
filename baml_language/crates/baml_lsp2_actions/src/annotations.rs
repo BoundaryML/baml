@@ -199,7 +199,7 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
         // ── Parameter-name hints on call expressions ──────────────────────────
 
         for (_expr_id, expr) in expr_body.exprs.iter() {
-            let Expr::Call { callee, args } = expr else {
+            let Expr::Call { callee, args, .. } = expr else {
                 continue;
             };
 

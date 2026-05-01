@@ -150,7 +150,7 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             collect_from_expr(context, *value, body, out);
             collect_value_throw_facts(context, *value, out);
         }
-        Expr::Call { callee, args } => {
+        Expr::Call { callee, args, .. } => {
             collect_from_expr(context, *callee, body, out);
             for arg in args {
                 collect_from_expr(context, *arg, body, out);

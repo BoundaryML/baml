@@ -5,6 +5,8 @@
 //! tool's `run_tir2` renderer.
 
 #[cfg(test)]
+mod explicit_type_args;
+#[cfg(test)]
 mod inference;
 #[cfg(test)]
 mod phase3a;
@@ -174,10 +176,20 @@ pub(crate) mod support {
                 format!("{} {op} {}", expr_desc(*lhs, body), expr_desc(*rhs, body))
             }
             Expr::Unary { op, expr: inner } => format!("{op:?} {}", expr_desc(*inner, body)),
-            Expr::Call { callee, args } => {
+            Expr::Call {
+                callee,
+                type_args,
+                args,
+            } => {
                 let callee_str = expr_desc(*callee, body);
+                let ty_args_str = if type_args.is_empty() {
+                    String::new()
+                } else {
+                    let tys: Vec<_> = type_args.iter().map(|t| t.to_string()).collect();
+                    format!("<{}>", tys.join(", "))
+                };
                 let arg_strs: Vec<String> = args.iter().map(|a| expr_desc(*a, body)).collect();
-                format!("{callee_str}({})", arg_strs.join(", "))
+                format!("{callee_str}{ty_args_str}({})", arg_strs.join(", "))
             }
             Expr::Object {
                 type_name, fields, ..
@@ -329,7 +341,7 @@ pub(crate) mod support {
     /// Like `expr_desc` but enriches Call expressions with type params from inference.
     fn expr_desc_rich(expr_id: ExprId, body: &ExprBody, inference: &ScopeInference) -> String {
         let expr = &body.exprs[expr_id];
-        if let Expr::Call { callee, args } = expr {
+        if let Expr::Call { callee, args, .. } = expr {
             let callee_str = expr_desc(*callee, body);
             let arg_strs: Vec<String> = args.iter().map(|a| expr_desc(*a, body)).collect();
             let type_params = if let Some(callee_ty) = inference.expression_type(*callee) {
@@ -453,7 +465,7 @@ pub(crate) mod support {
                     render_expr_body_untyped(lambda_body, root, indent + 2, output);
                 }
             }
-            Expr::Call { callee, args } => {
+            Expr::Call { callee, args, .. } => {
                 // Show type params at call site when callee has TypeVars
                 let callee_desc = expr_desc(*callee, body);
                 let arg_strs: Vec<String> = args.iter().map(|a| expr_desc(*a, body)).collect();
@@ -1370,7 +1382,7 @@ pub(crate) mod support {
                         expr_desc_hir(*inner, body, prefix, local_type_names)
                     )
                 }
-                Expr::Call { callee, args } => {
+                Expr::Call { callee, args, .. } => {
                     let callee_str = expr_desc_hir(*callee, body, prefix, local_type_names);
                     let arg_strs: Vec<String> = args
                         .iter()
