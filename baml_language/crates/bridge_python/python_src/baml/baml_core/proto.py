@@ -21,8 +21,20 @@ from typing import Any, Dict, List, Optional
 import pydantic
 
 from baml.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
-from .baml_py import BamlHandle
+from .baml_py import BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlVideo
 from .errors import BamlError
+
+
+# Media PyO3 types live behind their Rust class names; the inbound encoder
+# wraps each in an `InboundClassValue` whose `name` field carries the BAML
+# stdlib FQN (15b §line 21).
+_MEDIA_CLASS_TO_FQN: Dict[type, str] = {
+    BamlImage: "baml.media.Image",
+    BamlAudio: "baml.media.Audio",
+    BamlVideo: "baml.media.Video",
+    BamlPdf: "baml.media.Pdf",
+}
+_MEDIA_PYO3_TYPES = tuple(_MEDIA_CLASS_TO_FQN.keys())
 
 
 # ---------------------------------------------------------------------------
@@ -162,9 +174,34 @@ def _set_inbound_value(inbound_value, value: Any, *, kwarg_name: str) -> None:
         ev.value = value.name
         return
 
-    # Handle-backed Pydantic classes (Image/Audio/Video/Pdf/File, …) must be
-    # checked before the generic `BaseModel` branch — they carry a real
-    # `_handle` we want to send verbatim instead of the Pydantic shell.
+    # Media PyO3 types — wrap into an `InboundClassValue` per 15b. The
+    # encoder borrows the inner `Arc<MediaValue>` into the global handle
+    # table (via `_to_handle()`), then emits a class-shaped inbound where
+    # the only field is `_data` carrying that handle. The engine's
+    # `convert_external_to_vm_value` looks up the class by qualified
+    # name (`baml.media.Pdf` etc.) and lowers `_data` back into a
+    # VM-side `RustData` wrapping the same Arc.
+    #
+    # The handle-table slot is owned by the engine for the duration of
+    # the call — once `convert_external_to_vm_value` allocates a
+    # `RustData` on the VM heap (which holds its own `Arc::clone`), the
+    # slot can be released. See `arc_from_handle` notes in
+    # `bridge_python/src/media.rs`.
+    if isinstance(value, _MEDIA_PYO3_TYPES):
+        cv = inbound_value.class_value
+        cv.name = _MEDIA_CLASS_TO_FQN[type(value)]
+        data_entry = cv.fields.add()
+        data_entry.string_key = "_data"
+        _copy_handle(data_entry.value.handle, value._to_handle())
+        return
+
+    # Handle-backed Pydantic classes (`baml.io.File`, `baml.net.Socket`,
+    # …) must be checked before the generic `BaseModel` branch — they
+    # carry a real `_handle` we want to send verbatim instead of the
+    # Pydantic shell. Media classes (Image/Audio/Video/Pdf) intentionally
+    # don't carry a `_handle` PrivateAttr after 15d M2 — they're PyO3
+    # types holding `Arc<MediaValue>` directly and take the
+    # media-specific branch above.
     handle = _handle_from_handle_backed(value)
     if handle is not None:
         _copy_handle(inbound_value.handle, handle)
@@ -352,18 +389,16 @@ def _decode_class(class_value) -> Any:
     fqn = class_value.name.name
     cls = _resolve_type(fqn)
 
-    # Handle-backed classes never arrive via `class_value` — BEX emits
-    # them through `handle_value`. If one slipped through, it's a bug in
-    # Rust-side encoding or a stale codegen; fail loud rather than build
-    # a half-initialized instance.
-    try:
-        fields = cls.model_fields  # type: ignore[attr-defined]
-    except AttributeError:
-        fields = {}
-    if "_handle" in getattr(cls, "__private_attributes__", {}):
-        raise BamlError(
-            f"BEX emitted class_value for handle-backed class {fqn!r}"
-        )
+    # Media stdlib classes (`baml.media.*`) are PyO3 types holding
+    # `Arc<MediaValue>`. The engine emits them as
+    # `class_value { name: "baml.media.Pdf", fields: { _data: handle_value }}`
+    # (its on-wire shape mirrors the BAML class definition); the inner
+    # `_data` decode already constructed a fresh `BamlPdf` via
+    # `_decode_handle` → `cls._from_handle(...)`. Unwrap and return it
+    # directly — `BamlPdf` is not a Pydantic model and has no
+    # `model_validate`.
+    if cls in _MEDIA_PYO3_TYPES and "_data" in field_dict:
+        return field_dict["_data"]
 
     parameterized = _parameterize(cls, class_value.name.generic_args)
     if issubclass(cls, pydantic.BaseModel):
@@ -425,6 +460,18 @@ def _decode_handle(handle) -> Any:
             f"BEX returned handle_type {ht!r} but {subpath!r} is not "
             f"defined under sdk_root"
         )
+    # Media stdlib classes (`baml.media.*`) are PyO3 types holding
+    # `Arc<MediaValue>`. Their `_from_handle` classmethod resolves the
+    # handle table → unwraps the Arc → releases the slot. Other handle-
+    # backed stdlib classes (File/Socket/Response) keep the legacy
+    # `__handle`-keyword constructor.
+    if ht in (
+        HT.ADT_MEDIA_IMAGE,
+        HT.ADT_MEDIA_AUDIO,
+        HT.ADT_MEDIA_VIDEO,
+        HT.ADT_MEDIA_PDF,
+    ):
+        return cls._from_handle(wrapped)
     return cls(__handle=wrapped)
 
 
