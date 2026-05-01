@@ -1,6 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== HIR2 ===
-type user.Bar = ?
-type user.type = user.Foo

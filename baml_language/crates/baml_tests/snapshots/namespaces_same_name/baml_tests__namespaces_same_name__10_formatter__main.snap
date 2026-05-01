@@ -1,5 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== PARSER ERROR ===
-[UnexpectedToken { expected: "return type (->)", found: "throws", span: Span { file_id: FileId(0), range: 640..646 } }]
