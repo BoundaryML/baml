@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+type user.IntToInt = (x: int) -> int throws never
+type user.BinaryOp = (a: int, b: int) -> int throws never
+type user.UnnamedParams = (int, int) -> int throws never
+type user.MixedParams = (x: int, int, z: string) -> bool throws never
+type user.Producer = () -> string throws never
+type user.Curried = (x: int) -> ((y: int) -> int throws never) throws never
+type user.Complex = (items: int[], lookup: map<string, int>) -> string? throws never
+function user.GetTransform() -> (x: int) -> int throws never throws never {
+  { : 1
+    1 : 1
+  }
+  !! 787..788: type mismatch: expected (x: int) -> int throws never, got 1
+}
+type user.UnionParam = (value: int | string) -> bool throws never
+type user.FunctionFactory = (config: string) -> ((int) -> int throws never) throws never
+type user.IntToInt$stream = unknown
+type user.BinaryOp$stream = unknown
+type user.UnnamedParams$stream = unknown
+type user.MixedParams$stream = unknown
+type user.Producer$stream = unknown
+type user.Curried$stream = unknown
+type user.Complex$stream = unknown
+type user.UnionParam$stream = unknown
+type user.FunctionFactory$stream = unknown
