@@ -24,8 +24,8 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ github.event_name == 'workflow_run' && 'baml-language-alpha-canary' || format('baml-language-alpha-manual-{0}', github.run_id) }}
-  cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
+  group: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'canary') && 'baml-language-alpha-canary' || format('baml-language-alpha-{0}-{1}', github.event_name, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'canary' }}
 
 defaults:
   run:
@@ -40,6 +40,11 @@ env:
 jobs:
   prepare:
     name: Prepare Release
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'canary')
     runs-on: blacksmith-4vcpu-ubuntu-2204
     outputs:
       should_run: ${{ steps.gate.outputs.should_run }}
