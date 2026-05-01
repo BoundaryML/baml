@@ -274,41 +274,32 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     let lexer_tests: TokenStream = project.files.iter().map(generate_lexer_test).collect();
     let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
 
-    // Tier-specific phases
-    let (hir_test, tir_test, mir_test, diagnostics_test, codegen_test, formatter_tests) =
-        match project.tier {
-            Tier::BrokenSyntax => {
-                // Tier 1: lexer + parser only — no higher phases
-                (
-                    quote! {},
-                    quote! {},
-                    quote! {},
-                    quote! {},
-                    quote! {},
-                    quote! {},
-                )
-            }
-            Tier::DiagnosticErrors => {
-                // Tier 2: HIR, TIR, diagnostics, formatter — no MIR, no codegen
-                let hir = generate_hir_test(project, stdlib_package_filter);
-                let tir = generate_tir_test(project, stdlib_package_filter);
-                let diag = generate_diagnostics_test(project);
-                let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
-                (hir, tir, quote! {}, diag, quote! {}, fmt)
-            }
-            Tier::Compiles | Tier::Passing | Tier::PassingLlm => {
-                // Tier 3+: all compiler phases
-                let hir = generate_hir_test(project, stdlib_package_filter);
-                let tir = generate_tir_test(project, stdlib_package_filter);
-                let mir = generate_mir_test(project, stdlib_package_filter);
-                let diag = generate_diagnostics_test(project);
-                let cg = generate_codegen_test(project, stdlib_package_filter);
-                let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
-                (hir, tir, mir, diag, cg, fmt)
-            }
-        };
+    // All tiers get diagnostics (with tier-specific invariant assertions)
+    let diagnostics_test = generate_diagnostics_test(project, project.tier);
 
-    let tier_invariant_test = generate_tier_invariant_test(project);
+    // Tier-specific phases
+    let (hir_test, tir_test, mir_test, codegen_test, formatter_tests) = match project.tier {
+        Tier::BrokenSyntax => {
+            // Tier 1: lexer + parser + diagnostics only — no higher phases
+            (quote! {}, quote! {}, quote! {}, quote! {}, quote! {})
+        }
+        Tier::DiagnosticErrors => {
+            // Tier 2: HIR, TIR, formatter — no MIR, no codegen
+            let hir = generate_hir_test(project, stdlib_package_filter);
+            let tir = generate_tir_test(project, stdlib_package_filter);
+            let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
+            (hir, tir, quote! {}, quote! {}, fmt)
+        }
+        Tier::Compiles | Tier::Passing | Tier::PassingLlm => {
+            // Tier 3+: all compiler phases
+            let hir = generate_hir_test(project, stdlib_package_filter);
+            let tir = generate_tir_test(project, stdlib_package_filter);
+            let mir = generate_mir_test(project, stdlib_package_filter);
+            let cg = generate_codegen_test(project, stdlib_package_filter);
+            let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
+            (hir, tir, mir, cg, fmt)
+        }
+    };
 
     // parser_-prefixed tests: only for parser_ projects regardless of tier
     let parser_specific_tests = if project.name.starts_with("parser_") {
@@ -345,7 +336,6 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use crate::utils::*;
             const SNAPSHOT_PATH: &str = #snapshot_path;
 
-            #tier_invariant_test
             #lexer_tests
             #parser_tests
             #hir_test
@@ -672,7 +662,7 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
     }
 }
 
-fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
+fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -694,6 +684,65 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             }
         })
         .collect();
+
+    let project_name = &project.name;
+    let tier_name = tier.dir_name();
+
+    let tier_assertion = match tier {
+        Tier::BrokenSyntax => quote! {
+            // Tier 1 invariant: at least one file must have parse errors
+            let has_parse_errors = diagnostics.iter().any(|d| {
+                d.phase == DiagnosticPhase::Parse
+                    && d.severity == baml_compiler_diagnostics::Severity::Error
+            });
+            assert!(
+                has_parse_errors,
+                "Tier invariant violation: project '{}' is in '{}/' but has no parse errors. \
+                 Move it to 'diagnostic_errors/' (if it has semantic errors) or 'compiles/' (if it's clean).",
+                #project_name,
+                #tier_name,
+            );
+        },
+        Tier::DiagnosticErrors => quote! {
+            // Tier 2 invariant: must have error diagnostics but no parse errors
+            let has_parse_errors = diagnostics.iter().any(|d| {
+                d.phase == DiagnosticPhase::Parse
+                    && d.severity == baml_compiler_diagnostics::Severity::Error
+            });
+            assert!(
+                !has_parse_errors,
+                "Tier invariant violation: project '{}' is in '{}/' but has parse errors. \
+                 Move it to 'broken_syntax/'.",
+                #project_name,
+                #tier_name,
+            );
+            let has_errors = diagnostics.iter().any(|d| {
+                d.severity == baml_compiler_diagnostics::Severity::Error
+            });
+            assert!(
+                has_errors,
+                "Tier invariant violation: project '{}' is in '{}/' but has no error diagnostics. \
+                 Move it to 'compiles/'.",
+                #project_name,
+                #tier_name,
+            );
+        },
+        Tier::Compiles | Tier::Passing | Tier::PassingLlm => quote! {
+            // Tier 3+ invariant: zero error diagnostics (warnings OK)
+            let errors: Vec<_> = diagnostics
+                .iter()
+                .filter(|d| d.severity == baml_compiler_diagnostics::Severity::Error)
+                .collect();
+            assert!(
+                errors.is_empty(),
+                "Tier invariant violation: project '{}' is in '{}/' but has {} error diagnostic(s). \
+                 Move it to 'diagnostic_errors/' or 'broken_syntax/'.",
+                #project_name,
+                #tier_name,
+                errors.len(),
+            );
+        },
+    };
 
     quote! {
         #[test]
@@ -742,6 +791,8 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("05_diagnostics", output);
             });
+
+            #tier_assertion
         }
     }
 }
@@ -974,108 +1025,6 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                     #relative_path
                 );
             }
-        }
-    }
-}
-
-fn generate_tier_invariant_test(project: &TestProject) -> TokenStream {
-    let file_loaders: TokenStream = project
-        .files
-        .iter()
-        .map(|baml_file| {
-            let full_path = baml_file.full_path.display().to_string();
-            let relative_path = baml_file.relative_path.display().to_string();
-            let include_content = make_include_str(&full_path);
-
-            quote! {
-                {
-                    let content = #include_content;
-                    let content = content.replace("\r\n", "\n");
-                    db.add_file(#relative_path, &content);
-                }
-            }
-        })
-        .collect();
-
-    let project_name = &project.name;
-    let tier_name = project.tier.dir_name();
-
-    let assertion = match project.tier {
-        Tier::BrokenSyntax => quote! {
-            // Tier 1 invariant: at least one file must have parse errors
-            use baml_compiler_diagnostics::DiagnosticPhase;
-            use baml_project::collect_compiler2_diagnostics;
-
-            let diagnostics = collect_compiler2_diagnostics(&db);
-            let has_parse_errors = diagnostics.iter().any(|d| {
-                d.phase == DiagnosticPhase::Parse
-                    && d.severity == baml_compiler_diagnostics::Severity::Error
-            });
-            assert!(
-                has_parse_errors,
-                "Tier invariant violation: project '{}' is in '{}/' but has no parse errors. \
-                 Move it to 'diagnostic_errors/' (if it has semantic errors) or 'compiles/' (if it's clean).",
-                #project_name,
-                #tier_name,
-            );
-        },
-        Tier::DiagnosticErrors => quote! {
-            // Tier 2 invariant: must have error diagnostics but no parse errors
-            use baml_compiler_diagnostics::DiagnosticPhase;
-            use baml_project::collect_compiler2_diagnostics;
-
-            let diagnostics = collect_compiler2_diagnostics(&db);
-            let has_parse_errors = diagnostics.iter().any(|d| {
-                d.phase == DiagnosticPhase::Parse
-                    && d.severity == baml_compiler_diagnostics::Severity::Error
-            });
-            assert!(
-                !has_parse_errors,
-                "Tier invariant violation: project '{}' is in '{}/' but has parse errors. \
-                 Move it to 'broken_syntax/'.",
-                #project_name,
-                #tier_name,
-            );
-            let has_errors = diagnostics.iter().any(|d| {
-                d.severity == baml_compiler_diagnostics::Severity::Error
-            });
-            assert!(
-                has_errors,
-                "Tier invariant violation: project '{}' is in '{}/' but has no error diagnostics. \
-                 Move it to 'compiles/'.",
-                #project_name,
-                #tier_name,
-            );
-        },
-        Tier::Compiles | Tier::Passing | Tier::PassingLlm => quote! {
-            // Tier 3+ invariant: zero error diagnostics (warnings OK)
-            use baml_project::collect_compiler2_diagnostics;
-
-            let diagnostics = collect_compiler2_diagnostics(&db);
-            let errors: Vec<_> = diagnostics
-                .iter()
-                .filter(|d| d.severity == baml_compiler_diagnostics::Severity::Error)
-                .collect();
-            assert!(
-                errors.is_empty(),
-                "Tier invariant violation: project '{}' is in '{}/' but has {} error diagnostic(s). \
-                 Move it to 'diagnostic_errors/' or 'broken_syntax/'.",
-                #project_name,
-                #tier_name,
-                errors.len(),
-            );
-        },
-    };
-
-    quote! {
-        #[test]
-        fn test_00_tier_invariant() {
-            let mut db = ProjectDatabase::new();
-            let _root = db.set_project_root(std::path::Path::new("."));
-
-            #file_loaders
-
-            #assertion
         }
     }
 }
