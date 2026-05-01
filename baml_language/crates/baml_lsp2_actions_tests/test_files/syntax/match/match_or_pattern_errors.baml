@@ -55,49 +55,49 @@ function DuplicateInTopLevelAlt(x: AB) -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: class `A` has no field `x`
-//     ╭─[ match_match_or_pattern_errors.baml:43:1 ]
+//     ╭─[ match_match_or_pattern_errors.baml:42:40 ]
 //     │
-//  43 │   }
-//     │ ┬  
-//     │ ╰── class `A` has no field `x`
+//  42 │     let x: A { x } | let x: B { x } => x
+//     │                                        ┬  
+//     │                                        ╰── class `A` has no field `x`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
 // Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ match_match_or_pattern_errors.baml:43:1 ]
+//     ╭─[ match_match_or_pattern_errors.baml:42:40 ]
 //     │
-//  43 │   }
-//     │ ┬  
-//     │ ╰── identifier `x` is bound more than once in the same pattern
+//  42 │     let x: A { x } | let x: B { x } => x
+//     │                                        ┬  
+//     │                                        ╰── identifier `x` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: class `B` has no field `x`
-//     ╭─[ match_match_or_pattern_errors.baml:43:1 ]
+//     ╭─[ match_match_or_pattern_errors.baml:42:40 ]
 //     │
-//  43 │   }
-//     │ ┬  
-//     │ ╰── class `B` has no field `x`
+//  42 │     let x: A { x } | let x: B { x } => x
+//     │                                        ┬  
+//     │                                        ╰── class `B` has no field `x`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
 // Error: identifier `x` is bound more than once in the same pattern
-//     ╭─[ match_match_or_pattern_errors.baml:43:1 ]
+//     ╭─[ match_match_or_pattern_errors.baml:42:40 ]
 //     │
-//  43 │   }
-//     │ ┬  
-//     │ ╰── identifier `x` is bound more than once in the same pattern
+//  42 │     let x: A { x } | let x: B { x } => x
+//     │                                        ┬  
+//     │                                        ╰── identifier `x` is bound more than once in the same pattern
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: type mismatch: expected int, got user.A | user.B
-//     ╭─[ match_match_or_pattern_errors.baml:41:2 ]
+//     ╭─[ match_match_or_pattern_errors.baml:40:48 ]
 //     │
-//  41 │ ╭─▶   match (x) {
+//  40 │ ╭─▶ function DuplicateInTopLevelAlt(x: AB) -> int {
 //     ┆ ┆   
-//  44 │ ├─▶ }
-//     │ │      
-//     │ ╰────── type mismatch: expected int, got user.A | user.B
+//  43 │ ├─▶   }
+//     │ │         
+//     │ ╰───────── type mismatch: expected int, got user.A | user.B
 //     │     
 //     │     Note: Error code: E0001
 // ────╯

@@ -438,7 +438,15 @@ impl FromCST for ForStmt {
         // KW_FOR
         let keyword = it.expect_parse()?;
 
-        let open_paren = it.expect_parse()?;
+        // Three legal shapes:
+        //   for (let i in expr) { ... }       — paren + LET_STMT
+        //   for (let i = 0; cond; upd) { ... } — paren + LET_STMT + C-style
+        //   for (i in expr) { ... }            — paren + bare WORD
+        //   for i in expr { ... }              — no paren + bare WORD
+        let open_paren: Option<t::LParen> = it
+            .next_if_kind(SyntaxKind::L_PAREN)
+            .map(t::LParen::from_cst)
+            .transpose()?;
 
         // Iterator-style emits PATTERN directly (`for (let x in expr)`),
         // C-style emits a full LET_STMT (`for (let x = 0; cond; update)`).
@@ -465,7 +473,7 @@ impl FromCST for ForStmt {
             let expr = it.expect_next("iterator expression")?;
             let expression = Expression::from_cst(expr)?;
 
-            let close_paren = it.expect_parse()?;
+            let close_paren = open_paren.as_ref().map(|_| it.expect_parse()).transpose()?;
 
             ForArgs::Iterator(ForIteratorArgs {
                 open_paren,
@@ -476,8 +484,15 @@ impl FromCST for ForStmt {
                 close_paren,
             })
         } else {
-            // C-style: head is LET_STMT.
+            // C-style: head is LET_STMT and parens are required.
             let let_stmt = LetStmt::from_cst(head_elem)?;
+            let Some(open_paren) = open_paren else {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "C-style for loops require parentheses".into(),
+                    found: SyntaxKind::FOR_EXPR,
+                    at: it.parent,
+                });
+            };
 
             let condition = it.expect_next("an expression")?;
             let condition = Expression::from_cst(condition)?;
@@ -536,6 +551,7 @@ impl Printable for ForStmt {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum ForArgs {
     Iterator(ForIteratorArgs),
     CStyle(Box<ForCStyleArgs>),
@@ -701,12 +717,14 @@ impl Printable for ForCStyleArgs {
 
 #[derive(Debug)]
 pub struct ForIteratorArgs {
-    pub open_paren: t::LParen,
+    /// `None` for the parens-less form `for let i in expr { ... }`.
+    pub open_paren: Option<t::LParen>,
     pub keyword: t::Let,
     pub name: t::Word,
     pub in_keyword: t::In,
     pub expression: Expression,
-    pub close_paren: t::RParen,
+    /// Mirrors `open_paren` — present iff `open_paren` is.
+    pub close_paren: Option<t::RParen>,
 }
 
 impl PrintMultiLine for ForIteratorArgs {
@@ -722,9 +740,11 @@ impl PrintMultiLine for ForIteratorArgs {
         let inner_shape =
             Shape::standalone(shape.width, shape.indent + printer.config.indent_width);
 
-        printer.print_raw_token(&self.open_paren);
-        printer.print_trivia_all_trailing_for(self.open_paren.span());
-        printer.print_newline();
+        if let Some(open_paren) = &self.open_paren {
+            printer.print_raw_token(open_paren);
+            printer.print_trivia_all_trailing_for(open_paren.span());
+            printer.print_newline();
+        }
 
         let kw_leading = printer.trivia.get_for_range_split(self.keyword.span()).0;
         printer.print_trivia_with_newline(kw_leading, inner_shape.indent);
@@ -750,21 +770,25 @@ impl PrintMultiLine for ForIteratorArgs {
         };
         self.expression.print(expr_shape, printer);
         printer.print_trivia_trailing(expr_trailing);
-        printer.print_newline();
 
-        let (close_paren_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        printer.print_trivia_with_newline(close_paren_leading, inner_shape.indent);
-        printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_paren);
+        if let Some(close_paren) = &self.close_paren {
+            printer.print_newline();
+            let (close_paren_leading, _) = printer.trivia.get_for_range_split(close_paren.span());
+            printer.print_trivia_with_newline(close_paren_leading, inner_shape.indent);
+            printer.print_spaces(shape.indent);
+            printer.print_raw_token(close_paren);
+        }
         PrintInfo::default_multi_lined()
     }
 }
 
 impl ForIteratorArgs {
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.open_paren);
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        printer.try_print_trivia_single_line_squished(open_trailing)?;
+        if let Some(open_paren) = &self.open_paren {
+            printer.print_raw_token(open_paren);
+            let (_, open_trailing) = printer.trivia.get_for_range_split(open_paren.span());
+            printer.try_print_trivia_single_line_squished(open_trailing)?;
+        }
 
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
@@ -785,9 +809,11 @@ impl ForIteratorArgs {
         }
         printer.try_print_trivia_single_line_squished(expr_trailing)?;
 
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_raw_token(&self.close_paren);
+        if let Some(close_paren) = &self.close_paren {
+            let (close_leading, _) = printer.trivia.get_for_range_split(close_paren.span());
+            printer.try_print_trivia_single_line_squished(close_leading)?;
+            printer.print_raw_token(close_paren);
+        }
 
         if printer.output.len() > shape.width {
             None
@@ -804,10 +830,16 @@ impl Printable for ForIteratorArgs {
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
-        self.open_paren.span()
+        if let Some(open_paren) = &self.open_paren {
+            return open_paren.span();
+        }
+        self.keyword.span()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.close_paren.span()
+        if let Some(close_paren) = &self.close_paren {
+            return close_paren.span();
+        }
+        self.expression.rightmost_token()
     }
 }
 

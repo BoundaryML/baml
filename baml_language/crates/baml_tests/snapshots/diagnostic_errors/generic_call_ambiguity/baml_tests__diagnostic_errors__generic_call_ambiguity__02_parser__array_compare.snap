@@ -1,0 +1,169 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ArrayOfComparisons"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "c"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "d"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "bool[]"
+      WORD "bool"
+      L_BRACKET "["
+      R_BRACKET "]"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        ARRAY_LITERAL
+          L_BRACKET "["
+          BINARY_EXPR "a < b"
+            WORD "a"
+            LESS "<"
+            WORD "b"
+          COMMA ","
+          BINARY_EXPR "c > d"
+            WORD "c"
+            GREATER ">"
+            WORD "d"
+          R_BRACKET "]"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ArrayOfComparisonsParenthesized"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "c"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "d"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "bool[]"
+      WORD "bool"
+      L_BRACKET "["
+      R_BRACKET "]"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        ARRAY_LITERAL
+          L_BRACKET "["
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "a < b"
+              WORD "a"
+              LESS "<"
+              WORD "b"
+            R_PAREN ")"
+          COMMA ","
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "c > d"
+              WORD "c"
+              GREATER ">"
+              WORD "d"
+            R_PAREN ")"
+          R_BRACKET "]"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ArrayCompareThenCall"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int[]"
+      WORD "int"
+      L_BRACKET "["
+      R_BRACKET "]"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        ARRAY_LITERAL
+          L_BRACKET "["
+          BINARY_EXPR "f < x"
+            WORD "f"
+            LESS "<"
+            WORD "x"
+          COMMA ","
+          CALL_EXPR
+            WORD "y"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          R_BRACKET "]"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "y"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    0
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "0"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

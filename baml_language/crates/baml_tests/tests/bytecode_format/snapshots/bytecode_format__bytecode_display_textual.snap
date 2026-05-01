@@ -130,7 +130,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
 }
 
 function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
-    alloc_instance TestCollector
+    alloc_instance testing.TestCollector
     load_var prefix
     init_field .prefix
     alloc_array 0
@@ -213,7 +213,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
   L7:
     load_var self
     load_field .tests
-    alloc_instance TestRegistration
+    alloc_instance testing.TestRegistration
     load_var final_name
     init_field .name
     load_var body
@@ -332,7 +332,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
   L7:
     load_var self
     load_field .testsets
-    alloc_instance TestSetRegistration
+    alloc_instance testing.TestSetRegistration
     load_var final_name
     init_field .name
     load_var collector
@@ -469,7 +469,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
   L9:
     call baml.sys.now_ms
     store_var start
-    alloc_instance TestCollector
+    alloc_instance testing.TestCollector
     load_var name
     init_field .prefix
     alloc_array 0
@@ -487,7 +487,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     load_var self
     load_field .expansions
     load_var name
-    alloc_instance TestRegistry
+    alloc_instance testing.TestRegistry
     load_var sub_collector
     init_field .collector
     alloc_map 0
@@ -506,7 +506,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
 }
 
 function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
-    alloc_instance TestRegistry
+    alloc_instance testing.TestRegistry
     load_var collector
     init_field .collector
     alloc_map 0
@@ -674,7 +674,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     is_type null
     pop_jump_if_false L7
     load_var items
-    alloc_instance SerializedTest
+    alloc_instance testing.SerializedTest
     load_const "lazyTestSet"
     init_field .type
     load_var ts
@@ -694,7 +694,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     call testing.TestRegistry.serialize
     store_var _26
     load_var items
-    alloc_instance SerializedTestSet
+    alloc_instance testing.SerializedTestSet
     load_var _25
     init_field .name
     load_var _26
@@ -714,7 +714,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
 
   L8:
     load_var items
-    alloc_instance SerializedTest
+    alloc_instance testing.SerializedTest
     load_const "test"
     init_field .type
     load_var _3
@@ -796,7 +796,7 @@ function user.User.promote(self: null, bonus: int) -> Report {
     load_var bonus
     call user.score
     store_var base
-    alloc_instance Report
+    alloc_instance user.Report
     load_var base
     load_field .score
     load_var bonus
@@ -991,7 +991,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     load_const 0
     load_var total
     store_array_element
-    alloc_instance Report
+    alloc_instance user.Report
     load_var scores
     load_const 0
     load_array_element

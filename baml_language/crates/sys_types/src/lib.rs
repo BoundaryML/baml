@@ -170,6 +170,9 @@ pub enum OpErrorKind {
     #[error("Access error: {0}")]
     AccessError(#[from] bex_heap::AccessError),
 
+    #[error("IO error: {message}")]
+    Io { message: String },
+
     #[error("Operation cancelled")]
     Cancelled,
 
@@ -198,6 +201,7 @@ impl OpErrorKind {
             Self::Unsupported => SysOpErrorCategory::Unsupported,
             Self::RenderPrompt(_) => SysOpErrorCategory::RenderPrompt,
             Self::AccessError(_) => SysOpErrorCategory::AccessError,
+            Self::Io { .. } => SysOpErrorCategory::Io,
             Self::Cancelled => SysOpErrorCategory::Io,
             Self::Timeout { .. } => SysOpErrorCategory::Timeout,
             Self::NotImplemented { .. } => SysOpErrorCategory::NotImplemented,
@@ -329,6 +333,26 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
                 fut.await
                     .map(AsBexExternalValue::into_bex_external_value)
                     .map_err(|kind| OpError::new(op, kind))
+            })),
+        }
+    }
+}
+
+impl<T: Send + 'static> SysOpOutput<T> {
+    /// Convert to [`SysOpResult`] using a custom value mapping function.
+    ///
+    /// Used by generated glue code for return types that don't implement
+    /// [`AsBexExternalValue`] directly (e.g. `Vec<ClassName>`).
+    pub fn into_result_mapped(
+        self,
+        op: SysOp,
+        f: impl Fn(T) -> BexExternalValue + Send + 'static,
+    ) -> SysOpResult {
+        match self {
+            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(f(v))),
+            Self::Ready(Err(kind)) => SysOpResult::Ready(Err(OpError::new(op, kind))),
+            Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
+                fut.await.map(f).map_err(|kind| OpError::new(op, kind))
             })),
         }
     }
@@ -776,6 +800,9 @@ mod tests {
             OpErrorKind::ResourceTypeMismatch { expected: "File" },
             OpErrorKind::Unsupported,
             OpErrorKind::RenderPrompt("err".into()),
+            OpErrorKind::Io {
+                message: "io error".into(),
+            },
             OpErrorKind::Cancelled,
             OpErrorKind::Timeout {
                 message: "t".into(),

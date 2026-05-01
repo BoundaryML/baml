@@ -1,0 +1,93 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.Gpt4oClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: baml.llm.PrimitiveClientOptions
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4o", const null, const null, const null, const null, const null, const null, const null, const null, const "sk-test", const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "Gpt4oClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.O1Client$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: baml.llm.PrimitiveClientOptions
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "o1", const null, const null, const null, const null, const null, const null, const null, const null, const "sk-test", const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "O1Client", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.O1MiniClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: baml.llm.PrimitiveClientOptions
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "o1-mini", const null, const null, const null, const null, const null, const null, const null, const null, const "sk-test", const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "O1MiniClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.O1WithExplicitRoles$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: baml.llm.PrimitiveClientOptions
+    let _2: string[]
+    let _3: map<void, void>
+    let _4: map<void, void>
+    let _5: map<void, void>
+
+    bb0: {
+        _2 = [const "system", const "user", const "assistant"];
+        _3 = {  };
+        _4 = {  };
+        _5 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "o1", const null, const null, const null, const null, const null, const null, copy _2, const null, const "sk-test", const null, const null, copy _3, copy _4, copy _5 };
+        _0 = baml.llm.PrimitiveClient { const "O1WithExplicitRoles", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

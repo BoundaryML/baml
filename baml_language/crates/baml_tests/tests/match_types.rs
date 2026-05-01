@@ -96,7 +96,7 @@ async fn match_typed_pattern_second_arm() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        alloc_instance Failure
+        alloc_instance user.Failure
         load_const "error"
         init_field .reason
         store_var result
@@ -282,7 +282,7 @@ async fn match_guard_true() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        alloc_instance Score
+        alloc_instance user.Score
         load_const 95
         init_field .value
         store_var s
@@ -353,7 +353,7 @@ async fn match_guard_fallthrough() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        alloc_instance Score
+        alloc_instance user.Score
         load_const 75
         init_field .value
         store_var s
@@ -424,7 +424,7 @@ async fn match_guard_all_fail() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        alloc_instance Score
+        alloc_instance user.Score
         load_const 50
         init_field .value
         store_var s
@@ -907,7 +907,7 @@ async fn match_guard_on_typed_pattern_field_access() {
     }
 
     function main() -> string {
-        alloc_instance Success
+        alloc_instance user.Success
         load_const "hello"
         init_field .data
         call user.classify
@@ -979,7 +979,7 @@ async fn match_guard_on_typed_pattern_field_access_fails() {
     }
 
     function main() -> string {
-        alloc_instance Success
+        alloc_instance user.Success
         load_const ""
         init_field .data
         call user.classify
@@ -1411,7 +1411,7 @@ async fn match_class_types_exhaustive_first() {
     }
 
     function main() -> string {
-        alloc_instance Cat
+        alloc_instance user.Cat
         load_const "Whiskers"
         init_field .name
         call user.classify
@@ -1487,7 +1487,7 @@ async fn match_class_types_exhaustive_last() {
     }
 
     function main() -> string {
-        alloc_instance Bird
+        alloc_instance user.Bird
         load_const "Tweety"
         init_field .name
         call user.classify
@@ -1557,7 +1557,7 @@ async fn match_class_types_non_exhaustive_wildcard() {
     }
 
     function main() -> string {
-        alloc_instance Bird
+        alloc_instance user.Bird
         load_const "Tweety"
         init_field .name
         call user.classify
@@ -1627,7 +1627,7 @@ async fn match_class_types_non_exhaustive_matched() {
     }
 
     function main() -> string {
-        alloc_instance Dog
+        alloc_instance user.Dog
         load_const "Rex"
         init_field .name
         call user.classify
@@ -1773,7 +1773,7 @@ async fn match_multiple_typed_patterns_with_guards() {
     }
 
     function main() -> string {
-        alloc_instance Success
+        alloc_instance user.Success
         load_const 301
         init_field .code
         load_const false
@@ -1862,7 +1862,7 @@ async fn match_class_type_tag_jump_table() {
     }
 
     function main() -> string {
-        alloc_instance Dog
+        alloc_instance user.Dog
         load_const "Rex"
         init_field .name
         call user.describe
@@ -1918,7 +1918,7 @@ async fn match_class_type_is_type_chain() {
     }
 
     function main() -> string {
-        alloc_instance Cat
+        alloc_instance user.Cat
         load_const "Whiskers"
         init_field .name
         call user.describe
@@ -1983,7 +1983,7 @@ async fn match_mixed_class_primitive_type_tag_switch() {
     }
 
     function main() -> string {
-        alloc_instance MyClass
+        alloc_instance user.MyClass
         load_const 42
         init_field .value
         call user.classify

@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.MyClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: baml.llm.PrimitiveClientOptions
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "MyClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

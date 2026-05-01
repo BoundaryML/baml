@@ -1,0 +1,103 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.Append() -> int  [expr] {
+  { let f = baml.fs.open("log.txt", "a") } f.write("line\n")
+}
+function user.AppendAndRead() -> string  [expr] {
+  { let f = baml.fs.open("log.txt", "a+"); f.write("line\n"); f.seek_from("start", 0) } f.text()
+}
+function user.Exists() -> bool  [expr] {
+  {  } baml.fs.exists("maybe.txt")
+}
+function user.FileWrite() -> int  [expr] {
+  { let f = baml.fs.open("data.txt", "r+") } f.write("hello")
+}
+function user.FileWriteBytes() -> int  [expr] {
+  { let f = baml.fs.open("data.bin", "r+"); let data = f.bytes(); f.seek_from("start", 0) } f.write_bytes(data)
+}
+function user.ReadAndClose() -> string  [expr] {
+  { let f = baml.fs.open("example.txt", "r"); let content = f.text(); f.close() } content
+}
+function user.ReadChunk() -> string  [expr] {
+  { let f = baml.fs.open("log.txt", "r") } f.read(512)
+}
+function user.ReadChunkBytes() -> uint8array  [expr] {
+  { let f = baml.fs.open("data.bin", "r") } f.read_bytes(4096)
+}
+function user.ReadDir() -> baml.fs.DirEntry[]  [expr] {
+  {  } baml.fs.read_dir("some/path")
+}
+function user.ReadFile() -> string  [expr] {
+  { let f = baml.fs.open("example.txt", "r") } f.text()
+}
+function user.ReadFileBytes() -> uint8array  [expr] {
+  { let f = baml.fs.open("binary.dat", "r") } f.bytes()
+}
+function user.ReadFileBytesAndClose() -> uint8array  [expr] {
+  { let f = baml.fs.open("binary.dat", "r"); let data = f.bytes(); f.close() } data
+}
+function user.ReadFileBytesInline() -> uint8array  [expr] {
+  {  } baml.fs.open("image.png", "r").bytes()
+}
+function user.ReadFileInline() -> string  [expr] {
+  {  } baml.fs.open("data.json", "r").text()
+}
+function user.ReadMultipleFiles() -> string  [expr] {
+  { let f1 = baml.fs.open("file1.txt", "r"); let f2 = baml.fs.open("file2.txt", "r"); let content1 = f1.text(); let content2 = f2.text() } content1 Add content2
+}
+function user.Remove() -> null  [expr] {
+  {  } baml.fs.remove("stale.txt")
+}
+function user.SeekAndRead() -> string  [expr] {
+  { let f = baml.fs.open("data.txt", "r+"); f.seek_from("start", 10) } f.text()
+}
+function user.Size() -> int  [expr] {
+  {  } baml.fs.size("data.bin")
+}
+function user.WriteFile() -> int  [expr] {
+  {  } baml.fs.write("output.txt", "hello")
+}
+function user.WriteFileBytes() -> int  [expr] {
+  { let data = baml.fs.open("source.bin", "r").bytes() } baml.fs.write_bytes("output.bin", data)
+}
+function user.AskName() -> string  [expr] {
+  {  } baml.io.input("What is your name? ")
+}
+function user.AskNoPrompt() -> string  [expr] {
+  {  } baml.io.input(null)
+}
+function user.ConnectAndRead() -> string  [expr] {
+  { let sock = baml.net.connect("127.0.0.1:8080") } sock.read()
+}
+function user.ConnectAndReadInline() -> string  [expr] {
+  {  } baml.net.connect("localhost:3000").read()
+}
+function user.ConnectReadAndClose() -> string  [expr] {
+  { let sock = baml.net.connect("127.0.0.1:8080"); let data = sock.read(); sock.close() } data
+}
+function user.MultipleConnections() -> string  [expr] {
+  { let s1 = baml.net.connect("server1:80"); let s2 = baml.net.connect("server2:80"); let data1 = s1.read(); let data2 = s2.read() } data1 Add data2
+}
+function user.ChainCommands() -> string  [expr] {
+  { let result1 = baml.sys.shell("pwd", null); let result2 = baml.sys.shell("whoami", null) } result1.stdout Add " - " Add result2.stdout
+}
+function user.CheckExitCode() -> int  [expr] {
+  {  } baml.sys.shell("exit 42", null).exit_code
+}
+function user.CheckOk() -> bool  [expr] {
+  {  } baml.sys.shell("echo test", null).ok()
+}
+function user.ExecCommand() -> string  [expr] {
+  {  } baml.sys.exec("echo", ["hello"], null).stdout
+}
+function user.ExecWithOptions() -> string  [expr] {
+  {  } baml.sys.exec("pwd", null, baml.sys.ProcessOptions { cwd: "/tmp" }).stdout
+}
+function user.RunCommand() -> string  [expr] {
+  {  } baml.sys.shell("echo hello", null).stdout
+}
+function user.RunCommandWithVar() -> string  [expr] {
+  { let cmd = "ls -la" } baml.sys.shell(cmd, null).stdout
+}

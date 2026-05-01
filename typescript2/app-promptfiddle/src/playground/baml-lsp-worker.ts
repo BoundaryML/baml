@@ -58,6 +58,8 @@ import { formatValue } from "@b/pkg-playground/shared/format-value";
 import { deserializeRuntimeEvent } from "@b/pkg-playground/shared/deserialize-event";
 
 import { BamlVfs } from "./vfs";
+import { Bash, InMemoryFs, MountableFs } from "just-bash/browser";
+import { BamlVfsAdapter } from "./baml-vfs-adapter";
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -127,6 +129,108 @@ function resolveInput(callId: number, prompt: string | undefined): Promise<strin
     pendingInputResolvers.set(id, { callId, resolve });
     postOut({ type: "inputRequest", id, prompt, callId });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Shell callbacks (just-bash powered)
+// ---------------------------------------------------------------------------
+
+/** Shared Bash instance, created lazily on first use. */
+let bashInstance: Bash | null = null;
+
+function getOrCreateBash(): Bash {
+  if (!bashInstance) {
+    const base = new InMemoryFs();
+    const mountable = new MountableFs({ base });
+    mountable.mount("/workspace", new BamlVfsAdapter(vfs.wasmVfs));
+    bashInstance = new Bash({ fs: mountable, cwd: "/workspace" });
+  }
+  return bashInstance;
+}
+
+/** Shell result shape expected by the Rust WASM bridge. */
+interface ShellResult {
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+  stdout_bytes: Uint8Array;
+  stderr_bytes: Uint8Array;
+}
+
+/** Options passed from Rust as a JSON string. */
+interface ProcessOptionsJson {
+  cwd?: string;
+  env?: Record<string, string>;
+  timeout_ms?: number;
+  stdin?: string;
+}
+
+async function executeShell(
+  command: string,
+  optionsJson: string | undefined,
+): Promise<ShellResult> {
+  const bash = getOrCreateBash();
+  const options: ProcessOptionsJson | undefined = optionsJson
+    ? (JSON.parse(optionsJson) as ProcessOptionsJson)
+    : undefined;
+
+  const execOptions: Parameters<Bash["exec"]>[1] = {
+    cwd: options?.cwd,
+    env: options?.env,
+    stdin: options?.stdin,
+    ...(options?.env ? { replaceEnv: false } : {}),
+    ...(options?.timeout_ms != null
+      ? { signal: AbortSignal.timeout(options.timeout_ms) }
+      : {}),
+  };
+
+  const result = await bash.exec(command, execOptions);
+  const encoder = new TextEncoder();
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exit_code: result.exitCode,
+    stdout_bytes: encoder.encode(result.stdout),
+    stderr_bytes: encoder.encode(result.stderr),
+  };
+}
+
+async function executeExec(
+  program: string,
+  args: string[] | undefined,
+  optionsJson: string | undefined,
+): Promise<ShellResult> {
+  const bash = getOrCreateBash();
+  const options: ProcessOptionsJson | undefined = optionsJson
+    ? (JSON.parse(optionsJson) as ProcessOptionsJson)
+    : undefined;
+
+  // Build the command line: program + args joined. just-bash executes this
+  // as a shell script so we must quote args to prevent shell splitting.
+  const quotedArgs = (args ?? [])
+    .map((a) => "'" + a.replace(/'/g, "'\\''") + "'")
+    .join(" ");
+  const commandLine = quotedArgs ? `${program} ${quotedArgs}` : program;
+
+  const execOptions: Parameters<Bash["exec"]>[1] = {
+    cwd: options?.cwd,
+    env: options?.env,
+    stdin: options?.stdin,
+    ...(options?.env ? { replaceEnv: false } : {}),
+    ...(options?.timeout_ms != null
+      ? { signal: AbortSignal.timeout(options.timeout_ms) }
+      : {}),
+  };
+
+  const result = await bash.exec(commandLine, execOptions);
+  const encoder = new TextEncoder();
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exit_code: result.exitCode,
+    stdout_bytes: encoder.encode(result.stdout),
+    stderr_bytes: encoder.encode(result.stderr),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -464,6 +568,8 @@ self.onmessage = async (event: MessageEvent) => {
         fetch: loggingFetch,
         env: resolveEnv,
         input: resolveInput,
+        exec: executeExec,
+        shell: executeShell,
         lsp_send_notification: (notification: LspNotification) => {
           notification = mapsToRecordsDeep(notification);
 
@@ -621,7 +727,7 @@ self.onmessage = async (event: MessageEvent) => {
         const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
           const h = new BamlHandle(key.toString(), handleType);
           handles.push(h);
-          return h;
+          return { handle_key: key, handle_type: handleType, type_name: typeName };
         });
         const existing = liveHandles.get(msg.id);
         if (existing) {
@@ -632,8 +738,7 @@ self.onmessage = async (event: MessageEvent) => {
         } else {
           liveHandles.delete(msg.id);
         }
-        const result = JSON.stringify(decoded, null, 2);
-        postOut({ type: "callFunctionResult", id: msg.id, result });
+        postOut({ type: "callFunctionResult", id: msg.id, result: decoded });
       } catch (e) {
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
         let errorMessage: string;
@@ -751,7 +856,7 @@ self.onmessage = async (event: MessageEvent) => {
         const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
           const h = new BamlHandle(key.toString(), handleType);
           handles.push(h);
-          return h;
+          return { handle_key: key, handle_type: handleType, type_name: typeName };
         });
         const existing = liveHandles.get(msg.id);
         if (existing) {
@@ -762,11 +867,7 @@ self.onmessage = async (event: MessageEvent) => {
         } else {
           liveHandles.delete(msg.id);
         }
-        postOut({
-          type: "callFunctionResult",
-          id: msg.id,
-          result: JSON.stringify(decoded, null, 2),
-        });
+        postOut({ type: "callFunctionResult", id: msg.id, result: decoded });
       } catch (e: any) {
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
         let errorMessage: string;

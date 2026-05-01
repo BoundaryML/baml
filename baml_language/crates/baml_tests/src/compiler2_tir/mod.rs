@@ -159,7 +159,10 @@ pub(crate) mod support {
             Expr::Object {
                 type_name, fields, ..
             } => {
-                let tn = type_name.as_ref().map(|n| n.as_str()).unwrap_or("_");
+                let tn = type_name
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "_".to_string());
                 let field_strs: Vec<String> = fields
                     .iter()
                     .map(|(name, val)| format!("{name}: {}", expr_desc(*val, body)))
@@ -1084,17 +1087,19 @@ pub(crate) mod support {
         };
 
         fn qualify_type_name(
-            name: &baml_base::Name,
+            path: &baml_base::TypePath,
             pkg_prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
-            let s = name.as_str();
-            if s.contains('.') {
-                s.into()
-            } else if local_type_names.contains(s) {
-                format!("{pkg_prefix}{s}")
+            if path.is_qualified() {
+                path.to_string()
             } else {
-                s.into()
+                let leaf = path.leaf().as_str();
+                if local_type_names.contains(leaf) {
+                    format!("{pkg_prefix}{leaf}")
+                } else {
+                    leaf.into()
+                }
             }
         }
 

@@ -19,22 +19,20 @@ function CatchNamedWildcard(x: int) -> string {
 //----
 //- diagnostics
 // Warning: unreachable arm
-//    ╭─[ catch_catch_wildcard_only.baml:8:12 ]
+//    ╭─[ catch_catch_wildcard_only.baml:8:10 ]
 //    │
-//  8 │ ╭─▶     _ => "caught everything"
-//  9 │ ├─▶   }
-//    │ │         
-//    │ ╰───────── unreachable arm
-//    │     
-//    │     Note: Error code: E0063
+//  8 │     _ => "caught everything"
+//    │          ─────────┬─────────  
+//    │                   ╰─────────── unreachable arm
+//    │ 
+//    │ Note: Error code: E0063
 // ───╯
 // Warning: unreachable arm
-//     ╭─[ catch_catch_wildcard_only.baml:15:19 ]
+//     ╭─[ catch_catch_wildcard_only.baml:15:17 ]
 //     │
-//  15 │ ╭─▶     let other => "caught: " + other
-//  16 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── unreachable arm
-//     │     
-//     │     Note: Error code: E0063
+//  15 │     let other => "caught: " + other
+//     │                 ─────────┬─────────  
+//     │                          ╰─────────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0063
 // ────╯

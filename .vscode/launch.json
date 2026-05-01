@@ -13,7 +13,10 @@
       ],
       "outFiles": ["${workspaceFolder}/typescript2/app-vscode-ext/dist/**"],
       "env": {
-        "VSCODE_DEBUG_MODE": "true"
+        "VSCODE_DEBUG_MODE": "true",
+        "BAML_CLI_PATH": "${workspaceFolder}/baml_language/target/debug/baml-cli",
+        "RUST_BACKTRACE":"1",
+        "BAML_PLAYGROUND_DEV_PORT": "4000"
       },
       "preLaunchTask": "Build VS Code Extension (v2)"
     },

@@ -11,7 +11,7 @@ function Container.get(self: null, idx: int) -> string {
 }
 
 function main() -> string {
-    alloc_instance Container
+    alloc_instance user.Container
     load_const "a"
     load_const "b"
     load_const "c"

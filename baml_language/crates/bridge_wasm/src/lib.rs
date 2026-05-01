@@ -51,6 +51,8 @@ mod wasm_env;
 mod wasm_fs;
 mod wasm_http;
 mod wasm_io;
+mod wasm_io_fs;
+mod wasm_io_glob;
 mod wasm_lsp;
 mod wasm_playground;
 mod wasm_sys;
@@ -60,6 +62,7 @@ pub use error::BridgeError;
 use js_sys::Function;
 use prost::Message;
 use wasm_bindgen::prelude::*;
+pub use wasm_lsp::LspNotification;
 
 static LOGGER_INIT: std::sync::Once = std::sync::Once::new();
 
@@ -112,6 +115,19 @@ export type WasmSendNotificationCallback = (notification: LspNotification) => vo
 export type WasmSendResponseCallback = (response: LspResponse) => void;
 export type WasmMakeRequestCallback = (request: LspRequest) => void;
 export type WasmPlaygroundNotificationCallback = (notification: PlaygroundNotification) => void;
+
+export type WasmExecCallback = (
+  program: string,
+  args: string[] | undefined,
+  optionsJson: string | undefined,
+) => Promise<{ stdout: string; stderr: string; exit_code: number;
+               stdout_bytes: Uint8Array; stderr_bytes: Uint8Array }>;
+
+export type WasmShellCallback = (
+  command: string,
+  optionsJson: string | undefined,
+) => Promise<{ stdout: string; stderr: string; exit_code: number;
+               stdout_bytes: Uint8Array; stderr_bytes: Uint8Array }>;
 "#;
 
 #[wasm_bindgen]
@@ -123,6 +139,8 @@ extern "C" {
         fetch: WasmFetchCallback;
         env: WasmEnvVarsCallback;
         input: WasmInputCallback;
+        exec: WasmExecCallback;
+        shell: WasmShellCallback;
         lsp_send_notification: WasmSendNotificationCallback;
         lsp_send_response: WasmSendResponseCallback;
         lsp_make_request: WasmMakeRequestCallback;
@@ -138,6 +156,12 @@ extern "C" {
 
     #[wasm_bindgen(method, getter, structural, js_name = "input")]
     fn input(this: &WasmCallbacks) -> Function;
+
+    #[wasm_bindgen(method, getter, structural, js_name = "exec")]
+    fn exec(this: &WasmCallbacks) -> Function;
+
+    #[wasm_bindgen(method, getter, structural, js_name = "shell")]
+    fn shell_fn(this: &WasmCallbacks) -> Function;
 
     #[wasm_bindgen(method, getter, structural, js_name = "lsp_send_notification")]
     fn send_notification(this: &WasmCallbacks) -> Function;
@@ -183,16 +207,32 @@ impl BamlWasmRuntime {
         let fetch_fn = callbacks.fetch();
         let env_vars_fn = callbacks.env();
         let input_fn = callbacks.input();
+        let exec_fn = callbacks.exec();
+        let shell_fn = callbacks.shell_fn();
         let send_notification_fn = callbacks.send_notification();
         let send_response_fn = callbacks.send_response();
         let make_request_fn = callbacks.make_request();
         let playground_send_notification_fn = callbacks.playground_send_notification();
 
+        // Wrap wasm_vfs in Arc so it can be shared across the VFS filesystem,
+        // the fs IO namespace, and the glob IO namespace without cloning the
+        // underlying JS value.
+        #[allow(clippy::arc_with_non_send_sync)]
+        let wasm_vfs_arc = std::sync::Arc::new(wasm_vfs);
+
         let sys_ops = sys_ops::SysOpsBuilder::new()
             .with_http_instance(std::sync::Arc::new(wasm_http::WasmHttp::new(fetch_fn)))
             .with_env_instance(std::sync::Arc::new(wasm_env::WasmEnv::new(env_vars_fn)))
             .with_io_instance(std::sync::Arc::new(wasm_io::WasmIo::new(input_fn)))
-            .with_sys_instance(std::sync::Arc::new(wasm_sys::WasmSys::new()))
+            .with_sys_instance(std::sync::Arc::new(wasm_sys::WasmSys::new(
+                exec_fn, shell_fn,
+            )))
+            .with_fs_instance(std::sync::Arc::new(wasm_io_fs::WasmIoFs::new(
+                std::sync::Arc::clone(&wasm_vfs_arc),
+            )))
+            .with_glob_instance(std::sync::Arc::new(wasm_io_glob::WasmIoGlob::new(
+                std::sync::Arc::clone(&wasm_vfs_arc),
+            )))
             .build();
         let sys_ops = std::sync::Arc::new(sys_ops);
         let sys_op_factory = std::sync::Arc::new(move |_path: &vfs::VfsPath| sys_ops.clone());
@@ -202,7 +242,7 @@ impl BamlWasmRuntime {
             wasm_playground::WasmPlaygroundSender::new(playground_send_notification_fn.clone());
         let event_sink = wasm_playground::WasmEventSink::new(playground_send_notification_fn);
 
-        let vfs = wasm_fs::WasmFs::new(wasm_vfs);
+        let vfs = wasm_fs::WasmFs::new(wasm_vfs_arc);
         let vfs = std::sync::Arc::new(vfs);
 
         let bex = bex_project::new_lsp(
@@ -211,6 +251,7 @@ impl BamlWasmRuntime {
             std::sync::Arc::new(playground),
             bex_project::BamlVFS::new(vfs),
             Some(std::sync::Arc::new(event_sink)),
+            bex_project::BackgroundSpawner::new(),
         );
 
         Ok(BamlWasmRuntime { bex: Box::new(bex) })

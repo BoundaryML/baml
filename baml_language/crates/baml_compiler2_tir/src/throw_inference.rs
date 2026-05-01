@@ -355,25 +355,9 @@ fn throw_fact_from_expr<'db>(
                 attr: TyAttr::default(),
             }),
         Expr::Object {
-            type_name: Some(name),
+            type_name: Some(path),
             ..
-        } => {
-            if let Some(def) = pkg_items.lookup_type(ns_context, name) {
-                match def {
-                    Definition::Class(_) => {
-                        Ty::Class(qualify_def(db, def, name), vec![], TyAttr::default())
-                    }
-                    Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
-                    _ => Ty::Unknown {
-                        attr: TyAttr::default(),
-                    },
-                }
-            } else {
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
-            }
-        }
+        } => resolve_path_to_ty(db, pkg_items, ns_context, path.segments()),
         _ => Ty::Unknown {
             attr: TyAttr::default(),
         },
@@ -435,6 +419,23 @@ fn resolve_path_to_ty<'db>(
     } else {
         pkg_items.lookup_type(seg_ns, name)
     };
+    // Cross-package fallback for qualified paths whose first segment names
+    // either the literal `root` package (own-package alias) or another
+    // package the resolver knows about. Mirrors `lower_type_expr_in_ns` so
+    // throw-set type recovery works for `root.http.Response { ... }` literals
+    // and `baml.errors.DevOther` references inside throw expressions.
+    let def = def.or_else(|| {
+        if segments.len() < 2 {
+            return None;
+        }
+        if segments[0].as_str() == "root" {
+            pkg_items.lookup_type(&segments[1..segments.len() - 1], name)
+        } else {
+            let pkg_id = PackageId::new(db, segments[0].clone());
+            let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+            pkg.lookup_type(&segments[1..segments.len() - 1], name)
+        }
+    });
     if let Some(def) = def {
         return match def {
             Definition::Class(_) => {

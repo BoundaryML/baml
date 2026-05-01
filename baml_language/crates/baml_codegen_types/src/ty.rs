@@ -84,14 +84,23 @@ pub enum Ty {
     // Media types
     Media(baml_base::MediaKind),
 
-    /// Class type with resolved name.
-    Class(Name),
+    /// Class type with resolved name and concrete generic arguments.
+    /// `generic_args` is empty for non-generic classes; otherwise it has one
+    /// entry per declared `generic_params` slot, in order. Mirrors TIR's
+    /// `Ty::Class(QualifiedTypeName, Vec<Ty>, TyAttr)`.
+    Class(Name, Vec<Ty>),
 
     /// Enum type with resolved name.
     Enum(Name),
 
     /// Type alias with resolved name (used for recursive type aliases).
     TypeAlias(Name),
+
+    /// A type-variable reference — `T` inside `class Box<T> { item T }` or
+    /// `function deep_copy<T>(value: T) -> T`. Carries the bare `TypeVar`
+    /// identifier; generators render it as a `typing.TypeVar`. Mirrors
+    /// TIR's `Ty::TypeVar(Name, TyAttr)`.
+    TypeVar(baml_base::Name),
 
     // Type constructors
     Optional(Box<Ty>),
@@ -130,9 +139,10 @@ impl Ty {
             Ty::Bool => None,
             Ty::Uint8Array => None,
             Ty::Media(_) => None,
-            Ty::Class(_) => None,
+            Ty::Class(_, _) => None,
             Ty::Enum(_) => None,
             Ty::TypeAlias(_) => None,
+            Ty::TypeVar(_) => None,
             Ty::List(_) => None,
             Ty::Map { .. } => None,
             Ty::Union(_) => None,
@@ -153,10 +163,11 @@ impl Ty {
             | Ty::Bool
             | Ty::Uint8Array
             | Ty::Media(_)
-            | Ty::Class(_)
             | Ty::Enum(_)
             | Ty::TypeAlias(_)
+            | Ty::TypeVar(_)
             | Ty::BuiltinUnknown => Ok(()),
+            Ty::Class(_, args) => args.iter().try_for_each(Ty::validate),
             Ty::Callable { params, ret } => {
                 params.iter().try_for_each(Ty::validate)?;
                 ret.validate()
@@ -226,7 +237,17 @@ impl fmt::Display for Ty {
             Ty::Null => write!(f, "null"),
             Ty::Uint8Array => write!(f, "uint8array"),
             Ty::Media(kind) => write!(f, "{kind}"),
-            Ty::Class(name) | Ty::Enum(name) | Ty::TypeAlias(name) => write!(f, "{name}"),
+            Ty::Class(name, args) => {
+                if args.is_empty() {
+                    write!(f, "{name}")
+                } else {
+                    let parts: Vec<std::string::String> =
+                        args.iter().map(std::string::ToString::to_string).collect();
+                    write!(f, "{name}<{}>", parts.join(", "))
+                }
+            }
+            Ty::Enum(name) | Ty::TypeAlias(name) => write!(f, "{name}"),
+            Ty::TypeVar(name) => write!(f, "{name}"),
             Ty::Optional(inner) => write!(f, "{inner}?"),
             Ty::List(inner) => write!(f, "{inner}[]"),
             Ty::Map { key, value } => write!(f, "map<{key}, {value}>"),

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use baml_base::Name;
+use baml_base::{Name, TypePath};
 use baml_type::{MediaKind, Ty, TyAttr, TypeName};
 use indexmap::IndexMap;
 
@@ -3209,7 +3209,7 @@ impl LoweringContext<'_> {
     fn lower_object(
         &mut self,
         expr_id: AstExprId,
-        type_name: Option<&Name>,
+        type_name: Option<&TypePath>,
         fields: &[(Name, AstExprId)],
         spreads: &[baml_compiler2_ast::SpreadField],
         dest: Place,
@@ -3225,19 +3225,54 @@ impl LoweringContext<'_> {
             Ty::Class(tn, _) => Some(tn.clone()),
             _ => None,
         };
-        let class_name = if let Some(n) = type_name {
-            n.to_string()
+        // Prefer the TIR-resolved fully-qualified name (`<package>.<ns>.<name>`)
+        // because that matches the bytecode emitter's FQN registry. The parser
+        // stores qualified paths verbatim from source (e.g. `root.http.Response`
+        // for user types), but the emitter registers user types under the `user.`
+        // prefix — so the source-verbatim form would miss the lookup. Falling
+        // back to the parser name only when TIR has no type info handles
+        // synthetic Object exprs from `lower_cst.rs` that already use registry-
+        // matching dotted forms like "baml.llm.Client".
+        let class_name = if let Some(tn) = &type_name_key {
+            let mut parts: Vec<String> = tn.module_path.iter().map(ToString::to_string).collect();
+            parts.push(tn.name.to_string());
+            parts.join(".")
         } else {
-            type_name_key
-                .as_ref()
-                .map_or_else(String::new, |tn| tn.name.to_string())
+            type_name.map(ToString::to_string).unwrap_or_default()
         };
 
         if spreads.is_empty() {
-            let field_operands: Vec<Operand> = fields
-                .iter()
-                .map(|(_, e)| self.lower_to_operand(*e))
-                .collect();
+            // Lower fields in class-definition order, filling unspecified slots
+            // with Null. Source order in the literal does not match definition
+            // order, so a partial literal like `ScanOptions { absolute: true }`
+            // would otherwise put `absolute` into whichever slot happens to be
+            // first. The TIR Object handler resolves the type via its qualified
+            // path, so `class_fields.get(tn)` always finds the definition for
+            // any user-written class literal.
+            let field_operands: Vec<Operand> = if let Some(field_name_to_idx) = type_name_key
+                .as_ref()
+                .and_then(|tn| self.class_fields.get(tn))
+                .cloned()
+            {
+                let mut result: Vec<Operand> = (0..field_name_to_idx.len())
+                    .map(|_| Operand::Constant(Constant::Null))
+                    .collect();
+                for (name, expr) in fields {
+                    if let Some(&idx) = field_name_to_idx.get(&name.to_string()) {
+                        result[idx] = self.lower_to_operand(*expr);
+                    }
+                }
+                result
+            } else {
+                // Synthetic Object exprs without TIR type info (e.g. compiler
+                // sugar for retry policies) fall back to source order. These
+                // construction sites build full, ordered literals so the order
+                // matches the class definition.
+                fields
+                    .iter()
+                    .map(|(_, e)| self.lower_to_operand(*e))
+                    .collect()
+            };
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {

@@ -246,7 +246,7 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
     match value {
         bex_vm_types::ConstValue::Null => "null".to_string(),
         bex_vm_types::ConstValue::Int(i) => i.to_string(),
-        bex_vm_types::ConstValue::Float(f) => f.to_string(),
+        bex_vm_types::ConstValue::Float(f) => bex_vm_types::format_float(*f),
         bex_vm_types::ConstValue::Bool(b) => b.to_string(),
         bex_vm_types::ConstValue::Object(idx) => {
             if let Some(objs) = objects {

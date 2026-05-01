@@ -5,13 +5,11 @@ use bex_project::{BexExternalAdt, BexExternalValue, Ty};
 
 use crate::{
     baml::cffi::{
-        BamlFieldType, BamlFieldTypeBool, BamlFieldTypeFloat, BamlFieldTypeInt, BamlFieldTypeList,
-        BamlFieldTypeLiteral, BamlFieldTypeMap, BamlFieldTypeMedia, BamlFieldTypeNull,
-        BamlFieldTypeOptional, BamlFieldTypeString, BamlFieldTypeUint8Array,
-        BamlFieldTypeUnionVariant, BamlFieldTypeUnknown, BamlHandle, BamlOutboundMapEntry,
-        BamlOutboundValue, BamlTypeName, BamlTypeNamespace, BamlValueClass, BamlValueEnum,
-        BamlValueList, BamlValueMap, BamlValueUnionVariant, baml_field_type::Type as FieldType,
-        baml_outbound_value::Value as BamlValueVariant,
+        BamlHandle, BamlOutboundMapEntry, BamlOutboundValue, BamlTy, BamlTyBool, BamlTyFloat,
+        BamlTyInt, BamlTyList, BamlTyLiteral, BamlTyMap, BamlTyMedia, BamlTyName, BamlTyNull,
+        BamlTyOptional, BamlTyString, BamlTyUint8Array, BamlTyUnionVariant, BamlTyUnknown,
+        BamlValueClass, BamlValueEnum, BamlValueList, BamlValueMap, BamlValueUnionVariant,
+        baml_outbound_value::Value as BamlValueVariant, baml_ty::Type as FieldType,
     },
     error::CtypesError,
     handle_table::{HandleTableOptions, HandleTableValue},
@@ -71,9 +69,9 @@ pub fn external_to_baml_value(
                 });
             }
             Some(BamlValueVariant::ClassValue(BamlValueClass {
-                name: Some(BamlTypeName {
-                    namespace: BamlTypeNamespace::Types as i32,
+                name: Some(BamlTyName {
                     name: class_name.clone(),
+                    generic_args: vec![],
                 }),
                 fields: baml_fields,
             }))
@@ -82,9 +80,9 @@ pub fn external_to_baml_value(
             enum_name,
             variant_name,
         } => Some(BamlValueVariant::EnumValue(BamlValueEnum {
-            name: Some(BamlTypeName {
-                namespace: BamlTypeNamespace::Types as i32,
+            name: Some(BamlTyName {
                 name: enum_name.clone(),
+                generic_args: vec![],
             }),
             value: variant_name.clone(),
             is_dynamic: false,
@@ -93,9 +91,9 @@ pub fn external_to_baml_value(
             let inner = external_to_baml_value(value, options)?;
             Some(BamlValueVariant::UnionVariantValue(Box::new(
                 BamlValueUnionVariant {
-                    name: metadata.name.as_ref().map(|n| BamlTypeName {
-                        namespace: BamlTypeNamespace::Types as i32,
+                    name: metadata.name.as_ref().map(|n| BamlTyName {
                         name: n.clone(),
+                        generic_args: vec![],
                     }),
                     is_optional: metadata.is_optional,
                     is_single_pattern: metadata.is_single_pattern,
@@ -124,9 +122,7 @@ pub fn external_to_baml_value(
             if let Some(converted) = bex_project::try_convert_rust_data(arc) {
                 return external_to_baml_value(&converted, options);
             }
-            return Err(CtypesError::InternalError(
-                "RustData cannot be serialized over FFI".to_string(),
-            ));
+            Some(BamlValueVariant::StringValue("<native handle>".to_string()))
         }
 
         // All opaque types → insert into handle table, encode as BamlHandle.
@@ -148,10 +144,10 @@ pub fn external_to_baml_value(
     Ok(BamlOutboundValue { value: variant })
 }
 
-fn literal_to_field_type_literal(lit: &Literal) -> BamlFieldTypeLiteral {
+fn literal_to_field_type_literal(lit: &Literal) -> BamlTyLiteral {
     use crate::baml::cffi::{
         BamlLiteralBool, BamlLiteralInt, BamlLiteralString,
-        baml_field_type_literal::Literal as LiteralOneof,
+        baml_ty_literal::Literal as LiteralOneof,
     };
     let literal = match lit {
         Literal::String(s) => LiteralOneof::StringLiteral(BamlLiteralString { value: s.clone() }),
@@ -159,7 +155,7 @@ fn literal_to_field_type_literal(lit: &Literal) -> BamlFieldTypeLiteral {
         Literal::Bool(b) => LiteralOneof::BoolLiteral(BamlLiteralBool { value: *b }),
         Literal::Float(s) => LiteralOneof::StringLiteral(BamlLiteralString { value: s.clone() }),
     };
-    BamlFieldTypeLiteral {
+    BamlTyLiteral {
         literal: Some(literal),
     }
 }
@@ -263,50 +259,48 @@ fn bex_prompt_ast_simple_to_proto_prompt_ast_simple(
     }
 }
 
-fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
+fn ty_to_field_type(ty: &Ty) -> BamlTy {
     let field_type = match ty {
-        Ty::Null { .. } => Some(FieldType::NullType(BamlFieldTypeNull {})),
-        Ty::Int { .. } => Some(FieldType::IntType(BamlFieldTypeInt {})),
-        Ty::Float { .. } => Some(FieldType::FloatType(BamlFieldTypeFloat {})),
-        Ty::Bool { .. } => Some(FieldType::BoolType(BamlFieldTypeBool {})),
-        Ty::String { .. } => Some(FieldType::StringType(BamlFieldTypeString {})),
-        Ty::List(inner, _) => Some(FieldType::ListType(Box::new(BamlFieldTypeList {
+        Ty::Null { .. } => Some(FieldType::NullType(BamlTyNull {})),
+        Ty::Int { .. } => Some(FieldType::IntType(BamlTyInt {})),
+        Ty::Float { .. } => Some(FieldType::FloatType(BamlTyFloat {})),
+        Ty::Bool { .. } => Some(FieldType::BoolType(BamlTyBool {})),
+        Ty::String { .. } => Some(FieldType::StringType(BamlTyString {})),
+        Ty::List(inner, _) => Some(FieldType::ListType(Box::new(BamlTyList {
             item_type: Some(Box::new(ty_to_field_type(inner))),
         }))),
-        Ty::Map { key, value, .. } => Some(FieldType::MapType(Box::new(BamlFieldTypeMap {
+        Ty::Map { key, value, .. } => Some(FieldType::MapType(Box::new(BamlTyMap {
             key_type: Some(Box::new(ty_to_field_type(key))),
             value_type: Some(Box::new(ty_to_field_type(value))),
         }))),
-        Ty::Class(tn, _) => Some(FieldType::ClassType(
-            crate::baml::cffi::BamlFieldTypeClass {
-                name: Some(BamlTypeName {
-                    namespace: BamlTypeNamespace::Types as i32,
-                    name: tn.display_name.to_string(),
-                }),
-            },
-        )),
+        Ty::Class(tn, _) => Some(FieldType::ClassType(crate::baml::cffi::BamlTyClass {
+            name: Some(BamlTyName {
+                name: tn.display_name.to_string(),
+                generic_args: vec![],
+            }),
+        })),
         Ty::EnumVariant(tn, ..) | Ty::Enum(tn, _) => {
-            Some(FieldType::EnumType(crate::baml::cffi::BamlFieldTypeEnum {
+            Some(FieldType::EnumType(crate::baml::cffi::BamlTyEnum {
                 name: tn.display_name.to_string(),
             }))
         }
-        Ty::Union(_, _) => Some(FieldType::UnionVariantType(BamlFieldTypeUnionVariant {
+        Ty::Union(_, _) => Some(FieldType::UnionVariantType(BamlTyUnionVariant {
             name: None,
         })),
-        Ty::Optional(inner, _) => Some(FieldType::OptionalType(Box::new(BamlFieldTypeOptional {
+        Ty::Optional(inner, _) => Some(FieldType::OptionalType(Box::new(BamlTyOptional {
             value: Some(Box::new(ty_to_field_type(inner))),
         }))),
-        Ty::Media(kind, _) => Some(FieldType::MediaType(BamlFieldTypeMedia {
+        Ty::Media(kind, _) => Some(FieldType::MediaType(BamlTyMedia {
             media: media_kind_to_proto_enum(*kind).into(),
         })),
         Ty::Literal(lit, _) => Some(FieldType::LiteralType(literal_to_field_type_literal(lit))),
         Ty::Opaque(tn, _) => {
             unreachable!("runtime-only {tn} should not reach FFI type encoding")
         }
-        Ty::Uint8Array { .. } => Some(FieldType::Uint8arrayType(BamlFieldTypeUint8Array {})),
+        Ty::Uint8Array { .. } => Some(FieldType::Uint8arrayType(BamlTyUint8Array {})),
         // BuiltinUnknown is used for dynamic types (e.g., map values, array elements)
         // when the element type isn't known at compile time.
-        Ty::BuiltinUnknown { .. } => Some(FieldType::UnknownType(BamlFieldTypeUnknown {})),
+        Ty::BuiltinUnknown { .. } => Some(FieldType::UnknownType(BamlTyUnknown {})),
         Ty::TypeAlias(_, _)
         | Ty::Future(..)
         | Ty::Function { .. }
@@ -316,7 +310,7 @@ fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
         }
     };
 
-    BamlFieldType { r#type: field_type }
+    BamlTy { r#type: field_type }
 }
 
 #[cfg(test)]
@@ -364,11 +358,15 @@ mod tests {
     }
 
     #[test]
-    fn rust_data_unknown_type_returns_error() {
+    fn rust_data_unknown_type_returns_fallback_string() {
         let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
         let value = BexExternalValue::RustData(unknown);
         let options = HandleTableOptions::for_in_process();
         let result = external_to_baml_value(&value, &options);
-        assert!(result.is_err());
+        let value = result.unwrap().value;
+        assert_eq!(
+            value,
+            Some(BamlValueVariant::StringValue("<native handle>".to_string()))
+        );
     }
 }

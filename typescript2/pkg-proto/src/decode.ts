@@ -215,6 +215,9 @@ function deserializeValue<T>(
     case 'promptAstValue':
       return deserializePromptAst(holder.value.promptAstValue);
 
+    case 'uint8arrayValue':
+      return holder.value.uint8arrayValue;
+
     default:
       return null;
   }

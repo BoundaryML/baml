@@ -1496,16 +1496,31 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 type_name
                     .as_ref()
-                    .and_then(|n| {
-                        self.package_items
-                            .lookup_type(&self.ns_context, n)
-                            .map(|def| {
-                                Ty::Class(
-                                    crate::lower_type_expr::qualify_def(self.context.db(), def, n),
-                                    vec![],
-                                    TyAttr::default(),
-                                )
-                            })
+                    .and_then(|path| {
+                        // Bare names: look up in the local package's namespace
+                        // context. Qualified paths (`baml.glob.ScanOptions`,
+                        // `root.http.Response`): go through the resolver that
+                        // understands cross-namespace and cross-package paths.
+                        // Mixing these would let a bare name fall through to
+                        // another package, which the project intentionally
+                        // forbids — single-segment writes mean "in scope here".
+                        let db = self.context.db();
+                        if path.is_qualified() {
+                            self.res_ctx
+                                .resolve_type(db, path.segments(), &self.ns_context)
+                                .map(|(_, ty)| ty)
+                        } else {
+                            let leaf = path.leaf();
+                            self.package_items
+                                .lookup_type(&self.ns_context, leaf)
+                                .map(|def| {
+                                    Ty::Class(
+                                        crate::lower_type_expr::qualify_def(db, def, leaf),
+                                        vec![],
+                                        TyAttr::default(),
+                                    )
+                                })
+                        }
                     })
                     .unwrap_or(Ty::Unknown {
                         attr: TyAttr::default(),

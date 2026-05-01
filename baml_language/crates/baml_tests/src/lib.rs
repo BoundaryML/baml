@@ -2,7 +2,7 @@
 //!
 //! This crate provides:
 //! - [`engine`]: Unified test infrastructure using `baml_test!` macro
-//! - Automatic snapshot tests generated from the `projects/` directory by `build.rs`
+//! - Automatic snapshot tests generated from the `projects/{tier}/` directories by `build.rs`
 
 pub mod engine;
 

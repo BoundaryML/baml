@@ -42,4 +42,8 @@ pub(crate) struct PyFunction {
     /// in the `def` keyword (per 12d §3.4); this `Ty` is identical for
     /// the sync and async fan-out siblings.
     pub(crate) return_ty: Ty,
+    /// `TypeVar` names declared on this function. Empty for non-generic
+    /// functions. Surfaces only in `.pyi` rendering — the `.py` factory
+    /// binding is type-erased.
+    pub(crate) generic_params: Vec<String>,
 }

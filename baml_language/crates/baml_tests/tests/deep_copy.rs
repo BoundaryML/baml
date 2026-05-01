@@ -27,15 +27,15 @@ async fn deep_copy_object() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> Tree {
-        alloc_instance Tree
+        alloc_instance user.Tree
         load_const "1"
         init_field .value
-        alloc_instance Tree
+        alloc_instance user.Tree
         load_const "2"
         init_field .value
         alloc_array 0
         init_field .children
-        alloc_instance Tree
+        alloc_instance user.Tree
         load_const "3"
         init_field .value
         alloc_array 0
@@ -82,15 +82,15 @@ async fn deep_copy_independence() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 1
         init_field .value
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 2
         init_field .value
         alloc_array 0
         init_field .children
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 3
         init_field .value
         alloc_array 0
@@ -140,7 +140,7 @@ async fn deep_copy_nested_arrays_in_class() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Matrix
+        alloc_instance user.Matrix
         load_const 1
         load_const 2
         alloc_array 2
@@ -196,7 +196,7 @@ async fn deep_copy_map_in_class() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Container
+        alloc_instance user.Container
         load_const 1
         load_const 2
         load_const "a"
@@ -267,25 +267,25 @@ async fn deep_copy_complex_nested_structure() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
-        alloc_instance Outer
-        alloc_instance Middle
-        alloc_instance Inner
+        alloc_instance user.Outer
+        alloc_instance user.Middle
+        alloc_instance user.Inner
         load_const 1
         init_field .value
         init_field .inner
-        alloc_instance Inner
+        alloc_instance user.Inner
         load_const 2
         init_field .value
-        alloc_instance Inner
+        alloc_instance user.Inner
         load_const 3
         init_field .value
         alloc_array 2
         init_field .list
         init_field .middle
-        alloc_instance Inner
+        alloc_instance user.Inner
         load_const 4
         init_field .value
-        alloc_instance Inner
+        alloc_instance user.Inner
         load_const 5
         init_field .value
         load_const "first"
@@ -367,14 +367,14 @@ async fn deep_copy_circular_reference() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 1
         init_field .value
         alloc_array 0
         init_field .children
         store_var a
         load_var a
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 2
         init_field .value
         load_var a
@@ -464,12 +464,12 @@ async fn deep_equals_simple_objects() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 10
         init_field .x
         load_const 20
         init_field .y
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 10
         init_field .x
         load_const 20
@@ -501,12 +501,12 @@ async fn deep_equals_different_objects() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 10
         init_field .x
         load_const 20
         init_field .y
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 10
         init_field .x
         load_const 21
@@ -546,30 +546,30 @@ async fn deep_equals_nested_objects() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 1
         init_field .value
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 2
         init_field .value
         alloc_array 0
         init_field .children
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 3
         init_field .value
         alloc_array 0
         init_field .children
         alloc_array 2
         init_field .children
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 1
         init_field .value
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 2
         init_field .value
         alloc_array 0
         init_field .children
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 3
         init_field .value
         alloc_array 0
@@ -611,30 +611,30 @@ async fn deep_equals_nested_objects_different() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 1
         init_field .value
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 2
         init_field .value
         alloc_array 0
         init_field .children
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 3
         init_field .value
         alloc_array 0
         init_field .children
         alloc_array 2
         init_field .children
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 1
         init_field .value
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 2
         init_field .value
         alloc_array 0
         init_field .children
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 4
         init_field .value
         alloc_array 0
@@ -667,14 +667,14 @@ async fn deep_equals_with_arrays() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
-        alloc_instance Container
+        alloc_instance user.Container
         load_const 1
         load_const 2
         load_const 3
         load_const 4
         alloc_array 4
         init_field .data
-        alloc_instance Container
+        alloc_instance user.Container
         load_const 1
         load_const 2
         load_const 3
@@ -707,14 +707,14 @@ async fn deep_equals_with_maps() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> bool {
-        alloc_instance MapContainer
+        alloc_instance user.MapContainer
         load_const 1
         load_const 2
         load_const "a"
         load_const "b"
         alloc_map 2
         init_field .values
-        alloc_instance MapContainer
+        alloc_instance user.MapContainer
         load_const 1
         load_const 2
         load_const "a"
@@ -747,7 +747,7 @@ async fn deep_equals_same_reference() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 1
         init_field .value
         alloc_array 0
@@ -789,14 +789,14 @@ async fn deep_equals_circular_structure() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bool {
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 1
         init_field .value
         alloc_array 0
         init_field .children
         store_var a1
         load_var a1
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 2
         init_field .value
         load_var a1
@@ -804,14 +804,14 @@ async fn deep_equals_circular_structure() {
         init_field .children
         alloc_array 1
         store_field .children
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 1
         init_field .value
         alloc_array 0
         init_field .children
         store_var a2
         load_var a2
-        alloc_instance Node
+        alloc_instance user.Node
         load_const 2
         init_field .value
         load_var a2

@@ -19,12 +19,54 @@ pub(super) fn to_file_path(url: &lsp_types::Url) -> Result<std::path::PathBuf, (
     url.to_file_path()
 }
 
-#[allow(dead_code)]
-pub(super) fn run_async_in_background(f: impl Future<Output = ()> + Send + 'static) {
+/// A handle for spawning background async tasks.
+///
+/// On native: wraps a [`tokio::runtime::Handle`] and uses `handle.spawn()`.
+/// On WASM: zero-size sentinel that delegates to `wasm_bindgen_futures::spawn_local()`.
+#[derive(Clone)]
+pub struct BackgroundSpawner {
     #[cfg(not(target_arch = "wasm32"))]
-    drop(tokio::spawn(f));
+    handle: tokio::runtime::Handle,
+}
+
+impl BackgroundSpawner {
+    /// Create a spawner using the current async runtime.
+    ///
+    /// Native: captures `tokio::runtime::Handle::current()` — must be called
+    /// inside a tokio runtime context, otherwise this panics at runtime.
+    /// WASM: zero-size sentinel.
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            Self {
+                handle: tokio::runtime::Handle::current(),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Self {}
+        }
+    }
+
+    /// Create a spawner with an explicit tokio runtime handle (native only).
+    ///
+    /// Use this when constructing a spawner outside a runtime context, e.g.
+    /// before entering the runtime, by passing `runtime.handle().clone()`.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn with_handle(handle: tokio::runtime::Handle) -> Self {
+        Self { handle }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn spawn(&self, f: impl Future<Output = ()> + Send + 'static) {
+        drop(self.handle.spawn(f));
+    }
+
     #[cfg(target_arch = "wasm32")]
-    wasm_bindgen_futures::spawn_local(f);
+    pub fn spawn(&self, f: impl Future<Output = ()> + 'static) {
+        wasm_bindgen_futures::spawn_local(f);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
