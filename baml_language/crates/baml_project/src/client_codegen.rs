@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use baml_codegen_types::{self as cg, Origin, SymbolPool};
-use baml_compiler2_ast::DeclarativeMeta;
+use baml_compiler2_ast::{DeclarativeMeta, FunctionOrigin};
 use baml_compiler2_hir::{
     compiler2_all_files, file_package,
     ids::{FunctionMarker, LocalItemId},
@@ -315,6 +315,13 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         // inserted directly, keyed on the suffixed name.
         for (id, func) in &item_tree.functions {
             if method_ids.contains(id) {
+                continue;
+            }
+
+            // Internal-origin functions (e.g. `<Client>$new` synthesized for
+            // primitive clients) are runtime plumbing, not user-callable —
+            // skip them so they don't end up as Python factory bindings.
+            if matches!(func.origin, FunctionOrigin::Internal) {
                 continue;
             }
 
