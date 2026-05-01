@@ -1,5 +1,8 @@
 {
   "dependencies": {
+    "@b/bridge_wasm": "link:../pkg-playground/wasm",
+    "@b/pkg-playground": "workspace:*",
+    "@b/pkg-proto": "workspace:*",
     "@biomejs/biome": "2.1.2",
     "@boundaryml/baml": "0.202.1",
     "@boundaryml/baml-lezer": "0.1.3",

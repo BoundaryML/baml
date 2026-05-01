@@ -108,7 +108,7 @@ const nextConfig = {
     // turbopackPersistentCaching: true,
     // useCache: true,
   },
-  transpilePackages: ['unist-util-visit', 'mdast'],
+  transpilePackages: ['unist-util-visit', 'mdast', '@b/pkg-playground', '@b/pkg-proto'],
   serverExternalPackages: ['shiki', '@boundaryml/baml'],
 
   webpack: (config, { dev, isServer, webpack, nextRuntime }) => {
