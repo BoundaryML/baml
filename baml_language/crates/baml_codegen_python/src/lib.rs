@@ -1979,9 +1979,11 @@ mod tests {
 
     #[test]
     fn cross_leaf_user_baml() {
-        // lorem leaf references baml.http.Response — needs `from ..
-        // import baml` so the `baml.http.Response` annotation resolves
-        // through the generated `baml_sdk/baml/` subpackage.
+        // lorem leaf references baml.http.Response — needs a runtime
+        // `from .. import baml` so the `baml.http.Response` annotation
+        // resolves at Pydantic-validation time. `baml/*` is stdlib and
+        // can't cycle back into user leaves, so it lifts out of the
+        // TYPE_CHECKING guard.
         let mut pool: SymbolPool = HashMap::new();
         let response = cg_name("baml", &["http"], "Response");
         let envelope = cg_name("user", &["lorem"], "Envelope");
@@ -1998,8 +2000,13 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
-            py.contains("if typing.TYPE_CHECKING:\n    from .. import baml\n"),
-            "py missing guarded baml import:\n{py}"
+            py.contains("\nfrom .. import baml\n"),
+            "py missing runtime baml import:\n{py}"
+        );
+        // Not under TYPE_CHECKING — must be at runtime.
+        assert!(
+            !py.contains("if typing.TYPE_CHECKING:\n    from .. import baml"),
+            "baml import should not be under TYPE_CHECKING:\n{py}"
         );
         assert!(py.contains("    resp: baml.http.Response\n"));
     }
@@ -2060,7 +2067,9 @@ mod tests {
 
     #[test]
     fn cross_leaf_deep_stream_vendor() {
-        // stream_types/vendor/aws/s3 leaf (depth 4) referencing baml.http.Response.
+        // stream_types/vendor/aws/s3 leaf (depth 4) referencing
+        // baml.http.Response. `baml` lifts out of TYPE_CHECKING; the
+        // five-dot prefix anchors at the `baml_sdk/` root.
         let mut pool: SymbolPool = HashMap::new();
         let response = cg_name("baml", &["http"], "Response");
         let stream_bucket = cg_name("aws", &["s3"], "Bucket$stream");
@@ -2077,8 +2086,12 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let py = &out[&PathBuf::from("stream_types/vendor/aws/s3/__init__.py")];
         assert!(
-            py.contains("if typing.TYPE_CHECKING:\n    from ..... import baml\n"),
+            py.contains("\nfrom ..... import baml\n"),
             "py missing five-dot baml import:\n{py}"
+        );
+        assert!(
+            !py.contains("if typing.TYPE_CHECKING:\n    from ..... import baml"),
+            "baml should not be under TYPE_CHECKING:\n{py}"
         );
     }
 
@@ -2122,13 +2135,18 @@ mod tests {
         );
         let out = to_source_code(&pool, &[]);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
+        // `baml` lifts to a runtime import; siblings stay under
+        // TYPE_CHECKING. Each segment renders on its own line.
+        assert!(
+            py.contains("\nfrom .. import baml\n"),
+            "py missing runtime baml import:\n{py}"
+        );
         let expected_block = "if typing.TYPE_CHECKING:\n\
-                              \x20   from .. import baml\n\
                               \x20   from .. import ipsum\n\
                               \x20   from .. import vendor\n";
         assert!(
             py.contains(expected_block),
-            "py missing one-per-line cross-leaf block:\n{py}"
+            "py missing one-per-line TYPE_CHECKING block:\n{py}"
         );
         // Never comma-joined.
         assert!(!py.contains("from .. import baml,"));
