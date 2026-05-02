@@ -2743,6 +2743,144 @@ impl BexVm {
                 self.stack.push(result);
             }
 
+            // ── Specialized integer arithmetic ───────────────────────
+            Instruction::AddInt => {
+                let Value::Int(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Int(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Int(l + r));
+            }
+            Instruction::SubInt => {
+                let Value::Int(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Int(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Int(l - r));
+            }
+            Instruction::MulInt => {
+                let Value::Int(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Int(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Int(l * r));
+            }
+            Instruction::DivInt => {
+                let Value::Int(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Int(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                if r == 0 {
+                    return Err(VmError::Thrown(self.panic_to_exception_value(
+                        VmPanic::DivisionByZero {
+                            left: Value::Int(l),
+                            right: Value::Int(r),
+                        },
+                    )));
+                }
+                self.stack.push(Value::Int(l / r));
+            }
+            Instruction::ModInt => {
+                let Value::Int(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Int(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Int(l % r));
+            }
+
+            // ── Specialized float arithmetic ─────────────────────────
+            Instruction::AddFloat => {
+                let Value::Float(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Float(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Float(l + r));
+            }
+            Instruction::SubFloat => {
+                let Value::Float(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Float(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Float(l - r));
+            }
+            Instruction::MulFloat => {
+                let Value::Float(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Float(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Float(l * r));
+            }
+            Instruction::DivFloat => {
+                let Value::Float(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Float(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                if r == 0.0 {
+                    return Err(VmError::Thrown(self.panic_to_exception_value(
+                        VmPanic::DivisionByZero {
+                            left: Value::Float(l),
+                            right: Value::Float(r),
+                        },
+                    )));
+                }
+                self.stack.push(Value::Float(l / r));
+            }
+
+            // ── Specialized integer comparison ───────────────────────
+            Instruction::CmpIntOp(op) => {
+                let Value::Int(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Int(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Bool(match op {
+                    CmpOp::Eq => l == r,
+                    CmpOp::NotEq => l != r,
+                    CmpOp::Lt => l < r,
+                    CmpOp::LtEq => l <= r,
+                    CmpOp::Gt => l > r,
+                    CmpOp::GtEq => l >= r,
+                }));
+            }
+
+            // ── Specialized float comparison ─────────────────────────
+            #[allow(clippy::float_cmp)]
+            Instruction::CmpFloatOp(op) => {
+                let Value::Float(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Float(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Bool(match op {
+                    CmpOp::Eq => l == r,
+                    CmpOp::NotEq => l != r,
+                    CmpOp::Lt => l < r,
+                    CmpOp::LtEq => l <= r,
+                    CmpOp::Gt => l > r,
+                    CmpOp::GtEq => l >= r,
+                }));
+            }
+
             Instruction::UnaryOp(op) => {
                 let value = self.stack.ensure_pop();
 

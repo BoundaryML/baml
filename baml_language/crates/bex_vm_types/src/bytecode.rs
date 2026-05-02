@@ -251,6 +251,32 @@ pub enum Instruction {
     /// Format: `CMP_OP op` where `op` is the comparison operation to perform.
     CmpOp(CmpOp),
 
+    // ── Specialized arithmetic (type dispatch eliminated at compile time) ──
+    /// `[left: Int, right: Int] → [Int]`
+    AddInt,
+    /// `[left: Int, right: Int] → [Int]`
+    SubInt,
+    /// `[left: Int, right: Int] → [Int]`
+    MulInt,
+    /// `[left: Int, right: Int] → [Int]` — throws `DivisionByZero` if right == 0
+    DivInt,
+    /// `[left: Int, right: Int] → [Int]`
+    ModInt,
+
+    /// `[left: Float, right: Float] → [Float]`
+    AddFloat,
+    /// `[left: Float, right: Float] → [Float]`
+    SubFloat,
+    /// `[left: Float, right: Float] → [Float]`
+    MulFloat,
+    /// `[left: Float, right: Float] → [Float]` — throws `DivisionByZero` if right == 0.0
+    DivFloat,
+
+    /// `[left: Int, right: Int] → [Bool]`
+    CmpIntOp(CmpOp),
+    /// `[left: Float, right: Float] → [Bool]`
+    CmpFloatOp(CmpOp),
+
     /// Performs a unary operation.
     ///
     /// Format: `UNARY_OP op` where `op` is the unary operation to perform.
@@ -481,7 +507,7 @@ pub enum Instruction {
     /// count, moving fields to metadata tables) — all regressed identically,
     /// confirming it's the enum size itself, not the specific field changes.
     #[doc(hidden)]
-    _Pad(usize, usize),
+    _Pad(u8, u8),
 
     /// Create a bound method from a global function index and a receiver on the stack.
     ///
@@ -715,6 +741,17 @@ impl std::fmt::Display for Instruction {
             Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
             Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
+            Instruction::AddInt => f.write_str("ADD_INT"),
+            Instruction::SubInt => f.write_str("SUB_INT"),
+            Instruction::MulInt => f.write_str("MUL_INT"),
+            Instruction::DivInt => f.write_str("DIV_INT"),
+            Instruction::ModInt => f.write_str("MOD_INT"),
+            Instruction::AddFloat => f.write_str("ADD_FLOAT"),
+            Instruction::SubFloat => f.write_str("SUB_FLOAT"),
+            Instruction::MulFloat => f.write_str("MUL_FLOAT"),
+            Instruction::DivFloat => f.write_str("DIV_FLOAT"),
+            Instruction::CmpIntOp(op) => write!(f, "CMP_INT_OP {op}"),
+            Instruction::CmpFloatOp(op) => write!(f, "CMP_FLOAT_OP {op}"),
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),

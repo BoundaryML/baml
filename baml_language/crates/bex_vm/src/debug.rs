@@ -196,6 +196,17 @@ pub(crate) fn display_instruction(
         | Instruction::Copy(_)
         | Instruction::BinOp(_)
         | Instruction::CmpOp(_)
+        | Instruction::AddInt
+        | Instruction::SubInt
+        | Instruction::MulInt
+        | Instruction::DivInt
+        | Instruction::ModInt
+        | Instruction::AddFloat
+        | Instruction::SubFloat
+        | Instruction::MulFloat
+        | Instruction::DivFloat
+        | Instruction::CmpIntOp(_)
+        | Instruction::CmpFloatOp(_)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -325,9 +336,20 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::InitField(_)
         | Instruction::StoreArrayElement
         | Instruction::StoreMapElement => Color::Green,
-        Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
-            Color::BrightBlue
-        }
+        Instruction::BinOp(_)
+        | Instruction::CmpOp(_)
+        | Instruction::AddInt
+        | Instruction::SubInt
+        | Instruction::MulInt
+        | Instruction::DivInt
+        | Instruction::ModInt
+        | Instruction::AddFloat
+        | Instruction::SubFloat
+        | Instruction::MulFloat
+        | Instruction::DivFloat
+        | Instruction::CmpIntOp(_)
+        | Instruction::CmpFloatOp(_)
+        | Instruction::UnaryOp(_) => Color::BrightBlue,
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
         | Instruction::JumpIfFalse(_)
@@ -739,6 +761,17 @@ fn display_instruction_textual(
         // --- Operators ---
         Instruction::BinOp(op) => format!("bin_op {op}"),
         Instruction::CmpOp(op) => format!("cmp_op {op}"),
+        Instruction::AddInt => "add_int".to_string(),
+        Instruction::SubInt => "sub_int".to_string(),
+        Instruction::MulInt => "mul_int".to_string(),
+        Instruction::DivInt => "div_int".to_string(),
+        Instruction::ModInt => "mod_int".to_string(),
+        Instruction::AddFloat => "add_float".to_string(),
+        Instruction::SubFloat => "sub_float".to_string(),
+        Instruction::MulFloat => "mul_float".to_string(),
+        Instruction::DivFloat => "div_float".to_string(),
+        Instruction::CmpIntOp(op) => format!("cmp_int_op {op}"),
+        Instruction::CmpFloatOp(op) => format!("cmp_float_op {op}"),
         Instruction::UnaryOp(op) => format!("unary_op {op}"),
 
         // --- Allocation ---

@@ -426,6 +426,65 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    /// Resolve the compile-time type of an operand, if known.
+    fn resolve_operand_type(&self, operand: &Operand) -> Option<Ty> {
+        match operand {
+            Operand::Constant(c) => match c {
+                Constant::Int(_) => Some(Ty::int()),
+                Constant::Float(_) => Some(Ty::float()),
+                Constant::String(_) => Some(Ty::string()),
+                Constant::Bool(_) => Some(Ty::bool()),
+                Constant::Null => Some(Ty::null()),
+                _ => None,
+            },
+            Operand::Copy(place) | Operand::Move(place) => self.resolve_place_type(place),
+        }
+    }
+
+    /// Try to emit a specialized instruction for a binary operation based on
+    /// static operand types. Returns `None` when types can't be resolved or
+    /// don't match a specialized form (mixed int/float, strings, bitwise, etc.).
+    fn try_specialize_binary_op(
+        &self,
+        op: BinOp,
+        left: &Operand,
+        right: &Operand,
+    ) -> Option<Instruction> {
+        let left_ty = self.resolve_operand_type(left)?;
+        let right_ty = self.resolve_operand_type(right)?;
+
+        match (&left_ty, &right_ty) {
+            (Ty::Int { .. }, Ty::Int { .. }) => match op {
+                BinOp::Add => Some(Instruction::AddInt),
+                BinOp::Sub => Some(Instruction::SubInt),
+                BinOp::Mul => Some(Instruction::MulInt),
+                BinOp::Div => Some(Instruction::DivInt),
+                BinOp::Mod => Some(Instruction::ModInt),
+                BinOp::Eq => Some(Instruction::CmpIntOp(CmpOp::Eq)),
+                BinOp::Ne => Some(Instruction::CmpIntOp(CmpOp::NotEq)),
+                BinOp::Lt => Some(Instruction::CmpIntOp(CmpOp::Lt)),
+                BinOp::Le => Some(Instruction::CmpIntOp(CmpOp::LtEq)),
+                BinOp::Gt => Some(Instruction::CmpIntOp(CmpOp::Gt)),
+                BinOp::Ge => Some(Instruction::CmpIntOp(CmpOp::GtEq)),
+                _ => None, // bitwise ops stay generic
+            },
+            (Ty::Float { .. }, Ty::Float { .. }) => match op {
+                BinOp::Add => Some(Instruction::AddFloat),
+                BinOp::Sub => Some(Instruction::SubFloat),
+                BinOp::Mul => Some(Instruction::MulFloat),
+                BinOp::Div => Some(Instruction::DivFloat),
+                BinOp::Eq => Some(Instruction::CmpFloatOp(CmpOp::Eq)),
+                BinOp::Ne => Some(Instruction::CmpFloatOp(CmpOp::NotEq)),
+                BinOp::Lt => Some(Instruction::CmpFloatOp(CmpOp::Lt)),
+                BinOp::Le => Some(Instruction::CmpFloatOp(CmpOp::LtEq)),
+                BinOp::Gt => Some(Instruction::CmpFloatOp(CmpOp::Gt)),
+                BinOp::Ge => Some(Instruction::CmpFloatOp(CmpOp::GtEq)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     fn local_slot_or_panic(&self, local: Local, context: &str) -> usize {
         *self.local_slots.get(&local).unwrap_or_else(|| {
             panic!("local {local} has no allocated slot while emitting {context}")
@@ -1098,6 +1157,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             unwrap_infallible(self.make_closure(*lambda_idx, captures.len()));
             return;
         }
+        // Specialize BinaryOp when both operand types are statically known.
+        if let Rvalue::BinaryOp { op, left, right } = rvalue {
+            if let Some(specialized) = self.try_specialize_binary_op(*op, left, right) {
+                self.emit_operand_pull(left);
+                self.emit_operand_pull(right);
+                self.emit(specialized);
+                return;
+            }
+        }
         if let Rvalue::MakeBoundMethod { item_ref, receiver } = rvalue {
             // Emit the receiver onto the stack first.
             self.emit_operand_pull(receiver);
@@ -1652,7 +1720,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             let idx = self.add_constant(ConstValue::Int(*value));
             let inst = self.emit(Instruction::LoadConst(idx));
             self.set_operand(inst, OperandMeta::Const(label));
-            self.emit(Instruction::CmpOp(CmpOp::Eq));
+            self.emit(Instruction::CmpIntOp(CmpOp::Eq));
             let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
             self.emit_jump_unless_fallthrough(*target);
             let skip_to = self.current_pc();
@@ -1776,7 +1844,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let idx = self.add_constant(ConstValue::Int(*value));
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const(label));
-                self.emit(Instruction::CmpOp(CmpOp::Lt));
+                self.emit(Instruction::CmpIntOp(CmpOp::Lt));
                 let lt_jump = self.emit(Instruction::PopJumpIfFalse(0));
 
                 // Left subtree (values < pivot)
@@ -1907,7 +1975,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         let idx = self.add_constant(ConstValue::Int(value));
         let inst = self.emit(Instruction::LoadConst(idx));
         self.set_operand(inst, OperandMeta::Const(label));
-        self.emit(Instruction::CmpOp(CmpOp::Eq));
+        self.emit(Instruction::CmpIntOp(CmpOp::Eq));
         let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
         self.emit(Instruction::Pop(1));
         self.emit_jump_unless_fallthrough(target);
