@@ -154,7 +154,7 @@ async fn catch_literal_int_match() {
         jump L2
         load_var e
         load_const 42
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -3308,7 +3308,7 @@ async fn sequential_catches_both_recover() {
       L1:
         load_var a
         load_var b
-        bin_op +
+        add_int
         return
     }
     "#);
@@ -3356,7 +3356,7 @@ async fn throw_in_match_arm_propagates() {
     function main() -> string {
         load_const 2
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 

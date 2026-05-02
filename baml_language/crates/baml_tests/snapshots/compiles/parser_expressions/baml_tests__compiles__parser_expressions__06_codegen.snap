@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.Calculate() -> int {
     load_const 3
     load_const 3
-    bin_op *
+    mul_int
     store_var b
     load_const 3
     load_var b
