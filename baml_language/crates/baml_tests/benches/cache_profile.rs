@@ -237,8 +237,7 @@ fn compile_source(source: &str) -> (ProjectDatabase, BexEngine) {
     (db, engine)
 }
 
-fn call_main(engine: &Arc<BexEngine>) -> BexExternalValue {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+fn call_main(rt: &tokio::runtime::Runtime, engine: &Arc<BexEngine>) -> BexExternalValue {
     rt.block_on(engine.call_function(
         "main",
         vec![],
@@ -253,6 +252,7 @@ fn call_main(engine: &Arc<BexEngine>) -> BexExternalValue {
 fn run_pass<const N: usize>(
     sampler: &Sampler,
     events: [Event; N],
+    rt: &tokio::runtime::Runtime,
     engine: &Arc<BexEngine>,
     repeats: usize,
     label: &str,
@@ -264,7 +264,7 @@ fn run_pass<const N: usize>(
     let mut runs = Vec::new();
     for _ in 0..repeats {
         let before = thread.sample().expect("sample");
-        let _ = call_main(engine);
+        let _ = call_main(rt, engine);
         let after = thread.sample().expect("sample");
         let mut deltas = [0u64; N];
         for i in 0..N {
@@ -280,13 +280,14 @@ fn run_pass<const N: usize>(
 fn profile_workload(sampler: &Sampler, workload: &Workload, repeats: usize) -> Counters {
     let (_db, engine) = compile_source(workload.source);
     let engine = Arc::new(engine);
+    let rt = tokio::runtime::Runtime::new().expect("runtime creation failed");
 
     // Warmup
-    let _ = call_main(&engine);
+    let _ = call_main(&rt, &engine);
 
-    let a = run_pass(sampler, EVENTS_A, &engine, repeats, "A");
-    let b = run_pass(sampler, EVENTS_B, &engine, repeats, "B");
-    let c = run_pass(sampler, EVENTS_C, &engine, repeats, "C");
+    let a = run_pass(sampler, EVENTS_A, &rt, &engine, repeats, "A");
+    let b = run_pass(sampler, EVENTS_B, &rt, &engine, repeats, "B");
+    let c = run_pass(sampler, EVENTS_C, &rt, &engine, repeats, "C");
 
     let a = &a[a.len() / 2];
     let b = &b[b.len() / 2];

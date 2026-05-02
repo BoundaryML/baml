@@ -151,6 +151,7 @@ for workload in all_workloads:
             print(f"  {label:<20s} {bv:>16,d} {nv:>16,d} {sign}{delta:>+9,d} {sign}{pct:>+7.1f}%{indicator}")
         else:
             delta = nv - bv
+            pct = (delta / bv * 100) if bv != 0 else 0
             sign = "+" if delta > 0 else ""
             if abs(delta) < 0.01:
                 indicator = " "
@@ -190,6 +191,7 @@ PYTHON
 # ---- flamegraph: samply record ----
 cmd_flamegraph() {
     local workload_file="${1:-}"
+    local project_dir="/tmp/bex_flamegraph_project"
 
     if [[ -z "$workload_file" ]]; then
         # Default: use fib(35) workload
@@ -200,11 +202,13 @@ function fib(n: int) -> int {
 }
 function main() -> int { fib(35) }
 BAML
-        mkdir -p /tmp/bex_flamegraph_project/baml_src
-        cp "$workload_file" /tmp/bex_flamegraph_project/baml_src/workload.baml
-        echo '[project]' > /tmp/bex_flamegraph_project/baml.toml
-        echo 'name = "flamegraph"' >> /tmp/bex_flamegraph_project/baml.toml
     fi
+
+    # Set up a temp project with the workload file
+    mkdir -p "$project_dir/baml_src"
+    cp "$workload_file" "$project_dir/baml_src/workload.baml"
+    echo '[project]' > "$project_dir/baml.toml"
+    echo 'name = "flamegraph"' >> "$project_dir/baml.toml"
 
     echo "==> Building baml-cli (profiling profile)..."
     cargo build --profile profiling --bin baml-cli 2>&1 | tail -3
@@ -215,7 +219,7 @@ BAML
 
     echo "==> Recording with samply..."
     samply record --save-only --rate 10000 -o "$output" \
-        ./target/profiling/baml-cli run --function main --from /tmp/bex_flamegraph_project
+        ./target/profiling/baml-cli run --function main --from "$project_dir"
 
     echo ""
     echo "==> Profile saved to $output"

@@ -592,6 +592,8 @@ def main():
 
         mismatches = []
         checks = []
+        if has_baseline:
+            checks.append(("baseline", [args.baseline, "run", baml_file]))
         if has_python:
             checks.append(("python3", ["python3", "-S", py_file]))
         if has_node:
