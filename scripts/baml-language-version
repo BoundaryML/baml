@@ -8,7 +8,6 @@ import os
 import re
 import subprocess
 import sys
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,24 +48,39 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
-def load_release(path: Path = RELEASE_TOML) -> tuple[str, Version]:
-    try:
-        data = tomllib.loads(path.read_text())
-    except FileNotFoundError:
-        fail(f"{path.relative_to(ROOT)} does not exist")
-    except tomllib.TOMLDecodeError as exc:
-        fail(f"{path.relative_to(ROOT)} is invalid TOML: {exc}")
+def parse_release_content(content: str) -> tuple[str, Version]:
+    section: str | None = None
+    channel: dict[str, str] = {}
 
-    channel = data.get("channel")
-    if not isinstance(channel, dict):
-        fail("release.toml must contain a [channel] table")
+    for raw_line in content.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+            continue
+
+        if section != "channel":
+            continue
+
+        key, separator, value = line.partition("=")
+        if not separator:
+            fail(f"invalid release.toml line: {raw_line}")
+
+        key = key.strip()
+        value = value.strip()
+        if len(value) < 2 or not value.startswith('"') or not value.endswith('"'):
+            fail(f"channel.{key} must be a quoted string")
+
+        channel[key] = value[1:-1]
 
     name = channel.get("name")
-    if not isinstance(name, str):
+    if name is None:
         fail("channel.name must be a string")
 
     base_version = channel.get("base_version")
-    if not isinstance(base_version, str):
+    if base_version is None:
         fail("channel.base_version must be a string")
 
     try:
@@ -75,6 +89,14 @@ def load_release(path: Path = RELEASE_TOML) -> tuple[str, Version]:
         fail(str(exc))
 
     return name, version
+
+
+def load_release(path: Path = RELEASE_TOML) -> tuple[str, Version]:
+    try:
+        content = path.read_text()
+    except FileNotFoundError:
+        fail(f"{path.relative_to(ROOT)} does not exist")
+    return parse_release_content(content)
 
 
 def write_release(version: Version) -> None:
@@ -118,9 +140,7 @@ def previous_release_toml() -> str | None:
 
 def parse_release_toml_content(content: str) -> tuple[str, Version]:
     try:
-        data = tomllib.loads(content)
-        channel = data["channel"]
-        return channel["name"], Version.parse(channel["base_version"])
+        return parse_release_content(content)
     except Exception as exc:
         fail(f"previous baml_language/release.toml is invalid: {exc}")
 

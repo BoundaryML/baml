@@ -24,8 +24,8 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ github.event_name == 'workflow_run' && 'baml-language-alpha-canary' || format('baml-language-alpha-manual-{0}', github.run_id) }}
-  cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
+  group: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'canary') && 'baml-language-alpha-canary' || format('baml-language-alpha-{0}-{1}', github.event_name, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'canary' }}
 
 defaults:
   run:
@@ -40,6 +40,11 @@ env:
 jobs:
   prepare:
     name: Prepare Release
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'canary')
     runs-on: blacksmith-4vcpu-ubuntu-2204
     outputs:
       should_run: ${{ steps.gate.outputs.should_run }}
@@ -279,6 +284,7 @@ jobs:
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
       VERSION: ${{ needs.prepare.outputs.version }}
       RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
       SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
@@ -368,21 +374,22 @@ jobs:
         run: |
           set -euo pipefail
           title="BAML Language ${VERSION}"
-          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+          if gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" >/dev/null 2>&1; then
             gh release edit "${RELEASE_TAG}" \
+              --repo "${GH_REPO}" \
               --title "${title}" \
               --notes-file release-body.md \
-              --prerelease \
-              --latest=false
+              --prerelease
           else
             gh release create "${RELEASE_TAG}" \
+              --repo "${GH_REPO}" \
               --title "${title}" \
               --notes-file release-body.md \
               --prerelease \
               --latest=false \
               --target "${SOURCE_SHA}"
           fi
-          gh release upload "${RELEASE_TAG}" release-assets/* --clobber
+          gh release upload "${RELEASE_TAG}" release-assets/* --repo "${GH_REPO}" --clobber
 
       - name: Validate tap version before dispatch
         if: env.DISPATCH_HOMEBREW == 'true'

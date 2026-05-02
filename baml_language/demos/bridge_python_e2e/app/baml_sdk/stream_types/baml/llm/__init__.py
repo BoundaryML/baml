@@ -23,8 +23,9 @@ from __future__ import annotations
 import typing
 import pydantic
 
+from .... import baml
+
 if typing.TYPE_CHECKING:
-    from .... import baml
     from .... import stream_types
 
 

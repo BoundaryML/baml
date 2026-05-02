@@ -254,6 +254,13 @@ fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
             }
             collect_cross_leaf(ret, current, out);
         }
+        // `Ty::Media(_)` is rendered by `translate_ty` as the literal
+        // dotted form `baml.media.Image` etc. — no `Name` involved, but
+        // the resulting annotation references the `baml` first-segment,
+        // so the leaf needs `baml` imported.
+        Ty::Media(_) => {
+            out.insert("baml".to_string());
+        }
         Ty::Int
         | Ty::Float
         | Ty::String
@@ -261,7 +268,6 @@ fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
         | Ty::Null
         | Ty::Literal(_)
         | Ty::Uint8Array
-        | Ty::Media(_)
         | Ty::TypeVar(_)
         | Ty::BuiltinUnknown
         | Ty::Unit
@@ -319,6 +325,29 @@ fn render_class_bases(generic_params: &[String]) -> String {
             "pydantic.BaseModel, typing.Generic[{}]",
             generic_params.join(", ")
         )
+    }
+}
+
+/// If `c` is one of the four `baml.media.{Image,Video,Audio,Pdf}` stdlib
+/// classes, return the corresponding Rust `PyO3` class name (`BamlImage`,
+/// `BamlVideo`, …). 15b §lines 14-19 specify these as re-exports of
+/// `PyO3` types holding `Arc<MediaValue>` directly; the regular Pydantic
+/// shell is suppressed for them. Hardcoded list rather than an IR
+/// flag — out of scope per 15d.
+fn media_reexport_rust_name(c: &crate::emit::class::PyClass) -> Option<&'static str> {
+    match c.source.to_string().as_str() {
+        "baml.media.Image" => Some("BamlImage"),
+        "baml.media.Video" => Some("BamlVideo"),
+        "baml.media.Audio" => Some("BamlAudio"),
+        "baml.media.Pdf" => Some("BamlPdf"),
+        _ => None,
+    }
+}
+
+fn is_media_reexport(s: &EmittedSymbol) -> bool {
+    match s {
+        EmittedSymbol::Class(c) => media_reexport_rust_name(c).is_some(),
+        _ => false,
     }
 }
 
@@ -439,6 +468,12 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
 
     match s {
         EmittedSymbol::Class(c) => {
+            if let Some(rust_name) = media_reexport_rust_name(c) {
+                return format!(
+                    "from baml.baml_core.baml_py import {rust_name} as {py_name}\n",
+                    py_name = c.py_name,
+                );
+            }
             let properties = c
                 .properties
                 .iter()
@@ -623,19 +658,36 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
             out.push_str("import pydantic\n");
         }
     }
-    // Cross-leaf imports under `if typing.TYPE_CHECKING:` keep them
-    // out of the runtime import graph so recursive references (leaf A
-    // → leaf B → leaf A) don't cycle. `from __future__ import
-    // annotations` (in every header) makes annotations resolve lazily
-    // as strings.
+    // Cross-leaf imports go between the stdlib block and the factory
+    // imports. `baml` is lifted to a runtime import — Pydantic v2
+    // resolves field annotations like `baml.media.Pdf` against the
+    // module's runtime globals at model-construction time, so the
+    // `TYPE_CHECKING` guard isn't enough. `baml/*` is stdlib (only
+    // ever imports from `baml.baml_core`) and never references user
+    // leaves, so the runtime import can't cycle.
+    //
+    // All other first-segments stay under `if typing.TYPE_CHECKING:`
+    // so recursive cross-leaf references (leaf A → leaf B → leaf A)
+    // don't create an import cycle. `from __future__ import annotations`
+    // (in every header) makes annotations resolve lazily as strings.
     //
     // Dot count = depth + 1: anchors at the `baml_sdk/` root
     // regardless of the installed package name.
-    if !cross_leaf_segments.is_empty() {
+    let dots = ".".repeat(body.leaf.segments.len() + 1);
+    let (runtime_segments, type_checking_segments): (Vec<&String>, Vec<&String>) =
+        cross_leaf_segments
+            .iter()
+            .partition(|seg| seg.as_str() == "baml");
+    if !runtime_segments.is_empty() {
+        out.push('\n');
+        for seg in &runtime_segments {
+            writeln!(out, "from {dots} import {seg}").unwrap();
+        }
+    }
+    if !type_checking_segments.is_empty() {
         out.push('\n');
         out.push_str("if typing.TYPE_CHECKING:\n");
-        let dots = ".".repeat(body.leaf.segments.len() + 1);
-        for seg in &cross_leaf_segments {
+        for seg in &type_checking_segments {
             writeln!(out, "    from {dots} import {seg}").unwrap();
         }
     }
@@ -694,6 +746,9 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
                 if p == key
                     && matches!(prev_sym, EmittedSymbol::Function(_))
                     && matches!(sym, EmittedSymbol::Function(_)) => {}
+            // Adjacent media re-export imports collapse into a single
+            // import block with no blank between them.
+            Some((_, prev_sym)) if is_media_reexport(prev_sym) && is_media_reexport(sym) => {}
             Some(_) => out.push_str("\n\n"),
         }
         out.push_str(&body_text);
@@ -814,6 +869,12 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
 
     match s {
         EmittedSymbol::Class(c) => {
+            if let Some(rust_name) = media_reexport_rust_name(c) {
+                return format!(
+                    "from baml.baml_core.baml_py import {rust_name} as {py_name}\n",
+                    py_name = c.py_name,
+                );
+            }
             let mut out = ClassBodyPyi {
                 py_name: c.py_name.clone(),
                 bases: render_class_bases(&c.generic_params),
@@ -971,6 +1032,9 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
                 if p == key
                     && matches!(prev_sym, EmittedSymbol::Function(_))
                     && matches!(sym, EmittedSymbol::Function(_)) => {}
+            // Adjacent media re-export imports collapse into a single
+            // import block (mirrors `.py`).
+            Some((_, prev_sym)) if is_media_reexport(prev_sym) && is_media_reexport(sym) => {}
             Some(_) => out.push_str("\n\n"),
         }
         out.push_str(&body_text);

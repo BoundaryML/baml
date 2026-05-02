@@ -23,6 +23,8 @@ from __future__ import annotations
 import typing
 import pydantic
 
+from ... import baml
+
 if typing.TYPE_CHECKING:
     from ... import lorem
 
@@ -34,9 +36,23 @@ class Address(pydantic.BaseModel):
     zip: typing.Union[str, None]
 
 
+class Bar(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    their_pdf: baml.media.Pdf
+    their_image: baml.media.Image
+    name: typing.Literal["bar"]
+
+
 class Box(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     item: typing.Union[None, None]
+
+
+class Foo(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    name: typing.Literal["foo"]
+    my_pdf: baml.media.Pdf
+    my_image: baml.media.Image
 
 
 class PhoneNumber(pydantic.BaseModel):
@@ -57,7 +73,9 @@ class Resume(pydantic.BaseModel):
 
 __all__ = [
     "Address",
+    "Bar",
     "Box",
+    "Foo",
     "PhoneNumber",
     "Resume",
 ]
