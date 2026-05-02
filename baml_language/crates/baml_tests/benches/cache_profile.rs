@@ -1,6 +1,7 @@
-//! Cache & instruction profiling for BEX VM using darwin-kperf.
+//! Cache & instruction profiling for BEX VM using hardware performance counters.
 //!
-//! macOS only — requires Apple Silicon and sudo for kperf access.
+//! - **macOS**: Uses darwin-kperf (requires sudo)
+//! - **Linux**: Use `perf stat` CLI wrapper (no code dep needed)
 //!
 //! Usage:
 //!   cargo build --bench cache_profile --profile profiling
@@ -8,8 +9,10 @@
 
 #[cfg(not(target_os = "macos"))]
 fn main() {
-    eprintln!("cache_profile requires macOS with Apple Silicon.");
-    std::process::exit(0);
+    eprintln!("cache_profile bench requires macOS with Apple Silicon.");
+    eprintln!(
+        "On Linux, use: perf stat -e instructions,cycles,L1-icache-load-misses,L1-dcache-load-misses,branch-misses ./target/profiling/cache_profile_workload"
+    );
 }
 
 #[cfg(target_os = "macos")]
@@ -314,6 +317,8 @@ function main() -> int {
         }
     }
 
+    // ---- main ----
+
     pub fn run() {
         let sampler = Sampler::new().unwrap_or_else(|e| {
             eprintln!("Failed to create sampler: {e}");
@@ -329,7 +334,6 @@ function main() -> int {
             .map(|w| w[1].clone());
         let stability_mode = args.iter().any(|a| a == "--stability");
 
-        // Get git metadata (prefer env vars set by bench-compare script)
         let commit = std::env::var("BEX_GIT_COMMIT").unwrap_or_else(|_| {
             std::process::Command::new("git")
                 .args(["rev-parse", "--short", "HEAD"])

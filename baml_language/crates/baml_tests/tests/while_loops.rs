@@ -50,14 +50,14 @@ async fn while_loop_gcd() {
       L3:
         load_var b
         load_var a
-        bin_op -
+        sub_int
         store_var b
         jump L0
 
       L4:
         load_var a
         load_var b
-        bin_op -
+        sub_int
         store_var a
         jump L0
     }
@@ -109,11 +109,11 @@ async fn while_with_scope() {
       L2:
         load_var n
         load_const 1
-        bin_op -
+        sub_int
         store_var n
         load_var a
         load_var b
-        bin_op +
+        add_int
         store_var t
         load_var a
         store_var b
@@ -158,7 +158,7 @@ async fn while_with_break() {
         pop_jump_if_false L1
         load_var a
         load_const 1
-        bin_op +
+        add_int
         store_var a
         load_var a
         load_const 2
@@ -217,11 +217,11 @@ async fn break_factorial() {
       L1:
         load_var result
         load_var limit
-        bin_op *
+        mul_int
         store_var result
         load_var limit
         load_const 1
-        bin_op -
+        sub_int
         store_var limit
         jump L0
 
@@ -264,13 +264,13 @@ async fn break_nested() {
         pop_jump_if_false L0
         load_var a
         load_const 1
-        bin_op +
+        add_int
         store_var a
 
       L0:
         load_var a
         load_const 1
-        bin_op +
+        add_int
         store_var a
 
       L1:
@@ -313,13 +313,13 @@ async fn break_nested_with_variable_conditions() {
         pop_jump_if_false L0
         load_var a
         load_const 1
-        bin_op +
+        add_int
         store_var a
 
       L0:
         load_var a
         load_const 1
-        bin_op +
+        add_int
         store_var a
 
       L1:
@@ -361,11 +361,11 @@ async fn while_with_conditional_break() {
         pop_jump_if_false L1
         load_var result
         load_var n
-        bin_op +
+        add_int
         store_var result
         load_var n
         load_const 1
-        bin_op -
+        sub_int
         store_var n
         load_var n
         load_const 0
@@ -430,11 +430,11 @@ async fn continue_factorial() {
       L2:
         load_var result
         load_var limit
-        bin_op *
+        mul_int
         store_var result
         load_var limit
         load_const 1
-        bin_op -
+        sub_int
         store_var limit
         load_var limit
         load_const 0

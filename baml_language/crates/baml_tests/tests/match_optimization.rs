@@ -924,14 +924,14 @@ async fn match_if_else_chain_three_arms() {
     function classify(x: int) -> int {
         load_var x
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var x
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 

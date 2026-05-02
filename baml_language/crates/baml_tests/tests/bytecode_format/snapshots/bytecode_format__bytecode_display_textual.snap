@@ -120,7 +120,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
   L3:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L0
 
@@ -248,13 +248,13 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     pop_jump_if_false L11
     load_var count
     load_const 1
-    bin_op +
+    add_int
     store_var count
 
   L11:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L3
 }
@@ -367,13 +367,13 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     pop_jump_if_false L11
     load_var count
     load_const 1
-    bin_op +
+    add_int
     store_var count
 
   L11:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L3
 }
@@ -437,7 +437,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
   L5:
     load_var __for_idx_1
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx_1
     jump L2
 
@@ -462,7 +462,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
   L8:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L0
 
@@ -575,7 +575,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
   L5:
     load_var __for_idx_1
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx_1
     jump L2
 
@@ -600,7 +600,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
   L8:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L0
 
@@ -709,7 +709,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
   L7:
     load_var __for_idx_1
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx_1
     jump L2
 
@@ -727,7 +727,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     pop 1
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L0
 }
@@ -737,7 +737,8 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
     make_cell
     store_var ?1
     load_var body
-    make_closure .<lambda(run_test, 0)>, 1
+    load_const ?
+    make_closure .<lambda(run_test, 0)>
     store_var base_run
     load_var runner
     load_const null
@@ -945,7 +946,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     load_const 2
     bin_op *
     load_var role_mult
-    bin_op +
+    add_int
     store_var base
     load_var base
     load_var role_mult
@@ -965,7 +966,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
   L15:
     load_var capped
     load_var role_mult
-    bin_op +
+    add_int
     store_var total
     load_var total
     load_var threshold

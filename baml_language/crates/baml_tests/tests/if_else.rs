@@ -1283,7 +1283,7 @@ async fn nested_block_with_if() {
         store_var a
         load_const 2
         load_const 3
-        bin_op +
+        add_int
         store_var a
         load_var a
         load_const 5
