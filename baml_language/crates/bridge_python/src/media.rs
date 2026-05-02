@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use bex_project::{BexExternalAdt, MediaKind, MediaValue};
-use bridge_ctypes::{HANDLE_TABLE, HandleTableValue, baml::cffi::BamlHandleType};
+use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, baml::cffi::BamlHandleType};
 use pyo3::{
     Bound, PyAny, PyResult, Python,
     exceptions::{PyRuntimeError, PyTypeError},
@@ -35,12 +35,12 @@ fn arc_from_handle(handle: &BamlHandle, expected_kind: MediaKind) -> PyResult<Ar
         .resolve(handle.key())
         .ok_or_else(|| PyRuntimeError::new_err("media handle is no longer valid"))?;
     let result = match &*arc_value {
-        HandleTableValue::Adt(BexExternalAdt::Media(media_arc))
+        CffiHandleTableEntry::Adt(BexExternalAdt::Media(media_arc))
             if media_arc.kind == expected_kind =>
         {
             Ok(Arc::clone(media_arc))
         }
-        HandleTableValue::Adt(BexExternalAdt::Media(media_arc)) => {
+        CffiHandleTableEntry::Adt(BexExternalAdt::Media(media_arc)) => {
             Err(PyTypeError::new_err(format!(
                 "media handle kind mismatch: expected {:?}, got {:?}",
                 expected_kind, media_arc.kind
@@ -70,7 +70,7 @@ fn handle_type_for(kind: MediaKind) -> BamlHandleType {
 // fresh `BamlHandle` pointing at it. Used by the inbound encoder so a
 // Python-owned media value survives a round-trip into the engine.
 fn arc_to_handle(arc: &Arc<MediaValue>) -> BamlHandle {
-    let table_value = HandleTableValue::Adt(BexExternalAdt::Media(Arc::clone(arc)));
+    let table_value = CffiHandleTableEntry::Adt(BexExternalAdt::Media(Arc::clone(arc)));
     let key = HANDLE_TABLE.insert(table_value);
     let handle_type = handle_type_for(arc.kind) as i32;
     BamlHandle::new(key, handle_type)

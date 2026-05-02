@@ -12,7 +12,7 @@ use crate::{
         baml_outbound_value::Value as BamlValueVariant, baml_ty::Type as FieldType,
     },
     error::CtypesError,
-    handle_table::{HandleTableOptions, HandleTableValue},
+    handle_table::{CffiHandleTableEntry, CffiHandleTableOptions},
 };
 
 /// Convert `BexExternalValue` to `BamlOutboundValue` for FFI return.
@@ -21,7 +21,7 @@ use crate::{
 /// and encoded as `BamlHandle` messages so the host can round-trip them back.
 pub fn external_to_baml_value(
     value: &BexExternalValue,
-    options: &HandleTableOptions,
+    options: &CffiHandleTableOptions,
 ) -> Result<BamlOutboundValue, CtypesError> {
     let variant = match value {
         BexExternalValue::Null => None,
@@ -129,7 +129,7 @@ pub fn external_to_baml_value(
         BexExternalValue::Handle(_)
         | BexExternalValue::FunctionRef { .. }
         | BexExternalValue::Adt(_) => {
-            let table_value = HandleTableValue::try_from(value.clone()).map_err(|e| {
+            let table_value = CffiHandleTableEntry::try_from(value.clone()).map_err(|e| {
                 CtypesError::InternalError(format!("handle table insertion failed: {e}"))
             })?;
             let ht = table_value.handle_type();
@@ -328,7 +328,7 @@ mod tests {
             "hello".to_string(),
         ))));
         let value = BexExternalValue::RustData(prompt);
-        let options = HandleTableOptions::for_in_process();
+        let options = CffiHandleTableOptions::for_in_process();
         let result = external_to_baml_value(&value, &options);
         assert!(result.is_ok());
         assert!(matches!(
@@ -348,7 +348,7 @@ mod tests {
             Some("image/png".to_string()),
         ));
         let value = BexExternalValue::RustData(media);
-        let options = HandleTableOptions::for_in_process();
+        let options = CffiHandleTableOptions::for_in_process();
         let result = external_to_baml_value(&value, &options);
         assert!(result.is_ok());
         assert!(matches!(
@@ -361,7 +361,7 @@ mod tests {
     fn rust_data_unknown_type_returns_fallback_string() {
         let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
         let value = BexExternalValue::RustData(unknown);
-        let options = HandleTableOptions::for_in_process();
+        let options = CffiHandleTableOptions::for_in_process();
         let result = external_to_baml_value(&value, &options);
         let value = result.unwrap().value;
         assert_eq!(

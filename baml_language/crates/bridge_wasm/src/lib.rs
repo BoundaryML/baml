@@ -312,7 +312,7 @@ impl BamlWasmRuntime {
             }
         })?;
 
-        let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
+        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
         let baml_value = external_to_baml_value(&result, &handle_options)
             .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
 
@@ -429,7 +429,7 @@ impl BamlWasmRuntime {
 
         match result {
             Ok(result) => {
-                let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
+                let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
                 let baml_value = external_to_baml_value(&result, &handle_options)
                     .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
                 Ok(baml_value.encode_to_vec())

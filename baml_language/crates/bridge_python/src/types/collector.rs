@@ -147,7 +147,7 @@ impl FunctionLog {
     /// The result value as protobuf-encoded bytes, or None if not yet complete.
     #[getter]
     fn result(&self) -> Option<Vec<u8>> {
-        let handle_options = bridge_ctypes::HandleTableOptions::for_in_process();
+        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
         self.inner.result.as_ref().and_then(|val| {
             match external_to_baml_value(val, &handle_options) {
                 Ok(baml_val) => Some(baml_val.encode_to_vec()),
