@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 
-from . import errors, fs, glob, http, llm, media, net, panics, stream
+from . import errors, fs, glob, http, llm, media, net, panics, stream, sys
 
 import pydantic
 

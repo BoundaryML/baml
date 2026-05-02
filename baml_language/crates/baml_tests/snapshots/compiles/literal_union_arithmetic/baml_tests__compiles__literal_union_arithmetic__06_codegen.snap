@@ -79,14 +79,14 @@ function user.loopMatchAccum() -> int {
     store_var _5
     load_var i
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L3
     jump L6
 
   L3:
     load_var i
     load_const 1
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L4
     jump L5
 
@@ -111,7 +111,7 @@ function user.loopMatchAccum() -> int {
     store_var sum
     load_var i
     load_const 1
-    bin_op +
+    add_int
     store_var i
     jump L0
 }
@@ -119,14 +119,14 @@ function user.loopMatchAccum() -> int {
 function user.matchAdd(x: int) -> int {
     load_var x
     load_const 1
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var x
     load_const 2
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L2
 

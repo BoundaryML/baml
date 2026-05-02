@@ -18,13 +18,13 @@ function user.Calculator.compute(self: null, a: int, b: int) -> int {
   L0:
     load_var a
     load_var b
-    bin_op *
+    mul_int
     jump L2
 
   L1:
     load_var a
     load_var b
-    bin_op +
+    add_int
 
   L2:
     return
@@ -93,7 +93,7 @@ function user.RangeCheck.is_valid(self: null, n: int) -> bool {
     load_var n
     load_var self
     load_field .max
-    cmp_op <=
+    cmp_int_op <=
 
   L0:
     return
@@ -125,7 +125,8 @@ function user.test_bound_in_lambda() -> string {
     init_field .last
     store_deref ?1
     load_var emp
-    make_closure .<lambda(test_bound_in_lambda, 0)>, 1
+    load_const ?
+    make_closure .<lambda(test_bound_in_lambda, 0)>
     call_indirect
     store_var greeter
     load_const "Hello"

@@ -419,16 +419,16 @@ async fn watch_break_unwatches() {
       L1:
         load_var x
         load_const 9
-        bin_op +
+        add_int
         store_var x
         load_var total
         load_var x
-        bin_op +
+        add_int
         store_var total
         unwatch x
         load_var __for_idx
         load_const 1
-        bin_op +
+        add_int
         store_var __for_idx
         jump L0
 
@@ -512,11 +512,11 @@ async fn watch_continue_unwatches() {
       L3:
         load_var x
         load_const 10
-        bin_op +
+        add_int
         store_var x
         load_var total
         load_var x
-        bin_op +
+        add_int
         store_var total
         unwatch x
         jump L5
@@ -527,7 +527,7 @@ async fn watch_continue_unwatches() {
       L5:
         load_var __for_idx
         load_const 1
-        bin_op +
+        add_int
         store_var __for_idx
         jump L0
     }
@@ -731,12 +731,12 @@ async fn watch_for_throw_unwatches() {
       L3:
         load_var x
         load_const 9
-        bin_op +
+        add_int
         store_var x
         unwatch x
         load_var __for_idx
         load_const 1
-        bin_op +
+        add_int
         store_var __for_idx
         jump L0
 
@@ -834,11 +834,11 @@ async fn watch_while_throw_unwatches() {
       L3:
         load_var x
         load_const 10
-        bin_op +
+        add_int
         store_var x
         load_var i
         load_const 1
-        bin_op +
+        add_int
         store_var i
         unwatch x
         jump L0
@@ -907,7 +907,7 @@ async fn watch_match_arm_throw_unwatches() {
     function fails(input: int) -> int {
         load_var input
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -1077,7 +1077,7 @@ async fn watch_match_arm_fallthrough_unwatches() {
     function entry(input: int) -> int {
         load_var input
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -1326,7 +1326,7 @@ async fn watch_function_call_modifications() {
         load_field .x
         load_var point
         load_field .y
-        bin_op +
+        add_int
         unwatch point
         return
     }
@@ -1730,7 +1730,7 @@ async fn viz_header_before_while() {
         entry: "header_before_while",
     };
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function header_before_while() -> int {
         load_const 0
         store_var x
@@ -1750,7 +1750,7 @@ async fn viz_header_before_while() {
       L2:
         load_var x
         load_const 1
-        bin_op +
+        add_int
         store_var x
         jump L0
     }

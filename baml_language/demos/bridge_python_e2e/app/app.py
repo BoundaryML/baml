@@ -11,11 +11,14 @@ import asyncio
 import json
 
 from baml_sdk.baml.http import Request
+from baml_sdk.baml.media import Image, Pdf
 from baml_sdk.lorem import (
     Address,
+    Bar,
     Box,
     ExtractResume__build_request,
     ExtractResume__build_request_async,
+    Foo,
     PhoneNumber,
     Resume,
     Sentiment,
@@ -137,6 +140,63 @@ assert isinstance(outer_after_async.item, Box)
 assert outer_after_async.item.item == 42
 
 print()
+
+# ---------------------------------------------------------------------------
+# Media handles: top-level + nested round-trip per 15b spec.
+# Exercises Pdf.from_url (PyO3 staticmethod -> Arc<MediaValue>),
+# isinstance check on the returned value, instance accessor (url()),
+# nested pdf in input class (Foo.my_pdf), and nested pdf in output class
+# (Bar.their_pdf) decoded back to a Pdf.
+# ---------------------------------------------------------------------------
+
+original_pdf = Pdf.from_url(
+    "https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf",
+    "application/pdf",
+)
+assert isinstance(original_pdf, Pdf), f"expected Pdf, got {type(original_pdf).__name__}"
+assert original_pdf.url() == "https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf"
+
+original_image = Image.from_url(
+    "https://example.com/cat.png",
+    "image/png",
+)
+assert isinstance(original_image, Image), f"expected Image, got {type(original_image).__name__}"
+assert original_image.url() == "https://example.com/cat.png"
+
+foo = Foo(name="foo", my_pdf=original_pdf, my_image=original_image)
+bar = foo.repackage()
+
+assert isinstance(bar, Bar)
+assert bar.name == "bar"
+assert isinstance(bar.their_pdf, Pdf)
+assert bar.their_pdf.url() == "https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf"
+assert isinstance(bar.their_image, Image)
+assert bar.their_image.url() == "https://example.com/cat.png"
+
+# Extended accessor coverage — exercises `from_file` / `from_base64` /
+# the `file()` / `base64()` / `mime_type()` accessors that the M0 path
+# doesn't touch. Pure-Rust dispatch, no engine round-trip.
+pdf_file = Pdf.from_file("/tmp/sample.pdf", "application/pdf")
+assert pdf_file.file() == "/tmp/sample.pdf"
+assert pdf_file.url() is None
+assert pdf_file.mime_type() == "application/pdf"
+
+import base64 as b64
+data = b64.b64encode(b"%PDF-1.4 fake bytes").decode()
+pdf_b64 = Pdf.from_base64(data, "application/pdf")
+assert pdf_b64.base64() == data
+
+image_file = Image.from_file("/tmp/sample.png", "image/png")
+assert image_file.file() == "/tmp/sample.png"
+assert image_file.url() is None
+assert image_file.mime_type() == "image/png"
+
+image_data = b64.b64encode(b"\x89PNG fake bytes").decode()
+image_b64 = Image.from_base64(image_data, "image/png")
+assert image_b64.base64() == image_data
+
+print()
 print("OK — round-trip succeeded for: Optional, List<Class>, Map, Enum, "
       "nested-Class, sync+async, plus LLM `__build_request` companion, "
-      "plus Box<T> and Box<Box<int>> generics.")
+      "plus Box<T> and Box<Box<int>> generics, plus Pdf + Image media "
+      "handles (top-level + nested round-trip + accessors).")

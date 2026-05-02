@@ -76,7 +76,7 @@ impl BamlRuntime {
         // surfaces as BamlInvalidArgumentError to JS callers. Legacy engine/ had no equivalent
         // (returned NAPI classes directly, no encode step). bridge_python has the same
         // misclassification. Leaving as-is for parity; fix in both bridges together.
-        let handle_options = bridge_ctypes::HandleTableOptions::for_in_process();
+        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
         let baml_value = external_to_baml_value(&result, &handle_options)
             .map_err(|e| invalid_argument_error(format!("Failed to encode result: {e}")))?;
 
@@ -123,7 +123,7 @@ impl BamlRuntime {
                 .map_err(runtime_error_to_napi)?;
 
             // FIXME: Same misclassification as the sync path above.
-            let handle_options = bridge_ctypes::HandleTableOptions::for_in_process();
+            let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
             let baml_value = external_to_baml_value(&result, &handle_options)
                 .map_err(|e| invalid_argument_error(format!("Failed to encode result: {e}")))?;
 

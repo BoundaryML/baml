@@ -107,4 +107,6 @@ pub const ALL: &[BuiltinFile] = &[
 ];
 
 mod adt;
+mod media;
 pub use adt::*;
+pub use media::{MediaContent, MediaValue};

@@ -3,6 +3,7 @@
 use baml_tests::baml_test;
 
 #[tokio::test]
+#[ignore = "blocks on stdin — run with: cargo test --test io -- --ignored < /dev/null"]
 async fn io_input_with_prompt_bytecode() {
     let output = baml_test!(
         r#"
@@ -24,6 +25,7 @@ async fn io_input_with_prompt_bytecode() {
 }
 
 #[tokio::test]
+#[ignore = "blocks on stdin — run with: cargo test --test io -- --ignored < /dev/null"]
 async fn io_input_no_prompt_bytecode() {
     let output = baml_test!(
         r#"
@@ -44,6 +46,7 @@ async fn io_input_no_prompt_bytecode() {
 }
 
 #[tokio::test]
+#[ignore = "blocks on stdin — run with: cargo test --test io -- --ignored < /dev/null"]
 async fn io_input_fully_qualified_bytecode() {
     let output = baml_test!(
         r#"

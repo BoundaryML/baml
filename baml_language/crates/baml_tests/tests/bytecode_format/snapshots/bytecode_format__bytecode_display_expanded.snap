@@ -104,7 +104,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
 
   49   25   load_var 4             (__for_idx)
        26   load_const 2           (1)
-       27   bin_op +               
+       27   add_int                
        28   store_var 4            (__for_idx)
        29   jump -24               (to 5)
 
@@ -217,12 +217,12 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
        82   pop_jump_if_false +5   (to 87)
        83   load_var 6             (count)
        84   load_const 5           (1)
-       85   bin_op +               
+       85   add_int                
        86   store_var 6            (count)
 
   30   87   load_var 9             (__for_idx)
        88   load_const 5           (1)
-       89   bin_op +               
+       89   add_int                
        90   store_var 9            (__for_idx)
        91   jump -64               (to 27)
 }
@@ -321,12 +321,12 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
        82   pop_jump_if_false +5   (to 87)
        83   load_var 6             (count)
        84   load_const 5           (1)
-       85   bin_op +               
+       85   add_int                
        86   store_var 6            (count)
 
   41   87   load_var 9             (__for_idx)
        88   load_const 5           (1)
-       89   bin_op +               
+       89   add_int                
        90   store_var 9            (__for_idx)
        91   jump -64               (to 27)
 }
@@ -386,7 +386,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
 
   160   44    load_var 10            (__for_idx_1)
         45    load_const 3           (1)
-        46    bin_op +               
+        46    add_int                
         47    store_var 10           (__for_idx_1)
         48    jump -30               (to 18)
 
@@ -409,7 +409,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
 
   144   63    load_var 4             (__for_idx)
         64    load_const 3           (1)
-        65    bin_op +               
+        65    add_int                
         66    store_var 4            (__for_idx)
         67    jump -61               (to 6)
 
@@ -526,7 +526,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
 
   130   44   load_var 7             (__for_idx_1)
         45   load_const 3           (1)
-        46   bin_op +               
+        46   add_int                
         47   store_var 7            (__for_idx_1)
         48   jump -30               (to 18)
 
@@ -549,7 +549,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
 
   124   63   load_var 4             (__for_idx)
         64   load_const 3           (1)
-        65   bin_op +               
+        65   add_int                
         66   store_var 4            (__for_idx)
         67   jump -61               (to 6)
 
@@ -652,7 +652,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
 
   104   75   load_var 6              (__for_idx_1)
         76   load_const 4            (1)
-        77   bin_op +                
+        77   add_int                 
         78   store_var 6             (__for_idx_1)
         79   jump -59                (to 20)
 
@@ -670,7 +670,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         90   pop 1                   
         91   load_var 4              (__for_idx)
         92   load_const 4            (1)
-        93   bin_op +                
+        93   add_int                 
         94   store_var 4             (__for_idx)
         95   jump -87                (to 8)
 }
@@ -681,28 +681,29 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   173   3    load_var 1             (body)
-        4    make_closure 354 1     
-        5    store_var 3            (base_run)
+        4    load_const 0           
+        5    make_closure 354       
+        6    store_var 3            (base_run)
 
-  188   6    load_var 2             (runner)
-        7    load_const 0           (null)
-        8    cmp_op ==              
-        9    pop_jump_if_false +2   (to 11)
-        10   jump +9                (to 19)
-        11   load_var 2             (runner)
-        12   is_type 1              
-        13   pop_jump_if_false +8   (to 21)
+  188   7    load_var 2             (runner)
+        8    load_const 1           (null)
+        9    cmp_op ==              
+        10   pop_jump_if_false +2   (to 12)
+        11   jump +9                (to 20)
+        12   load_var 2             (runner)
+        13   is_type 2              
+        14   pop_jump_if_false +8   (to 22)
 
-  191   14   load_var 3             (base_run)
-        15   load_var 2             (runner)
-        16   call_indirect          
+  191   15   load_var 3             (base_run)
+        16   load_var 2             (runner)
+        17   call_indirect          
 
-  192   17   call_indirect          
-        18   jump +3                (to 21)
+  192   18   call_indirect          
+        19   jump +3                (to 22)
 
-  189   19   load_var 3             (base_run)
-        20   call_indirect          
-        21   return                 
+  189   20   load_var 3             (base_run)
+        21   call_indirect          
+        22   return                 
 }
 
 function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> testing.TestSetReport {
@@ -759,48 +760,48 @@ function user.User.promote(self: null, bonus: int) -> Report {
 }
 
 function user.http_status(code: int) -> string {
-  96    0    load_var 1         (code)
-        1    dense_tag 0        
-        2    jump_table 0, +1   ([to 21, to 18, to 15, to 12, to 9, to 6], default to 3)
+  96    0    load_var 1     (code)
+        1    dense_tag 0    
+        2    jump_table 0   ([to 21, to 18, to 15, to 12, to 9, to 6], default to 3)
 
-  103   3    load_const 0       ("Unknown")
-        4    store_var 2        (label)
+  103   3    load_const 0   ("Unknown")
+        4    store_var 2    (label)
 
-  96    5    jump +18           (to 23)
+  96    5    jump +18       (to 23)
 
-  102   6    load_const 1       ("Internal Server Error")
-        7    store_var 2        (label)
+  102   6    load_const 1   ("Internal Server Error")
+        7    store_var 2    (label)
 
-  96    8    jump +15           (to 23)
+  96    8    jump +15       (to 23)
 
-  101   9    load_const 2       ("Not Found")
-        10   store_var 2        (label)
+  101   9    load_const 2   ("Not Found")
+        10   store_var 2    (label)
 
-  96    11   jump +12           (to 23)
+  96    11   jump +12       (to 23)
 
-  100   12   load_const 3       ("Bad Request")
-        13   store_var 2        (label)
+  100   12   load_const 3   ("Bad Request")
+        13   store_var 2    (label)
 
-  96    14   jump +9            (to 23)
+  96    14   jump +9        (to 23)
 
-  99    15   load_const 4       ("No Content")
-        16   store_var 2        (label)
+  99    15   load_const 4   ("No Content")
+        16   store_var 2    (label)
 
-  96    17   jump +6            (to 23)
+  96    17   jump +6        (to 23)
 
-  98    18   load_const 5       ("Created")
-        19   store_var 2        (label)
+  98    18   load_const 5   ("Created")
+        19   store_var 2    (label)
 
-  96    20   jump +3            (to 23)
+  96    20   jump +3        (to 23)
 
-  97    21   load_const 6       ("OK")
-        22   store_var 2        (label)
+  97    21   load_const 6   ("OK")
+        22   store_var 2    (label)
 
-  95    23   load_const 7       ("HTTP ")
+  95    23   load_const 7   ("HTTP ")
 
-  105   24   load_var 2         (label)
-        25   bin_op +           
-        26   return             
+  105   24   load_var 2     (label)
+        25   bin_op +       
+        26   return         
 }
 
 function user.score(input: User | ErrorInfo, threshold: int) -> Report {
@@ -857,7 +858,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
   56   39    load_var 1              (input)
        40    load_field 2            (role)
        41    discriminant            
-       42    jump_table 0, +69       ([to 52, to 49, to 46, to 43], default to 111)
+       42    jump_table 0            ([to 52, to 49, to 46, to 43], default to 111)
 
   60   43    load_var 2              (threshold)
        44    store_var 5             (role_mult)
@@ -881,7 +882,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
        55    load_const 2            (2)
        56    bin_op *                
        57    load_var 5              (role_mult)
-       58    bin_op +                
+       58    add_int                 
        59    store_var 6             (base)
 
   66   60    load_var 6              (base)
@@ -900,7 +901,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
 
   71   70    load_var 7              (capped)
        71    load_var 5              (role_mult)
-       72    bin_op +                
+       72    add_int                 
        73    store_var 8             (total)
 
   73   74    load_var 8              (total)

@@ -35,7 +35,7 @@ function user.add_assign() -> int {
     store_var x
     load_var x
     load_const 5
-    bin_op +
+    add_int
     store_var x
     load_var x
     return
@@ -61,11 +61,11 @@ function user.assign_in_loop() -> int {
   L2:
     load_var sum
     load_var i
-    bin_op +
+    add_int
     store_var sum
     load_var i
     load_const 1
-    bin_op +
+    add_int
     store_var i
     jump L0
 }
@@ -120,11 +120,11 @@ function user.c_style_for_loop() -> int {
   L2:
     load_var result
     load_var i
-    bin_op +
+    add_int
     store_var result
     load_var i
     load_const 1
-    bin_op +
+    add_int
     store_var i
     jump L0
 }
@@ -147,7 +147,7 @@ function user.continue_in_for() -> int {
   L2:
     load_var i
     load_const 1
-    bin_op +
+    add_int
     store_var i
     jump L0
 }
@@ -240,11 +240,11 @@ function user.iterator_style_for_loop() -> int {
     load_var _2
     load_var __for_idx
     load_array_element
-    bin_op +
+    add_int
     store_var result
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L0
 }
@@ -287,7 +287,7 @@ function user.mul_assign() -> int {
     store_var x
     load_var x
     load_const 4
-    bin_op *
+    mul_int
     store_var x
     load_var x
     return
@@ -304,7 +304,7 @@ function user.multi_assign() -> int {
     store_var b
     load_var a
     load_var b
-    bin_op +
+    add_int
     return
 }
 
@@ -366,7 +366,7 @@ function user.nested_for_loop() -> int {
   L4:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L0
 
@@ -377,11 +377,11 @@ function user.nested_for_loop() -> int {
     load_var __for_idx_1
     load_array_element
     bin_op *
-    bin_op +
+    add_int
     store_var result
     load_var __for_idx_1
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx_1
     jump L3
 }
@@ -409,7 +409,7 @@ function user.nested_while_loop() -> int {
     pop_jump_if_false L0
     load_var j
     load_const 1
-    bin_op +
+    add_int
     store_var j
     jump L3
 }
@@ -461,7 +461,7 @@ function user.simple_while_loop() -> int {
   L2:
     load_var i
     load_const 1
-    bin_op +
+    add_int
     store_var i
     jump L0
 }
@@ -471,7 +471,7 @@ function user.sub_assign() -> int {
     store_var x
     load_var x
     load_const 3
-    bin_op -
+    sub_int
     store_var x
     load_var x
     return

@@ -1025,7 +1025,7 @@ async fn match_enum_variant_first() {
         load_var s
         discriminant
         load_const Status.Active
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
@@ -1033,7 +1033,7 @@ async fn match_enum_variant_first() {
         load_var s
         discriminant
         load_const Status.Inactive
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -1094,7 +1094,7 @@ async fn match_enum_variant_last() {
         load_var s
         discriminant
         load_const Status.Active
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
@@ -1102,7 +1102,7 @@ async fn match_enum_variant_last() {
         load_var s
         discriminant
         load_const Status.Inactive
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -1167,7 +1167,7 @@ async fn match_enum_variant_with_wildcard() {
         load_var s
         discriminant
         load_const Status.Active
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
@@ -1175,7 +1175,7 @@ async fn match_enum_variant_with_wildcard() {
         load_var s
         discriminant
         load_const Status.Inactive
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -1236,7 +1236,7 @@ async fn match_enum_variant_with_wildcard_matched() {
         load_var s
         discriminant
         load_const Status.Active
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
@@ -1244,7 +1244,7 @@ async fn match_enum_variant_with_wildcard_matched() {
         load_var s
         discriminant
         load_const Status.Inactive
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 

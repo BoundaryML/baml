@@ -103,14 +103,14 @@ async fn match_literal_int_first_arm() {
     function main() -> int {
         load_const 1
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_const 1
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -152,14 +152,14 @@ async fn match_literal_int_second_arm() {
     function main() -> int {
         load_const 2
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_const 2
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -201,14 +201,14 @@ async fn match_literal_int_fallback() {
     function main() -> int {
         load_const 999
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_const 999
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -590,21 +590,21 @@ async fn match_union_with_duplicates() {
     function main() -> string {
         load_const 1
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L4
 
       L0:
         load_const 1
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_const 1
         load_const 3
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         jump L3
 
@@ -653,14 +653,14 @@ async fn match_as_expression_in_arithmetic() {
     function main() -> int {
         load_const 2
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_const 2
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -709,14 +709,14 @@ async fn match_nested() {
     function main() -> int {
         load_const 1
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_const 1
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -731,14 +731,14 @@ async fn match_nested() {
       L3:
         load_const 2
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L4
         jump L7
 
       L4:
         load_const 2
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L5
         jump L6
 
@@ -1107,7 +1107,7 @@ async fn match_catch_all_binding_with_int_patterns() {
       L0:
         load_const 99
         load_const 10
-        bin_op *
+        mul_int
         jump L5
 
       L1: 3
@@ -1365,7 +1365,7 @@ async fn match_negative_int_with_variable() {
         load_const 1
         unary_op -
         load_const -1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
@@ -1373,7 +1373,7 @@ async fn match_negative_int_with_variable() {
         load_const 1
         unary_op -
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -1628,7 +1628,7 @@ async fn match_three_levels_nested() {
     function classify(x: int, y: int, z: int) -> string {
         load_var x
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -1639,7 +1639,7 @@ async fn match_three_levels_nested() {
       L1:
         load_var y
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         jump L3
 
@@ -1650,7 +1650,7 @@ async fn match_three_levels_nested() {
       L3:
         load_var z
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L4
         jump L5
 
@@ -1706,7 +1706,7 @@ async fn match_three_levels_nested_middle() {
     function classify(x: int, y: int, z: int) -> string {
         load_var x
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -1717,7 +1717,7 @@ async fn match_three_levels_nested_middle() {
       L1:
         load_var y
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         jump L3
 
@@ -1728,7 +1728,7 @@ async fn match_three_levels_nested_middle() {
       L3:
         load_var z
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L4
         jump L5
 
@@ -1954,7 +1954,7 @@ async fn match_arithmetic_scrutinee() {
         load_var b
         bin_op +
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
@@ -1963,7 +1963,7 @@ async fn match_arithmetic_scrutinee() {
         load_var b
         bin_op +
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -2021,7 +2021,7 @@ async fn match_function_call_scrutinee() {
     function classify() -> string {
         call user.helper
         load_const 42
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -2191,7 +2191,7 @@ async fn match_in_loop() {
         store_var sum
         load_var i
         load_const 1
-        bin_op +
+        add_int
         store_var i
         jump L0
     }
