@@ -16,9 +16,11 @@ pub use baml_base::{Literal, MediaKind, Name, Span};
 mod attr;
 mod defs;
 pub mod simplify_sap;
+pub mod template;
 pub mod typetag;
 pub use attr::*;
 pub use defs::*;
+pub use template::TyTemplate;
 
 /// A lightweight name type for class/enum/type-alias references.
 ///

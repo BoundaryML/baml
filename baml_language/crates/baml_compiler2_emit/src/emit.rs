@@ -1356,7 +1356,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                    let inst = self.emit(Instruction::Call(global_callee));
+                    let inst = self.emit(Instruction::Call {
+                        callee: global_callee,
+                        ntypeargs: 0,
+                    });
                     if let Some(name) = &func_name {
                         self.set_operand(inst, OperandMeta::Callable(name.clone()));
                     }
@@ -2142,7 +2145,10 @@ impl PullSink for StackifyCodegen<'_, '_> {
             .get("baml.deep_copy")
             .copied()
             .unwrap_or_else(|| panic!("undefined function: baml.deep_copy"));
-        let inst = self.emit(Instruction::Call(GlobalIndex::from_raw(deep_copy_idx)));
+        let inst = self.emit(Instruction::Call {
+            callee: GlobalIndex::from_raw(deep_copy_idx),
+            ntypeargs: 0,
+        });
         self.set_operand(inst, OperandMeta::Callable("baml.deep_copy".to_string()));
         Ok(())
     }
@@ -2225,7 +2231,10 @@ impl PullSink for StackifyCodegen<'_, '_> {
             .copied()
             .unwrap_or_else(|| panic!("undefined function: baml.Array.length"));
         pull_semantics::walk_place_pull(self, place)?;
-        let inst = self.emit(Instruction::Call(GlobalIndex::from_raw(global_idx)));
+        let inst = self.emit(Instruction::Call {
+            callee: GlobalIndex::from_raw(global_idx),
+            ntypeargs: 0,
+        });
         self.set_operand(inst, OperandMeta::Callable("baml.Array.length".to_string()));
         Ok(())
     }

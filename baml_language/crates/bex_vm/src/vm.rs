@@ -26,8 +26,8 @@ use bex_vm_types::{
     ObjectType, PanicClass, StackIndex, UnaryOp, Value, Variant,
     bytecode::{self, BlockNotification},
     types::{
-        BoundMethod, Cell, Closure, Function, FunctionType, Future, FutureType, Instance,
-        PendingFuture, Type,
+        BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, Future, FutureType,
+        Instance, PendingFuture, Type,
     },
 };
 use indexmap::IndexMap;
@@ -44,15 +44,20 @@ use crate::{
 pub const MAX_FRAMES: usize = 256;
 
 /// Bytecode call frame — pushed when entering a bytecode function.
-/// Deliberately Copy so the exec-loop can snapshot/restore cheaply.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct BytecodeFrame {
+#[derive(Clone, Debug)]
+pub struct BytecodeFrame {
     /// Pointer to the running function (or closure) object.
-    pub(crate) function: HeapPtr,
+    pub function: HeapPtr,
     /// Instruction pointer (IP). Points to the next instruction.
-    pub(crate) instruction_ptr: usize,
+    pub instruction_ptr: usize,
     /// Local variables offset in the eval stack.
-    pub(crate) locals_offset: StackIndex,
+    pub locals_offset: StackIndex,
+    /// Resolved type arguments for this call frame.
+    ///
+    /// Populated by the `Call { ntypeargs }` instruction when the callee is
+    /// generic.  Empty for non-generic calls.  Used by the `LoadType`
+    /// instruction to substitute `TypeArgRef(n)` leaves in a `TyTemplate`.
+    pub type_args: Vec<baml_type::Ty>,
 }
 
 impl RootHaver for BytecodeFrame {
@@ -67,7 +72,7 @@ impl RootHaver for BytecodeFrame {
 /// Native continuation frame — pushed when a native function yields via
 /// `NativeCallResult::YieldToCall`. Sits below the callback's bytecode
 /// frame on the call stack and is popped when the callback returns.
-pub(crate) struct NativeFrame {
+pub struct NativeFrame {
     /// Pointer to the native function object (for GC roots + stack traces).
     pub(crate) function: HeapPtr,
     /// The continuation to invoke with the callback's return value.
@@ -86,7 +91,7 @@ impl RootHaver for NativeFrame {
 }
 
 /// Call frame — either a bytecode frame or a native continuation frame.
-pub(crate) enum Frame {
+pub enum Frame {
     Bytecode(BytecodeFrame),
     Native(NativeFrame),
 }
@@ -229,7 +234,7 @@ pub struct BexVm {
     /// On each function call we create a new [`Frame`] and push it on this
     /// stack. On each return, we destroy the frame and pop it from the stack
     /// to resume the execution of the previous frame.
-    pub(crate) frames: Vec<Frame>,
+    pub frames: Vec<Frame>,
 
     /// Evaluation stack.
     ///
@@ -869,6 +874,7 @@ impl BexVm {
             function,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
+            type_args: vec![],
         }));
 
         // Entry functions need the same frame-local pre-allocation as normal
@@ -1112,6 +1118,7 @@ impl BexVm {
             function: function_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(locals_offset),
+            type_args: vec![],
         }));
         self.allocate_real_locals_for_frame(function_ptr)?;
 
@@ -1662,6 +1669,7 @@ impl BexVm {
                     function: callee_ptr,
                     instruction_ptr: 0,
                     locals_offset,
+                    type_args: vec![],
                 }));
                 self.allocate_real_locals_for_frame(callee_ptr)?;
 
@@ -3339,9 +3347,52 @@ impl BexVm {
                 ))));
             }
 
-            Instruction::Call(callee) => {
+            Instruction::Call { callee, ntypeargs } => {
                 let callee_value = self.globals[callee];
                 let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+
+                // Pop `ntypeargs` Object::Type values from the stack into a Vec<Ty>.
+                // These sit below the regular value args on the stack:
+                //   [..., type_arg_0, ..., type_arg_{n-1}, val_arg_0, ..., val_arg_{m-1}]
+                let ntypeargs_usize = ntypeargs as usize;
+                let type_args: Vec<baml_type::Ty> = if ntypeargs_usize > 0 {
+                    let total_needed = arg_count + ntypeargs_usize;
+                    let base = self
+                        .stack
+                        .len()
+                        .checked_sub(total_needed)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(total_needed))?;
+
+                    // Collect Object::Type values from the stack slots.
+                    let mut collected = Vec::with_capacity(ntypeargs_usize);
+                    for slot in base..(base + ntypeargs_usize) {
+                        let v = self.stack[StackIndex::from_raw(slot)];
+                        let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                        let obj = self.get_object(ptr);
+                        match obj {
+                            Object::Type(ty) => {
+                                collected.push(*ty.clone());
+                            }
+                            other => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Type.into(),
+                                    got: ObjectType::of(other).into(),
+                                }
+                                .into());
+                            }
+                        }
+                    }
+
+                    // Remove the type-arg slots by shifting val-args over them.
+                    for _ in 0..ntypeargs_usize {
+                        self.stack.remove(base);
+                    }
+
+                    collected
+                } else {
+                    vec![]
+                };
+
                 let args_offset = self
                     .stack
                     .len()
@@ -3349,13 +3400,57 @@ impl BexVm {
                     .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?;
                 let locals_offset = StackIndex::from_raw(args_offset);
 
-                return self.execute_call_from_locals_offset(
+                let result = self.execute_call_from_locals_offset(
                     callee_ptr,
                     locals_offset,
                     arg_count,
                     frame_idx,
                     function,
-                );
+                )?;
+
+                // Inject type_args into the newly-pushed bytecode frame.
+                // execute_call_from_locals_offset updates *frame_idx on
+                // FunctionKind::Bytecode; for Native calls the frame never
+                // needs type_args (native functions access them directly).
+                if !type_args.is_empty() {
+                    if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+                        bf.type_args = type_args;
+                    }
+                }
+
+                if let Some(state) = result {
+                    return Ok(Some(state));
+                }
+            }
+
+            Instruction::LoadType(idx) => {
+                let template = match &function.bytecode.constants[idx] {
+                    ConstValue::Type(t) => t.clone(),
+                    _ => {
+                        return Err(VmInternalError::UnexpectedConstantKind.into());
+                    }
+                };
+
+                let ty = {
+                    let frame_type_args = if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                        bf.type_args.clone()
+                    } else {
+                        vec![]
+                    };
+                    if template.is_fully_concrete() {
+                        // Fast path: no walk needed for plain Concrete leaf.
+                        if let baml_type::TyTemplate::Concrete(t) = &template {
+                            t.clone()
+                        } else {
+                            template.substitute(&frame_type_args)
+                        }
+                    } else {
+                        template.substitute(&frame_type_args)
+                    }
+                };
+
+                let value = self.alloc_type(ty);
+                self.stack.push(value);
             }
 
             Instruction::CallIndirect => {

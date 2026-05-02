@@ -145,7 +145,7 @@ pub(crate) fn display_instruction(
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
             display_global_ref(*index, globals, objects, compile_time_globals)
         }
-        Instruction::Call(callee) | Instruction::DispatchFuture(callee) => {
+        Instruction::Call { callee, .. } | Instruction::DispatchFuture(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
         Instruction::LoadVar(index)
@@ -220,7 +220,8 @@ pub(crate) fn display_instruction(
         | Instruction::StoreCapture(_)
         | Instruction::CaptureRef(_)
         | Instruction::Return
-        | Instruction::SendEvent => String::new(),
+        | Instruction::SendEvent
+        | Instruction::LoadType(_) => String::new(),
     };
 
     (instruction.to_string(), metadata)
@@ -255,6 +256,7 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
                 format!("<object {}>", idx.raw())
             }
         }
+        bex_vm_types::ConstValue::Type(template) => format!("<type_template {template:?}>"),
     }
 }
 
@@ -332,7 +334,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::JumpIfFalse(_)
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Color::Yellow,
-        Instruction::Call(_) | Instruction::CallIndirect => Color::Magenta,
+        Instruction::Call { .. } | Instruction::CallIndirect => Color::Magenta,
         Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) | Instruction::Throw => {
             Color::Red
         }
@@ -348,6 +350,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
+        | Instruction::LoadType(_)
         | Instruction::ThrowIfPanic => Color::BrightBlue,
         Instruction::Unreachable => Color::BrightRed,
         Instruction::MakeClosure(_, _)
@@ -750,7 +753,7 @@ fn display_instruction_textual(
         Instruction::StoreMapElement => "store_map_element".to_string(),
 
         // --- Calls ---
-        Instruction::Call(_) => format!("call {}", meta_str(&"")),
+        Instruction::Call { .. } => format!("call {}", meta_str(&"")),
         Instruction::CallIndirect => "call_indirect".to_string(),
         Instruction::DispatchFuture(_) => format!("dispatch_future {}", meta_str(&"")),
         Instruction::Await => "await".to_string(),
@@ -794,6 +797,7 @@ fn display_instruction_textual(
             let name = meta_str(const_idx);
             format!("is_type {name}")
         }
+        Instruction::LoadType(const_idx) => format!("load_type {const_idx}"),
         Instruction::DenseTag(table_idx) => {
             let names = function
                 .bytecode
@@ -984,7 +988,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::LoadField(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
-        | Instruction::Call(_)
+        | Instruction::Call { .. }
         | Instruction::DispatchFuture(_)
         | Instruction::AllocInstance(_)
         | Instruction::AllocVariant(_)

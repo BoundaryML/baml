@@ -697,9 +697,10 @@ pub fn generate_project_bytecode_with_opt(
             let mut constants: Vec<bex_vm_types::ConstValue> = Vec::new();
             for (_name, global_slot) in init_test_fns {
                 instructions.push(Instruction::LoadVar(1)); // slot 1 = first param ("registry")
-                instructions.push(Instruction::Call(bex_vm_types::GlobalIndex::from_raw(
-                    *global_slot,
-                )));
+                instructions.push(Instruction::Call {
+                    callee: bex_vm_types::GlobalIndex::from_raw(*global_slot),
+                    ntypeargs: 0,
+                });
                 instructions.push(Instruction::Pop(1));
             }
             // Return null
@@ -1327,9 +1328,10 @@ fn compile_init_function<'db>(
         )));
 
         // Emit: Call(helper_global_slot) then StoreGlobal(let_slot)
-        init_instructions.push(Instruction::Call(bex_vm_types::GlobalIndex::from_raw(
-            helper_global_slot,
-        )));
+        init_instructions.push(Instruction::Call {
+            callee: bex_vm_types::GlobalIndex::from_raw(helper_global_slot),
+            ntypeargs: 0,
+        });
         init_meta.push(bex_vm_types::bytecode::InstructionMeta {
             operand: Some(bex_vm_types::bytecode::OperandMeta::Callable(format!(
                 "$init_let_{i}"

@@ -126,6 +126,9 @@ pub enum VmInternalError {
 
     #[error("Invalid manual notify")]
     InvalidManualNotify,
+
+    #[error("unexpected constant kind: expected a TyTemplate constant at this index")]
+    UnexpectedConstantKind,
 }
 
 /// Any kind of virtual machine error.

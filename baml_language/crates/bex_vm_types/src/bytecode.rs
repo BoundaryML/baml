@@ -335,11 +335,28 @@ pub enum Instruction {
 
     /// Call a statically-known global function.
     ///
-    /// Format: `CALL g` where `g` is the global index of the callee function.
+    /// Format: `CALL g ntypeargs` where `g` is the global index of the callee
+    /// function and `ntypeargs` is the number of type-argument `Object::Type`
+    /// values that precede the regular arguments on the eval stack.
     ///
-    /// Arguments are pushed onto the eval stack. The callee is read from
-    /// `Vm::globals[g]`, and arity is read from function metadata.
-    Call(GlobalIndex),
+    /// Stack layout (top-of-stack on the right):
+    ///
+    /// ```text
+    /// [type_arg_0, ..., type_arg_{ntypeargs-1}, val_arg_0, ..., val_arg_{nargs-1}]
+    /// ```
+    ///
+    /// The VM pops `ntypeargs` `Object::Type` values into the new frame's
+    /// `type_args` vector, then pops `nargs` regular value arguments.
+    /// `nargs` is inferred from the function's arity metadata.
+    ///
+    /// When no type arguments are threaded, set `ntypeargs = 0`.
+    Call {
+        /// Global index of the callee function.
+        callee: GlobalIndex,
+        /// Number of type-argument `Object::Type` values on the stack
+        /// immediately below the regular value arguments.
+        ntypeargs: u16,
+    },
 
     /// Call a function value from the eval stack.
     ///
@@ -422,6 +439,18 @@ pub enum Instruction {
     ///
     /// Pops the value, pushes `Bool` result.
     IsType(usize),
+
+    /// Materialise a `Ty` from a constant-pool `TyTemplate`, substituting
+    /// any `TypeArgRef(n)` leaves with `frame.type_args[n]`.
+    ///
+    /// Pushes `Value::Object(Object::Type(ty))`.
+    ///
+    /// For fully-concrete templates (no `TypeArgRef`), no substitution walk
+    /// is performed — the concrete `Ty` is cloned directly.
+    ///
+    /// Format: `LOAD_TYPE i` where `i` indexes into `Bytecode::constants`
+    /// which must hold a `ConstValue::Type(TyTemplate)` at that slot.
+    LoadType(usize),
 
     /// Remap a sparse type tag to a dense index via perfect hash lookup.
     ///
@@ -706,7 +735,9 @@ impl std::fmt::Display for Instruction {
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
             Instruction::DispatchFuture(callee) => write!(f, "DISPATCH_FUTURE {callee}"),
             Instruction::Await => f.write_str("AWAIT"),
-            Instruction::Call(callee) => write!(f, "CALL {callee}"),
+            Instruction::Call { callee, ntypeargs } => {
+                write!(f, "CALL {callee} ntypeargs={ntypeargs}")
+            }
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
             Instruction::Throw => f.write_str("THROW"),
 
@@ -726,6 +757,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
+            Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
@@ -951,7 +983,12 @@ impl Bytecode {
         self.resolved_constants = self
             .constants
             .iter()
-            .map(|cv| cv.to_value(&resolve))
+            .map(|cv| match cv {
+                // TyTemplate constants are NOT pre-resolved: `LoadType` reads
+                // them directly from `constants` at execution time.
+                ConstValue::Type(_) => crate::Value::Null,
+                other => other.to_value(&resolve),
+            })
             .collect();
     }
 }
