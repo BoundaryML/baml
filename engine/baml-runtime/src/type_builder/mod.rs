@@ -19,6 +19,7 @@ use crate::{
 };
 
 type MetaData = Arc<Mutex<IndexMap<String, BamlValue>>>;
+type ClassPropertySnapshot = Vec<(String, Option<TypeIR>, PropertyAttributes)>;
 
 trait Meta {
     fn meta(&self) -> MetaData;
@@ -735,12 +736,37 @@ impl TypeBuilder {
         Vec<IndexMap<String, TypeIR>>,
     ) {
         log::debug!("Converting types to overrides");
-        let cls = self
+        let class_entries = self
             .classes
             .lock()
             .unwrap()
             .iter()
             .map(|(name, cls)| {
+                let properties = {
+                    let cls = cls.lock().unwrap();
+                    cls.properties.lock().unwrap().clone()
+                };
+                let property_snapshot = properties
+                    .iter()
+                    .map(|(property_name, f)| {
+                        let attrs = PropertyAttributes::from(f);
+                        let t = {
+                            let property = f.lock().unwrap();
+                            let t = property.r#type.lock().unwrap();
+                            t.clone()
+                        };
+                        (property_name.clone(), t, attrs)
+                    })
+                    .collect::<ClassPropertySnapshot>();
+                (name.clone(), property_snapshot)
+            })
+            .collect::<Vec<_>>();
+
+        let detected_recursive_class_cycles = detect_recursive_class_cycles(&class_entries);
+
+        let cls = class_entries
+            .into_iter()
+            .map(|(name, properties)| {
                 log::debug!("Converting class: {name}");
                 let mut overrides = RuntimeClassOverride {
                     alias: None,
@@ -748,33 +774,17 @@ impl TypeBuilder {
                     update_fields: Default::default(),
                 };
 
-                cls.lock()
-                    .unwrap()
-                    .properties
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .for_each(|(property_name, f)| {
-                        let attrs = PropertyAttributes::from(f);
-                        let t = {
-                            let property = f.lock().unwrap();
-                            let t = property.r#type.lock().unwrap();
-                            t.clone()
-                        };
-                        match t.as_ref() {
-                            Some(r#type) => {
-                                overrides
-                                    .new_fields
-                                    .insert(property_name.to_string(), (r#type.clone(), attrs));
-                            }
-                            None => {
-                                overrides
-                                    .update_fields
-                                    .insert(property_name.to_string(), attrs);
-                            }
+                for (property_name, t, attrs) in properties {
+                    match t {
+                        Some(r#type) => {
+                            overrides.new_fields.insert(property_name, (r#type, attrs));
                         }
-                    });
-                (name.clone(), overrides)
+                        None => {
+                            overrides.update_fields.insert(property_name, attrs);
+                        }
+                    }
+                }
+                (name, overrides)
             })
             .collect();
 
@@ -823,97 +833,121 @@ impl TypeBuilder {
 
         let recursive_aliases = self.recursive_type_aliases.lock().unwrap().clone();
         let mut recursive_classes = self.recursive_classes.lock().unwrap().clone();
-        for cycle in self.detect_recursive_class_cycles() {
-            if !recursive_classes
-                .iter()
-                .any(|existing| same_class_cycle(existing, &cycle))
-            {
+        for cycle in detected_recursive_class_cycles {
+            if !recursive_classes.iter().any(|existing| {
+                existing.len() == cycle.len()
+                    && existing.iter().all(|class_name| cycle.contains(class_name))
+            }) {
                 recursive_classes.push(cycle);
             }
         }
 
         (cls, enm, aliases, recursive_classes, recursive_aliases)
     }
-
-    fn detect_recursive_class_cycles(&self) -> Vec<IndexSet<String>> {
-        let class_entries = self
-            .classes
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|(name, class)| {
-                let property_types = class
-                    .lock()
-                    .unwrap()
-                    .properties
-                    .lock()
-                    .unwrap()
-                    .values()
-                    .filter_map(|property| property.lock().unwrap().r#type())
-                    .collect::<Vec<_>>();
-                (name.clone(), property_types)
-            })
-            .collect::<Vec<_>>();
-
-        let class_names = class_entries
-            .iter()
-            .map(|(name, _)| name.clone())
-            .collect::<IndexSet<_>>();
-        let graph = class_entries
-            .into_iter()
-            .map(|(name, property_types)| {
-                let mut references = IndexSet::new();
-                for property_type in property_types {
-                    collect_class_references(&property_type, &class_names, &mut references);
-                }
-                (name, references)
-            })
-            .collect::<IndexMap<_, _>>();
-
-        let mut cycles = Vec::new();
-        for class_name in graph.keys() {
-            let mut path = Vec::new();
-            collect_cycles_from(class_name, class_name, &graph, &mut path, &mut cycles);
-        }
-        cycles
-    }
 }
 
-fn same_class_cycle(left: &IndexSet<String>, right: &IndexSet<String>) -> bool {
-    left.len() == right.len() && left.iter().all(|class_name| right.contains(class_name))
-}
-
-fn push_class_cycle(cycles: &mut Vec<IndexSet<String>>, cycle: IndexSet<String>) {
-    if !cycles
+fn detect_recursive_class_cycles(
+    class_entries: &[(String, ClassPropertySnapshot)],
+) -> Vec<IndexSet<String>> {
+    let class_names = class_entries
         .iter()
-        .any(|existing| same_class_cycle(existing, &cycle))
-    {
-        cycles.push(cycle);
-    }
+        .map(|(name, _)| name.clone())
+        .collect::<IndexSet<_>>();
+    let graph = class_entries
+        .iter()
+        .map(|(name, properties)| {
+            let mut references = IndexSet::new();
+            for (_, property_type, _) in properties {
+                if let Some(property_type) = property_type {
+                    collect_class_references(property_type, &class_names, &mut references);
+                }
+            }
+            (name.clone(), references)
+        })
+        .collect::<IndexMap<_, _>>();
+
+    strongly_connected_class_components(&graph)
 }
 
-fn collect_cycles_from(
-    start: &str,
-    current: &str,
+fn strongly_connected_class_components(
     graph: &IndexMap<String, IndexSet<String>>,
-    path: &mut Vec<String>,
-    cycles: &mut Vec<IndexSet<String>>,
-) {
-    if path.iter().any(|class_name| class_name == current) {
-        return;
+) -> Vec<IndexSet<String>> {
+    fn visit(
+        node: &str,
+        graph: &IndexMap<String, IndexSet<String>>,
+        visited: &mut IndexSet<String>,
+        order: &mut Vec<String>,
+    ) {
+        if !visited.insert(node.to_string()) {
+            return;
+        }
+
+        if let Some(neighbors) = graph.get(node) {
+            for neighbor in neighbors {
+                if graph.contains_key(neighbor) {
+                    visit(neighbor, graph, visited, order);
+                }
+            }
+        }
+        order.push(node.to_string());
     }
 
-    path.push(current.to_string());
-    if let Some(neighbors) = graph.get(current) {
-        for neighbor in neighbors {
-            if neighbor == start {
-                push_class_cycle(cycles, path.iter().cloned().collect());
-            } else if graph.contains_key(neighbor) {
-                collect_cycles_from(start, neighbor, graph, path, cycles);
+    fn collect_component(
+        node: &str,
+        reverse_graph: &IndexMap<String, IndexSet<String>>,
+        visited: &mut IndexSet<String>,
+        component: &mut IndexSet<String>,
+    ) {
+        if !visited.insert(node.to_string()) {
+            return;
+        }
+
+        component.insert(node.to_string());
+        if let Some(neighbors) = reverse_graph.get(node) {
+            for neighbor in neighbors {
+                collect_component(neighbor, reverse_graph, visited, component);
             }
         }
     }
-    path.pop();
+
+    let mut visited = IndexSet::new();
+    let mut order = Vec::new();
+    for class_name in graph.keys() {
+        visit(class_name, graph, &mut visited, &mut order);
+    }
+
+    let mut reverse_graph = graph
+        .keys()
+        .map(|class_name| (class_name.clone(), IndexSet::new()))
+        .collect::<IndexMap<_, _>>();
+    for (class_name, references) in graph {
+        for reference in references {
+            if let Some(reverse_references) = reverse_graph.get_mut(reference) {
+                reverse_references.insert(class_name.clone());
+            }
+        }
+    }
+
+    let mut assigned = IndexSet::new();
+    let mut components = Vec::new();
+    for class_name in order.iter().rev() {
+        if assigned.contains(class_name) {
+            continue;
+        }
+
+        let mut component = IndexSet::new();
+        collect_component(class_name, &reverse_graph, &mut assigned, &mut component);
+        let has_self_loop = component.iter().any(|name| {
+            graph
+                .get(name)
+                .is_some_and(|references| references.contains(name))
+        });
+        if component.len() > 1 || has_self_loop {
+            components.push(component);
+        }
+    }
+
+    components
 }
 
 fn collect_class_references(
