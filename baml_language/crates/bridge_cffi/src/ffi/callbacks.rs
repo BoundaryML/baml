@@ -1,7 +1,7 @@
 //! Callback registration and invocation.
 
 use bex_project::BexExternalValue;
-use bridge_ctypes::external_to_baml_value;
+use bridge_ctypes::external_to_outbound;
 use once_cell::sync::OnceCell;
 use prost::Message;
 
@@ -29,7 +29,7 @@ pub fn send_result_to_callback(id: u32, value: &BexExternalValue) {
     };
 
     let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
-    match external_to_baml_value(value, &handle_options) {
+    match external_to_outbound(value, &handle_options) {
         Ok(baml_value) => {
             let buf = baml_value.encode_to_vec();
             tokio::task::block_in_place(|| {

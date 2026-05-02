@@ -3,7 +3,7 @@
 use std::sync::{Arc, RwLock};
 
 use bex_project::Bex;
-use bridge_ctypes::{HANDLE_TABLE, external_to_baml_value, kwargs_to_bex_values};
+use bridge_ctypes::{HANDLE_TABLE, external_to_outbound, kwargs_to_bex_values};
 use prost::Message;
 use pyo3::{
     PyObject, Python,
@@ -133,7 +133,7 @@ impl BamlRuntime {
                 .map_err(runtime_error_to_py)?;
 
             let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
-            let baml_value = external_to_baml_value(&result, &handle_options).map_err(|e| {
+            let baml_value = external_to_outbound(&result, &handle_options).map_err(|e| {
                 pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
                     "Failed to encode result: {e}"
                 ))
@@ -192,7 +192,7 @@ impl BamlRuntime {
             .map_err(runtime_error_to_py)?;
 
         let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
-        let baml_value = external_to_baml_value(&result, &handle_options).map_err(|e| {
+        let baml_value = external_to_outbound(&result, &handle_options).map_err(|e| {
             pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!("Failed to encode result: {e}"))
         })?;
 

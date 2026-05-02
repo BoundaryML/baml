@@ -12,14 +12,14 @@ use crate::{
         baml_outbound_value::Value as BamlValueVariant, baml_ty::Type as FieldType,
     },
     error::CtypesError,
-    handle_table::{CffiHandleTableEntry, CffiHandleTableOptions},
+    handle_table::{BexRustData, CffiHandleTableEntry, CffiHandleTableOptions},
 };
 
 /// Convert `BexExternalValue` to `BamlOutboundValue` for FFI return.
 ///
 /// Opaque types (Handle, Resource, `FunctionRef`, Adt) are inserted into `handle_table`
 /// and encoded as `BamlHandle` messages so the host can round-trip them back.
-pub fn external_to_baml_value(
+pub fn external_to_outbound(
     value: &BexExternalValue,
     options: &CffiHandleTableOptions,
 ) -> Result<BamlOutboundValue, CtypesError> {
@@ -35,7 +35,7 @@ pub fn external_to_baml_value(
         } => {
             let values: Result<Vec<BamlOutboundValue>, CtypesError> = items
                 .iter()
-                .map(|v| external_to_baml_value(v, options))
+                .map(|v| external_to_outbound(v, options))
                 .collect();
             Some(BamlValueVariant::ListValue(BamlValueList {
                 item_type: Some(ty_to_field_type(element_type)),
@@ -51,7 +51,7 @@ pub fn external_to_baml_value(
             for (key, val) in entries {
                 baml_entries.push(BamlOutboundMapEntry {
                     key: key.clone(),
-                    value: Some(external_to_baml_value(val, options)?),
+                    value: Some(external_to_outbound(val, options)?),
                 });
             }
             Some(BamlValueVariant::MapValue(BamlValueMap {
@@ -65,7 +65,7 @@ pub fn external_to_baml_value(
             for (key, val) in fields {
                 baml_fields.push(BamlOutboundMapEntry {
                     key: key.clone(),
-                    value: Some(external_to_baml_value(val, options)?),
+                    value: Some(external_to_outbound(val, options)?),
                 });
             }
             Some(BamlValueVariant::ClassValue(BamlValueClass {
@@ -88,7 +88,7 @@ pub fn external_to_baml_value(
             is_dynamic: false,
         })),
         BexExternalValue::Union { value, metadata } => {
-            let inner = external_to_baml_value(value, options)?;
+            let inner = external_to_outbound(value, options)?;
             Some(BamlValueVariant::UnionVariantValue(Box::new(
                 BamlValueUnionVariant {
                     name: metadata.name.as_ref().map(|n| BamlTyName {
@@ -120,9 +120,15 @@ pub fn external_to_baml_value(
         }
         BexExternalValue::RustData(arc) => {
             if let Some(converted) = bex_project::try_convert_rust_data(arc) {
-                return external_to_baml_value(&converted, options);
+                return external_to_outbound(&converted, options);
             }
-            Some(BamlValueVariant::StringValue("<native handle>".to_string()))
+            let table_value = CffiHandleTableEntry::RustData(BexRustData(arc.clone()));
+            let ht = table_value.handle_type();
+            let key = options.table.insert(table_value);
+            Some(BamlValueVariant::HandleValue(BamlHandle {
+                key,
+                handle_type: ht as i32,
+            }))
         }
 
         // All opaque types → insert into handle table, encode as BamlHandle.
@@ -329,7 +335,7 @@ mod tests {
         ))));
         let value = BexExternalValue::RustData(prompt);
         let options = CffiHandleTableOptions::for_in_process();
-        let result = external_to_baml_value(&value, &options);
+        let result = external_to_outbound(&value, &options);
         assert!(result.is_ok());
         assert!(matches!(
             result.unwrap().value,
@@ -349,7 +355,7 @@ mod tests {
         ));
         let value = BexExternalValue::RustData(media);
         let options = CffiHandleTableOptions::for_in_process();
-        let result = external_to_baml_value(&value, &options);
+        let result = external_to_outbound(&value, &options);
         assert!(result.is_ok());
         assert!(matches!(
             result.unwrap().value,
@@ -358,15 +364,14 @@ mod tests {
     }
 
     #[test]
-    fn rust_data_unknown_type_returns_fallback_string() {
+    fn rust_data_unknown_type_inserts_handle() {
         let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
         let value = BexExternalValue::RustData(unknown);
         let options = CffiHandleTableOptions::for_in_process();
-        let result = external_to_baml_value(&value, &options);
-        let value = result.unwrap().value;
-        assert_eq!(
-            value,
-            Some(BamlValueVariant::StringValue("<native handle>".to_string()))
-        );
+        let result = external_to_outbound(&value, &options);
+        assert!(matches!(
+            result.unwrap().value,
+            Some(BamlValueVariant::HandleValue(_))
+        ));
     }
 }

@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use bridge_ctypes::external_to_baml_value;
+use bridge_ctypes::external_to_outbound;
 use prost::Message;
 use pyo3::prelude::*;
 
@@ -149,7 +149,7 @@ impl FunctionLog {
     fn result(&self) -> Option<Vec<u8>> {
         let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
         self.inner.result.as_ref().and_then(|val| {
-            match external_to_baml_value(val, &handle_options) {
+            match external_to_outbound(val, &handle_options) {
                 Ok(baml_val) => Some(baml_val.encode_to_vec()),
                 Err(e) => {
                     log::warn!("FunctionLog.result: failed to convert value: {e}");
