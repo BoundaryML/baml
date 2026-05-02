@@ -246,7 +246,7 @@ function baml.http.Response.ok(self: null) -> bool {
     load_var self
     load_field .status_code
     load_const 300
-    cmp_op <
+    cmp_int_op <
 
   L0:
     return
@@ -321,7 +321,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
     load_field .client_type
     discriminant
     load_const ClientType.Primitive
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L11
 
@@ -330,7 +330,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
     load_field .client_type
     discriminant
     load_const ClientType.Fallback
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L4
 
@@ -414,7 +414,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
   L9:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L5
 
@@ -427,7 +427,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: bam
     pop 1
     load_var __for_idx_1
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx_1
     jump L8
 
@@ -514,7 +514,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.l
     load_var current_delay
     load_var r
     load_field .multiplier
-    bin_op *
+    mul_float
     store_var next
     load_var next
     load_var r
@@ -556,7 +556,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.l
   L10:
     load_var attempt
     load_const 1
-    bin_op +
+    add_int
     store_var attempt
     jump L2
 
@@ -574,7 +574,7 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.l
     pop 1
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L9
 }
@@ -584,7 +584,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     load_field .client_type
     discriminant
     load_const ClientType.Primitive
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L9
 
@@ -593,7 +593,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     load_field .client_type
     discriminant
     load_const ClientType.Fallback
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L4
 
@@ -670,7 +670,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     throw_if_panic
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L5
 
@@ -776,7 +776,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     load_field .client_type
     discriminant
     load_const ClientType.Primitive
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L9
 
@@ -785,7 +785,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     load_field .client_type
     discriminant
     load_const ClientType.Fallback
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L4
 
@@ -862,7 +862,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     throw_if_panic
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L5
 
@@ -967,7 +967,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     load_var current_delay
     load_var r
     load_field .multiplier
-    bin_op *
+    mul_float
     store_var next
     load_var next
     load_var r
@@ -1009,7 +1009,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     throw_if_panic
     load_var attempt
     load_const 1
-    bin_op +
+    add_int
     store_var attempt
     jump L2
 
@@ -1075,7 +1075,7 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
     load_var current_delay
     load_var r
     load_field .multiplier
-    bin_op *
+    mul_float
     store_var next
     load_var next
     load_var r
@@ -1117,7 +1117,7 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
     throw_if_panic
     load_var attempt
     load_const 1
-    bin_op +
+    add_int
     store_var attempt
     jump L2
 
@@ -1183,13 +1183,13 @@ function baml.llm.PlannerState.rr_local_offset(self: null, client_name: string) 
     pop_jump_if_false L3
     load_var offset
     load_const 1
-    bin_op +
+    add_int
     store_var offset
 
   L3:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L0
 }

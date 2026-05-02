@@ -3,14 +3,16 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.test_annotated() -> int {
     load_const 21
-    make_closure .<lambda(test_annotated, 0)>, 0
+    load_const ?
+    make_closure .<lambda(test_annotated, 0)>
     call_indirect
     return
 }
 
 function user.test_generic() -> int {
     load_const 42
-    make_closure .<lambda(test_generic, 0)>, 0
+    load_const ?
+    make_closure .<lambda(test_generic, 0)>
     call_indirect
     return
 }
@@ -18,7 +20,7 @@ function user.test_generic() -> int {
 function user.test_in_match(x: int) -> int {
     load_var x
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L1
 
@@ -28,7 +30,8 @@ function user.test_in_match(x: int) -> int {
 
   L1:
     load_const 10
-    make_closure .<lambda(test_in_match, 0)>, 0
+    load_const ?
+    make_closure .<lambda(test_in_match, 0)>
     call_indirect
 
   L2:
@@ -37,18 +40,21 @@ function user.test_in_match(x: int) -> int {
 
 function user.test_inferred() -> int {
     load_const 21
-    make_closure .<lambda(test_inferred, 0)>, 0
+    load_const ?
+    make_closure .<lambda(test_inferred, 0)>
     call_indirect
     return
 }
 
 function user.test_mixed() -> int {
     load_const 0
-    make_closure .<lambda(test_mixed, 0)>, 0
+    load_const ?
+    make_closure .<lambda(test_mixed, 0)>
     call_indirect
     store_var _3
     load_const 0
-    make_closure .<lambda(test_mixed, 1)>, 0
+    load_const ?
+    make_closure .<lambda(test_mixed, 1)>
     call_indirect
     store_var _5
     load_var _3
@@ -60,13 +66,15 @@ function user.test_mixed() -> int {
 function user.test_multi_param() -> int {
     load_const 20
     load_const 22
-    make_closure .<lambda(test_multi_param, 0)>, 0
+    load_const ?
+    make_closure .<lambda(test_multi_param, 0)>
     call_indirect
     return
 }
 
 function user.test_zero_param() -> int {
-    make_closure .<lambda(test_zero_param, 0)>, 0
+    load_const ?
+    make_closure .<lambda(test_zero_param, 0)>
     call_indirect
     return
 }

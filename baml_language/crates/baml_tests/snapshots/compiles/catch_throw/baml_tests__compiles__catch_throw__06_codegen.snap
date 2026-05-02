@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.AlsoMayFail(x: int) -> string {
     load_var x
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L1
 
@@ -113,7 +113,7 @@ function user.ChainedCatchClauses(x: int) -> string {
 function user.MayFail(x: int) -> string {
     load_var x
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L1
 
@@ -129,14 +129,14 @@ function user.MayFail(x: int) -> string {
 function user.MayFailIntOrString(x: int) -> string {
     load_var x
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var x
     load_const 1
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L2
 

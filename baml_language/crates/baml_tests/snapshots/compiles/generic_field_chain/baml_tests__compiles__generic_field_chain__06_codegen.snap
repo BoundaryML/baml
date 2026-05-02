@@ -6,7 +6,8 @@ function user.test_generic_capture(box: Box) -> string {
     make_cell
     store_var ?1
     load_var box
-    make_closure .<lambda(test_generic_capture, 0)>, 1
+    load_const ?
+    make_closure .<lambda(test_generic_capture, 0)>
     call_indirect
     return
 }
