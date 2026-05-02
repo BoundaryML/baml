@@ -88,6 +88,7 @@ impl EarlyYieldCheck {
         park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>,
         interval: u64,
     ) -> Self {
+        assert!(interval > 0, "early-yield interval must be greater than zero");
         Self {
             counter: interval,
             interval,
