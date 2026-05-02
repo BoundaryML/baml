@@ -55,21 +55,42 @@ pub use types::{
 ///   The flag should be set by another thread that wants to park the VM.
 pub struct EarlyYieldCheck {
     counter: u64,
+    interval: u64,
     /// Only used in non-WASM targets, since WASM currently doesn't support threads.
     /// If another thread wants us to park (e.g. for a GC) they will set this to true.
     #[cfg(not(target_arch = "wasm32"))]
     park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>,
 }
+
+/// Default poll interval: ~32M instructions (~1.5s at typical IPC).
+pub const EARLY_YIELD_INTERVAL: u64 = 1 << 25;
+
 impl EarlyYieldCheck {
     #[cfg(target_arch = "wasm32")]
     #[expect(clippy::new_without_default)]
     pub const fn new() -> Self {
-        Self { counter: 1 << 25 }
+        Self {
+            counter: EARLY_YIELD_INTERVAL,
+            interval: EARLY_YIELD_INTERVAL,
+        }
     }
     #[cfg(not(target_arch = "wasm32"))]
-    pub const fn new(park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>) -> Self {
+    pub fn new(park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>) -> Self {
         Self {
-            counter: 1 << 25,
+            counter: EARLY_YIELD_INTERVAL,
+            interval: EARLY_YIELD_INTERVAL,
+            park_requested,
+        }
+    }
+    /// Create with a custom interval (for testing).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn with_interval(
+        park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>,
+        interval: u64,
+    ) -> Self {
+        Self {
+            counter: interval,
+            interval,
             park_requested,
         }
     }
@@ -87,7 +108,7 @@ impl EarlyYieldCheck {
         if self.counter != 0 {
             return false;
         }
-        self.counter = 1 << 25;
+        self.counter = self.interval;
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -100,7 +121,7 @@ impl EarlyYieldCheck {
         }
     }
     pub const fn reset(&mut self) {
-        self.counter = 1 << 25;
+        self.counter = self.interval;
     }
 }
 
@@ -113,12 +134,14 @@ mod tests {
 
     use super::EarlyYieldCheck;
 
-    const POLL_WINDOW: u64 = (1 << 25) + 100; // slightly more than the countdown interval
+    /// Small interval for fast tests.
+    const TEST_INTERVAL: u64 = 1 << 10;
+    const POLL_WINDOW: u64 = TEST_INTERVAL + 100;
 
     #[test]
     fn flag_false_never_yields() {
         let flag = Arc::new(AtomicBool::new(false));
-        let mut check = EarlyYieldCheck::new(flag);
+        let mut check = EarlyYieldCheck::with_interval(flag, TEST_INTERVAL);
         for _ in 0..10_000 {
             assert!(!check.should_early_yield());
         }
@@ -127,7 +150,7 @@ mod tests {
     #[test]
     fn flag_true_yields_within_poll_window() {
         let flag = Arc::new(AtomicBool::new(true));
-        let mut check = EarlyYieldCheck::new(flag);
+        let mut check = EarlyYieldCheck::with_interval(flag, TEST_INTERVAL);
         let mut yielded_at = None;
         for i in 0..POLL_WINDOW {
             if check.should_early_yield() {
@@ -144,7 +167,7 @@ mod tests {
     #[test]
     fn flag_set_mid_execution_is_observed() {
         let flag = Arc::new(AtomicBool::new(false));
-        let mut check = EarlyYieldCheck::new(Arc::clone(&flag));
+        let mut check = EarlyYieldCheck::with_interval(Arc::clone(&flag), TEST_INTERVAL);
 
         for _ in 0..2_000 {
             assert!(!check.should_early_yield());
@@ -168,7 +191,7 @@ mod tests {
     #[test]
     fn reset_clears_counter() {
         let flag = Arc::new(AtomicBool::new(true));
-        let mut check = EarlyYieldCheck::new(Arc::clone(&flag));
+        let mut check = EarlyYieldCheck::with_interval(Arc::clone(&flag), TEST_INTERVAL);
 
         let mut saw_yield = false;
         for _ in 0..POLL_WINDOW {
