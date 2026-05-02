@@ -309,7 +309,7 @@ opt-level = 0
 inherits = "release"
 strip = false
 debug = "full"
-lto = "thin"
+lto = "fat"
 
 # The profile that 'cargo dist' will build with.
 [profile.dist]
