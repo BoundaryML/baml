@@ -342,6 +342,42 @@ impl ProjectTest {
         crate::grep::list_symbols(&self.db, &files, &[])
     }
 
+    /// Run `list_package_items()` for the user package and return the result.
+    pub(crate) fn list_package_items_user(&self) -> Vec<crate::listing::ListingEntry> {
+        let package_id =
+            baml_compiler2_hir::package::PackageId::new(&self.db, baml_base::Name::new("user"));
+        crate::listing::list_package_items(&self.db, package_id)
+    }
+
+    /// Run `list_namespace_items()` for a user namespace.
+    pub(crate) fn list_namespace_items_user(
+        &self,
+        ns_segments: &[&str],
+    ) -> Option<Vec<crate::listing::ListingEntry>> {
+        let package_id =
+            baml_compiler2_hir::package::PackageId::new(&self.db, baml_base::Name::new("user"));
+        let ns_path: Vec<baml_base::Name> = ns_segments.iter().map(baml_base::Name::new).collect();
+        crate::listing::list_namespace_items(&self.db, package_id, &ns_path)
+    }
+
+    /// Format a `ListingEntry` for snapshot comparison.
+    pub(crate) fn format_listing_entry(&self, entry: &crate::listing::ListingEntry) -> String {
+        let filename = entry
+            .file
+            .path(&self.db)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        format!(
+            "{:<16} {:<32} {}:{}",
+            entry.kind.as_str(),
+            entry.fqn,
+            filename,
+            entry.line,
+        )
+    }
+
     /// Format a `SymbolDescription` for snapshot comparison.
     pub(crate) fn format_description(&self, desc: &SymbolDescription) -> String {
         let mut out = String::new();
@@ -356,13 +392,30 @@ impl ProjectTest {
         let offset: usize = desc.name_span.start().into();
         let (line, _col) = offset_to_line_col(text, offset);
 
-        writeln!(out, "── {} ── {}:{}", desc.kind, filename, line).unwrap();
+        writeln!(out, "{} {}  {}:{}", desc.kind, desc.name, filename, line).unwrap();
         if let Some(ref doc) = desc.docstring {
             for line in doc.lines() {
                 writeln!(out, "/// {line}").unwrap();
             }
         }
         writeln!(out, "shape: {}", desc.shape).unwrap();
+        if !desc.instance_methods.is_empty() {
+            out.push_str("instance_methods:");
+            for m in &desc.instance_methods {
+                write!(out, " {}", m.name).unwrap();
+            }
+            out.push('\n');
+        }
+        if !desc.static_methods.is_empty() {
+            out.push_str("static_methods:");
+            for m in &desc.static_methods {
+                write!(out, " {}", m.name).unwrap();
+            }
+            out.push('\n');
+        }
+        if let Some(ref c) = desc.container {
+            writeln!(out, "container: {}", c.name).unwrap();
+        }
         if !desc.dependencies.is_empty() {
             out.push_str("deps:");
             for dep in &desc.dependencies {

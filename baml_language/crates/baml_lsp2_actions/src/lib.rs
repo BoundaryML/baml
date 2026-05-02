@@ -48,6 +48,7 @@ pub mod definition;
 pub mod describe;
 pub mod fixes;
 pub mod grep;
+pub mod listing;
 pub mod outline;
 pub mod search;
 pub mod tokens;
@@ -63,6 +64,8 @@ mod definition_at_tests;
 mod describe_tests;
 #[cfg(test)]
 mod grep_tests;
+#[cfg(test)]
+mod listing_tests;
 #[cfg(test)]
 mod testing;
 #[cfg(test)]
@@ -91,9 +94,12 @@ pub use baml_compiler2_hir::contributions::DefinitionKind;
 pub use check::check_file;
 pub use completions::{Completion, CompletionKind, completions_at};
 pub use definition::{Location, definition_at};
-pub use describe::{DepRef, RefSite, SymbolDescription, describe};
+pub use describe::{
+    DepRef, RefSite, SymbolDescription, describe, describe_by_definition, describe_item_member,
+};
 pub use fixes::{Fix, FixKind, fixes_at};
 pub use grep::{GrepMode, GrepOptions, GrepResult, MatchAnnotation, TextMatch, grep, list_symbols};
+pub use listing::{ListingEntry, list_namespace_items, list_package_items, non_user_package_names};
 pub use outline::{OutlineItem, file_outline};
 pub use search::{SymbolInfo, search_symbols};
 pub use tokens::{SemanticToken, SemanticTokenType, TOKEN_TYPES, semantic_tokens};

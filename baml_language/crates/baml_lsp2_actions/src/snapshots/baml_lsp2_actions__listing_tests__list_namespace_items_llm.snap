@@ -1,0 +1,6 @@
+---
+source: crates/baml_lsp2_actions/src/listing_tests.rs
+expression: listing
+---
+class            llm.Config                       models.baml:2
+function         llm.LlmIdentity                  models.baml:7

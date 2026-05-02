@@ -279,12 +279,12 @@ fn render_description(
     db: &ProjectDatabase,
     desc: &SymbolDescription,
     budget: usize,
-    history: &std::collections::HashSet<&str>,
-    no_hints: bool,
+    _history: &std::collections::HashSet<&str>,
+    _no_hints: bool,
     project_root: &std::path::Path,
 ) {
     // Delegate to the describe_command renderer.
-    crate::describe_command::render_description(db, desc, budget, history, no_hints, project_root);
+    crate::describe_command::render_description(db, desc, budget, project_root);
 }
 
 /// Render only the references section for a symbol.
@@ -479,5 +479,32 @@ pub fn description_to_json(
                 "text": r.line_text.trim(),
             })
         }).collect::<Vec<_>>(),
+        "instance_methods": desc.instance_methods.iter().map(|m| {
+            let m_path = relative_path(&m.file.path(db), project_root);
+            serde_json::json!({
+                "name": m.name,
+                "kind": m.kind.as_str(),
+                "file": m_path.to_string_lossy(),
+                "line": line_number_at_offset(m.file.text(db), m.name_span.start().into()),
+            })
+        }).collect::<Vec<_>>(),
+        "static_methods": desc.static_methods.iter().map(|m| {
+            let m_path = relative_path(&m.file.path(db), project_root);
+            serde_json::json!({
+                "name": m.name,
+                "kind": m.kind.as_str(),
+                "file": m_path.to_string_lossy(),
+                "line": line_number_at_offset(m.file.text(db), m.name_span.start().into()),
+            })
+        }).collect::<Vec<_>>(),
+        "container": desc.container.as_ref().map(|c| {
+            let c_path = relative_path(&c.file.path(db), project_root);
+            serde_json::json!({
+                "name": c.name,
+                "kind": c.kind.as_str(),
+                "file": c_path.to_string_lossy(),
+                "line": line_number_at_offset(c.file.text(db), c.name_span.start().into()),
+            })
+        }),
     })
 }
