@@ -744,12 +744,13 @@ impl OpCode {
             | Self::LoadCapture
             | Self::StoreCapture
             | Self::CaptureRef
+            | Self::MakeClosure
             | Self::Jump
             | Self::PopJumpIfFalse
             | Self::JumpIfFalse => 5,
 
-            // 9-byte: opcode + u32 + u32/i32
-            Self::JumpTable | Self::MakeClosure => 9,
+            // 9-byte: opcode + u32 + i32
+            Self::JumpTable => 9,
         }
     }
 }
@@ -1509,7 +1510,23 @@ impl Bytecode {
                 | Instruction::SendEvent => {}
 
                 // ── Expanded sub-enum ops: no operands ──────────────
-                Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {}
+                Instruction::BinOp(_)
+                | Instruction::CmpOp(_)
+                | Instruction::UnaryOp(_)
+                | Instruction::AddInt
+                | Instruction::SubInt
+                | Instruction::MulInt
+                | Instruction::DivInt
+                | Instruction::ModInt
+                | Instruction::AddFloat
+                | Instruction::SubFloat
+                | Instruction::MulFloat
+                | Instruction::DivFloat
+                | Instruction::CmpIntOp(_)
+                | Instruction::CmpFloatOp(_) => {}
+
+                // ── Padding (never constructed) ─────────────────────
+                Instruction::_Pad(..) => unreachable!(),
 
                 // ── Constant specialization ──────────────────────────
                 Instruction::LoadConst(idx) => {
@@ -1605,13 +1622,14 @@ impl Bytecode {
                 }
 
                 // ── JumpTable: u32 table_idx + i32 default_offset ───
-                Instruction::JumpTable { table_idx, default } => {
+                Instruction::JumpTable(table_idx) => {
                     code.extend_from_slice(
                         &u32::try_from(*table_idx)
                             .expect("table index fits u32")
                             .to_le_bytes(),
                     );
-                    // default offset: same translation as jump ops
+                    // default offset: stored in jump_tables[table_idx].default
+                    let default = self.jump_tables[*table_idx].default;
                     let target_instr = (i as isize + default) as usize;
                     let target_byte = index_to_offset[target_instr];
                     let instr_end = index_to_offset[i] + op.encoded_size();
@@ -1619,16 +1637,11 @@ impl Bytecode {
                     code.extend_from_slice(&(byte_delta as i32).to_le_bytes());
                 }
 
-                // ── MakeClosure: u32 object_idx + u32 capture_count ─
-                Instruction::MakeClosure(obj_idx, capture_count) => {
+                // ── MakeClosure: u32 object_idx ─
+                Instruction::MakeClosure(obj_idx) => {
                     code.extend_from_slice(
                         &u32::try_from(obj_idx.into_raw())
                             .expect("object index fits u32")
-                            .to_le_bytes(),
-                    );
-                    code.extend_from_slice(
-                        &u32::try_from(*capture_count)
-                            .expect("capture count fits u32")
                             .to_le_bytes(),
                     );
                 }
@@ -1683,9 +1696,7 @@ impl Bytecode {
                 let instr_idx = self
                     .instructions
                     .iter()
-                    .position(|instr| {
-                        matches!(instr, Instruction::JumpTable { table_idx: t, .. } if *t == table_idx)
-                    })
+                    .position(|instr| matches!(instr, Instruction::JumpTable(t) if *t == table_idx))
                     .expect("JumpTable instruction must exist for each jump_tables entry");
                 let instr_end_byte = index_to_offset[instr_idx] + OpCode::JumpTable.encoded_size();
 
@@ -1696,8 +1707,7 @@ impl Bytecode {
                         offset_opt.map(|isize_offset| {
                             // target instruction index = instr_idx + isize_offset
                             // (same formula as the old VM: target = i + offset)
-                            let target_instr =
-                                (instr_idx as isize + isize_offset) as usize;
+                            let target_instr = (instr_idx as isize + isize_offset) as usize;
                             let target_byte = index_to_offset[target_instr];
                             let byte_offset = target_byte as i64 - instr_end_byte as i64;
                             byte_offset as i32
@@ -1808,14 +1818,36 @@ impl Bytecode {
             Instruction::StoreCapture(_) => OpCode::StoreCapture,
             Instruction::CaptureRef(_) => OpCode::CaptureRef,
 
+            // Specialized arithmetic (map to expanded opcodes)
+            Instruction::AddInt => OpCode::Add,
+            Instruction::SubInt => OpCode::Sub,
+            Instruction::MulInt => OpCode::Mul,
+            Instruction::DivInt => OpCode::Div,
+            Instruction::ModInt => OpCode::Mod,
+            Instruction::AddFloat => OpCode::Add,
+            Instruction::SubFloat => OpCode::Sub,
+            Instruction::MulFloat => OpCode::Mul,
+            Instruction::DivFloat => OpCode::Div,
+            Instruction::CmpIntOp(op) | Instruction::CmpFloatOp(op) => match op {
+                CmpOp::Eq => OpCode::Eq,
+                CmpOp::NotEq => OpCode::NotEq,
+                CmpOp::Lt => OpCode::Lt,
+                CmpOp::LtEq => OpCode::LtEq,
+                CmpOp::Gt => OpCode::Gt,
+                CmpOp::GtEq => OpCode::GtEq,
+            },
+
             // Jump variants
             Instruction::Jump(_) => OpCode::Jump,
             Instruction::PopJumpIfFalse(_) => OpCode::PopJumpIfFalse,
             Instruction::JumpIfFalse(_) => OpCode::JumpIfFalse,
 
             // Two-operand variants
-            Instruction::JumpTable { .. } => OpCode::JumpTable,
-            Instruction::MakeClosure(_, _) => OpCode::MakeClosure,
+            Instruction::JumpTable(_) => OpCode::JumpTable,
+            Instruction::MakeClosure(_) => OpCode::MakeClosure,
+
+            // Padding variant (never constructed)
+            Instruction::_Pad(..) => unreachable!(),
         }
     }
 }
