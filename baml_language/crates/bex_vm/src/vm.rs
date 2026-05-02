@@ -3573,7 +3573,7 @@ impl BexVm {
             // ============================================================
             // Jump Table Instructions
             // ============================================================
-            Instruction::JumpTable { table_idx, default } => {
+            Instruction::JumpTable(table_idx) => {
                 // Pop discriminant from stack
                 let discriminant = self.stack.ensure_pop();
 
@@ -3588,7 +3588,7 @@ impl BexVm {
 
                 // Lookup in jump table
                 let table = &function.bytecode.jump_tables[table_idx];
-                let offset = table.lookup(value).unwrap_or(default);
+                let offset = table.lookup(value).unwrap_or(table.default);
 
                 // Jump
                 let bf = unsafe {
@@ -3728,7 +3728,15 @@ impl BexVm {
                 self.stack.push(Value::Object(ptr));
             }
 
-            Instruction::MakeClosure(obj_idx, capture_count) => {
+            Instruction::MakeClosure(obj_idx) => {
+                // Capture count was pushed onto the stack by a preceding LoadConst.
+                let Value::Int(capture_count) = self.stack.ensure_pop() else {
+                    unreachable!("MakeClosure: capture count must be Int");
+                };
+                // Safety: capture_count is always a small non-negative integer
+                // emitted by the compiler as a LoadConst.
+                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                let capture_count = capture_count as usize;
                 let mut captures = Vec::with_capacity(capture_count);
                 for _ in 0..capture_count {
                     captures.push(self.stack.ensure_pop());
@@ -3960,6 +3968,8 @@ impl BexVm {
                     source_location,
                 }));
             }
+
+            Instruction::_Pad(..) => unsafe { std::hint::unreachable_unchecked() },
         }
 
         Ok(None)

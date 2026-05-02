@@ -1534,11 +1534,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             let otherwise_pc = self.resolve_pending_target_pc(pending.otherwise);
             let default_offset = otherwise_pc as isize - jump_table_pc as isize;
 
-            // Update the instruction with the correct default offset
-            self.bytecode.instructions[jump_table_pc] = Instruction::JumpTable {
-                table_idx: pending.table_idx,
-                default: default_offset,
-            };
+            // Store default in the table metadata, not in the instruction
+            table.default = default_offset;
+
+            // Update the instruction to reference the final table index
+            self.bytecode.instructions[jump_table_pc] = Instruction::JumpTable(pending.table_idx);
 
             // Store the completed table
             self.bytecode.jump_tables.push(table);
@@ -1694,11 +1694,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             .collect();
         let resolved_otherwise = self.resolve_pending_target(otherwise);
 
-        // 3. Emit JumpTable instruction with placeholder default offset
-        let jump_table_pc = self.emit(Instruction::JumpTable {
-            table_idx,
-            default: 0, // Will be patched later
-        });
+        // 3. Emit JumpTable instruction (default is stored in JumpTableData, patched later)
+        let jump_table_pc = self.emit(Instruction::JumpTable(table_idx));
 
         // 4. Record pending jump table for patching
         self.pending_jump_tables.push(PendingJumpTable {
@@ -1875,10 +1872,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             .collect();
         let resolved_otherwise = self.resolve_pending_target(otherwise);
 
-        let jump_table_pc = self.emit(Instruction::JumpTable {
-            table_idx: jt_table_idx,
-            default: 0, // Will be patched later.
-        });
+        let jump_table_pc = self.emit(Instruction::JumpTable(jt_table_idx));
 
         self.pending_jump_tables.push(PendingJumpTable {
             table_idx: jt_table_idx,
@@ -2289,10 +2283,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
             .get(lambda_idx)
             .cloned()
             .unwrap_or_else(|| format!("<lambda {lambda_idx}>"));
-        let inst = self.emit(Instruction::MakeClosure(
-            ObjectIndex::from_raw(obj_idx),
-            capture_count,
-        ));
+        // Push capture count onto the stack so MakeClosure can pop it at runtime.
+        // This avoids widening the Instruction enum for a rarely-used second field.
+        #[allow(clippy::cast_possible_wrap)] // capture_count is always small
+        let count_idx = self.add_constant(ConstValue::Int(capture_count as i64));
+        self.emit(Instruction::LoadConst(count_idx));
+        let inst = self.emit(Instruction::MakeClosure(ObjectIndex::from_raw(obj_idx)));
         self.set_operand(inst, OperandMeta::Object(name));
         Ok(())
     }

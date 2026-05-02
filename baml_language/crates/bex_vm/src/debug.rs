@@ -182,8 +182,8 @@ pub(crate) fn display_instruction(
                 format!("(invalid viz index: {index})")
             }
         }
-        Instruction::JumpTable { table_idx, default } => {
-            format!("(table {table_idx}, default {default:+})")
+        Instruction::JumpTable(table_idx) => {
+            format!("(table {table_idx})")
         }
         Instruction::DenseTag(table_idx) => {
             if let Some(table) = function.bytecode.match_hash_tables.get(*table_idx) {
@@ -211,7 +211,7 @@ pub(crate) fn display_instruction(
         | Instruction::IsType(_)
         | Instruction::ThrowIfPanic
         | Instruction::Unreachable
-        | Instruction::MakeClosure(_, _)
+        | Instruction::MakeClosure(_)
         | Instruction::MakeBoundMethod(_)
         | Instruction::MakeCell
         | Instruction::LoadDeref(_)
@@ -221,6 +221,7 @@ pub(crate) fn display_instruction(
         | Instruction::CaptureRef(_)
         | Instruction::Return
         | Instruction::SendEvent => String::new(),
+        Instruction::_Pad(..) => unreachable!(),
     };
 
     (instruction.to_string(), metadata)
@@ -350,14 +351,15 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::IsType(_)
         | Instruction::ThrowIfPanic => Color::BrightBlue,
         Instruction::Unreachable => Color::BrightRed,
-        Instruction::MakeClosure(_, _)
-        | Instruction::MakeBoundMethod(_)
-        | Instruction::MakeCell => Color::Cyan,
+        Instruction::MakeClosure(_) | Instruction::MakeBoundMethod(_) | Instruction::MakeCell => {
+            Color::Cyan
+        }
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
             Color::Blue
         }
         Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Color::Green,
         Instruction::SendEvent => Color::BrightGreen,
+        Instruction::_Pad(..) => unreachable!(),
     }
 }
 
@@ -564,9 +566,10 @@ fn display_bytecode_textual(function: &Function) -> String {
                 let target = ip.wrapping_add_signed(*offset);
                 jump_targets.insert(target);
             }
-            Instruction::JumpTable { table_idx, default } => {
+            Instruction::JumpTable(table_idx) => {
                 // Default target.
-                let default_target = ip.wrapping_add_signed(*default);
+                let default_target =
+                    ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
                 jump_targets.insert(default_target);
                 // Each entry in the jump table.
                 if let Some(table) = function.bytecode.jump_tables.get(*table_idx) {
@@ -696,8 +699,9 @@ fn display_instruction_textual(
                 .unwrap_or_else(|| format!("?{target}"));
             format!("jump_if_false {label}")
         }
-        Instruction::JumpTable { table_idx, default } => {
-            let default_target = ip.wrapping_add_signed(*default);
+        Instruction::JumpTable(table_idx) => {
+            let default_target =
+                ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
             let default_label = label_map
                 .get(&default_target)
                 .cloned()
@@ -806,9 +810,9 @@ fn display_instruction_textual(
         Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 
         // --- Closures and cells ---
-        Instruction::MakeClosure(obj_idx, count) => {
+        Instruction::MakeClosure(obj_idx) => {
             let name = meta_str(&obj_idx.raw());
-            format!("make_closure {name}, {count}")
+            format!("make_closure {name}")
         }
         Instruction::MakeBoundMethod(_) => {
             let name = meta_str(&"");
@@ -827,6 +831,7 @@ fn display_instruction_textual(
         Instruction::StoreCapture(idx) => format!("store_capture {idx}"),
         Instruction::CaptureRef(idx) => format!("capture_ref {idx}"),
         Instruction::SendEvent => "send_event".to_string(),
+        Instruction::_Pad(..) => unreachable!(),
     }
 }
 
@@ -1003,8 +1008,9 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         }
 
         // Jump tables: show all target addresses.
-        Instruction::JumpTable { table_idx, default } => {
-            let default_target = ip.wrapping_add_signed(*default);
+        Instruction::JumpTable(table_idx) => {
+            let default_target =
+                ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
             let mut entries = Vec::new();
             if let Some(table) = function.bytecode.jump_tables.get(*table_idx) {
                 for entry in &table.offsets {
