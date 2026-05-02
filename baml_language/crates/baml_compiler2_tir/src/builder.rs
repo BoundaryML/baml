@@ -4465,6 +4465,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     })
             }
+            Ty::Type { .. } => {
+                // Bridge: type → TypeValue companion class (provides `.to_string()`, etc.)
+                self.resolve_builtin_member(&["TypeValue"], &[], member, at)
+                    .unwrap_or_else(|| {
+                        self.context.report_at_member_simple(
+                            TirTypeError::UnresolvedMember {
+                                base_type: base_ty.clone(),
+                                member: member.clone(),
+                            },
+                            at,
+                        );
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
+                        }
+                    })
+            }
             Ty::Primitive(
                 p @ (PrimitiveType::Uint8Array
                 | PrimitiveType::Image

@@ -7,7 +7,7 @@ use std::fmt;
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
-use baml_type::Ty;
+use baml_type::{Ty, TyTemplate};
 
 // ============================================================================
 // Optimization Level
@@ -629,6 +629,16 @@ pub enum Rvalue {
         item_ref: ItemRef,
         receiver: Operand,
     },
+
+    /// Materialize a `Ty` from a `TyTemplate`.
+    ///
+    /// For concrete templates (`TyTemplate::Concrete`), the `Ty` is baked in
+    /// at compile time. For templates containing `TypeArgRef(N)`, the VM
+    /// substitutes `frame.type_args[N]` at execution time.
+    ///
+    /// Emitted by the `reflect.type_of<T>()` intrinsic.
+    /// Lowers to `Instruction::LoadType(const_idx)` in bytecode.
+    LoadType(TyTemplate),
 }
 
 /// The kind of aggregate being constructed.

@@ -14,7 +14,7 @@ use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
     Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
-use baml_type::Ty;
+use baml_type::{Ty, TyTemplate};
 use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
     GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
@@ -2285,6 +2285,13 @@ impl PullSink for StackifyCodegen<'_, '_> {
             let inst = self.emit(Instruction::LoadConst(idx));
             self.set_operand(inst, OperandMeta::Const("false".to_string()));
         }
+        Ok(())
+    }
+
+    fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error> {
+        let const_idx = self.add_constant(ConstValue::Type(template.clone()));
+        let inst = self.emit(Instruction::LoadType(const_idx));
+        self.set_operand(inst, OperandMeta::Const(format!("type:{template:?}")));
         Ok(())
     }
 

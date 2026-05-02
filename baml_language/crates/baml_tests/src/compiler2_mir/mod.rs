@@ -142,3 +142,36 @@ fn object_construction() {
     );
     mir_snapshot!("object_construction", render_mir(&db, file));
 }
+
+// ─── Phase 4: reflect.type_of concrete types ─────────────────────────────────
+
+/// `reflect.type_of<User>()` should lower to `_N = load_type(Concrete(User))`.
+#[test]
+fn reflect_type_of_class() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        class User { name string }
+        function f() -> type {
+            reflect.type_of<User>()
+        }
+        "#,
+    );
+    mir_snapshot!("reflect_type_of_class", render_mir(&db, file));
+}
+
+/// `reflect.type_of<int[]>()` — concrete array type.
+#[test]
+fn reflect_type_of_array() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function f() -> type {
+            reflect.type_of<int[]>()
+        }
+        "#,
+    );
+    mir_snapshot!("reflect_type_of_array", render_mir(&db, file));
+}

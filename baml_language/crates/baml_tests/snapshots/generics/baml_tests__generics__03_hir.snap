@@ -127,5 +127,5 @@ class user.Todo {
   userId: int
 }
 function user.GetTodo() -> user.Todo  [expr] {
-  {  } <missing>(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." })
+  {  } baml.fetch_as(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." })
 }

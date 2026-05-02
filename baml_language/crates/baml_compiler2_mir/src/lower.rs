@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
-use baml_type::{MediaKind, Ty, TyAttr, TypeName};
+use baml_type::{MediaKind, Ty, TyAttr, TyTemplate, TypeName};
 use indexmap::IndexMap;
 
 use crate::{
@@ -2911,6 +2911,16 @@ impl LoweringContext<'_> {
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
+        // Check if callee is `reflect.type_of<T>()` — a value-producing intrinsic.
+        // Unlike void intrinsics (log.*, baml.events.send), this emits an assignment
+        // of `Rvalue::LoadType(template)` to `dest` rather than a StatementKind::Intrinsic.
+        if let Some(template) = self.check_type_of_intrinsic(callee, expr_id) {
+            self.builder.assign(dest, Rvalue::LoadType(template));
+            self.builder.goto(target);
+            self.builder.set_current_block(target);
+            return;
+        }
+
         // Check if callee is a compiler intrinsic (log.*, baml.events.send).
         // Intrinsics are void side effects — emit as a statement, not a call.
         if let Some(op) = self.check_intrinsic(callee) {
@@ -3140,7 +3150,148 @@ impl LoweringContext<'_> {
     }
 }
 
-// ─── 3.6: Helper methods ─────────────────────────────────────────────────────
+// ─── 3.6: reflect.type_of intrinsic ─────────────────────────────────────────
+
+impl LoweringContext<'_> {
+    /// Detect a `reflect.type_of<T>()` call and, if found, resolve the type
+    /// argument and return the corresponding `TyTemplate`.
+    ///
+    /// Returns `Some(template)` when:
+    /// - The callee is the `baml.reflect.type_of` `$compiler_intrinsic`.
+    /// - The call carries exactly one type argument.
+    /// - The type argument resolves to a concrete `Ty` (no `TypeVar` leaves).
+    ///
+    /// Returns `None` when the callee is not `type_of` **or** when the type
+    /// argument contains a `TypeVar` (generic-parameter reference).  The latter
+    /// case is deferred to Phase 5 which will produce `TyTemplate::TypeArgRef`
+    /// leaves; attempting it here would emit a broken `LoadType` instruction.
+    fn check_type_of_intrinsic(
+        &self,
+        callee: AstExprId,
+        call_expr_id: AstExprId,
+    ) -> Option<TyTemplate> {
+        use baml_compiler2_ast::BuiltinKind;
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+
+        // ── 1. Check the callee resolves to `baml.reflect.type_of` ──────────
+        let func_loc = if let AstExpr::Path(segments) = &self.body.exprs[callee] {
+            if segments.len() == 1 {
+                let span_start = self
+                    .source_map
+                    .as_ref()
+                    .map(|sm| sm.expr_span(callee).start())
+                    .unwrap_or_default();
+                let resolved = baml_compiler2_tir::resolve::resolve_name_at_in_scope(
+                    self.db,
+                    self.file,
+                    span_start,
+                    &segments[0],
+                    self.scope_func_name.as_ref(),
+                );
+                match resolved {
+                    baml_compiler2_tir::resolve::ResolvedName::Builtin(
+                        baml_compiler2_hir::contributions::Definition::Function(fl),
+                    ) => Some(fl),
+                    baml_compiler2_tir::resolve::ResolvedName::Item(
+                        baml_compiler2_hir::contributions::Definition::Function(fl),
+                    ) => Some(fl),
+                    _ => None,
+                }
+            } else {
+                use baml_compiler2_tir::inference::MemberResolution;
+                let from_pmr = self
+                    .path_member_resolutions
+                    .get(&(self.current_scope, callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .and_then(|res| match res {
+                        MemberResolution::Free { func_loc } => Some(*func_loc),
+                        MemberResolution::BoundMethod { func_loc, .. }
+                        | MemberResolution::UnboundMethod { func_loc, .. } => Some(*func_loc),
+                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                    });
+                if from_pmr.is_some() {
+                    from_pmr
+                } else {
+                    self.resolutions
+                        .get(&(self.current_scope, callee))
+                        .and_then(|res| match res {
+                            MemberResolution::Free { func_loc } => Some(*func_loc),
+                            MemberResolution::BoundMethod { func_loc, .. }
+                            | MemberResolution::UnboundMethod { func_loc, .. } => Some(*func_loc),
+                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                                None
+                            }
+                        })
+                }
+            }
+        } else {
+            None
+        }?;
+
+        let body = baml_compiler2_ppir::function_body(self.db, func_loc);
+        if !matches!(
+            body.as_ref(),
+            baml_compiler2_hir::body::FunctionBody::Builtin(BuiltinKind::Intrinsic)
+        ) {
+            return None;
+        }
+        let item_ref = def_to_item_ref(
+            self.db,
+            baml_compiler2_hir::contributions::Definition::Function(func_loc),
+        );
+        if item_ref.to_string().as_str() != "reflect.type_of" {
+            return None;
+        }
+
+        // ── 2. Extract the single type argument ─────────────────────────────
+        let type_args = if let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] {
+            type_args.clone()
+        } else {
+            return None;
+        };
+        let type_arg = type_args.into_iter().next()?;
+
+        // ── 3. Lower the type expression to a Tir2Ty ────────────────────────
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_items = package_items(self.db, pkg_id);
+
+        // Include the enclosing function's generic params so that `T` in
+        // `reflect.type_of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
+        // than an unresolved-type error.
+        let generic_params: Vec<baml_base::Name> = self
+            .func_loc
+            .map(|fl| {
+                let item_tree = file_item_tree(self.db, fl.file(self.db));
+                item_tree[fl.id(self.db)].generic_params.clone()
+            })
+            .unwrap_or_default();
+
+        let mut diags = Vec::new();
+        let tir_ty = lower_type_expr_in_ns(
+            self.db,
+            &type_arg,
+            pkg_items,
+            &pkg_info.namespace_path,
+            &generic_params,
+            &mut diags,
+        );
+
+        // ── 4. Phase 4 guard: TypeVar references are deferred to Phase 5 ────
+        if baml_compiler2_tir::generics::contains_typevar(&tir_ty) {
+            // Phase 5 will replace this guard with TypeArgRef template building.
+            // For now, return None so the call falls through — the emitter will
+            // fail gracefully rather than generating a broken LoadType.
+            return None;
+        }
+
+        // ── 5. Convert to baml_type::Ty and wrap in TyTemplate::Concrete ────
+        let mir_ty = convert_tir2_ty(&tir_ty, &self.resolved_aliases);
+        Some(TyTemplate::Concrete(mir_ty))
+    }
+}
+
+// ─── 3.7: Helper methods ─────────────────────────────────────────────────────
 
 impl LoweringContext<'_> {
     fn lower_to_operand(&mut self, expr_id: AstExprId) -> Operand {

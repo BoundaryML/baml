@@ -239,8 +239,9 @@ class user.Todo {
 }
 function user.GetTodo() -> user.Todo throws never {
   { : unknown
-    <missing>(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." }) : unknown
+    baml.fetch_as(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." }) : unknown
   }
+  !! 106..124: unresolved name: fetch_as
   !! 165..185: unresolved name: HttpMethod
 }
 class user.Todo$stream {

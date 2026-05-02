@@ -415,6 +415,9 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, receiver)?;
             write!(f, ")")
         }
+        Rvalue::LoadType(template) => {
+            write!(f, "load_type({template:?})")
+        }
     }
 }
 

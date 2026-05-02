@@ -2247,6 +2247,8 @@ fn baml.String.toUpperCase = builtin(vm)
 
 fn baml.String.trim = builtin(vm)
 
+fn baml.TypeValue.to_string = builtin(vm)
+
 fn baml.Uint8Array.at = builtin(vm)
 
 fn baml.Uint8Array.concat = builtin(vm)

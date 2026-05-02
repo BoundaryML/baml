@@ -79,6 +79,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "core.baml"),
     builtin!("baml", "string.baml"),
     builtin!("baml", "uint8array.baml"),
+    builtin!("baml", "type_class.baml"),
     // --- Namespaced (ns_* folders) ---
     builtin!("baml", "ns_errors/errors.baml"),
     builtin!("baml", "ns_errors/stack_trace.baml"),
@@ -97,6 +98,8 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_llm/llm_types.baml"),
     builtin!("baml", "ns_llm/llm.baml"),
     builtin!("baml", "ns_stream/stream.baml"),
+    // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
+    builtin!("reflect", "reflect.baml"),
     // --- testing package ---
     builtin!("testing", "registry.baml"),
     builtin!("testing", "types.baml"),

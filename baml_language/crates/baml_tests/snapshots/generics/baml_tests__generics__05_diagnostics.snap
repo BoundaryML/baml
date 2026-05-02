@@ -96,6 +96,17 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
+  [type] Error: unresolved name: fetch_as
+   ╭─[ fetch_as.baml:8:29 ]
+   │
+ 8 │ ╭─▶ function GetTodo() -> Todo {
+ 9 │ ├─▶     baml.fetch_as<Todo>(baml.HttpRequest {
+   │ │                                                
+   │ ╰──────────────────────────────────────────────── unresolved name: fetch_as
+   │     
+   │     Note: Error code: E0003
+───╯
+
   [type] Error: unresolved name: HttpMethod
     ╭─[ fetch_as.baml:10:16 ]
     │

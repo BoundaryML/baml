@@ -802,6 +802,12 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
+    fn load_type(&mut self, _template: &baml_type::TyTemplate) -> Result<(), Self::Error> {
+        // LoadType pushes one Object::Type value onto the stack. No operands consumed.
+        self.sim.push();
+        Ok(())
+    }
+
     fn make_closure(
         &mut self,
         _lambda_idx: usize,

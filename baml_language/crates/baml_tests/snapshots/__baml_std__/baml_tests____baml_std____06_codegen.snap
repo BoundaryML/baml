@@ -88,6 +88,9 @@ function baml.String.toUpperCase(self: null) -> string {
 function baml.String.trim(self: null) -> string {
 }
 
+function baml.TypeValue.to_string(self: null) -> string {
+}
+
 function baml.Uint8Array.at(self: null, index: int) -> int? {
 }
 

@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use baml_compiler2_mir::{
     AggregateKind, BinOp, Constant, IndexKind, Local, Operand, Place, Rvalue, UnaryOp,
 };
-use baml_type::Ty;
+use baml_type::{Ty, TyTemplate};
 
 use crate::analysis::{LocalClassification, LocalDefUse};
 
@@ -50,6 +50,9 @@ pub(crate) trait PullSink {
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error>;
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error>;
+    /// Materialize an `Object::Type` from a `TyTemplate` constant.
+    /// Emits `Instruction::LoadType(const_idx)` in the bytecode emitter.
+    fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error>;
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
     /// Load a captured variable from the current closure's captures array.
@@ -385,5 +388,6 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("MakeBoundMethod must be handled in emit_rvalue_pull")
         }
+        Rvalue::LoadType(template) => sink.load_type(template),
     }
 }

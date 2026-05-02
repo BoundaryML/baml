@@ -1,0 +1,239 @@
+//! Phase 4 runtime tests for `reflect.type_of<T>()` with concrete type arguments.
+//!
+//! These tests verify:
+//! - `reflect.type_of<User>()` returns an `Object::Type` with `.to_string() == "User"`.
+//! - Structural equality: two `type` values for the same type are `==`.
+//! - Structural inequality: `type` values for different types are `!=`.
+//! - Composite concrete types: `User[]`, `map<string, User>`, `User?`.
+//! - Primitive types: `int`, `string`, `bool`.
+
+use baml_tests::baml_test;
+use bex_engine::BexExternalValue;
+
+const PRELUDE: &str = r#"
+class User { name string }
+class Container<T> { value T }
+"#;
+
+// ─── Basic to_string tests ────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn type_of_class_to_string() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> string {{
+            reflect.type_of<User>().to_string()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("User".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn type_of_int_to_string() {
+    let source = r#"
+        function main() -> string {
+            reflect.type_of<int>().to_string()
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("int".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn type_of_string_to_string() {
+    let source = r#"
+        function main() -> string {
+            reflect.type_of<string>().to_string()
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("string".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn type_of_bool_to_string() {
+    let source = r#"
+        function main() -> string {
+            reflect.type_of<bool>().to_string()
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("bool".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn type_of_array_to_string() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> string {{
+            reflect.type_of<User[]>().to_string()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("User[]".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn type_of_optional_to_string() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> string {{
+            reflect.type_of<User?>().to_string()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("User?".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn type_of_map_to_string() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> string {{
+            reflect.type_of<map<string, User>>().to_string()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("map<string, User>".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn type_of_generic_class_runs_without_crash() {
+    // Composite-of-concrete: `Container<User>` should evaluate to an Object::Type
+    // without any compile or runtime errors. Class type-args are not yet
+    // first-class in `Ty` (see baml_type/src/template.rs Class arm), so the
+    // rendered name is currently the monomorphic class name. Phase 5 / future
+    // work will add parametric-class support; tighten this assertion then.
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> string {{
+            reflect.type_of<Container<User>>().to_string()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Container".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn type_of_map_eq() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> bool {{
+            reflect.type_of<map<string, User>>() == reflect.type_of<map<string, User>>()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn type_of_generic_class_eq() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> bool {{
+            reflect.type_of<Container<User>>() == reflect.type_of<Container<User>>()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+#[ignore = "Phase 5: requires class type-args to be first-class in Ty"]
+async fn type_of_generic_class_neq_different_arg() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> bool {{
+            reflect.type_of<Container<User>>() == reflect.type_of<Container<int>>()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+// ─── Structural equality ──────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn type_of_same_class_eq() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> bool {{
+            reflect.type_of<User>() == reflect.type_of<User>()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn type_of_different_class_neq() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> bool {{
+            reflect.type_of<User>() == reflect.type_of<int>()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn type_of_assign_and_compare() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> bool {{
+            let a: type = reflect.type_of<User>();
+            let b: type = reflect.type_of<User>();
+            a == b
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}

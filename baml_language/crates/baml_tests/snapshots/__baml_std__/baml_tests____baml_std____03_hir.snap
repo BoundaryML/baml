@@ -458,6 +458,11 @@ function baml.toLowerCase(self: ?) -> string  [builtin]
 function baml.toUpperCase(self: ?) -> string  [builtin]
 function baml.trim(self: ?) -> string  [builtin]
 
+--- <builtin>/baml/type_class.baml ---
+class baml.TypeValue {
+}
+function baml.to_string(self: ?) -> string  [builtin]
+
 --- <builtin>/baml/uint8array.baml ---
 class baml.Uint8Array {
 }

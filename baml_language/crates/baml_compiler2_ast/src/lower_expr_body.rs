@@ -1650,6 +1650,11 @@ impl LoweringContext {
 
     fn lower_path_expr(&mut self, node: &SyntaxNode) -> ExprId {
         // PATH_EXPR contains WORD (or keyword-as-ident) tokens joined by DOTs.
+        //
+        // When a PATH_EXPR is wrapped in another PATH_EXPR for generic-arg
+        // annotation (e.g. `reflect.type_of<User>` → outer PATH_EXPR wrapping
+        // inner PATH_EXPR + GENERIC_ARGS), the outer node has no direct token
+        // children. In that case, delegate to the inner PATH_EXPR node.
         let mut segments: Vec<(Name, TextRange)> = Vec::new();
 
         for elem in node.children_with_tokens() {
@@ -1661,6 +1666,11 @@ impl LoweringContext {
         }
 
         if segments.is_empty() {
+            // Check for a nested PATH_EXPR child (produced by the parser when
+            // `foo.bar<T>` wraps the `foo.bar` PATH_EXPR in an outer PATH_EXPR).
+            if let Some(inner) = node.children().find(|n| n.kind() == SyntaxKind::PATH_EXPR) {
+                return self.lower_path_expr(&inner);
+            }
             return self.alloc_expr(Expr::Missing, node.text_range());
         }
 
