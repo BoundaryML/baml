@@ -63,14 +63,119 @@ functions:
         response.body.usage.output_tokens * OUTPUT_TOKEN_COST
 
   - match: >
-        client.provider == 'gemini'
+        client.provider == 'gemini' or
+        client.provider == 'google-ai' or
+        client.provider == 'vertex-ai' or
+        client.base_url | regex_match('^https://generativelanguage\\.googleapis\\.com')
 
+    # Default costs for Gemini models (Gemini 2.5 Flash as default)
+    # Prices are per token (price per 1M tokens / 1,000,000)
     constants:
-        INPUT_TOKEN_COST: 0.00002
-        OUTPUT_TOKEN_COST: 0.00006
+        INPUT_TOKEN_COST: 0.0000003      # $0.30 / 1M tokens (Gemini 2.5 Flash default)
+        OUTPUT_TOKEN_COST: 0.0000025     # $2.50 / 1M tokens
+        CACHED_INPUT_TOKEN_COST: 0.00000003  # $0.03 / 1M tokens
 
     returns:
       total_cost: >
-        (response.body.usageMetadata.promptTokenCount - response.body.usageMetadata.cachedTokenCount) * INPUT_TOKEN_COST +
-        response.body.usageMetadata.candidatesTokenCount * OUTPUT_TOKEN_COST
+        (response.body.usageMetadata.promptTokenCount | int - (response.body.usageMetadata.cachedContentTokenCount | default(0) | int)) * INPUT_TOKEN_COST +
+        (response.body.usageMetadata.cachedContentTokenCount | default(0) | int) * CACHED_INPUT_TOKEN_COST +
+        response.body.usageMetadata.candidatesTokenCount | int * OUTPUT_TOKEN_COST
+
+    overrides:
+      # Gemini 3.1 Pro Preview (prompts <= 200k tokens)
+      - match: >
+          response.model | regex_match('gemini-3\\.1-pro')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000002       # $2.00 / 1M tokens
+          OUTPUT_TOKEN_COST: 0.000012      # $12.00 / 1M tokens
+          CACHED_INPUT_TOKEN_COST: 0.0000002  # $0.20 / 1M tokens
+
+      # Gemini 3.1 Flash-Lite Preview
+      - match: >
+          response.model | regex_match('gemini-3\\.1-flash-lite')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000025     # $0.25 / 1M tokens
+          OUTPUT_TOKEN_COST: 0.0000015     # $1.50 / 1M tokens
+          CACHED_INPUT_TOKEN_COST: 0.000000025  # $0.025 / 1M tokens
+
+      # Gemini 3 Flash Preview
+      - match: >
+          response.model | regex_match('gemini-3-flash')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000005      # $0.50 / 1M tokens
+          OUTPUT_TOKEN_COST: 0.000003      # $3.00 / 1M tokens
+          CACHED_INPUT_TOKEN_COST: 0.00000005  # $0.05 / 1M tokens
+
+      # Gemini 2.5 Pro (prompts <= 200k tokens)
+      - match: >
+          response.model | regex_match('gemini-2\\.5-pro')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000125     # $1.25 / 1M tokens
+          OUTPUT_TOKEN_COST: 0.00001       # $10.00 / 1M tokens
+          CACHED_INPUT_TOKEN_COST: 0.000000125  # $0.125 / 1M tokens
+
+      # Gemini 2.5 Flash
+      - match: >
+          response.model | regex_match('gemini-2\\.5-flash(?!-lite)')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000003      # $0.30 / 1M tokens
+          OUTPUT_TOKEN_COST: 0.0000025     # $2.50 / 1M tokens
+          CACHED_INPUT_TOKEN_COST: 0.00000003  # $0.03 / 1M tokens
+
+      # Gemini 2.5 Flash-Lite
+      - match: >
+          response.model | regex_match('gemini-2\\.5-flash-lite')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000001      # $0.10 / 1M tokens
+          OUTPUT_TOKEN_COST: 0.0000004     # $0.40 / 1M tokens
+          CACHED_INPUT_TOKEN_COST: 0.00000001  # $0.01 / 1M tokens
+
+      # Gemini 2.0 Flash
+      - match: >
+          response.model | regex_match('gemini-2\\.0-flash(?!-lite)')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000015     # $0.15 / 1M tokens
+          OUTPUT_TOKEN_COST: 0.0000006     # $0.60 / 1M tokens
+
+      # Gemini 2.0 Flash-Lite
+      - match: >
+          response.model | regex_match('gemini-2\\.0-flash-lite')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000000075    # $0.075 / 1M tokens
+          OUTPUT_TOKEN_COST: 0.0000003     # $0.30 / 1M tokens
+
+      # Gemini 1.5 Pro (prompts <= 128k tokens)
+      - match: >
+          response.model | regex_match('gemini-1\\.5-pro')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000125     # $1.25 / 1M tokens
+          OUTPUT_TOKEN_COST: 0.000005      # $5.00 / 1M tokens
+          CACHED_INPUT_TOKEN_COST: 0.0000003125  # $0.3125 / 1M tokens
+
+      # Gemini 1.5 Flash
+      - match: >
+          response.model | regex_match('gemini-1\\.5-flash(?!-8b)')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000000075    # $0.075 / 1M tokens
+          OUTPUT_TOKEN_COST: 0.0000003     # $0.30 / 1M tokens
+          CACHED_INPUT_TOKEN_COST: 0.00000001875  # $0.01875 / 1M tokens
+
+      # Gemini 1.5 Flash-8B
+      - match: >
+          response.model | regex_match('gemini-1\\.5-flash-8b')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000000375   # $0.0375 / 1M tokens
+          OUTPUT_TOKEN_COST: 0.00000015    # $0.15 / 1M tokens
+          CACHED_INPUT_TOKEN_COST: 0.000000009375  # $0.009375 / 1M tokens
 
