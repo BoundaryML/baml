@@ -211,7 +211,7 @@ pub(crate) fn display_instruction(
         | Instruction::IsType(_)
         | Instruction::ThrowIfPanic
         | Instruction::Unreachable
-        | Instruction::MakeClosure(_, _)
+        | Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
         | Instruction::MakeCell
         | Instruction::LoadDeref(_)
@@ -353,7 +353,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::LoadType(_)
         | Instruction::ThrowIfPanic => Color::BrightBlue,
         Instruction::Unreachable => Color::BrightRed,
-        Instruction::MakeClosure(_, _)
+        Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
         | Instruction::MakeCell => Color::Cyan,
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
@@ -810,9 +810,17 @@ fn display_instruction_textual(
         Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 
         // --- Closures and cells ---
-        Instruction::MakeClosure(obj_idx, count) => {
+        Instruction::MakeClosure {
+            obj_idx,
+            capture_count,
+            ntypeargs,
+        } => {
             let name = meta_str(&obj_idx.raw());
-            format!("make_closure {name}, {count}")
+            if *ntypeargs > 0 {
+                format!("make_closure {name}, captures={capture_count}, ntypeargs={ntypeargs}")
+            } else {
+                format!("make_closure {name}, {capture_count}")
+            }
         }
         Instruction::MakeBoundMethod(_) => {
             let name = meta_str(&"");

@@ -1087,15 +1087,24 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         if let Rvalue::MakeClosure {
             lambda_idx,
             captures,
+            type_arg_templates,
         } = rvalue
         {
+            // Emit LoadType for each type-arg template first (not in closure-capture mode).
+            for template in type_arg_templates {
+                unwrap_infallible(self.load_type(template));
+            }
             let prev = self.loading_for_closure_capture;
             self.loading_for_closure_capture = true;
             for capture in captures {
                 self.emit_operand_pull(capture);
             }
             self.loading_for_closure_capture = prev;
-            unwrap_infallible(self.make_closure(*lambda_idx, captures.len()));
+            unwrap_infallible(self.make_closure_with_type_args(
+                *lambda_idx,
+                captures.len(),
+                type_arg_templates.len(),
+            ));
             return;
         }
         if let Rvalue::MakeBoundMethod { item_ref, receiver } = rvalue {
@@ -1340,6 +1349,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::Call {
                 callee,
                 args,
+                ntypeargs,
                 destination,
                 target,
                 unwind: _,
@@ -1358,7 +1368,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
                     let inst = self.emit(Instruction::Call {
                         callee: global_callee,
-                        ntypeargs: 0,
+                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
                     });
                     if let Some(name) = &func_name {
                         self.set_operand(inst, OperandMeta::Callable(name.clone()));
@@ -2021,6 +2031,33 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         locals
     }
+
+    /// Emit a `MakeClosure` bytecode instruction with the given counts.
+    ///
+    /// This is the underlying implementation called by both the `PullSink`
+    /// trait methods (`make_closure` and `make_closure_with_type_args`).
+    fn emit_make_closure_bytecode(
+        &mut self,
+        lambda_idx: usize,
+        capture_count: usize,
+        ntypeargs: usize,
+    ) {
+        let obj_idx = *self
+            .lambda_object_indices
+            .get(lambda_idx)
+            .unwrap_or_else(|| panic!("make_closure: lambda_idx {lambda_idx} out of range"));
+        let name = self
+            .lambda_names
+            .get(lambda_idx)
+            .cloned()
+            .unwrap_or_else(|| format!("<lambda {lambda_idx}>"));
+        let inst = self.emit(Instruction::MakeClosure {
+            obj_idx: ObjectIndex::from_raw(obj_idx),
+            capture_count,
+            ntypeargs,
+        });
+        self.set_operand(inst, OperandMeta::Object(name));
+    }
 }
 
 impl PullSink for StackifyCodegen<'_, '_> {
@@ -2296,20 +2333,17 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error> {
-        let obj_idx = *self
-            .lambda_object_indices
-            .get(lambda_idx)
-            .unwrap_or_else(|| panic!("make_closure: lambda_idx {lambda_idx} out of range"));
-        let name = self
-            .lambda_names
-            .get(lambda_idx)
-            .cloned()
-            .unwrap_or_else(|| format!("<lambda {lambda_idx}>"));
-        let inst = self.emit(Instruction::MakeClosure(
-            ObjectIndex::from_raw(obj_idx),
-            capture_count,
-        ));
-        self.set_operand(inst, OperandMeta::Object(name));
+        self.emit_make_closure_bytecode(lambda_idx, capture_count, 0);
+        Ok(())
+    }
+
+    fn make_closure_with_type_args(
+        &mut self,
+        lambda_idx: usize,
+        capture_count: usize,
+        ntypeargs: usize,
+    ) -> Result<(), Self::Error> {
+        self.emit_make_closure_bytecode(lambda_idx, capture_count, ntypeargs);
         Ok(())
     }
 

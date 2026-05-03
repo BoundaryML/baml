@@ -783,6 +783,15 @@ pub struct Closure {
     pub function: HeapPtr,
     /// Captured cells, one per closed-over variable (each is `Object::Cell`).
     pub captures: Vec<Value>,
+    /// Type arguments captured from the enclosing generic context at the time
+    /// the closure is created by `MakeClosure`.
+    ///
+    /// Populated by the `MakeClosure { ntypeargs }` instruction which pops
+    /// `ntypeargs` `Object::Type` values from the operand stack immediately
+    /// before the cell captures.  These become `frame.type_args` when the
+    /// closure is invoked, so that `LoadType(TypeArgRef(N))` inside the
+    /// closure body resolves correctly.
+    pub captured_type_args: Vec<baml_type::Ty>,
 }
 
 /// A method bound to a specific receiver instance.

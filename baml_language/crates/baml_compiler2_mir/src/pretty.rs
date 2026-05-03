@@ -255,14 +255,25 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
         Terminator::Call {
             callee,
             args,
+            ntypeargs,
             destination,
             target,
             unwind,
         } => {
             write!(f, "{destination} = call ")?;
             write_operand(f, callee)?;
+            if *ntypeargs > 0 {
+                write!(f, "<")?;
+                for (i, arg) in args.iter().take(*ntypeargs).enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write_operand(f, arg)?;
+                }
+                write!(f, ">")?;
+            }
             write!(f, "(")?;
-            for (i, arg) in args.iter().enumerate() {
+            for (i, arg) in args.iter().skip(*ntypeargs).enumerate() {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
@@ -400,8 +411,13 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
+            type_arg_templates,
         } => {
-            write!(f, "make_closure lambda[{lambda_idx}](")?;
+            write!(f, "make_closure lambda[{lambda_idx}]")?;
+            if !type_arg_templates.is_empty() {
+                write!(f, "<{} type_args>", type_arg_templates.len())?;
+            }
+            write!(f, "(")?;
             for (i, cap) in captures.iter().enumerate() {
                 if i > 0 {
                     write!(f, ", ")?;

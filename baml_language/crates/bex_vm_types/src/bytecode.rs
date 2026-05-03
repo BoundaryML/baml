@@ -486,12 +486,28 @@ pub enum Instruction {
 
     /// Allocate a `Closure` object wrapping a function from the object pool.
     ///
-    /// Pops `capture_count` values from the stack (left-to-right order, reversed
-    /// after popping), pairs them with the function at `obj_idx`, and pushes the
-    /// resulting `Object::Closure`.
+    /// Stack layout (top-of-stack on the right):
     ///
-    /// Stack: `[cap_0, cap_1, ..., cap_{n-1}]` -> `[closure]`
-    MakeClosure(ObjectIndex, usize),
+    /// ```text
+    /// [type_arg_0, ..., type_arg_{ntypeargs-1}, cap_0, cap_1, ..., cap_{capture_count-1}]
+    /// ```
+    ///
+    /// 1. Pop `capture_count` cell values (left-to-right order, reversed after
+    ///    popping) into `Closure::captures`.
+    /// 2. Pop `ntypeargs` `Object::Type` values into `Closure::captured_type_args`.
+    /// 3. Push the resulting `Object::Closure`.
+    ///
+    /// When there are no enclosing type parameters, `ntypeargs = 0` and step 2
+    /// is a no-op (backward-compatible with all existing call sites).
+    MakeClosure {
+        /// Index into the object pool for the underlying `Object::Function`.
+        obj_idx: ObjectIndex,
+        /// Number of cell captures to pop from the stack.
+        capture_count: usize,
+        /// Number of `Object::Type` values to pop from the stack into
+        /// `Closure::captured_type_args`.  Zero for non-generic contexts.
+        ntypeargs: usize,
+    },
 
     /// Create a bound method from a global function index and a receiver on the stack.
     ///
@@ -761,8 +777,22 @@ impl std::fmt::Display for Instruction {
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
-            Instruction::MakeClosure(obj_idx, count) => {
-                write!(f, "MAKE_CLOSURE {} {}", obj_idx.raw(), count)
+            Instruction::MakeClosure {
+                obj_idx,
+                capture_count,
+                ntypeargs,
+            } => {
+                if *ntypeargs > 0 {
+                    write!(
+                        f,
+                        "MAKE_CLOSURE {} captures={} ntypeargs={}",
+                        obj_idx.raw(),
+                        capture_count,
+                        ntypeargs
+                    )
+                } else {
+                    write!(f, "MAKE_CLOSURE {} {}", obj_idx.raw(), capture_count)
+                }
             }
             Instruction::MakeBoundMethod(global_idx) => {
                 write!(f, "MAKE_BOUND_METHOD {global_idx}")

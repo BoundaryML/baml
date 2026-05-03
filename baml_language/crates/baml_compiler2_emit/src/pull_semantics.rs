@@ -55,6 +55,20 @@ pub(crate) trait PullSink {
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error>;
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
+    /// Same as `make_closure` but with an additional `ntypeargs` count for
+    /// the type arguments pushed before the captures.  The default impl
+    /// delegates to `make_closure` (ntypeargs=0), so implementors that do not
+    /// care about type-arg threading continue to work without changes.
+    fn make_closure_with_type_args(
+        &mut self,
+        lambda_idx: usize,
+        capture_count: usize,
+        ntypeargs: usize,
+    ) -> Result<(), Self::Error> {
+        let _ = ntypeargs; // ignored by default
+        self.make_closure(lambda_idx, capture_count)
+    }
+
     /// Load a captured variable from the current closure's captures array.
     /// Emits `LoadCapture(idx)` in the bytecode emitter.
     fn load_capture(&mut self, idx: usize) -> Result<(), Self::Error>;
@@ -378,11 +392,16 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
+            type_arg_templates,
         } => {
+            // Push type-arg templates first (they sit below the captures on the stack).
+            for template in type_arg_templates {
+                sink.load_type(template)?;
+            }
             for capture in captures {
                 walk_operand_pull(sink, capture)?;
             }
-            sink.make_closure(*lambda_idx, captures.len())
+            sink.make_closure_with_type_args(*lambda_idx, captures.len(), type_arg_templates.len())
         }
         Rvalue::MakeBoundMethod { .. } => {
             // Handled specially in emit_rvalue_pull before this function is called.

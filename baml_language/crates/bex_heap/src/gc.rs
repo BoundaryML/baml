@@ -1690,6 +1690,7 @@ mod tests {
         let closure_ptr = tlab.alloc(Object::Closure(Closure {
             function: func_ptr,
             captures: vec![Value::Object(captured), Value::Int(7)],
+            captured_type_args: vec![],
         }));
 
         let roots = vec![closure_ptr];
@@ -2243,6 +2244,7 @@ mod tests {
         let closure_container = tlab.alloc(Object::Closure(Closure {
             function: leaf_func,
             captures: vec![Value::Object(leaf_for_closure_cap), Value::Int(7)],
+            captured_type_args: vec![],
         }));
 
         // --- Container: Object::Cell ---

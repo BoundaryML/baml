@@ -6,7 +6,7 @@ fn user.f() -> type {
     let _0: type // _0 // return
 
     bb0: {
-        _0 = load_type(Concrete(List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })));
+        _0 = load_type(Array(Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } })));
         goto -> bb1;
     }
 

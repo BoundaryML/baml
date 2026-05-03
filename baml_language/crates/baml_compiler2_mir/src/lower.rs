@@ -328,7 +328,8 @@ fn resolution_to_item_ref(
 use baml_compiler2_ast::{
     AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, Expr as AstExpr,
     ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, PatId as AstPatId,
-    PatternKind as AstPatternKind, Stmt as AstStmt, StmtId as AstStmtId, UnaryOp as AstUnaryOp,
+    PatternKind as AstPatternKind, Stmt as AstStmt, StmtId as AstStmtId, TypeExpr,
+    UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
@@ -1646,11 +1647,22 @@ impl LoweringContext<'_> {
         let lambda_pending_idx = self.pending_lambdas.len();
         self.pending_lambdas.push(lambda_mir);
 
+        // Build TyTemplate entries for each enclosing generic type param so
+        // the closure can materialise them at runtime.  These resolve in the
+        // **outer** frame (TypeArgRef(N) → outer frame.type_args[N]).
+        let enclosing_params = self.enclosing_generic_params();
+        let type_arg_templates: Vec<TyTemplate> = enclosing_params
+            .iter()
+            .enumerate()
+            .map(|(n, _)| TyTemplate::TypeArgRef(n as u32))
+            .collect();
+
         self.builder.assign(
             dest,
             Rvalue::MakeClosure {
                 lambda_idx: lambda_pending_idx,
                 captures: capture_operands,
+                type_arg_templates,
             },
         );
     }
@@ -2936,6 +2948,31 @@ impl LoweringContext<'_> {
             return;
         }
 
+        // ── Phase 5: Emit LoadType temps for explicit type arguments ─────────
+        // When the call carries explicit type args (e.g. `describe<User>()` or
+        // `fwd<T>()` where T forwards to `described_type<T>()`), materialise
+        // each as a `type` value on the stack before the regular value args.
+        // The VM pops these `ntypeargs` Object::Type values into the new frame's
+        // `type_args` vec so that inner `reflect.type_of<T>()` calls can
+        // substitute them at runtime.
+        let ast_type_args: Vec<TypeExpr> =
+            if let AstExpr::Call { type_args, .. } = &self.body.exprs[expr_id] {
+                type_args.clone()
+            } else {
+                vec![]
+            };
+        let type_arg_operands = self.lower_explicit_type_args(&ast_type_args);
+        let ntypeargs = type_arg_operands.len();
+
+        // Prepend type-arg operands before the value-arg operands.
+        let all_arg_operands = if ntypeargs > 0 {
+            let mut combined = type_arg_operands;
+            combined.extend(arg_operands);
+            combined
+        } else {
+            arg_operands
+        };
+
         // Check if callee resolves to a builtin IO function (sys-op)
         let is_sys_op = self.check_sys_op(callee);
 
@@ -2952,9 +2989,10 @@ impl LoweringContext<'_> {
             let future_local = self.builder.temp(future_ty);
             let future_place = Place::Local(future_local);
             let resume = self.builder.create_block();
+            // sys-ops do not support type-arg threading; use plain arg list.
             self.builder.dispatch_future(
                 callee_operand,
-                arg_operands,
+                all_arg_operands,
                 future_place.clone(),
                 resume,
             );
@@ -2968,15 +3006,22 @@ impl LoweringContext<'_> {
             // first, then assign from the temp to the real destination.
             match &dest {
                 Place::Local(_) => {
-                    self.builder
-                        .call(callee_operand, arg_operands, dest, target, unwind);
+                    self.builder.call_with_type_args(
+                        callee_operand,
+                        all_arg_operands,
+                        ntypeargs,
+                        dest,
+                        target,
+                        unwind,
+                    );
                 }
                 _ => {
                     let call_ty = self.expr_ty(expr_id);
                     let tmp = self.builder.temp(call_ty);
-                    self.builder.call(
+                    self.builder.call_with_type_args(
                         callee_operand,
-                        arg_operands,
+                        all_arg_operands,
+                        ntypeargs,
                         Place::local(tmp),
                         target,
                         unwind,
@@ -3277,17 +3322,147 @@ impl LoweringContext<'_> {
             &mut diags,
         );
 
-        // ── 4. Phase 4 guard: TypeVar references are deferred to Phase 5 ────
-        if baml_compiler2_tir::generics::contains_typevar(&tir_ty) {
-            // Phase 5 will replace this guard with TypeArgRef template building.
-            // For now, return None so the call falls through — the emitter will
-            // fail gracefully rather than generating a broken LoadType.
-            return None;
+        // ── 4. (Phase 5) Build TyTemplate — TypeVar → TypeArgRef(N) ────────────
+        let template = self.ty_to_template(&tir_ty, &generic_params);
+        Some(template)
+    }
+
+    /// Recursively convert a `Tir2Ty` to a `TyTemplate`.
+    ///
+    /// `Tir2Ty::TypeVar("T")` whose name appears at position `N` in
+    /// `generic_params` maps to `TyTemplate::TypeArgRef(N)`.  All other types
+    /// recurse structurally and bottom out at `TyTemplate::Concrete(...)`.
+    ///
+    /// This is the Phase 5 replacement for the direct `convert_tir2_ty` call
+    /// that Phase 4 used for fully-concrete types.
+    fn ty_to_template(&self, ty: &Tir2Ty, generic_params: &[baml_base::Name]) -> TyTemplate {
+        match ty {
+            Tir2Ty::TypeVar(name, _) => {
+                // Find the de Bruijn index in the enclosing function's param list.
+                if let Some(n) = generic_params.iter().position(|p| p == name) {
+                    TyTemplate::TypeArgRef(
+                        u32::try_from(n).expect("generic param index fits in u32"),
+                    )
+                } else {
+                    // TypeVar not found in enclosing params — defensive fallback.
+                    // This should not happen for well-typed programs.
+                    TyTemplate::Concrete(Ty::Void {
+                        attr: baml_type::TyAttr::default(),
+                    })
+                }
+            }
+            Tir2Ty::List(inner, _) => {
+                TyTemplate::Array(Box::new(self.ty_to_template(inner, generic_params)))
+            }
+            Tir2Ty::Optional(inner, _) => {
+                TyTemplate::Optional(Box::new(self.ty_to_template(inner, generic_params)))
+            }
+            Tir2Ty::Map(k, v, _) => TyTemplate::Map(
+                Box::new(self.ty_to_template(k, generic_params)),
+                Box::new(self.ty_to_template(v, generic_params)),
+            ),
+            Tir2Ty::Union(parts, _) => TyTemplate::Union(
+                parts
+                    .iter()
+                    .map(|p| self.ty_to_template(p, generic_params))
+                    .collect(),
+            ),
+            Tir2Ty::Class(qtn, type_args, attr) => {
+                if type_args
+                    .iter()
+                    .any(baml_compiler2_tir::generics::contains_typevar)
+                {
+                    // Generic class instantiation with type-variable args.
+                    let template_args: Vec<TyTemplate> = type_args
+                        .iter()
+                        .map(|a| self.ty_to_template(a, generic_params))
+                        .collect();
+                    TyTemplate::Class(qtn_to_type_name(qtn), template_args)
+                } else {
+                    // Monomorphic class — no TypeVars in args.
+                    TyTemplate::Concrete(Ty::Class(qtn_to_type_name(qtn), attr.clone()))
+                }
+            }
+            // EvolvingList and EvolvingMap: treat like their non-evolving counterparts.
+            Tir2Ty::EvolvingList(inner, _) => {
+                TyTemplate::Array(Box::new(self.ty_to_template(inner, generic_params)))
+            }
+            Tir2Ty::EvolvingMap(k, v, _) => TyTemplate::Map(
+                Box::new(self.ty_to_template(k, generic_params)),
+                Box::new(self.ty_to_template(v, generic_params)),
+            ),
+            // All remaining concrete leaf types.
+            other => TyTemplate::Concrete(convert_tir2_ty(other, &self.resolved_aliases)),
+        }
+    }
+
+    /// Return the list of user-declared generic parameter names for the
+    /// **enclosing** function being lowered.  Empty for top-level expressions
+    /// that have no enclosing generic function.
+    fn enclosing_generic_params(&self) -> Vec<baml_base::Name> {
+        self.func_loc
+            .map(|fl| {
+                let item_tree = file_item_tree(self.db, fl.file(self.db));
+                item_tree[fl.id(self.db)].generic_params.clone()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Emit `LoadType` rvalue assignments for the explicit type arguments of a
+    /// generic call and return the resulting operands plus the count.
+    ///
+    /// For each `TypeExpr` in `ast_type_args`:
+    /// 1. Lowers it to `Tir2Ty` (respecting the enclosing generic params so
+    ///    that `T` resolves to `Tir2Ty::TypeVar("T")` rather than an error).
+    /// 2. Converts it to a `TyTemplate` via `ty_to_template` (`TypeVar` → `TypeArgRef(N)`).
+    /// 3. Assigns `Rvalue::LoadType(template)` to a fresh `type`-typed temp.
+    /// 4. Appends that temp as an `Operand::Copy` to the returned vec.
+    ///
+    /// Returns `(type_arg_operands, ntypeargs)` — the number equals
+    /// `ast_type_args.len()`.  Returns an empty vec when there are no type args.
+    fn lower_explicit_type_args(&mut self, ast_type_args: &[TypeExpr]) -> Vec<Operand> {
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+
+        if ast_type_args.is_empty() {
+            return vec![];
         }
 
-        // ── 5. Convert to baml_type::Ty and wrap in TyTemplate::Concrete ────
-        let mir_ty = convert_tir2_ty(&tir_ty, &self.resolved_aliases);
-        Some(TyTemplate::Concrete(mir_ty))
+        let generic_params = self.enclosing_generic_params();
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_items = package_items(self.db, pkg_id);
+
+        let type_ty = baml_type::Ty::Opaque(
+            baml_type::TypeName {
+                name: baml_base::Name::new("Type"),
+                module_path: vec![
+                    baml_base::Name::new("baml"),
+                    baml_base::Name::new("reflect"),
+                ],
+                display_name: baml_base::Name::new("type"),
+            },
+            baml_type::TyAttr::default(),
+        );
+
+        let mut operands = Vec::with_capacity(ast_type_args.len());
+        for type_arg in ast_type_args {
+            let mut diags = Vec::new();
+            let tir_ty = lower_type_expr_in_ns(
+                self.db,
+                type_arg,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &generic_params,
+                &mut diags,
+            );
+            // Ignore diagnostics here — TIR already validated the type args.
+            let template = self.ty_to_template(&tir_ty, &generic_params);
+            let temp = self.builder.temp(type_ty.clone());
+            self.builder
+                .assign(Place::local(temp), Rvalue::LoadType(template));
+            operands.push(Operand::Copy(Place::local(temp)));
+        }
+        operands
     }
 }
 

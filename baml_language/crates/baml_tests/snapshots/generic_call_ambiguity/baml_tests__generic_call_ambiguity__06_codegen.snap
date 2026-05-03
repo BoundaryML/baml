@@ -35,6 +35,8 @@ function user.ArrayOfComparisonsParenthesized(a: int, b: int, c: int, d: int) ->
 }
 
 function user.GenericCallInArray(k: int, v: string) -> string[] {
+    load_type 0
+    load_type 1
     load_var k
     load_var v
     call user.f
@@ -48,6 +50,8 @@ function user.f(k: void, v: void) -> void {
 }
 
 function user.literal_arg() -> string {
+    load_type 0
+    load_type 1
     load_const "a"
     load_const "b"
     call user.f
@@ -55,6 +59,8 @@ function user.literal_arg() -> string {
 }
 
 function user.paren_union_arg() -> string {
+    load_type 0
+    load_type 1
     load_const 0
     load_const "b"
     call user.f

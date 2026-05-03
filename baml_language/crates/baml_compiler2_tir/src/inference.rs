@@ -706,8 +706,18 @@ pub fn infer_scope_types<'db>(
                                             }
                                         });
 
-                                    // Seed builder with lambda params
-                                    let generic_params: Vec<Name> = func_def.generic_params.clone();
+                                    // Seed builder with lambda params.
+                                    // Combine the enclosing function's generic params with the
+                                    // lambda's own generic params so that `T` from
+                                    // `function foo<T>() { ... || { reflect.type_of<T>() } }` is
+                                    // visible inside the lambda body.
+                                    let mut generic_params: Vec<Name> =
+                                        func_data.generic_params.clone();
+                                    for p in &func_def.generic_params {
+                                        if !generic_params.contains(p) {
+                                            generic_params.push(p.clone());
+                                        }
+                                    }
                                     builder.set_generic_params(generic_params.clone());
                                     for (i, param) in func_def.params.iter().enumerate() {
                                         let param_ty = param

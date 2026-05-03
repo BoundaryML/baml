@@ -352,7 +352,18 @@ pub enum Terminator {
         /// The function to call.
         callee: Operand,
         /// Arguments to pass.
+        ///
+        /// The first `ntypeargs` operands are type-argument values (`Object::Type`)
+        /// followed by the `nargs` regular value arguments.  The `ntypeargs`
+        /// count tells the emitter how many leading slots to account for in
+        /// the `Instruction::Call { ntypeargs }` bytecode instruction.
         args: Vec<Operand>,
+        /// Number of leading `args` entries that carry type arguments.
+        ///
+        /// Zero for non-generic calls (the common case).  Non-zero for
+        /// calls to generic functions where at least one type argument is
+        /// threaded at the call site (explicit `<T>` or type-arg forwarding).
+        ntypeargs: usize,
         /// Where to store the result.
         destination: Place,
         /// Block to jump to after call returns normally.
@@ -616,9 +627,16 @@ pub enum Rvalue {
     ///
     /// `lambda_idx` indexes into `MirFunction::lambdas` of the enclosing function.
     /// `captures` is the ordered list of captured values (each will become a Cell).
+    /// `type_arg_templates` carries one `TyTemplate` per enclosing generic type
+    /// parameter; the emitter pushes `LoadType` instructions for each before
+    /// the cell captures so the VM's `MakeClosure { ntypeargs }` instruction
+    /// can pop them into `Closure::captured_type_args`.
     MakeClosure {
         lambda_idx: usize,
         captures: Vec<Operand>,
+        /// Templates for enclosing generic type params captured by this closure.
+        /// Empty (the common case) when the enclosing function has no type params.
+        type_arg_templates: Vec<TyTemplate>,
     },
 
     /// Create a bound method value from a method reference and its receiver.

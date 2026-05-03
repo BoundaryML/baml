@@ -1537,6 +1537,14 @@ impl BexVm {
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
+        // Extract captured_type_args from a Closure callee before we discard
+        // the concrete Closure type in favour of the inner Function.
+        // These are injected into the new BytecodeFrame after it is created.
+        let closure_type_args: Vec<baml_type::Ty> = match self.get_object(callee_ptr) {
+            Object::Closure(c) => c.captured_type_args.clone(),
+            _ => vec![],
+        };
+
         // Resolve the callee: either a plain Function, a Closure, or a BoundMethod wrapping one.
         let callee = match self.get_object(callee_ptr) {
             Object::Function(f) => f,
@@ -1665,11 +1673,15 @@ impl BexVm {
                 };
 
                 // Push the new frame.
+                // If the callee is a Closure with captured type args, populate
+                // frame.type_args from those captured args rather than leaving
+                // the vec empty.  For plain Function / BoundMethod callees
+                // (and non-generic closures) this is vec![] (no-op).
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
                     function: callee_ptr,
                     instruction_ptr: 0,
                     locals_offset,
-                    type_args: vec![],
+                    type_args: closure_type_args,
                 }));
                 self.allocate_real_locals_for_frame(callee_ptr)?;
 
@@ -3802,17 +3814,49 @@ impl BexVm {
                 self.stack.push(Value::Object(ptr));
             }
 
-            Instruction::MakeClosure(obj_idx, capture_count) => {
+            Instruction::MakeClosure {
+                obj_idx,
+                capture_count,
+                ntypeargs,
+            } => {
                 let mut captures = Vec::with_capacity(capture_count);
                 for _ in 0..capture_count {
                     captures.push(self.stack.ensure_pop()?);
                 }
                 // Captures were pushed left-to-right, popped right-to-left.
                 captures.reverse();
+
+                // Pop type args (pushed before the captures, so they come off
+                // the stack after the captures are popped).
+                let captured_type_args: Vec<baml_type::Ty> = if ntypeargs > 0 {
+                    let mut type_args = Vec::with_capacity(ntypeargs);
+                    for _ in 0..ntypeargs {
+                        let v = self.stack.ensure_pop()?;
+                        let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                        let obj = self.get_object(ptr);
+                        match obj {
+                            Object::Type(ty) => type_args.push(*ty.clone()),
+                            other => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Type.into(),
+                                    got: ObjectType::of(other).into(),
+                                }
+                                .into());
+                            }
+                        }
+                    }
+                    // Type args were pushed left-to-right, popped right-to-left.
+                    type_args.reverse();
+                    type_args
+                } else {
+                    vec![]
+                };
+
                 let function_ptr = self.idx_to_ptr(obj_idx);
                 let closure = Object::Closure(Closure {
                     function: function_ptr,
                     captures,
+                    captured_type_args,
                 });
                 let ptr = self.tlab.alloc(closure);
                 self.stack.push(Value::Object(ptr));

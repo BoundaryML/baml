@@ -808,13 +808,20 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn make_closure(
+    fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error> {
+        self.make_closure_with_type_args(lambda_idx, capture_count, 0)
+    }
+
+    fn make_closure_with_type_args(
         &mut self,
         _lambda_idx: usize,
         capture_count: usize,
+        ntypeargs: usize,
     ) -> Result<(), Self::Error> {
-        // MakeClosure pops `capture_count` capture values and pushes one closure object.
-        if !self.sim.pop_n(capture_count) {
+        // MakeClosure pops `ntypeargs` type-arg values, `capture_count` capture
+        // values, and pushes one closure object.
+        let total_pops = capture_count + ntypeargs;
+        if !self.sim.pop_n(total_pops) {
             return Err(());
         }
         self.sim.push();
