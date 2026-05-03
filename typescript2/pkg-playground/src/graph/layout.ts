@@ -12,6 +12,20 @@ const NODE_SIZES: Record<string, { w: number; h: number }> = {
   hexagon: { w: 180, h: 50 },
 };
 
+function nodeSize(node: WorkflowNode): { w: number; h: number } {
+  const base = NODE_SIZES[node.type ?? 'base'] ?? NODE_SIZES.base;
+  const imageCount = node.data.imageOutputs?.length ?? 0;
+  if (imageCount === 0) return base;
+
+  const visibleCount = Math.min(imageCount, 4);
+  const previewRows = visibleCount === 1 ? 1 : Math.ceil(visibleCount / 2);
+  const previewHeight = visibleCount === 1 ? 104 : previewRows * 68;
+  return {
+    w: Math.max(base.w, 220),
+    h: base.h + previewHeight,
+  };
+}
+
 function buildElkNodes(
   allNodes: WorkflowNode[],
   direction: 'horizontal' | 'vertical',
@@ -26,7 +40,7 @@ function buildElkNodes(
 
   return siblings.map((node) => {
     const isGroup = node.type === 'group';
-    const size = NODE_SIZES[node.type ?? 'base'] ?? NODE_SIZES.base;
+    const size = nodeSize(node);
 
     const elkNode: ElkNode = { id: node.id };
 

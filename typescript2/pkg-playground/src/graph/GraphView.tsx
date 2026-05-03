@@ -13,8 +13,9 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import type { ControlFlowGraph } from '../worker-protocol';
+import type { ControlFlowGraph, DeserializedRuntimeEvent } from '../worker-protocol';
 import { cfgToGraphNodes, graphToReactflow } from './convert';
+import { collectGraphNodeOutputs } from './runtime-output';
 import { layoutGraph } from './layout';
 import { kNodeTypes } from './nodes';
 import { kEdgeTypes, ColorfulMarkerDefinitions } from './edges';
@@ -22,11 +23,14 @@ import type { WorkflowNode, WorkflowEdge } from './types';
 
 interface GraphViewProps {
   graph: ControlFlowGraph;
+  runtimeEvents?: DeserializedRuntimeEvent[];
   selectedNodeId: number | null;
   onNodeClick: (nodeId: number) => void;
 }
 
-function GraphViewInner({ graph, selectedNodeId, onNodeClick }: GraphViewProps) {
+const EMPTY_RUNTIME_EVENTS: DeserializedRuntimeEvent[] = [];
+
+function GraphViewInner({ graph, runtimeEvents = EMPTY_RUNTIME_EVENTS, selectedNodeId, onNodeClick }: GraphViewProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
   const [direction, setDirection] = useState<'horizontal' | 'vertical'>('horizontal');
@@ -35,6 +39,32 @@ function GraphViewInner({ graph, selectedNodeId, onNodeClick }: GraphViewProps) 
   useEffect(() => {
     const { nodes: graphNodes, edges: graphEdges } = cfgToGraphNodes(graph);
     const { nodes: rfNodes, edges: rfEdges } = graphToReactflow(graphNodes, graphEdges);
+    const outputs = collectGraphNodeOutputs(graphNodes, runtimeEvents);
+    const selectedId = selectedNodeId == null ? null : String(selectedNodeId);
+    const nodesWithOutputs = rfNodes.map((node) => {
+      const output = outputs.get(node.id);
+      const selected = node.id === selectedId;
+      if (!output) {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            selected,
+          },
+        };
+      }
+
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          result: output.result,
+          imageOutputs: output.imageOutputs,
+          executionState: 'success' as const,
+          selected,
+        },
+      };
+    });
     console.log('[GraphView] CFG nodes:', Object.entries(graph.nodes).map(([k, n]) =>
       `${k}: ${n.nodeType} "${n.label}" parent=${n.parentNodeId}`));
     console.log('[GraphView] CFG edges:', Object.entries(graph.edgesBySrc).flatMap(([, es]) =>
@@ -42,7 +72,7 @@ function GraphViewInner({ graph, selectedNodeId, onNodeClick }: GraphViewProps) 
     console.log('[GraphView] RF nodes:', rfNodes.map(n => `${n.id}:${n.type}`),
       'RF edges:', rfEdges.map(e => `${e.source}→${e.target}`));
 
-    layoutGraph(rfNodes, rfEdges, direction)
+    layoutGraph(nodesWithOutputs, rfEdges, direction)
       .then(({ nodes: laid, edges: laidEdges }) => {
         console.log('[GraphView] Layout complete:', laid.length, 'nodes,', laidEdges.length, 'edges');
         setNodes(laid);
@@ -51,7 +81,7 @@ function GraphViewInner({ graph, selectedNodeId, onNodeClick }: GraphViewProps) 
       .catch((err) => {
         console.error('[GraphView] Layout failed:', err);
       });
-  }, [graph, direction, setNodes, setEdges]);
+  }, [graph, runtimeEvents, selectedNodeId, direction, setNodes, setEdges]);
 
   // Update selected state on nodes
   useEffect(() => {

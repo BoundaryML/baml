@@ -1,4 +1,5 @@
 import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from '@xyflow/react';
+import type { BamlJsMedia, BamlJsValue } from '@b/pkg-proto';
 
 // Internal graph types (between CFG JSON and ReactFlow)
 export type GraphNodeType =
@@ -46,6 +47,8 @@ export interface WorkflowNodeData {
   logFilterKey: string;
   llmClient?: string;
   iterationCount?: number;
+  result?: BamlJsValue | null;
+  imageOutputs?: BamlJsMedia[];
   [key: string]: unknown;
 }
 

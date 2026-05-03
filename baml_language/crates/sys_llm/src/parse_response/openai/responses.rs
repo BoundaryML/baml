@@ -1,7 +1,9 @@
 use serde::Deserialize;
 
 use super::CompletionUsage;
-use crate::parse_response::{FinishReason, LlmProviderResponse, ParseResponseError, TokenUsage};
+use crate::parse_response::{
+    FinishReason, LlmOutput, LlmProviderResponse, ParseResponseError, TokenUsage,
+};
 
 // == Serde types ===================================================
 
@@ -13,11 +15,12 @@ struct ResponsesApiResponse {
     usage: Option<CompletionUsage>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum ResponseOutputType {
     Message,
     FunctionCall,
+    ImageGenerationCall,
     #[serde(other)]
     Unknown,
 }
@@ -32,10 +35,15 @@ struct ResponseOutput {
     name: Option<String>,
     arguments: Option<String>,
     call_id: Option<String>,
+    // Image generation fields
+    result: Option<String>,
+    revised_prompt: Option<String>,
+    output_format: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct OutputContent {
+    #[serde(default)]
     text: Option<String>,
 }
 
@@ -52,30 +60,54 @@ pub(in crate::parse_response) fn parse_openai_responses_response(
             content: body.to_string(),
         })?;
 
-    // Extract content: first Message output's text, or FunctionCall serialized JSON
-    let content = response
-        .output
-        .iter()
-        .find_map(|output| match output.output_type {
-            ResponseOutputType::Message => output.content.first()?.text.clone(),
+    let mut output = LlmOutput::default();
+
+    for item in &response.output {
+        match item.output_type {
+            ResponseOutputType::Message => {
+                for content in &item.content {
+                    if let Some(text) = &content.text {
+                        output.push_text(text.clone());
+                    }
+                }
+            }
             ResponseOutputType::FunctionCall => {
-                if let (Some(name), Some(arguments)) = (&output.name, &output.arguments) {
-                    Some(
+                if let (Some(name), Some(arguments)) = (&item.name, &item.arguments) {
+                    output.push_text(
                         serde_json::json!({
                             "type": "function_call",
                             "name": name,
                             "arguments": arguments,
-                            "call_id": output.call_id
+                            "call_id": item.call_id.clone()
                         })
                         .to_string(),
-                    )
-                } else {
-                    None
+                    );
                 }
             }
-            ResponseOutputType::Unknown => None,
-        })
-        .unwrap_or_default();
+            ResponseOutputType::ImageGenerationCall => {
+                if let Some(result) = &item.result {
+                    let mime_type = image_output_format_to_mime_type(item.output_format.as_deref())
+                        .unwrap_or("image/png");
+                    output.push_media(
+                        baml_builtins2::MediaValue::from_base64(
+                            baml_base::MediaKind::Image,
+                            result,
+                            Some(mime_type),
+                        ),
+                        None,
+                        serde_json::json!({
+                            "provider": "openai-responses",
+                            "revised_prompt": item.revised_prompt.clone(),
+                            "output_format": item.output_format.clone(),
+                        }),
+                    );
+                }
+            }
+            ResponseOutputType::Unknown => {}
+        }
+    }
+
+    let content = output.text_content();
 
     // Finish reason: status field, not a separate finish_reason
     let finish_reason = match response.status.as_str() {
@@ -100,12 +132,22 @@ pub(in crate::parse_response) fn parse_openai_responses_response(
         .unwrap_or_default();
 
     Ok(LlmProviderResponse {
+        output,
         content,
         model: Some(response.model),
         finish_reason,
         finish_reason_raw: Some(response.status),
         usage,
     })
+}
+
+fn image_output_format_to_mime_type(output_format: Option<&str>) -> Option<&'static str> {
+    match output_format?.trim().to_ascii_lowercase().as_str() {
+        "png" => Some("image/png"),
+        "jpeg" | "jpg" => Some("image/jpeg"),
+        "webp" => Some("image/webp"),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -140,6 +182,69 @@ mod tests {
         assert_eq!(resp.finish_reason, FinishReason::Stop);
         assert_eq!(resp.finish_reason_raw, Some("completed".to_string()));
         assert_eq!(resp.usage.input_tokens, Some(10));
+    }
+
+    #[test]
+    fn test_parse_text_and_multiple_images_response() {
+        let body = r#"{
+            "id": "resp_images",
+            "object": "response",
+            "created_at": 1700000000,
+            "status": "completed",
+            "model": "gpt-4.1",
+            "output": [
+                {
+                    "type": "message",
+                    "id": "msg_1",
+                    "status": "completed",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "caption"}]
+                },
+                {
+                    "type": "image_generation_call",
+                    "id": "ig_1",
+                    "status": "completed",
+                    "result": "aW1hZ2Ux",
+                    "output_format": "png"
+                },
+                {
+                    "type": "image_generation_call",
+                    "id": "ig_2",
+                    "status": "completed",
+                    "result": "aW1hZ2Uy",
+                    "output_format": "webp"
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15
+            }
+        }"#;
+
+        let resp = parse_openai_responses_response(body).unwrap();
+        assert_eq!(resp.content, "caption");
+        assert_eq!(resp.output.parts.len(), 3);
+
+        let crate::parse_response::LlmOutputPart::Text { text } = &resp.output.parts[0] else {
+            panic!("expected text output");
+        };
+        assert_eq!(text, "caption");
+
+        let crate::parse_response::LlmOutputPart::Media { media, .. } = &resp.output.parts[1]
+        else {
+            panic!("expected first image output");
+        };
+        assert_eq!(media.kind, baml_base::MediaKind::Image);
+        assert_eq!(media.base64(), "aW1hZ2Ux");
+        assert_eq!(media.mime_type().as_deref(), Some("image/png"));
+
+        let crate::parse_response::LlmOutputPart::Media { media, .. } = &resp.output.parts[2]
+        else {
+            panic!("expected second image output");
+        };
+        assert_eq!(media.base64(), "aW1hZ2Uy");
+        assert_eq!(media.mime_type().as_deref(), Some("image/webp"));
     }
 
     #[test]

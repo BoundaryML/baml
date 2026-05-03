@@ -12,7 +12,7 @@
 import type { ChangeEvent, FC, ReactNode, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
-import type { BamlJsValue } from '@b/pkg-proto';
+import type { BamlJsMedia, BamlJsValue } from '@b/pkg-proto';
 import { KeyRound, PanelLeft, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -45,6 +45,7 @@ import { HttpRequestCurlRenderer, isHttpRequest } from './renderers/HttpRequestC
 import { GraphView } from './graph/GraphView';
 import { FunctionSidebar } from './FunctionSidebar';
 import { EventValueDisplay } from './EventValueDisplay';
+import { findImageMedia, mediaToSrc } from './shared/media-values';
 
 registerBuiltinResultRenderers();
 
@@ -64,6 +65,78 @@ function tryFormatJson(str: string): string {
 function stringifyResult(value: BamlJsValue): string {
   return JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2);
 }
+
+function findLatestGraphRun(runs: RunEntry[], selectedFn: string | null): RunEntry | undefined {
+  if (!selectedFn) return undefined;
+
+  for (let i = runs.length - 1; i >= 0; i -= 1) {
+    const run = runs[i];
+    if (!run) continue;
+    if (run.functionName === selectedFn) return run;
+    if (run.runtimeEvents.some((evt) => {
+      const kind = evt.event;
+      return kind?.$case === 'functionEnd' && kind.functionEnd.name === selectedFn;
+    })) {
+      return run;
+    }
+  }
+
+  return undefined;
+}
+
+const InlineImageOutputs: FC<{ images: BamlJsMedia[] }> = ({ images }) => {
+  const visible = images.slice(0, 3);
+  const remaining = images.length - visible.length;
+
+  return (
+    <span className="inline-flex items-center gap-0.5 align-middle">
+      {visible.map((image, index) => {
+        const src = mediaToSrc(image);
+        return src ? (
+          <img
+            key={`${image.content_type}-${index}`}
+            src={src}
+            alt="BAML image output"
+            className="inline-block h-7 w-7 rounded border border-vsc-border object-cover align-middle"
+            loading="lazy"
+          />
+        ) : (
+          <span
+            key={`${image.content_type}-${index}`}
+            className="inline-flex h-7 w-10 items-center justify-center rounded border border-vsc-border bg-vsc-bg-secondary text-[9px] text-vsc-text-faint"
+          >
+            image
+          </span>
+        );
+      })}
+      {remaining > 0 && (
+        <span className="inline-flex h-7 items-center rounded border border-vsc-border bg-vsc-bg-secondary px-1 text-[10px] text-vsc-text-muted">
+          +{remaining}
+        </span>
+      )}
+    </span>
+  );
+};
+
+const FunctionEndPayload: FC<{
+  event: { name: string; durationMs: number; result: BamlJsValue | null };
+  customRenderers?: Record<string, FC<ResultRendererProps>>;
+}> = ({ event, customRenderers }) => {
+  const images = event.result == null ? [] : findImageMedia(event.result);
+
+  return (
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-1 align-middle">
+      <span>{event.name} ({event.durationMs}ms)</span>
+      {event.result != null && (
+        <>
+          <span className="text-vsc-text-faint">=&gt;</span>
+          {images.length > 0 && <InlineImageOutputs images={images} />}
+          <EventValueDisplay value={event.result} customRenderers={customRenderers} />
+        </>
+      )}
+    </span>
+  );
+};
 
 function formatBuildTime(epochSecs: number): { absolute: string; relative: string } {
   const d = new Date(epochSecs * 1000);
@@ -199,7 +272,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
                     break;
                   case 'functionEnd':
                     label = 'END';
-                    payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
+                    payload = <FunctionEndPayload event={kind.functionEnd} customRenderers={resultRenderers} />;
                     colorCls = 'text-vsc-text-muted';
                     break;
                   case 'log': {
@@ -984,6 +1057,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const selectedFnInfo = functions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
+  const latestGraphRun = findLatestGraphRun(runs, selectedFn);
 
   useEffect(() => {
     setSelectedFn((prev) => prev && !functionNames.includes(prev) ? null : prev);
@@ -1321,7 +1395,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                 break;
                               case 'functionEnd':
                                 label = 'END';
-                                payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
+                                payload = <FunctionEndPayload event={kind.functionEnd} customRenderers={resultRenderers} />;
                                 colorCls = 'text-vsc-text-muted';
                                 break;
                               case 'log': {
@@ -1471,6 +1545,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 {controlFlowGraph ? (
                   <GraphView
                     graph={controlFlowGraph}
+                    runtimeEvents={latestGraphRun?.runtimeEvents}
                     selectedNodeId={highlightedNodeId}
                     onNodeClick={(nodeId) => setHighlightedNodeId(nodeId)}
                   />
@@ -1656,7 +1731,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                     break;
                                   case 'functionEnd':
                                     label = 'END';
-                                    payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
+                                    payload = <FunctionEndPayload event={kind.functionEnd} customRenderers={resultRenderers} />;
                                     colorCls = 'text-vsc-text-muted';
                                     break;
                                   case 'log': {

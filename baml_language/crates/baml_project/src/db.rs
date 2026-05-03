@@ -786,8 +786,7 @@ impl ProjectDatabase {
             }
 
             let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
-            let Some(source_map) =
-                baml_compiler2_hir::body::function_body_source_map(self, func_loc)
+            let Some(source_map) = baml_compiler2_ppir::function_body_source_map(self, func_loc)
             else {
                 return (None, vec![]);
             };

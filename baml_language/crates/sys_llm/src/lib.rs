@@ -232,11 +232,14 @@ pub fn execute_specialize_prompt_from_owned(
 pub async fn execute_build_request_from_owned(
     client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
+    return_type: &baml_type::Ty,
     io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<baml_std::HttpRequest, LlmOpError> {
-    build_request::build_request(client, prompt, io)
+    let mut request = build_request::build_request(client, prompt, io)
         .await
-        .map_err(|e| LlmOpError::Other(e.to_string()))
+        .map_err(|e| LlmOpError::Other(e.to_string()))?;
+    apply_output_request_features(client, return_type, &mut request)?;
+    Ok(request)
 }
 
 /// Build an HTTP request with streaming enabled.
@@ -245,11 +248,126 @@ pub async fn execute_build_request_from_owned(
 pub async fn execute_build_request_stream_from_owned(
     client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
+    return_type: &baml_type::Ty,
     io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<baml_std::HttpRequest, LlmOpError> {
-    let mut request = execute_build_request_from_owned(client, prompt, io).await?;
+    let mut request = execute_build_request_from_owned(client, prompt, return_type, io).await?;
     request.body = add_stream_flag_to_request_body(&request.body)?;
     Ok(request)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ImageGenerationMode {
+    Disabled,
+    Available,
+    Required,
+}
+
+fn apply_output_request_features(
+    client: &baml_std::PrimitiveClient,
+    return_type: &baml_type::Ty,
+    request: &mut baml_std::HttpRequest,
+) -> Result<(), LlmOpError> {
+    let provider = LlmProvider::from_str(&client.provider)
+        .map_err(|e| LlmOpError::Other(format!("Unknown provider '{}': {e}", client.provider)))?;
+
+    if provider == LlmProvider::OpenAiResponses {
+        match image_generation_mode(return_type) {
+            ImageGenerationMode::Disabled => {}
+            mode => enable_openai_responses_image_generation(request, mode)?,
+        }
+    }
+
+    Ok(())
+}
+
+fn enable_openai_responses_image_generation(
+    request: &mut baml_std::HttpRequest,
+    mode: ImageGenerationMode,
+) -> Result<(), LlmOpError> {
+    let mut body: serde_json::Value = serde_json::from_str(&request.body)
+        .map_err(|e| LlmOpError::Other(format!("Failed to parse OpenAI Responses body: {e}")))?;
+    let obj = body.as_object_mut().ok_or_else(|| {
+        LlmOpError::Other("OpenAI Responses request body must be a JSON object".to_string())
+    })?;
+
+    let tools = obj
+        .entry("tools".to_string())
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+    let tools = tools.as_array_mut().ok_or_else(|| {
+        LlmOpError::Other(
+            "OpenAI Responses image outputs require request_body.tools to be an array".to_string(),
+        )
+    })?;
+
+    let has_image_generation_tool = tools.iter().any(|tool| {
+        tool.get("type")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|tool_type| tool_type == "image_generation")
+    });
+    if !has_image_generation_tool {
+        tools.push(serde_json::json!({ "type": "image_generation" }));
+    }
+
+    if mode == ImageGenerationMode::Required && !obj.contains_key("tool_choice") {
+        obj.insert(
+            "tool_choice".to_string(),
+            serde_json::json!({ "type": "image_generation" }),
+        );
+    }
+
+    request.body = serde_json::to_string(&body).map_err(|e| {
+        LlmOpError::Other(format!("Failed to serialize OpenAI Responses body: {e}"))
+    })?;
+    Ok(())
+}
+
+fn image_generation_mode(target: &baml_type::Ty) -> ImageGenerationMode {
+    match target {
+        baml_type::Ty::Media(baml_base::MediaKind::Image, _) => ImageGenerationMode::Required,
+        baml_type::Ty::List(inner, _) => match image_generation_mode(inner) {
+            ImageGenerationMode::Required => ImageGenerationMode::Required,
+            ImageGenerationMode::Available => ImageGenerationMode::Available,
+            ImageGenerationMode::Disabled => ImageGenerationMode::Disabled,
+        },
+        baml_type::Ty::Optional(inner, _) => match image_generation_mode(inner) {
+            ImageGenerationMode::Disabled => ImageGenerationMode::Disabled,
+            ImageGenerationMode::Required | ImageGenerationMode::Available => {
+                ImageGenerationMode::Available
+            }
+        },
+        baml_type::Ty::Union(_, _) if is_text_or_image_union(target) => {
+            ImageGenerationMode::Available
+        }
+        baml_type::Ty::Union(members, _) => {
+            let non_null_members: Vec<&baml_type::Ty> = members
+                .iter()
+                .filter(|member| !matches!(member, baml_type::Ty::Null { .. }))
+                .collect();
+            if non_null_members.is_empty() {
+                return ImageGenerationMode::Disabled;
+            }
+
+            let mut has_image = false;
+            for member in &non_null_members {
+                match image_generation_mode(member) {
+                    ImageGenerationMode::Required | ImageGenerationMode::Available => {
+                        has_image = true;
+                    }
+                    ImageGenerationMode::Disabled => return ImageGenerationMode::Disabled,
+                }
+            }
+
+            if has_image && non_null_members.len() == members.len() {
+                ImageGenerationMode::Required
+            } else if has_image {
+                ImageGenerationMode::Available
+            } else {
+                ImageGenerationMode::Disabled
+            }
+        }
+        _ => ImageGenerationMode::Disabled,
+    }
 }
 
 fn add_stream_flag_to_request_body(body: &str) -> Result<String, LlmOpError> {
@@ -315,6 +433,10 @@ pub fn execute_parse_response_from_owned(
         )));
     }
 
+    if let Some(parsed) = parse_llm_output_for_target(return_type, &response.output)? {
+        return Ok(parsed);
+    }
+
     let compiled = bex_sap::CompiledSapModel::from_sys_op_context(
         ctx,
         return_type.clone(),
@@ -323,6 +445,153 @@ pub fn execute_parse_response_from_owned(
     .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
     let sap = SapStreamCache::new(compiled);
     execute_sap_parse_final(&response.content, &sap, ctx)
+}
+
+fn parse_llm_output_for_target(
+    target: &baml_type::Ty,
+    output: &parse_response::LlmOutput,
+) -> Result<Option<BexExternalValue>, LlmOpError> {
+    if output.parts.is_empty() {
+        return Ok(None);
+    }
+
+    match target {
+        baml_type::Ty::Media(kind, _) => {
+            let media = media_parts(output, *kind);
+            if media.is_empty() {
+                return Ok(None);
+            }
+            if media.len() != 1 {
+                return Err(LlmOpError::ParseResponseError(format!(
+                    "Expected exactly one {kind} output, got {}. Use {kind}[] for multiple outputs.",
+                    media.len()
+                )));
+            }
+            Ok(Some(media_to_external(media[0].clone())))
+        }
+        baml_type::Ty::List(inner, _) if is_media_type(inner, baml_base::MediaKind::Image) => {
+            let media = media_parts(output, baml_base::MediaKind::Image);
+            if media.is_empty() {
+                return Ok(None);
+            }
+            Ok(Some(BexExternalValue::Array {
+                element_type: *inner.clone(),
+                items: media.into_iter().map(media_to_external).collect(),
+            }))
+        }
+        baml_type::Ty::List(inner, _) if is_text_or_image_union(inner) => {
+            let items = mixed_text_image_parts(output, inner)?;
+            if items.is_empty() {
+                return Ok(None);
+            }
+            Ok(Some(BexExternalValue::Array {
+                element_type: *inner.clone(),
+                items,
+            }))
+        }
+        baml_type::Ty::Union(_, _) if is_text_or_image_union(target) => {
+            let items = mixed_text_image_parts(output, target)?;
+            match items.len() {
+                0 => Ok(None),
+                1 => Ok(Some(items.into_iter().next().expect("length checked"))),
+                n => Err(LlmOpError::ParseResponseError(format!(
+                    "Expected one text or image output for {target}, got {n} parts. Use (image | string)[] to preserve mixed outputs."
+                ))),
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
+fn media_parts(
+    output: &parse_response::LlmOutput,
+    kind: baml_base::MediaKind,
+) -> Vec<std::sync::Arc<baml_builtins2::MediaValue>> {
+    output
+        .parts
+        .iter()
+        .filter_map(|part| match part {
+            parse_response::LlmOutputPart::Media { media, .. } if media.kind == kind => {
+                Some(media.clone())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn mixed_text_image_parts(
+    output: &parse_response::LlmOutput,
+    target: &baml_type::Ty,
+) -> Result<Vec<BexExternalValue>, LlmOpError> {
+    let baml_type::Ty::Union(members, _) = target else {
+        return Ok(Vec::new());
+    };
+
+    let string_ty = members
+        .iter()
+        .find(|member| matches!(member, baml_type::Ty::String { .. }))
+        .cloned()
+        .unwrap_or_else(baml_type::Ty::string);
+    let image_ty = members
+        .iter()
+        .find(|member| matches!(member, baml_type::Ty::Media(baml_base::MediaKind::Image, _)))
+        .cloned()
+        .unwrap_or(baml_type::Ty::Media(
+            baml_base::MediaKind::Image,
+            baml_type::TyAttr::default(),
+        ));
+
+    let mut items = Vec::new();
+    for part in &output.parts {
+        match part {
+            parse_response::LlmOutputPart::Text { text } if !text.trim().is_empty() => {
+                items.push(BexExternalValue::union(
+                    BexExternalValue::String(text.clone()),
+                    members.clone(),
+                    string_ty.clone(),
+                ));
+            }
+            parse_response::LlmOutputPart::Media { media, .. }
+                if media.kind == baml_base::MediaKind::Image =>
+            {
+                items.push(BexExternalValue::union(
+                    media_to_external(media.clone()),
+                    members.clone(),
+                    image_ty.clone(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(items)
+}
+
+fn media_to_external(media: std::sync::Arc<baml_builtins2::MediaValue>) -> BexExternalValue {
+    BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(media))
+}
+
+fn is_media_type(target: &baml_type::Ty, kind: baml_base::MediaKind) -> bool {
+    matches!(target, baml_type::Ty::Media(actual, _) if *actual == kind)
+}
+
+fn is_text_or_image_union(target: &baml_type::Ty) -> bool {
+    let baml_type::Ty::Union(members, _) = target else {
+        return false;
+    };
+
+    let mut has_string = false;
+    let mut has_image = false;
+    for member in members {
+        match member {
+            baml_type::Ty::String { .. } => has_string = true,
+            baml_type::Ty::Media(baml_base::MediaKind::Image, _) => has_image = true,
+            baml_type::Ty::Null { .. } => {}
+            _ => return false,
+        }
+    }
+
+    has_string && has_image
 }
 
 pub fn execute_sap_parse_final(
@@ -383,9 +652,17 @@ mod tests {
     use std::sync::Arc;
 
     use ::baml_base::TyAttr;
-    use ::sys_types::{ClassDefinition, ClassFieldDefinition, EnumDefinition, SysOpContext};
+    use ::sys_types::{
+        ClassDefinition, ClassFieldDefinition, EnumDefinition, SysOpContext,
+        runtime_io::NoopRuntimeIo,
+    };
+    use baml_builtins2::PromptAst;
+    use bex_external_types::BexExternalValue;
 
-    use super::{build_output_format_content, execute_parse_response_from_owned};
+    use super::{
+        build_output_format_content, execute_build_request_from_owned,
+        execute_parse_response_from_owned,
+    };
     use crate::baml_std;
 
     fn make_client_with_options(
@@ -396,6 +673,33 @@ mod tests {
         }
         baml_std::PrimitiveClient::new("TestClient".to_string(), "openai".to_string(), options)
             .unwrap()
+    }
+
+    fn make_openai_responses_client(
+        mut options: baml_std::PrimitiveClientOptions,
+    ) -> baml_std::PrimitiveClient {
+        if options.model.is_none() {
+            options.model = Some("gpt-4.1".to_string());
+        }
+        options.base_url = Some("https://api.openai.com/v1".to_string());
+        baml_std::PrimitiveClient::new(
+            "TestClient".to_string(),
+            "openai-responses".to_string(),
+            options,
+        )
+        .unwrap()
+    }
+
+    fn prompt_msg(text: &str) -> bex_vm_types::PromptAst {
+        Arc::new(PromptAst::Message {
+            role: "user".to_string(),
+            content: Arc::new(text.to_string().into()),
+            metadata: serde_json::Value::Null,
+        })
+    }
+
+    fn body_json(request: &baml_std::HttpRequest) -> serde_json::Value {
+        serde_json::from_str(&request.body).unwrap()
     }
 
     #[test]
@@ -505,6 +809,181 @@ mod tests {
         );
     }
 
+    #[test]
+    fn openai_responses_parses_multiple_image_outputs() {
+        let client = baml_std::PrimitiveClient::new(
+            "test".to_string(),
+            "openai-responses".to_string(),
+            baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4.1".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let response = r#"{
+            "id": "resp_img",
+            "object": "response",
+            "status": "completed",
+            "model": "gpt-4.1",
+            "output": [
+                {
+                    "type": "image_generation_call",
+                    "id": "ig_1",
+                    "status": "completed",
+                    "result": "aW1hZ2Ux",
+                    "output_format": "png"
+                },
+                {
+                    "type": "image_generation_call",
+                    "id": "ig_2",
+                    "status": "completed",
+                    "result": "aW1hZ2Uy",
+                    "output_format": "jpeg"
+                }
+            ],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+        }"#;
+
+        let result = execute_parse_response_from_owned(
+            &client,
+            response,
+            &baml_type::Ty::List(Box::new(ty_image()), TyAttr::default()),
+            &SysOpContext::empty(),
+        )
+        .unwrap();
+
+        let BexExternalValue::Array { items, .. } = result else {
+            panic!("expected image array");
+        };
+        assert_eq!(items.len(), 2);
+
+        let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(first)) = &items[0]
+        else {
+            panic!("expected first media item");
+        };
+        assert_eq!(first.kind, baml_base::MediaKind::Image);
+        assert_eq!(first.base64(), "aW1hZ2Ux");
+        assert_eq!(first.mime_type().as_deref(), Some("image/png"));
+
+        let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(second)) = &items[1]
+        else {
+            panic!("expected second media item");
+        };
+        assert_eq!(second.base64(), "aW1hZ2Uy");
+        assert_eq!(second.mime_type().as_deref(), Some("image/jpeg"));
+    }
+
+    #[test]
+    fn openai_responses_parses_mixed_text_and_image_outputs() {
+        let client = baml_std::PrimitiveClient::new(
+            "test".to_string(),
+            "openai-responses".to_string(),
+            baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4.1".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let response = r#"{
+            "id": "resp_mixed",
+            "object": "response",
+            "status": "completed",
+            "model": "gpt-4.1",
+            "output": [
+                {
+                    "type": "message",
+                    "id": "msg_1",
+                    "status": "completed",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "caption"}]
+                },
+                {
+                    "type": "image_generation_call",
+                    "id": "ig_1",
+                    "status": "completed",
+                    "result": "aW1hZ2U=",
+                    "output_format": "webp"
+                }
+            ],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+        }"#;
+
+        let result = execute_parse_response_from_owned(
+            &client,
+            response,
+            &baml_type::Ty::List(Box::new(ty_text_image_union()), TyAttr::default()),
+            &SysOpContext::empty(),
+        )
+        .unwrap();
+
+        let BexExternalValue::Array { items, .. } = result else {
+            panic!("expected mixed array");
+        };
+        assert_eq!(items.len(), 2);
+
+        let BexExternalValue::Union { value, .. } = &items[0] else {
+            panic!("expected first union item");
+        };
+        assert_eq!(value.as_ref(), &BexExternalValue::String("caption".into()));
+
+        let BexExternalValue::Union { value, .. } = &items[1] else {
+            panic!("expected second union item");
+        };
+        let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(media)) =
+            value.as_ref()
+        else {
+            panic!("expected media union value");
+        };
+        assert_eq!(media.kind, baml_base::MediaKind::Image);
+        assert_eq!(media.base64(), "aW1hZ2U=");
+        assert_eq!(media.mime_type().as_deref(), Some("image/webp"));
+    }
+
+    #[tokio::test]
+    async fn openai_responses_image_return_enables_image_generation_tool() {
+        let client = make_openai_responses_client(Default::default());
+        let request = execute_build_request_from_owned(
+            &client,
+            prompt_msg("Generate a product photo of a brass desk lamp."),
+            &ty_image(),
+            Arc::new(NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
+
+        let body = body_json(&request);
+        assert_eq!(
+            body["tools"],
+            serde_json::json!([{ "type": "image_generation" }])
+        );
+        assert_eq!(
+            body["tool_choice"],
+            serde_json::json!({ "type": "image_generation" })
+        );
+    }
+
+    #[tokio::test]
+    async fn openai_responses_mixed_text_image_return_enables_tool_without_forcing_choice() {
+        let client = make_openai_responses_client(Default::default());
+        let request = execute_build_request_from_owned(
+            &client,
+            prompt_msg("Return a caption and generate an illustration."),
+            &baml_type::Ty::List(Box::new(ty_text_image_union()), TyAttr::default()),
+            Arc::new(NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
+
+        let body = body_json(&request);
+        assert_eq!(
+            body["tools"],
+            serde_json::json!([{ "type": "image_generation" }])
+        );
+        assert!(body.get("tool_choice").is_none());
+    }
+
     // ========================================================================
     // build_output_format_content / walk_ty tests
     // ========================================================================
@@ -519,6 +998,12 @@ mod tests {
         baml_type::Ty::String {
             attr: TyAttr::default(),
         }
+    }
+    fn ty_image() -> baml_type::Ty {
+        baml_type::Ty::Media(baml_base::MediaKind::Image, TyAttr::default())
+    }
+    fn ty_text_image_union() -> baml_type::Ty {
+        baml_type::Ty::Union(vec![ty_string(), ty_image()], TyAttr::default())
     }
     fn ty_optional(inner: baml_type::Ty) -> baml_type::Ty {
         baml_type::Ty::Optional(Box::new(inner), TyAttr::default())

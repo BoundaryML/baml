@@ -3,6 +3,7 @@ import { type ComponentType, memo } from 'react';
 import { stateColors } from '../constants';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
+import { NodeOutputPreview } from './NodeOutputPreview';
 
 const StateIcon = ({ state }: { state: string }) => {
   if (state === 'running') {
@@ -45,7 +46,8 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          flexDirection: 'column',
+          alignItems: 'stretch',
           gap: 8,
           padding: '8px 12px',
           borderRadius: 6,
@@ -55,23 +57,26 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
           minWidth: 100,
         }}
       >
-        <div
-          style={{
-            width: 24,
-            height: 24,
-            borderRadius: '50%',
-            background: colors.accent,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <StateIcon state={d.executionState} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: '50%',
+              background: colors.accent,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <StateIcon state={d.executionState} />
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: '#ccc', maxWidth: 140, wordBreak: 'break-word' }}>
+            {d.label}
+          </div>
         </div>
-        <div style={{ fontSize: 12, fontWeight: 500, color: '#ccc', maxWidth: 140, wordBreak: 'break-word' }}>
-          {d.label}
-        </div>
+        <NodeOutputPreview images={d.imageOutputs} />
       </div>
     </>
   );

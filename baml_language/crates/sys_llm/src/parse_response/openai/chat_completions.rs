@@ -142,6 +142,7 @@ pub(in crate::parse_response) fn parse_openai_response(
         .unwrap_or_default();
 
     Ok(LlmProviderResponse {
+        output: crate::parse_response::LlmOutput::from_text(content.clone()),
         content,
         model: Some(response.model),
         finish_reason,

@@ -3,6 +3,7 @@ import { type ComponentType, memo } from 'react';
 import { stateColors } from '../constants';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
+import { NodeOutputPreview } from './NodeOutputPreview';
 
 export const LLMNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
   const d = data as WorkflowNodeData;
@@ -48,6 +49,7 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
             {d.llmClient}
           </div>
         )}
+        <NodeOutputPreview images={d.imageOutputs} />
       </div>
     </>
   );

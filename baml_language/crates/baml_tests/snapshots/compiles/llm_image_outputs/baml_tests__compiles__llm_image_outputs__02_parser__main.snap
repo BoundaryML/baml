@@ -1,0 +1,239 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 11643
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "OpenAIImageResponses"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai-responses"
+          WORD "openai-responses"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4.1"
+                QUOTE """
+                WORD "gpt-4"
+                DOT "."
+                INTEGER_LITERAL "1"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "api_key"
+            CONFIG_VALUE
+              ENV_ACCESS_EXPR "env.OPENAI_API_KEY"
+                WORD "env"
+                DOT "."
+                WORD "OPENAI_API_KEY"
+          CONFIG_ITEM
+            WORD "tools"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_BLOCK
+                  L_BRACE "{"
+                  CONFIG_ITEM
+                    WORD "type"
+                    CONFIG_VALUE
+                      STRING_LITERAL "image_generation"
+                        QUOTE """
+                        WORD "image_generation"
+                        QUOTE """
+                  CONFIG_ITEM
+                    WORD "size"
+                    CONFIG_VALUE
+                      STRING_LITERAL "1024x1024"
+                        QUOTE """
+                        INTEGER_LITERAL "1024"
+                        WORD "x1024"
+                        QUOTE """
+                  CONFIG_ITEM
+                    WORD "quality"
+                    CONFIG_VALUE
+                      STRING_LITERAL "low"
+                        QUOTE """
+                        WORD "low"
+                        QUOTE """
+                  R_BRACE "}"
+                R_BRACKET "]"
+          R_BRACE "}"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "GenerateImage"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "prompt"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "image"
+      WORD "image"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client OpenAIImageResponses"
+        KW_CLIENT "client"
+        WORD "OpenAIImageResponses"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL
+          HASH "#"
+          QUOTE """
+          PROMPT_TEXT "Generate an image for this prompt:"
+            WORD "Generate"
+            WORD "an"
+            WORD "image"
+            KW_FOR "for"
+            WORD "this"
+            WORD "prompt"
+            COLON ":"
+          TEMPLATE_INTERPOLATION "{{ prompt }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "prompt"
+            R_BRACE "}"
+            R_BRACE "}"
+          TEMPLATE_INTERPOLATION "{{ ctx.output_format }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "ctx"
+            DOT "."
+            WORD "output_format"
+            R_BRACE "}"
+            R_BRACE "}"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "GenerateImageSet"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "prompt"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "image[]"
+      WORD "image"
+      L_BRACKET "["
+      R_BRACKET "]"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client OpenAIImageResponses"
+        KW_CLIENT "client"
+        WORD "OpenAIImageResponses"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL
+          HASH "#"
+          QUOTE """
+          PROMPT_TEXT "Generate multiple distinct image outputs for this prompt:"
+            WORD "Generate"
+            WORD "multiple"
+            WORD "distinct"
+            WORD "image"
+            WORD "outputs"
+            KW_FOR "for"
+            WORD "this"
+            WORD "prompt"
+            COLON ":"
+          TEMPLATE_INTERPOLATION "{{ prompt }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "prompt"
+            R_BRACE "}"
+            R_BRACE "}"
+          TEMPLATE_INTERPOLATION "{{ ctx.output_format }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "ctx"
+            DOT "."
+            WORD "output_format"
+            R_BRACE "}"
+            R_BRACE "}"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "GenerateMixedImageNarrative"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "prompt"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        TYPE_EXPR "image | string"
+          WORD "image"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+      L_BRACKET "["
+      R_BRACKET "]"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client OpenAIImageResponses"
+        KW_CLIENT "client"
+        WORD "OpenAIImageResponses"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL
+          HASH "#"
+          QUOTE """
+          PROMPT_TEXT "Generate a short narrative with text captions and image outputs for:"
+            WORD "Generate"
+            WORD "a"
+            WORD "short"
+            WORD "narrative"
+            WORD "with"
+            WORD "text"
+            WORD "captions"
+            WORD "and"
+            WORD "image"
+            WORD "outputs"
+            KW_FOR "for"
+            COLON ":"
+          TEMPLATE_INTERPOLATION "{{ prompt }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "prompt"
+            R_BRACE "}"
+            R_BRACE "}"
+          TEMPLATE_INTERPOLATION "{{ ctx.output_format }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "ctx"
+            DOT "."
+            WORD "output_format"
+            R_BRACE "}"
+            R_BRACE "}"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+
+=== ERRORS ===
+None
