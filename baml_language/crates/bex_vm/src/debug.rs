@@ -1243,9 +1243,10 @@ pub fn display_compact_bytecode(
             }
 
             OpCode::MakeClosure => {
+                // Compact form has only obj_idx; capture_count is on the stack
+                // (pushed by a preceding LoadConst).
                 let obj_idx = read_u32(code, &mut pc);
-                let captures = read_u32(code, &mut pc);
-                writeln!(f, "obj={obj_idx}  captures={captures}")?;
+                writeln!(f, "obj={obj_idx}")?;
             }
         }
     }

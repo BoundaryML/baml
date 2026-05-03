@@ -693,7 +693,7 @@ pub enum OpCode {
 
     // ── Two operands (9 bytes) ─────────────────────────────────
     JumpTable,   // u32 table_idx + i32 default_offset
-    MakeClosure, // u32 object_idx + u32 capture_count
+    MakeClosure, // u32 object_idx (capture_count is popped from the stack)
 }
 
 impl OpCode {
