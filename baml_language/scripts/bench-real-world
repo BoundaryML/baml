@@ -521,6 +521,7 @@ def main():
     parser.add_argument("--baseline", help="Path to baseline baml-cli binary for A/B comparison")
     parser.add_argument("--runs", type=int, default=10, help="Number of runs per benchmark (default: 10)")
     parser.add_argument("--baml", default=None, help="Path to baml-cli (default: target/release/baml-cli)")
+    parser.add_argument("--only-baml", action="store_true", help="Only run baml benchmarks, skip python/node/bun comparisons")
     args = parser.parse_args()
 
     # Find binaries
@@ -533,9 +534,12 @@ def main():
         print("Run: cargo build --release --bin baml-cli")
         sys.exit(1)
 
-    has_python = subprocess.run(["python3", "--version"], capture_output=True).returncode == 0
-    has_bun = subprocess.run(["bun", "--version"], capture_output=True).returncode == 0
-    has_node = subprocess.run(["node", "--version"], capture_output=True).returncode == 0
+    if args.only_baml:
+        has_python = has_bun = has_node = False
+    else:
+        has_python = subprocess.run(["python3", "--version"], capture_output=True).returncode == 0
+        has_bun = subprocess.run(["bun", "--version"], capture_output=True).returncode == 0
+        has_node = subprocess.run(["node", "--version"], capture_output=True).returncode == 0
     has_baseline = args.baseline and os.path.isfile(args.baseline)
 
     runs = args.runs

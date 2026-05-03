@@ -1147,6 +1147,27 @@ pub fn display_compact_bytecode(
             | OpCode::LtEq
             | OpCode::Gt
             | OpCode::GtEq
+            | OpCode::AddInt
+            | OpCode::SubInt
+            | OpCode::MulInt
+            | OpCode::DivInt
+            | OpCode::ModInt
+            | OpCode::AddFloat
+            | OpCode::SubFloat
+            | OpCode::MulFloat
+            | OpCode::DivFloat
+            | OpCode::CmpIntEq
+            | OpCode::CmpIntNotEq
+            | OpCode::CmpIntLt
+            | OpCode::CmpIntLtEq
+            | OpCode::CmpIntGt
+            | OpCode::CmpIntGtEq
+            | OpCode::CmpFloatEq
+            | OpCode::CmpFloatNotEq
+            | OpCode::CmpFloatLt
+            | OpCode::CmpFloatLtEq
+            | OpCode::CmpFloatGt
+            | OpCode::CmpFloatGtEq
             | OpCode::Not
             | OpCode::Neg
             | OpCode::LoadNull

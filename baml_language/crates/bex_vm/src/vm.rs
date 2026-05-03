@@ -1931,78 +1931,41 @@ impl BexVm {
             return Ok(VmExecState::Complete(Value::Null));
         }
 
-        let mut frame_idx = self.frames.len() - 1;
-        let mut function = unsafe { self.load_function(frame_idx)? };
+        // Always use compact bytecode dispatch — all functions are lowered
+        // to compact bytecode at engine load time.
+        return self.exec_compact();
 
-        // Delegate to compact dispatch if compact bytecode is available.
-        if function.bytecode.compact.is_some() {
-            return self.exec_compact();
-        }
+        // Legacy instruction-array dispatch (kept for reference, never reached).
+        #[allow(unreachable_code)]
+        {
+            let mut frame_idx = self.frames.len() - 1;
+            let mut function = unsafe { self.load_function(frame_idx)? };
 
-        loop {
-            // ── CPS continuation handler ──────────────────────────────
-            //
-            // When a bytecode callback returns (Return instruction) and
-            // the frame below is Frame::Native, the Return handler just
-            // pops the bytecode frame and leaves the result on the stack.
-            // We detect the Native frame here and drive the continuation.
-            //
-            // This also handles re-entry after exec() yielded a
-            // FunctionExit span for a traced callback.
-            while matches!(self.frames.last(), Some(Frame::Native(_))) {
-                let v = self.stack.ensure_pop();
-                let Some(Frame::Native(nf)) = self.frames.pop() else {
-                    unreachable!("just matched Some(Frame::Native(_))");
-                };
-                let native_fn_ptr = nf.function;
+            loop {
+                // ── CPS continuation handler ──────────────────────────────
+                //
+                // When a bytecode callback returns (Return instruction) and
+                // the frame below is Frame::Native, the Return handler just
+                // pops the bytecode frame and leaves the result on the stack.
+                // We detect the Native frame here and drive the continuation.
+                //
+                // This also handles re-entry after exec() yielded a
+                // FunctionExit span for a traced callback.
+                while matches!(self.frames.last(), Some(Frame::Native(_))) {
+                    let v = self.stack.ensure_pop();
+                    let Some(Frame::Native(nf)) = self.frames.pop() else {
+                        unreachable!("just matched Some(Frame::Native(_))");
+                    };
+                    let native_fn_ptr = nf.function;
 
-                match nf.continuation.call(self, v) {
-                    NativeCallResult::Done(val) => {
-                        self.stack.push(val);
-                        // Continue the while loop — there may be stacked
-                        // Native frames below (e.g. nested continuations).
-                    }
-                    NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
-                        VmError::Thrown(exception_value) => {
-                            self.try_unwind_exception(
-                                &mut frame_idx,
-                                &mut function,
-                                exception_value,
-                            )?;
-                            break;
+                    match nf.continuation.call(self, v) {
+                        NativeCallResult::Done(val) => {
+                            self.stack.push(val);
+                            // Continue the while loop — there may be stacked
+                            // Native frames below (e.g. nested continuations).
                         }
-                        other => return Err(other),
-                    },
-                    NativeCallResult::YieldToCall {
-                        callee,
-                        args: mut callback_args,
-                        continuation,
-                    } => {
-                        // The continuation wants to call another function.
-                        // Push the new Native frame, then dispatch the
-                        // callback through ECFLO.
-                        self.frames.push(Frame::Native(NativeFrame {
-                            function: native_fn_ptr,
-                            continuation,
-                        }));
-
-                        // If callee is a BoundMethod, insert receiver into args.
-                        let real_callee =
-                            self.resolve_bound_method_callee(callee, &mut callback_args);
-
-                        let arg_count = callback_args.len();
-                        let cb_locals = StackIndex::from_raw(self.stack.len());
-                        self.stack.extend(callback_args);
-
-                        let ecflo_result = match self.execute_call_from_locals_offset(
-                            real_callee,
-                            cb_locals,
-                            arg_count,
-                            &mut frame_idx,
-                            &mut function,
-                        ) {
-                            Ok(result) => result,
-                            Err(VmError::Thrown(exception_value)) => {
+                        NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
+                            VmError::Thrown(exception_value) => {
                                 self.try_unwind_exception(
                                     &mut frame_idx,
                                     &mut function,
@@ -2010,74 +1973,114 @@ impl BexVm {
                                 )?;
                                 break;
                             }
-                            Err(other) => return Err(other),
-                        };
+                            other => return Err(other),
+                        },
+                        NativeCallResult::YieldToCall {
+                            callee,
+                            args: mut callback_args,
+                            continuation,
+                        } => {
+                            // The continuation wants to call another function.
+                            // Push the new Native frame, then dispatch the
+                            // callback through ECFLO.
+                            self.frames.push(Frame::Native(NativeFrame {
+                                function: native_fn_ptr,
+                                continuation,
+                            }));
 
-                        if let Some(state) = ecflo_result {
-                            return Ok(state);
+                            // If callee is a BoundMethod, insert receiver into args.
+                            let real_callee =
+                                self.resolve_bound_method_callee(callee, &mut callback_args);
+
+                            let arg_count = callback_args.len();
+                            let cb_locals = StackIndex::from_raw(self.stack.len());
+                            self.stack.extend(callback_args);
+
+                            let ecflo_result = match self.execute_call_from_locals_offset(
+                                real_callee,
+                                cb_locals,
+                                arg_count,
+                                &mut frame_idx,
+                                &mut function,
+                            ) {
+                                Ok(result) => result,
+                                Err(VmError::Thrown(exception_value)) => {
+                                    self.try_unwind_exception(
+                                        &mut frame_idx,
+                                        &mut function,
+                                        exception_value,
+                                    )?;
+                                    break;
+                                }
+                                Err(other) => return Err(other),
+                            };
+
+                            if let Some(state) = ecflo_result {
+                                return Ok(state);
+                            }
+                            // If ECFLO returned None: either a bytecode frame
+                            // was pushed (top is Bytecode, while exits) or a
+                            // native callback completed inline (top is Native,
+                            // while continues).
                         }
-                        // If ECFLO returned None: either a bytecode frame
-                        // was pushed (top is Bytecode, while exits) or a
-                        // native callback completed inline (top is Native,
-                        // while continues).
                     }
                 }
-            }
 
-            if self.frames.is_empty() {
-                return Ok(VmExecState::Complete(self.stack.ensure_pop()));
-            }
-
-            // Sync frame state — may have changed due to continuation
-            // handling above or the previous step()'s Return.
-            frame_idx = self.frames.len() - 1;
-            function = unsafe { self.load_function(frame_idx)? };
-
-            // ── Instruction execution ─────────────────────────────────
-
-            let Frame::Bytecode(bf) = &mut self.frames[frame_idx] else {
-                unreachable!("exec loop frame is always Bytecode after continuation handler");
-            };
-            let instruction_ptr = bf.instruction_ptr;
-            bf.instruction_ptr += 1;
-            bf.faulting_pc = instruction_ptr;
-
-            #[cfg(debug_assertions)]
-            #[allow(clippy::print_stderr)] // intentional debug output
-            if std::env::var("BEX_VM_DEBUG").is_ok() {
-                let stack = self
-                    .stack
-                    .iter()
-                    .map(crate::debug::display_value)
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                let (instruction, metadata) = crate::debug::display_instruction(
-                    instruction_ptr,
-                    function,
-                    &self.globals,
-                    None,
-                    None,
-                );
-
-                eprintln!("[{stack}]");
-                eprintln!("{instruction} {metadata}");
-            }
-
-            let step_result = self.step(&mut frame_idx, &mut function, instruction_ptr);
-
-            match step_result {
-                Ok(Some(state)) => return Ok(state),
-                Ok(None) => {}
-                Err(VmError::InternalError(err)) => return Err(VmError::InternalError(err)),
-                Err(VmError::Thrown(exception_value)) => {
-                    self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)?;
+                if self.frames.is_empty() {
+                    return Ok(VmExecState::Complete(self.stack.ensure_pop()));
                 }
-                Err(
-                    e @ (VmError::ThrownUnhandled { .. } | VmError::TracedInternalError { .. }),
-                ) => return Err(e),
+
+                // Sync frame state — may have changed due to continuation
+                // handling above or the previous step()'s Return.
+                frame_idx = self.frames.len() - 1;
+                function = unsafe { self.load_function(frame_idx)? };
+
+                // ── Instruction execution ─────────────────────────────────
+
+                let Frame::Bytecode(bf) = &mut self.frames[frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode after continuation handler");
+                };
+                let instruction_ptr = bf.instruction_ptr;
+                bf.instruction_ptr += 1;
+                bf.faulting_pc = instruction_ptr;
+
+                #[cfg(debug_assertions)]
+                #[allow(clippy::print_stderr)] // intentional debug output
+                if std::env::var("BEX_VM_DEBUG").is_ok() {
+                    let stack = self
+                        .stack
+                        .iter()
+                        .map(crate::debug::display_value)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
+                    let (instruction, metadata) = crate::debug::display_instruction(
+                        instruction_ptr,
+                        function,
+                        &self.globals,
+                        None,
+                        None,
+                    );
+
+                    eprintln!("[{stack}]");
+                    eprintln!("{instruction} {metadata}");
+                }
+
+                let step_result = self.step(&mut frame_idx, &mut function, instruction_ptr);
+
+                match step_result {
+                    Ok(Some(state)) => return Ok(state),
+                    Ok(None) => {}
+                    Err(VmError::InternalError(err)) => return Err(VmError::InternalError(err)),
+                    Err(VmError::Thrown(exception_value)) => {
+                        self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)?;
+                    }
+                    Err(
+                        e @ (VmError::ThrownUnhandled { .. } | VmError::TracedInternalError { .. }),
+                    ) => return Err(e),
+                }
             }
-        }
+        } // end #[allow(unreachable_code)]
     }
 
     /// Execute a single instruction.
@@ -4404,19 +4407,16 @@ impl BexVm {
         Ok(())
     }
 
-    /// Get a helper for reading from compact bytecode that borrows the current
-    /// bytecode frame's `instruction_ptr` mutably.
-    fn current_bytecode_frame_mut(&mut self, frame_idx: usize) -> &mut BytecodeFrame {
-        let Frame::Bytecode(bf) = &mut self.frames[frame_idx] else {
-            unreachable!("exec_compact frame is always Bytecode");
-        };
-        bf
-    }
-
     /// Compact bytecode dispatch loop.
     ///
     /// Reads opcodes from `CompactCode.code` instead of indexing `Vec<Instruction>`.
     /// `instruction_ptr` is a byte offset into the code array.
+    ///
+    /// Key optimization: `pc` and `code` are kept as local variables in the hot
+    /// loop, avoiding frame access on every instruction. They are only saved back
+    /// to the frame when control flow changes (calls, returns, exceptions, yields).
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn exec_compact(&mut self) -> Result<VmExecState, VmError> {
         if self.frames.is_empty() {
             return Ok(VmExecState::Complete(Value::Null));
@@ -4425,6 +4425,7 @@ impl BexVm {
         let mut frame_idx = self.frames.len() - 1;
         let mut function = unsafe { self.load_function(frame_idx)? };
 
+        // Outer loop handles CPS continuations and frame transitions.
         loop {
             // ── CPS continuation handler (identical to exec_inner) ────────
             while matches!(self.frames.last(), Some(Frame::Native(_))) {
@@ -4498,54 +4499,84 @@ impl BexVm {
             frame_idx = self.frames.len() - 1;
             function = unsafe { self.load_function(frame_idx)? };
 
-            // ── Instruction execution ─────────────────────────────────────
+            // ── Extract locals for the tight inner dispatch loop ──────────
+            // SAFETY: code is &'static because Function is &'static.
+            let code: &'static [u8] = &function.bytecode.compact.as_ref().unwrap().code;
             let Frame::Bytecode(bf) = &mut self.frames[frame_idx] else {
                 unreachable!(
                     "exec_compact loop frame is always Bytecode after continuation handler"
                 );
             };
+            let mut pc = bf.instruction_ptr;
 
-            let compact = function.bytecode.compact.as_ref().unwrap();
-            let saved_pc = bf.instruction_ptr;
-            bf.faulting_pc = saved_pc;
+            // ── Tight inner dispatch loop ─────────────────────────────────
+            // pc/code/function/frame_idx are kept as locals across many
+            // instructions — we only break out (re-extracting from the frame)
+            // on actual control-flow changes (Call, Return, Throw).
+            //
+            // Critical perf: simple ops (arithmetic, load/store, jumps within
+            // the same function) never touch the frame's instruction_ptr.
+            loop {
+                let orig_frame_idx = frame_idx;
+                let step_result = self.step_compact(&mut pc, &mut frame_idx, &mut function, code);
 
-            // Read opcode byte and advance PC past it.
-            let op_byte = compact.code[saved_pc];
-            bf.instruction_ptr = saved_pc + 1;
-
-            let step_result = self.step_compact(&mut frame_idx, &mut function, op_byte);
-
-            match step_result {
-                Ok(Some(state)) => return Ok(state),
-                Ok(None) => {}
-                Err(VmError::InternalError(err)) => return Err(VmError::InternalError(err)),
-                Err(VmError::Thrown(exception_value)) => {
-                    self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)?;
+                match step_result {
+                    Ok(None) if frame_idx == orig_frame_idx => {
+                        // Simple op, frame unchanged. pc is already advanced
+                        // as a local — no frame write needed. Continue tight loop.
+                        continue;
+                    }
+                    Ok(None) => {
+                        // Frame changed (Call/Return) — Call saved pc before the
+                        // call. Re-extract code/function for the new frame.
+                        break;
+                    }
+                    Ok(Some(state)) => {
+                        // Yielding — save pc to current frame so we can resume.
+                        if frame_idx == orig_frame_idx {
+                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(frame_idx) {
+                                bf.instruction_ptr = pc;
+                            }
+                        }
+                        return Ok(state);
+                    }
+                    Err(VmError::InternalError(err)) => {
+                        return Err(VmError::InternalError(err));
+                    }
+                    Err(VmError::Thrown(exception_value)) => {
+                        // Throw saves pc inside its handler before unwinding.
+                        self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)?;
+                        break; // re-extract code/function after unwind
+                    }
+                    Err(
+                        e @ (VmError::ThrownUnhandled { .. } | VmError::TracedInternalError { .. }),
+                    ) => return Err(e),
                 }
-                Err(
-                    e @ (VmError::ThrownUnhandled { .. } | VmError::TracedInternalError { .. }),
-                ) => return Err(e),
             }
         }
     }
 
     /// Execute a single compact-encoded instruction.
     ///
-    /// Reads operands from the compact code stream (advancing `bf.instruction_ptr`),
-    /// then executes the same logic as the corresponding arm in `step()`.
+    /// `pc` is a local from the caller's tight loop — operand reads advance it
+    /// directly without going through frame indirection. The caller saves `pc`
+    /// back to the frame after this returns.
     #[allow(
         clippy::too_many_lines,
         clippy::cast_possible_wrap,
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation,
         clippy::cast_lossless,
-        clippy::useless_conversion
+        clippy::useless_conversion,
+        clippy::inline_always
     )]
+    #[inline(always)]
     fn step_compact(
         &mut self,
+        pc: &mut usize,
         frame_idx: &mut usize,
         function: &mut &'static Function,
-        op_byte: u8,
+        code: &'static [u8],
     ) -> Result<Option<VmExecState>, VmError> {
         use bex_vm_types::bytecode::OpCode;
 
@@ -4553,7 +4584,7 @@ impl BexVm {
         // by our own encoder which guarantees correct sizes (verified by
         // debug_assert_eq!(code.len(), byte_offset) in lower_to_compact pass 2).
         // The PC always stays in bounds during well-formed execution.
-        #[inline]
+        #[inline(always)]
         unsafe fn read_u32_unchecked(code: &[u8], pc: &mut usize) -> u32 {
             unsafe {
                 let p = *pc;
@@ -4568,7 +4599,7 @@ impl BexVm {
             }
         }
 
-        #[inline]
+        #[inline(always)]
         unsafe fn read_i32_unchecked(code: &[u8], pc: &mut usize) -> i32 {
             unsafe {
                 let p = *pc;
@@ -4583,7 +4614,7 @@ impl BexVm {
             }
         }
 
-        #[inline]
+        #[inline(always)]
         unsafe fn read_i8_unchecked(code: &[u8], pc: &mut usize) -> i8 {
             unsafe {
                 let val = *code.get_unchecked(*pc) as i8;
@@ -4592,14 +4623,22 @@ impl BexVm {
             }
         }
 
-        let op = OpCode::try_from(op_byte).map_err(VmInternalError::InvalidOpcode)?;
+        // Read opcode byte and advance PC past it.
+        // SAFETY: PC is always in bounds (bytecode invariant).
+        #[allow(unsafe_code)]
+        let op_byte = unsafe { *code.get_unchecked(*pc) };
+        *pc += 1;
 
-        // SAFETY: `function` is `&'static Function`, so `code` has lifetime 'static.
-        // This does NOT borrow from `self`, so there is no conflict with `&mut self`.
-        // All unchecked reads are safe because the compact bytecode is produced by our
-        // own encoder which guarantees correct byte layout (verified by debug_assert in
-        // lower_to_compact). The PC always stays in bounds during well-formed execution.
-        let code: &'static [u8] = &function.bytecode.compact.as_ref().unwrap().code;
+        // Save faulting PC for error reporting (points to the opcode byte).
+        let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+            unsafe { std::hint::unreachable_unchecked() }
+        };
+        bf.faulting_pc = *pc - 1;
+
+        // SAFETY: OpCode is #[repr(u8)] and the compact bytecode is produced by our
+        // own encoder which only emits valid opcode bytes.
+        #[allow(unsafe_code)]
+        let op: OpCode = unsafe { std::mem::transmute(op_byte) };
 
         // SAFETY: see above — bytecode invariants guarantee all reads are in bounds.
         #[allow(unused_unsafe)]
@@ -4616,29 +4655,20 @@ impl BexVm {
                     self.stack.push(Value::Bool(false));
                 }
                 OpCode::LoadIntSmall => {
-                    let val = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_i8_unchecked(code, &mut bf.instruction_ptr)
-                    };
+                    let val = { read_i8_unchecked(code, pc) };
                     self.stack.push(Value::Int(i64::from(val)));
                 }
 
                 // ── LoadConst ─────────────────────────────────────────────────
                 OpCode::LoadConst => {
-                    let idx = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let idx = { read_u32_unchecked(code, pc) as usize };
                     let val = function.bytecode.resolved_constants[idx];
                     self.stack.push(val);
                 }
 
                 // ── LoadVar / StoreVar ────────────────────────────────────────
                 OpCode::LoadVar => {
-                    let slot = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let slot = { read_u32_unchecked(code, pc) as usize };
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -4648,10 +4678,7 @@ impl BexVm {
                 }
 
                 OpCode::StoreVar => {
-                    let slot = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let slot = { read_u32_unchecked(code, pc) as usize };
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -4681,20 +4708,14 @@ impl BexVm {
 
                 // ── LoadGlobal / StoreGlobal ──────────────────────────────────
                 OpCode::LoadGlobal => {
-                    let raw = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr)
-                    };
+                    let raw = { read_u32_unchecked(code, pc) };
                     let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let value = self.globals[global_idx];
                     self.stack.push(value);
                 }
 
                 OpCode::StoreGlobal => {
-                    let raw = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr)
-                    };
+                    let raw = { read_u32_unchecked(code, pc) };
                     let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let value = self.stack.ensure_pop();
                     self.globals[global_idx] = value;
@@ -4702,10 +4723,7 @@ impl BexVm {
 
                 // ── LoadField / StoreField / InitField ────────────────────────
                 OpCode::LoadField => {
-                    let idx = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let idx = { read_u32_unchecked(code, pc) as usize };
                     let top = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(&top, ObjectType::Instance)?;
                     let Object::Instance(instance) = self.get_object(obj_ptr) else {
@@ -4720,10 +4738,7 @@ impl BexVm {
                 }
 
                 OpCode::StoreField => {
-                    let idx = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let idx = { read_u32_unchecked(code, pc) as usize };
                     let new_value = self.stack.ensure_pop();
                     let instance_value = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
@@ -4761,10 +4776,7 @@ impl BexVm {
                 }
 
                 OpCode::InitField => {
-                    let idx = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let idx = { read_u32_unchecked(code, pc) as usize };
                     let new_value = self.stack.ensure_pop();
                     let instance_value = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
@@ -4782,20 +4794,14 @@ impl BexVm {
 
                 // ── Pop / Copy ────────────────────────────────────────────────
                 OpCode::Pop => {
-                    let n = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let n = { read_u32_unchecked(code, pc) as usize };
                     let drain_start = self.stack.len() - n;
                     let drain_range = StackIndex::from_raw(drain_start)..;
                     self.stack.drain(drain_range);
                 }
 
                 OpCode::Copy => {
-                    let offset = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let offset = { read_u32_unchecked(code, pc) as usize };
                     let index = self.stack.ensure_slot_from_top(offset);
                     let value = self.stack[index];
                     self.stack.push(value);
@@ -4803,10 +4809,7 @@ impl BexVm {
 
                 // ── Allocation opcodes ────────────────────────────────────────
                 OpCode::AllocArray => {
-                    let size = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let size = { read_u32_unchecked(code, pc) as usize };
                     let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
                     let array = self.stack.drain(drain_range).collect();
                     let array_index = self.tlab.alloc(Object::Array(array));
@@ -4814,10 +4817,7 @@ impl BexVm {
                 }
 
                 OpCode::AllocMap => {
-                    let n = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let n = { read_u32_unchecked(code, pc) as usize };
                     let map = if n > 0 {
                         let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
                         let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
@@ -4841,10 +4841,7 @@ impl BexVm {
                 }
 
                 OpCode::AllocInstance => {
-                    let raw = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr)
-                    };
+                    let raw = { read_u32_unchecked(code, pc) };
                     let class_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
                     let Object::Class(class) = self.get_object(class_ptr) else {
                         return Err(VmInternalError::TypeError {
@@ -4865,10 +4862,7 @@ impl BexVm {
                 }
 
                 OpCode::AllocVariant => {
-                    let raw = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr)
-                    };
+                    let raw = { read_u32_unchecked(code, pc) };
                     let enum_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
                     let variant_count = {
                         let Object::Enum(enm) = self.get_object(enum_ptr) else {
@@ -4908,10 +4902,7 @@ impl BexVm {
 
                 // ── DispatchFuture ────────────────────────────────────────────
                 OpCode::DispatchFuture => {
-                    let raw = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr)
-                    };
+                    let raw = { read_u32_unchecked(code, pc) };
                     let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let callee_value = self.globals[callee];
                     let expected_type = FunctionType::SysOp;
@@ -4950,10 +4941,7 @@ impl BexVm {
 
                 // ── Watch / Unwatch / Notify / NotifyBlock ────────────────────
                 OpCode::Watch => {
-                    let index = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let index = { read_u32_unchecked(code, pc) as usize };
                     let filter = match self.stack.ensure_pop() {
                         Value::Null => WatchFilter::Default,
                         Value::Object(object_index) => match self.get_object(object_index) {
@@ -5001,10 +4989,7 @@ impl BexVm {
                 }
 
                 OpCode::Unwatch => {
-                    let index = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let index = { read_u32_unchecked(code, pc) as usize };
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -5027,10 +5012,7 @@ impl BexVm {
                 }
 
                 OpCode::Notify => {
-                    let index = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let index = { read_u32_unchecked(code, pc) as usize };
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -5046,10 +5028,7 @@ impl BexVm {
                 }
 
                 OpCode::NotifyBlock => {
-                    let block_index = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let block_index = { read_u32_unchecked(code, pc) as usize };
                     let notification = &function.block_notifications[block_index];
                     let full_notification = bytecode::BlockNotification {
                         function_name: function.name.clone(),
@@ -5065,10 +5044,7 @@ impl BexVm {
 
                 // ── VizEnter / VizExit ────────────────────────────────────────
                 OpCode::VizEnter | OpCode::VizExit => {
-                    let index = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let index = { read_u32_unchecked(code, pc) as usize };
                     let delta = if op == OpCode::VizEnter {
                         bytecode::VizExecDelta::Enter
                     } else {
@@ -5096,10 +5072,7 @@ impl BexVm {
 
                 // ── Call ──────────────────────────────────────────────────────
                 OpCode::Call => {
-                    let raw = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr)
-                    };
+                    let raw = read_u32_unchecked(code, pc);
                     let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let callee_value = self.globals[callee_global];
                     let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
@@ -5109,6 +5082,11 @@ impl BexVm {
                         .checked_sub(arg_count)
                         .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?;
                     let locals_offset = StackIndex::from_raw(args_offset);
+                    // Save pc as return address before pushing new frame.
+                    let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                        unsafe { std::hint::unreachable_unchecked() }
+                    };
+                    bf.instruction_ptr = *pc;
                     return self.execute_call_from_locals_offset(
                         callee_ptr,
                         locals_offset,
@@ -5120,6 +5098,12 @@ impl BexVm {
 
                 // ── CallIndirect ──────────────────────────────────────────────
                 OpCode::CallIndirect => {
+                    // Save pc as return address before any call.
+                    let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                        unsafe { std::hint::unreachable_unchecked() }
+                    };
+                    bf.instruction_ptr = *pc;
+
                     let callee_slot = self.stack.ensure_stack_top();
                     let callee_value = self.stack[callee_slot];
                     let callee_ptr =
@@ -5206,6 +5190,11 @@ impl BexVm {
                     self.stack.drain(bf.locals_offset..);
                     self.stack.push(result);
                     self.frames.pop();
+                    // Update frame_idx so the outer loop detects the frame change
+                    // and re-extracts code/pc/function for the parent frame.
+                    if !self.frames.is_empty() {
+                        *frame_idx = self.frames.len() - 1;
+                    }
                     if Some(self.frames.len()) == self.interrupt_frame {
                         self.interrupt_frame = None;
                         return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
@@ -5256,6 +5245,10 @@ impl BexVm {
                 // ── Throw ─────────────────────────────────────────────────────
                 OpCode::Throw => {
                     let value = self.stack.ensure_pop();
+                    // Save pc before unwinding (handler lookup needs it).
+                    if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+                        bf.instruction_ptr = *pc;
+                    }
                     self.try_unwind_exception(frame_idx, function, value)?;
                     if self.early_yield.should_early_yield() {
                         return Ok(Some(VmExecState::EarlyYield));
@@ -5264,27 +5257,19 @@ impl BexVm {
 
                 // ── Jump opcodes ──────────────────────────────────────────────
                 OpCode::Jump => {
-                    let offset = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_i32_unchecked(code, &mut bf.instruction_ptr)
-                    };
-                    let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    // offset is relative to instruction end (current bf.instruction_ptr)
-                    bf.instruction_ptr = (bf.instruction_ptr as i64 + offset as i64) as usize;
+                    let offset = read_i32_unchecked(code, pc);
+                    // offset is relative to instruction end (current pc)
+                    *pc = (*pc as i64 + offset as i64) as usize;
                     if self.early_yield.should_early_yield() {
                         return Ok(Some(VmExecState::EarlyYield));
                     }
                 }
 
                 OpCode::PopJumpIfFalse => {
-                    let offset = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_i32_unchecked(code, &mut bf.instruction_ptr)
-                    };
+                    let offset = read_i32_unchecked(code, pc);
                     let cond = self.stack.ensure_pop();
                     if cond == Value::Bool(false) {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        bf.instruction_ptr = (bf.instruction_ptr as i64 + offset as i64) as usize;
+                        *pc = (*pc as i64 + offset as i64) as usize;
                     }
                     if self.early_yield.should_early_yield() {
                         return Ok(Some(VmExecState::EarlyYield));
@@ -5292,26 +5277,18 @@ impl BexVm {
                 }
 
                 OpCode::JumpIfFalse => {
-                    let offset = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_i32_unchecked(code, &mut bf.instruction_ptr)
-                    };
+                    let offset = read_i32_unchecked(code, pc);
                     let top_slot = self.stack.ensure_stack_top();
                     let cond = self.stack[top_slot];
                     if cond == Value::Bool(false) {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        bf.instruction_ptr = (bf.instruction_ptr as i64 + offset as i64) as usize;
+                        *pc = (*pc as i64 + offset as i64) as usize;
                     }
                 }
 
                 // ── JumpTable ─────────────────────────────────────────────────
                 OpCode::JumpTable => {
-                    let (table_idx, default_offset) = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        let tidx = read_u32_unchecked(code, &mut bf.instruction_ptr) as usize;
-                        let def = read_i32_unchecked(code, &mut bf.instruction_ptr);
-                        (tidx, def)
-                    };
+                    let table_idx = read_u32_unchecked(code, pc) as usize;
+                    let default_offset = read_i32_unchecked(code, pc);
                     let discriminant = self.stack.ensure_pop();
                     let Value::Int(value) = discriminant else {
                         return Err(VmInternalError::TypeError {
@@ -5323,15 +5300,8 @@ impl BexVm {
                     // Use pre-translated compact jump table (byte-offset-relative).
                     let compact = function.bytecode.compact.as_ref().unwrap();
                     let compact_table = &compact.jump_tables[table_idx];
-                    let bf_ip = {
-                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                            unreachable!()
-                        };
-                        bf.instruction_ptr
-                    };
                     let offset = compact_table.lookup(value).unwrap_or(default_offset);
-                    let bf = self.current_bytecode_frame_mut(*frame_idx);
-                    bf.instruction_ptr = (bf_ip as i64 + offset as i64) as usize;
+                    *pc = (*pc as i64 + offset as i64) as usize;
                     if self.early_yield.should_early_yield() {
                         return Ok(Some(VmExecState::EarlyYield));
                     }
@@ -5370,10 +5340,7 @@ impl BexVm {
 
                 // ── IsType ────────────────────────────────────────────────────
                 OpCode::IsType => {
-                    let const_idx = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let const_idx = { read_u32_unchecked(code, pc) as usize };
                     let value = self.stack.ensure_pop();
                     let expected = &function.bytecode.resolved_constants[const_idx];
                     let result = match expected {
@@ -5397,10 +5364,7 @@ impl BexVm {
                     clippy::cast_possible_truncation
                 )]
                 OpCode::DenseTag => {
-                    let table_idx = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let table_idx = { read_u32_unchecked(code, pc) as usize };
                     let tag = match self.stack.ensure_pop() {
                         Value::Int(t) => t,
                         other => {
@@ -5435,6 +5399,10 @@ impl BexVm {
                         _ => false,
                     };
                     if is_panic {
+                        // Save pc before unwinding (handler lookup needs it).
+                        if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+                            bf.instruction_ptr = *pc;
+                        }
                         self.try_unwind_exception(frame_idx, function, value)?;
                     }
                     if self.early_yield.should_early_yield() {
@@ -5459,10 +5427,7 @@ impl BexVm {
 
                 // ── MakeClosure ───────────────────────────────────────────────
                 OpCode::MakeClosure => {
-                    let obj_idx_raw = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let obj_idx_raw = { read_u32_unchecked(code, pc) as usize };
                     // Capture count is on the stack (pushed by preceding LoadConst).
                     let Value::Int(capture_count) = self.stack.ensure_pop() else {
                         unreachable!("MakeClosure: capture count must be Int");
@@ -5485,10 +5450,7 @@ impl BexVm {
 
                 // ── MakeBoundMethod ───────────────────────────────────────────
                 OpCode::MakeBoundMethod => {
-                    let raw = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr)
-                    };
+                    let raw = { read_u32_unchecked(code, pc) };
                     let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let receiver = self.stack.ensure_pop();
                     let callee_value = self.globals[global_idx];
@@ -5504,10 +5466,7 @@ impl BexVm {
 
                 // ── LoadDeref / StoreDeref ────────────────────────────────────
                 OpCode::LoadDeref => {
-                    let slot = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let slot = { read_u32_unchecked(code, pc) as usize };
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -5532,10 +5491,7 @@ impl BexVm {
                 }
 
                 OpCode::StoreDeref => {
-                    let slot = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let slot = { read_u32_unchecked(code, pc) as usize };
                     let value = self.stack.ensure_pop();
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
@@ -5563,10 +5519,7 @@ impl BexVm {
 
                 // ── LoadCapture / StoreCapture / CaptureRef ───────────────────
                 OpCode::LoadCapture => {
-                    let idx = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let idx = { read_u32_unchecked(code, pc) as usize };
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -5599,10 +5552,7 @@ impl BexVm {
                 }
 
                 OpCode::StoreCapture => {
-                    let idx = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let idx = { read_u32_unchecked(code, pc) as usize };
                     let value = self.stack.ensure_pop();
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
@@ -5637,10 +5587,7 @@ impl BexVm {
                 }
 
                 OpCode::CaptureRef => {
-                    let idx = {
-                        let bf = self.current_bytecode_frame_mut(*frame_idx);
-                        read_u32_unchecked(code, &mut bf.instruction_ptr) as usize
-                    };
+                    let idx = { read_u32_unchecked(code, pc) as usize };
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -5903,6 +5850,229 @@ impl BexVm {
                 OpCode::LtEq => self.exec_cmpop(CmpOp::LtEq)?,
                 OpCode::Gt => self.exec_cmpop(CmpOp::Gt)?,
                 OpCode::GtEq => self.exec_cmpop(CmpOp::GtEq)?,
+
+                // ── Specialized int arithmetic (skip type dispatch) ───────────
+                OpCode::AddInt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Int(l + r));
+                }
+                OpCode::SubInt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Int(l - r));
+                }
+                OpCode::MulInt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Int(l * r));
+                }
+                OpCode::DivInt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    if r == 0 {
+                        return Err(VmError::Thrown(self.panic_to_exception_value(
+                            VmPanic::DivisionByZero {
+                                left: Value::Int(l),
+                                right: Value::Int(r),
+                            },
+                        )));
+                    }
+                    self.stack.push(Value::Int(l / r));
+                }
+                OpCode::ModInt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    if r == 0 {
+                        return Err(VmError::Thrown(self.panic_to_exception_value(
+                            VmPanic::DivisionByZero {
+                                left: Value::Int(l),
+                                right: Value::Int(r),
+                            },
+                        )));
+                    }
+                    self.stack.push(Value::Int(l % r));
+                }
+
+                // ── Specialized float arithmetic (skip type dispatch) ─────────
+                OpCode::AddFloat => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Float(l + r));
+                }
+                OpCode::SubFloat => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Float(l - r));
+                }
+                OpCode::MulFloat => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Float(l * r));
+                }
+                OpCode::DivFloat => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    if r == 0.0 {
+                        return Err(VmError::Thrown(self.panic_to_exception_value(
+                            VmPanic::DivisionByZero {
+                                left: Value::Float(l),
+                                right: Value::Float(r),
+                            },
+                        )));
+                    }
+                    self.stack.push(Value::Float(l / r));
+                }
+
+                // ── Specialized int comparison (skip type dispatch) ───────────
+                OpCode::CmpIntEq => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l == r));
+                }
+                OpCode::CmpIntNotEq => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l != r));
+                }
+                OpCode::CmpIntLt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l < r));
+                }
+                OpCode::CmpIntLtEq => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l <= r));
+                }
+                OpCode::CmpIntGt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l > r));
+                }
+                OpCode::CmpIntGtEq => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l >= r));
+                }
+
+                // ── Specialized float comparison (skip type dispatch) ─────────
+                #[allow(clippy::float_cmp)]
+                OpCode::CmpFloatEq => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l == r));
+                }
+                #[allow(clippy::float_cmp)]
+                OpCode::CmpFloatNotEq => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l != r));
+                }
+                OpCode::CmpFloatLt => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l < r));
+                }
+                OpCode::CmpFloatLtEq => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l <= r));
+                }
+                OpCode::CmpFloatGt => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l > r));
+                }
+                OpCode::CmpFloatGtEq => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l >= r));
+                }
 
                 // ── Expanded unary ────────────────────────────────────────────
                 OpCode::Not => {

@@ -617,6 +617,33 @@ pub enum OpCode {
     Gt,
     GtEq,
 
+    // ── Specialized arithmetic (no operands, 1 byte) ────────────
+    // These skip type checks using unreachable_unchecked — the compiler
+    // guarantees operand types at emit time.
+    AddInt,
+    SubInt,
+    MulInt,
+    DivInt,
+    ModInt,
+    AddFloat,
+    SubFloat,
+    MulFloat,
+    DivFloat,
+
+    // ── Specialized comparison (no operands, 1 byte) ───────────
+    CmpIntEq,
+    CmpIntNotEq,
+    CmpIntLt,
+    CmpIntLtEq,
+    CmpIntGt,
+    CmpIntGtEq,
+    CmpFloatEq,
+    CmpFloatNotEq,
+    CmpFloatLt,
+    CmpFloatLtEq,
+    CmpFloatGt,
+    CmpFloatGtEq,
+
     // ── Expanded unary (no operands, 1 byte) ───────────────────
     Not,
     Neg,
@@ -704,6 +731,27 @@ impl OpCode {
             | Self::LtEq
             | Self::Gt
             | Self::GtEq
+            | Self::AddInt
+            | Self::SubInt
+            | Self::MulInt
+            | Self::DivInt
+            | Self::ModInt
+            | Self::AddFloat
+            | Self::SubFloat
+            | Self::MulFloat
+            | Self::DivFloat
+            | Self::CmpIntEq
+            | Self::CmpIntNotEq
+            | Self::CmpIntLt
+            | Self::CmpIntLtEq
+            | Self::CmpIntGt
+            | Self::CmpIntGtEq
+            | Self::CmpFloatEq
+            | Self::CmpFloatNotEq
+            | Self::CmpFloatLt
+            | Self::CmpFloatLtEq
+            | Self::CmpFloatGt
+            | Self::CmpFloatGtEq
             | Self::Not
             | Self::Neg
             | Self::LoadNull
@@ -790,6 +838,27 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::LtEq as u8 => Ok(Self::LtEq),
             x if x == Self::Gt as u8 => Ok(Self::Gt),
             x if x == Self::GtEq as u8 => Ok(Self::GtEq),
+            x if x == Self::AddInt as u8 => Ok(Self::AddInt),
+            x if x == Self::SubInt as u8 => Ok(Self::SubInt),
+            x if x == Self::MulInt as u8 => Ok(Self::MulInt),
+            x if x == Self::DivInt as u8 => Ok(Self::DivInt),
+            x if x == Self::ModInt as u8 => Ok(Self::ModInt),
+            x if x == Self::AddFloat as u8 => Ok(Self::AddFloat),
+            x if x == Self::SubFloat as u8 => Ok(Self::SubFloat),
+            x if x == Self::MulFloat as u8 => Ok(Self::MulFloat),
+            x if x == Self::DivFloat as u8 => Ok(Self::DivFloat),
+            x if x == Self::CmpIntEq as u8 => Ok(Self::CmpIntEq),
+            x if x == Self::CmpIntNotEq as u8 => Ok(Self::CmpIntNotEq),
+            x if x == Self::CmpIntLt as u8 => Ok(Self::CmpIntLt),
+            x if x == Self::CmpIntLtEq as u8 => Ok(Self::CmpIntLtEq),
+            x if x == Self::CmpIntGt as u8 => Ok(Self::CmpIntGt),
+            x if x == Self::CmpIntGtEq as u8 => Ok(Self::CmpIntGtEq),
+            x if x == Self::CmpFloatEq as u8 => Ok(Self::CmpFloatEq),
+            x if x == Self::CmpFloatNotEq as u8 => Ok(Self::CmpFloatNotEq),
+            x if x == Self::CmpFloatLt as u8 => Ok(Self::CmpFloatLt),
+            x if x == Self::CmpFloatLtEq as u8 => Ok(Self::CmpFloatLtEq),
+            x if x == Self::CmpFloatGt as u8 => Ok(Self::CmpFloatGt),
+            x if x == Self::CmpFloatGtEq as u8 => Ok(Self::CmpFloatGtEq),
             x if x == Self::Not as u8 => Ok(Self::Not),
             x if x == Self::Neg as u8 => Ok(Self::Neg),
             x if x == Self::LoadNull as u8 => Ok(Self::LoadNull),
@@ -869,6 +938,27 @@ impl std::fmt::Display for OpCode {
             Self::LtEq => "LT_EQ",
             Self::Gt => "GT",
             Self::GtEq => "GT_EQ",
+            Self::AddInt => "ADD_INT",
+            Self::SubInt => "SUB_INT",
+            Self::MulInt => "MUL_INT",
+            Self::DivInt => "DIV_INT",
+            Self::ModInt => "MOD_INT",
+            Self::AddFloat => "ADD_FLOAT",
+            Self::SubFloat => "SUB_FLOAT",
+            Self::MulFloat => "MUL_FLOAT",
+            Self::DivFloat => "DIV_FLOAT",
+            Self::CmpIntEq => "CMP_INT_EQ",
+            Self::CmpIntNotEq => "CMP_INT_NOT_EQ",
+            Self::CmpIntLt => "CMP_INT_LT",
+            Self::CmpIntLtEq => "CMP_INT_LT_EQ",
+            Self::CmpIntGt => "CMP_INT_GT",
+            Self::CmpIntGtEq => "CMP_INT_GT_EQ",
+            Self::CmpFloatEq => "CMP_FLOAT_EQ",
+            Self::CmpFloatNotEq => "CMP_FLOAT_NOT_EQ",
+            Self::CmpFloatLt => "CMP_FLOAT_LT",
+            Self::CmpFloatLtEq => "CMP_FLOAT_LT_EQ",
+            Self::CmpFloatGt => "CMP_FLOAT_GT",
+            Self::CmpFloatGtEq => "CMP_FLOAT_GT_EQ",
             Self::Not => "NOT",
             Self::Neg => "NEG",
             Self::LoadNull => "LOAD_NULL",
@@ -1818,23 +1908,31 @@ impl Bytecode {
             Instruction::StoreCapture(_) => OpCode::StoreCapture,
             Instruction::CaptureRef(_) => OpCode::CaptureRef,
 
-            // Specialized arithmetic (map to expanded opcodes)
-            Instruction::AddInt => OpCode::Add,
-            Instruction::SubInt => OpCode::Sub,
-            Instruction::MulInt => OpCode::Mul,
-            Instruction::DivInt => OpCode::Div,
-            Instruction::ModInt => OpCode::Mod,
-            Instruction::AddFloat => OpCode::Add,
-            Instruction::SubFloat => OpCode::Sub,
-            Instruction::MulFloat => OpCode::Mul,
-            Instruction::DivFloat => OpCode::Div,
-            Instruction::CmpIntOp(op) | Instruction::CmpFloatOp(op) => match op {
-                CmpOp::Eq => OpCode::Eq,
-                CmpOp::NotEq => OpCode::NotEq,
-                CmpOp::Lt => OpCode::Lt,
-                CmpOp::LtEq => OpCode::LtEq,
-                CmpOp::Gt => OpCode::Gt,
-                CmpOp::GtEq => OpCode::GtEq,
+            // Specialized arithmetic (dedicated opcodes, skip type dispatch)
+            Instruction::AddInt => OpCode::AddInt,
+            Instruction::SubInt => OpCode::SubInt,
+            Instruction::MulInt => OpCode::MulInt,
+            Instruction::DivInt => OpCode::DivInt,
+            Instruction::ModInt => OpCode::ModInt,
+            Instruction::AddFloat => OpCode::AddFloat,
+            Instruction::SubFloat => OpCode::SubFloat,
+            Instruction::MulFloat => OpCode::MulFloat,
+            Instruction::DivFloat => OpCode::DivFloat,
+            Instruction::CmpIntOp(op) => match op {
+                CmpOp::Eq => OpCode::CmpIntEq,
+                CmpOp::NotEq => OpCode::CmpIntNotEq,
+                CmpOp::Lt => OpCode::CmpIntLt,
+                CmpOp::LtEq => OpCode::CmpIntLtEq,
+                CmpOp::Gt => OpCode::CmpIntGt,
+                CmpOp::GtEq => OpCode::CmpIntGtEq,
+            },
+            Instruction::CmpFloatOp(op) => match op {
+                CmpOp::Eq => OpCode::CmpFloatEq,
+                CmpOp::NotEq => OpCode::CmpFloatNotEq,
+                CmpOp::Lt => OpCode::CmpFloatLt,
+                CmpOp::LtEq => OpCode::CmpFloatLtEq,
+                CmpOp::Gt => OpCode::CmpFloatGt,
+                CmpOp::GtEq => OpCode::CmpFloatGtEq,
             },
 
             // Jump variants
