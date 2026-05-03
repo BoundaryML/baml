@@ -1,181 +1,664 @@
+# Pricing configuration for LLM API cost estimation.
+# All costs are per-token (not per million tokens).
+# Overrides are checked in order; first match wins.
 
-# Global metadata
 version: "1.0"
 name: "LLM Usage Cost Configuration"
 description: "Define cost calculations for LLM API calls"
 
-
-# Global constants (can be overridden)
 constants:
-  DEFAULT_INPUT_COST: 0.001
-  DEFAULT_OUTPUT_COST: 0.002
+  DEFAULT_INPUT_COST: 0.000003
+  DEFAULT_OUTPUT_COST: 0.000015
 
 functions:
+  # ──────────────────────────────────────────────────────
+  # OpenAI Responses API
+  # ──────────────────────────────────────────────────────
   - match: >
-        client.provider == 'openai' or
-        client.base_url | regex_match('^https://api\\.openai\\.com')
+        client.provider == 'openai-responses'
 
+    # Default: gpt-4o pricing ($2.50/$10 per MTok)
     constants:
-      INPUT_TOKEN_COST: 0.00001
-      OUTPUT_TOKEN_COST: 0.00003
+      INPUT_TOKEN_COST: 0.0000025
+      OUTPUT_TOKEN_COST: 0.00001
 
     returns:
-      total_cost: >
-        (response.body.usage.input_tokens | int - response.body.usage.input_tokens_details.cached_tokens | int) * INPUT_TOKEN_COST +
+      input_cost: >
+        (response.body.usage.input_tokens | int - response.body.usage.input_tokens_details.cached_tokens | int) * INPUT_TOKEN_COST
+
+      output_cost: >
         response.body.usage.output_tokens | int * OUTPUT_TOKEN_COST
 
-      completion_cost: >
-        response.body.usage.completion_tokens | int * OUTPUT_TOKEN_COST
-
-    # Time-based overrides
     overrides:
-      # first thing that matches
+      # o3-pro ($20/$80 per MTok)
       - match: >
-          headers.date | date_between('2025-01-01', '2025-06-30') and
-          response.model == 'gpt-4-turbo'
+          response.model | regex_match('^o3-pro')
 
-        # override constants
         constants:
           INPUT_TOKEN_COST: 0.00002
+          OUTPUT_TOKEN_COST: 0.00008
+
+      # o3 ($2/$8 per MTok)
+      - match: >
+          response.model | regex_match('^o3-2')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000002
+          OUTPUT_TOKEN_COST: 0.000008
+
+      # o3-mini ($1.10/$4.40 per MTok)
+      - match: >
+          response.model | regex_match('^o3-mini')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000011
+          OUTPUT_TOKEN_COST: 0.0000044
+
+      # o4-mini ($1.10/$4.40 per MTok)
+      - match: >
+          response.model | regex_match('^o4-mini')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000011
+          OUTPUT_TOKEN_COST: 0.0000044
+
+      # o1 ($15/$60 per MTok)
+      - match: >
+          response.model | regex_match('^o1-2')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000015
           OUTPUT_TOKEN_COST: 0.00006
 
-
-      # Complex matching with AND/OR logic
+      # o1-mini ($3/$12 per MTok)
       - match: >
-          response.model | regex_match('^gpt-4') and
-          response.status == '200'
+          response.model | regex_match('^o1-mini')
 
-        returns:
-          # override outputs
-          total_cost: >
-            response.body.usage.total_tokens | int * 0.00005 * (1.1 if client.options.stream else 1.0)
+        constants:
+          INPUT_TOKEN_COST: 0.000003
+          OUTPUT_TOKEN_COST: 0.000012
 
+      # GPT-5 ($1.25/$10 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-5(?!-mini)')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000125
+          OUTPUT_TOKEN_COST: 0.00001
+
+      # GPT-5 Mini ($0.25/$2 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-5-mini')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000025
+          OUTPUT_TOKEN_COST: 0.000002
+
+      # GPT-4.1 ($2/$8 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-4\\.1(?!-mini|nano)')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000002
+          OUTPUT_TOKEN_COST: 0.000008
+
+      # GPT-4.1 Mini ($0.40/$1.60 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-4\\.1-mini')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000004
+          OUTPUT_TOKEN_COST: 0.0000016
+
+      # GPT-4.1 Nano ($0.10/$0.40 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-4\\.1-nano')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000001
+          OUTPUT_TOKEN_COST: 0.0000004
+
+      # gpt-4o-mini ($0.15/$0.60 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-4o-mini')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000015
+          OUTPUT_TOKEN_COST: 0.0000006
+
+      # gpt-4-turbo ($10/$30 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-4-turbo')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00001
+          OUTPUT_TOKEN_COST: 0.00003
+
+      # gpt-4 base ($30/$60 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-4-0')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00003
+          OUTPUT_TOKEN_COST: 0.00006
+
+      # gpt-3.5-turbo ($0.50/$1.50 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-3')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000005
+          OUTPUT_TOKEN_COST: 0.0000015
+
+  # ──────────────────────────────────────────────────────
+  # OpenAI Chat Completions API
+  # ──────────────────────────────────────────────────────
+  - match: >
+        client.provider == 'openai'
+
+    # Default: gpt-4o pricing ($2.50/$10 per MTok)
+    constants:
+      INPUT_TOKEN_COST: 0.0000025
+      OUTPUT_TOKEN_COST: 0.00001
+
+    returns:
+      input_cost: >
+        (response.body.usage.prompt_tokens | int - response.body.usage.prompt_tokens_details.cached_tokens | int) * INPUT_TOKEN_COST
+
+      output_cost: >
+        response.body.usage.completion_tokens | int * OUTPUT_TOKEN_COST
+
+    overrides:
+      # o3-pro ($20/$80 per MTok)
+      - match: >
+          response.model | regex_match('^o3-pro')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00002
+          OUTPUT_TOKEN_COST: 0.00008
+
+      # o3 ($2/$8 per MTok)
+      - match: >
+          response.model | regex_match('^o3-2')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000002
+          OUTPUT_TOKEN_COST: 0.000008
+
+      # o3-mini ($1.10/$4.40 per MTok)
+      - match: >
+          response.model | regex_match('^o3-mini')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000011
+          OUTPUT_TOKEN_COST: 0.0000044
+
+      # o4-mini ($1.10/$4.40 per MTok)
+      - match: >
+          response.model | regex_match('^o4-mini')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000011
+          OUTPUT_TOKEN_COST: 0.0000044
+
+      # o1 ($15/$60 per MTok)
+      - match: >
+          response.model | regex_match('^o1-2')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000015
+          OUTPUT_TOKEN_COST: 0.00006
+
+      # o1-mini ($3/$12 per MTok)
+      - match: >
+          response.model | regex_match('^o1-mini')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000003
+          OUTPUT_TOKEN_COST: 0.000012
+
+      # GPT-5 ($1.25/$10 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-5(?!-mini)')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000125
+          OUTPUT_TOKEN_COST: 0.00001
+
+      # GPT-5 Mini ($0.25/$2 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-5-mini')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000025
+          OUTPUT_TOKEN_COST: 0.000002
+
+      # GPT-4.1 ($2/$8 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-4\\.1(?!-mini|nano)')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000002
+          OUTPUT_TOKEN_COST: 0.000008
+
+      # GPT-4.1 Mini ($0.40/$1.60 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-4\\.1-mini')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000004
+          OUTPUT_TOKEN_COST: 0.0000016
+
+      # GPT-4.1 Nano ($0.10/$0.40 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-4\\.1-nano')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000001
+          OUTPUT_TOKEN_COST: 0.0000004
+
+      # gpt-4o-mini ($0.15/$0.60 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-4o-mini')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000015
+          OUTPUT_TOKEN_COST: 0.0000006
+
+      # gpt-4-turbo ($10/$30 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-4-turbo')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00001
+          OUTPUT_TOKEN_COST: 0.00003
+
+      # gpt-4 base ($30/$60 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-4-0')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00003
+          OUTPUT_TOKEN_COST: 0.00006
+
+      # gpt-3.5-turbo ($0.50/$1.50 per MTok)
+      - match: >
+          response.model | regex_match('^gpt-3')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000005
+          OUTPUT_TOKEN_COST: 0.0000015
+
+  # ──────────────────────────────────────────────────────
+  # Anthropic
+  # ──────────────────────────────────────────────────────
   - match: >
       client.provider == 'anthropic'
 
+    # Default: Claude Sonnet 4 pricing ($3/$15 per MTok)
+    # Cache writes are 1.25x base input; cache reads are 0.1x base input.
+    # input_tokens, cache_creation_input_tokens, and cache_read_input_tokens
+    # are separate non-overlapping fields in the Anthropic API.
     constants:
-        INPUT_TOKEN_COST: 0.00002
-        OUTPUT_TOKEN_COST: 0.00006
+      INPUT_TOKEN_COST: 0.000003
+      CACHE_WRITE_TOKEN_COST: 0.00000375
+      CACHE_READ_TOKEN_COST: 0.0000003
+      OUTPUT_TOKEN_COST: 0.000015
 
     returns:
-      total_cost: >
-        (response.body.usage.input_tokens - response.body.usage.cached_tokens) * INPUT_TOKEN_COST +
-        response.body.usage.output_tokens * OUTPUT_TOKEN_COST
+      input_cost: >
+        response.body.usage.input_tokens | int * INPUT_TOKEN_COST + response.body.usage.cache_creation_input_tokens | int * CACHE_WRITE_TOKEN_COST + response.body.usage.cache_read_input_tokens | int * CACHE_READ_TOKEN_COST
 
-  - match: >
-        client.provider == 'gemini' or
-        client.provider == 'google-ai' or
-        client.provider == 'vertex-ai' or
-        client.base_url | regex_match('^https://generativelanguage\\.googleapis\\.com')
-
-    # Default costs for Gemini models (Gemini 2.5 Flash as default)
-    # Prices are per token (price per 1M tokens / 1,000,000)
-    constants:
-        INPUT_TOKEN_COST: 0.0000003      # $0.30 / 1M tokens (Gemini 2.5 Flash default)
-        OUTPUT_TOKEN_COST: 0.0000025     # $2.50 / 1M tokens
-        CACHED_INPUT_TOKEN_COST: 0.00000003  # $0.03 / 1M tokens
-
-    returns:
-      total_cost: >
-        (response.body.usageMetadata.promptTokenCount | int - (response.body.usageMetadata.cachedContentTokenCount | default(0) | int)) * INPUT_TOKEN_COST +
-        (response.body.usageMetadata.cachedContentTokenCount | default(0) | int) * CACHED_INPUT_TOKEN_COST +
-        response.body.usageMetadata.candidatesTokenCount | int * OUTPUT_TOKEN_COST
+      output_cost: >
+        response.body.usage.output_tokens | int * OUTPUT_TOKEN_COST
 
     overrides:
-      # Gemini 3.1 Pro Preview (prompts <= 200k tokens)
+      # Claude Opus 4.7 ($5/$25 per MTok, cache write $6.25, cache read $0.50)
+      - match: >
+          response.model | regex_match('^claude-opus-4-7')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000005
+          CACHE_WRITE_TOKEN_COST: 0.00000625
+          CACHE_READ_TOKEN_COST: 0.0000005
+          OUTPUT_TOKEN_COST: 0.000025
+
+      # Claude Opus 4.6 ($5/$25 per MTok, cache write $6.25, cache read $0.50)
+      - match: >
+          response.model | regex_match('^claude-opus-4-6')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000005
+          CACHE_WRITE_TOKEN_COST: 0.00000625
+          CACHE_READ_TOKEN_COST: 0.0000005
+          OUTPUT_TOKEN_COST: 0.000025
+
+      # Claude Opus 4.5 ($5/$25 per MTok, cache write $6.25, cache read $0.50)
+      - match: >
+          response.model | regex_match('^claude-opus-4-5')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000005
+          CACHE_WRITE_TOKEN_COST: 0.00000625
+          CACHE_READ_TOKEN_COST: 0.0000005
+          OUTPUT_TOKEN_COST: 0.000025
+
+      # Claude Opus 4.1 ($15/$75 per MTok, cache write $18.75, cache read $1.50)
+      - match: >
+          response.model | regex_match('^claude-opus-4-1')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000015
+          CACHE_WRITE_TOKEN_COST: 0.00001875
+          CACHE_READ_TOKEN_COST: 0.0000015
+          OUTPUT_TOKEN_COST: 0.000075
+
+      # Claude Opus 4 ($15/$75 per MTok, cache write $18.75, cache read $1.50)
+      - match: >
+          response.model | regex_match('^claude-opus-4(?!-)')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000015
+          CACHE_WRITE_TOKEN_COST: 0.00001875
+          CACHE_READ_TOKEN_COST: 0.0000015
+          OUTPUT_TOKEN_COST: 0.000075
+
+      # Claude 3 Opus ($15/$75 per MTok, cache write $18.75, cache read $1.50)
+      - match: >
+          response.model | regex_match('^claude-3-opus')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000015
+          CACHE_WRITE_TOKEN_COST: 0.00001875
+          CACHE_READ_TOKEN_COST: 0.0000015
+          OUTPUT_TOKEN_COST: 0.000075
+
+      # Claude Sonnet 4.6 ($3/$15 per MTok, cache write $3.75, cache read $0.30)
+      - match: >
+          response.model | regex_match('^claude-sonnet-4-6')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000003
+          CACHE_WRITE_TOKEN_COST: 0.00000375
+          CACHE_READ_TOKEN_COST: 0.0000003
+          OUTPUT_TOKEN_COST: 0.000015
+
+      # Claude Sonnet 4.5 ($3/$15 per MTok, cache write $3.75, cache read $0.30)
+      - match: >
+          response.model | regex_match('^claude-sonnet-4-5')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000003
+          CACHE_WRITE_TOKEN_COST: 0.00000375
+          CACHE_READ_TOKEN_COST: 0.0000003
+          OUTPUT_TOKEN_COST: 0.000015
+
+      # Claude Sonnet 4 ($3/$15 per MTok, cache write $3.75, cache read $0.30) - same as default
+      - match: >
+          response.model | regex_match('^claude-sonnet-4(?!-)')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000003
+          CACHE_WRITE_TOKEN_COST: 0.00000375
+          CACHE_READ_TOKEN_COST: 0.0000003
+          OUTPUT_TOKEN_COST: 0.000015
+
+      # Claude 3.7 Sonnet ($3/$15 per MTok, cache write $3.75, cache read $0.30)
+      - match: >
+          response.model | regex_match('^claude-3-7-sonnet')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000003
+          CACHE_WRITE_TOKEN_COST: 0.00000375
+          CACHE_READ_TOKEN_COST: 0.0000003
+          OUTPUT_TOKEN_COST: 0.000015
+
+      # Claude 3.5 Sonnet ($3/$15 per MTok, cache write $3.75, cache read $0.30)
+      - match: >
+          response.model | regex_match('^claude-3-5-sonnet')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000003
+          CACHE_WRITE_TOKEN_COST: 0.00000375
+          CACHE_READ_TOKEN_COST: 0.0000003
+          OUTPUT_TOKEN_COST: 0.000015
+
+      # Claude 3 Sonnet ($3/$15 per MTok, cache write $3.75, cache read $0.30)
+      - match: >
+          response.model | regex_match('^claude-3-sonnet')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000003
+          CACHE_WRITE_TOKEN_COST: 0.00000375
+          CACHE_READ_TOKEN_COST: 0.0000003
+          OUTPUT_TOKEN_COST: 0.000015
+
+      # Claude Haiku 4.5 ($1/$5 per MTok, cache write $1.25, cache read $0.10)
+      - match: >
+          response.model | regex_match('^claude-haiku-4-5')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000001
+          CACHE_WRITE_TOKEN_COST: 0.00000125
+          CACHE_READ_TOKEN_COST: 0.0000001
+          OUTPUT_TOKEN_COST: 0.000005
+
+      # Claude 3.5 Haiku ($0.80/$4 per MTok, cache write $1.00, cache read $0.08)
+      - match: >
+          response.model | regex_match('^claude-3-5-haiku')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000008
+          CACHE_WRITE_TOKEN_COST: 0.000001
+          CACHE_READ_TOKEN_COST: 0.00000008
+          OUTPUT_TOKEN_COST: 0.000004
+
+      # Claude 3 Haiku ($0.25/$1.25 per MTok, cache write $0.30, cache read $0.03)
+      - match: >
+          response.model | regex_match('^claude-3-haiku')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000025
+          CACHE_WRITE_TOKEN_COST: 0.0000003
+          CACHE_READ_TOKEN_COST: 0.00000003
+          OUTPUT_TOKEN_COST: 0.00000125
+
+  # ──────────────────────────────────────────────────────
+  # Google Gemini (direct API / AI Studio)
+  # ──────────────────────────────────────────────────────
+  - match: >
+        client.provider == 'gemini'
+
+    # Default: Gemini 2.0 Flash pricing ($0.15/$0.60 per MTok)
+    constants:
+      INPUT_TOKEN_COST: 0.00000015
+      OUTPUT_TOKEN_COST: 0.0000006
+
+    returns:
+      input_cost: >
+        (response.body.usageMetadata.promptTokenCount | int - response.body.usageMetadata.cachedContentTokenCount | int) * INPUT_TOKEN_COST
+
+      output_cost: >
+        response.body.usageMetadata.candidatesTokenCount | int * OUTPUT_TOKEN_COST
+
+    # NOTE: -lite variants MUST come before base models (first match wins)
+    overrides:
+      # Gemini 3.1 Pro Preview ($2/$12 per MTok)
       - match: >
           response.model | regex_match('gemini-3\\.1-pro')
 
         constants:
-          INPUT_TOKEN_COST: 0.000002       # $2.00 / 1M tokens
-          OUTPUT_TOKEN_COST: 0.000012      # $12.00 / 1M tokens
-          CACHED_INPUT_TOKEN_COST: 0.0000002  # $0.20 / 1M tokens
+          INPUT_TOKEN_COST: 0.000002
+          OUTPUT_TOKEN_COST: 0.000012
 
-      # Gemini 3.1 Flash-Lite Preview
+      # Gemini 3.1 Flash-Lite Preview ($0.25/$1.50 per MTok)
       - match: >
           response.model | regex_match('gemini-3\\.1-flash-lite')
 
         constants:
-          INPUT_TOKEN_COST: 0.00000025     # $0.25 / 1M tokens
-          OUTPUT_TOKEN_COST: 0.0000015     # $1.50 / 1M tokens
-          CACHED_INPUT_TOKEN_COST: 0.000000025  # $0.025 / 1M tokens
+          INPUT_TOKEN_COST: 0.00000025
+          OUTPUT_TOKEN_COST: 0.0000015
 
-      # Gemini 3 Flash Preview
+      # Gemini 3 Pro Preview ($2/$12 per MTok)
+      - match: >
+          response.model | regex_match('gemini-3-pro')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000002
+          OUTPUT_TOKEN_COST: 0.000012
+
+      # Gemini 3 Flash Preview ($0.50/$3 per MTok)
       - match: >
           response.model | regex_match('gemini-3-flash')
 
         constants:
-          INPUT_TOKEN_COST: 0.0000005      # $0.50 / 1M tokens
-          OUTPUT_TOKEN_COST: 0.000003      # $3.00 / 1M tokens
-          CACHED_INPUT_TOKEN_COST: 0.00000005  # $0.05 / 1M tokens
+          INPUT_TOKEN_COST: 0.0000005
+          OUTPUT_TOKEN_COST: 0.000003
 
-      # Gemini 2.5 Pro (prompts <= 200k tokens)
+      # Gemini 2.5 Pro ($1.25/$10 per MTok)
       - match: >
           response.model | regex_match('gemini-2\\.5-pro')
 
         constants:
-          INPUT_TOKEN_COST: 0.00000125     # $1.25 / 1M tokens
-          OUTPUT_TOKEN_COST: 0.00001       # $10.00 / 1M tokens
-          CACHED_INPUT_TOKEN_COST: 0.000000125  # $0.125 / 1M tokens
+          INPUT_TOKEN_COST: 0.00000125
+          OUTPUT_TOKEN_COST: 0.00001
 
-      # Gemini 2.5 Flash
-      - match: >
-          response.model | regex_match('gemini-2\\.5-flash(?!-lite)')
-
-        constants:
-          INPUT_TOKEN_COST: 0.0000003      # $0.30 / 1M tokens
-          OUTPUT_TOKEN_COST: 0.0000025     # $2.50 / 1M tokens
-          CACHED_INPUT_TOKEN_COST: 0.00000003  # $0.03 / 1M tokens
-
-      # Gemini 2.5 Flash-Lite
+      # Gemini 2.5 Flash-Lite ($0.10/$0.40 per MTok)
       - match: >
           response.model | regex_match('gemini-2\\.5-flash-lite')
 
         constants:
-          INPUT_TOKEN_COST: 0.0000001      # $0.10 / 1M tokens
-          OUTPUT_TOKEN_COST: 0.0000004     # $0.40 / 1M tokens
-          CACHED_INPUT_TOKEN_COST: 0.00000001  # $0.01 / 1M tokens
+          INPUT_TOKEN_COST: 0.0000001
+          OUTPUT_TOKEN_COST: 0.0000004
 
-      # Gemini 2.0 Flash
+      # Gemini 2.5 Flash ($0.30/$2.50 per MTok)
       - match: >
-          response.model | regex_match('gemini-2\\.0-flash(?!-lite)')
+          response.model | regex_match('gemini-2\\.5-flash')
 
         constants:
-          INPUT_TOKEN_COST: 0.00000015     # $0.15 / 1M tokens
-          OUTPUT_TOKEN_COST: 0.0000006     # $0.60 / 1M tokens
+          INPUT_TOKEN_COST: 0.0000003
+          OUTPUT_TOKEN_COST: 0.0000025
 
-      # Gemini 2.0 Flash-Lite
+      # Gemini 2.0 Flash-Lite ($0.075/$0.30 per MTok)
       - match: >
           response.model | regex_match('gemini-2\\.0-flash-lite')
 
         constants:
-          INPUT_TOKEN_COST: 0.000000075    # $0.075 / 1M tokens
-          OUTPUT_TOKEN_COST: 0.0000003     # $0.30 / 1M tokens
+          INPUT_TOKEN_COST: 0.000000075
+          OUTPUT_TOKEN_COST: 0.0000003
 
-      # Gemini 1.5 Pro (prompts <= 128k tokens)
+      # Gemini 1.5 Pro ($1.25/$5 per MTok)
       - match: >
           response.model | regex_match('gemini-1\\.5-pro')
 
         constants:
-          INPUT_TOKEN_COST: 0.00000125     # $1.25 / 1M tokens
-          OUTPUT_TOKEN_COST: 0.000005      # $5.00 / 1M tokens
-          CACHED_INPUT_TOKEN_COST: 0.0000003125  # $0.3125 / 1M tokens
+          INPUT_TOKEN_COST: 0.00000125
+          OUTPUT_TOKEN_COST: 0.000005
 
-      # Gemini 1.5 Flash
+      # Gemini 1.5 Flash ($0.075/$0.30 per MTok)
       - match: >
-          response.model | regex_match('gemini-1\\.5-flash(?!-8b)')
+          response.model | regex_match('gemini-1\\.5-flash')
 
         constants:
-          INPUT_TOKEN_COST: 0.000000075    # $0.075 / 1M tokens
-          OUTPUT_TOKEN_COST: 0.0000003     # $0.30 / 1M tokens
-          CACHED_INPUT_TOKEN_COST: 0.00000001875  # $0.01875 / 1M tokens
+          INPUT_TOKEN_COST: 0.000000075
+          OUTPUT_TOKEN_COST: 0.0000003
 
-      # Gemini 1.5 Flash-8B
+  # ──────────────────────────────────────────────────────
+  # Google Vertex AI (same response format as Gemini)
+  # ──────────────────────────────────────────────────────
+  - match: >
+        client.provider == 'vertex-ai'
+
+    # Default: Gemini 2.0 Flash pricing ($0.15/$0.60 per MTok)
+    constants:
+      INPUT_TOKEN_COST: 0.00000015
+      OUTPUT_TOKEN_COST: 0.0000006
+
+    returns:
+      input_cost: >
+        (response.body.usageMetadata.promptTokenCount | int - response.body.usageMetadata.cachedContentTokenCount | int) * INPUT_TOKEN_COST
+
+      output_cost: >
+        response.body.usageMetadata.candidatesTokenCount | int * OUTPUT_TOKEN_COST
+
+    # NOTE: -lite variants MUST come before base models (first match wins)
+    overrides:
+      # Gemini 3.1 Pro Preview ($2/$12 per MTok)
       - match: >
-          response.model | regex_match('gemini-1\\.5-flash-8b')
+          response.model | regex_match('gemini-3\\.1-pro')
 
         constants:
-          INPUT_TOKEN_COST: 0.0000000375   # $0.0375 / 1M tokens
-          OUTPUT_TOKEN_COST: 0.00000015    # $0.15 / 1M tokens
-          CACHED_INPUT_TOKEN_COST: 0.000000009375  # $0.009375 / 1M tokens
+          INPUT_TOKEN_COST: 0.000002
+          OUTPUT_TOKEN_COST: 0.000012
 
+      # Gemini 3.1 Flash-Lite Preview ($0.25/$1.50 per MTok)
+      - match: >
+          response.model | regex_match('gemini-3\\.1-flash-lite')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000025
+          OUTPUT_TOKEN_COST: 0.0000015
+
+      # Gemini 3 Pro Preview ($2/$12 per MTok)
+      - match: >
+          response.model | regex_match('gemini-3-pro')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000002
+          OUTPUT_TOKEN_COST: 0.000012
+
+      # Gemini 3 Flash Preview ($0.50/$3 per MTok)
+      - match: >
+          response.model | regex_match('gemini-3-flash')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000005
+          OUTPUT_TOKEN_COST: 0.000003
+
+      # Gemini 2.5 Pro ($1.25/$10 per MTok)
+      - match: >
+          response.model | regex_match('gemini-2\\.5-pro')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000125
+          OUTPUT_TOKEN_COST: 0.00001
+
+      # Gemini 2.5 Flash-Lite ($0.10/$0.40 per MTok)
+      - match: >
+          response.model | regex_match('gemini-2\\.5-flash-lite')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000001
+          OUTPUT_TOKEN_COST: 0.0000004
+
+      # Gemini 2.5 Flash ($0.30/$2.50 per MTok)
+      - match: >
+          response.model | regex_match('gemini-2\\.5-flash')
+
+        constants:
+          INPUT_TOKEN_COST: 0.0000003
+          OUTPUT_TOKEN_COST: 0.0000025
+
+      # Gemini 2.0 Flash-Lite ($0.075/$0.30 per MTok)
+      - match: >
+          response.model | regex_match('gemini-2\\.0-flash-lite')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000000075
+          OUTPUT_TOKEN_COST: 0.0000003
+
+      # Gemini 1.5 Pro ($1.25/$5 per MTok)
+      - match: >
+          response.model | regex_match('gemini-1\\.5-pro')
+
+        constants:
+          INPUT_TOKEN_COST: 0.00000125
+          OUTPUT_TOKEN_COST: 0.000005
+
+      # Gemini 1.5 Flash ($0.075/$0.30 per MTok)
+      - match: >
+          response.model | regex_match('gemini-1\\.5-flash')
+
+        constants:
+          INPUT_TOKEN_COST: 0.000000075
+          OUTPUT_TOKEN_COST: 0.0000003
