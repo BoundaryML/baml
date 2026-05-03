@@ -41,7 +41,10 @@
 //! - The argument count != param count (variadic / error cases)
 
 use baml_base::SourceFile;
-use baml_compiler2_ast::{Expr, Stmt};
+use baml_compiler2_ast::{
+    Expr, Stmt,
+    ast::{DeclarativeMeta, FunctionOrigin},
+};
 use baml_compiler2_hir::{body::FunctionBody, loc::FunctionLoc, scope::ScopeKind};
 use baml_compiler2_tir::ty::Ty;
 use text_size::TextSize;
@@ -91,6 +94,12 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
     let mut out: Vec<InlineAnnotation> = Vec::new();
 
     for (func_local_id, func_data) in &item_tree.functions {
+        if func_data.origin != FunctionOrigin::UserDefined
+            || matches!(func_data.declarative_meta, Some(DeclarativeMeta::Llm(_)))
+        {
+            continue;
+        }
+
         let func_loc = FunctionLoc::new(db, file, *func_local_id);
 
         // Only expression-body functions have type information we can display.
@@ -288,4 +297,47 @@ fn find_binding_ty_any_scope(
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::ProjectTest;
+
+    #[test]
+    fn annotations_skip_declarative_llm_synthetic_call_hints() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+function Summarize(input: string) -> string {
+    client GPT4
+    prompt #"Summarize {{ input }}"#
+}
+
+function Echo(x: string) -> string {
+    x
+}
+
+function UseEcho() -> string {
+    Echo("hi")
+}
+"##,
+        );
+        let project = builder.build();
+
+        let hints = annotations(&project.db, project.files[0]);
+        let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
+
+        assert!(
+            labels.iter().any(|label| *label == "x: "),
+            "expected regular function call parameter hints to remain, got {labels:?}"
+        );
+        assert!(
+            labels
+                .iter()
+                .all(|label| !matches!(*label, "client: " | "function_name: " | "args: ")),
+            "LLM synthetic call hints should be suppressed, got {labels:?}"
+        );
+    }
 }

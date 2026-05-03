@@ -593,6 +593,40 @@ impl BexEngine {
         }
     }
 
+    fn emit_error_function_end_events(
+        &self,
+        call_id: CallId,
+        span_state: &mut Option<SpanState>,
+        error: String,
+    ) {
+        let Some(state) = span_state.as_mut() else {
+            return;
+        };
+
+        while let Some(span) = state.stack.pop() {
+            let mut call_stack = state.host_call_stack.clone();
+            call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
+            call_stack.push(span.span_id.clone());
+
+            self.emit(RuntimeEvent {
+                call_id,
+                ctx: SpanContext {
+                    span_id: span.span_id,
+                    parent_span_id: span.parent_span_id,
+                    root_span_id: state.root_span_id.clone(),
+                },
+                call_stack,
+                timestamp: SystemTime::now(),
+                event: EventKind::Function(FunctionEvent::End(Box::new(FunctionEnd {
+                    name: span.label,
+                    result: BexExternalValue::Null,
+                    duration: span.started_at.elapsed(),
+                    error: Some(error.clone()),
+                }))),
+            });
+        }
+    }
+
     /// Return the event sink for this engine (if any). Used by bridges for flush / `HostSpanManager`.
     pub fn event_sink(&self) -> Option<std::sync::Arc<dyn bex_events::EventSink>> {
         self.event_sink.clone()
@@ -924,17 +958,23 @@ impl BexEngine {
             host_call_stack,
         });
 
-        // Run the event loop with span tracking
-        self.run_event_loop(
-            return_type,
-            throws_type,
-            vm,
-            call_id,
-            &mut span_state,
-            &cancel,
-            copy_objects,
-        )
-        .await
+        // Run the event loop with span tracking. On errors, emit FunctionEnd
+        // events for every active span so consumers can mark each node failed.
+        let result = self
+            .run_event_loop(
+                return_type,
+                throws_type,
+                vm,
+                call_id,
+                &mut span_state,
+                &cancel,
+                copy_objects,
+            )
+            .await;
+        if let Err(err) = &result {
+            self.emit_error_function_end_events(call_id, &mut span_state, err.to_string());
+        }
+        result
 
         // active_calls cleanup is done by ActiveCallGuard on drop.
         //
@@ -1320,6 +1360,7 @@ impl BexEngine {
                                         name: root_span.label,
                                         result: external_result,
                                         duration: root_span.started_at.elapsed(),
+                                        error: None,
                                     },
                                 ))),
                             };
@@ -1617,6 +1658,7 @@ impl BexEngine {
                                                 name: function_name,
                                                 result: external_result,
                                                 duration: span.started_at.elapsed(),
+                                                error: None,
                                             },
                                         ))),
                                     };

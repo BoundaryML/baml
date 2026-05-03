@@ -276,8 +276,51 @@ fn apply_output_request_features(
             ImageGenerationMode::Disabled => {}
             mode => enable_openai_responses_image_generation(request, mode)?,
         }
+    } else if provider == LlmProvider::OpenAiGeneric {
+        match image_generation_mode(return_type) {
+            ImageGenerationMode::Disabled => {}
+            mode => enable_openai_generic_image_output_modalities(request, mode)?,
+        }
     }
 
+    Ok(())
+}
+
+fn enable_openai_generic_image_output_modalities(
+    request: &mut baml_std::HttpRequest,
+    _mode: ImageGenerationMode,
+) -> Result<(), LlmOpError> {
+    let mut body: serde_json::Value = serde_json::from_str(&request.body)
+        .map_err(|e| LlmOpError::Other(format!("Failed to parse OpenAI Generic body: {e}")))?;
+    let obj = body.as_object_mut().ok_or_else(|| {
+        LlmOpError::Other("OpenAI Generic request body must be a JSON object".to_string())
+    })?;
+
+    match obj.get_mut("modalities") {
+        Some(serde_json::Value::Array(modalities)) => {
+            let has_image = modalities
+                .iter()
+                .any(|modality| modality.as_str() == Some("image"));
+            if !has_image {
+                modalities.push(serde_json::Value::String("image".to_string()));
+            }
+        }
+        Some(_) => {
+            return Err(LlmOpError::Other(
+                "OpenAI Generic image outputs require request_body.modalities to be an array"
+                    .to_string(),
+            ));
+        }
+        None => {
+            obj.insert(
+                "modalities".to_string(),
+                serde_json::json!(["image", "text"]),
+            );
+        }
+    }
+
+    request.body = serde_json::to_string(&body)
+        .map_err(|e| LlmOpError::Other(format!("Failed to serialize OpenAI Generic body: {e}")))?;
     Ok(())
 }
 
@@ -657,7 +700,7 @@ mod tests {
         runtime_io::NoopRuntimeIo,
     };
     use baml_builtins2::PromptAst;
-    use bex_external_types::BexExternalValue;
+    use bex_external_types::{BexExternalValue, Ty};
 
     use super::{
         build_output_format_content, execute_build_request_from_owned,
@@ -685,6 +728,21 @@ mod tests {
         baml_std::PrimitiveClient::new(
             "TestClient".to_string(),
             "openai-responses".to_string(),
+            options,
+        )
+        .unwrap()
+    }
+
+    fn make_openai_generic_client(
+        mut options: baml_std::PrimitiveClientOptions,
+    ) -> baml_std::PrimitiveClient {
+        if options.model.is_none() {
+            options.model = Some("google/gemini-2.5-flash-image-preview".to_string());
+        }
+        options.base_url = Some("https://openrouter.ai/api/v1".to_string());
+        baml_std::PrimitiveClient::new(
+            "TestClient".to_string(),
+            "openai-generic".to_string(),
             options,
         )
         .unwrap()
@@ -982,6 +1040,88 @@ mod tests {
             serde_json::json!([{ "type": "image_generation" }])
         );
         assert!(body.get("tool_choice").is_none());
+    }
+
+    #[tokio::test]
+    async fn openai_generic_image_return_enables_image_modality() {
+        let client = make_openai_generic_client(Default::default());
+        let request = execute_build_request_from_owned(
+            &client,
+            prompt_msg("Generate a product photo of a brass desk lamp."),
+            &ty_image(),
+            Arc::new(NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
+
+        let body = body_json(&request);
+        assert_eq!(body["modalities"], serde_json::json!(["image", "text"]));
+        assert!(body.get("tools").is_none());
+        assert!(body.get("tool_choice").is_none());
+    }
+
+    #[tokio::test]
+    async fn openai_generic_image_return_preserves_existing_modalities_and_adds_image() {
+        let client = make_openai_generic_client(baml_std::PrimitiveClientOptions {
+            request_body: indexmap::IndexMap::from([(
+                "modalities".to_string(),
+                BexExternalValue::Array {
+                    element_type: Ty::String {
+                        attr: TyAttr::default(),
+                    },
+                    items: vec![BexExternalValue::String("text".to_string())],
+                },
+            )]),
+            ..Default::default()
+        });
+        let request = execute_build_request_from_owned(
+            &client,
+            prompt_msg("Generate a product photo of a brass desk lamp."),
+            &ty_image(),
+            Arc::new(NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
+
+        let body = body_json(&request);
+        assert_eq!(body["modalities"], serde_json::json!(["text", "image"]));
+    }
+
+    #[test]
+    fn openai_generic_parses_message_images_for_image_return() {
+        let client = make_openai_generic_client(Default::default());
+        let response = r#"{
+            "model": "google/gemini-2.5-flash-image-preview",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Generated image",
+                    "images": [{
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "data:image/png;base64,aW1hZ2U="
+                        }
+                    }]
+                },
+                "finish_reason": "stop"
+            }]
+        }"#;
+
+        let result = execute_parse_response_from_owned(
+            &client,
+            response,
+            &ty_image(),
+            &SysOpContext::empty(),
+        )
+        .unwrap();
+
+        let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(media)) = result else {
+            panic!("expected image media");
+        };
+        assert_eq!(media.kind, baml_base::MediaKind::Image);
+        assert_eq!(media.base64(), "aW1hZ2U=");
+        assert_eq!(media.mime_type().as_deref(), Some("image/png"));
     }
 
     // ========================================================================

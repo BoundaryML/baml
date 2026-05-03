@@ -1,11 +1,25 @@
 import type { BamlJsMedia, BamlJsValue } from '@b/pkg-proto';
 import type { DeserializedRuntimeEvent } from '../worker-protocol';
 import { findImageMedia } from '../shared/media-values';
-import type { GraphNode } from './types';
+import type { GraphNode, NodeExecutionState } from './types';
 
 export interface GraphNodeOutput {
   result: BamlJsValue;
   imageOutputs: BamlJsMedia[];
+}
+
+export interface GraphNodeRuntime {
+  result?: BamlJsValue | null;
+  hasResult?: boolean;
+  imageOutputs: BamlJsMedia[];
+  executionState: NodeExecutionState;
+  errorMessage?: string | null;
+}
+
+export interface GraphRunState {
+  status?: 'running' | 'success' | 'error' | 'cancelled';
+  error?: string | null;
+  functionName?: string | null;
 }
 
 function nodeMatchesFunctionName(node: GraphNode, functionName: string): boolean {
@@ -14,7 +28,9 @@ function nodeMatchesFunctionName(node: GraphNode, functionName: string): boolean
   if (label.startsWith(`${functionName}(`)) return true;
 
   const namespacedName = functionName.split('.').pop();
-  return namespacedName != null && namespacedName !== functionName && label.startsWith(`${namespacedName}(`);
+  return namespacedName != null
+    && namespacedName !== functionName
+    && (label === namespacedName || label.startsWith(`${namespacedName}(`));
 }
 
 function findOutputNodeId(graphNodes: GraphNode[], functionName: string): string | null {
@@ -25,22 +41,117 @@ function findOutputNodeId(graphNodes: GraphNode[], functionName: string): string
   return call?.id ?? null;
 }
 
+const statePriority: Record<NodeExecutionState, number> = {
+  'not-started': 0,
+  skipped: 0,
+  pending: 1,
+  cached: 2,
+  success: 3,
+  running: 5,
+  error: 6,
+};
+
+function mergeState(current: NodeExecutionState | undefined, next: NodeExecutionState): NodeExecutionState {
+  if (current == null) return next;
+  return statePriority[next] > statePriority[current] ? next : current;
+}
+
+function updateRuntime(
+  map: Map<string, GraphNodeRuntime>,
+  nodeId: string,
+  patch: Partial<GraphNodeRuntime> & { executionState: NodeExecutionState },
+) {
+  const prev = map.get(nodeId);
+  map.set(nodeId, {
+    result: 'result' in patch ? patch.result : prev?.result,
+    hasResult: 'hasResult' in patch ? patch.hasResult : prev?.hasResult,
+    imageOutputs: 'imageOutputs' in patch ? (patch.imageOutputs ?? []) : prev?.imageOutputs ?? [],
+    executionState: patch.executionState,
+    errorMessage: 'errorMessage' in patch ? patch.errorMessage : prev?.errorMessage,
+  });
+}
+
+export function collectGraphNodeRuntime(
+  graphNodes: GraphNode[],
+  runtimeEvents: DeserializedRuntimeEvent[],
+  runState?: GraphRunState,
+): Map<string, GraphNodeRuntime> {
+  const direct = new Map<string, GraphNodeRuntime>();
+  const parentById = new Map(graphNodes.map((node) => [node.id, node.parent]));
+  const activeNodeIds = new Set<string>();
+
+  for (const evt of runtimeEvents) {
+    const kind = evt.event;
+    if (kind?.$case === 'functionStart') {
+      const nodeId = findOutputNodeId(graphNodes, kind.functionStart.name);
+      if (!nodeId) continue;
+
+      activeNodeIds.add(nodeId);
+      updateRuntime(direct, nodeId, {
+        executionState: 'running',
+      });
+    } else if (kind?.$case === 'functionEnd') {
+      const nodeId = findOutputNodeId(graphNodes, kind.functionEnd.name);
+      if (!nodeId) continue;
+
+      activeNodeIds.delete(nodeId);
+      const error = kind.functionEnd.error || null;
+      updateRuntime(direct, nodeId, {
+        result: kind.functionEnd.result,
+        hasResult: kind.functionEnd.result != null,
+        imageOutputs: kind.functionEnd.result == null ? [] : findImageMedia(kind.functionEnd.result),
+        executionState: error ? 'error' : 'success',
+        errorMessage: error,
+      });
+    }
+  }
+
+  if (runState?.status === 'error') {
+    const errorTargets = activeNodeIds.size > 0
+      ? [...activeNodeIds]
+      : runState.functionName
+        ? [findOutputNodeId(graphNodes, runState.functionName)].filter((id): id is string => id != null)
+        : [];
+
+    for (const nodeId of errorTargets) {
+      updateRuntime(direct, nodeId, {
+        executionState: 'error',
+        errorMessage: runState.error,
+      });
+    }
+  }
+
+  const withAncestors = new Map(direct);
+  for (const [nodeId, runtime] of direct) {
+    let parentId = parentById.get(nodeId);
+    while (parentId != null) {
+      const prev = withAncestors.get(parentId);
+      withAncestors.set(parentId, {
+        result: prev?.result,
+        hasResult: prev?.hasResult,
+        imageOutputs: prev?.imageOutputs ?? [],
+        executionState: mergeState(prev?.executionState, runtime.executionState),
+        errorMessage: prev?.errorMessage ?? runtime.errorMessage,
+      });
+      parentId = parentById.get(parentId);
+    }
+  }
+
+  return withAncestors;
+}
+
 export function collectGraphNodeOutputs(
   graphNodes: GraphNode[],
   runtimeEvents: DeserializedRuntimeEvent[],
 ): Map<string, GraphNodeOutput> {
+  const runtime = collectGraphNodeRuntime(graphNodes, runtimeEvents);
   const outputs = new Map<string, GraphNodeOutput>();
 
-  for (const evt of runtimeEvents) {
-    const kind = evt.event;
-    if (kind?.$case !== 'functionEnd' || kind.functionEnd.result == null) continue;
-
-    const nodeId = findOutputNodeId(graphNodes, kind.functionEnd.name);
-    if (!nodeId) continue;
-
+  for (const [nodeId, nodeRuntime] of runtime) {
+    if (nodeRuntime.result == null) continue;
     outputs.set(nodeId, {
-      result: kind.functionEnd.result,
-      imageOutputs: findImageMedia(kind.functionEnd.result),
+      result: nodeRuntime.result,
+      imageOutputs: nodeRuntime.imageOutputs,
     });
   }
 

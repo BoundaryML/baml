@@ -533,6 +533,7 @@ impl BexMulitProject {
                 } else {
                     crate::bex_lsp::FunctionKind::Expr
                 },
+                origin: f.origin.into(),
                 capabilities: if f.is_llm {
                     Some(crate::bex_lsp::LlmCapabilities {
                         render_prompt: true,

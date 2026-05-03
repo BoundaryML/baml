@@ -71,6 +71,7 @@ fn event_kind_to_proto(
                 name: end.name.clone(),
                 result: Some(result),
                 duration_ms,
+                error: end.error.clone().unwrap_or_default(),
             })
         }
         EventKind::SetTags(tags) => {
@@ -243,6 +244,7 @@ mod tests {
                 name: "my_func".into(),
                 result: BexExternalValue::Bool(true),
                 duration: Duration::from_millis(150),
+                error: None,
             }))),
         };
 
@@ -255,6 +257,7 @@ mod tests {
         {
             assert_eq!(end.name, "my_func");
             assert_eq!(end.duration_ms, 150);
+            assert_eq!(end.error, "");
             assert!(end.result.is_some());
         } else {
             panic!("Expected FunctionEnd event");
@@ -289,6 +292,7 @@ mod tests {
                 name: "image_func".into(),
                 result: BexExternalValue::Adt(BexExternalAdt::Media(Arc::new(media))),
                 duration: Duration::from_millis(1),
+                error: None,
             }))),
         };
 

@@ -43,6 +43,7 @@ message FunctionEndEvent {
   string name = 1;
   BamlOutboundValue result = 2;
   uint64 duration_ms = 3;
+  string error = 4;
 }
 
 /// Metadata tag updates on the current span.

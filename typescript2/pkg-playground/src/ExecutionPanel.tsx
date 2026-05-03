@@ -36,6 +36,7 @@ import type {
   FunctionInfo,
   ProjectUpdate,
   RunEntry,
+  SourceNavigationTarget,
   WorkerOutMessage,
 } from './worker-protocol';
 import type { ResultRendererProps } from './result-renderers';
@@ -75,13 +76,18 @@ function findLatestGraphRun(runs: RunEntry[], selectedFn: string | null): RunEnt
     if (run.functionName === selectedFn) return run;
     if (run.runtimeEvents.some((evt) => {
       const kind = evt.event;
-      return kind?.$case === 'functionEnd' && kind.functionEnd.name === selectedFn;
+      return (kind?.$case === 'functionStart' && kind.functionStart.name === selectedFn)
+        || (kind?.$case === 'functionEnd' && kind.functionEnd.name === selectedFn);
     })) {
       return run;
     }
   }
 
   return undefined;
+}
+
+function isInternalFunction(fn: FunctionInfo): boolean {
+  return fn.origin != null && fn.origin !== 'userDefined';
 }
 
 const InlineImageOutputs: FC<{ images: BamlJsMedia[] }> = ({ images }) => {
@@ -119,7 +125,7 @@ const InlineImageOutputs: FC<{ images: BamlJsMedia[] }> = ({ images }) => {
 };
 
 const FunctionEndPayload: FC<{
-  event: { name: string; durationMs: number; result: BamlJsValue | null };
+  event: { name: string; durationMs: number; result: BamlJsValue | null; error?: string | null };
   customRenderers?: Record<string, FC<ResultRendererProps>>;
 }> = ({ event, customRenderers }) => {
   const images = event.result == null ? [] : findImageMedia(event.result);
@@ -127,6 +133,12 @@ const FunctionEndPayload: FC<{
   return (
     <span className="inline-flex min-w-0 flex-wrap items-center gap-1 align-middle">
       <span>{event.name} ({event.durationMs}ms)</span>
+      {event.error && (
+        <>
+          <span className="text-vsc-text-faint">=&gt;</span>
+          <span className="text-vsc-red">error: {event.error}</span>
+        </>
+      )}
       {event.result != null && (
         <>
           <span className="text-vsc-text-faint">=&gt;</span>
@@ -168,7 +180,7 @@ export interface ExecutionPanelProps {
   /** Called when user clicks the WASM panic banner to reload the worker. */
   onReload?: () => void;
   /** Called when user clicks an event with source location to jump to that line. */
-  onNavigateToSource?: (source: { fileId: number; line: number; column: number }) => void;
+  onNavigateToSource?: (source: SourceNavigationTarget) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -273,7 +285,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
                   case 'functionEnd':
                     label = 'END';
                     payload = <FunctionEndPayload event={kind.functionEnd} customRenderers={resultRenderers} />;
-                    colorCls = 'text-vsc-text-muted';
+                    colorCls = kind.functionEnd.error ? 'text-vsc-red' : 'text-vsc-text-muted';
                     break;
                   case 'log': {
                     const lvl = kind.log.level;
@@ -335,6 +347,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
+  const [showInternalFunctions, setShowInternalFunctions] = useState(false);
   const [argsJson, setArgsJson] = useState('{}');
 
   // Run history — each entry is a complete invocation with its logs + result
@@ -361,6 +374,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [previewLoading, setPreviewLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(220);
+  const [logsPanelHeight, setLogsPanelHeight] = useState(280);
   const resizingRef = useRef(false);
   const [resultModes, setResultModes] = useState<Record<number, 'parsed' | 'raw'>>({});
 
@@ -386,6 +400,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   useEffect(() => { selectedFnRef.current = selectedFn; }, [selectedFn]);
   const controlFlowGraphRef = useRef(controlFlowGraph);
   useEffect(() => { controlFlowGraphRef.current = controlFlowGraph; }, [controlFlowGraph]);
+  const graphNavigationRef = useRef<{
+    nodeId: number;
+    startOffset: number;
+    endOffset: number;
+    expiresAt: number;
+  } | null>(null);
 
   const nextCallIdRef = useRef(0);
   const pendingCallsRef = useRef<Map<number, { resolve: (v: BamlJsValue) => void; reject: (e: Error) => void }>>(new Map());
@@ -397,19 +417,38 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   /** Build a lookup from sourceExpr → nodeId for the cached CFG.
    *  When multiple nodes share a sourceExpr, prefer semantic types
    *  (call/loop/branch/header) over structural ones (branchArm). */
-  function buildSourceExprIndex(graph: ControlFlowGraph | null): Map<number, number> {
-    const map = new Map<number, number>();
-    if (!graph) return map;
+  function graphNodeOwnerFunction(node: ControlFlowGraph['nodes'][string]): string | null {
+    return node.logFilterKey.split('|', 1)[0] || null;
+  }
+
+  function setSourceExprIndexEntry(
+    map: Map<number, number>,
+    sourceExpr: number,
+    nodeId: number,
+    nodeType: string,
+    preferred: Set<string>,
+  ) {
+    if (preferred.has(nodeType) || !map.has(sourceExpr)) {
+      map.set(sourceExpr, nodeId);
+    }
+  }
+
+  function buildSourceExprIndexes(
+    graph: ControlFlowGraph | null,
+    functionName: string | null,
+  ): { owner: Map<number, number>; any: Map<number, number> } {
+    const owner = new Map<number, number>();
+    const any = new Map<number, number>();
+    if (!graph) return { owner, any };
     const preferred = new Set(['otherScope', 'loop', 'branchGroup', 'headerContextEnter']);
     for (const [, node] of Object.entries(graph.nodes)) {
       if (node.sourceExpr == null) continue;
-      if (preferred.has(node.nodeType)) {
-        map.set(node.sourceExpr, node.id);
-      } else if (!map.has(node.sourceExpr)) {
-        map.set(node.sourceExpr, node.id);
+      setSourceExprIndexEntry(any, node.sourceExpr, node.id, node.nodeType, preferred);
+      if (functionName && graphNodeOwnerFunction(node) === functionName) {
+        setSourceExprIndexEntry(owner, node.sourceExpr, node.id, node.nodeType, preferred);
       }
     }
-    return map;
+    return { owner, any };
   }
 
   /** Try each candidate expression ID (most-specific first) against the
@@ -420,11 +459,16 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   function resolveCandidatesToNodeId(
     graph: ControlFlowGraph | null,
     candidates: number[],
+    functionName: string | null,
   ): number | null {
     if (!graph || candidates.length === 0) return null;
-    const index = buildSourceExprIndex(graph);
+    const index = buildSourceExprIndexes(graph, functionName);
     for (const exprId of candidates) {
-      const nodeId = index.get(exprId);
+      const nodeId = index.owner.get(exprId);
+      if (nodeId != null) return nodeId;
+    }
+    for (const exprId of candidates) {
+      const nodeId = index.any.get(exprId);
       if (nodeId != null) return nodeId;
     }
     return null;
@@ -445,10 +489,45 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     return null;
   }
 
+  function handleGraphNodeClick(nodeId: number) {
+    setHighlightedNodeId(nodeId);
+
+    const source = (controlFlowGraph ?? controlFlowGraphRef.current)
+      ?.nodes[String(nodeId)]
+      ?.sourceSpan;
+    if (source && onNavigateToSource) {
+      if (source.startOffset != null && source.endOffset != null) {
+        graphNavigationRef.current = {
+          nodeId,
+          startOffset: source.startOffset,
+          endOffset: source.endOffset,
+          expiresAt: performance.now() + 1000,
+        };
+      }
+      onNavigateToSource(source);
+    }
+  }
+
   function handleCursorContext(ctx: CursorContext) {
     // Update cursor offset for event highlighting (cursor ↔ event matching)
     console.log('[DEBUG] CursorContext:', { cursorOffset: ctx.cursorOffset, functionName: ctx.functionName });
     setCursorOffset(ctx.cursorOffset ?? null);
+
+    const graphNavigation = graphNavigationRef.current;
+    if (
+      graphNavigation
+      && performance.now() <= graphNavigation.expiresAt
+      && ctx.cursorOffset != null
+      && ctx.cursorOffset >= graphNavigation.startOffset
+      && ctx.cursorOffset <= graphNavigation.endOffset
+    ) {
+      setHighlightedNodeId(graphNavigation.nodeId);
+      graphNavigationRef.current = null;
+      return;
+    }
+    if (graphNavigation && performance.now() > graphNavigation.expiresAt) {
+      graphNavigationRef.current = null;
+    }
 
     if (!ctx.functionName) return;
 
@@ -456,7 +535,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     const cachedGraph = controlFlowGraphRef.current;
 
     const candidates = ctx.sourceExprCandidates ?? [];
-    const nodeId = resolveCandidatesToNodeId(cachedGraph, candidates)
+    const sourceExprFunctionName = ctx.sourceExprFunctionName ?? ctx.functionName;
+    const nodeId = resolveCandidatesToNodeId(cachedGraph, candidates, sourceExprFunctionName)
       ?? (ctx.sourceExprId != null ? resolveNodeByFunctionName(cachedGraph, ctx.functionName) : null);
 
     // Rule 1: cursor is on a node in the currently-displayed workflow
@@ -871,8 +951,28 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     document.addEventListener('mouseup', onMouseUp);
   }, [sidebarWidth]);
 
+  const onLogsResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startHeight = logsPanelHeight;
+
+    const onMouseMove = (moveE: MouseEvent) => {
+      const delta = startY - moveE.clientY;
+      const maxHeight = Math.max(180, Math.min(620, window.innerHeight - 220));
+      setLogsPanelHeight(Math.max(140, Math.min(maxHeight, startHeight + delta)));
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [logsPanelHeight]);
+
   const onRunFunction = useCallback(async () => {
     if (!selectedFn || !selectedProject || isRunning) return;
+
+    setActiveTab('run');
 
     const runId = nextCallIdRef.current++;
     const startTime = performance.now();
@@ -1050,11 +1150,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const currentUpdate = selectedProject ? projectUpdates[selectedProject] : undefined;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
-  const functionNames = functions.map((f) => f.name);
+  const internalFunctionCount = functions.filter(isInternalFunction).length;
+  const visibleFunctions = showInternalFunctions ? functions : functions.filter((fn) => !isInternalFunction(fn));
+  const functionNames = visibleFunctions.map((f) => f.name);
   const engineStale = currentUpdate ? !currentUpdate.isBexCurrent : false;
   const diags = currentUpdate?.diagnostics ?? [];
 
-  const selectedFnInfo = functions.find((f) => f.name === selectedFn);
+  const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
   const latestGraphRun = findLatestGraphRun(runs, selectedFn);
@@ -1260,7 +1362,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           <>
             <div className="shrink-0 overflow-hidden" style={{ width: sidebarWidth }}>
               <FunctionSidebar
-                functions={functions}
+                functions={visibleFunctions}
+                showInternalFunctions={showInternalFunctions}
+                onShowInternalFunctionsChange={setShowInternalFunctions}
+                internalFunctionCount={internalFunctionCount}
                 testTree={testTree}
                 selectedFn={selectedFn}
                 onSelectFn={(fn) => { setWorkflowContext(null); setSelectedFn(fn); setViewingCollection(false); setViewingTestRun(false); }}
@@ -1396,7 +1501,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                               case 'functionEnd':
                                 label = 'END';
                                 payload = <FunctionEndPayload event={kind.functionEnd} customRenderers={resultRenderers} />;
-                                colorCls = 'text-vsc-text-muted';
+                                colorCls = kind.functionEnd.error ? 'text-vsc-red' : 'text-vsc-text-muted';
                                 break;
                               case 'log': {
                                 const lvl = kind.log.level;
@@ -1546,8 +1651,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                   <GraphView
                     graph={controlFlowGraph}
                     runtimeEvents={latestGraphRun?.runtimeEvents}
+                    runStatus={latestGraphRun?.status}
+                    runError={latestGraphRun?.error}
+                    runFunctionName={latestGraphRun?.functionName}
+                    customRenderers={resultRenderers}
                     selectedNodeId={highlightedNodeId}
-                    onNodeClick={(nodeId) => setHighlightedNodeId(nodeId)}
+                    onNodeClick={handleGraphNodeClick}
                   />
                 ) : (
                   <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
@@ -1617,8 +1726,58 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                   />
                 </div>
 
+                {/* Live graph */}
+                <div className="flex-1 min-h-0 flex flex-col bg-vsc-bg border-b border-vsc-border" style={{ minHeight: 180 }}>
+                  {workflowContext && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] bg-vsc-bg-secondary border-b border-vsc-border shrink-0">
+                      <span className="text-vsc-text-faint">Called from:</span>
+                      {workflowContext.workflows.map((wf) => (
+                        <Button
+                          key={wf}
+                          variant="outline"
+                          size="sm"
+                          className="h-auto px-1.5 py-0.5 text-[10px]"
+                          onClick={() => {
+                            setWorkflowContext(null);
+                            setSelectedFn(wf);
+                            setHighlightedNodeId(null);
+                          }}
+                        >
+                          {wf}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  {controlFlowGraph ? (
+                    <GraphView
+                      graph={controlFlowGraph}
+                      runtimeEvents={latestGraphRun?.runtimeEvents}
+                      runStatus={latestGraphRun?.status}
+                      runError={latestGraphRun?.error}
+                      runFunctionName={latestGraphRun?.functionName}
+                      customRenderers={resultRenderers}
+                      selectedNodeId={highlightedNodeId}
+                      onNodeClick={handleGraphNodeClick}
+                    />
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
+                      Loading graph...
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  onMouseDown={onLogsResizeStart}
+                  className="h-1.5 shrink-0 cursor-row-resize bg-vsc-surface hover:bg-vsc-accent/30 transition-colors border-y border-vsc-border"
+                  title="Resize logs"
+                />
+
                 {/* Run history (scrollable) */}
-                <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
+                <div
+                  ref={outputRef}
+                  className="shrink-0 overflow-auto font-vsc-mono text-xs bg-vsc-bg"
+                  style={{ height: logsPanelHeight }}
+                >
                   {runs.length === 0 && (
                     <div className="p-5 text-center text-vsc-text-faint text-[11px]">
                       Press Run to execute {selectedFn}()
@@ -1732,7 +1891,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                   case 'functionEnd':
                                     label = 'END';
                                     payload = <FunctionEndPayload event={kind.functionEnd} customRenderers={resultRenderers} />;
-                                    colorCls = 'text-vsc-text-muted';
+                                    colorCls = kind.functionEnd.error ? 'text-vsc-red' : 'text-vsc-text-muted';
                                     break;
                                   case 'log': {
                                     const lvl = kind.log.level;

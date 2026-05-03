@@ -948,20 +948,33 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         onWorkerReadyRef.current?.(worker!);
         setRuntimePort(runtimePort, { connectionVersion: connectionVersionRef.current });
         setReloadCallback(() => restartWorkerRef.current?.());
-        setNavigateToSource((source) => {
-          // Find a visible BAML editor to navigate to.
-          // NOTE: The WASM runtime exposes runtime.resolveFileId(fileId) which returns the
-          // full file path. To use it from here, we'd need to add RPC from main thread → worker.
-          // For now, we search visible BAML editors as a fallback since promptfiddle typically
-          // has a single .baml file open.
+        setNavigateToSource(async (source) => {
+          const targetEditor = source.filePath
+            ? vscode.window.visibleTextEditors.find((e) => {
+                const filename = uriToFilename(e.document.uri);
+                return e.document.uri.path === source.filePath
+                  || filename === source.filePath
+                  || (filename != null && source.filePath?.endsWith(`/${filename}`));
+              })
+            : undefined;
           const bamlEditor = vscode.window.visibleTextEditors.find(
             (e) => e.document.uri.path.endsWith('.baml') || e.document.languageId === 'baml'
           );
-          const editor = bamlEditor ?? vscode.window.activeTextEditor;
+          let editor = targetEditor ?? bamlEditor ?? vscode.window.activeTextEditor;
+          if (!editor && source.filePath) {
+            const uri = vscode.Uri.file(source.filePath);
+            await vscode.workspace.openTextDocument(uri);
+            editor = await vscode.window.showTextDocument(uri);
+          }
           if (editor) {
-            const position = new vscode.Position(source.line, source.column);
-            editor.selection = new vscode.Selection(position, position);
-            editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+            const start = new vscode.Position(source.line, source.column);
+            const end = new vscode.Position(
+              source.endLine ?? source.line,
+              source.endColumn ?? source.column,
+            );
+            const range = new vscode.Range(start, end);
+            editor.selection = new vscode.Selection(end, start);
+            editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
           }
         });
 

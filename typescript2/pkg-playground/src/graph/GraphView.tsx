@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type FC } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -13,9 +13,10 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import type { ControlFlowGraph, DeserializedRuntimeEvent } from '../worker-protocol';
+import type { ControlFlowGraph, DeserializedRuntimeEvent, RunEntry } from '../worker-protocol';
+import type { ResultRendererProps } from '../result-renderers';
 import { cfgToGraphNodes, graphToReactflow } from './convert';
-import { collectGraphNodeOutputs } from './runtime-output';
+import { collectGraphNodeRuntime } from './runtime-output';
 import { layoutGraph } from './layout';
 import { kNodeTypes } from './nodes';
 import { kEdgeTypes, ColorfulMarkerDefinitions } from './edges';
@@ -24,32 +25,52 @@ import type { WorkflowNode, WorkflowEdge } from './types';
 interface GraphViewProps {
   graph: ControlFlowGraph;
   runtimeEvents?: DeserializedRuntimeEvent[];
+  runStatus?: RunEntry['status'];
+  runError?: string | null;
+  runFunctionName?: string | null;
+  customRenderers?: Record<string, FC<ResultRendererProps>>;
   selectedNodeId: number | null;
   onNodeClick: (nodeId: number) => void;
 }
 
 const EMPTY_RUNTIME_EVENTS: DeserializedRuntimeEvent[] = [];
 
-function GraphViewInner({ graph, runtimeEvents = EMPTY_RUNTIME_EVENTS, selectedNodeId, onNodeClick }: GraphViewProps) {
+function GraphViewInner({
+  graph,
+  runtimeEvents = EMPTY_RUNTIME_EVENTS,
+  runStatus,
+  runError,
+  runFunctionName,
+  customRenderers,
+  selectedNodeId,
+  onNodeClick,
+}: GraphViewProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
   const [direction, setDirection] = useState<'horizontal' | 'vertical'>('horizontal');
+  const selectedNodeIdRef = useRef(selectedNodeId);
+
+  useEffect(() => {
+    selectedNodeIdRef.current = selectedNodeId;
+  }, [selectedNodeId]);
 
   // Convert CFG -> ReactFlow and run layout
   useEffect(() => {
     const { nodes: graphNodes, edges: graphEdges } = cfgToGraphNodes(graph);
     const { nodes: rfNodes, edges: rfEdges } = graphToReactflow(graphNodes, graphEdges);
-    const outputs = collectGraphNodeOutputs(graphNodes, runtimeEvents);
-    const selectedId = selectedNodeId == null ? null : String(selectedNodeId);
-    const nodesWithOutputs = rfNodes.map((node) => {
-      const output = outputs.get(node.id);
-      const selected = node.id === selectedId;
-      if (!output) {
+    const runtimeByNode = collectGraphNodeRuntime(graphNodes, runtimeEvents, {
+      status: runStatus,
+      error: runError,
+      functionName: runFunctionName,
+    });
+    const nodesWithRuntime = rfNodes.map((node) => {
+      const runtime = runtimeByNode.get(node.id);
+      if (!runtime) {
         return {
           ...node,
           data: {
             ...node.data,
-            selected,
+            selected: false,
           },
         };
       }
@@ -58,30 +79,32 @@ function GraphViewInner({ graph, runtimeEvents = EMPTY_RUNTIME_EVENTS, selectedN
         ...node,
         data: {
           ...node.data,
-          result: output.result,
-          imageOutputs: output.imageOutputs,
-          executionState: 'success' as const,
-          selected,
+          result: runtime.result,
+          hasResult: runtime.hasResult,
+          imageOutputs: runtime.imageOutputs,
+          executionState: runtime.executionState,
+          errorMessage: runtime.errorMessage,
+          customRenderers,
+          selected: false,
         },
       };
     });
-    console.log('[GraphView] CFG nodes:', Object.entries(graph.nodes).map(([k, n]) =>
-      `${k}: ${n.nodeType} "${n.label}" parent=${n.parentNodeId}`));
-    console.log('[GraphView] CFG edges:', Object.entries(graph.edgesBySrc).flatMap(([, es]) =>
-      es.map(e => `${e.src}→${e.dst}`)));
-    console.log('[GraphView] RF nodes:', rfNodes.map(n => `${n.id}:${n.type}`),
-      'RF edges:', rfEdges.map(e => `${e.source}→${e.target}`));
 
-    layoutGraph(nodesWithOutputs, rfEdges, direction)
+    layoutGraph(nodesWithRuntime, rfEdges, direction)
       .then(({ nodes: laid, edges: laidEdges }) => {
-        console.log('[GraphView] Layout complete:', laid.length, 'nodes,', laidEdges.length, 'edges');
-        setNodes(laid);
+        const selectedId = selectedNodeIdRef.current == null
+          ? null
+          : String(selectedNodeIdRef.current);
+        setNodes(laid.map((node) => ({
+          ...node,
+          data: { ...node.data, selected: node.id === selectedId },
+        })));
         setEdges(laidEdges);
       })
       .catch((err) => {
         console.error('[GraphView] Layout failed:', err);
       });
-  }, [graph, runtimeEvents, selectedNodeId, direction, setNodes, setEdges]);
+  }, [graph, runtimeEvents, runStatus, runError, runFunctionName, customRenderers, direction, setNodes, setEdges]);
 
   // Update selected state on nodes
   useEffect(() => {
@@ -150,6 +173,43 @@ function GraphViewInner({ graph, runtimeEvents = EMPTY_RUNTIME_EVENTS, selectedN
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {/* Override @xyflow/react defaults:
+            - .react-flow__node-group has a built-in light gray fill + 1px
+              border (so nested groups stack into visible gray patches).
+            - .react-flow__node-group.selected adds a square box-shadow halo
+              on the (un-rounded) wrapper, which mismatches our rounded frame.
+            - .react-flow__node:focus adds a browser outline on click.
+          Strip all of those so our custom node styles render unobstructed. */}
+      <style>{`
+        .react-flow__node-group,
+        .react-flow__node.parent {
+          background: transparent !important;
+          border: none !important;
+          padding: 0 !important;
+          box-shadow: none !important;
+          border-radius: 12px !important;
+        }
+        .react-flow__node-group > div:first-child,
+        .react-flow__node.parent > div:first-child {
+          background: transparent !important;
+        }
+        .react-flow__node-group.selected,
+        .react-flow__node.parent.selected {
+          border: none !important;
+          box-shadow: none !important;
+        }
+        .react-flow__node:focus,
+        .react-flow__node:focus-visible,
+        .react-flow__node.selectable:focus,
+        .react-flow__node.selectable:focus-visible {
+          outline: none !important;
+          box-shadow: none !important;
+        }
+        @keyframes baml-graph-spin {
+          to { transform: rotate(360deg); }
+        }
+        .react-flow__attribution { display: none !important; }
+      `}</style>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -159,6 +219,12 @@ function GraphViewInner({ graph, runtimeEvents = EMPTY_RUNTIME_EVENTS, selectedN
         edgeTypes={kEdgeTypes}
         onNodeClick={handleNodeClick}
         nodesDraggable={false}
+        nodesFocusable={false}
+        edgesFocusable={false}
+        elementsSelectable={false}
+        selectNodesOnDrag={false}
+        elevateNodesOnSelect={false}
+        elevateEdgesOnSelect={false}
         panOnDrag={[0, 1, 2]}
         panOnScroll
         fitView
@@ -169,26 +235,44 @@ function GraphViewInner({ graph, runtimeEvents = EMPTY_RUNTIME_EVENTS, selectedN
           position="bottom-left"
           style={{ display: 'flex', flexDirection: 'row' }}
         />
-        <Background variant={BackgroundVariant.Dots} color="#333" gap={16} />
+        <Background variant={BackgroundVariant.Dots} color="rgba(255,255,255,0.10)" gap={18} size={1} />
         <ColorfulMarkerDefinitions />
       </ReactFlow>
       <button
         onClick={() => setDirection((d) => (d === 'horizontal' ? 'vertical' : 'horizontal'))}
         style={{
           position: 'absolute',
-          top: 8,
-          right: 8,
+          top: 10,
+          right: 10,
           zIndex: 10,
-          padding: '4px 8px',
-          borderRadius: 4,
-          border: '1px solid #555',
-          background: '#2d2d2d',
-          color: '#ccc',
+          width: 30,
+          height: 30,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 0,
+          borderRadius: 8,
+          border: '1px solid rgba(255,255,255,0.10)',
+          background: 'rgba(24,24,27,0.75)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          color: '#e4e4e7',
           cursor: 'pointer',
           fontSize: 14,
           lineHeight: 1,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)',
+          transition: 'background 120ms ease, border-color 120ms ease',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(39,39,42,0.85)';
+          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(24,24,27,0.75)';
+          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)';
         }}
         title={`Switch to ${direction === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
+        aria-label="Toggle layout direction"
       >
         {direction === 'horizontal' ? '\u2195' : '\u2194'}
       </button>
