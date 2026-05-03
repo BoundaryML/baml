@@ -436,11 +436,22 @@ pub struct BytecodeProgram {
 /// 2. Builds resolved name lookups for functions, classes, and enums
 pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram, VmInternalError> {
     // Convert objects, attaching native functions
-    let objects: Vec<Object> = program
+    let mut objects: Vec<Object> = program
         .objects
         .into_iter()
         .map(crate::package_baml::attach_builtins)
         .collect::<Result<Vec<_>, _>>()?;
+
+    // Lower every Function's bytecode to compact form. exec_compact requires
+    // this — callers that bypass BexEngine (e.g. tests using BexVm::from_program
+    // directly) would otherwise hit Option::unwrap on compact.as_ref().
+    for obj in &mut objects {
+        if let Object::Function(func) = obj {
+            if func.bytecode.compact.is_none() {
+                func.bytecode.compact = Some(func.bytecode.lower_to_compact());
+            }
+        }
+    }
 
     // Build resolved name maps by scanning objects
     let mut resolved_function_names = HashMap::new();
