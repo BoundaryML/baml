@@ -1891,8 +1891,8 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     bb24: {
         _37 = copy _34;
         _38 = copy _1.3;
-        _39 = load_type(Concrete(Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }));
-        _40 = load_type(Concrete(Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }));
+        _39 = load_type(TypeArgRef(0));
+        _40 = load_type(TypeArgRef(1));
         _41 = dispatch_future const fn baml.llm.__sap_parse_final(copy _37, copy _38, copy _39, copy _40) -> bb25;
     }
 
@@ -2038,8 +2038,8 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     bb15: {
         _23 = copy _19;
         _24 = copy _1.3;
-        _25 = load_type(Concrete(Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }));
-        _26 = load_type(Concrete(Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }));
+        _25 = load_type(TypeArgRef(0));
+        _26 = load_type(TypeArgRef(1));
         _27 = dispatch_future const fn baml.llm.__sap_parse_partial(copy _23, copy _24, copy _25, copy _26) -> bb16;
     }
 

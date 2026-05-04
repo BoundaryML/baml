@@ -489,6 +489,11 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Bool(_), Ty::Literal(Literal::Bool(_), _)) => true,
         (BexExternalValue::Array { .. }, Ty::List(_, _)) => true,
         (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
+        // Class match ignores `Ty::Class` type args because `Instance` carries
+        // no runtime type-arg payload yet (see also `find_matching_union_member`
+        // below).  Now that `Ty::Class` is parametric, unions like
+        // `Foo<int> | Foo<string>` cannot be disambiguated here without
+        // first threading class type args through instance construction.
         (BexExternalValue::Instance { class_name, .. }, Ty::Class(tn, _, _)) => {
             type_name_matches_external_name(class_name, tn)
         }
@@ -551,6 +556,13 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                 Object::Instance(inst) => {
                     let class_obj = unsafe { inst.class.get() };
                     if let Object::Class(class) = class_obj {
+                        // Compares only `TypeName` (name + module path); the
+                        // `Ty::Class` type-arg slot is ignored because
+                        // `Instance` does not carry resolved class type args
+                        // at runtime.  Unions like `Foo<int> | Foo<string>`
+                        // therefore resolve to whichever variant appears
+                        // first — closing this gap requires plumbing class
+                        // type args onto `Instance` construction.
                         members
                             .iter()
                             .find(|m| matches!(m, Ty::Class(tn, _, _) if *tn == class.name))

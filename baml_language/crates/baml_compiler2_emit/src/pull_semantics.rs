@@ -56,16 +56,21 @@ pub(crate) trait PullSink {
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
     /// Same as `make_closure` but with an additional `ntypeargs` count for
-    /// the type arguments pushed before the captures.  The default impl
-    /// delegates to `make_closure` (ntypeargs=0), so implementors that do not
-    /// care about type-arg threading continue to work without changes.
+    /// the type arguments pushed before the captures.  Implementors that emit
+    /// typed closures must override this to consume the type-arg slots; the
+    /// default impl falls back to `make_closure` and asserts in debug builds
+    /// so a sink that forgets to override it is caught immediately rather
+    /// than silently modeling the wrong stack shape.
     fn make_closure_with_type_args(
         &mut self,
         lambda_idx: usize,
         capture_count: usize,
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
-        let _ = ntypeargs; // ignored by default
+        debug_assert_eq!(
+            ntypeargs, 0,
+            "PullSink::make_closure_with_type_args must be overridden for typed closures"
+        );
         self.make_closure(lambda_idx, capture_count)
     }
 

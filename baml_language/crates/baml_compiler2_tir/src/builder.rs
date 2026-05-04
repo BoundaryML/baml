@@ -4752,6 +4752,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             ) => self
                 .resolve_builtin_method(p.builtin_class_path(), &[], member)
                 .map(BuiltinResolution::into_ty),
+            Ty::Type { .. } => self
+                .resolve_builtin_method(&["TypeValue"], &[], member)
+                .map(BuiltinResolution::into_ty),
             Ty::Optional(inner, _) => {
                 // Drill through Optional to resolve the member on the inner type
                 self.try_resolve_member_on_ty(inner, member)

@@ -348,3 +348,27 @@ async fn type_of_union_neq_different_member() {
     let output = baml_test!(source);
     assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
 }
+
+// ─── Stable identity via .to_string() ────────────────────────────────────────
+//
+// `type` values cannot yet be used as `map<type, V>` keys because BAML has no
+// interface system to constrain K to "hashable".  In the meantime,
+// `to_string()` returns a fully-qualified, package-prefixed name so user code
+// can use the result as a stable identity key in `map<string, V>`.
+
+#[tokio::test]
+async fn type_of_to_string_works_as_map_key() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> int {{
+            let m: map<string, int> = {{}};
+            m[reflect.type_of<User>().to_string()] = 1;
+            m[reflect.type_of<int>().to_string()] = 2;
+            m[reflect.type_of<User>().to_string()]
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}

@@ -1300,7 +1300,7 @@ function baml.llm.Stream.final(self: null) -> void {
     load_var self
     load_field ._cache
     load_type 3
-    load_type 3
+    load_type 4
     dispatch_future baml.llm.__sap_parse_final
     await
     return
@@ -1363,7 +1363,7 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
     load_var self
     load_field ._cache
     load_type 4
-    load_type 4
+    load_type 5
     dispatch_future baml.llm.__sap_parse_partial
     await
     store_var parsed

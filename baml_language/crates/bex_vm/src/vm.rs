@@ -3601,6 +3601,13 @@ impl BexVm {
                     .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?;
                 let locals_offset = StackIndex::from_raw(args_offset);
 
+                // Snapshot the frame count so we can tell whether
+                // execute_call_from_locals_offset actually pushed a new
+                // bytecode frame (it does for FunctionKind::Bytecode but not
+                // for completed Native calls — Native YieldToCall pushes a
+                // Native frame, also not the target of a type-arg writeback).
+                let frames_before = self.frames.len();
+
                 let result = self.execute_call_from_locals_offset(
                     callee_ptr,
                     locals_offset,
@@ -3609,13 +3616,15 @@ impl BexVm {
                     function,
                 )?;
 
-                // Inject type_args into the newly-pushed bytecode frame.
-                // execute_call_from_locals_offset updates *frame_idx on
-                // FunctionKind::Bytecode; for Native calls the frame never
-                // needs type_args (native functions access them directly).
-                if !type_args.is_empty() {
+                // Append call-site type_args to the newly-pushed bytecode
+                // frame's existing type_args (which were pre-seeded from
+                // Closure::captured_type_args for closure callees, and empty
+                // otherwise).  Skip the writeback unless a new bytecode frame
+                // was actually pushed — for completed Native calls *frame_idx
+                // still points to the caller and we'd clobber its generics.
+                if !type_args.is_empty() && self.frames.len() > frames_before {
                     if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
-                        bf.type_args = type_args;
+                        bf.type_args.extend(type_args);
                     }
                 }
 

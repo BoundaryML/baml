@@ -3321,16 +3321,13 @@ impl LoweringContext<'_> {
         let pkg_id = PackageId::new(self.db, pkg_info.package);
         let pkg_items = package_items(self.db, pkg_id);
 
-        // Include the enclosing function's generic params so that `T` in
-        // `reflect.type_of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
-        // than an unresolved-type error.
-        let generic_params: Vec<baml_base::Name> = self
-            .func_loc
-            .map(|fl| {
-                let item_tree = file_item_tree(self.db, fl.file(self.db));
-                item_tree[fl.id(self.db)].generic_params.clone()
-            })
-            .unwrap_or_default();
+        // Include the enclosing class + function generic params so that `T`
+        // in `reflect.type_of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
+        // than an unresolved-type error — both for free generic functions and
+        // for methods on generic classes.  The order (class params first,
+        // then function params) mirrors TIR's `enclosing_class_generic_params
+        // ++ user_generic_params` convention used in `callable.rs`.
+        let generic_params = self.enclosing_generic_params();
 
         let mut diags = Vec::new();
         let tir_ty = lower_type_expr_in_ns(
@@ -3424,16 +3421,37 @@ impl LoweringContext<'_> {
         }
     }
 
-    /// Return the list of user-declared generic parameter names for the
+    /// Return the list of generic parameter names in scope for the
     /// **enclosing** function being lowered.  Empty for top-level expressions
     /// that have no enclosing generic function.
+    ///
+    /// When the enclosing function is a method on a generic class, the
+    /// class-level params come first, followed by the function-level params
+    /// — matching TIR's `enclosing_class_generic_params ++ generic_params`
+    /// convention (see `baml_compiler2_tir::callable`).  This keeps MIR's
+    /// view of in-scope generics consistent with how TIR types the body.
+    ///
+    /// **Runtime caveat**: the runtime ABI does not yet thread class-level
+    /// type args through method calls (a method's `frame.type_args` is
+    /// populated only from explicit call-site `<...>` args, not from the
+    /// receiver's class type args).  Class-level generics resolve correctly
+    /// at the MIR layer via this helper, but `reflect.type_of<T>()` where
+    /// `T` is a class-level param will substitute to `Ty::unknown` at
+    /// runtime until that gap is closed.
     fn enclosing_generic_params(&self) -> Vec<baml_base::Name> {
-        self.func_loc
-            .map(|fl| {
-                let item_tree = file_item_tree(self.db, fl.file(self.db));
-                item_tree[fl.id(self.db)].generic_params.clone()
-            })
-            .unwrap_or_default()
+        let Some(fl) = self.func_loc else {
+            return Vec::new();
+        };
+        let item_tree = file_item_tree(self.db, fl.file(self.db));
+        let func_id = fl.id(self.db);
+        let mut params: Vec<baml_base::Name> = item_tree
+            .classes
+            .values()
+            .find(|class_data| class_data.methods.contains(&func_id))
+            .map(|class_data| class_data.generic_params.clone())
+            .unwrap_or_default();
+        params.extend(item_tree[func_id].generic_params.iter().cloned());
+        params
     }
 
     /// Emit `LoadType` rvalue assignments for the explicit type arguments of a

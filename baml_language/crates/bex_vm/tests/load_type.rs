@@ -84,11 +84,13 @@ fn inject_function(
 }
 
 /// Compile a base program, inject the test function, and run to completion.
-fn run_with_bytecode(
+/// Returns both the result `Value` and the VM so tests can inspect
+/// heap-allocated objects (e.g. `Object::Type`) referenced by the result.
+fn run_with_bytecode_keep_vm(
     fn_name: &str,
     instructions: Vec<Instruction>,
     constants: Vec<ConstValue>,
-) -> Value {
+) -> (Value, BexVm) {
     let mut program = compile_source(STUB_SOURCE);
     inject_function(&mut program, fn_name, instructions, constants);
 
@@ -103,7 +105,7 @@ fn run_with_bytecode(
 
     loop {
         match vm.exec().expect("exec") {
-            VmExecState::Complete(v) => return v,
+            VmExecState::Complete(v) => return (v, vm),
             VmExecState::EarlyYield => continue,
             other => panic!("unexpected VM state: {other:?}"),
         }
@@ -117,47 +119,59 @@ fn run_with_bytecode(
 #[test]
 fn load_type_concrete_int() {
     let template = TyTemplate::Concrete(Ty::int());
-    let result = run_with_bytecode(
+    let (result, vm) = run_with_bytecode_keep_vm(
         "user.test_load_int",
-        vec![
-            // Load the type → push Object::Type(int) on stack
-            Instruction::LoadType(0),
-            Instruction::Return,
-        ],
+        vec![Instruction::LoadType(0), Instruction::Return],
         vec![ConstValue::Type(template)],
     );
 
-    // LoadType ran without error and produced an Object.
-    assert!(
-        matches!(result, Value::Object(_)),
-        "expected Object, got {result:?}"
-    );
+    let Value::Object(ptr) = result else {
+        panic!("expected Object, got {result:?}");
+    };
+    match vm.get_object(ptr) {
+        Object::Type(ty) => assert_eq!(**ty, Ty::int(), "LoadType(int) should materialise Ty::int"),
+        other => panic!("expected Object::Type, got {other:?}"),
+    }
 }
 
-/// A `TyTemplate::Concrete(string)` produces a different object than
-/// `TyTemplate::Concrete(int)` when materialised by `LoadType`.
+/// A `TyTemplate::Concrete(string)` produces a `Ty::string()` payload distinct
+/// from a `TyTemplate::Concrete(int)`, and the resulting heap objects compare
+/// unequal under `deep_equals`.
 #[test]
 fn load_type_concrete_string_different_from_int() {
-    let r_int = run_with_bytecode(
+    let (r_int, vm_int) = run_with_bytecode_keep_vm(
         "user.test_load_int2",
         vec![Instruction::LoadType(0), Instruction::Return],
         vec![ConstValue::Type(TyTemplate::Concrete(Ty::int()))],
     );
-    let r_str = run_with_bytecode(
+    let (r_str, vm_str) = run_with_bytecode_keep_vm(
         "user.test_load_str",
         vec![Instruction::LoadType(0), Instruction::Return],
         vec![ConstValue::Type(TyTemplate::Concrete(Ty::string()))],
     );
 
-    // Both should be Objects (not scalars)
-    assert!(matches!(r_int, Value::Object(_)), "int LoadType → Object");
-    assert!(
-        matches!(r_str, Value::Object(_)),
-        "string LoadType → Object"
+    let Value::Object(p_int) = r_int else {
+        panic!("expected Object for int, got {r_int:?}");
+    };
+    let Value::Object(p_str) = r_str else {
+        panic!("expected Object for string, got {r_str:?}");
+    };
+
+    let int_ty = match vm_int.get_object(p_int) {
+        Object::Type(ty) => (**ty).clone(),
+        other => panic!("expected Object::Type for int, got {other:?}"),
+    };
+    let str_ty = match vm_str.get_object(p_str) {
+        Object::Type(ty) => (**ty).clone(),
+        other => panic!("expected Object::Type for string, got {other:?}"),
+    };
+
+    assert_eq!(int_ty, Ty::int());
+    assert_eq!(str_ty, Ty::string());
+    assert_ne!(
+        int_ty, str_ty,
+        "int and string LoadType payloads must differ"
     );
-    // They should be different heap objects (different VMs)
-    // Structural equality is tested via the deep_equals path in Phase 2;
-    // here we just confirm both succeed.
 }
 
 // ─── 3.5 ── LoadType with TypeArgRef — type_args set directly on the frame ──
