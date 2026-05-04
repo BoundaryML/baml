@@ -523,7 +523,7 @@ fn parse_llm_output_for_target(
             }))
         }
         baml_type::Ty::List(inner, _) if types::is_text_or_image_union(inner) => {
-            let items = mixed_text_image_parts(output, inner)?;
+            let items = mixed_text_image_parts(output, inner);
             if items.is_empty() {
                 return Ok(None);
             }
@@ -536,7 +536,7 @@ fn parse_llm_output_for_target(
             parse_nullable_media_output(target, output)
         }
         baml_type::Ty::Union(_, _) if types::is_text_or_image_union(target) => {
-            let items = mixed_text_image_parts(output, target)?;
+            let items = mixed_text_image_parts(output, target);
             single_text_or_image_union_output(target, items)
         }
         _ => Ok(None),
@@ -602,9 +602,9 @@ fn media_parts(
 fn mixed_text_image_parts(
     output: &parse_response::LlmOutput,
     target: &baml_type::Ty,
-) -> Result<Vec<BexExternalValue>, LlmOpError> {
+) -> Vec<BexExternalValue> {
     let baml_type::Ty::Union(members, _) = target else {
-        return Ok(Vec::new());
+        return Vec::new();
     };
 
     let string_ty = members
@@ -644,7 +644,7 @@ fn mixed_text_image_parts(
         }
     }
 
-    Ok(items)
+    items
 }
 
 fn single_text_or_image_union_output(
@@ -1117,7 +1117,7 @@ mod tests {
 
     #[tokio::test]
     async fn openai_responses_image_return_enables_image_generation_tool() {
-        let client = make_openai_responses_client(Default::default());
+        let client = make_openai_responses_client(baml_std::PrimitiveClientOptions::default());
         let request = execute_build_request_from_owned(
             &client,
             prompt_msg("Generate a product photo of a brass desk lamp."),
@@ -1166,7 +1166,7 @@ mod tests {
 
     #[tokio::test]
     async fn openai_responses_mixed_text_image_return_enables_tool_without_forcing_choice() {
-        let client = make_openai_responses_client(Default::default());
+        let client = make_openai_responses_client(baml_std::PrimitiveClientOptions::default());
         let request = execute_build_request_from_owned(
             &client,
             prompt_msg("Return a caption and generate an illustration."),
@@ -1186,7 +1186,7 @@ mod tests {
 
     #[tokio::test]
     async fn openai_generic_image_return_enables_image_modality() {
-        let client = make_openai_generic_client(Default::default());
+        let client = make_openai_generic_client(baml_std::PrimitiveClientOptions::default());
         let request = execute_build_request_from_owned(
             &client,
             prompt_msg("Generate a product photo of a brass desk lamp."),
@@ -1231,7 +1231,7 @@ mod tests {
 
     #[test]
     fn openai_generic_parses_message_images_for_image_return() {
-        let client = make_openai_generic_client(Default::default());
+        let client = make_openai_generic_client(baml_std::PrimitiveClientOptions::default());
         let response = r#"{
             "model": "google/gemini-2.5-flash-image-preview",
             "choices": [{

@@ -1,6 +1,13 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api';
 import type { WorkflowNode, WorkflowEdge } from './types';
+import {
+  NODE_IMAGE_PREVIEW_GAP,
+  NODE_IMAGE_PREVIEW_MAX,
+  NODE_IMAGE_PREVIEW_SINGLE_HEIGHT,
+  NODE_IMAGE_PREVIEW_TILE_HEIGHT,
+  NODE_IMAGE_PREVIEW_WIDTH,
+} from './nodes/NodeOutputPreview';
 
 const elk = new ELK();
 
@@ -25,14 +32,34 @@ function nodeSize(node: WorkflowNode): { w: number; h: number } {
   const base = NODE_SIZES[node.type ?? 'base'] ?? NODE_SIZES.base;
   const imageCount = node.data.imageOutputs?.length ?? 0;
   const visualSize = (() => {
-    if (imageCount === 0) return base;
-    const visibleCount = Math.min(imageCount, 4);
-    const previewRows = visibleCount === 1 ? 1 : Math.ceil(visibleCount / 2);
-    const previewHeight = visibleCount === 1 ? 104 : previewRows * 68;
-    return {
-      w: Math.max(base.w, 220),
-      h: base.h + previewHeight,
-    };
+    if (imageCount > 0) {
+      const visibleCount = Math.min(imageCount, NODE_IMAGE_PREVIEW_MAX);
+      const previewRows = visibleCount === 1 ? 1 : Math.ceil(visibleCount / 2);
+      const previewHeight = visibleCount === 1
+        ? NODE_IMAGE_PREVIEW_SINGLE_HEIGHT
+        : previewRows * NODE_IMAGE_PREVIEW_TILE_HEIGHT
+          + (previewRows - 1) * NODE_IMAGE_PREVIEW_GAP;
+      return {
+        w: Math.max(base.w, NODE_IMAGE_PREVIEW_WIDTH),
+        h: base.h + previewHeight + 14,
+      };
+    }
+
+    if (node.data.errorMessage) {
+      return {
+        w: Math.max(base.w, 360),
+        h: base.h + 176,
+      };
+    }
+
+    if (node.data.hasResult) {
+      return {
+        w: Math.max(base.w, 360),
+        h: base.h + 216,
+      };
+    }
+
+    return base;
   })();
   return {
     w: visualSize.w + 2 * NODE_BUFFER,

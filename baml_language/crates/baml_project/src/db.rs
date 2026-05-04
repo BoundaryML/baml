@@ -512,7 +512,7 @@ impl ProjectDatabase {
                 continue;
             }
 
-            Self::merge_callee_graph_under_call_node(graph, call_node_id, callee_graph);
+            Self::merge_callee_graph_under_call_node(graph, call_node_id, &callee_graph);
         }
     }
 
@@ -521,9 +521,8 @@ impl ProjectDatabase {
 
         let mut calls = Vec::new();
         for (expr_id, expr) in body.exprs.iter() {
-            let callee = match expr {
-                Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } => callee,
-                _ => continue,
+            let (Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. }) = expr else {
+                continue;
             };
 
             let Expr::Path(segments) = &body.exprs[*callee] else {
@@ -556,7 +555,7 @@ impl ProjectDatabase {
     fn merge_callee_graph_under_call_node(
         graph: &mut baml_compiler2_visualization::control_flow::ControlFlowGraph,
         call_node_id: baml_compiler2_visualization::control_flow::NodeId,
-        callee_graph: baml_compiler2_visualization::control_flow::ControlFlowGraph,
+        callee_graph: &baml_compiler2_visualization::control_flow::ControlFlowGraph,
     ) {
         use baml_compiler2_visualization::control_flow::{Edge, NodeId};
 

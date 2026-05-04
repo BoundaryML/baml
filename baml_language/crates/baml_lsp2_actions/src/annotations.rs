@@ -330,7 +330,7 @@ function UseEcho() -> string {
         let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
 
         assert!(
-            labels.iter().any(|label| *label == "x: "),
+            labels.contains(&"x: "),
             "expected regular function call parameter hints to remain, got {labels:?}"
         );
         assert!(

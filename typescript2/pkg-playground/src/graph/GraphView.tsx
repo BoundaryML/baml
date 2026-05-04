@@ -131,11 +131,13 @@ function GraphViewInner({
 
   const layoutRunIdRef = useRef(0);
 
-  // Convert CFG -> ReactFlow and run layout only when geometry inputs change.
+  // Convert CFG -> ReactFlow and run layout when graph geometry changes.
+  // Runtime output affects geometry because result previews can make nodes larger.
   useEffect(() => {
     const layoutRunId = ++layoutRunIdRef.current;
+    const nodesWithRuntime = decorateNodesWithRuntime(graphModel.rfNodes);
 
-    layoutGraph(graphModel.rfNodes, graphModel.rfEdges, direction)
+    layoutGraph(nodesWithRuntime, graphModel.rfEdges, direction)
       .then(({ nodes: laid, edges: laidEdges }) => {
         if (layoutRunId !== layoutRunIdRef.current) return;
         setNodes(decorateNodesWithRuntime(laid));
@@ -144,9 +146,19 @@ function GraphViewInner({
       .catch((err) => {
         console.error('[GraphView] Layout failed:', err);
       });
-  }, [graphModel, direction, setNodes, setEdges, decorateNodesWithRuntime]);
+  }, [
+    graphModel,
+    runtimeEvents,
+    runStatus,
+    runError,
+    runFunctionName,
+    direction,
+    setNodes,
+    setEdges,
+    decorateNodesWithRuntime,
+  ]);
 
-  // Runtime events update node data without recalculating ELK geometry.
+  // Keep runtime node data fresh while a new ELK layout is pending.
   useEffect(() => {
     setNodes((nds) => decorateNodesWithRuntime(nds));
   }, [

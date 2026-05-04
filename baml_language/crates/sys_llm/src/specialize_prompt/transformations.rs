@@ -87,7 +87,7 @@ pub(super) fn merge_adjacent_roles(prompt: bex_vm_types::PromptAst) -> bex_vm_ty
 /// If a prompt has media but no user message, move media-bearing messages to
 /// the user role for providers whose media inputs belong there.
 ///
-/// This preserves the normal OpenAI default of treating unrole-tagged text as
+/// This preserves the normal `OpenAI` default of treating unrole-tagged text as
 /// a system message while keeping unrole-tagged image prompts valid: a simple
 /// `Describe this: {{ img }}` prompt is wrapped as `system` first, then changed
 /// to `user` only because it contains media and there are no user messages.

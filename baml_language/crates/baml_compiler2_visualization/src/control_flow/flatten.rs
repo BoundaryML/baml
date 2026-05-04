@@ -31,7 +31,7 @@ pub fn flatten_control_flow_graph(graph: &ControlFlowGraph) -> ControlFlowGraph 
 ///
 /// Does NOT run Pass 1 (`remove_implicit_nodes`) or Pass 3
 /// (`inline_branch_arms_and_scopes`) — the playground needs all nodes
-/// visible. Branch arms are the exception: ReactFlow already renders branch
+/// visible. Branch arms are the exception: `ReactFlow` already renders branch
 /// structure as labeled fan-out edges, so keeping them as group containers
 /// creates redundant nested boxes.
 pub fn prepare_control_flow_graph_for_visualization(graph: &ControlFlowGraph) -> ControlFlowGraph {

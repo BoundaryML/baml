@@ -315,7 +315,7 @@ mod tests {
                     ))
                 );
             }
-            other => panic!("Expected media value, got {:?}", other),
+            other => panic!("Expected media value, got {other:?}"),
         }
     }
 

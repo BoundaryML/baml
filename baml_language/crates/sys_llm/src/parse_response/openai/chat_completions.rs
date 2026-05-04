@@ -212,16 +212,14 @@ fn push_chat_message_content(
                 }
                 if is_image_part_type(part.part_type.as_deref()) {
                     if let Some(image_url) = &part.image_url {
-                        if let Some(media) = media_from_image_url(image_url.url()) {
-                            output.push_media(
-                                media,
-                                None,
-                                serde_json::json!({
-                                    "provider": "openai-chat",
-                                    "source": "message.content"
-                                }),
-                            );
-                        }
+                        output.push_media(
+                            media_from_image_url(image_url.url()),
+                            None,
+                            serde_json::json!({
+                                "provider": "openai-chat",
+                                "source": "message.content"
+                            }),
+                        );
                     }
                 }
             }
@@ -248,41 +246,31 @@ fn push_chat_message_images(
             continue;
         };
 
-        if let Some(media) = media_from_image_url(url) {
-            output.push_media(
-                media,
-                None,
-                serde_json::json!({
-                    "provider": "openai-chat",
-                    "source": "message.images"
-                }),
-            );
-        }
+        output.push_media(
+            media_from_image_url(url),
+            None,
+            serde_json::json!({
+                "provider": "openai-chat",
+                "source": "message.images"
+            }),
+        );
     }
 }
 
 fn is_image_part_type(part_type: Option<&str>) -> bool {
     matches!(
         part_type,
-        None | Some("image") | Some("image_url") | Some("output_image")
+        None | Some("image" | "image_url" | "output_image")
     )
 }
 
-fn media_from_image_url(url: &str) -> Option<Arc<MediaValue>> {
+fn media_from_image_url(url: &str) -> Arc<MediaValue> {
     if let Some((mime_type, base64_data)) = parse_image_data_url(url) {
-        return Some(MediaValue::from_base64(
-            baml_base::MediaKind::Image,
-            base64_data,
-            Some(mime_type),
-        ));
+        return MediaValue::from_base64(baml_base::MediaKind::Image, base64_data, Some(mime_type));
     }
 
     let mime_type = image_mime_type_from_url(url);
-    Some(MediaValue::from_url(
-        baml_base::MediaKind::Image,
-        url,
-        mime_type.as_deref(),
-    ))
+    MediaValue::from_url(baml_base::MediaKind::Image, url, mime_type.as_deref())
 }
 
 fn parse_image_data_url(url: &str) -> Option<(&str, &str)> {
