@@ -1,6 +1,6 @@
 import { type Diagnostic } from '@codemirror/lint';
 import { atom, useAtomValue } from 'jotai';
-import { atomFamily, atomWithStorage } from 'jotai/utils';
+import { atomFamily, atomWithStorage, createJSONStorage } from 'jotai/utils';
 
 import { unwrap } from 'jotai/utils';
 import { type ICodeBlock } from './types';
@@ -155,11 +155,20 @@ export const CodeMirrorDiagnosticsAtom = atom((get) => {
 
 export const isPanelVisibleAtom = atom(false);
 
+const browserStorage = createJSONStorage<{
+  [key: string]: string | undefined;
+}>(() =>
+  typeof window !== 'undefined' &&
+  typeof window.localStorage?.getItem === 'function'
+    ? window.localStorage
+    : undefined,
+);
+
 export const envVarsAtom = atomWithStorage<{
   [key: string]: string | undefined;
 }>('baml-env-vars', {
   BOUNDARY_PROXY_URL: 'https://fiddle-proxy.fly.dev',
-});
+}, browserStorage);
 
 export const requiredEnvVarsAtom = atom((get) => {
   const { rt } = get(runtimeAtom);

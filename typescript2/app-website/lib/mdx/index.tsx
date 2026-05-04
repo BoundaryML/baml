@@ -2,7 +2,7 @@ import type { MDXComponents } from 'mdx/types';
 import dynamic from 'next/dynamic';
 import NextImage from 'next/image';
 import NewsletterForm from '@/components/NewsletterForm';
-import BamlBlock from './baml-block/BamlBlock2';
+import BamlBlock from './baml-block/BamlBlockClient';
 import { CodeBlocks } from './code-blocks';
 import { DevSpotlight } from './dev-spotlight';
 import { MDXMedia } from './media';

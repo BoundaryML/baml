@@ -6,6 +6,7 @@ import {
   atomWithStorage,
   atomFamily,
   useAtomCallback,
+  createJSONStorage,
 } from 'jotai/utils';
 import { useCallback } from 'react';
 
@@ -255,11 +256,20 @@ export const useWaitForWasm = () => {
   return wasm !== undefined;
 };
 
+const browserStorage = createJSONStorage<{
+  [key: string]: string | undefined;
+}>(() =>
+  typeof window !== 'undefined' &&
+  typeof window.localStorage?.getItem === 'function'
+    ? window.localStorage
+    : undefined,
+);
+
 export const envVarsAtom = atomWithStorage<{
   [key: string]: string | undefined;
 }>('baml-env-vars', {
   BOUNDARY_PROXY_URL: 'https://fiddle-proxy.fly.dev',
-});
+}, browserStorage);
 
 export const ctxAtom = atom((get) => {
   const wasm = get(wasmAtom);
