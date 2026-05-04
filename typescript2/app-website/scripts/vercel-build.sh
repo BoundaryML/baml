@@ -80,7 +80,7 @@ else
 fi
 
 echo "==> [5/6] Install JS deps from the monorepo root (workspace:* + link: deps need workspace context)"
-( cd ../ && pnpm install --frozen-lockfile )
+( cd ../ && pnpm install --frozen-lockfile --prod=false )
 
 echo "==> [6/6] Build Next site"
 pnpm build
