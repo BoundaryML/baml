@@ -15,18 +15,34 @@ import type { RuntimePort } from './runtime-port';
 // ---------------------------------------------------------------------------
 
 const ENV_VARS_STORAGE_KEY = 'baml-playground-env-vars';
+type EnvVars = Record<string, string>;
+type EnvVarsUpdate = EnvVars | ((prev: EnvVars) => EnvVars);
 
-function readStoredEnvVars(): Record<string, string> {
+function storage(): Storage | null {
+  if (typeof window === 'undefined') return null;
+  return window.sessionStorage;
+}
+
+function readStoredEnvVars(): EnvVars {
   if (typeof window === 'undefined') return {};
 
   try {
-    const raw = window.localStorage.getItem(ENV_VARS_STORAGE_KEY);
+    const store = storage();
+    const sessionRaw = store?.getItem(ENV_VARS_STORAGE_KEY);
+    const legacyRaw = sessionRaw == null
+      ? window.localStorage.getItem(ENV_VARS_STORAGE_KEY)
+      : null;
+    const raw = sessionRaw ?? legacyRaw;
+    if (legacyRaw != null) {
+      store?.setItem(ENV_VARS_STORAGE_KEY, legacyRaw);
+    }
+    window.localStorage.removeItem(ENV_VARS_STORAGE_KEY);
     if (!raw) return {};
 
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
 
-    const result: Record<string, string> = {};
+    const result: EnvVars = {};
     for (const [key, value] of Object.entries(parsed)) {
       if (typeof key === 'string' && typeof value === 'string') {
         result[key] = value;
@@ -38,22 +54,50 @@ function readStoredEnvVars(): Record<string, string> {
   }
 }
 
-function writeStoredEnvVars(vars: Record<string, string>) {
+function writeStoredEnvVars(vars: EnvVars) {
   if (typeof window === 'undefined') return;
 
   try {
+    const store = storage();
+    if (!store) return;
     if (Object.keys(vars).length === 0) {
-      window.localStorage.removeItem(ENV_VARS_STORAGE_KEY);
+      store.removeItem(ENV_VARS_STORAGE_KEY);
     } else {
-      window.localStorage.setItem(ENV_VARS_STORAGE_KEY, JSON.stringify(vars));
+      store.setItem(ENV_VARS_STORAGE_KEY, JSON.stringify(vars));
     }
   } catch {
-    // localStorage may be unavailable or full; env vars still work in memory.
+    // Storage may be unavailable or full; env vars still work in memory.
+  }
+}
+
+function syncEnvVarsToPort(port: RuntimePort | null, prev: EnvVars, next: EnvVars) {
+  if (!port) return;
+
+  for (const key of Object.keys(prev)) {
+    if (!(key in next)) {
+      port.postMessage({ type: 'deleteEnvVar', key });
+    }
+  }
+  for (const [key, value] of Object.entries(next)) {
+    if (prev[key] !== value) {
+      port.postMessage({ type: 'setEnvVar', key, value });
+    }
   }
 }
 
 /** Current env var key-value pairs. */
-export const envVarsAtom = atom<Record<string, string>>(readStoredEnvVars());
+const envVarsBaseAtom = atom<EnvVars>(readStoredEnvVars());
+const runtimePortAtom = atom<RuntimePort | null>(null);
+export const envVarsAtom = atom(
+  (get) => get(envVarsBaseAtom),
+  (get, set, update: EnvVarsUpdate) => {
+    const prev = get(envVarsBaseAtom);
+    const next = typeof update === 'function' ? update(prev) : update;
+    set(envVarsBaseAtom, next);
+    writeStoredEnvVars(next);
+    syncEnvVarsToPort(get(runtimePortAtom), prev, next);
+  },
+);
 
 /**
  * Keys the project is known to need — accumulated from worker envVarRequests.
@@ -84,17 +128,32 @@ export function useEnvVars(port: RuntimePort): UseEnvVars {
   const [envVars, setEnvVars] = useAtom(envVarsAtom);
   const requiredKeys = useAtomValue(knownRequiredKeysAtom);
   const setRequiredKeys = useSetAtom(knownRequiredKeysAtom);
-  const hydratedRef = useRef(false);
+  const setRuntimePort = useSetAtom(runtimePortAtom);
+  const lastHydratedPortRef = useRef<RuntimePort | null>(null);
+  const envVarsRef = useRef(envVars);
 
   useEffect(() => {
-    if (hydratedRef.current) return;
-    hydratedRef.current = true;
+    envVarsRef.current = envVars;
+  }, [envVars]);
+
+  useEffect(() => {
+    setRuntimePort(port);
+    return () => {
+      setRuntimePort((current) => current === port ? null : current);
+    };
+  }, [setRuntimePort, port]);
+
+  useEffect(() => {
+    if (lastHydratedPortRef.current === port) return;
+    lastHydratedPortRef.current = port;
 
     const stored = readStoredEnvVars();
-    if (Object.keys(stored).length === 0) return;
+    const merged = { ...stored, ...envVarsRef.current };
 
-    setEnvVars((prev) => ({ ...stored, ...prev }));
-    for (const [key, value] of Object.entries(stored)) {
+    if (Object.keys(stored).length > 0) {
+      setEnvVars(merged);
+    }
+    for (const [key, value] of Object.entries(merged)) {
       port.postMessage({ type: 'setEnvVar', key, value });
     }
   }, [setEnvVars, port]);
@@ -102,31 +161,23 @@ export function useEnvVars(port: RuntimePort): UseEnvVars {
   const addEnvVar = useCallback((key: string, value: string) => {
     setEnvVars((prev) => {
       const next = { ...prev, [key]: value };
-      writeStoredEnvVars(next);
       return next;
     });
-    port.postMessage({ type: 'setEnvVar', key, value });
-  }, [setEnvVars, port]);
+  }, [setEnvVars]);
 
   const removeEnvVar = useCallback((key: string) => {
-    setEnvVars((prev: Record<string, string>) => {
+    setEnvVars((prev: EnvVars) => {
       const { [key]: _, ...rest } = prev;
-      writeStoredEnvVars(rest);
       return rest;
     });
-    port.postMessage({ type: 'deleteEnvVar', key });
-  }, [setEnvVars, port]);
+  }, [setEnvVars]);
 
-  const importEnvVars = useCallback((vars: Record<string, string>) => {
+  const importEnvVars = useCallback((vars: EnvVars) => {
     setEnvVars((prev) => {
       const next = { ...prev, ...vars };
-      writeStoredEnvVars(next);
       return next;
     });
-    for (const [key, value] of Object.entries(vars)) {
-      port.postMessage({ type: 'setEnvVar', key, value });
-    }
-  }, [setEnvVars, port]);
+  }, [setEnvVars]);
 
   const addRequiredKey = useCallback((key: string) => {
     setRequiredKeys((prev) => prev.has(key) ? prev : new Set([...prev, key]));

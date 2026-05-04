@@ -60,6 +60,15 @@ export const stateColors: Record<string, NodeStateStyle> = {
     text: '#fecdd3',
     textMuted: '#fda4af',
   },
+  'cancelled': {
+    border: 'rgba(234,179,8,0.40)',
+    bgTop: 'rgba(58,45,18,0.85)',
+    bgBottom: 'rgba(42,32,12,0.85)',
+    accent: '#eab308',
+    glow: 'rgba(234,179,8,0.22)',
+    text: '#fef9c3',
+    textMuted: '#fde047',
+  },
   'pending': {
     border: 'rgba(245,158,11,0.40)',
     bgTop: 'rgba(58,40,18,0.85)',

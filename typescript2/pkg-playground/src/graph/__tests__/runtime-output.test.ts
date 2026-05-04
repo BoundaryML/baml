@@ -37,9 +37,9 @@ const graphNodes: GraphNode[] = [
   },
 ];
 
-function functionStartEvent(name: string): DeserializedRuntimeEvent {
+function functionStartEvent(name: string, spanId = `${name}-span`): DeserializedRuntimeEvent {
   return {
-    spanId: `${name}-span`,
+    spanId,
     rootSpanId: 'root',
     timestampMs: 1,
     callStack: [],
@@ -53,9 +53,14 @@ function functionStartEvent(name: string): DeserializedRuntimeEvent {
   };
 }
 
-function functionEndEvent(name: string, result: BamlJsValue, error?: string): DeserializedRuntimeEvent {
+function functionEndEvent(
+  name: string,
+  result: BamlJsValue,
+  error?: string,
+  spanId = `${name}-span`,
+): DeserializedRuntimeEvent {
   return {
-    spanId: `${name}-span`,
+    spanId,
     rootSpanId: 'root',
     timestampMs: 1,
     callStack: [],
@@ -113,5 +118,40 @@ describe('collectGraphNodeOutputs', () => {
     expect(runtime.get('2')?.hasResult).toBe(false);
     expect(runtime.get('1')?.executionState).toBe('error');
     expect(runtime.get('1')?.errorMessage).toBe('HTTP request failed');
+  });
+
+  it('maps repeated call sites by span instead of collapsing to the first label match', () => {
+    const repeatedGraphNodes: GraphNode[] = [
+      graphNodes[0]!,
+      graphNodes[1]!,
+      {
+        id: '3',
+        label: 'GenerateImages(prompt)',
+        type: 'scope',
+        parent: '1',
+        metadata: { logFilterKey: 'call-2', sourceExpr: null, isContainer: false },
+      },
+    ];
+
+    const runtime = collectGraphNodeRuntime(repeatedGraphNodes, [
+      functionStartEvent('GenerateImages', 'span-a'),
+      functionStartEvent('GenerateImages', 'span-b'),
+      functionEndEvent('GenerateImages', imageA, undefined, 'span-a'),
+      functionEndEvent('GenerateImages', imageB, undefined, 'span-b'),
+    ]);
+
+    expect(runtime.get('2')?.imageOutputs).toEqual([imageA]);
+    expect(runtime.get('3')?.imageOutputs).toEqual([imageB]);
+  });
+
+  it('marks active nodes as cancelled when the run is cancelled', () => {
+    const runtime = collectGraphNodeRuntime(
+      graphNodes,
+      [functionStartEvent('GenerateImages')],
+      { status: 'cancelled' },
+    );
+
+    expect(runtime.get('2')?.executionState).toBe('cancelled');
+    expect(runtime.get('1')?.executionState).toBe('cancelled');
   });
 });

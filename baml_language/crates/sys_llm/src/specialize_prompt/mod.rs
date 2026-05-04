@@ -2,10 +2,11 @@
 //!
 //! Applies provider-specific transformations to a generic `PromptAst`:
 //! 1. Wrap simple nodes as messages with the default role
-//! 2. Merge adjacent same-role messages
-//! 3. Consolidate system prompts
-//! 4. Validate roles against `allowed_roles`, then remap
-//! 5. Filter metadata
+//! 2. Promote provider-incompatible media roles when needed
+//! 3. Merge adjacent same-role messages
+//! 4. Consolidate system prompts
+//! 5. Validate roles against `allowed_roles`, then remap
+//! 6. Filter metadata
 
 mod transformations;
 
@@ -22,12 +23,12 @@ pub(crate) fn specialize_prompt_from_owned(
 
     let features = ModelFeatures::for_provider(provider, &client.options);
     let prompt = transformations::wrap_simple_as_message(prompt, &client.default_role);
-    let prompt = transformations::merge_adjacent_roles(prompt);
     let prompt = if provider_promotes_media_to_user(provider) {
         transformations::promote_media_to_user_when_no_user_message(prompt)
     } else {
         prompt
     };
+    let prompt = transformations::merge_adjacent_roles(prompt);
     let prompt = transformations::consolidate_system_prompts(prompt, &features);
 
     let prompt = transformations::validate_and_remap_roles(
@@ -157,6 +158,37 @@ mod tests {
             panic!("expected first message");
         };
         assert_eq!(role, "system");
+    }
+
+    #[test]
+    fn openai_responses_promotes_only_media_system_message_before_merge() {
+        let client = openai_responses_client();
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "Follow the style guide."),
+            msg_with_content("system", PromptAstSimple::Media(image_media())),
+        ]));
+
+        let result = specialize_prompt_from_owned(&client, prompt).unwrap();
+
+        let PromptAst::Vec(messages) = result.as_ref() else {
+            panic!("expected message vec");
+        };
+        assert_eq!(messages.len(), 2);
+
+        let PromptAst::Message { role, content, .. } = messages[0].as_ref() else {
+            panic!("expected first message");
+        };
+        assert_eq!(role, "system");
+        assert_eq!(
+            content.as_ref(),
+            &PromptAstSimple::String("Follow the style guide.".into())
+        );
+
+        let PromptAst::Message { role, content, .. } = messages[1].as_ref() else {
+            panic!("expected second message");
+        };
+        assert_eq!(role, "user");
+        assert!(matches!(content.as_ref(), PromptAstSimple::Media(_)));
     }
 
     #[test]

@@ -33,12 +33,19 @@ function nodeMatchesFunctionName(node: GraphNode, functionName: string): boolean
     && (label === namespacedName || label.startsWith(`${namespacedName}(`));
 }
 
-function findOutputNodeId(graphNodes: GraphNode[], functionName: string): string | null {
-  const exact = graphNodes.find((node) => node.label.trim() === functionName);
-  if (exact) return exact.id;
+function findOutputNodeIds(graphNodes: GraphNode[], functionName: string): string[] {
+  const exact = graphNodes
+    .filter((node) => node.label.trim() === functionName)
+    .map((node) => node.id);
+  if (exact.length > 0) return exact;
 
-  const call = graphNodes.find((node) => nodeMatchesFunctionName(node, functionName));
-  return call?.id ?? null;
+  return graphNodes
+    .filter((node) => nodeMatchesFunctionName(node, functionName))
+    .map((node) => node.id);
+}
+
+function findOutputNodeId(graphNodes: GraphNode[], functionName: string): string | null {
+  return findOutputNodeIds(graphNodes, functionName)[0] ?? null;
 }
 
 const statePriority: Record<NodeExecutionState, number> = {
@@ -47,6 +54,7 @@ const statePriority: Record<NodeExecutionState, number> = {
   pending: 1,
   cached: 2,
   success: 3,
+  cancelled: 4,
   running: 5,
   error: 6,
 };
@@ -79,22 +87,36 @@ export function collectGraphNodeRuntime(
   const direct = new Map<string, GraphNodeRuntime>();
   const parentById = new Map(graphNodes.map((node) => [node.id, node.parent]));
   const activeNodeIds = new Set<string>();
+  const nodeIdBySpanId = new Map<string, string>();
+  const nextCandidateByFunctionName = new Map<string, number>();
+
+  function assignNodeForFunctionStart(functionName: string): string | null {
+    const candidates = findOutputNodeIds(graphNodes, functionName);
+    if (candidates.length === 0) return null;
+
+    const nextIndex = nextCandidateByFunctionName.get(functionName) ?? 0;
+    nextCandidateByFunctionName.set(functionName, nextIndex + 1);
+    return candidates[nextIndex % candidates.length] ?? null;
+  }
 
   for (const evt of runtimeEvents) {
     const kind = evt.event;
     if (kind?.$case === 'functionStart') {
-      const nodeId = findOutputNodeId(graphNodes, kind.functionStart.name);
+      const nodeId = assignNodeForFunctionStart(kind.functionStart.name);
       if (!nodeId) continue;
 
+      nodeIdBySpanId.set(evt.spanId, nodeId);
       activeNodeIds.add(nodeId);
       updateRuntime(direct, nodeId, {
         executionState: 'running',
       });
     } else if (kind?.$case === 'functionEnd') {
-      const nodeId = findOutputNodeId(graphNodes, kind.functionEnd.name);
+      const nodeId = nodeIdBySpanId.get(evt.spanId)
+        ?? findOutputNodeId(graphNodes, kind.functionEnd.name);
       if (!nodeId) continue;
 
       activeNodeIds.delete(nodeId);
+      nodeIdBySpanId.delete(evt.spanId);
       const error = kind.functionEnd.error || null;
       updateRuntime(direct, nodeId, {
         result: kind.functionEnd.result,
@@ -106,7 +128,8 @@ export function collectGraphNodeRuntime(
     }
   }
 
-  if (runState?.status === 'error') {
+  if (runState?.status === 'error' || runState?.status === 'cancelled') {
+    const terminalState = runState.status;
     const errorTargets = activeNodeIds.size > 0
       ? [...activeNodeIds]
       : runState.functionName
@@ -115,7 +138,7 @@ export function collectGraphNodeRuntime(
 
     for (const nodeId of errorTargets) {
       updateRuntime(direct, nodeId, {
-        executionState: 'error',
+        executionState: terminalState,
         errorMessage: runState.error,
       });
     }

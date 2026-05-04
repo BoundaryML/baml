@@ -1543,7 +1543,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                 onClick={source && onNavigateToSource ? () => onNavigateToSource({ fileId: source.fileId, line: source.line, column: source.column }) : undefined}
                               >
                                 <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
-                                <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
+                                <div className="text-vsc-text flex-1 min-w-0 break-all">{payload}</div>
                               </div>
                             );
                           })}
@@ -1933,7 +1933,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                     onClick={source && onNavigateToSource ? () => onNavigateToSource({ fileId: source.fileId, line: source.line, column: source.column }) : undefined}
                                   >
                                     <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
-                                    <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
+                                    <div className="text-vsc-text flex-1 min-w-0 break-all">{payload}</div>
                                   </div>
                                 );
                               })}

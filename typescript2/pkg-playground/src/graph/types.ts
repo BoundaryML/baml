@@ -40,6 +40,7 @@ export type NodeExecutionState =
   | 'running'
   | 'success'
   | 'error'
+  | 'cancelled'
   | 'skipped'
   | 'cached';
 

@@ -105,9 +105,9 @@ export class WebviewPanel {
       preview: false,
     });
 
-    const start = new Position(source.line, source.column);
+    const start = new Position(Math.max(0, source.line - 1), source.column);
     const end = new Position(
-      source.endLine ?? source.line,
+      Math.max(0, (source.endLine ?? source.line) - 1),
       source.endColumn ?? source.column,
     );
     const range = new Range(start, end);

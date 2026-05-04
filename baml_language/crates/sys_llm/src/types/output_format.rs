@@ -684,6 +684,13 @@ fn render_literal(lit: &LiteralValue) -> String {
 fn media_output_instruction(target: &Ty) -> Option<String> {
     match target {
         Ty::Media(kind, _) => Some(format!("Return an {kind} output.")),
+        Ty::Optional(inner, _) => {
+            media_output_instruction(inner).map(|s| format!("{} or null.", s.trim_end_matches('.')))
+        }
+        Ty::Union(variants, _) if nullable_media_union_kind(variants).is_some() => {
+            let kind = nullable_media_union_kind(variants).expect("checked above");
+            Some(format!("Return an {kind} output or null."))
+        }
         Ty::List(inner, _) => match inner.as_ref() {
             Ty::Media(kind, _) => Some(format!("Return one or more {kind} outputs.")),
             inner if is_text_or_image_union(inner) => {
@@ -698,7 +705,28 @@ fn media_output_instruction(target: &Ty) -> Option<String> {
     }
 }
 
-fn is_text_or_image_union(target: &Ty) -> bool {
+fn nullable_media_union_kind(variants: &[Ty]) -> Option<baml_base::MediaKind> {
+    let mut kind = None;
+    let mut has_null = false;
+    for variant in variants {
+        match variant {
+            Ty::Media(media_kind, _) => {
+                if kind
+                    .replace(*media_kind)
+                    .is_some_and(|prev| prev != *media_kind)
+                {
+                    return None;
+                }
+            }
+            Ty::Null { .. } => has_null = true,
+            _ => return None,
+        }
+    }
+
+    if has_null { kind } else { None }
+}
+
+pub(crate) fn is_text_or_image_union(target: &Ty) -> bool {
     let Ty::Union(variants, _) = target else {
         return false;
     };
@@ -889,7 +917,7 @@ mod tests {
                 Ty::String {
                     attr: TyAttr::default(),
                 },
-                image,
+                image.clone(),
             ],
             TyAttr::default(),
         );
@@ -909,6 +937,31 @@ mod tests {
         assert_eq!(
             rendered,
             Some("Return an ordered sequence of text and image outputs.".to_string())
+        );
+
+        let rendered =
+            OutputFormatContent::new(Ty::Optional(Box::new(image.clone()), TyAttr::default()))
+                .render(&RenderOptions::default())
+                .unwrap();
+        assert_eq!(
+            rendered,
+            Some("Return an image output or null.".to_string())
+        );
+
+        let rendered = OutputFormatContent::new(Ty::Union(
+            vec![
+                image,
+                Ty::Null {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        ))
+        .render(&RenderOptions::default())
+        .unwrap();
+        assert_eq!(
+            rendered,
+            Some("Return an image output or null.".to_string())
         );
     }
 

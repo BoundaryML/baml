@@ -306,16 +306,17 @@ mod tests {
             panic!("Expected FunctionEnd event");
         };
         let result = end.result.expect("expected function result");
-        let Some(crate::baml::cffi::baml_outbound_value::Value::MediaValue(media)) = result.value
-        else {
-            panic!("Expected media value, got {:?}", result.value);
-        };
-        assert_eq!(
-            media.value,
-            Some(crate::baml::cffi::baml_value_media::Value::Base64(
-                "aW1hZ2U=".into()
-            ))
-        );
+        match result.value {
+            Some(crate::baml::cffi::baml_outbound_value::Value::MediaValue(media)) => {
+                assert_eq!(
+                    media.value,
+                    Some(crate::baml::cffi::baml_value_media::Value::Base64(
+                        "aW1hZ2U=".into()
+                    ))
+                );
+            }
+            other => panic!("Expected media value, got {:?}", other),
+        }
     }
 
     #[test]

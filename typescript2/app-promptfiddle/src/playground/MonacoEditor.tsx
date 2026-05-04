@@ -960,12 +960,20 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
           const bamlEditor = vscode.window.visibleTextEditors.find(
             (e) => e.document.uri.path.endsWith('.baml') || e.document.languageId === 'baml'
           );
-          let editor = targetEditor ?? bamlEditor ?? vscode.window.activeTextEditor;
+          let editor = targetEditor;
           if (!editor && source.filePath) {
-            const uri = vscode.Uri.file(source.filePath);
-            await vscode.workspace.openTextDocument(uri);
-            editor = await vscode.window.showTextDocument(uri);
+            const resolvedPath = source.filePath.startsWith('/')
+              ? source.filePath
+              : `/workspace/${source.filePath}`;
+            const uri = vscode.Uri.file(resolvedPath);
+            try {
+              await vscode.workspace.openTextDocument(uri);
+              editor = await vscode.window.showTextDocument(uri);
+            } catch {
+              editor = undefined;
+            }
           }
+          editor ??= bamlEditor ?? vscode.window.activeTextEditor;
           if (editor) {
             const start = new vscode.Position(source.line, source.column);
             const end = new vscode.Position(

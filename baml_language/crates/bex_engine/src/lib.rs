@@ -156,6 +156,7 @@ impl Drop for AbortHandlesGuard {
 // ============================================================================
 
 /// A single active span in the engine's per-invocation span stack.
+#[derive(Clone)]
 struct EngineSpan {
     span_id: SpanId,
     parent_span_id: Option<SpanId>,
@@ -176,6 +177,12 @@ struct SpanState {
     /// Host-side call stack prefix (from Python @trace spans).
     /// Prepended to the engine's call stack in emitted events.
     host_call_stack: Vec<SpanId>,
+    /// Root span after a successful VM completion event has been emitted.
+    ///
+    /// Final return conversion still happens after that event. If conversion fails,
+    /// this lets observers receive a terminal error event for the root call instead
+    /// of retaining the earlier success.
+    completed_root_span: Option<EngineSpan>,
 }
 
 /// Errors that can occur during engine execution.
@@ -625,6 +632,28 @@ impl BexEngine {
                 }))),
             });
         }
+
+        if let Some(span) = state.completed_root_span.take() {
+            let mut call_stack = state.host_call_stack.clone();
+            call_stack.push(span.span_id.clone());
+
+            self.emit(RuntimeEvent {
+                call_id,
+                ctx: SpanContext {
+                    span_id: span.span_id,
+                    parent_span_id: span.parent_span_id,
+                    root_span_id: state.root_span_id.clone(),
+                },
+                call_stack,
+                timestamp: SystemTime::now(),
+                event: EventKind::Function(FunctionEvent::End(Box::new(FunctionEnd {
+                    name: span.label,
+                    result: BexExternalValue::Null,
+                    duration: span.started_at.elapsed(),
+                    error: Some(error),
+                }))),
+            });
+        }
     }
 
     /// Return the event sink for this engine (if any). Used by bridges for flush / `HostSpanManager`.
@@ -956,6 +985,7 @@ impl BexEngine {
             }],
             root_span_id: effective_root_span_id,
             host_call_stack,
+            completed_root_span: None,
         });
 
         // Run the event loop with span tracking. On errors, emit FunctionEnd
@@ -1342,6 +1372,7 @@ impl BexEngine {
                     // Emit FunctionEnd for the root entry-point span if tracing
                     if let Some(state) = span_state.as_mut() {
                         if let Some(root_span) = state.stack.pop() {
+                            state.completed_root_span = Some(root_span.clone());
                             let external_result = self.vm_value_to_owned(vm.proof(), &value);
                             let mut full_call_stack = state.host_call_stack.clone();
                             full_call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));

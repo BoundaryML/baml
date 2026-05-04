@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FC } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FC } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -54,23 +54,61 @@ function GraphViewInner({
     selectedNodeIdRef.current = selectedNodeId;
   }, [selectedNodeId]);
 
-  // Convert CFG -> ReactFlow and run layout
-  useEffect(() => {
+  const graphModel = useMemo(() => {
     const { nodes: graphNodes, edges: graphEdges } = cfgToGraphNodes(graph);
     const { nodes: rfNodes, edges: rfEdges } = graphToReactflow(graphNodes, graphEdges);
-    const runtimeByNode = collectGraphNodeRuntime(graphNodes, runtimeEvents, {
-      status: runStatus,
-      error: runError,
-      functionName: runFunctionName,
+    return { graphNodes, rfNodes, rfEdges };
+  }, [graph]);
+
+  const runtimeInputsRef = useRef({
+    runtimeEvents,
+    runStatus,
+    runError,
+    runFunctionName,
+    customRenderers,
+  });
+  runtimeInputsRef.current = {
+    runtimeEvents,
+    runStatus,
+    runError,
+    runFunctionName,
+    customRenderers,
+  };
+
+  const graphNodesRef = useRef(graphModel.graphNodes);
+  graphNodesRef.current = graphModel.graphNodes;
+
+  const decorateNodesWithRuntime = useCallback((baseNodes: WorkflowNode[]): WorkflowNode[] => {
+    const {
+      runtimeEvents: latestRuntimeEvents,
+      runStatus: latestRunStatus,
+      runError: latestRunError,
+      runFunctionName: latestRunFunctionName,
+      customRenderers: latestCustomRenderers,
+    } = runtimeInputsRef.current;
+    const runtimeByNode = collectGraphNodeRuntime(graphNodesRef.current, latestRuntimeEvents, {
+      status: latestRunStatus,
+      error: latestRunError,
+      functionName: latestRunFunctionName,
     });
-    const nodesWithRuntime = rfNodes.map((node) => {
+    const selectedId = selectedNodeIdRef.current == null
+      ? null
+      : String(selectedNodeIdRef.current);
+
+    return baseNodes.map((node) => {
       const runtime = runtimeByNode.get(node.id);
       if (!runtime) {
         return {
           ...node,
           data: {
             ...node.data,
-            selected: false,
+            result: undefined,
+            hasResult: undefined,
+            imageOutputs: [],
+            executionState: 'not-started' as const,
+            errorMessage: undefined,
+            customRenderers: latestCustomRenderers,
+            selected: node.id === selectedId,
           },
         };
       }
@@ -84,27 +122,43 @@ function GraphViewInner({
           imageOutputs: runtime.imageOutputs,
           executionState: runtime.executionState,
           errorMessage: runtime.errorMessage,
-          customRenderers,
-          selected: false,
+          customRenderers: latestCustomRenderers,
+          selected: node.id === selectedId,
         },
       };
     });
+  }, []);
 
-    layoutGraph(nodesWithRuntime, rfEdges, direction)
+  const layoutRunIdRef = useRef(0);
+
+  // Convert CFG -> ReactFlow and run layout only when geometry inputs change.
+  useEffect(() => {
+    const layoutRunId = ++layoutRunIdRef.current;
+
+    layoutGraph(graphModel.rfNodes, graphModel.rfEdges, direction)
       .then(({ nodes: laid, edges: laidEdges }) => {
-        const selectedId = selectedNodeIdRef.current == null
-          ? null
-          : String(selectedNodeIdRef.current);
-        setNodes(laid.map((node) => ({
-          ...node,
-          data: { ...node.data, selected: node.id === selectedId },
-        })));
+        if (layoutRunId !== layoutRunIdRef.current) return;
+        setNodes(decorateNodesWithRuntime(laid));
         setEdges(laidEdges);
       })
       .catch((err) => {
         console.error('[GraphView] Layout failed:', err);
       });
-  }, [graph, runtimeEvents, runStatus, runError, runFunctionName, customRenderers, direction, setNodes, setEdges]);
+  }, [graphModel, direction, setNodes, setEdges, decorateNodesWithRuntime]);
+
+  // Runtime events update node data without recalculating ELK geometry.
+  useEffect(() => {
+    setNodes((nds) => decorateNodesWithRuntime(nds));
+  }, [
+    runtimeEvents,
+    runStatus,
+    runError,
+    runFunctionName,
+    customRenderers,
+    selectedNodeId,
+    setNodes,
+    decorateNodesWithRuntime,
+  ]);
 
   // Update selected state on nodes
   useEffect(() => {

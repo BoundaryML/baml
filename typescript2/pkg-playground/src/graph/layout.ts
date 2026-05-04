@@ -269,12 +269,17 @@ export async function layoutGraph(
   // OWNER container (the LCA group we attached the edge to). We collect
   // every edge along with its owner so we can translate to absolute
   // flow coordinates before handing the polyline to the edge component.
-  const elkEdgeOwners = new Map<string, { ownerId: string; section: any }>();
+  type ElkSection = {
+    startPoint?: { x: number; y: number };
+    endPoint?: { x: number; y: number };
+    bendPoints?: { x: number; y: number }[];
+  };
+  const elkEdgeOwners = new Map<string, { ownerId: string; sections: ElkSection[] }>();
   function collectElkEdges(elkNode: ElkNode, ownerId: string) {
     if (elkNode.edges) {
-      for (const e of elkNode.edges as Array<ElkExtendedEdge & { sections?: any[] }>) {
-        const section = e.sections?.[0];
-        if (section) elkEdgeOwners.set(e.id, { ownerId, section });
+      for (const e of elkNode.edges as Array<ElkExtendedEdge & { sections?: ElkSection[] }>) {
+        const sections = e.sections ?? [];
+        if (sections.length > 0) elkEdgeOwners.set(e.id, { ownerId, sections });
       }
     }
     if (elkNode.children) {
@@ -303,14 +308,15 @@ export async function layoutGraph(
         : absPositions.get(elkInfo.ownerId) ?? { x: 0, y: 0 };
       const ox = ownerAbs.x;
       const oy = ownerAbs.y;
-      const sec = elkInfo.section;
-      const start = { x: (sec.startPoint?.x ?? 0) + ox, y: (sec.startPoint?.y ?? 0) + oy };
-      const end = { x: (sec.endPoint?.x ?? 0) + ox, y: (sec.endPoint?.y ?? 0) + oy };
-      const bends = (sec.bendPoints ?? []).map((p: { x: number; y: number }) => ({
-        x: p.x + ox,
-        y: p.y + oy,
-      }));
-      const points = [start, ...bends, end];
+      const points = elkInfo.sections.flatMap((sec) => {
+        const start = { x: (sec.startPoint?.x ?? 0) + ox, y: (sec.startPoint?.y ?? 0) + oy };
+        const end = { x: (sec.endPoint?.x ?? 0) + ox, y: (sec.endPoint?.y ?? 0) + oy };
+        const bends = (sec.bendPoints ?? []).map((p) => ({
+          x: p.x + ox,
+          y: p.y + oy,
+        }));
+        return [start, ...bends, end];
+      });
       // De-dupe consecutive identical points (ELK occasionally emits these
       // and they create zero-length segments that read as visual artifacts).
       const deduped = points.filter((p, i, arr) => {

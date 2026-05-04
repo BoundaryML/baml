@@ -15,6 +15,8 @@ export function mediaToSrc(media: BamlJsMedia): string | null {
     }
     case 'file':
       return null;
+    default:
+      return null;
   }
 }
 

@@ -48,7 +48,7 @@ export const ValueRenderer: FC<{
   if (value == null) return <span className="font-vsc-mono text-xs text-vsc-text-faint">null</span>;
   if (typeof value === 'string') return <span className="font-vsc-mono text-xs text-green-400">"{value}"</span>;
   if (typeof value === 'number') return <span className="font-vsc-mono text-xs text-cyan-400">{value}</span>;
-  if (typeof value === 'bigint') return <span className="font-vsc-mono text-xs text-cyan-400">{value.toString()}</span>;
+  if (typeof value === 'bigint') return <span className="font-vsc-mono text-xs text-cyan-400">{`${value}n`}</span>;
   if (typeof value === 'boolean') return <span className="font-vsc-mono text-xs text-yellow-400">{String(value)}</span>;
   if (typeof value !== 'object') return <span className="font-vsc-mono text-xs text-vsc-text">{stringifyValue(value)}</span>;
 

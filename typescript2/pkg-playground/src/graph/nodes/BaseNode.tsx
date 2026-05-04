@@ -36,6 +36,13 @@ const StateIcon = ({ state }: { state: string }) => {
       </svg>
     );
   }
+  if (state === 'cancelled') {
+    return (
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round">
+        <path d="M6 12h12" />
+      </svg>
+    );
+  }
   // Idle: a subtle dot — keeps visual rhythm without competing for attention
   return (
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
