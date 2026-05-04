@@ -13,6 +13,7 @@ use bex_engine::BexExternalValue;
 const PRELUDE: &str = r#"
 class User { name string }
 class Container<T> { value T }
+enum Color { Red, Green, Blue }
 "#;
 
 // ─── Basic to_string tests ────────────────────────────────────────────────────
@@ -277,4 +278,73 @@ async fn type_of_assign_and_compare() {
     );
     let output = baml_test!(&source);
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+// ─── Enum and union coverage ──────────────────────────────────────────────────
+
+#[tokio::test]
+async fn type_of_enum_to_string() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> string {{
+            reflect.type_of<Color>().to_string()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Color".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn type_of_enum_eq() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> bool {{
+            reflect.type_of<Color>() == reflect.type_of<Color>()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn type_of_enum_neq_class() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> bool {{
+            reflect.type_of<Color>() == reflect.type_of<User>()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn type_of_union_eq() {
+    let source = r#"
+        function main() -> bool {
+            reflect.type_of<int | string>() == reflect.type_of<int | string>()
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn type_of_union_neq_different_member() {
+    let source = r#"
+        function main() -> bool {
+            reflect.type_of<int | string>() == reflect.type_of<int | bool>()
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
 }

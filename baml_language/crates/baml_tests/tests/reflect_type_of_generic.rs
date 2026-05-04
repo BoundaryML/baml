@@ -262,3 +262,94 @@ async fn fwd_int_neq_user() {
     let output = baml_test!(&source);
     assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
 }
+
+/// Three levels of explicit-arg forwarding: the original `T` should still
+/// resolve correctly at the deepest call site.
+#[tokio::test]
+async fn three_level_forwarding_eq_concrete() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function level1<T>() -> type {{
+            reflect.type_of<T>()
+        }}
+        function level2<T>() -> type {{
+            level1<T>()
+        }}
+        function level3<T>() -> type {{
+            level2<T>()
+        }}
+        function main() -> bool {{
+            level3<User>() == reflect.type_of<User>()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn three_level_forwarding_to_string() {
+    let source = r#"
+        function level1<T>() -> string {
+            reflect.type_of<T>().to_string()
+        }
+        function level2<T>() -> string {
+            level1<T>()
+        }
+        function level3<T>() -> string {
+            level2<T>()
+        }
+        function main() -> string {
+            level3<int>()
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("int".to_string()))
+    );
+}
+
+// ─── Closure capturing composite type ─────────────────────────────────────────
+
+/// Closure body uses a composite template (`T[]`) — exercises Phase 5's
+/// `TypeArgRef` substitution under a captured type-arg vector.
+#[tokio::test]
+async fn closure_captures_type_arg_array_of_user() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function make_array_describer<T>() -> () -> string {{
+            return () -> string {{ reflect.type_of<T[]>().to_string() }}
+        }}
+        function main() -> string {{
+            let f = make_array_describer<User>();
+            f()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("User[]".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn closure_captures_type_arg_optional_of_int() {
+    let source = r#"
+        function make_opt_describer<T>() -> () -> string {
+            return () -> string { reflect.type_of<T?>().to_string() }
+        }
+        function main() -> string {
+            let f = make_opt_describer<int>();
+            f()
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("int?".to_string()))
+    );
+}

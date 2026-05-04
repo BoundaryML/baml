@@ -2,6 +2,31 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
+class user.User {
+  name: string
+}
+function user.reflect_type_to_int() -> int throws never {
+  { : never
+    let x = reflect.type_of() : type
+    return x : type
+  }
+  !! 540..541: type mismatch: expected int, got type
+}
+function user.unknown_type_in_reflect() -> type throws never {
+  { : type
+    reflect.type_of() : type
+  }
+  !! 648..683: unresolved type: NonExistent
+}
+function user.too_many_type_args() -> type throws never {
+  { : type
+    reflect.type_of() : type
+  }
+  !! 884..919: function `type_of` expects 1 type argument(s), got 2
+}
+class user.User$stream {
+  name: null | string
+}
 function user.assign_type_to_int(function_name: string) -> int throws never {
   { : never
     let x = baml.llm.get_return_type(function_name) : type

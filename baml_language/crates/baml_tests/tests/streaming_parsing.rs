@@ -47,6 +47,14 @@ fn streaming_llm_source(base_url: &str) -> String {
     )
 }
 
+/// Phase 6 regression pin (paired with `projects/compiles/stream_llm_inferred_typeargs/`):
+/// `baml.llm.stream_llm_function(...)` is called with **no** explicit `<T, S>`.
+/// `T` and `S` are inferred via the let-binding annotation, but inferred
+/// type-args don't reach MIR lowering today, so `__make_stream<T, S>` falls
+/// back to a registry lookup (`get_return_type(function_name)`) instead of
+/// `reflect.type_of<T>()`. If anyone removes that workaround without first
+/// landing inferred-arg lowering, this test will crash with a
+/// `Non-parsable type: BuiltinUnknown` error from the sys-op layer.
 #[tokio::test]
 async fn stream_string_final_value() {
     let server = MockServer::start().await;

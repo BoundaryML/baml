@@ -1,0 +1,61 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.reflect_array() -> type {
+    // Locals:
+    let _0: type // _0 // return
+
+    bb0: {
+        _0 = load_type(Array(TypeArgRef(0)));
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.reflect_int_array() -> type {
+    // Locals:
+    let _0: type // _0 // return
+    let _1: type
+
+    bb0: {
+        _1 = load_type(Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }));
+        _0 = call const fn user.reflect_array<copy _1>() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.reflect_person() -> type {
+    // Locals:
+    let _0: type // _0 // return
+    let _1: type
+
+    bb0: {
+        _1 = load_type(Concrete(Class(TypeName { name: "Person", module_path: ["user"], display_name: "Person" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })));
+        _0 = call const fn user.reflect_type<copy _1>() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.reflect_type() -> type {
+    // Locals:
+    let _0: type // _0 // return
+
+    bb0: {
+        _0 = load_type(TypeArgRef(0));
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
