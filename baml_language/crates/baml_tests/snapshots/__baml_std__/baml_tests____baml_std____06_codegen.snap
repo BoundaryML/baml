@@ -274,21 +274,13 @@ function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, fun
     load_var self
     call baml.llm.Client.to_primitive_client
     store_var primitive
-    load_var function_name
-    dispatch_future baml.llm.get_return_type
-    await
-    store_var return_type
-    load_var function_name
-    dispatch_future baml.llm.get_stream_return_type
-    await
-    store_var stream_return_type
     load_var primitive
     dispatch_future baml.llm.PrimitiveClient.new_stream_accumulator
     await
     store_var acc
     load_const null
-    load_var return_type
-    load_var stream_return_type
+    load_type 1
+    load_type 2
     dispatch_future baml.llm.StreamCache.new
     await
     store_var cache
@@ -606,11 +598,11 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
   L2:
     load_var self
     load_field .counter
-    store_var _59
+    store_var _57
     load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _60
+    store_var _58
     load_var self
     load_var self
     load_field .counter
@@ -619,8 +611,8 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     store_field .counter
     load_var self
     load_field .sub_clients
-    load_var _59
-    load_var _60
+    load_var _57
+    load_var _58
     bin_op %
     load_array_element
     load_var context
@@ -637,13 +629,13 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
   L4:
     load_var self
     load_field .sub_clients
-    store_var _45
+    store_var _43
     load_const 0
     store_var __for_idx
 
   L5:
     load_var __for_idx
-    load_var _45
+    load_var _43
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L6
@@ -656,7 +648,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     throw
 
   L7:
-    load_var _45
+    load_var _43
     load_var __for_idx
     load_array_element
     load_var context
@@ -678,17 +670,12 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     load_var self
     call baml.llm.Client.to_primitive_client
     store_var primitive
-    load_var context
-    load_field .function_name
-    dispatch_future baml.llm.get_return_type
-    await
-    store_var return_type
     load_var primitive
     load_var context
     load_field .jinja_string
     load_var context
     load_field .args
-    load_var return_type
+    load_type 4
     dispatch_future baml.llm.PrimitiveClient.render_prompt
     await
     store_var prompt
@@ -745,7 +732,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     store_var body
     load_var primitive
     load_var body
-    load_var return_type
+    load_type 4
     dispatch_future baml.llm.PrimitiveClient.parse
     await
     jump L15
@@ -798,11 +785,11 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
   L2:
     load_var self
     load_field .counter
-    store_var _41
+    store_var _39
     load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _42
+    store_var _40
     load_var self
     load_var self
     load_field .counter
@@ -811,8 +798,8 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     store_field .counter
     load_var self
     load_field .sub_clients
-    load_var _41
-    load_var _42
+    load_var _39
+    load_var _40
     bin_op %
     load_array_element
     load_var context
@@ -829,13 +816,13 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
   L4:
     load_var self
     load_field .sub_clients
-    store_var _27
+    store_var _25
     load_const 0
     store_var __for_idx
 
   L5:
     load_var __for_idx
-    load_var _27
+    load_var _25
     call baml.Array.length
     cmp_op <
     pop_jump_if_false L6
@@ -848,7 +835,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     throw
 
   L7:
-    load_var _27
+    load_var _25
     load_var __for_idx
     load_array_element
     load_var context
@@ -870,17 +857,12 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     load_var self
     call baml.llm.Client.to_primitive_client
     store_var primitive
-    load_var context
-    load_field .function_name
-    dispatch_future baml.llm.get_return_type
-    await
-    store_var return_type
     load_var primitive
     load_var context
     load_field .jinja_string
     load_var context
     load_field .args
-    load_var return_type
+    load_type 4
     dispatch_future baml.llm.PrimitiveClient.render_prompt
     await
     store_var prompt
@@ -1218,7 +1200,7 @@ function baml.llm.PrimitiveClient.build_request_stream(self: null, prompt: baml.
 function baml.llm.PrimitiveClient.new_stream_accumulator(self: null) -> baml.llm.StreamAccumulator {
 }
 
-function baml.llm.PrimitiveClient.parse(self: null, http_response_body: string, type_def: type) -> void {
+function baml.llm.PrimitiveClient.parse(self: null, http_response_body: string) -> void {
 }
 
 function baml.llm.PrimitiveClient.render_prompt(self: null, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst {
@@ -1303,6 +1285,8 @@ function baml.llm.Stream.final(self: null) -> void {
     await
     load_var self
     load_field ._cache
+    load_type 3
+    load_type 3
     dispatch_future baml.llm.__sap_parse_final
     await
     return
@@ -1364,6 +1348,8 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
     await
     load_var self
     load_field ._cache
+    load_type 4
+    load_type 4
     dispatch_future baml.llm.__sap_parse_partial
     await
     store_var parsed
@@ -1505,6 +1491,8 @@ function baml.llm.parse(function_name: string, json: string) -> void {
     store_var cache
     load_var json
     load_var cache
+    load_type 1
+    load_type 2
     dispatch_future baml.llm.__sap_parse_final
     await
     return

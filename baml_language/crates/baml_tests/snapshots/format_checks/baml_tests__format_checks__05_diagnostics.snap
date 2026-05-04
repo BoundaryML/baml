@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 11870
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type `string` has no member `len`

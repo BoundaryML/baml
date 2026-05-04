@@ -60,7 +60,7 @@ function parse<T, S>(function_name: string, json: string) -> T {
   let return_type = get_return_type(function_name);
   let stream_return_type = get_stream_return_type(function_name);
   let cache = StreamCache.new(return_type, stream_return_type);
-  __sap_parse_final(json, cache)
+  __sap_parse_final<T, S>(json, cache)
 }
 
 /// UNSAFE: do not call from user code

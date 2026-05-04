@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13807
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type mismatch: expected (x: int) -> int throws never, got 1

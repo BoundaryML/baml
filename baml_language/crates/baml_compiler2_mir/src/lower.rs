@@ -2965,12 +2965,14 @@ impl LoweringContext<'_> {
         let ntypeargs = type_arg_operands.len();
 
         // Prepend type-arg operands before the value-arg operands.
-        let all_arg_operands = if ntypeargs > 0 {
-            let mut combined = type_arg_operands;
-            combined.extend(arg_operands);
+        // (For regular BAML calls, type args are leading so the callee's frame
+        // can pop them into `frame.type_args` before reading value args.)
+        let all_arg_operands_for_call = if ntypeargs > 0 {
+            let mut combined = type_arg_operands.clone();
+            combined.extend(arg_operands.iter().cloned());
             combined
         } else {
-            arg_operands
+            arg_operands.clone()
         };
 
         // Check if callee resolves to a builtin IO function (sys-op)
@@ -2989,10 +2991,22 @@ impl LoweringContext<'_> {
             let future_local = self.builder.temp(future_ty);
             let future_place = Place::Local(future_local);
             let resume = self.builder.create_block();
-            // sys-ops do not support type-arg threading; use plain arg list.
+            // For generic IO builtins (`$rust_io_function` with type params),
+            // the compiler injects synthetic trailing value-arg slots — one
+            // `baml_type::Ty` per type parameter.  The Rust glue reads them
+            // positionally after the regular value args.  We therefore append
+            // type-arg operands AFTER the value args here (unlike regular BAML
+            // calls where they are prepended as leading args).
+            let sys_op_arg_operands = if ntypeargs > 0 {
+                let mut combined = arg_operands;
+                combined.extend(type_arg_operands);
+                combined
+            } else {
+                arg_operands
+            };
             self.builder.dispatch_future(
                 callee_operand,
-                all_arg_operands,
+                sys_op_arg_operands,
                 future_place.clone(),
                 resume,
             );
@@ -3008,7 +3022,7 @@ impl LoweringContext<'_> {
                 Place::Local(_) => {
                     self.builder.call_with_type_args(
                         callee_operand,
-                        all_arg_operands,
+                        all_arg_operands_for_call,
                         ntypeargs,
                         dest,
                         target,
@@ -3020,7 +3034,7 @@ impl LoweringContext<'_> {
                     let tmp = self.builder.temp(call_ty);
                     self.builder.call_with_type_args(
                         callee_operand,
-                        all_arg_operands,
+                        all_arg_operands_for_call,
                         ntypeargs,
                         Place::local(tmp),
                         target,
@@ -5818,13 +5832,35 @@ pub fn lower_function<'db>(
             mir.item_ref = item_ref;
             mir
         }
-        FunctionBody::Builtin(kind) => MirFunction {
-            arity,
-            span: None,
-            item_ref,
-            kind: MirFunctionKind::Builtin(*kind),
-            lambdas: vec![],
-        },
+        FunctionBody::Builtin(kind) => {
+            use baml_compiler2_ast::BuiltinKind;
+            // For IO builtins (`$rust_io_function`), the compiler injects one
+            // synthetic trailing value-arg slot for each generic type parameter
+            // (e.g. `parse<T>` gets one extra `baml_type::Ty` slot after the
+            // regular params).  We must include those synthetic slots in the
+            // arity so that `DispatchFuture` pops the correct number of args
+            // from the stack.
+            let extra_arity = if matches!(kind, BuiltinKind::Io) {
+                // For IO builtins (`$rust_io_function`), the compiler injects
+                // one synthetic trailing value-arg slot for each *function-level*
+                // generic type parameter.  Class-level generics (from the
+                // enclosing class definition) do NOT generate extra slots —
+                // `baml_builtins2_codegen` only adds type-arg params for
+                // function-level generics.  We therefore only count the
+                // function's own generic_params here.
+                let item_tree = file_item_tree(db, func_loc.file(db));
+                item_tree[func_loc.id(db)].generic_params.len()
+            } else {
+                0
+            };
+            MirFunction {
+                arity: arity + extra_arity,
+                span: None,
+                item_ref,
+                kind: MirFunctionKind::Builtin(*kind),
+                lambdas: vec![],
+            }
+        }
         FunctionBody::Missing => MirFunction {
             arity,
             span: None,

@@ -42,11 +42,21 @@ pub enum TyTemplate {
 
 impl TyTemplate {
     /// Walk the template once, substituting each `TypeArgRef(n)` with
-    /// `type_args[n]`.  Panics if `n` is out of range.
+    /// `type_args[n]`.
+    ///
+    /// If `n` is out of range (e.g. when a generic function is called from a
+    /// non-generic context that didn't supply type arguments), the substitution
+    /// falls back to `Ty::unknown()` rather than panicking.  This handles
+    /// stdlib paths where T/S are declared in the function signature for
+    /// type-checking purposes but the corresponding Rust sys-op implementation
+    /// doesn't use the type-arg slot.
     pub fn substitute(&self, type_args: &[Ty]) -> Ty {
         match self {
             Self::Concrete(t) => t.clone(),
-            Self::TypeArgRef(n) => type_args[*n as usize].clone(),
+            Self::TypeArgRef(n) => type_args
+                .get(*n as usize)
+                .cloned()
+                .unwrap_or_else(Ty::unknown),
             Self::Array(inner) => Ty::list(inner.substitute(type_args)),
             Self::Optional(inner) => Ty::optional(inner.substitute(type_args)),
             Self::Union(parts) => Ty::union(parts.iter().map(|p| p.substitute(type_args))),
