@@ -86,7 +86,7 @@ export function collectGraphNodeRuntime(
 ): Map<string, GraphNodeRuntime> {
   const direct = new Map<string, GraphNodeRuntime>();
   const parentById = new Map(graphNodes.map((node) => [node.id, node.parent]));
-  const activeNodeIds = new Set<string>();
+  const activeNodeCounts = new Map<string, number>();
   const nodeIdBySpanId = new Map<string, string>();
   const nextCandidateByFunctionName = new Map<string, number>();
 
@@ -99,6 +99,20 @@ export function collectGraphNodeRuntime(
     return candidates[nextIndex % candidates.length] ?? null;
   }
 
+  function incrementActiveNodeCount(nodeId: string) {
+    activeNodeCounts.set(nodeId, (activeNodeCounts.get(nodeId) ?? 0) + 1);
+  }
+
+  function decrementActiveNodeCount(nodeId: string): number {
+    const nextCount = Math.max((activeNodeCounts.get(nodeId) ?? 0) - 1, 0);
+    if (nextCount === 0) {
+      activeNodeCounts.delete(nodeId);
+    } else {
+      activeNodeCounts.set(nodeId, nextCount);
+    }
+    return nextCount;
+  }
+
   for (const evt of runtimeEvents) {
     const kind = evt.event;
     if (kind?.$case === 'functionStart') {
@@ -106,23 +120,27 @@ export function collectGraphNodeRuntime(
       if (!nodeId) continue;
 
       nodeIdBySpanId.set(evt.spanId, nodeId);
-      activeNodeIds.add(nodeId);
+      incrementActiveNodeCount(nodeId);
       updateRuntime(direct, nodeId, {
         executionState: 'running',
       });
     } else if (kind?.$case === 'functionEnd') {
-      const nodeId = nodeIdBySpanId.get(evt.spanId)
+      const mappedNodeId = nodeIdBySpanId.get(evt.spanId);
+      const nodeId = mappedNodeId
         ?? findOutputNodeId(graphNodes, kind.functionEnd.name);
-      if (!nodeId) continue;
-
-      activeNodeIds.delete(nodeId);
+      if (mappedNodeId != null) {
+        decrementActiveNodeCount(mappedNodeId);
+      }
       nodeIdBySpanId.delete(evt.spanId);
+
+      if (!nodeId) continue;
+      const remainingActiveCount = activeNodeCounts.get(nodeId) ?? 0;
       const error = kind.functionEnd.error || null;
       updateRuntime(direct, nodeId, {
         result: kind.functionEnd.result,
         hasResult: kind.functionEnd.result != null,
         imageOutputs: kind.functionEnd.result == null ? [] : findImageMedia(kind.functionEnd.result),
-        executionState: error ? 'error' : 'success',
+        executionState: remainingActiveCount > 0 ? 'running' : error ? 'error' : 'success',
         errorMessage: error,
       });
     }
@@ -130,10 +148,16 @@ export function collectGraphNodeRuntime(
 
   if (runState?.status === 'error' || runState?.status === 'cancelled') {
     const terminalState = runState.status;
-    const errorTargets = activeNodeIds.size > 0
-      ? [...activeNodeIds]
-      : runState.functionName
-        ? [findOutputNodeId(graphNodes, runState.functionName)].filter((id): id is string => id != null)
+    const activeNodeIds = [...activeNodeCounts.entries()]
+      .filter(([, count]) => count > 0)
+      .map(([nodeId]) => nodeId);
+    const fallbackNodeId = runState.functionName
+      ? findOutputNodeId(graphNodes, runState.functionName)
+      : null;
+    const errorTargets = activeNodeIds.length > 0
+      ? activeNodeIds
+      : fallbackNodeId != null && (activeNodeCounts.get(fallbackNodeId) ?? 0) === 0
+        ? [fallbackNodeId]
         : [];
 
     for (const nodeId of errorTargets) {

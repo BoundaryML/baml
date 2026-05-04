@@ -171,20 +171,20 @@ fn inline_branch_arms_for_visualization(graph: &mut ControlFlowGraph) {
         .map(|node| node.id)
         .collect();
 
+    let mut children_map = build_children_map(&graph.nodes);
     for arm_id in arm_ids {
         if !graph.nodes.contains_key(&arm_id) {
             continue;
         }
 
-        let children_map = build_children_map(&graph.nodes);
         let has_children = children_map
             .get(&arm_id)
             .is_some_and(|children| !children.is_empty());
 
         // Keep empty/synthetic arms as visible leaf nodes (for example the
         // implicit `else` arm on an `if` without an explicit else block).
-        if has_children {
-            inline_node(graph, arm_id, &children_map);
+        if has_children && inline_node(graph, arm_id, &children_map) {
+            children_map = build_children_map(&graph.nodes);
         }
     }
 }
@@ -399,7 +399,7 @@ fn inline_branch_arms_and_scopes(graph: &ControlFlowGraph) -> ControlFlowGraph {
     let mut next = graph.clone();
 
     loop {
-        let children_map = build_children_map(&next.nodes);
+        let mut children_map = build_children_map(&next.nodes);
         let candidates = collect_candidates(&next.nodes, &children_map);
 
         if candidates.is_empty() {
@@ -412,9 +412,9 @@ fn inline_branch_arms_and_scopes(graph: &ControlFlowGraph) -> ControlFlowGraph {
                 continue;
             }
 
-            let children_map = build_children_map(&next.nodes);
             if inline_node(&mut next, candidate_id, &children_map) {
                 changed = true;
+                children_map = build_children_map(&next.nodes);
             }
         }
 

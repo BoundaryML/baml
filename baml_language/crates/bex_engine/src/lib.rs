@@ -156,7 +156,6 @@ impl Drop for AbortHandlesGuard {
 // ============================================================================
 
 /// A single active span in the engine's per-invocation span stack.
-#[derive(Clone)]
 struct EngineSpan {
     span_id: SpanId,
     parent_span_id: Option<SpanId>,
@@ -177,12 +176,6 @@ struct SpanState {
     /// Host-side call stack prefix (from Python @trace spans).
     /// Prepended to the engine's call stack in emitted events.
     host_call_stack: Vec<SpanId>,
-    /// Root span after a successful VM completion event has been emitted.
-    ///
-    /// Final return conversion still happens after that event. If conversion fails,
-    /// this lets observers receive a terminal error event for the root call instead
-    /// of retaining the earlier success.
-    completed_root_span: Option<EngineSpan>,
 }
 
 /// Errors that can occur during engine execution.
@@ -617,7 +610,7 @@ impl BexEngine {
         &self,
         call_id: CallId,
         span_state: &mut Option<SpanState>,
-        error: String,
+        error: &str,
     ) {
         let Some(state) = span_state.as_mut() else {
             return;
@@ -641,29 +634,7 @@ impl BexEngine {
                     name: span.label,
                     result: BexExternalValue::Null,
                     duration: span.started_at.elapsed(),
-                    error: Some(error.clone()),
-                }))),
-            });
-        }
-
-        if let Some(span) = state.completed_root_span.take() {
-            let mut call_stack = state.host_call_stack.clone();
-            call_stack.push(span.span_id.clone());
-
-            self.emit(RuntimeEvent {
-                call_id,
-                ctx: SpanContext {
-                    span_id: span.span_id,
-                    parent_span_id: span.parent_span_id,
-                    root_span_id: state.root_span_id.clone(),
-                },
-                call_stack,
-                timestamp: SystemTime::now(),
-                event: EventKind::Function(FunctionEvent::End(Box::new(FunctionEnd {
-                    name: span.label,
-                    result: BexExternalValue::Null,
-                    duration: span.started_at.elapsed(),
-                    error: Some(error),
+                    error: Some(error.to_string()),
                 }))),
             });
         }
@@ -998,7 +969,6 @@ impl BexEngine {
             }],
             root_span_id: effective_root_span_id,
             host_call_stack,
-            completed_root_span: None,
         });
 
         // Run the event loop with span tracking. On errors, emit FunctionEnd
@@ -1015,7 +985,8 @@ impl BexEngine {
             )
             .await;
         if let Err(err) = &result {
-            self.emit_error_function_end_events(call_id, &mut span_state, err.to_string());
+            let error = err.to_string();
+            self.emit_error_function_end_events(call_id, &mut span_state, &error);
         }
         result
 
@@ -1374,19 +1345,42 @@ impl BexEngine {
                     // "Cancel wins" semantics: if cancellation races with a
                     // completed VM step, report `Cancelled` rather than
                     // returning a success value.
-                    //
-                    // Still emit FunctionEnd first so tracing consumers see
-                    // a paired root FunctionStart/FunctionEnd span.
                     let cancelled = cancel.is_cancelled();
                     if cancelled {
                         abort_handles.abort_all();
+                        return Err(EngineError::Cancelled);
                     }
 
-                    // Emit FunctionEnd for the root entry-point span if tracing
+                    let (return_value, event_result) = if !copy_objects {
+                        if let Value::Object(ptr) = value {
+                            let handle = self.heap.create_handle(ptr);
+                            (
+                                BexExternalValue::Handle(handle),
+                                self.vm_value_to_owned(vm.proof(), &value),
+                            )
+                        } else {
+                            let external = self.convert_vm_value_to_external_with_type(
+                                &value,
+                                &return_type,
+                                vm.proof(),
+                            )?;
+                            (external.clone(), external)
+                        }
+                    } else {
+                        let external = self.convert_vm_value_to_external_with_type(
+                            &value,
+                            &return_type,
+                            vm.proof(),
+                        )?;
+                        (external.clone(), external)
+                    };
+
+                    // Emit FunctionEnd for the root entry-point span after the
+                    // final return value conversion succeeds. If conversion fails,
+                    // the active root span remains on the stack and the caller's
+                    // error path emits exactly one failing FunctionEnd.
                     if let Some(state) = span_state.as_mut() {
                         if let Some(root_span) = state.stack.pop() {
-                            state.completed_root_span = Some(root_span.clone());
-                            let external_result = self.vm_value_to_owned(vm.proof(), &value);
                             let mut full_call_stack = state.host_call_stack.clone();
                             full_call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
                             full_call_stack.push(root_span.span_id.clone());
@@ -1402,7 +1396,7 @@ impl BexEngine {
                                 event: EventKind::Function(FunctionEvent::End(Box::new(
                                     FunctionEnd {
                                         name: root_span.label,
-                                        result: external_result,
+                                        result: event_result,
                                         duration: root_span.started_at.elapsed(),
                                         error: None,
                                     },
@@ -1412,28 +1406,7 @@ impl BexEngine {
                         }
                     }
 
-                    if cancelled {
-                        return Err(EngineError::Cancelled);
-                    }
-
-                    // When copy_objects: false and the result is a heap object,
-                    // create a Handle. The `vm` permit is still live here and
-                    // proves GC-exclusion for the duration of this operation.
-                    if !copy_objects {
-                        if let Value::Object(ptr) = value {
-                            let handle = self.heap.create_handle(ptr);
-                            return Ok(BexExternalValue::Handle(handle));
-                        }
-                        // Non-object primitives fall through to normal conversion below.
-                    }
-
-                    // Normal deep-extraction: convert VM value to fully owned BexExternalValue.
-                    // `vm` is still live here and holds the permit that proves GC-exclusion.
-                    return self.convert_vm_value_to_external_with_type(
-                        &value,
-                        &return_type,
-                        vm.proof(),
-                    );
+                    return Ok(return_value);
                 }
 
                 VmExecState::ScheduleFuture(id) => {

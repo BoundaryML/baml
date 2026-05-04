@@ -144,6 +144,33 @@ describe('collectGraphNodeOutputs', () => {
     expect(runtime.get('3')?.imageOutputs).toEqual([imageB]);
   });
 
+  it('keeps a node running until all overlapping spans mapped to it end', () => {
+    const runtime = collectGraphNodeRuntime(graphNodes, [
+      functionStartEvent('GenerateImages', 'span-a'),
+      functionStartEvent('GenerateImages', 'span-b'),
+      functionEndEvent('GenerateImages', imageA, undefined, 'span-a'),
+    ]);
+
+    expect(runtime.get('2')?.executionState).toBe('running');
+    expect(runtime.get('2')?.imageOutputs).toEqual([imageA]);
+    expect(runtime.get('1')?.executionState).toBe('running');
+  });
+
+  it('marks nodes with remaining overlapping spans as cancelled on terminal cancellation', () => {
+    const runtime = collectGraphNodeRuntime(
+      graphNodes,
+      [
+        functionStartEvent('GenerateImages', 'span-a'),
+        functionStartEvent('GenerateImages', 'span-b'),
+        functionEndEvent('GenerateImages', imageA, undefined, 'span-a'),
+      ],
+      { status: 'cancelled' },
+    );
+
+    expect(runtime.get('2')?.executionState).toBe('cancelled');
+    expect(runtime.get('1')?.executionState).toBe('cancelled');
+  });
+
   it('marks active nodes as cancelled when the run is cancelled', () => {
     const runtime = collectGraphNodeRuntime(
       graphNodes,

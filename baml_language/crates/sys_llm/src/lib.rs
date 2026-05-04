@@ -535,6 +535,10 @@ fn parse_llm_output_for_target(
         target if nullable_media_kind(target).is_some() => {
             parse_nullable_media_output(target, output)
         }
+        baml_type::Ty::Optional(inner, _) if types::is_text_or_image_union(inner) => {
+            let items = mixed_text_image_parts(output, inner);
+            single_text_or_image_union_output(inner, items)
+        }
         baml_type::Ty::Union(_, _) if types::is_text_or_image_union(target) => {
             let items = mixed_text_image_parts(output, target);
             single_text_or_image_union_output(target, items)
@@ -1113,6 +1117,42 @@ mod tests {
             value.as_ref(),
             &BexExternalValue::String("hello world".into())
         );
+    }
+
+    #[test]
+    fn optional_text_image_union_parses_native_media_part() {
+        let mut output = super::parse_response::LlmOutput::default();
+        output.push_media(
+            Arc::new(MediaValue::new(
+                baml_base::MediaKind::Image,
+                MediaContent::Base64 {
+                    base64_data: "aW1hZ2U=".into(),
+                },
+                Some("image/png".into()),
+            )),
+            None,
+            serde_json::Value::Null,
+        );
+
+        let inner = ty_text_image_union();
+        let result = super::parse_llm_output_for_target(&ty_optional(inner.clone()), &output)
+            .unwrap()
+            .expect("expected optional union media");
+        let BexExternalValue::Union { value, metadata } = result else {
+            panic!("expected text|image union");
+        };
+        assert_eq!(metadata.union_type, inner);
+        assert_eq!(
+            metadata.selected_option,
+            baml_type::Ty::Media(baml_base::MediaKind::Image, TyAttr::default())
+        );
+        let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(media)) =
+            value.as_ref()
+        else {
+            panic!("expected media union value");
+        };
+        assert_eq!(media.base64(), "aW1hZ2U=");
+        assert_eq!(media.mime_type().as_deref(), Some("image/png"));
     }
 
     #[tokio::test]
