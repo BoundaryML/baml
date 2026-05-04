@@ -1,0 +1,636 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.bare_type_arm(v: int | string) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var v
+    is_type string
+    pop_jump_if_false L2
+    load_const 2
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function user.call_either_int_caller(cb: (int) -> int | int throws never) -> int {
+    load_var cb
+    is_type (int) -> int throws never
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var cb
+    is_type (bool) -> int throws never
+    pop_jump_if_false L2
+    load_const 2
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function user.call_int_callback(cb: (int) -> int throws never) -> int {
+    load_var cb
+    is_type (int) -> int throws never
+    pop_jump_if_false L0
+    load_const 10
+    load_var cb
+    call_indirect
+
+  L0:
+    return
+}
+
+function user.call_with_callback(runner: ((int) -> int throws never) -> int | int throws never) -> int {
+    load_var runner
+    is_type ((int) -> int throws never) -> int throws never
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var runner
+    is_type ((string) -> int throws never) -> int throws never
+    pop_jump_if_false L2
+    load_const ?
+    make_closure .<lambda(call_with_callback, 1)>
+    load_var runner
+    call_indirect
+    jump L2
+
+  L1:
+    load_const ?
+    make_closure .<lambda(call_with_callback, 0)>
+    load_var runner
+    call_indirect
+
+  L2:
+    return
+}
+
+function user.catch_chain_union(mode: int) -> int {
+    load_var mode
+    call user.risky_error
+    jump L3
+    load_var e
+    is_type AppError
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var e
+    is_type string
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    throw
+
+  L2:
+    load_const 1
+
+  L3:
+    return
+}
+
+function user.catch_paren_or_chain(mode: int) -> int {
+    load_var mode
+    call user.risky_error
+    jump L3
+    load_var e
+    is_type AppError
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var e
+    is_type string
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    throw
+
+  L2:
+    load_const 1
+
+  L3:
+    return
+}
+
+function user.catch_widening_chain(mode: int) -> int {
+    load_var mode
+    call user.risky_error
+    jump L4
+    load_var e
+    is_type string
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var e
+    is_type AppError
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    throw
+
+  L2:
+    load_const 2
+    jump L4
+
+  L3:
+    load_const 1
+
+  L4:
+    return
+}
+
+function user.chain_narrow_then_wildcard(v: int | string | bool) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var v
+
+  L2:
+    return
+}
+
+function user.deeply_parenthesized_binding(v: int) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    load_var v
+
+  L0:
+    return
+}
+
+function user.dispatch_callback(cb: (int) -> int | string throws never) -> int {
+    load_var cb
+    is_type (int) -> int throws never
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var cb
+    is_type (string) -> string throws never
+    pop_jump_if_false L2
+    load_const 0
+    jump L2
+
+  L1:
+    load_const 0
+    load_var cb
+    call_indirect
+
+  L2:
+    return
+}
+
+function user.dispatch_with_wildcard(cb: (int) -> int | int throws never) -> int {
+    load_var cb
+    is_type (int) -> int throws never
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
+    load_var cb
+    is_type (int) -> int throws never
+    pop_jump_if_false L0
+    load_var cb
+    is_type (int) -> int | string throws never
+    pop_jump_if_false L0
+
+  L0:
+    load_const 1
+    return
+}
+
+function user.for_let_chain_widening(items: int[]) -> int {
+    load_const 0
+    store_var sum
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var items
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var sum
+    return
+
+  L2:
+    load_var items
+    load_var __for_idx
+    load_array_element
+    store_var n
+    load_var sum
+    load_const 1
+    add_int
+    store_var sum
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L0
+}
+
+function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
+    load_const 0
+    store_var total
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var items
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var total
+    return
+
+  L2:
+    load_const 0
+    load_var items
+    load_var __for_idx
+    load_array_element
+    call_indirect
+    store_var _9
+    load_var total
+    load_var _9
+    add_int
+    store_var total
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L0
+}
+
+function user.for_let_multi_chain(items: (int | string | bool)[]) -> int {
+    load_const 0
+    store_var count
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var items
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var count
+    return
+
+  L2:
+    load_var items
+    load_var __for_idx
+    load_array_element
+    store_var v
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L0
+}
+
+function user.for_let_with_narrow(items: int[]) -> int {
+    load_const 0
+    store_var sum
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var items
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var sum
+    return
+
+  L2:
+    load_var sum
+    load_var items
+    load_var __for_idx
+    load_array_element
+    add_int
+    store_var sum
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L0
+}
+
+function user.int_widens_to_alias(v: int | float) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L1
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var v
+    is_type float
+    pop_jump_if_false L1
+
+  L1:
+    load_const 1
+    return
+}
+
+function user.int_widens_to_optional(v: int?) -> int? {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    load_var v
+    pop 1
+    load_const false
+    pop_jump_if_false L0
+    load_var v
+
+  L0:
+    return
+}
+
+function user.int_widens_to_union(v: int | string) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L1
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var v
+    is_type string
+    pop_jump_if_false L1
+
+  L1:
+    load_const 1
+    return
+}
+
+function user.literal_widens_to_int(v: int) -> int {
+    load_var v
+    is_type 1
+    pop_jump_if_false L0
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    load_var v
+
+  L0:
+    return
+}
+
+function user.multi_narrow_chain(v: int) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    load_var v
+
+  L0:
+    return
+}
+
+function user.or_with_repeated_bare_binding(v: int) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var v
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var v
+    is_type int
+    pop_jump_if_false L3
+
+  L2:
+    load_var v
+
+  L3:
+    return
+}
+
+function user.or_with_repeated_typed_binding(v: int | string) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var v
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L3
+
+  L2:
+    load_var v
+
+  L3:
+    return
+}
+
+function user.paren_atom_outer_chain(v: int) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    load_var v
+
+  L0:
+    return
+}
+
+function user.paren_chains_in_or(v: int | string) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var v
+    is_type string
+    pop_jump_if_false L1
+
+  L1:
+    load_const 1
+    return
+}
+
+function user.paren_fn_pattern_with_chain(cb: (int) -> int throws never) -> int {
+    load_var cb
+    is_type (int) -> int throws never
+    pop_jump_if_false L0
+    load_var cb
+    is_type (int) -> int throws never
+    pop_jump_if_false L0
+    load_const 0
+    load_var cb
+    call_indirect
+
+  L0:
+    return
+}
+
+function user.paren_union_outer_chain(v: int) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var v
+    is_type int
+    pop_jump_if_false L2
+
+  L1:
+    load_var v
+    is_type int
+    pop_jump_if_false L2
+    load_var v
+
+  L2:
+    return
+}
+
+function user.risky_error(mode: int) -> int {
+    load_var mode
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "boom"
+    throw
+
+  L1:
+    alloc_instance user.AppError
+    load_const 1
+    init_field .code
+    throw
+}
+
+function user.unwrap_curried(f: (int) -> ((int) -> ((int) -> int throws never) throws never) throws never | (string) -> ((string) -> string throws never) throws never) -> int {
+    load_var f
+    is_type (int) -> ((int) -> ((int) -> int throws never) throws never) throws never
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var f
+    is_type (string) -> ((string) -> string throws never) throws never
+    pop_jump_if_false L2
+    load_const 0
+    jump L2
+
+  L1:
+    load_const 1
+    load_var f
+    call_indirect
+    store_var _5
+    load_const 2
+    load_var _5
+    call_indirect
+    store_var _4
+    load_const 3
+    load_var _4
+    call_indirect
+
+  L2:
+    return
+}
+
+function user.unwrap_typed(cb: (int) -> void | void throws never) -> void {
+    load_var cb
+    is_type (int) -> void throws never
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var cb
+    is_type (string) -> void throws never
+    pop_jump_if_false L2
+    load_const ""
+    load_var cb
+    call_indirect
+    jump L2
+
+  L1:
+    load_const 0
+    load_var cb
+    call_indirect
+
+  L2:
+    return
+}
