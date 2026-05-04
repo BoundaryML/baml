@@ -68,7 +68,6 @@ pub enum LspError {
 pub struct FunctionInfo {
     pub name: String,
     pub kind: FunctionKind,
-    pub origin: FunctionOrigin,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<LlmCapabilities>,
 }
@@ -78,24 +77,6 @@ pub struct FunctionInfo {
 pub enum FunctionKind {
     Llm,
     Expr,
-}
-
-#[derive(Debug, Clone, Copy, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum FunctionOrigin {
-    UserDefined,
-    Companion,
-    Internal,
-}
-
-impl From<baml_project::FunctionOrigin> for FunctionOrigin {
-    fn from(origin: baml_project::FunctionOrigin) -> Self {
-        match origin {
-            baml_project::FunctionOrigin::UserDefined => Self::UserDefined,
-            baml_project::FunctionOrigin::Companion => Self::Companion,
-            baml_project::FunctionOrigin::Internal => Self::Internal,
-        }
-    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

@@ -53,30 +53,11 @@ pub enum PathSegment {
 #[serde(rename_all = "camelCase")]
 pub enum NodeType {
     FunctionRoot,
-    LlmFunction,
     HeaderContextEnter,
     BranchGroup,
     BranchArm,
     Loop,
     OtherScope,
-}
-
-/// Source range for a graph node.
-///
-/// Line and column values are 0-indexed LSP/VS Code positions. `end_*` is
-/// intentionally derived from an end offset that has already been expanded by
-/// the caller, so clients can select the whole span directly.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SourceSpan {
-    pub file_id: u32,
-    pub file_path: String,
-    pub start_offset: u32,
-    pub end_offset: u32,
-    pub line: u32,
-    pub column: u32,
-    pub end_line: u32,
-    pub end_column: u32,
 }
 
 /// A node in the control flow visualization graph.
@@ -91,13 +72,9 @@ pub struct Node {
     ///
     /// Interpretation depends on which builder created the graph:
     /// - VIR builder: index into `ExprBody.exprs` (convert via `ExprId::into_raw().into_u32()`)
-    /// - AST builder: index into `AstSourceMap`, with the high bit tagging statement spans
+    /// - AST builder: not yet set (always `None`)
     pub source_expr: Option<u32>,
     pub node_type: NodeType,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub llm_client: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_span: Option<SourceSpan>,
     #[serde(default)]
     pub is_container: bool,
 }
@@ -118,8 +95,6 @@ impl Node {
             label: label.into(),
             source_expr,
             node_type,
-            llm_client: None,
-            source_span: None,
             is_container: false,
         }
     }
@@ -133,12 +108,6 @@ impl Node {
             None,
             NodeType::FunctionRoot,
         )
-    }
-
-    #[must_use]
-    pub fn with_llm_client(mut self, client_name: impl Into<String>) -> Self {
-        self.llm_client = Some(client_name.into());
-        self
     }
 }
 
@@ -308,25 +277,30 @@ impl Frame {
 // LLM function graph builder
 // ---------------------------------------------------------------------------
 
-/// Build a single semantic node for a declarative LLM function.
+/// Build a simple 2-node control flow graph for an LLM function.
 ///
-/// The desugared render/build/call functions are implementation details, so the
-/// playground graph should surface only the top-level LLM call.
+/// Produces: `FunctionRoot` -> `OtherScope("LLM client: <client_name>")`.
 pub fn build_llm_control_flow_graph(function_name: &str, client_name: &str) -> ControlFlowGraph {
     let mut graph = GraphAccumulator::default();
-    let llm_id = graph.allocate_id();
+    let root_id = graph.allocate_id();
     let root_segment = PathSegment::FunctionRoot { ordinal: 0 };
     let root_key = encode_segments(function_name, std::slice::from_ref(&root_segment));
+    graph.add_node(Node::root(root_id, root_key, function_name));
+
+    let slug = slug_or_default("llm", "llm");
+    let segment = PathSegment::OtherScope { slug, ordinal: 0 };
+    let log_filter_key = encode_segments(function_name, &[root_segment, segment]);
+    let scope_id = graph.allocate_id();
     let node = Node::new(
-        llm_id,
+        scope_id,
+        Some(root_id),
+        log_filter_key,
+        format!("LLM client: {client_name}"),
         None,
-        root_key,
-        function_name,
-        None,
-        NodeType::LlmFunction,
-    )
-    .with_llm_client(client_name);
+        NodeType::OtherScope,
+    );
     graph.add_node(node);
+    graph.add_edge(root_id, scope_id);
 
     graph.finish()
 }
@@ -362,7 +336,6 @@ pub fn slug_or_default(label: &str, default: &str) -> String {
 pub fn describe_node_type(node_type: &NodeType) -> &'static str {
     match node_type {
         NodeType::FunctionRoot => "function",
-        NodeType::LlmFunction => "llm-function",
         NodeType::HeaderContextEnter => "header",
         NodeType::BranchGroup => "branch-group",
         NodeType::BranchArm => "branch-arm",

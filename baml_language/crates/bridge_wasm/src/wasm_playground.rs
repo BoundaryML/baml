@@ -11,7 +11,6 @@ use crate::send_wrapper::SendWrapper;
 pub struct FunctionInfo {
     pub name: String,
     pub kind: FunctionKind,
-    pub origin: FunctionOrigin,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<LlmCapabilities>,
 }
@@ -22,15 +21,6 @@ pub struct FunctionInfo {
 pub enum FunctionKind {
     Llm,
     Expr,
-}
-
-#[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
-#[serde(rename_all = "camelCase")]
-pub enum FunctionOrigin {
-    UserDefined,
-    Companion,
-    Internal,
 }
 
 #[derive(Tsify, Serialize)]
@@ -120,17 +110,6 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                                 kind: match f.kind {
                                     bex_project::FunctionKind::Llm => FunctionKind::Llm,
                                     bex_project::FunctionKind::Expr => FunctionKind::Expr,
-                                },
-                                origin: match f.origin {
-                                    bex_project::FunctionOrigin::UserDefined => {
-                                        FunctionOrigin::UserDefined
-                                    }
-                                    bex_project::FunctionOrigin::Companion => {
-                                        FunctionOrigin::Companion
-                                    }
-                                    bex_project::FunctionOrigin::Internal => {
-                                        FunctionOrigin::Internal
-                                    }
                                 },
                                 capabilities: f.capabilities.map(|c| LlmCapabilities {
                                     render_prompt: c.render_prompt,
@@ -223,7 +202,7 @@ impl WasmEventSink {
 impl bex_events::EventSink for WasmEventSink {
     fn send(&self, event: bex_events::RuntimeEvent) {
         let call_id = event.call_id.0;
-        let options = bridge_ctypes::CffiHandleTableOptions::for_wire();
+        let options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
         match bridge_ctypes::runtime_event_to_bytes(&event, &options) {
             Ok(data) => {
                 let notification = PlaygroundNotification::RuntimeEvent { data, call_id };
