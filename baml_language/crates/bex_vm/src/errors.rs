@@ -126,6 +126,9 @@ pub enum VmInternalError {
 
     #[error("Invalid manual notify")]
     InvalidManualNotify,
+
+    #[error("invalid compact opcode byte: {0}")]
+    InvalidOpcode(u8),
 }
 
 /// Any kind of virtual machine error.
