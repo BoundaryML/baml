@@ -1,0 +1,64 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 36865
+---
+=== TIR2 ===
+function user.or_different_names_two(v: int) -> int throws never {
+  { : 1
+    match (v : int) : 1
+      x | y =>
+        1 : 1
+  }
+}
+function user.or_different_names_three(v: int) -> int throws never {
+  { : 1
+    match (v : int) : 1
+      x | y | z =>
+        1 : 1
+  }
+}
+function user.or_one_binds_one_doesnt(v: int) -> int throws never {
+  { : 1
+    match (v : int) : 1
+      x | _ =>
+        1 : 1
+  }
+}
+function user.or_mixed_names_in_chain(v: int | string) -> int throws never {
+  { : 1
+    match (v : int | string) : 1
+      x: int | y: string =>
+        1 : 1
+  }
+}
+function user.or_same_name_distinct_narrows(v: int | string) -> int throws never {
+  { : 1
+    match (v : int | string) : 1
+      x: int | x: string =>
+        1 : 1
+  }
+  !! 1289..1302: Or-pattern alternatives bind `x` with conflicting types: `int` vs `string`
+}
+function user.chain_violates_subtype(v: int) -> int throws never {
+  { : 1
+    match (v : int) : 1
+      n: int: string =>
+        1 : 1
+  }
+  !! 1663..1667: type mismatch: expected string, got int
+}
+function user.literal_narrow_violates(v: int) -> int throws never {
+  { : 1
+    match (v : int) : 1
+      n: "hello": int =>
+        1 : 1
+  }
+  !! 1830..1838: type mismatch: expected int, got "hello"
+}
+function user.binding_in_middle_of_chain() -> int throws never {
+  { : 1
+    let x: 1: int: y = 1 : 1
+    1 : 1
+  }
+  !! 2150..2154: type mismatch: expected never, got int
+}

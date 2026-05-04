@@ -177,9 +177,9 @@ function deeply_parenthesized_binding(v: int) -> int {
 }
 
 // Paren-wrapped Or with each branch itself a chain.
-function paren_chains_in_or(v: int | string) -> int {
+function paren_chains_in_or(v: int) -> int {
     match (v) {
-        ((let x: int)) | ((let x: string)) => 1
+        ((let x: int)) | ((let x: int)) => 1
     }
 }
 
@@ -263,5 +263,104 @@ function catch_widening_chain(mode: int) -> int {
     risky_error(mode) catch (e) {
         let s: string => 1,
         let app: AppError => 2
+    }
+}
+
+// ============================================================================
+// let-statement chain narrows (multi-link widening)
+// ============================================================================
+
+// Two-step widen: literal → primitive.
+function let_literal_to_primitive() -> int {
+    let x: 1: int = 1;
+    x
+}
+
+// Three-step widen: literal → primitive → union.
+function let_three_step_widen() -> int {
+    let x: 1: int: int | string = 1;
+    1
+}
+
+// Four-step widen: literal → primitive → 2-union → 3-union.
+function let_four_step_widen() -> int {
+    let x: 1: int: int | string: int | string | float = 1;
+    1
+}
+
+// Primitive → optional → optional-union (each step a supertype of the prior).
+function let_widen_to_nullable_union() -> int {
+    let x: int: int?: int | string | null = 1;
+    1
+}
+
+// String literal → primitive → union of literals + primitive.
+function let_string_literal_widening() -> int {
+    let s: "hello": string: string | int = "hello";
+    1
+}
+
+// Function-type widen: narrower return → wider return.
+function let_fn_return_widen() -> int {
+    let f: (int) -> int: (int) -> int | string = (x: int) -> int { x };
+    f(0)
+}
+
+// List-element widen: int[] <: (int | string)[].
+function let_list_widen(items: int[]) -> int {
+    let xs: int[]: (int | string)[] = items;
+    xs.length()
+}
+
+// Bare wildcard chain: `_: T: U` is allowed (Wildcard contributes Never which
+// is a subtype of everything). Effective annotation is the rightmost.
+function let_wildcard_chain() -> int {
+    let _: int: int | string = 1;
+    1
+}
+
+// Mixed chain: literal narrowing through nullable.
+function let_literal_to_nullable() -> int {
+    let x: 0: int: int? = 0;
+    1
+}
+
+// ============================================================================
+// Type unions with suffixes wrapped in many layers of parens
+// ============================================================================
+
+// Single-layer paren around a union with array suffix.
+function nested_paren_union_array_one(items: (int | string)[]) -> int {
+    items.length()
+}
+
+// Two paren layers: `((int | string)[])` is the same as `(int | string)[]`.
+function nested_paren_union_array_two(items: ((int | string)[])) -> int {
+    items.length()
+}
+
+// Three paren layers. Chain narrow on the outside.
+function nested_paren_union_array_three(v: (((int | string)[])[])) -> int {
+    v.length()
+}
+
+// Chained suffix: union with `[]` wrapped, then `?` outside.
+function nested_paren_union_array_optional(v: ((int | string)[])?) -> int {
+    match (v) {
+        let _: ((int | string)[])? => 1
+    }
+}
+
+// In a let-stmt chain narrow: paren'd union with array suffix, widened to
+// optional outer.
+function let_nested_paren_union_chain(items: (int | string)[]) -> int {
+    let xs: (int | string)[]: ((int | string)[])? = items;
+    1
+}
+
+// In a match arm, deeply parenthesized type union as the pattern.
+function match_nested_paren_union(v: (int | string)[]) -> int {
+    match (v) {
+        let _: (((int | string)[])) => 1
     }
 }

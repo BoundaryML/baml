@@ -3677,17 +3677,25 @@ impl LoweringContext<'_> {
                 is_watched,
                 ..
             } => {
-                // Extract binding name from pattern
+                // Extract binding names from pattern. A simple `let x` has
+                // one name; a chain `let x: let y: let z` has three. The
+                // first name owns the declared slot (the init writes into
+                // it directly); remaining names alias via copy-assignment.
                 let pat = self.body.patterns[pattern].clone();
-                let name = pat
-                    .binding_name(&self.body.patterns)
+                let names: Vec<Name> = pat
+                    .bound_names(&self.body.patterns)
+                    .into_iter()
                     .cloned()
-                    .unwrap_or_else(|| Name::new("_"));
+                    .collect();
+                let first_name = names.first().cloned().unwrap_or_else(|| Name::new("_"));
 
                 let local_ty = self.pat_ty(pattern);
-                let local =
-                    self.builder
-                        .declare_local(Some(name.clone()), local_ty, None, is_watched);
+                let local = self.builder.declare_local(
+                    Some(first_name.clone()),
+                    local_ty.clone(),
+                    None,
+                    is_watched,
+                );
 
                 if let Some(init) = initializer {
                     self.lower_expr(init, Place::local(local));
@@ -3698,9 +3706,25 @@ impl LoweringContext<'_> {
                     );
                 }
 
-                self.locals.insert(name, local);
+                self.locals.insert(first_name, local);
                 if let Some(binding_id) = self.binding_id_for_statement(stmt_id, pattern) {
                     self.binding_locals.insert(binding_id, local);
+                }
+
+                // Additional chain-link bindings get their own locals that
+                // copy from the first. `let x: let y` ⇒ y = x at runtime.
+                for extra in names.iter().skip(1) {
+                    let alias = self.builder.declare_local(
+                        Some(extra.clone()),
+                        local_ty.clone(),
+                        None,
+                        false,
+                    );
+                    self.builder.assign(
+                        Place::local(alias),
+                        Rvalue::Use(Operand::Copy(Place::Local(local))),
+                    );
+                    self.locals.insert(extra.clone(), alias);
                 }
 
                 if is_watched {
@@ -3869,7 +3893,12 @@ impl LoweringContext<'_> {
                 // distinct cell.
                 {
                     let pat = &self.body.patterns[binding];
-                    if let Some(name) = pat.binding_name(&self.body.patterns) {
+                    let names: Vec<Name> = pat
+                        .bound_names(&self.body.patterns)
+                        .into_iter()
+                        .cloned()
+                        .collect();
+                    if let Some(first_name) = names.first().cloned() {
                         let narrow = self.pattern_narrow_type(binding);
                         let ty = if let Some(narrow) = &narrow {
                             self.resolve_type_annotation(narrow)
@@ -3879,17 +3908,35 @@ impl LoweringContext<'_> {
                                 .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
                                 .unwrap_or_else(|| self.builder.local_ty(elem_local))
                         };
-                        let local = self
-                            .builder
-                            .declare_local(Some(name.clone()), ty, None, false);
+                        let local = self.builder.declare_local(
+                            Some(first_name.clone()),
+                            ty.clone(),
+                            None,
+                            false,
+                        );
                         self.builder.fresh_cell(local);
                         self.builder.assign(
                             Place::local(local),
                             Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
                         );
-                        self.locals.insert(name.clone(), local);
+                        self.locals.insert(first_name, local);
                         if let Some(binding_id) = self.binding_id_for_statement(stmt_id, binding) {
                             self.binding_locals.insert(binding_id, local);
+                        }
+                        // Additional chain-link bindings: each is an alias of
+                        // the first, like in let-stmt lowering.
+                        for extra in names.iter().skip(1) {
+                            let alias = self.builder.declare_local(
+                                Some(extra.clone()),
+                                ty.clone(),
+                                None,
+                                false,
+                            );
+                            self.builder.assign(
+                                Place::local(alias),
+                                Rvalue::Use(Operand::Copy(Place::Local(local))),
+                            );
+                            self.locals.insert(extra.clone(), alias);
                         }
                     }
                 }
@@ -5117,27 +5164,60 @@ impl LoweringContext<'_> {
     }
 
     fn bind_pattern(&mut self, scrutinee: Local, pat_id: AstPatId) {
-        let pat = &self.body.patterns[pat_id];
-        if let Some(name) = pat.binding_name(&self.body.patterns) {
-            let name = name.clone();
-            let narrow = self.pattern_narrow_type(pat_id);
-            let ty = if let Some(narrow) = &narrow {
-                self.resolve_type_annotation(narrow)
-            } else {
-                self.pat_types
-                    .get(&(self.current_scope, pat_id))
-                    .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
-                    .unwrap_or_else(|| self.builder.local_ty(scrutinee))
-            };
-            let local = self
-                .builder
-                .declare_local(Some(name.clone()), ty, None, false);
-            self.builder.assign(
-                Place::local(local),
-                Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
-            );
-            self.locals.insert(name, local);
-            self.record_pattern_binding_local(pat_id, local);
+        // Pass the root pat_id through recursion: HIR registers bindings
+        // keyed by the OUTER pattern PatId (the let-stmt's pattern, the
+        // match-arm's pattern, etc.), never by the inner Bind. To wire up
+        // closure capture lookups correctly, we register the local against
+        // that root.
+        self.bind_pattern_inner(scrutinee, pat_id, pat_id);
+    }
+
+    fn bind_pattern_inner(&mut self, scrutinee: Local, pat_id: AstPatId, root: AstPatId) {
+        match self.body.patterns[pat_id].clone() {
+            AstPattern::Bind { name } => {
+                let narrow = self.pattern_narrow_type(root);
+                let ty = if let Some(narrow) = &narrow {
+                    self.resolve_type_annotation(narrow)
+                } else {
+                    self.pat_types
+                        .get(&(self.current_scope, pat_id))
+                        .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
+                        .unwrap_or_else(|| self.builder.local_ty(scrutinee))
+                };
+                let local = self
+                    .builder
+                    .declare_local(Some(name.clone()), ty, None, false);
+                self.builder.assign(
+                    Place::local(local),
+                    Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
+                );
+                self.locals.insert(name, local);
+                self.record_pattern_binding_local(root, local);
+            }
+            AstPattern::Chain(parts) => {
+                // Every Bind in a chain refers to the same scrutinee value
+                // (each link is a refinement, not a sub-projection). Bind
+                // them all in order, keeping the root pat_id.
+                for p in parts {
+                    self.bind_pattern_inner(scrutinee, p, root);
+                }
+            }
+            AstPattern::Or(parts) => {
+                // HIR ensures each Or branch binds the same name set; pick
+                // the first branch's bindings (every branch agrees).
+                if let Some(first) = parts.first() {
+                    self.bind_pattern_inner(scrutinee, *first, root);
+                }
+            }
+            AstPattern::Class { fields, .. } => {
+                // Class destructure is parser-gated. Recurse into field
+                // patterns for completeness — field projection lookup is
+                // phase-2 work, so the scrutinee is shared for now.
+                for f in fields {
+                    self.bind_pattern_inner(scrutinee, f.pat, root);
+                }
+            }
+            AstPattern::Wildcard | AstPattern::Type(_) => {}
         }
     }
 }

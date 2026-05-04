@@ -3074,12 +3074,23 @@ impl<'a> Parser<'a> {
     /// Parse a single atomic pattern.
     fn parse_pattern_atom(&mut self) {
         if self.at(TokenKind::LParen) {
-            // `(` may start either a parenthesized pattern OR a function-type
-            // pattern atom (`(int) -> int`, `(x: int, y: int) -> int`). The
-            // disambiguator is whether the matching `)` is followed by `->`.
+            // `(` may start either a parenthesized pattern OR a parenthesized
+            // type expression. Type expression iff the matching `)` is
+            // followed by `->` (function type) or `[` / `?` (array / optional
+            // suffix on a paren'd type, e.g. `(int | string)[]`).
+            //
+            // Function-type paren keeps `|` for the surrounding `UNION_PATTERN`
+            // (so `(int) -> int | string` parses as `Or([fn, string])`).
+            // Paren-type-suffix paren consumes `|` because the whole
+            // expression is unambiguously one type — `(int | string)[] | float`
+            // parses as the union type `(int | string)[] | float`.
             if self.looks_like_function_type_paren() {
                 self.with_node(SyntaxKind::TYPE_PATTERN, |p| {
                     p.parse_type_with(/* consume_union = */ false);
+                });
+            } else if self.looks_like_paren_type_suffix() {
+                self.with_node(SyntaxKind::TYPE_PATTERN, |p| {
+                    p.parse_type_with(/* consume_union = */ true);
                 });
             } else {
                 self.with_node(SyntaxKind::PAREN_PATTERN, |p| {
@@ -3147,6 +3158,41 @@ impl<'a> Parser<'a> {
     /// correctly. On any mismatch (unbalanced or out-of-order closers) we
     /// bail out and let the caller treat it as a paren pattern; the real
     /// error will surface during the actual parse.
+    /// True if `(...)` is followed by a type-expression suffix (`[` or `?`),
+    /// indicating a parenthesized type like `(int | string)[]` rather than a
+    /// parenthesized pattern.
+    fn looks_like_paren_type_suffix(&self) -> bool {
+        debug_assert!(self.at(TokenKind::LParen));
+        let mut stack: Vec<TokenKind> = vec![TokenKind::RParen];
+        let mut i: usize = 1;
+        loop {
+            let Some(tok) = self.peek(i) else {
+                return false;
+            };
+            match tok.kind {
+                TokenKind::LParen => stack.push(TokenKind::RParen),
+                TokenKind::LBracket => stack.push(TokenKind::RBracket),
+                TokenKind::LBrace => stack.push(TokenKind::RBrace),
+                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
+                    let Some(expected) = stack.pop() else {
+                        return false;
+                    };
+                    if expected != close {
+                        return false;
+                    }
+                    if stack.is_empty() {
+                        return matches!(
+                            self.peek(i + 1).map(|t| t.kind),
+                            Some(TokenKind::LBracket | TokenKind::Question)
+                        );
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+    }
+
     fn looks_like_function_type_paren(&self) -> bool {
         debug_assert!(self.at(TokenKind::LParen));
         let mut stack: Vec<TokenKind> = vec![TokenKind::RParen];

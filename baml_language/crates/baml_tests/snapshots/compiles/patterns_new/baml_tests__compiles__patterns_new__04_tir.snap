@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17863
 ---
 === TIR2 ===
 function user.or_with_repeated_typed_binding(v: int | string) -> int throws never {
@@ -173,10 +174,10 @@ function user.deeply_parenthesized_binding(v: int) -> int throws never {
         x : int
   }
 }
-function user.paren_chains_in_or(v: int | string) -> int throws never {
+function user.paren_chains_in_or(v: int) -> int throws never {
   { : 1
-    match (v : int | string) : 1
-      x: int | x: string =>
+    match (v : int) : 1
+      x: int | x: int =>
         1 : 1
   }
 }
@@ -263,6 +264,101 @@ function user.catch_widening_chain(mode: int) -> int throws never {
           1 : 1
         app: AppError =>
           2 : 2
+  }
+}
+function user.let_literal_to_primitive() -> int throws never {
+  { : 1
+    let x: 1: int = 1 : 1
+    x : 1
+  }
+}
+function user.let_three_step_widen() -> int throws never {
+  { : 1
+    let x: 1: int: int | string = 1 : 1
+    1 : 1
+  }
+}
+function user.let_four_step_widen() -> int throws never {
+  { : 1
+    let x: 1: int: int | string: int | string | float = 1 : 1
+    1 : 1
+  }
+}
+function user.let_widen_to_nullable_union() -> int throws never {
+  { : 1
+    let x: int: int?: int | string | null = 1 : 1
+    1 : 1
+  }
+}
+function user.let_string_literal_widening() -> int throws never {
+  { : 1
+    let s: "hello": string: string | int = "hello" : "hello"
+    1 : 1
+  }
+}
+function user.let_fn_return_widen() -> int throws never {
+  { : int
+    let f: (int) -> int: (int) -> int | string = : (x: int) -> int throws never
+      (x: int) -> int { ... } : (x: int) -> int throws never
+        {
+          x
+        }
+    f(0) : int
+  }
+}
+lambda user.let_fn_return_widen {
+}
+function user.let_list_widen(items: int[]) -> int throws never {
+  { : int
+    let xs: int[]: (int | string)[] = items : int[]
+    xs.length() : int
+  }
+}
+function user.let_wildcard_chain() -> int throws never {
+  { : 1
+    let _: int: int | string = 1 : 1
+    1 : 1
+  }
+}
+function user.let_literal_to_nullable() -> int throws never {
+  { : 1
+    let x: 0: int: int? = 0 : 0
+    1 : 1
+  }
+}
+function user.nested_paren_union_array_one(items: (int | string)[]) -> int throws never {
+  { : int
+    items.length() : int
+  }
+}
+function user.nested_paren_union_array_two(items: (int | string)[]) -> int throws never {
+  { : int
+    items.length() : int
+  }
+}
+function user.nested_paren_union_array_three(v: (int | string)[][]) -> int throws never {
+  { : int
+    v.length() : int
+  }
+}
+function user.nested_paren_union_array_optional(v: (int | string)[]?) -> int throws never {
+  { : 1
+    match (v : (int | string)[]?) : 1
+      _: (int | string)[]? =>
+        1 : 1
+  }
+}
+function user.let_nested_paren_union_chain(items: (int | string)[]) -> int throws never {
+  { : 1
+    let xs: (int | string)[]: (int | string)[]? = items : (int | string)[]
+    1 : 1
+  }
+}
+function user.match_nested_paren_union(v: (int | string)[]) -> int throws never {
+  { : 1
+    match (v : (int | string)[]) : 1
+      _: (int | string)[] =>
+        1 : 1
   }
 }
 type user.Number$stream = int | float

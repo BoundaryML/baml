@@ -424,6 +424,9 @@ pub fn infer_scope_types<'db>(
                         }
                     }
                     builder.set_generic_params(generic_params.clone());
+                    if let Some(sm) = baml_compiler2_ppir::function_body_source_map(db, func_loc) {
+                        builder.set_body_source_map(sm);
+                    }
 
                     if let FunctionBody::Expr(expr_body) = body.as_ref() {
                         // Get declared return type

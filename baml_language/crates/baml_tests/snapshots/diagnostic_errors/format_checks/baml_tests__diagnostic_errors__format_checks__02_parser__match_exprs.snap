@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 29771
+assertion_line: 30460
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -1974,6 +1974,203 @@ SOURCE_FILE
             STRING_LITERAL "other"
               QUOTE """
               WORD "other"
+              QUOTE """
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let /* a leading */ n"
+                  KW_LET "let"
+                  WORD "n"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "/* c colon trailing */
+        /* d link2 leading */
+        int"
+                    WORD "int"
+                COLON ":"
+                UNION_PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "/* f colon2 trailing */
+        /* g link3 leading */
+        int"
+                      WORD "int"
+                  PIPE "|"
+                  TYPE_PATTERN
+                    TYPE_EXPR "string"
+                      WORD "string"
+            FAT_ARROW "=>"
+            BINARY_EXPR "n + 1"
+              WORD "n"
+              PLUS "+"
+              INTEGER_LITERAL "1"
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              UNION_PATTERN
+                PAREN_PATTERN
+                  L_PAREN "("
+                  PATTERN
+                    CHAIN_PATTERN
+                      BINDING_PATTERN "let /* 2a paren leading */ x"
+                        KW_LET "let"
+                        WORD "x"
+                      COLON ":"
+                      TYPE_PATTERN
+                        TYPE_EXPR "/* 2c colon trailing */ int"
+                          WORD "int"
+                  R_PAREN ")"
+                PIPE "|"
+                PAREN_PATTERN
+                  L_PAREN "("
+                  PATTERN
+                    CHAIN_PATTERN
+                      BINDING_PATTERN "let /* 6a paren leading */ x"
+                        KW_LET "let"
+                        WORD "x"
+                      COLON ":"
+                      TYPE_PATTERN
+                        TYPE_EXPR "/* 6c colon trailing */ int"
+                          WORD "int"
+                  R_PAREN ")"
+            FAT_ARROW "=>"
+            WORD "x"
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let n"
+                  KW_LET "let"
+                  WORD "n"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "/* after colon-1 */ 1"
+                    INTEGER_LITERAL "1"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "/* before colon-2 */ int"
+                    WORD "int"
+                COLON ":"
+                UNION_PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "/* after colon-3 */ int"
+                      WORD "int"
+                  PIPE "|"
+                  TYPE_PATTERN
+                    TYPE_EXPR "string"
+                      WORD "string"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              PAREN_PATTERN
+                L_PAREN "("
+                PATTERN
+                  UNION_PATTERN
+                    PAREN_PATTERN
+                      L_PAREN "("
+                      PATTERN
+                        CHAIN_PATTERN
+                          BINDING_PATTERN "let /* inner1 leading */ x"
+                            KW_LET "let"
+                            WORD "x"
+                          COLON ":"
+                          TYPE_PATTERN
+                            TYPE_EXPR "/* inner1 colon */ int"
+                              WORD "int"
+                      R_PAREN ")"
+                    PIPE "|"
+                    PAREN_PATTERN
+                      L_PAREN "("
+                      PATTERN
+                        CHAIN_PATTERN
+                          BINDING_PATTERN "let /* inner2 leading */ x"
+                            KW_LET "let"
+                            WORD "x"
+                          COLON ":"
+                          TYPE_PATTERN
+                            TYPE_EXPR "/* inner2 colon */ int"
+                              WORD "int"
+                      R_PAREN ")"
+                R_PAREN ")"
+            FAT_ARROW "=>"
+            WORD "x"
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              CHAIN_PATTERN
+                WILDCARD_PATTERN "_"
+                  WORD "_"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "/* colon trailing */ int"
+                    WORD "int"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "s"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              UNION_PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "MatchStatus.Active"
+                    WORD "MatchStatus"
+                    DOT "."
+                    WORD "Active"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "/* b */
+        MatchStatus.Inactive"
+                    WORD "MatchStatus"
+                    DOT "."
+                    WORD "Inactive"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "/* d */
+        MatchStatus.Pending"
+                    WORD "MatchStatus"
+                    DOT "."
+                    WORD "Pending"
+            FAT_ARROW "=>"
+            STRING_LITERAL "any"
+              QUOTE """
+              WORD "any"
               QUOTE """
           R_BRACE "}"
         R_BRACE "}"

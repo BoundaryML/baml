@@ -285,6 +285,12 @@ impl UnionPattern {
 }
 
 impl UnionPattern {
+    // TODO: trivia between Or-pattern alternatives (block comments before/
+    // after `|` and around member boundaries) is currently dropped. Mirroring
+    // `UnionType`'s handling almost works but breaks formatter idempotence
+    // for some cases — first pass wraps multi-line, second pass collapses to
+    // single-line. Trivia inside a chain narrow (between `:` and its type)
+    // IS preserved by `ChainPattern`; this only affects `|` boundaries.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         if printer
             .print(&*self.first, Shape::unlimited_single_line())
@@ -384,7 +390,7 @@ impl ChainPattern {
 impl Printable for ChainPattern {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print(&*self.first, shape.clone());
-        for (colon, pat) in &self.rest {
+        for (i, (colon, pat)) in self.rest.iter().enumerate() {
             printer.print_raw_token(colon);
             printer.print_str(" ");
             // Preserve trivia between `:` and the next pattern (block
@@ -395,10 +401,13 @@ impl Printable for ChainPattern {
             let pat_leading = printer.trivia.get_leading_for_element(pat);
             printer.print_trivia_squished(pat_leading);
             printer.print(pat, shape.clone());
-            // Trailing trivia on each link (except the last) — preserves
-            // block comments after the type annotation.
-            let pat_trailing = printer.trivia.get_trailing_for_element(pat);
-            printer.print_trivia_squished(pat_trailing);
+            // Trailing trivia on each link except the LAST — for the last
+            // link, the trailing trivia belongs to the surrounding context
+            // (e.g. the match-arm body) and printing it here would duplicate.
+            if i + 1 < self.rest.len() {
+                let pat_trailing = printer.trivia.get_trailing_for_element(pat);
+                printer.print_trivia_squished(pat_trailing);
+            }
         }
         PrintInfo::default_single_line()
     }

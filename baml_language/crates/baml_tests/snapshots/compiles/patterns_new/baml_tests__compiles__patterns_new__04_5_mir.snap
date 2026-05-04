@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17895
 ---
 === MIR2 ===
 fn user.bare_type_arm(v: int | string) -> int {
@@ -712,6 +713,170 @@ fn user.int_widens_to_union(v: int | string) -> int {
     }
 }
 
+fn user.let_fn_return_widen() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int) -> int throws never // f
+    let _2: (int) -> int throws never
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = copy _1;
+        _0 = call copy _2(const 0_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(let_fn_return_widen, 0)>(x: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.let_four_step_widen() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.let_list_widen(items: int[]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int[] // items // param
+    let _2: int[] // xs
+
+    bb0: {
+        _2 = copy _1;
+        _0 = call const fn baml.Array.length(copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.let_literal_to_nullable() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.let_literal_to_primitive() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: 1 // x
+
+    bb0: {
+        _1 = const 1_i64;
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.let_nested_paren_union_chain(items: (int | string)[]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int | string)[] // items // param
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.let_string_literal_widening() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.let_three_step_widen() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.let_widen_to_nullable_union() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.let_wildcard_chain() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.literal_widens_to_int(v: int) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -741,6 +906,27 @@ fn user.literal_widens_to_int(v: int) -> int {
     }
 }
 
+fn user.match_nested_paren_union(v: (int | string)[]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int | string)[] // v // param
+    let _2: bool
+
+    bb0: {
+        _2 = is_type(copy _1, List(Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _0 = const 1_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.multi_narrow_chain(v: int) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -766,6 +952,69 @@ fn user.multi_narrow_chain(v: int) -> int {
     }
 
     bb3: {
+        return;
+    }
+}
+
+fn user.nested_paren_union_array_one(items: (int | string)[]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int | string)[] // items // param
+
+    bb0: {
+        _0 = call const fn baml.Array.length(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.nested_paren_union_array_optional(v: (int | string)[]?) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int | string)[]? // v // param
+    let _2: bool
+
+    bb0: {
+        _2 = is_type(copy _1, Optional(List(Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _0 = const 1_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.nested_paren_union_array_three(v: (int | string)[][]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int | string)[][] // v // param
+
+    bb0: {
+        _0 = call const fn baml.Array.length(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.nested_paren_union_array_two(items: (int | string)[]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int | string)[] // items // param
+
+    bb0: {
+        _0 = call const fn baml.Array.length(copy _1) -> [bb1];
+    }
+
+    bb1: {
         return;
     }
 }
@@ -862,10 +1111,10 @@ fn user.paren_atom_outer_chain(v: int) -> int {
     }
 }
 
-fn user.paren_chains_in_or(v: int | string) -> int {
+fn user.paren_chains_in_or(v: int) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int | string // v // param
+    let _1: int // v // param
     let _2: bool
     let _3: bool
 
@@ -875,7 +1124,7 @@ fn user.paren_chains_in_or(v: int | string) -> int {
     }
 
     bb1: {
-        _3 = is_type(copy _1, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        _3 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _3 -> [bb2, bb3];
     }
 

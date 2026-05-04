@@ -593,8 +593,19 @@ impl<'db> SemanticIndexBuilder<'db> {
                         }
                     }
                     if !mismatched.is_empty() {
+                        // Tighten the span to cover just the Or's branches
+                        // rather than the whole containing pattern (which can
+                        // pull in surrounding trivia and span multiple lines).
+                        let or_span = match (parts.first(), parts.last()) {
+                            (Some(first), Some(last)) => {
+                                let first_range = source_map.pattern_span(*first);
+                                let last_range = source_map.pattern_span(*last);
+                                TextRange::new(first_range.start(), last_range.end())
+                            }
+                            _ => source_map.pattern_span(pat_id),
+                        };
                         diagnostics.push(Hir2Diagnostic::OrPatternBindingMismatch {
-                            or_span: source_map.pattern_span(pat_id),
+                            or_span,
                             mismatched_names: mismatched.into_iter().collect(),
                         });
                     }

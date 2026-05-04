@@ -16,7 +16,9 @@
 use std::collections::{BTreeSet, HashMap};
 
 use baml_base::Name;
-use baml_compiler2_ast::{self as ast, Expr, ExprBody, ExprId, PatId, Stmt, StmtId, TypeExpr};
+use baml_compiler2_ast::{
+    self as ast, AstSourceMap, Expr, ExprBody, ExprId, PatId, Stmt, StmtId, TypeExpr,
+};
 use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems},
@@ -284,6 +286,10 @@ pub struct TypeInferenceBuilder<'db> {
     /// function body so that `T` resolves to `Ty::TypeVar("T", TyAttr::default())` rather than
     /// `Ty::Unknown`.
     pub generic_params: Vec<Name>,
+    /// Source map for the body being analyzed. Set by `infer_scope_types`
+    /// before checking. Used to resolve `PatId` → `TextRange` when emitting
+    /// pattern-position diagnostics.
+    body_source_map: Option<AstSourceMap>,
     /// Depth counter for `OptionalChain` scopes. When > 0, `FieldAccess` and
     /// `Index` auto-unwrap nullable bases (null is caught by the chain wrapper).
     /// When 0, accessing a member on a nullable type is a type error.
@@ -469,6 +475,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             let_binding_patterns: FxHashMap::default(),
             scoped_local_declarations: Vec::new(),
             scoped_local_assignments: Vec::new(),
+            body_source_map: None,
             resolutions: FxHashMap::default(),
             res_ctx,
             package_items,
@@ -492,6 +499,12 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Set the generic type parameters for this function scope.
+    /// Install the source map for the body being analyzed. Used to resolve
+    /// `PatId` → `TextRange` for pattern-position diagnostic spans.
+    pub fn set_body_source_map(&mut self, sm: AstSourceMap) {
+        self.body_source_map = Some(sm);
+    }
+
     pub fn set_generic_params(&mut self, params: Vec<Name>) {
         self.generic_params = params;
     }
@@ -2947,13 +2960,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for i in 0..tys.len().saturating_sub(1) {
                     let (left, right) = (&tys[i], &tys[i + 1]);
                     if !self.is_subtype(left, right) {
-                        self.context.report_simple(
-                            TirTypeError::TypeMismatch {
-                                expected: right.clone(),
-                                got: left.clone(),
-                            },
-                            at_expr,
-                        );
+                        let err = TirTypeError::TypeMismatch {
+                            expected: right.clone(),
+                            got: left.clone(),
+                        };
+                        // Point at the offending (left) chain link's pattern
+                        // span so the diagnostic underlines the value-side of
+                        // the bad chain rather than the arm body.
+                        if let Some(sm) = self.body_source_map.as_ref() {
+                            self.context.report_at_span(err, sm.pattern_span(parts[i]));
+                        } else {
+                            self.context.report_simple(err, at_expr);
+                        }
                     }
                 }
                 // Chain's effective type is the RIGHTMOST CONCRETE narrow —
@@ -2979,6 +2997,48 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .iter()
                     .map(|p| self.pattern_type(*p, body, at_expr))
                     .collect();
+                // Cross-branch binding-type consistency. HIR already verified
+                // every Or branch binds the same name set, so each branch's
+                // `pattern_type` is exactly the shared binding's effective
+                // narrow — `(let x: int)` resolves to `int`, `(let x: string)`
+                // resolves to `string`. Linear scan: compare each subsequent
+                // branch's natural type to the first.
+                if parts.len() > 1 {
+                    let first_names: Vec<Name> = body.patterns[parts[0]]
+                        .bound_names(&body.patterns)
+                        .into_iter()
+                        .cloned()
+                        .collect();
+                    if let Some(name) = first_names.first() {
+                        let first_ty = &tys[0];
+                        for (idx, ty) in tys.iter().enumerate().skip(1) {
+                            // Only emit when this branch *also* binds the
+                            // same name — otherwise HIR will already report
+                            // a name-mismatch and we'd double-fire on
+                            // `(let x: int) | (let y: string)`.
+                            let branch_names =
+                                body.patterns[parts[idx]].bound_names(&body.patterns);
+                            if !branch_names.contains(&name) {
+                                continue;
+                            }
+                            if !self.is_subtype(first_ty, ty) || !self.is_subtype(ty, first_ty) {
+                                let err = TirTypeError::OrPatternBindingTypeMismatch {
+                                    name: name.clone(),
+                                    first_type: first_ty.clone(),
+                                    other_type: ty.clone(),
+                                };
+                                // Prefer the conflicting branch's pattern span;
+                                // fall back to `at_expr` if no source map is set.
+                                if let Some(sm) = self.body_source_map.as_ref() {
+                                    self.context
+                                        .report_at_span(err, sm.pattern_span(parts[idx]));
+                                } else {
+                                    self.context.report_simple(err, at_expr);
+                                }
+                            }
+                        }
+                    }
+                }
                 Self::join_all(&tys)
             }
         }

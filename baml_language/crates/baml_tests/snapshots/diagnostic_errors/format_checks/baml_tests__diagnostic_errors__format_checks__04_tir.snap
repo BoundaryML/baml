@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 30112
+assertion_line: 30801
 ---
 === TIR2 ===
 function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int throws never {
@@ -1466,7 +1466,7 @@ class user.MatchFailure {
 enum user.MatchStatus
 type user.MatchResult = user.MatchSuccess | user.MatchFailure
 function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bool) -> string throws never {
-  { : "zero" | "other"
+  { : "any"
     match (x : int) : "zero" | "other"
       0 =>
         "zero" : "zero"
@@ -1713,6 +1713,24 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
         "zero" : "zero"
       _ =>
         "other" : "other"
+    match (x : int) : unknown
+      n: int: int | string =>
+        n + 1 : unknown
+    match (x : int) : int
+      x: int | x: int =>
+        x : int
+    match (x : int) : 0
+      n: 1: int: int | string =>
+        0 : 0
+    match (x : int) : int
+      x: int | x: int =>
+        x : int
+    match (x : int) : 0
+      _: int =>
+        0 : 0
+    match (s : user.MatchStatus) : "any"
+      MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending =>
+        "any" : "any"
   }
   !! 3883..3893: unreachable arm
   !! 3908..3915: unreachable arm
@@ -1721,6 +1739,7 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
   !! 8424..8429: operator `Mul` cannot be applied to `bool` and `bool`
   !! 8436..8441: operator `Mul` cannot be applied to `int` and `bool`
   !! 8448..8453: operator `Mul` cannot be applied to `bool` and `int`
+  !! 10318..10323: operator `Add` cannot be applied to `int | string` and `1`
 }
 class user.MatchSuccess$stream {
   data: null | string

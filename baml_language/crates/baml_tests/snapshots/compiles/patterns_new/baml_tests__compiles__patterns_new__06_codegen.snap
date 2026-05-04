@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18033
 ---
 function user.bare_type_arm(v: int | string) -> int {
     load_var v
@@ -428,6 +429,60 @@ function user.int_widens_to_union(v: int | string) -> int {
     return
 }
 
+function user.let_fn_return_widen() -> int {
+    load_const 0
+    load_const ?
+    make_closure .<lambda(let_fn_return_widen, 0)>
+    call_indirect
+    return
+}
+
+function user.let_four_step_widen() -> int {
+    load_const 1
+    return
+}
+
+function user.let_list_widen(items: int[]) -> int {
+    load_var items
+    call baml.Array.length
+    return
+}
+
+function user.let_literal_to_nullable() -> int {
+    load_const 1
+    return
+}
+
+function user.let_literal_to_primitive() -> int {
+    load_const 1
+    return
+}
+
+function user.let_nested_paren_union_chain(items: (int | string)[]) -> int {
+    load_const 1
+    return
+}
+
+function user.let_string_literal_widening() -> int {
+    load_const 1
+    return
+}
+
+function user.let_three_step_widen() -> int {
+    load_const 1
+    return
+}
+
+function user.let_widen_to_nullable_union() -> int {
+    load_const 1
+    return
+}
+
+function user.let_wildcard_chain() -> int {
+    load_const 1
+    return
+}
+
 function user.literal_widens_to_int(v: int) -> int {
     load_var v
     is_type 1
@@ -441,6 +496,16 @@ function user.literal_widens_to_int(v: int) -> int {
     return
 }
 
+function user.match_nested_paren_union(v: (int | string)[]) -> int {
+    load_var v
+    is_type (int | string)[]
+    pop_jump_if_false L0
+
+  L0:
+    load_const 1
+    return
+}
+
 function user.multi_narrow_chain(v: int) -> int {
     load_var v
     is_type int
@@ -451,6 +516,35 @@ function user.multi_narrow_chain(v: int) -> int {
     load_var v
 
   L0:
+    return
+}
+
+function user.nested_paren_union_array_one(items: (int | string)[]) -> int {
+    load_var items
+    call baml.Array.length
+    return
+}
+
+function user.nested_paren_union_array_optional(v: (int | string)[]?) -> int {
+    load_var v
+    pop 1
+    load_const false
+    pop_jump_if_false L0
+
+  L0:
+    load_const 1
+    return
+}
+
+function user.nested_paren_union_array_three(v: (int | string)[][]) -> int {
+    load_var v
+    call baml.Array.length
+    return
+}
+
+function user.nested_paren_union_array_two(items: (int | string)[]) -> int {
+    load_var items
+    call baml.Array.length
     return
 }
 
@@ -511,7 +605,7 @@ function user.paren_atom_outer_chain(v: int) -> int {
     return
 }
 
-function user.paren_chains_in_or(v: int | string) -> int {
+function user.paren_chains_in_or(v: int) -> int {
     load_var v
     is_type int
     pop_jump_if_false L0
@@ -519,7 +613,7 @@ function user.paren_chains_in_or(v: int | string) -> int {
 
   L0:
     load_var v
-    is_type string
+    is_type int
     pop_jump_if_false L1
 
   L1:

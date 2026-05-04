@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17839
 ---
 === HIR2 ===
 class user.AppError {
@@ -63,11 +64,56 @@ function user.int_widens_to_optional(v: int?) -> int?  [expr] {
 function user.int_widens_to_union(v: int | string) -> int  [expr] {
   {  } match (v) { n: int: int | string => 1 }
 }
+function user.let_fn_return_widen() -> int  [expr] {
+  { let f: (int) -> int: (int) -> int | string = (x: int) -> int { {  } x } } f(0)
+}
+function user.let_four_step_widen() -> int  [expr] {
+  { let x: 1: int: int | string: int | string | float = 1 } 1
+}
+function user.let_list_widen(items: int[]) -> int  [expr] {
+  { let xs: int[]: int | string[] = items } xs.length()
+}
+function user.let_literal_to_nullable() -> int  [expr] {
+  { let x: 0: int: int? = 0 } 1
+}
+function user.let_literal_to_primitive() -> int  [expr] {
+  { let x: 1: int = 1 } x
+}
+function user.let_nested_paren_union_chain(items: int | string[]) -> int  [expr] {
+  { let xs: int | string[]: int | string[]? = items } 1
+}
+function user.let_string_literal_widening() -> int  [expr] {
+  { let s: "hello": string: string | int = "hello" } 1
+}
+function user.let_three_step_widen() -> int  [expr] {
+  { let x: 1: int: int | string = 1 } 1
+}
+function user.let_widen_to_nullable_union() -> int  [expr] {
+  { let x: int: int?: int | string | null = 1 } 1
+}
+function user.let_wildcard_chain() -> int  [expr] {
+  { let _: int: int | string = 1 } 1
+}
 function user.literal_widens_to_int(v: int) -> int  [expr] {
   {  } match (v) { n: 1: int => n }
 }
+function user.match_nested_paren_union(v: int | string[]) -> int  [expr] {
+  {  } match (v) { _: int | string[] => 1 }
+}
 function user.multi_narrow_chain(v: int) -> int  [expr] {
   {  } match (v) { n: int: int => n }
+}
+function user.nested_paren_union_array_one(items: int | string[]) -> int  [expr] {
+  {  } items.length()
+}
+function user.nested_paren_union_array_optional(v: int | string[]?) -> int  [expr] {
+  {  } match (v) { _: int | string[]? => 1 }
+}
+function user.nested_paren_union_array_three(v: int | string[][]) -> int  [expr] {
+  {  } v.length()
+}
+function user.nested_paren_union_array_two(items: int | string[]) -> int  [expr] {
+  {  } items.length()
 }
 function user.or_with_repeated_bare_binding(v: int) -> int  [expr] {
   {  } match (v) { x | x | x => x }
@@ -78,8 +124,8 @@ function user.or_with_repeated_typed_binding(v: int | string) -> int  [expr] {
 function user.paren_atom_outer_chain(v: int) -> int  [expr] {
   {  } match (v) { x: int => x }
 }
-function user.paren_chains_in_or(v: int | string) -> int  [expr] {
-  {  } match (v) { x: int | x: string => 1 }
+function user.paren_chains_in_or(v: int) -> int  [expr] {
+  {  } match (v) { x: int | x: int => 1 }
 }
 function user.paren_fn_pattern_with_chain(cb: (int) -> int) -> int  [expr] {
   {  } match (cb) { f: (int) -> int: (int) -> int => f(0) }
