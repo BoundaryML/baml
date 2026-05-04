@@ -1,10 +1,30 @@
 const BG = '#ffffff';
 const INK = '#1A1612';
-const MUTED = '#5C5852';
-const KICKER = '#8A8580';
 const BORDER = '#D9D3C4';
 const ACCENT = '#6D28D9';
 const DASH = 'rgba(109, 40, 217, 0.35)';
+
+const BAML_ASCII = String.raw`          _____                    _____                    _____                    _____
+         /\    \                  /\    \                  /\    \                  /\    \
+        /::\    \                /::\    \                /::\____\                /::\____\
+       /::::\    \              /::::\    \              /::::|   |               /:::/    /
+      /::::::\    \            /::::::\    \            /:::::|   |              /:::/    /
+     /:::/\:::\    \          /:::/\:::\    \          /::::::|   |             /:::/    /
+    /:::/__\:::\    \        /:::/__\:::\    \        /:::/|::|   |            /:::/    /
+   /::::\   \:::\    \      /::::\   \:::\    \      /:::/ |::|   |           /:::/    /
+  /::::::\   \:::\    \    /::::::\   \:::\    \    /:::/  |::|___|______    /:::/    /
+ /:::/\:::\   \:::\ ___\  /:::/\:::\   \:::\    \  /:::/   |::::::::\    \  /:::/    /
+/:::/__\:::\   \:::|    |/:::/  \:::\   \:::\____\/:::/    |:::::::::\____\/:::/____/
+\:::\   \:::\  /:::|____|\::/    \:::\  /:::/    /\::/    / ~~~~~/:::/    /\:::\    \
+ \:::\   \:::\/:::/    /  \/____/ \:::\/:::/    /  \/____/      /:::/    /  \:::\    \
+  \:::\   \::::::/    /            \::::::/    /               /:::/    /    \:::\    \
+   \:::\   \::::/    /              \::::/    /               /:::/    /      \:::\    \
+    \:::\  /:::/    /               /:::/    /               /:::/    /        \:::\    \
+     \:::\/:::/    /               /:::/    /               /:::/    /          \:::\    \
+      \::::::/    /               /:::/    /               /:::/    /            \:::\    \
+       \::::/    /               /:::/    /               /:::/    /              \:::\____\
+        \::/____/                \::/    /                \::/    /                \::/    /
+         ~~                       \/____/                  \/____/                  \/____/`;
 
 const LEFT = [
   'Schema aware parsing',
@@ -14,7 +34,7 @@ const LEFT = [
 ];
 
 const RIGHT = [
-  'Compiles to Python, TypeScript, Ruby, Go',
+  'Better context',
   'Streaming with typed partials',
   'One interface, every LLM provider',
   'Tests live next to your prompts',
@@ -24,7 +44,7 @@ export function WhyALanguage() {
   return (
     <section
       className="w-full"
-      aria-labelledby="why-a-language-heading"
+      aria-label="BAML"
       style={{ backgroundColor: BG }}
     >
       <style>{`
@@ -44,18 +64,23 @@ export function WhyALanguage() {
         }}
       >
         <div className="mx-auto flex w-full max-w-[900px] flex-col items-center text-center">
-          <p
+          <pre
+            aria-label="BAML"
             style={{
-              fontSize: '13px',
-              fontWeight: 500,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              color: KICKER,
-              margin: '0 0 20px',
+              color: ACCENT,
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+              fontSize: 'clamp(5px, 0.78vw, 12px)',
+              fontWeight: 600,
+              lineHeight: 1,
+              margin: '0 0 28px',
+              maxWidth: '100%',
+              overflowX: 'auto',
+              textAlign: 'left',
+              whiteSpace: 'pre',
             }}
           >
-            Why a language
-          </p>
+            {BAML_ASCII}
+          </pre>
 
           <div
             aria-hidden="true"
@@ -65,21 +90,6 @@ export function WhyALanguage() {
               margin: '0 0 28px',
             }}
           />
-
-          <h2
-            id="why-a-language-heading"
-            style={{
-              fontSize: 'clamp(2rem, 4.5vw, 3.5rem)',
-              fontWeight: 600,
-              lineHeight: 1.02,
-              letterSpacing: '-0.03em',
-              color: INK,
-              margin: '0 0 56px',
-            }}
-          >
-            Every guarantee, built in
-            <span style={{ color: ACCENT }}>.</span>
-          </h2>
 
           <p
             style={{
@@ -93,10 +103,10 @@ export function WhyALanguage() {
             }}
           >
             BAML is a programming language, built in{' '}
-            <span style={{ color: ACCENT, fontWeight: 500 }}>Rust</span> and used
-            by some of the world&apos;s largest companies. It has a compiler,
-            VM, LSP, formatter, type system (with inferred error types), and
-            drops into <span style={{ fontWeight: 500 }}>Python</span>,{' '}
+            <span style={{ color: ACCENT, fontWeight: 500 }}>Rust</span>{' '}
+            and used by some of the world&apos;s largest companies. It has a
+            compiler, VM, LSP, formatter, type system (with inferred error
+            types), and drops into <span style={{ fontWeight: 500 }}>Python</span>,{' '}
             <span style={{ fontWeight: 500 }}>TypeScript</span>,{' '}
             <span style={{ fontWeight: 500 }}>Go</span>, and the{' '}
             <span style={{ fontWeight: 500 }}>browser</span> so teams can adopt
@@ -125,26 +135,6 @@ export function WhyALanguage() {
             <Column items={RIGHT} />
           </div>
 
-          <div
-            aria-hidden="true"
-            style={{
-              width: 56,
-              borderTop: `1px dashed ${DASH}`,
-              margin: '72px 0 20px',
-            }}
-          />
-
-          <p
-            style={{
-              fontFamily: 'var(--font-serif)',
-              fontStyle: 'italic',
-              fontSize: '18px',
-              color: MUTED,
-              margin: 0,
-            }}
-          >
-            Just engineering.
-          </p>
         </div>
       </div>
     </section>

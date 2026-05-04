@@ -26,8 +26,10 @@ const MONO =
 
 type Lang = {
   name: string;
-  Icon: IconType;
-  color: string;
+  Icon?: IconType;
+  color?: string;
+  // When set, the tile renders this string in place of an icon.
+  glyph?: string;
 };
 
 const LANGS: Lang[] = [
@@ -37,6 +39,7 @@ const LANGS: Lang[] = [
   { name: 'Go', Icon: SiGo, color: '#00ADD8' },
   { name: 'Rust', Icon: SiRust, color: '#000000' },
   { name: 'Java', Icon: SiOpenjdk, color: '#ED8B00' },
+  { name: 'and more', glyph: '+' },
 ];
 
 // Geometry — keep SVG and tile layout in lockstep.
@@ -220,18 +223,6 @@ export function LanguageFanout() {
                   }}
                 />
               </div>
-              <span
-                style={{
-                  fontFamily: MONO,
-                  fontSize: 11,
-                  letterSpacing: '0.08em',
-                  color: MUTED,
-                  textTransform: 'uppercase',
-                  zIndex: 1,
-                }}
-              >
-                triage.baml
-              </span>
             </motion.div>
           </div>
 
@@ -429,7 +420,21 @@ export function LanguageFanout() {
                       'box-shadow 220ms ease, transform 220ms ease, border-color 220ms ease',
                   }}
                 >
-                  <lang.Icon size={40} color={lang.color} />
+                  {lang.Icon ? (
+                    <lang.Icon size={40} color={lang.color} />
+                  ) : (
+                    <span
+                      style={{
+                        color: ACCENT,
+                        fontFamily: MONO,
+                        fontSize: 36,
+                        fontWeight: 500,
+                        lineHeight: 1,
+                      }}
+                    >
+                      {lang.glyph}
+                    </span>
+                  )}
                 </div>
                 <span
                   style={{

@@ -3,24 +3,23 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { siteConfig } from '@/app/_lib/config';
-import { AgentModeToggle } from '@/components/agent-mode-toggle';
 
 const navStyles = {
-  nav: {
-    display: 'grid',
-    gridTemplateColumns: 'auto 1fr auto auto auto',
-    alignItems: 'center',
-    columnGap: '16px',
-    padding: '16px 24px',
-    fontSize: '15px',
-    letterSpacing: '0.05em',
-    textTransform: 'uppercase',
-    borderBottom: '1px solid #D9D3C4',
-  } as React.CSSProperties,
   logo: {
     fontWeight: 600,
     padding: '0 16px',
     paddingLeft: 0,
+  } as React.CSSProperties,
+  nav: {
+    alignItems: 'center',
+    borderBottom: '1px solid #D9D3C4',
+    columnGap: '16px',
+    display: 'grid',
+    fontSize: '15px',
+    gridTemplateColumns: 'auto 1fr auto auto auto',
+    letterSpacing: '0.05em',
+    padding: '16px 24px',
+    textTransform: 'uppercase',
   } as React.CSSProperties,
   navDiv: {
     padding: '0 16px',
@@ -49,23 +48,23 @@ function NavStars() {
 
   return (
     <Link
-      href="https://github.com/boundaryml/baml"
-      target="_blank"
-      rel="noopener noreferrer"
-      style={navStyles.navItem}
       className="flex items-center gap-1.5 hover:text-[#6D28D9] transition-colors"
+      href="https://github.com/boundaryml/baml"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      rel="noopener noreferrer"
+      style={navStyles.navItem}
+      target="_blank"
     >
       <img
-        src="/github-mark.svg"
         alt="GitHub"
         className="size-3.5 transition-all duration-150"
+        src="/github-mark.svg"
         style={{
-          opacity: hovered ? 1 : 0.6,
           filter: hovered
             ? 'invert(27%) sepia(80%) saturate(800%) hue-rotate(240deg) brightness(90%)'
             : 'none',
+          opacity: hovered ? 1 : 0.6,
         }}
       />
       <span className="tabular-nums">{display}</span>
@@ -79,27 +78,26 @@ export function Navbar() {
       <Link href="/" style={navStyles.logo}>
         Boundary
       </Link>
-      <div style={navStyles.navDiv} className="nav-links">
+      <div className="nav-links" style={navStyles.navDiv}>
         {siteConfig.nav.links.map((link) => (
-          <Link
-            key={link.id}
-            href={link.href}
-            className="nav-link"
-          >
+          <Link className="nav-link" href={link.href} key={link.id}>
             {link.name}
           </Link>
         ))}
         <Link
-          href="https://docs.boundaryml.com/?utm_source=marketing-site&utm_medium=navbar-docs"
-          target="_blank"
-          rel="noopener noreferrer"
           className="nav-link"
+          href="https://docs.boundaryml.com/?utm_source=marketing-site&utm_medium=navbar-docs"
+          rel="noopener noreferrer"
+          target="_blank"
         >
           Docs
         </Link>
+        <Link className="nav-link" href="/vs">
+          BAML vs X
+        </Link>
       </div>
       <NavStars />
-      <AgentModeToggle />
+      <ForAgentsLink />
       <LearnBamlLink />
       <style>{`
         .nav-link {
@@ -124,28 +122,50 @@ export function Navbar() {
   );
 }
 
+function ForAgentsLink() {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <Link
+      href="/llms.txt"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        ...navStyles.navItem,
+        border: `1px solid ${hovered ? '#A8A29E' : '#D9D3C4'}`,
+        borderRadius: 8,
+        color: hovered ? '#1A1612' : '#5C5852',
+        padding: '6px 14px',
+        transition: 'color 180ms ease, border-color 180ms ease',
+      }}
+    >
+      For agents
+    </Link>
+  );
+}
+
 function LearnBamlLink() {
   const [hovered, setHovered] = useState(false);
 
   return (
     <Link
       href="https://docs.boundaryml.com/home"
-      target="_blank"
-      rel="noopener noreferrer"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      rel="noopener noreferrer"
       style={{
         ...navStyles.navItem,
-        color: hovered ? '#4C1D95' : '#6D28D9',
         background: hovered
           ? 'linear-gradient(135deg, #DDD0F7 0%, #C4B5FD 100%)'
           : 'linear-gradient(135deg, #F5EFFE 0%, #E9DDFB 100%)',
         border: `1px solid ${hovered ? '#A78BFA' : '#D8C8F5'}`,
         borderRadius: 8,
+        color: hovered ? '#4C1D95' : '#6D28D9',
         padding: '6px 14px',
         transition:
           'background 850ms ease, color 850ms ease, border-color 850ms ease',
       }}
+      target="_blank"
     >
       Learn BAML
     </Link>

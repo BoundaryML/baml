@@ -23,25 +23,22 @@ import Marquee from '../magicui/marquee';
 import { ScriptCopyBtn } from '../magicui/script-copy-btn';
 import { Navbar } from '../navbar';
 
-const TRUST_LOGOS: { alt: string; src: string; heightPx: number }[] = [
-  { alt: 'SAP', heightPx: 36, src: '/testimonials/logos/sapLogo.png' },
-  { alt: 'AWS', heightPx: 36, src: '/testimonials/logos/aws.png' },
-  { alt: 'AMD', heightPx: 36, src: '/testimonials/logos/amd.png' },
-  { alt: 'Cisco', heightPx: 36, src: '/testimonials/logos/cisco.png' },
-  { alt: 'EY', heightPx: 44, src: '/EY.svg' },
+const TRUST_LOGOS: { alt: string; src: string }[] = [
+  { alt: 'SAP', src: '/testimonials/logos/sapLogo.png' },
+  { alt: 'AWS', src: '/testimonials/logos/aws.png' },
+  { alt: 'AMD', src: '/testimonials/logos/amd.png' },
+  { alt: 'Cisco', src: '/testimonials/logos/cisco.png' },
+  { alt: 'EY', src: '/EY.svg' },
   {
     alt: 'Product Hunt',
-    heightPx: 36,
     src: '/testimonials/logos/product-hunt.png',
   },
-  { alt: 'Aer Compliance', heightPx: 36, src: '/testimonials/logos/aer.png' },
-  { alt: 'PMMI', heightPx: 36, src: '/testimonials/logos/pmmi.png' },
+  { alt: 'Aer Compliance', src: '/testimonials/logos/aer.png' },
+  { alt: 'PMMI', src: '/testimonials/logos/pmmi.png' },
   {
     alt: 'Cerebral Valley',
-    heightPx: 36,
     src: '/testimonials/logos/cerebral.png',
   },
-  { alt: 'DoorDash', heightPx: 32, src: '/Doordash Logo.svg' },
 ];
 
 const TrustMarquee = () => (
@@ -67,17 +64,18 @@ const TrustMarquee = () => (
           'linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%)',
       }}
     >
-      <Marquee className="[--duration:40s] [--gap:4rem] py-2">
+      <Marquee className="[--duration:40s] [--gap:1.75rem] py-2">
         {TRUST_LOGOS.map((logo) => (
           <div
-            className="flex h-12 flex-shrink-0 items-center justify-center"
+            className="flex h-12 w-24 flex-shrink-0 items-center justify-center"
             key={logo.alt}
           >
-            <img
+            <Image
               alt={logo.alt}
-              className="w-auto object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
+              className="max-h-8 max-w-full object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
+              height={32}
               src={logo.src}
-              style={{ height: `${logo.heightPx}px` }}
+              width={128}
             />
           </div>
         ))}
@@ -86,27 +84,18 @@ const TrustMarquee = () => (
   </div>
 );
 
-// Cycle goes through these words once and then stops on the FINAL entry —
-// the brand "settle" word. To change the resting term, move the desired
-// word to the end of this array.
 const ROTATING_WORDS = [
-  'writing',
-  'testing',
-  'dispatching',
-  'parsing',
-  'orchestrating',
-  'shipping',
-  'running',
-  'debugging',
   'evaluating',
-  'streaming',
+  'testing',
   'verifying',
+  'debugging',
+  'shipping',
   'deploying',
-  'AI',
+  'orchestrating',
 ];
 const HOLD_MS = 1400;
 const TRANSITION_MS = 400;
-const FINAL_HOLD_MS = 4200; // breathing room before the settle locks visually
+const SETTLE_MS = 900;
 
 const RotatingWord = () => {
   const [index, setIndex] = useState(0);
@@ -121,7 +110,6 @@ const RotatingWord = () => {
   useEffect(() => {
     // With reduced motion, jump straight to the terminal word.
     if (reduced) {
-      setIndex(ROTATING_WORDS.length - 1);
       setSettled(true);
       return;
     }
@@ -133,12 +121,14 @@ const RotatingWord = () => {
       timer = setTimeout(() => {
         setIndex(next);
         setVisible(true);
-        if (next === ROTATING_WORDS.length - 1) {
-          // Reached the terminal word — pause permanently.
-          setSettled(true);
-          return;
-        }
-        timer = setTimeout(() => advance(next + 1), HOLD_MS);
+        timer = setTimeout(() => {
+          if (next === ROTATING_WORDS.length - 1) {
+            setVisible(false);
+            timer = setTimeout(() => setSettled(true), TRANSITION_MS);
+            return;
+          }
+          advance(next + 1);
+        }, HOLD_MS);
       }, TRANSITION_MS);
     };
 
@@ -161,18 +151,45 @@ const RotatingWord = () => {
       aria-live="polite"
       style={{
         color: '#6D28D9',
-        display: 'inline-block',
+        columnGap: settled ? 0 : '0.18em',
+        display: 'inline-flex',
         fontFamily: 'var(--font-serif)',
         fontStyle: 'italic',
         fontWeight: 500,
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(6px)',
+        lineHeight: 1.12,
+        verticalAlign: 'baseline',
         transition: reduced
           ? 'none'
-          : `opacity ${TRANSITION_MS}ms cubic-bezier(0.4,0,0.2,1), transform ${TRANSITION_MS}ms cubic-bezier(0.4,0,0.2,1)`,
+          : `column-gap ${SETTLE_MS}ms cubic-bezier(0.4,0,0.2,1)`,
       }}
     >
-      {ROTATING_WORDS[index]}
+      <span
+        aria-hidden={settled}
+        style={{
+          display: 'inline-block',
+          maxWidth: settled ? 0 : '9.5em',
+          opacity: visible && !settled ? 1 : 0,
+          overflow: 'hidden',
+          transition: reduced
+            ? 'none'
+            : `opacity ${TRANSITION_MS}ms cubic-bezier(0.4,0,0.2,1), max-width ${SETTLE_MS}ms cubic-bezier(0.16,1,0.3,1)`,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {ROTATING_WORDS[index]}
+      </span>
+      <span
+        style={{
+          display: 'inline-block',
+          transform: 'translateX(0)',
+          transition: reduced
+            ? 'none'
+            : `transform ${SETTLE_MS}ms cubic-bezier(0.4,0,0.2,1)`,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        AI
+      </span>
     </span>
   );
 };
@@ -557,10 +574,12 @@ const HeroCodeWindow = () => (
   </div>
 );
 
-type InstallPath = 'claude' | 'codex' | 'human';
+type InstallPath = 'claude' | 'docs';
 
-const humanCommand = 'Check our docs (you should really try Claude)';
-const humanDocsHref =
+const claudeInstallPrompt =
+  'Read https://www.boundaryml.com/llms.txt and help me add BAML to this codebase. Prefer the smallest working integration: identify the language/framework, install the right package, initialize BAML if needed, generate the typed client, and wire one existing LLM call through BAML.';
+const docsInstallLabel = 'Read the installation guide';
+const docsInstallHref =
   'https://docs.boundaryml.com/guide/introduction/what-is-baml';
 
 const installOptions: {
@@ -570,25 +589,20 @@ const installOptions: {
   command: string;
 }[] = [
   {
-    command: 'curl -fsSL http://baml.dev/agent | claude',
-    icon: '/Claude Color SVG.svg',
+    command: claudeInstallPrompt,
     id: 'claude',
-    label: 'Claude',
+    label: 'Agent prompt',
   },
-  {
-    command: 'curl -fsSL http://baml.dev/agent | codex',
-    icon: '/Codex Color.svg',
-    id: 'codex',
-    label: 'Codex',
-  },
-  { command: humanCommand, id: 'human', label: 'Human' },
+  { command: docsInstallLabel, id: 'docs', label: 'Docs' },
 ];
 
 const HeroSection = () => {
   const [installPath, setInstallPath] = useState<InstallPath>('claude');
   const isDesktop = useIsDesktop();
 
-  const selected = installOptions.find((o) => o.id === installPath)!;
+  const selected =
+    installOptions.find((option) => option.id === installPath) ??
+    installOptions[0];
 
   return (
     <section className="hero-responsive" style={customStyles.hero}>
@@ -597,7 +611,7 @@ const HeroSection = () => {
           <h1 style={customStyles.h1}>
             A language
             <br />
-            for <RotatingWord />.
+            for <RotatingWord />
           </h1>
           <p style={customStyles.p}>
             Python and Java were built for humans. BAML was built for agents.
@@ -614,7 +628,7 @@ const HeroSection = () => {
                   textTransform: 'uppercase',
                 }}
               >
-                Install BAML
+                Install
               </p>
               <div style={{ maxWidth: 512, width: '100%' }}>
                 <ScriptCopyBtn
@@ -623,7 +637,9 @@ const HeroSection = () => {
                   commandMap={{ bash: selected.command } as const}
                   darkTheme="none"
                   lightTheme="none"
-                  linkHref={installPath === 'human' ? humanDocsHref : undefined}
+                  linkHref={
+                    installPath === 'docs' ? docsInstallHref : undefined
+                  }
                   showMultiplePackageOptions={false}
                 />
               </div>
@@ -649,7 +665,13 @@ const HeroSection = () => {
                     type="button"
                   >
                     {opt.icon && (
-                      <img alt={opt.label} className="size-4" src={opt.icon} />
+                      <Image
+                        alt={opt.label}
+                        className="size-4"
+                        height={16}
+                        src={opt.icon}
+                        width={16}
+                      />
                     )}
                     {opt.label}
                   </button>
