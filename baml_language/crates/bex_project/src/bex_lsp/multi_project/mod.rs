@@ -533,7 +533,6 @@ impl BexMulitProject {
                 } else {
                     crate::bex_lsp::FunctionKind::Expr
                 },
-                origin: f.origin.into(),
                 capabilities: if f.is_llm {
                     Some(crate::bex_lsp::LlmCapabilities {
                         render_prompt: true,
@@ -1024,7 +1023,6 @@ impl super::BexLsp for BexMulitProject {
             workflow_memberships: vec![],
             source_expr_id: None,
             source_expr_candidates: vec![],
-            source_expr_function_name: None,
             test_name: None,
             cursor_offset: None,
         };

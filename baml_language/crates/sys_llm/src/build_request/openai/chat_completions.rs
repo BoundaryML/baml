@@ -162,7 +162,7 @@ fn prompt_node_to_message(
             content,
             metadata,
         } => {
-            let parts = openai_content_parts(content.as_ref(), role)?;
+            let parts = openai_content_parts(content.as_ref())?;
 
             // Merge metadata into the last content part (e.g. cache_control).
             let extra = metadata_to_map(metadata);
@@ -202,30 +202,18 @@ fn merge_adjacent_openai_messages(messages: Vec<ChatMessage>) -> Vec<ChatMessage
 
 fn openai_content_parts(
     content: &PromptAstSimple,
-    role: &str,
 ) -> Result<Vec<ContentPart>, crate::build_request::BuildRequestError> {
     match content {
         PromptAstSimple::String(s) => Ok(vec![ContentPart::Text { text: s.clone() }]),
-        PromptAstSimple::Media(media) => {
-            if role != "user" {
-                return Err(unsupported_media_role(role, media.kind));
-            }
-            openai_media_part(media).map(|part| vec![part])
-        }
+        PromptAstSimple::Media(media) => openai_media_part(media).map(|part| vec![part]),
         PromptAstSimple::Multiple(items) => {
             let mut parts = Vec::new();
             for item in items {
-                parts.extend(openai_content_parts(item, role)?);
+                parts.extend(openai_content_parts(item)?);
             }
             Ok(parts)
         }
     }
-}
-
-fn unsupported_media_role(role: &str, kind: MediaKind) -> crate::build_request::BuildRequestError {
-    crate::build_request::BuildRequestError::UnsupportedMedia(format!(
-        "OpenAI Chat Completions only supports {kind} input in user messages; found media in a {role} message"
-    ))
 }
 
 fn openai_media_part(
@@ -347,14 +335,6 @@ mod tests {
             role: role.to_string(),
             content: Arc::new(PromptAstSimple::String(text.to_string())),
             metadata,
-        })
-    }
-
-    fn msg_with_content(role: &str, content: PromptAstSimple) -> Arc<PromptAst> {
-        Arc::new(PromptAst::Message {
-            role: role.to_string(),
-            content: Arc::new(content),
-            metadata: serde_json::Value::Null,
         })
     }
 
@@ -790,25 +770,6 @@ mod tests {
                 "content": [{"type": "text", "text": "hello"}],
                 "cache_control": {"type": "ephemeral"}
             })
-        );
-    }
-
-    #[test]
-    fn chat_rejects_system_image_before_http() {
-        let media = make_media(
-            MediaKind::Image,
-            MediaContent::Url {
-                url: "https://example.com/cat.png".into(),
-                base64_data: None,
-            },
-            Some("image/png"),
-        );
-        let prompt = msg_with_content("system", PromptAstSimple::Media(media));
-
-        let err = prompt_to_openai_messages(&prompt).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("only supports image input in user messages")
         );
     }
 

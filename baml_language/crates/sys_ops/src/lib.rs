@@ -228,7 +228,6 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         prompt: io::owned::llm::PromptAst,
-        return_type: baml_type::Ty,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = match convert_io_primitive_client(&client) {
@@ -238,23 +237,18 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         let prompt_ast = unwrap_prompt_ast(&prompt);
         let io = ctx.runtime_io.clone();
         SysOpOutput::async_op(async move {
-            sys_llm::execute_build_request_from_owned(
-                &old_client,
-                prompt_ast,
-                &return_type,
-                io.clone(),
-            )
-            .await
-            .map(|req| {
-                io::owned::http::Request {
-                    method: req.method,
-                    url: req.url,
-                    headers: req.headers,
-                    body: req.body,
-                }
-                .into_bex_external_value()
-            })
-            .map_err(OpErrorKind::from)
+            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast, io.clone())
+                .await
+                .map(|req| {
+                    io::owned::http::Request {
+                        method: req.method,
+                        url: req.url,
+                        headers: req.headers,
+                        body: req.body,
+                    }
+                    .into_bex_external_value()
+                })
+                .map_err(OpErrorKind::from)
         })
     }
 
@@ -284,7 +278,6 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         prompt: io::owned::llm::PromptAst,
-        return_type: baml_type::Ty,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = match convert_io_primitive_client(&client) {
@@ -294,23 +287,18 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         let prompt_ast = unwrap_prompt_ast(&prompt);
         let io = ctx.runtime_io.clone();
         SysOpOutput::async_op(async move {
-            sys_llm::execute_build_request_stream_from_owned(
-                &old_client,
-                prompt_ast,
-                &return_type,
-                io,
-            )
-            .await
-            .map(|req| {
-                io::owned::http::Request {
-                    method: req.method,
-                    url: req.url,
-                    headers: req.headers,
-                    body: req.body,
-                }
-                .into_bex_external_value()
-            })
-            .map_err(OpErrorKind::from)
+            sys_llm::execute_build_request_stream_from_owned(&old_client, prompt_ast, io)
+                .await
+                .map(|req| {
+                    io::owned::http::Request {
+                        method: req.method,
+                        url: req.url,
+                        headers: req.headers,
+                        body: req.body,
+                    }
+                    .into_bex_external_value()
+                })
+                .map_err(OpErrorKind::from)
         })
     }
 

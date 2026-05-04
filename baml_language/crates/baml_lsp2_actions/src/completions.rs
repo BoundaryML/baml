@@ -42,7 +42,7 @@ use baml_compiler2_hir::{
     semantic_index::ScopeBindings,
     signature::function_signature,
 };
-use baml_compiler2_tir::ty::{PrimitiveType, Ty};
+use baml_compiler2_tir::ty::Ty;
 use rowan::NodeOrToken;
 use text_size::TextSize;
 
@@ -55,47 +55,6 @@ fn format_function_signature(db: &dyn Db, func_loc: FunctionLoc<'_>) -> String {
         .params
         .iter()
         .map(|(name, te)| format!("{}: {}", name.as_str(), utils::display_type_expr(te)))
-        .collect();
-    let ret = sig
-        .return_type
-        .as_ref()
-        .map(utils::display_type_expr)
-        .unwrap_or_else(|| "null".to_string());
-    format!("({}) -> {}", params.join(", "), ret)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum BuiltinMethodMode {
-    Instance,
-    Static,
-    All,
-}
-
-/// Format a builtin class method signature for completion details.
-///
-/// Instance completions hide the synthetic `self` parameter because the receiver
-/// is already present in source (`img.base64()`, not `img.base64(img)`).
-fn format_builtin_method_signature(
-    db: &dyn Db,
-    func_loc: FunctionLoc<'_>,
-    mode: BuiltinMethodMode,
-) -> String {
-    let sig = function_signature(db, func_loc);
-    let params: Vec<String> = sig
-        .params
-        .iter()
-        .enumerate()
-        .filter_map(|(idx, (name, te))| {
-            if mode == BuiltinMethodMode::Instance && idx == 0 && name.as_str() == "self" {
-                None
-            } else {
-                Some(format!(
-                    "{}: {}",
-                    name.as_str(),
-                    utils::display_type_expr(te)
-                ))
-            }
-        })
         .collect();
     let ret = sig
         .return_type
@@ -431,16 +390,7 @@ fn completions_for_type_position(
 
     // ── Builtin primitives ────────────────────────────────────────────────────
     for prim in &[
-        "int",
-        "float",
-        "string",
-        "bool",
-        "null",
-        "uint8array",
-        "image",
-        "audio",
-        "video",
-        "pdf",
+        "int", "float", "string", "bool", "null", "image", "audio", "video", "pdf",
     ] {
         items
             .push(Completion::new(*prim, CompletionKind::Primitive).with_sort(format!("0_{prim}")));
@@ -535,16 +485,6 @@ fn completions_for_field_access(
     if ty.is_none() {
         if let Some(completions) = completions_for_package_path(db, file, &segments) {
             return completions;
-        }
-
-        if segments.len() == 1 {
-            if let Some(class_path) = builtin_static_class_path_for_root(&segments[0]) {
-                return completions_for_builtin_class_methods(
-                    db,
-                    class_path,
-                    BuiltinMethodMode::Static,
-                );
-            }
         }
     }
 
@@ -654,123 +594,7 @@ fn completions_for_package_path(
         }
     }
 
-    if let Some(class_completions) = completions_for_package_class_path(db, pkg_items, segments) {
-        for completion in class_completions {
-            if seen.insert(completion.label.clone()) {
-                items.push(completion);
-            }
-        }
-    }
-
     if items.is_empty() { None } else { Some(items) }
-}
-
-fn completions_for_package_class_path(
-    db: &dyn Db,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    segments: &[String],
-) -> Option<Vec<Completion>> {
-    if segments.len() < 2 {
-        return None;
-    }
-
-    let path: Vec<Name> = segments[1..].iter().map(Name::new).collect();
-    let (class_name, namespace) = path.split_last()?;
-    let Some(Definition::Class(class_loc)) = pkg_items.lookup_type(namespace, class_name) else {
-        return None;
-    };
-
-    Some(completions_for_class_methods(
-        db,
-        class_loc,
-        BuiltinMethodMode::All,
-    ))
-}
-
-fn builtin_static_class_path_for_root(root: &str) -> Option<&'static [&'static str]> {
-    match root {
-        "image" => Some(&["media", "Image"]),
-        "audio" => Some(&["media", "Audio"]),
-        "video" => Some(&["media", "Video"]),
-        "pdf" => Some(&["media", "Pdf"]),
-        "string" => Some(&["String"]),
-        _ => None,
-    }
-}
-
-fn builtin_instance_class_path_for_primitive(
-    primitive: &PrimitiveType,
-) -> Option<&'static [&'static str]> {
-    match primitive {
-        PrimitiveType::String => Some(&["String"]),
-        PrimitiveType::Uint8Array
-        | PrimitiveType::Image
-        | PrimitiveType::Audio
-        | PrimitiveType::Video
-        | PrimitiveType::Pdf => Some(primitive.builtin_class_path()),
-        _ => None,
-    }
-}
-
-fn method_has_self_param(db: &dyn Db, func_loc: FunctionLoc<'_>) -> bool {
-    function_signature(db, func_loc)
-        .params
-        .first()
-        .is_some_and(|(name, _)| name.as_str() == "self")
-}
-
-fn completions_for_builtin_class_methods(
-    db: &dyn Db,
-    class_path: &[&str],
-    mode: BuiltinMethodMode,
-) -> Vec<Completion> {
-    if class_path.is_empty() {
-        return Vec::new();
-    }
-
-    let builtin_id = PackageId::new(db, Name::new("baml"));
-    let builtin = package_items(db, builtin_id);
-    let path: Vec<Name> = class_path.iter().map(Name::new).collect();
-    let Some((class_name, namespace)) = path.split_last() else {
-        return Vec::new();
-    };
-    let Some(Definition::Class(class_loc)) = builtin.lookup_type(namespace, class_name) else {
-        return Vec::new();
-    };
-
-    completions_for_class_methods(db, class_loc, mode)
-}
-
-fn completions_for_class_methods(
-    db: &dyn Db,
-    class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
-    mode: BuiltinMethodMode,
-) -> Vec<Completion> {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
-    let class_data = &item_tree[class_loc.id(db)];
-    let mut items = Vec::new();
-
-    for method_id in &class_data.methods {
-        let func_loc = FunctionLoc::new(db, class_loc.file(db), *method_id);
-        let has_self = method_has_self_param(db, func_loc);
-        if mode != BuiltinMethodMode::All
-            && !matches!(
-                (mode, has_self),
-                (BuiltinMethodMode::Instance, true) | (BuiltinMethodMode::Static, false)
-            )
-        {
-            continue;
-        }
-
-        let method = &item_tree[*method_id];
-        items.push(
-            Completion::new(method.name.as_str(), CompletionKind::Method)
-                .with_detail(format_builtin_method_signature(db, func_loc, mode))
-                .with_sort(format!("1_{}", method.name.as_str())),
-        );
-    }
-
-    items
 }
 
 /// Resolve the type of a field/member on a given type.
@@ -946,25 +770,61 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
         }
 
         Ty::List(..) | Ty::EvolvingList(..) => {
-            completions_for_builtin_class_methods(db, &["Array"], BuiltinMethodMode::Instance)
+            // Built-in list methods.
+            builtin_list_completions()
         }
 
         Ty::Map(..) | Ty::EvolvingMap(..) => {
-            completions_for_builtin_class_methods(db, &["Map"], BuiltinMethodMode::Instance)
+            // Built-in map methods.
+            builtin_map_completions()
         }
 
-        Ty::Primitive(primitive, _) => builtin_instance_class_path_for_primitive(primitive)
-            .map(|class_path| {
-                completions_for_builtin_class_methods(db, class_path, BuiltinMethodMode::Instance)
-            })
-            .unwrap_or_default(),
-
-        Ty::Literal(baml_base::Literal::String(_), _, _) => {
-            completions_for_builtin_class_methods(db, &["String"], BuiltinMethodMode::Instance)
+        Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::String, _) => {
+            // Built-in string methods.
+            builtin_string_completions()
         }
 
         _ => Vec::new(),
     }
+}
+
+/// Built-in methods for list types.
+fn builtin_list_completions() -> Vec<Completion> {
+    vec![
+        Completion::new("length", CompletionKind::Method).with_detail("int"),
+        Completion::new("map", CompletionKind::Method).with_detail("(f: (T) -> U) -> U[]"),
+        Completion::new("filter", CompletionKind::Method).with_detail("(f: (T) -> bool) -> T[]"),
+        Completion::new("reduce", CompletionKind::Method)
+            .with_detail("(f: (U, T) -> U, init: U) -> U"),
+        Completion::new("find", CompletionKind::Method).with_detail("(f: (T) -> bool) -> T?"),
+        Completion::new("any", CompletionKind::Method).with_detail("(f: (T) -> bool) -> bool"),
+        Completion::new("all", CompletionKind::Method).with_detail("(f: (T) -> bool) -> bool"),
+    ]
+}
+
+/// Built-in methods for map types.
+fn builtin_map_completions() -> Vec<Completion> {
+    vec![
+        Completion::new("keys", CompletionKind::Method).with_detail("K[]"),
+        Completion::new("values", CompletionKind::Method).with_detail("V[]"),
+        Completion::new("entries", CompletionKind::Method).with_detail("{ key: K, value: V }[]"),
+    ]
+}
+
+/// Built-in methods for string types.
+fn builtin_string_completions() -> Vec<Completion> {
+    vec![
+        Completion::new("length", CompletionKind::Method).with_detail("int"),
+        Completion::new("upper", CompletionKind::Method).with_detail("string"),
+        Completion::new("lower", CompletionKind::Method).with_detail("string"),
+        Completion::new("trim", CompletionKind::Method).with_detail("string"),
+        Completion::new("split", CompletionKind::Method).with_detail("(sep: string) -> string[]"),
+        Completion::new("contains", CompletionKind::Method).with_detail("(sub: string) -> bool"),
+        Completion::new("starts_with", CompletionKind::Method)
+            .with_detail("(prefix: string) -> bool"),
+        Completion::new("ends_with", CompletionKind::Method)
+            .with_detail("(suffix: string) -> bool"),
+    ]
 }
 
 /// Convert a `Definition` to its representative `Ty`.

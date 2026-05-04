@@ -3,17 +3,7 @@ members = [
   "crates/*",
   "rig_tests/crates/*",
 ]
-exclude = [
-  "crates/bridge_go",
-  # Generated Python rig-test outputs do not contain Cargo manifests, but the
-  # workspace member glob above would otherwise make cargo metadata fail.
-  "rig_tests/crates/python_empty",
-  "rig_tests/crates/python_literal_types",
-  "rig_tests/crates/python_map_types",
-  "rig_tests/crates/python_mixed_complex_types",
-  "rig_tests/crates/python_semantic_streaming",
-  "rig_tests/crates/python_union_types_extended",
-]
+exclude = [ "crates/bridge_go" ]
 resolver = "2"
 
 [workspace.package]
