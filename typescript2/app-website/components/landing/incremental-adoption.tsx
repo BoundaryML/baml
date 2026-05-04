@@ -94,17 +94,23 @@ const STEP_3_BAML = `class NextAction {
 }
 
 class Triage {
-  category "billing" | "technical" | "feedback"
-  order_id string?
-  sentiment float
-  urgency "low" | "med" | "high"
+  category    "billing" | "technical" | "feedback"
+  order_id    string?
+  sentiment   float
+  urgency     "low" | "med" | "high"
   next_action NextAction
+
+  // a real method on the class, not a schema annotation
+  function priority(self) -> int {
+    if (self.urgency == "high") { 3 }
+    else if (self.urgency == "med") { 2 }
+    else { 1 }
+  }
 }
 
 function Triage(message: string) -> Triage {
   client GPT4
   prompt #"
-    Classify this support message and extract info.
     {{ ctx.output_format }}
     {{ _.role("user") }} {{ message }}
   "#
@@ -113,8 +119,9 @@ function Triage(message: string) -> Triage {
 
 const STEP_3_PY = `from baml_client import b
 
-def triage(message: str) -> Triage:
-    return b.Triage(message)
+# typed result. priority() runs in BAML's runtime.
+result = b.Triage("my order never arrived")
+print(result.priority())  # 3
 `;
 
 const STEP_4_BAML = `class Answer   { text string }
@@ -122,29 +129,46 @@ class ReadFile { path string }
 class RunBash  { command string }
 type Tool = Answer | ReadFile | RunBash
 
-class Action { thought string  tool Tool }
+class Step { thought string  tool Tool }
 
-function Agent(message: string) -> Action {
+function PickTool(history: string[]) -> Step {
   client GPT4
   prompt #"
-    Pick a tool to handle the user request.
     {{ ctx.output_format }}
-    {{ _.role("user") }} {{ message }}
+    {{ _.role("user") }} {{ history }}
   "#
 }
 
+// exhaustive at compile time — adding a Tool variant without
+// updating this match is a type error.
 function dispatch(tool: Tool) -> string {
   match (tool) {
     a: Answer    => a.text,
     r: ReadFile  => baml.fs.read(r.path),
-    b: RunBash   => baml.sys.shell(b.command),
+    b: RunBash   => baml.sys.shell(b.command).stdout,
   }
 }
 
+// the agent loop, in BAML itself. typed history, typed tools, typed return.
+function Agent(question: string) -> string {
+  let history: string[] = [question];
+  for (let _ = 0; _ < 5; _ += 1) {
+    let step = PickTool(history);
+    let result = dispatch(step.tool);
+    if (step.tool is Answer) { return result; };
+    history.push(result);
+  }
+  "(agent hit turn limit)"
+}
+
 testset "agent" {
-  test "picks the right tool" {
-    let act = Agent("read package.json");
-    assert.is_true(act.tool is ReadFile);
+  test "answers route through dispatch" {
+    assert.equal(dispatch(Answer { text: "ok" }), "ok");
+  }
+
+  test "reads a file when asked" {
+    let r = dispatch(ReadFile { path: "README.md" });
+    assert.is_true(r.length() > 0);
   }
 }
 `;
@@ -164,7 +188,14 @@ type BlockSpec = {
   annotations: Annotation[];
 };
 
+/** Approximate share of code that is BAML at this step in the adoption arc.
+ *  Step 1: pure Python prompt → 0%
+ *  Step 2: Pydantic types added but prompt is still string → 0%
+ *  Step 3: BAML schema + prompt; app code stays in Python → 50%
+ *  Step 4: BAML stdlib + agent loop in BAML → 100%
+ */
 type Step = {
+  bamlPercent: number;
   heading: string;
   body: string;
   blocks: BlockSpec[];
@@ -192,6 +223,7 @@ const STEPS: Step[] = [
         lang: 'python',
       },
     ],
+    bamlPercent: 0,
     body: "A string prompt. Manual JSON parsing. No types, no retries, no guarantees. Works until it doesn't.",
     heading: 'Every agent codebase starts here.',
   },
@@ -216,6 +248,7 @@ const STEPS: Step[] = [
         lang: 'python',
       },
     ],
+    bamlPercent: 0,
     body: 'Pydantic validates after the model responds. If the JSON is wrong, you find out at runtime. The model is still guessing at what you want.',
     heading: 'Types help. But the prompt is still a string.',
   },
@@ -224,8 +257,13 @@ const STEPS: Step[] = [
       {
         annotations: [
           {
-            column: 28,
-            lineNumber: 18,
+            column: 3,
+            lineNumber: 14,
+            text: 'a real method on the class.\nnot just a schema annotation.',
+          },
+          {
+            column: 3,
+            lineNumber: 24,
             text: 'BAML injects the schema.\nthe model knows what to return.',
           },
         ],
@@ -237,9 +275,9 @@ const STEPS: Step[] = [
       {
         annotations: [
           {
-            column: 28,
-            lineNumber: 4,
-            text: 'your existing app,\nmostly unchanged',
+            column: 1,
+            lineNumber: 5,
+            text: 'a BAML method, called\nfrom your Python app.',
           },
         ],
         code: STEP_3_PY,
@@ -248,7 +286,8 @@ const STEPS: Step[] = [
         lang: 'python',
       },
     ],
-    body: 'Class, prompt, and client live together. The return type drives schema aware parsing. Your Python app calls a typed function. The model never sees a hand rolled JSON schema.',
+    bamlPercent: 50,
+    body: 'Class, prompt, and client live together — and the class has real methods. Your Python app calls a typed BAML function and even invokes BAML logic. The model never sees a hand rolled JSON schema.',
     heading:
       'Define the function once. Call it from anywhere.',
   },
@@ -257,19 +296,24 @@ const STEPS: Step[] = [
       {
         annotations: [
           {
-            column: 14,
+            column: 1,
             lineNumber: 4,
-            text: 'each tool is a class.\nadd a tool, add a match arm.',
+            text: 'tagged union — add a tool,\nadd a match arm.',
           },
           {
             column: 3,
-            lineNumber: 18,
-            text: 'exhaustive match.\nmissing a tool is a compile error.',
+            lineNumber: 19,
+            text: 'exhaustive match.\nmissing a variant is a compile error.',
+          },
+          {
+            column: 3,
+            lineNumber: 29,
+            text: 'a real for loop.\ncontrol flow lives in BAML.',
           },
           {
             column: 1,
-            lineNumber: 25,
-            text: 'tests live next to the code.\nrun in the playground or CI.',
+            lineNumber: 38,
+            text: 'tests live next to the code.\nassertions, not snapshots.',
           },
         ],
         code: STEP_4_BAML,
@@ -278,7 +322,8 @@ const STEPS: Step[] = [
         lang: 'baml',
       },
     ],
-    body: 'Tagged union tool dispatch via match. Schema aware parsing of model output. testset blocks beside the code. Stdlib written in BAML. The agent loop is BAML.',
+    bamlPercent: 100,
+    body: 'A typed agent loop, in BAML itself. Tagged unions, exhaustive match, real control flow, stdlib calls, and testsets with assertions.',
     heading: 'We need a whole new language.',
   },
 ];
@@ -820,16 +865,32 @@ export function IncrementalAdoption() {
                   >
                     <div
                       style={{
+                        alignItems: 'baseline',
                         color: isActive ? ACCENT : '#8A8580',
+                        display: 'flex',
                         flexShrink: 0,
                         fontSize: 11,
                         fontWeight: 500,
+                        gap: 10,
                         letterSpacing: '0.14em',
                         textTransform: 'uppercase',
                         transition: 'color 350ms ease',
                       }}
                     >
-                      Step {String(i + 1).padStart(2, '0')}
+                      <span>Step {String(i + 1).padStart(2, '0')}</span>
+                      <span
+                        aria-label={`${s.bamlPercent} percent BAML`}
+                        style={{
+                          color: isActive ? ACCENT : '#A8A29E',
+                          fontVariantNumeric: 'tabular-nums',
+                          fontWeight: 600,
+                          letterSpacing: '0.05em',
+                          opacity: isActive ? 1 : 0.65,
+                          transition: 'opacity 350ms ease, color 350ms ease',
+                        }}
+                      >
+                        {s.bamlPercent}% BAML
+                      </span>
                     </div>
                     <h3
                       style={{

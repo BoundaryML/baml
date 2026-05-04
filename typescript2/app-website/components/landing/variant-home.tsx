@@ -86,6 +86,9 @@ const TrustMarquee = () => (
   </div>
 );
 
+// Cycle goes through these words once and then stops on the FINAL entry —
+// the brand "settle" word. To change the resting term, move the desired
+// word to the end of this array.
 const ROTATING_WORDS = [
   'writing',
   'testing',
@@ -99,46 +102,55 @@ const ROTATING_WORDS = [
   'streaming',
   'verifying',
   'deploying',
+  'AI',
 ];
-const HOLD_MS = 2200;
+const HOLD_MS = 1400;
 const TRANSITION_MS = 400;
+const FINAL_HOLD_MS = 4200; // breathing room before the settle locks visually
 
 const RotatingWord = () => {
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
   const [reduced, setReduced] = useState(false);
+  const [settled, setSettled] = useState(false);
 
   useEffect(() => {
     setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   }, []);
 
   useEffect(() => {
-    if (reduced) return;
+    // With reduced motion, jump straight to the terminal word.
+    if (reduced) {
+      setIndex(ROTATING_WORDS.length - 1);
+      setSettled(true);
+      return;
+    }
 
-    let interval: ReturnType<typeof setInterval> | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    const startCycle = () => {
-      interval = setInterval(() => {
-        setVisible(false);
-        setTimeout(() => {
-          setIndex((i) => (i + 1) % ROTATING_WORDS.length);
-          setVisible(true);
-        }, TRANSITION_MS);
-      }, HOLD_MS + TRANSITION_MS);
+    const advance = (next: number) => {
+      setVisible(false);
+      timer = setTimeout(() => {
+        setIndex(next);
+        setVisible(true);
+        if (next === ROTATING_WORDS.length - 1) {
+          // Reached the terminal word — pause permanently.
+          setSettled(true);
+          return;
+        }
+        timer = setTimeout(() => advance(next + 1), HOLD_MS);
+      }, TRANSITION_MS);
     };
+
+    timer = setTimeout(() => advance(1), HOLD_MS);
 
     const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        if (interval) clearInterval(interval);
-      } else {
-        startCycle();
-      }
+      if (document.visibilityState === 'hidden' && timer) clearTimeout(timer);
     };
-
-    startCycle();
     document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
-      if (interval) clearInterval(interval);
+      if (timer) clearTimeout(timer);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [reduced]);
@@ -585,9 +597,7 @@ const HeroSection = () => {
           <h1 style={customStyles.h1}>
             A language
             <br />
-            for <RotatingWord />
-            <br />
-            AI.
+            for <RotatingWord />.
           </h1>
           <p style={customStyles.p}>
             Python and Java were built for humans. BAML was built for agents.

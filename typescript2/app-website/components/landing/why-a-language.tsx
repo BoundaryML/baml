@@ -7,17 +7,17 @@ const ACCENT = '#6D28D9';
 const DASH = 'rgba(109, 40, 217, 0.35)';
 
 const LEFT = [
-  'schema aware parsing',
-  'tagged union match dispatch',
-  'typed errors and retries',
-  'generics, lambdas, namespaces',
+  'Schema aware parsing',
+  'Tagged union match dispatch',
+  'Typed errors and retries',
+  'Generics, lambdas, namespaces',
 ];
 
 const RIGHT = [
-  'compiles to python, typescript, ruby, go',
-  'streaming with typed partials',
-  'one interface, every llm provider',
-  'tests live next to your prompts',
+  'Compiles to Python, TypeScript, Ruby, Go',
+  'Streaming with typed partials',
+  'One interface, every LLM provider',
+  'Tests live next to your prompts',
 ];
 
 export function WhyALanguage() {
@@ -74,12 +74,34 @@ export function WhyALanguage() {
               lineHeight: 1.02,
               letterSpacing: '-0.03em',
               color: INK,
-              margin: '0 0 88px',
+              margin: '0 0 56px',
             }}
           >
             Every guarantee, built in
             <span style={{ color: ACCENT }}>.</span>
           </h2>
+
+          <p
+            style={{
+              fontSize: 'clamp(17px, 1.6vw, 20px)',
+              fontWeight: 400,
+              lineHeight: 1.55,
+              letterSpacing: '-0.005em',
+              color: INK,
+              maxWidth: 720,
+              margin: '0 0 88px',
+            }}
+          >
+            BAML is a programming language, built in{' '}
+            <span style={{ color: ACCENT, fontWeight: 500 }}>Rust</span> and used
+            by some of the world&apos;s largest companies. It has a compiler,
+            VM, LSP, formatter, type system (with inferred error types), and
+            drops into <span style={{ fontWeight: 500 }}>Python</span>,{' '}
+            <span style={{ fontWeight: 500 }}>TypeScript</span>,{' '}
+            <span style={{ fontWeight: 500 }}>Go</span>, and the{' '}
+            <span style={{ fontWeight: 500 }}>browser</span> so teams can adopt
+            it incrementally without rewriting their stack.
+          </p>
 
           <div
             className="why-cols"
