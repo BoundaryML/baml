@@ -595,6 +595,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     .map(|id| Self::collect_pattern_names(patterns, *id, source_map, diagnostics))
                     .collect();
 
+                let mut has_mismatch = false;
                 if let Some(first) = branch_sets.first() {
                     let first_names: std::collections::BTreeSet<&Name> = first.keys().collect();
                     let mut mismatched: std::collections::BTreeSet<Name> =
@@ -607,6 +608,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                         }
                     }
                     if !mismatched.is_empty() {
+                        has_mismatch = true;
                         // Tighten the span to cover just the Or's branches
                         // rather than the whole containing pattern (which can
                         // pull in surrounding trivia and span multiple lines).
@@ -625,10 +627,18 @@ impl<'db> SemanticIndexBuilder<'db> {
                     }
                 }
 
-                // Surface the first branch's names as the Or's contribution
-                // to its parent — every branch was just verified to introduce
-                // the same set, so any of them works.
-                branch_sets.into_iter().next().unwrap_or_default()
+                if has_mismatch {
+                    // On mismatch, suppress the Or's bindings entirely so
+                    // downstream scopes don't depend on branch order
+                    // (`let x | _` vs `_ | let x` would otherwise behave
+                    // differently). The primary diagnostic above captures
+                    // the error.
+                    FxHashMap::default()
+                } else {
+                    // Every branch introduces the same set, so the first
+                    // branch's contribution is representative.
+                    branch_sets.into_iter().next().unwrap_or_default()
+                }
             }
         }
     }
