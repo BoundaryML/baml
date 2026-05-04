@@ -28,6 +28,13 @@ async fn type_of_class_to_string() {
         "#
     );
     let output = baml_test!(&source);
+    insta::assert_snapshot!(output.bytecode, @r"
+    function main() -> string {
+        load_type 0
+        call baml.TypeValue.to_string
+        return
+    }
+    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("User".to_string()))

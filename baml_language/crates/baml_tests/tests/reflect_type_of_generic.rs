@@ -30,6 +30,19 @@ async fn describe_user_returns_user() {
         "#
     );
     let output = baml_test!(&source);
+    insta::assert_snapshot!(output.bytecode, @r"
+    function describe() -> string {
+        load_type 0
+        call baml.TypeValue.to_string
+        return
+    }
+
+    function main() -> string {
+        load_type 0
+        call user.describe
+        return
+    }
+    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("User".to_string()))
@@ -168,6 +181,20 @@ async fn closure_captures_type_arg_user() {
         "#
     );
     let output = baml_test!(&source);
+    insta::assert_snapshot!(output.bytecode, @r"
+    function main() -> string {
+        load_type 0
+        call user.make_describer
+        call_indirect
+        return
+    }
+
+    function make_describer() -> () -> string throws never {
+        load_type 0
+        make_closure .<lambda(make_describer, 0)>, captures=0, ntypeargs=1
+        return
+    }
+    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("User".to_string()))
