@@ -23,7 +23,7 @@ export CI=1                                  # most tools switch to non-interact
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0     # corepack-specific override
 export DEBIAN_FRONTEND=noninteractive        # in case anything shells out to apt
 export NEXT_TELEMETRY_DISABLED=1
-export NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=8192"
+export NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=6144"
 
 # Vercel runs this from typescript2/app-website/ (the project Root Directory).
 cd "${VERCEL_BUILD_SCRIPT_DIR}/.."
@@ -53,7 +53,13 @@ else
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
       sh -s -- -y --default-toolchain none --profile minimal --no-modify-path
   fi
-  . "$HOME/.cargo/env"
+  if [[ -f "$HOME/.cargo/env" ]]; then
+    . "$HOME/.cargo/env"
+  fi
+  if ! command -v cargo >/dev/null 2>&1; then
+    echo "cargo is not available after rustup install" >&2
+    exit 1
+  fi
 
   echo "==> [2/6] Install wasm-pack (prebuilt binary, faster than cargo install)"
   if ! command -v wasm-pack >/dev/null 2>&1; then
