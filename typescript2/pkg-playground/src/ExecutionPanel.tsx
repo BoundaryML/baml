@@ -98,6 +98,10 @@ export interface ExecutionPanelProps {
   onNavigateToSource?: (source: { fileId: number; line: number; column: number }) => void;
   /** Initial value for the function arguments JSON input. Defaults to '{}'. */
   initialArgsJson?: string;
+  /** Initial function to select once the runtime reports it. */
+  initialFunctionName?: string;
+  /** Optional allow-list for functions shown in the left sidebar. */
+  visibleFunctionNames?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -247,7 +251,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
 // Component
 // ---------------------------------------------------------------------------
 
-export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload, onNavigateToSource, initialArgsJson }) => {
+export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload, onNavigateToSource, initialArgsJson, initialFunctionName, visibleFunctionNames }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
   const [testTree, setTestTree] = useState<any>(null);
@@ -263,7 +267,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [viewingTestRun, setViewingTestRun] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
 
-  const [selectedFn, setSelectedFn] = useState<string | null>(null);
+  const [selectedFn, setSelectedFn] = useState<string | null>(
+    initialFunctionName ?? null,
+  );
   const [argsJson, setArgsJson] = useState(initialArgsJson ?? '{}');
 
   // Run history — each entry is a complete invocation with its logs + result
@@ -979,7 +985,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const currentUpdate = selectedProject ? projectUpdates[selectedProject] : undefined;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
-  const functionNames = functions.map((f) => f.name);
+  const visibleFunctionNameSet =
+    visibleFunctionNames && visibleFunctionNames.length > 0
+      ? new Set(visibleFunctionNames)
+      : null;
+  const sidebarFunctions = visibleFunctionNameSet
+    ? functions.filter((f) => visibleFunctionNameSet.has(f.name))
+    : functions;
+  const functionNames = sidebarFunctions.map((f) => f.name);
   const engineStale = currentUpdate ? !currentUpdate.isBexCurrent : false;
   const diags = currentUpdate?.diagnostics ?? [];
 
@@ -988,6 +1001,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
 
   useEffect(() => {
+    if (functionNames.length === 0) return;
     setSelectedFn((prev) => prev && !functionNames.includes(prev) ? null : prev);
   }, [functionNames]);
 
@@ -1188,7 +1202,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           <>
             <div className="shrink-0 overflow-hidden" style={{ width: sidebarWidth }}>
               <FunctionSidebar
-                functions={functions}
+                functions={sidebarFunctions}
                 testTree={testTree}
                 selectedFn={selectedFn}
                 onSelectFn={(fn) => { setWorkflowContext(null); setSelectedFn(fn); setViewingCollection(false); setViewingTestRun(false); }}
