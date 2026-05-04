@@ -1168,13 +1168,17 @@ impl LoweringContext {
         }
     }
 
-    /// Lower a `TYPE_PATTERN`. The parser guarantees a single `TYPE_EXPR`
-    /// child.
+    /// Lower a `TYPE_PATTERN`. Normally a `TYPE_EXPR` child is present, but
+    /// error-recovered CSTs (e.g. `let x: = 1`) may emit a `TYPE_PATTERN` with
+    /// no usable type child — fall back to a wildcard so downstream passes
+    /// don't crash on malformed input.
     fn lower_type_pattern(&mut self, node: &SyntaxNode) -> PatId {
-        let type_expr = node
+        let Some(type_expr) = node
             .children()
             .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
-            .expect("TYPE_PATTERN always has a TYPE_EXPR child");
+        else {
+            return self.alloc_pattern(Pattern::Wildcard, node.text_range());
+        };
         let ty = crate::lower_type_expr::lower_type_expr_node(&type_expr);
         self.alloc_pattern(Pattern::Type(ty), node.text_range())
     }

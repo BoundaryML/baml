@@ -325,6 +325,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                 if let Some(initializer) = initializer {
                     self.walk_expr(*initializer, body, source_map, true);
                 }
+                if !body.patterns[*pattern].is_irrefutable(&body.patterns) {
+                    self.diagnostics
+                        .push(Hir2Diagnostic::RefutablePatternInLet {
+                            pattern_span: source_map.pattern_span(*pattern),
+                            context: "let",
+                        });
+                }
                 self.register_local_pattern(
                     *pattern,
                     DefinitionSite::Statement(stmt_id),
@@ -340,6 +347,13 @@ impl<'db> SemanticIndexBuilder<'db> {
             } => {
                 self.walk_expr(*collection, body, source_map, true);
                 self.push_scope(ScopeKind::Block, None, source_map.stmt_span(stmt_id));
+                if !body.patterns[*binding].is_irrefutable(&body.patterns) {
+                    self.diagnostics
+                        .push(Hir2Diagnostic::RefutablePatternInLet {
+                            pattern_span: source_map.pattern_span(*binding),
+                            context: "for-let",
+                        });
+                }
                 self.register_local_pattern(
                     *binding,
                     DefinitionSite::Statement(stmt_id),

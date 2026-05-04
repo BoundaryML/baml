@@ -817,8 +817,12 @@ impl Pattern {
             Pattern::Chain(parts) => parts
                 .iter()
                 .all(|id| patterns[*id].is_irrefutable(patterns)),
-            // Or-of-patterns is refutable in general (each alternative may be).
-            Pattern::Or(_) => false,
+            // Or-of-patterns is irrefutable iff EVERY alternative is. That
+            // makes `_ | _` valid in a `let` while keeping refutable cases
+            // (e.g. `1 | 2`) properly rejected.
+            Pattern::Or(parts) => parts
+                .iter()
+                .all(|id| patterns[*id].is_irrefutable(patterns)),
         }
     }
 }

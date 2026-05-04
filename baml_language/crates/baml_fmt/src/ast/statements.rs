@@ -173,7 +173,7 @@ impl Printable for ExpressionStmt {
 ///
 /// Post-pattern-rewrite shape: `KW_WATCH? PATTERN EQUALS? <expr>? SEMICOLON?`.
 /// The `let` keyword, binding name, and any `: T` annotation now live inside
-/// the [`MatchPattern`] (e.g. `let x: int` parses as a `Chain([Bind, Type])`).
+/// the [`super::MatchPattern`] (e.g. `let x: int` parses as a `Chain([Bind, Type])`).
 #[derive(Debug)]
 pub struct LetStmt {
     pub watch: Option<t::Watch>,

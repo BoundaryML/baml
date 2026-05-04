@@ -77,6 +77,16 @@ pub enum Hir2Diagnostic {
         /// Names that appear in some alternatives but not all.
         mismatched_names: Vec<Name>,
     },
+    /// A `let` statement or `for-let` binding uses a refutable pattern
+    /// (one that can fail to match). These contexts require an
+    /// irrefutable pattern; refutable forms belong in `match`.
+    RefutablePatternInLet {
+        /// Span of the offending pattern.
+        pattern_span: TextRange,
+        /// Where the binding lives — for the diagnostic message
+        /// (`"let"` vs `"for-let"`).
+        context: &'static str,
+    },
 }
 
 impl Hir2Diagnostic {
@@ -235,6 +245,17 @@ impl Hir2Diagnostic {
                 )
                 .with_phase(DiagnosticPhase::Hir)
             }
+            Hir2Diagnostic::RefutablePatternInLet { pattern_span, context } => Diagnostic::error(
+                DiagnosticId::RefutablePatternInLet,
+                format!(
+                    "refutable pattern in {context} binding; refutable patterns belong in `match`",
+                ),
+            )
+            .with_primary(
+                Span { file_id, range: *pattern_span },
+                "this pattern can fail to match",
+            )
+            .with_phase(DiagnosticPhase::Hir),
         }
     }
 }
