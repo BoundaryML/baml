@@ -9,7 +9,7 @@ interface BamlEditorProps {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
-  /** Hide the "main.baml" top strip; the toggle button still floats top-right. */
+  /** Hide the "main.baml" top strip. */
   chromeless?: boolean;
 }
 
@@ -24,7 +24,6 @@ const bamlLang = convertTextmateToShiki(bamlTextmate as Record<string, any>);
 // ---------------------------------------------------------------------------
 
 export function BamlEditor({ value, onChange, disabled, chromeless }: BamlEditorProps) {
-  const [trainingWheels, setTrainingWheels] = useState(true);
   const [tokens, setTokens] = useState<ThemedToken[][] | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
@@ -84,48 +83,26 @@ export function BamlEditor({ value, onChange, disabled, chromeless }: BamlEditor
         </div>
       )}
 
-      {/* Floating training-wheels toggle — always visible regardless of chromeless */}
-      <button
-        type="button"
-        className={`absolute top-2 right-2 z-10 text-[11px] px-2 py-1 rounded border transition-colors ${
-          trainingWheels
-            ? 'bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 border-purple-500/30'
-            : 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 border-emerald-500/30'
-        }`}
-        onClick={() => setTrainingWheels((prev) => !prev)}
-      >
-        {trainingWheels ? 'Remove Training Wheels' : 'Re-enable Training Wheels'}
-      </button>
-
-      {trainingWheels ? (
-        // Read-only highlighted view
+      <div className="flex-1 relative overflow-hidden">
+        {/* Highlighted layer */}
         <div
-          className="flex-1 overflow-auto p-4 font-mono text-sm leading-6 whitespace-pre-wrap break-words select-text cursor-default"
-          aria-label="BAML source (read-only)"
+          ref={highlightRef}
+          className="absolute inset-0 p-4 font-mono text-sm leading-6 overflow-auto pointer-events-none whitespace-pre-wrap break-words"
+          aria-hidden
         >
           {highlightedLines}
         </div>
-      ) : (
-        // Full edit mode: transparent textarea over highlighted layer
-        <div className="flex-1 relative overflow-hidden">
-          <div
-            ref={highlightRef}
-            className="absolute inset-0 p-4 font-mono text-sm leading-6 overflow-auto pointer-events-none whitespace-pre-wrap break-words"
-            aria-hidden
-          >
-            {highlightedLines}
-          </div>
-          <textarea
-            ref={textareaRef}
-            className="absolute inset-0 w-full h-full p-4 font-mono text-sm leading-6 bg-transparent text-transparent caret-white resize-none outline-none overflow-auto whitespace-pre-wrap break-words"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onScroll={handleScroll}
-            spellCheck={false}
-            disabled={disabled}
-          />
-        </div>
-      )}
+        {/* Transparent textarea — captures all input */}
+        <textarea
+          ref={textareaRef}
+          className="absolute inset-0 w-full h-full p-4 font-mono text-sm leading-6 bg-transparent text-transparent caret-white resize-none outline-none overflow-auto whitespace-pre-wrap break-words"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onScroll={handleScroll}
+          spellCheck={false}
+          disabled={disabled}
+        />
+      </div>
     </div>
   );
 }
