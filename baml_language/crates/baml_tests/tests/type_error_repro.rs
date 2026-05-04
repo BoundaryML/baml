@@ -27,7 +27,23 @@ async fn bytecode_1d_array_write_local() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        load_const "a"
+        load_const "b"
+        load_const "c"
+        alloc_array 3
+        store_var arr
+        load_var arr
+        load_const 1
+        load_const "z"
+        store_array_element
+        load_var arr
+        load_const 1
+        load_array_element
+        return
+    }
+    "#);
     assert!(output.result.is_ok());
 }
 
@@ -53,7 +69,32 @@ async fn bytecode_1d_array_write_through_field() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function Container.set(self: null, idx: int, val: string) -> null {
+        load_var self
+        load_field .items
+        load_var idx
+        load_var val
+        store_array_element
+        load_const null
+        return
+    }
+
+    function main() -> null {
+        alloc_instance user.Container
+        load_const "a"
+        load_const "b"
+        load_const "c"
+        alloc_array 3
+        init_field .items
+        load_const 1
+        load_const "z"
+        call user.Container.set
+        pop 1
+        load_const null
+        return
+    }
+    "#);
 }
 
 /// WORKS: 1D array READ through a field on self (control — same path, no assignment).
@@ -75,7 +116,27 @@ async fn bytecode_1d_array_read_through_field() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function Container.get(self: null, idx: int) -> string {
+        load_var self
+        load_field .items
+        load_var idx
+        load_array_element
+        return
+    }
+
+    function main() -> string {
+        alloc_instance user.Container
+        load_const "a"
+        load_const "b"
+        load_const "c"
+        alloc_array 3
+        init_field .items
+        load_const 1
+        call user.Container.get
+        return
+    }
+    "#);
     assert!(output.result.is_ok());
 }
 
@@ -91,7 +152,30 @@ async fn bytecode_2d_array_write_local() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        load_const "a"
+        load_const "b"
+        alloc_array 2
+        load_const "c"
+        load_const "d"
+        alloc_array 2
+        alloc_array 2
+        store_var cells
+        load_var cells
+        load_const 1
+        load_array_element
+        load_const 0
+        load_const "x"
+        store_array_element
+        load_var cells
+        load_const 1
+        load_array_element
+        load_const 0
+        load_array_element
+        return
+    }
+    "#);
     assert!(output.result.is_ok());
 }
 
@@ -116,7 +200,38 @@ async fn bytecode_2d_array_write_through_field() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function Grid.set(self: null, row: int, col: int, val: string) -> null {
+        load_var self
+        load_field .cells
+        load_var row
+        load_array_element
+        load_var col
+        load_var val
+        store_array_element
+        load_const null
+        return
+    }
+
+    function main() -> null {
+        alloc_instance user.Grid
+        load_const "a"
+        load_const "b"
+        alloc_array 2
+        load_const "c"
+        load_const "d"
+        alloc_array 2
+        alloc_array 2
+        init_field .cells
+        load_const 1
+        load_const 0
+        load_const "x"
+        call user.Grid.set
+        pop 1
+        load_const null
+        return
+    }
+    "#);
 }
 
 /// BROKEN: map write through a field on self.
@@ -140,7 +255,29 @@ async fn bytecode_map_write_through_field() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function Scores.set(self: null, key: string, val: int) -> null {
+        load_var self
+        load_field .data
+        load_var key
+        load_var val
+        store_map_element
+        load_const null
+        return
+    }
+
+    function main() -> null {
+        alloc_instance user.Scores
+        alloc_map 0
+        init_field .data
+        load_const "alice"
+        load_const 100
+        call user.Scores.set
+        pop 1
+        load_const null
+        return
+    }
+    "#);
 }
 
 /// WORKS: map write on a local variable.
@@ -155,7 +292,20 @@ async fn bytecode_map_write_local() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        alloc_map 0
+        store_var scores
+        load_var scores
+        load_const "alice"
+        load_const 100
+        store_map_element
+        load_var scores
+        load_const "alice"
+        load_map_element
+        return
+    }
+    "#);
     assert!(output.result.is_ok());
 }
 
@@ -180,7 +330,32 @@ async fn bytecode_non_self_param_array_write() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode);
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> null {
+        alloc_instance user.Container
+        load_const "a"
+        load_const "b"
+        load_const "c"
+        alloc_array 3
+        init_field .items
+        load_const 1
+        load_const "z"
+        call user.set_item
+        pop 1
+        load_const null
+        return
+    }
+
+    function set_item(c: Container, idx: int, val: string) -> null {
+        load_var c
+        load_field .items
+        load_var idx
+        load_var val
+        store_array_element
+        load_const null
+        return
+    }
+    "#);
 }
 
 // ============================================================================
