@@ -670,8 +670,9 @@ fn vm_value_media_kind(value: &Value) -> Option<MediaKind> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_type::TyAttr;
+
+    use super::*;
 
     fn media_ty(kind: MediaKind) -> Ty {
         Ty::Media(kind, TyAttr::default())
