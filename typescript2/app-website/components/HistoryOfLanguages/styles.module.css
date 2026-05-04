@@ -135,6 +135,7 @@
     SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
   color: #1a1a1a;
+  overflow: hidden;
 }
 
 .tagline {
@@ -149,6 +150,7 @@
 
 .morphAscii {
   margin: 0;
+  overflow: hidden;
   white-space: pre;
 }
 

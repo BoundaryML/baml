@@ -74,7 +74,7 @@ export function WhyALanguage() {
               lineHeight: 1,
               margin: '0 0 28px',
               maxWidth: '100%',
-              overflowX: 'auto',
+              overflow: 'hidden',
               textAlign: 'left',
               whiteSpace: 'pre',
             }}

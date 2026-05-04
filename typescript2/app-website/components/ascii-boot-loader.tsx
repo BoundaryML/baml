@@ -27,13 +27,21 @@ const BAML_ASCII = String.raw`          _____                    _____          
 const TYPE_MS = 1450;
 const HOLD_MS = 1000;
 const FADE_MS = 360;
+const HAS_SHOWN_KEY = 'baml-ascii-boot-loader-shown';
 
 export function AsciiBootLoader() {
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisible] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [shownChars, setShownChars] = useState<number | null>(null);
 
   useEffect(() => {
+    if (window.sessionStorage.getItem(HAS_SHOWN_KEY) === '1') {
+      return;
+    }
+
+    window.sessionStorage.setItem(HAS_SHOWN_KEY, '1');
+    setVisible(true);
+
     const reduced = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
     ).matches;
