@@ -433,6 +433,7 @@ pub fn synthesize_llm_builtin_call(
             let counter = alloc(Expr::Literal(Literal::Int(0)));
             alloc(Expr::Object {
                 type_name: Some(TypePath::from_dotted("baml.llm.Client")),
+                type_args: vec![],
                 fields: vec![
                     (Name::new("name"), name_lit),
                     (Name::new("client_type"), ct_variant),
@@ -591,6 +592,7 @@ pub fn synthesize_llm_make_stream_call(
         let counter = alloc(Expr::Literal(Literal::Int(0)));
         alloc(Expr::Object {
             type_name: Some(TypePath::from_dotted("baml.llm.Client")),
+            type_args: vec![],
             fields: vec![
                 (Name::new("name"), name_lit),
                 (Name::new("client_type"), ct_variant),
@@ -1359,6 +1361,7 @@ fn synthesize_retry_policy_let(
 
     let root = alloc(Expr::Object {
         type_name: Some(TypePath::bare(Name::new("RetryPolicy"))),
+        type_args: vec![],
         fields,
         spreads: vec![],
     });
@@ -1594,6 +1597,7 @@ fn synthesize_client_let(
     // Client { name, client_type, sub_clients, retry, counter }
     let root = alloc(Expr::Object {
         type_name: Some(TypePath::bare(Name::new("Client"))),
+        type_args: vec![],
         fields: vec![
             (Name::new("name"), name_expr),
             (Name::new("client_type"), client_type_expr),
@@ -1794,6 +1798,7 @@ fn synthesize_client_new_companion(
         if !provider_fields_set.is_empty() {
             alloc(Expr::Object {
                 type_name: Some(TypePath::from_dotted(type_name)),
+                type_args: vec![],
                 fields: prov_fields,
                 spreads: vec![],
             })
@@ -1838,6 +1843,7 @@ fn synthesize_client_new_companion(
 
     let options_expr = alloc(Expr::Object {
         type_name: Some(TypePath::from_dotted("baml.llm.PrimitiveClientOptions")),
+        type_args: vec![],
         fields: options_fields,
         spreads: vec![],
     });
@@ -1849,6 +1855,7 @@ fn synthesize_client_new_companion(
     )));
     let root = alloc(Expr::Object {
         type_name: Some(TypePath::from_dotted("baml.llm.PrimitiveClient")),
+        type_args: vec![],
         fields: vec![
             (Name::new("name"), name_lit),
             (Name::new("provider"), provider_lit),

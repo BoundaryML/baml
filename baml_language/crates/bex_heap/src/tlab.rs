@@ -162,7 +162,11 @@ impl Tlab {
     /// Allocate an instance object.
     #[inline]
     pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
-        self.alloc(Object::Instance(Instance { class, fields }))
+        self.alloc(Object::Instance(Instance {
+            class,
+            class_type_args: vec![],
+            fields,
+        }))
     }
 
     /// Allocate a variant object.

@@ -435,6 +435,11 @@ pub struct Instance {
     /// Pointer to the class object in the heap.
     pub class: HeapPtr,
 
+    /// Resolved class-level type args at construction time.  Empty when the
+    /// class is non-generic.  De Bruijn-ordered to match
+    /// `enclosing_generic_params()`: index 0 = first class param, etc.
+    pub class_type_args: Vec<baml_type::Ty>,
+
     /// Fields are accessed by index. No string lookups.
     pub fields: Vec<Value>,
 }
@@ -647,6 +652,20 @@ pub enum ConstValue {
     /// time — `LoadType` reads the template here and performs substitution at
     /// runtime (using the current frame's `type_args`).
     Type(baml_type::TyTemplate),
+    /// A parametric-class `IsType` check constant.
+    ///
+    /// Used by `Instruction::IsType` when the expected type is a generic class
+    /// instantiation (e.g. `Foo<int>` or `Foo<T>`).  Like `ConstValue::Type`,
+    /// this constant is **not** pre-resolved: the `IsType` VM dispatch reads it
+    /// directly from the raw constant pool and resolves the `class_obj` index to
+    /// a `HeapPtr` at execution time.
+    ClassWithTypeArgs {
+        /// Compile-time index of the class object in the object pool.
+        class_obj: crate::ObjectIndex,
+        /// Templates for the class-level type args, in De Bruijn order.
+        /// `TypeArgRef(n)` refers to `frame.type_args[n]`.
+        type_args_templates: Vec<baml_type::TyTemplate>,
+    },
 }
 
 impl ConstValue {
@@ -671,6 +690,12 @@ impl ConstValue {
                 panic!(
                     "ConstValue::Type must not be pre-resolved via to_value — \
                      use the LoadType instruction instead"
+                )
+            }
+            ConstValue::ClassWithTypeArgs { .. } => {
+                panic!(
+                    "ConstValue::ClassWithTypeArgs must not be pre-resolved via to_value — \
+                     use the IsType instruction instead"
                 )
             }
         }

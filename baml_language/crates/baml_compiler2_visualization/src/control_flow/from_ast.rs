@@ -1286,6 +1286,7 @@ mod tests {
             let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let obj = exprs.alloc(ast::Expr::Object {
                 type_name: Some(TypePath::bare("MyResponse".into())),
+                type_args: vec![],
                 fields: vec![("ok".into(), field_val)],
                 spreads: vec![],
             });
@@ -1348,6 +1349,7 @@ mod tests {
             let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let obj_true = exprs.alloc(ast::Expr::Object {
                 type_name: Some(TypePath::bare("Result".into())),
+                type_args: vec![],
                 fields: vec![],
                 spreads: vec![],
             });
@@ -1360,6 +1362,7 @@ mod tests {
             let err_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(false)));
             let obj_false = exprs.alloc(ast::Expr::Object {
                 type_name: Some(TypePath::bare("Result".into())),
+                type_args: vec![],
                 fields: vec![("err".into(), err_val)],
                 spreads: vec![],
             });
@@ -1399,6 +1402,7 @@ mod tests {
         let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
         let obj = exprs.alloc(ast::Expr::Object {
             type_name: Some(TypePath::bare("Resp".into())),
+            type_args: vec![],
             fields: vec![("ok".into(), field_val)],
             spreads: vec![],
         });

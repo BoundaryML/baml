@@ -711,8 +711,33 @@ pub fn infer_scope_types<'db>(
                                     // lambda's own generic params so that `T` from
                                     // `function foo<T>() { ... || { reflect.type_of<T>() } }` is
                                     // visible inside the lambda body.
-                                    let mut generic_params: Vec<Name> =
-                                        func_data.generic_params.clone();
+                                    //
+                                    // Also include class-level generic params if the enclosing
+                                    // function is a class method.  For a method on `class Box<T>`,
+                                    // `func_data.generic_params` is empty (no function-level
+                                    // generics), but a closure body inside `describe(self)` must
+                                    // still resolve `T` from `reflect.type_of<T>()`.
+                                    let mut generic_params: Vec<Name> = {
+                                        let mut gp = func_data.generic_params.clone();
+                                        if let Some(parent_fsi) = ancestor_scope.parent {
+                                            let parent_scope =
+                                                &index.scopes[parent_fsi.index() as usize];
+                                            if matches!(parent_scope.kind, ScopeKind::Class) {
+                                                if let Some(class_name) = &parent_scope.name {
+                                                    for class_data in item_tree.classes.values() {
+                                                        if class_data.name == *class_name {
+                                                            let mut merged =
+                                                                class_data.generic_params.clone();
+                                                            merged.extend(gp);
+                                                            gp = merged;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        gp
+                                    };
                                     for p in &func_def.generic_params {
                                         if !generic_params.contains(p) {
                                             generic_params.push(p.clone());

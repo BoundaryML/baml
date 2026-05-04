@@ -1164,6 +1164,81 @@ SOURCE_FILE
             L_PAREN "("
             R_PAREN ")"
         R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Foo"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "T"
+        WORD "T"
+      GREATER ">"
+    L_BRACE "{"
+    FIELD
+      WORD "value"
+      TYPE_EXPR "T"
+        WORD "T"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "bare_in_union_param"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "f"
+        COLON ":"
+        TYPE_EXPR
+          WORD "Foo"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+          PIPE "|"
+          WORD "Foo"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "f"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN
+              WORD "_"
+              COLON ":"
+              TYPE_EXPR
+                WORD "Foo"
+                TYPE_ARGS
+                  LESS "<"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                  GREATER ">"
+            FAT_ARROW "=>"
+            STRING_LITERAL "specific"
+              QUOTE """
+              WORD "specific"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN
+              WORD "_"
+              COLON ":"
+              TYPE_EXPR "Foo"
+                WORD "Foo"
+            FAT_ARROW "=>"
+            STRING_LITERAL "bare"
+              QUOTE """
+              WORD "bare"
+              QUOTE """
+            COMMA ","
+          R_BRACE "}"
+        R_BRACE "}"
 
 === ERRORS ===
 None

@@ -322,9 +322,15 @@ pub enum Instruction {
 
     /// Builds an instance of a class and allocates it on the heap.
     ///
-    /// Format: `ALLOC_INSTANCE i` where `i` is the index of the class in the
-    /// `Vm::objects` array.
-    AllocInstance(ObjectIndex),
+    /// Format: `ALLOC_INSTANCE { class_obj: i, ntypeargs: n }` where `i` is
+    /// the index of the class in the `Vm::objects` array and `n` type-arg
+    /// `Object::Type` values sit on the stack below any pending field values
+    /// (popped before the instance is created).  `n == 0` for non-generic
+    /// classes.
+    AllocInstance {
+        class_obj: ObjectIndex,
+        ntypeargs: u16,
+    },
 
     /// Builds a variant of an enum and allocates it on the heap.
     ///
@@ -789,7 +795,12 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadMapElement => f.write_str("LOAD_MAP_ELEMENT"),
             Instruction::StoreArrayElement => f.write_str("STORE_ARRAY_ELEMENT"),
             Instruction::StoreMapElement => f.write_str("STORE_MAP_ELEMENT"),
-            Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
+            Instruction::AllocInstance {
+                class_obj,
+                ntypeargs,
+            } => {
+                write!(f, "ALLOC_INSTANCE {class_obj} ntypeargs={ntypeargs}")
+            }
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
             Instruction::DispatchFuture(callee) => write!(f, "DISPATCH_FUTURE {callee}"),
             Instruction::Await => f.write_str("AWAIT"),
@@ -1059,6 +1070,10 @@ impl Bytecode {
                 // TyTemplate constants are NOT pre-resolved: `LoadType` reads
                 // them directly from `constants` at execution time.
                 ConstValue::Type(_) => crate::Value::Null,
+                // ClassWithTypeArgs constants are NOT pre-resolved: `IsType`
+                // reads them directly from `constants` at execution time and
+                // resolves `class_obj` to a `HeapPtr` via `idx_to_ptr`.
+                ConstValue::ClassWithTypeArgs { .. } => crate::Value::Null,
                 other => other.to_value(&resolve),
             })
             .collect();

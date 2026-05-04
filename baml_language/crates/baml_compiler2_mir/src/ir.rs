@@ -621,7 +621,16 @@ pub enum Rvalue {
     Len(Place),
 
     /// Type check for pattern matching: `is_type(_1, Type)`
-    IsType { operand: Operand, ty: Ty },
+    ///
+    /// The type is stored as a `TyTemplate` so that generic class checks like
+    /// `value is Foo<T>` (where `T` is a type parameter in scope) resolve
+    /// correctly at runtime via `TypeArgRef` substitution.  For fully-concrete
+    /// types the template is `TyTemplate::Concrete(ty)`, which the emitter
+    /// handles on the same fast path as before.
+    IsType {
+        operand: Operand,
+        ty_template: TyTemplate,
+    },
 
     /// Allocate a closure object from a child lambda function.
     ///
@@ -664,8 +673,17 @@ pub enum Rvalue {
 pub enum AggregateKind {
     /// An array.
     Array,
-    /// A class instance.
-    Class(String),
+    /// A class instance with optional type-arg templates.
+    ///
+    /// `type_arg_templates` is non-empty only for generic class instantiations:
+    /// each element corresponds to one class-level type parameter in De Bruijn
+    /// order (matching `enclosing_generic_params()`).  These templates are
+    /// emitted as `LoadType` instructions before `AllocInstance` so the VM can
+    /// store resolved `Ty` values in `Instance::class_type_args`.
+    Class {
+        name: String,
+        type_arg_templates: Vec<baml_type::TyTemplate>,
+    },
     /// An enum variant.
     EnumVariant { enum_name: String, variant: String },
 }

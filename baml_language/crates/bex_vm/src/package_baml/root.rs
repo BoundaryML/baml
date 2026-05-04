@@ -72,6 +72,7 @@ fn deep_copy_value_recursive(
                 Object::Instance(instance) => {
                     let placeholder_ptr = vm.tlab.alloc(Object::Instance(Instance {
                         class: instance.class,
+                        class_type_args: instance.class_type_args.clone(),
                         fields: Vec::new(),
                     }));
                     copied_objects.insert(ptr, placeholder_ptr);
@@ -83,6 +84,7 @@ fn deep_copy_value_recursive(
 
                     let new_instance = Instance {
                         class: instance.class,
+                        class_type_args: instance.class_type_args,
                         fields: new_fields,
                     };
                     // no GC write barrier because it is all in gen0

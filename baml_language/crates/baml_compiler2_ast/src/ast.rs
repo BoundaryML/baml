@@ -589,6 +589,9 @@ pub enum Expr {
     },
     Object {
         type_name: Option<TypePath>,
+        /// Explicit generic type args from syntax like `Foo<int> { ... }`.
+        /// Empty when no `<...>` was written (e.g. bare `Foo { ... }`).
+        type_args: Vec<TypeExpr>,
         fields: Vec<(Name, ExprId)>,
         spreads: Vec<SpreadField>,
     },

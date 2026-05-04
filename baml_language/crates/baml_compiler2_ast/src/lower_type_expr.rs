@@ -335,6 +335,23 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
             }
         }
 
+        // For non-map generic types (e.g. `Foo<int>` in a union `Foo<int> | Foo<string>`),
+        // pick up the TYPE_ARGS child that union_member_parts() placed in child_nodes.
+        let generic_args: Vec<TypeExpr> = if name != "map" {
+            if let Some(type_args_node) = parts.type_args() {
+                type_args_node
+                    .children()
+                    .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
+                    .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                    .map(|te| lower_type_expr_inner(&te, false))
+                    .collect()
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+
         return match name.as_str() {
             "true" => TypeExpr::Literal {
                 value: baml_base::Literal::Bool(true),
@@ -344,16 +361,11 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
                 value: baml_base::Literal::Bool(false),
                 attrs: vec![],
             },
-            _ => lower_from_type_name(&name),
+            _ => lower_from_type_name_with_generic_args(&name, generic_args),
         };
     }
 
     TypeExpr::Unknown { attrs: vec![] }
-}
-
-/// Create a `TypeExpr` from a type name string (primitive or user-defined).
-fn lower_from_type_name(name: &str) -> TypeExpr {
-    lower_from_type_name_with_generic_args(name, vec![])
 }
 
 /// Create a `TypeExpr` from a type name string with optional generic arguments.

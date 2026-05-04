@@ -233,6 +233,40 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
     }
 }
 
+// ─── Ty → TyTemplate conversion for already-resolved Ty values ──────────────
+
+/// Convert an already-resolved `baml_type::Ty` back to a `TyTemplate`.
+///
+/// This is needed for `IsType` pattern-matching where the pattern type comes
+/// through `convert_tir2_ty` (so `TypeVars` are already erased), but we still
+/// need a `TyTemplate` to carry class-level type args for the VM to compare
+/// against `Instance::class_type_args`.
+///
+/// For all leaf types that aren't `Ty::Class`, the result is
+/// `TyTemplate::Concrete(ty)`.  For `Ty::Class(tn, args, _)` we produce
+/// `TyTemplate::Class(tn, args.map(Concrete))` so the VM can compare the
+/// resolved args against the instance's `class_type_args`.
+///
+/// Note: by the time `emit_is_type_branch` is called, any `TypeVars` in the
+/// pattern have already been resolved to concrete types — so no
+/// `generic_params` are needed.  If future patterns introduce `TypeVars` that
+/// survive to MIR, thread `enclosing_generic_params()` through here.
+pub(crate) fn ty_to_template_from_resolved_ty(ty: &Ty) -> TyTemplate {
+    match ty {
+        Ty::Class(tn, args, _) if !args.is_empty() => {
+            // Parametric class: produce TyTemplate::Class with Concrete leaves.
+            // This allows the VM to check `expected_args == inst.class_type_args`.
+            TyTemplate::Class(
+                tn.clone(),
+                args.iter().map(ty_to_template_from_resolved_ty).collect(),
+            )
+        }
+        // All other types: wrap in Concrete.  The VM uses this for the
+        // existing fast paths (primitive type tags, monomorphic classes).
+        other => TyTemplate::Concrete(other.clone()),
+    }
+}
+
 // ─── def_to_item_ref helper ──────────────────────────────────────────────────
 
 use baml_compiler2_hir::{
@@ -1106,6 +1140,21 @@ impl<'db> LoweringContext<'db> {
             })
     }
 
+    /// Compute the `TyTemplate` slice for the class-level type args of a class
+    /// construction expression.
+    ///
+    /// Returns `vec![]` for non-generic (or unresolved) classes.
+    fn class_type_arg_templates(&self, expr_id: AstExprId) -> Vec<TyTemplate> {
+        let generic_params = self.enclosing_generic_params();
+        match self.expr_types.get(&(self.current_scope, expr_id)) {
+            Some(Tir2Ty::Class(_, type_args, _)) if !type_args.is_empty() => type_args
+                .iter()
+                .map(|t| self.ty_to_template(t, &generic_params))
+                .collect(),
+            _ => vec![],
+        }
+    }
+
     /// Get the `baml_type::Ty` for a pattern binding
     fn pat_ty(&self, pat_id: AstPatId) -> Ty {
         self.pat_types
@@ -1775,6 +1824,7 @@ impl LoweringContext<'_> {
                 type_name,
                 fields,
                 spreads,
+                ..
             } => {
                 self.lower_object(expr_id, type_name.as_ref(), &fields, &spreads, dest);
             }
@@ -2718,6 +2768,16 @@ impl LoweringContext<'_> {
         // Check if callee is a method call (MemberAccess or multi-segment Path with a
         // MemberResolution::BoundMethod/UnboundMethod/Free). Field and Variant resolutions are not callable.
         // If the base is a real value (not a package namespace), prepend it as self.
+        //
+        // When the base is a class-instance receiver with generic type args, we need to
+        // thread those type args as leading call-site type args so that methods with
+        // `reflect.type_of<T>()` can see the class-level type param at runtime.
+        // `receiver_base_for_class_type_args` is set to the base expression id when this applies
+        // (MemberAccess callee path — `expr_types` is used for the lookup).
+        // `receiver_path_tir_ty` is used for multi-segment Path callees (e.g. `b.describe()`) where
+        // the receiver type is looked up from `path_root_types` instead of `expr_types`.
+        let mut receiver_base_for_class_type_args: Option<AstExprId> = None;
+        let mut receiver_path_tir_ty: Option<Tir2Ty> = None;
         let (callee_operand, arg_operands) = if let AstExpr::MemberAccess { base, .. } =
             &callee_expr
         {
@@ -2766,6 +2826,9 @@ impl LoweringContext<'_> {
                     // For immediate calls, emit the callee as a plain function constant
                     // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                     let receiver_op = self.lower_to_operand(*base);
+                    // Record the receiver base expr so we can later emit LoadType for its
+                    // class-level type args (De Bruijn ordering: class params first).
+                    receiver_base_for_class_type_args = Some(*base);
                     let callee_op = {
                         let resolution =
                             self.resolutions.get(&(self.current_scope, callee)).cloned();
@@ -2883,6 +2946,13 @@ impl LoweringContext<'_> {
                     );
                     Operand::Copy(Place::local(recv_local))
                 };
+                // Record the receiver's TIR type so that class-level type args can be
+                // threaded as leading call-site type args (De Bruijn order: class params first).
+                // `path_root_types` stores the root variable's type for multi-segment paths.
+                receiver_path_tir_ty = self
+                    .path_root_types
+                    .get(&(self.current_scope, callee))
+                    .cloned();
                 let mut all_args = vec![receiver_op];
                 all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
                 (callee_op, all_args)
@@ -2967,7 +3037,53 @@ impl LoweringContext<'_> {
             } else {
                 vec![]
             };
-        let type_arg_operands = self.lower_explicit_type_args(&ast_type_args);
+        let explicit_type_arg_operands = self.lower_explicit_type_args(&ast_type_args);
+
+        // ── Phase 8: Prepend receiver's class-level type args ────────────────
+        // For `b.describe()` where `b: Box<int>`, the method `describe` is compiled
+        // as a direct call `describe(b)` (not via MakeBoundMethod). The VM's
+        // BoundMethod path for seeding frame.type_args is bypassed, so we instead
+        // emit LoadType for each class-level type arg and prepend them as leading
+        // call-site type args.  This preserves De Bruijn ordering:
+        //   frame.type_args = [class_T, class_U, ..., fn_A, fn_B, ...]
+        // matching `enclosing_generic_params()` = class_params ++ fn_params.
+        //
+        // There are two receiver paths:
+        //   1. MemberAccess callee (`base.method()`): receiver type from `expr_types[recv_base_id]`.
+        //   2. Path callee (`b.describe()` compiled as Path(["b","describe"])): receiver type
+        //      from `path_root_types[callee_expr_id]` (TIR records root segment type there).
+        let receiver_tir_ty: Option<Tir2Ty> =
+            if let Some(recv_base_id) = receiver_base_for_class_type_args {
+                self.expr_types
+                    .get(&(self.current_scope, recv_base_id))
+                    .cloned()
+            } else {
+                receiver_path_tir_ty
+            };
+        let receiver_class_type_arg_operands: Vec<Operand> = match receiver_tir_ty {
+            Some(Tir2Ty::Class(_, class_type_args, _)) if !class_type_args.is_empty() => {
+                let generic_params = self.enclosing_generic_params();
+                class_type_args
+                    .iter()
+                    .map(|ty_arg| {
+                        let template = self.ty_to_template(ty_arg, &generic_params);
+                        let temp = self.builder.temp(Ty::type_type());
+                        self.builder
+                            .assign(Place::local(temp), Rvalue::LoadType(template));
+                        Operand::Copy(Place::local(temp))
+                    })
+                    .collect()
+            }
+            _ => vec![],
+        };
+
+        let type_arg_operands: Vec<Operand> = if !receiver_class_type_arg_operands.is_empty() {
+            let mut combined = receiver_class_type_arg_operands;
+            combined.extend(explicit_type_arg_operands);
+            combined
+        } else {
+            explicit_type_arg_operands
+        };
         let ntypeargs = type_arg_operands.len();
 
         // Prepend type-arg operands before the value-arg operands.
@@ -3650,10 +3766,14 @@ impl LoweringContext<'_> {
                     .map(|(_, e)| self.lower_to_operand(*e))
                     .collect()
             };
+            let type_arg_templates = self.class_type_arg_templates(expr_id);
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
-                    kind: AggregateKind::Class(class_name),
+                    kind: AggregateKind::Class {
+                        name: class_name,
+                        type_arg_templates,
+                    },
                     fields: field_operands,
                 },
             );
@@ -3716,10 +3836,14 @@ impl LoweringContext<'_> {
                         .iter()
                         .map(|(_, e)| self.lower_to_operand(*e))
                         .collect();
+                    let type_arg_templates = self.class_type_arg_templates(expr_id);
                     self.builder.assign(
                         dest,
                         Rvalue::Aggregate {
-                            kind: AggregateKind::Class(class_name),
+                            kind: AggregateKind::Class {
+                                name: class_name,
+                                type_arg_templates,
+                            },
                             fields: field_operands,
                         },
                     );
@@ -3761,10 +3885,14 @@ impl LoweringContext<'_> {
                 }
             }
 
+            let type_arg_templates = self.class_type_arg_templates(expr_id);
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
-                    kind: AggregateKind::Class(class_name),
+                    kind: AggregateKind::Class {
+                        name: class_name,
+                        type_arg_templates,
+                    },
                     fields: result,
                 },
             );
@@ -5278,9 +5406,15 @@ impl LoweringContext<'_> {
                 }
             }
         } else {
+            // Convert Ty → TyTemplate so the emitter can handle generic class
+            // checks (Ty::Class with args containing TypeVars map to
+            // TyTemplate::Class with TypeArgRef leaves).  For non-generic types
+            // the template is TyTemplate::Concrete(ty) — the emitter falls back
+            // to the same fast path as before.
+            let ty_template = ty_to_template_from_resolved_ty(&ty);
             let test = Rvalue::IsType {
                 operand: Operand::Copy(Place::Local(scrutinee)),
-                ty,
+                ty_template,
             };
             let test_local = self.builder.temp(Ty::Bool {
                 attr: TyAttr::default(),

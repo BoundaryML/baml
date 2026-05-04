@@ -1075,6 +1075,7 @@ retry_policy MyRetry {
                 type_name,
                 fields,
                 spreads,
+                ..
             } => (type_name, fields, spreads),
             other => panic!("expected Expr::Object, got {other:?}"),
         };

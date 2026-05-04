@@ -298,7 +298,9 @@ function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, fun
     dispatch_future baml.llm.StreamCache.new
     await
     store_var cache
-    alloc_instance baml.llm.Stream
+    load_type 1
+    load_type 2
+    alloc_instance<2> baml.llm.Stream
     load_var primitive
     init_field ._client
     load_var acc

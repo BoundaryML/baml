@@ -1589,11 +1589,33 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Expr::Object {
-                type_name, fields, ..
+                type_name,
+                type_args: obj_type_args,
+                fields,
+                ..
             } => {
                 for (_, expr_id) in fields {
                     self.infer_expr(*expr_id, body);
                 }
+                // Lower explicit type args from `Foo<int> { ... }` syntax.
+                let lowered_type_args: Vec<Ty> = obj_type_args
+                    .iter()
+                    .map(|te| {
+                        let mut diags = Vec::new();
+                        let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                            self.context.db(),
+                            te,
+                            self.package_items,
+                            &self.ns_context,
+                            &self.generic_params,
+                            &mut diags,
+                        );
+                        // Swallow diagnostics silently — errors will be caught during
+                        // elaboration and reported with better context.
+                        let _ = diags;
+                        ty
+                    })
+                    .collect();
                 type_name
                     .as_ref()
                     .and_then(|path| {
@@ -1616,7 +1638,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 .map(|def| {
                                     Ty::Class(
                                         crate::lower_type_expr::qualify_def(db, def, leaf),
-                                        vec![],
+                                        lowered_type_args,
                                         TyAttr::default(),
                                     )
                                 })

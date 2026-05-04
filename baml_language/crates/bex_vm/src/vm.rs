@@ -993,10 +993,11 @@ impl BexVm {
     /// TODO: Seems to low level for an embedder, provide an API that takes
     /// class name and mapping of field name => value instead.
     pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> Value {
-        Value::Object(
-            self.tlab
-                .alloc(Object::Instance(Instance { class, fields })),
-        )
+        Value::Object(self.tlab.alloc(Object::Instance(Instance {
+            class,
+            class_type_args: vec![],
+            fields,
+        })))
     }
 
     // TODO: Same problem as above. Ideally takes (&str, &str) instead.
@@ -1244,6 +1245,7 @@ impl BexVm {
         let class_ptr = self.error_class_ptrs[class as usize];
         let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
             class: class_ptr,
+            class_type_args: vec![],
             fields,
         }));
         Value::Object(instance_ptr)
@@ -1315,6 +1317,7 @@ impl BexVm {
         let class_ptr = self.panic_class_ptrs[class as usize];
         let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
             class: class_ptr,
+            class_type_args: vec![],
             fields,
         }));
         Value::Object(instance_ptr)
@@ -1560,6 +1563,22 @@ impl BexVm {
             _ => vec![],
         };
 
+        // For BoundMethod callees, extract the receiver's class_type_args so
+        // they can seed frame.type_args before call-site explicit type args are
+        // appended.  This implements the De Bruijn ordering:
+        //   frame.type_args = receiver.class_type_args ++ explicit_call_site_args
+        // matching enclosing_generic_params() which puts class params first.
+        let bound_method_class_type_args: Vec<baml_type::Ty> = match self.get_object(callee_ptr) {
+            Object::BoundMethod(bm) => match bm.receiver {
+                Value::Object(recv_ptr) => match self.get_object(recv_ptr) {
+                    Object::Instance(inst) => inst.class_type_args.clone(),
+                    _ => vec![],
+                },
+                _ => vec![],
+            },
+            _ => vec![],
+        };
+
         // Resolve the callee: either a plain Function, a Closure, or a BoundMethod wrapping one.
         let callee = match self.get_object(callee_ptr) {
             Object::Function(f) => f,
@@ -1688,15 +1707,30 @@ impl BexVm {
                 };
 
                 // Push the new frame.
-                // If the callee is a Closure with captured type args, populate
-                // frame.type_args from those captured args rather than leaving
-                // the vec empty.  For plain Function / BoundMethod callees
-                // (and non-generic closures) this is vec![] (no-op).
+                // Seed frame.type_args from:
+                //  1. BoundMethod callees: the receiver's class_type_args (De
+                //     Bruijn slot 0..n_class_params).  The Call-instruction
+                //     writeback at vm.rs:3619-3629 appends explicit call-site
+                //     type args after these, preserving ordering
+                //     [class_args, fn_args].
+                //  2. Closure callees: captured_type_args (whole-frame snapshot
+                //     taken at MakeClosure time; enclosing_generic_params()
+                //     already widened to class+fn params so the ordering is
+                //     consistent).
+                //  3. Plain Function callees: vec![] (no-op).
+                //
+                // Note: BoundMethod takes priority over Closure; a method can
+                // never be both simultaneously.
+                let initial_type_args = if !bound_method_class_type_args.is_empty() {
+                    bound_method_class_type_args
+                } else {
+                    closure_type_args
+                };
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
                     function: callee_ptr,
                     instruction_ptr: 0,
                     locals_offset,
-                    type_args: closure_type_args,
+                    type_args: initial_type_args,
                 }));
                 self.allocate_real_locals_for_frame(callee_ptr)?;
 
@@ -3264,9 +3298,40 @@ impl BexVm {
                 }
             }
 
-            Instruction::AllocInstance(index) => {
+            Instruction::AllocInstance {
+                class_obj: index,
+                ntypeargs,
+            } => {
                 // Convert compile-time ObjectIndex to HeapPtr
                 let class_ptr = self.idx_to_ptr(index);
+
+                // Pop class-level type args from the stack (sitting below any
+                // field init instructions that follow).  When ntypeargs == 0
+                // this is a no-op for non-generic classes.
+                let class_type_args: Vec<baml_type::Ty> = if ntypeargs > 0 {
+                    let n = ntypeargs as usize;
+                    let base = self
+                        .stack
+                        .len()
+                        .checked_sub(n)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(n))?;
+                    let mut collected = Vec::with_capacity(n);
+                    for slot in base..(base + n) {
+                        let v = self.stack[StackIndex::from_raw(slot)];
+                        let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        collected.push(*ty.clone());
+                    }
+                    for _ in 0..n {
+                        self.stack.remove(base);
+                    }
+                    collected
+                } else {
+                    vec![]
+                };
+
                 let Object::Class(class) = self.get_object(class_ptr) else {
                     return Err(VmInternalError::TypeError {
                         expected: ObjectType::Class.into(),
@@ -3282,6 +3347,7 @@ impl BexVm {
                 // Allocate an instance of the class.
                 let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
                     class: class_ptr,
+                    class_type_args,
                     fields,
                 }));
 
@@ -3924,23 +3990,64 @@ impl BexVm {
 
             Instruction::IsType(const_idx) => {
                 let value = self.stack.ensure_pop();
-                let expected = &function.bytecode.resolved_constants[const_idx];
-                let result = match expected {
-                    Value::Object(class_ptr) => {
-                        // Class identity check: is value an instance of this class?
+                // Read the raw constant so we can handle ClassWithTypeArgs
+                // (which is NOT pre-resolved into resolved_constants).
+                let raw_const = &function.bytecode.constants[const_idx];
+                let result = match raw_const {
+                    ConstValue::ClassWithTypeArgs {
+                        class_obj,
+                        type_args_templates,
+                    } => {
+                        // Parametric class check: verify class identity AND
+                        // that the instance's class_type_args match the
+                        // expected templates (substituted with current
+                        // frame.type_args for TypeArgRef leaves).
+                        let class_ptr = self.idx_to_ptr(*class_obj);
                         match value {
                             Value::Object(val_ptr) => match self.get_object(val_ptr) {
-                                Object::Instance(instance) => instance.class == *class_ptr,
+                                Object::Instance(inst) if inst.class == class_ptr => {
+                                    let frame_type_args =
+                                        if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                                            bf.type_args.clone()
+                                        } else {
+                                            vec![]
+                                        };
+                                    // Resolve each template and compare with
+                                    // the instance's stored class_type_args.
+                                    let expected_args: Vec<baml_type::Ty> = type_args_templates
+                                        .iter()
+                                        .map(|t| t.substitute(&frame_type_args))
+                                        .collect();
+                                    expected_args == inst.class_type_args
+                                }
                                 _ => false,
                             },
                             _ => false,
                         }
                     }
-                    Value::Int(tag) => {
-                        // Type tag check: does value's type tag match?
-                        value_type_tag(&value) == *tag
+                    // Fall through to the pre-resolved path for non-template
+                    // constants (Object ptr for monomorphic classes, Int for
+                    // primitive type tags).
+                    _ => {
+                        let expected = &function.bytecode.resolved_constants[const_idx];
+                        match expected {
+                            Value::Object(class_ptr) => {
+                                // Class identity check: is value an instance of this class?
+                                match value {
+                                    Value::Object(val_ptr) => match self.get_object(val_ptr) {
+                                        Object::Instance(instance) => instance.class == *class_ptr,
+                                        _ => false,
+                                    },
+                                    _ => false,
+                                }
+                            }
+                            Value::Int(tag) => {
+                                // Type tag check: does value's type tag match?
+                                value_type_tag(&value) == *tag
+                            }
+                            _ => false,
+                        }
                     }
-                    _ => false,
                 };
                 self.stack.push(Value::Bool(result));
             }

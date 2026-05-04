@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use baml_compiler2_mir::{
     AggregateKind, BinOp, Constant, IndexKind, Local, Operand, Place, Rvalue, UnaryOp,
 };
-use baml_type::{Ty, TyTemplate};
+use baml_type::TyTemplate;
 
 use crate::analysis::{LocalClassification, LocalDefUse};
 
@@ -40,7 +40,8 @@ pub(crate) trait PullSink {
     fn alloc_uint8array(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
     fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error>;
 
-    fn alloc_class_instance(&mut self, class_name: &str) -> Result<(), Self::Error>;
+    fn alloc_class_instance(&mut self, class_name: &str, ntypeargs: u16)
+    -> Result<(), Self::Error>;
     fn init_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error>;
 
     fn alloc_enum_variant(&mut self, enum_name: &str, variant: &str) -> Result<(), Self::Error>;
@@ -49,7 +50,7 @@ pub(crate) trait PullSink {
     fn type_tag(&mut self) -> Result<(), Self::Error>;
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error>;
-    fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error>;
+    fn is_type(&mut self, ty_template: &TyTemplate) -> Result<(), Self::Error>;
     /// Materialize an `Object::Type` from a `TyTemplate` constant.
     /// Emits `Instruction::LoadType(const_idx)` in the bytecode emitter.
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error>;
@@ -368,8 +369,18 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
                 }
                 sink.alloc_array(fields.len())
             }
-            AggregateKind::Class(class_name) => {
-                sink.alloc_class_instance(class_name)?;
+            AggregateKind::Class {
+                name: class_name,
+                type_arg_templates,
+            } => {
+                // Emit one LoadType per class-level type arg (before AllocInstance
+                // so the VM can pop them from the stack).
+                let ntypeargs = u16::try_from(type_arg_templates.len())
+                    .expect("type_arg_templates count fits in u16");
+                for template in type_arg_templates {
+                    sink.load_type(template)?;
+                }
+                sink.alloc_class_instance(class_name, ntypeargs)?;
                 for (field_idx, field_operand) in fields.iter().enumerate() {
                     let name = sink.class_field_name(class_name, field_idx);
                     walk_operand_pull(sink, field_operand)?;
@@ -390,9 +401,12 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             sink.type_tag()
         }
         Rvalue::Len(place) => sink.len_of_place(place),
-        Rvalue::IsType { operand, ty } => {
+        Rvalue::IsType {
+            operand,
+            ty_template,
+        } => {
             walk_operand_pull(sink, operand)?;
-            sink.is_type(ty)
+            sink.is_type(ty_template)
         }
         Rvalue::MakeClosure {
             lambda_idx,

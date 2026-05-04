@@ -1011,6 +1011,7 @@ mod tests {
         // Instance has 3 fields but class expects 1 — should panic on verify
         let _bad_instance = tlab.alloc(Object::Instance(bex_vm_types::types::Instance {
             class: class_ptr,
+            class_type_args: vec![],
             fields: vec![Value::Int(1), Value::Int(2), Value::Int(3)],
         }));
 
@@ -2270,6 +2271,7 @@ mod tests {
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance {
             class: class_ptr,
+            class_type_args: vec![],
             fields: vec![Value::Object(leaf_string)],
         }));
 

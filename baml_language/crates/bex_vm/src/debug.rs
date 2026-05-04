@@ -166,7 +166,10 @@ pub(crate) fn display_instruction(
         | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
         }
-        Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
+        Instruction::AllocInstance {
+            class_obj: index, ..
+        }
+        | Instruction::AllocVariant(index) => {
             // Look up the class/enum from the compile-time ObjectPool if available
             if let Some(objs) = objects {
                 format!("({})", display_object_from_pool(index.raw(), objs))
@@ -268,6 +271,15 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
             }
         }
         bex_vm_types::ConstValue::Type(template) => format!("<type_template {template:?}>"),
+        bex_vm_types::ConstValue::ClassWithTypeArgs {
+            class_obj,
+            type_args_templates,
+        } => {
+            format!(
+                "<class_with_type_args obj={} args={type_args_templates:?}>",
+                class_obj.raw()
+            )
+        }
     }
 }
 
@@ -361,7 +373,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
             Color::Red
         }
         Instruction::AllocMap(_)
-        | Instruction::AllocInstance(_)
+        | Instruction::AllocInstance { .. }
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Color::Cyan,
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
@@ -778,7 +790,17 @@ fn display_instruction_textual(
         // --- Allocation ---
         Instruction::AllocArray(n) => format!("alloc_array {n}"),
         Instruction::AllocMap(n) => format!("alloc_map {n}"),
-        Instruction::AllocInstance(_) => format!("alloc_instance {}", meta_str(&"")),
+        Instruction::AllocInstance {
+            class_obj: _,
+            ntypeargs,
+        } => {
+            let name = meta_str(&"");
+            if *ntypeargs > 0 {
+                format!("alloc_instance<{ntypeargs}> {name}")
+            } else {
+                format!("alloc_instance {name}")
+            }
+        }
         Instruction::AllocVariant(_) => format!("alloc_variant {}", meta_str(&"")),
 
         // --- Array/Map element access ---
@@ -1033,7 +1055,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::InitField(_)
         | Instruction::Call { .. }
         | Instruction::DispatchFuture(_)
-        | Instruction::AllocInstance(_)
+        | Instruction::AllocInstance { .. }
         | Instruction::AllocVariant(_)
         | Instruction::Watch(_)
         | Instruction::Unwatch(_)

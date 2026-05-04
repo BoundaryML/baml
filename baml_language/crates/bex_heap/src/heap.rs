@@ -318,6 +318,11 @@ impl BexHeap {
                     .iter()
                     .map(|cv| match cv {
                         bex_vm_types::ConstValue::Type(_) => bex_vm_types::Value::Null,
+                        // ClassWithTypeArgs is NOT pre-resolved: `IsType` reads it
+                        // directly from `constants` at execution time.
+                        bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => {
+                            bex_vm_types::Value::Null
+                        }
                         other => other.to_value(resolve_idx),
                     })
                     .collect();

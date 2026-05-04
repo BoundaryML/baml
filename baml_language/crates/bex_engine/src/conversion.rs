@@ -489,11 +489,12 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Bool(_), Ty::Literal(Literal::Bool(_), _)) => true,
         (BexExternalValue::Array { .. }, Ty::List(_, _)) => true,
         (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
-        // Class match ignores `Ty::Class` type args because `Instance` carries
-        // no runtime type-arg payload yet (see also `find_matching_union_member`
-        // below).  Now that `Ty::Class` is parametric, unions like
-        // `Foo<int> | Foo<string>` cannot be disambiguated here without
-        // first threading class type args through instance construction.
+        // For FFI-boundary matching we only compare class names because
+        // `BexExternalValue::Instance` does not carry class_type_args (that
+        // field lives on the VM-side `Object::Instance`).  Fine-grained
+        // generic disambiguation (e.g. `Foo<int>` vs `Foo<string>`) is
+        // handled in-VM via `IsType` instructions (Phase 8.6) and
+        // `find_matching_union_member` below.
         (BexExternalValue::Instance { class_name, .. }, Ty::Class(tn, _, _)) => {
             type_name_matches_external_name(class_name, tn)
         }
@@ -556,16 +557,19 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                 Object::Instance(inst) => {
                     let class_obj = unsafe { inst.class.get() };
                     if let Object::Class(class) = class_obj {
-                        // Compares only `TypeName` (name + module path); the
-                        // `Ty::Class` type-arg slot is ignored because
-                        // `Instance` does not carry resolved class type args
-                        // at runtime.  Unions like `Foo<int> | Foo<string>`
-                        // therefore resolve to whichever variant appears
-                        // first — closing this gap requires plumbing class
-                        // type args onto `Instance` construction.
-                        members
-                            .iter()
-                            .find(|m| matches!(m, Ty::Class(tn, _, _) if *tn == class.name))
+                        // Compare both class name and type args.  When the
+                        // union member has empty type args (e.g. a bare `Foo`)
+                        // it matches any instance of `Foo` regardless of its
+                        // class_type_args — preserving first-match semantics
+                        // for `Foo<int> | Foo`.  When type args are present
+                        // on the union member they must equal the instance's
+                        // class_type_args exactly.
+                        members.iter().find(|m| {
+                            matches!(m, Ty::Class(tn, expected_args, _)
+                                if *tn == class.name
+                                && (expected_args.is_empty()
+                                    || expected_args == &inst.class_type_args))
+                        })
                     } else {
                         None
                     }

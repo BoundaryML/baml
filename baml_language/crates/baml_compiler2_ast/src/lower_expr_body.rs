@@ -1057,7 +1057,6 @@ impl LoweringContext {
         let mut elements: Vec<PatId> = Vec::new();
         let mut current_element: Option<PatternElement> = None;
         let mut pending_negation = false;
-
         for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => {
@@ -2027,11 +2026,14 @@ impl LoweringContext {
         let mut spreads = Vec::new();
         let mut position = 0;
         let mut type_name = None;
+        let mut type_args: Vec<TypeExpr> = vec![];
 
         // Look for the optional type name (first WORD or path before the brace):
         //   - A simple WORD token: `MyClass { ... }` → `TypePath::bare`.
         //   - A qualified path node: `baml.errors.DevOther { ... }` (parsed as
         //     PATH_EXPR) → `TypePath` of all the WORD segments.
+        //   - A generic path: `Foo<int> { ... }` (parsed as PATH_EXPR with
+        //     GENERIC_ARGS child) → `TypePath::bare("Foo")` + `type_args = [int]`.
         'outer: for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => {
@@ -2052,6 +2054,17 @@ impl LoweringContext {
                     if !segments.is_empty() {
                         type_name = Some(TypePath::new(segments));
                     }
+                    // Also extract explicit generic type args from `Foo<int>` syntax:
+                    // PATH_EXPR contains a GENERIC_ARGS child with TYPE_EXPR children.
+                    type_args = child_node
+                        .children()
+                        .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+                        .into_iter()
+                        .flat_map(|args_node| args_node.children())
+                        .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+                        .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                        .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+                        .collect();
                     break 'outer;
                 }
             }
@@ -2116,6 +2129,7 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Object {
                 type_name,
+                type_args,
                 fields,
                 spreads,
             },

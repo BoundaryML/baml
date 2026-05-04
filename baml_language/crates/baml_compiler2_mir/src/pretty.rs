@@ -380,7 +380,22 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         Rvalue::Aggregate { kind, fields } => {
             match kind {
                 AggregateKind::Array => write!(f, "array")?,
-                AggregateKind::Class(name) => write!(f, "{name}")?,
+                AggregateKind::Class {
+                    name,
+                    type_arg_templates,
+                } => {
+                    write!(f, "{name}")?;
+                    if !type_arg_templates.is_empty() {
+                        write!(f, "<")?;
+                        for (i, t) in type_arg_templates.iter().enumerate() {
+                            if i > 0 {
+                                write!(f, ", ")?;
+                            }
+                            write!(f, "{t:?}")?;
+                        }
+                        write!(f, ">")?;
+                    }
+                }
                 AggregateKind::EnumVariant { enum_name, variant } => {
                     write!(f, "{enum_name}::{variant}")?;
                 }
@@ -403,10 +418,13 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         Rvalue::Len(place) => {
             write!(f, "len({place})")
         }
-        Rvalue::IsType { operand, ty } => {
+        Rvalue::IsType {
+            operand,
+            ty_template,
+        } => {
             write!(f, "is_type(")?;
             write_operand(f, operand)?;
-            write!(f, ", {ty:?})")
+            write!(f, ", {ty_template:?})")
         }
         Rvalue::MakeClosure {
             lambda_idx,

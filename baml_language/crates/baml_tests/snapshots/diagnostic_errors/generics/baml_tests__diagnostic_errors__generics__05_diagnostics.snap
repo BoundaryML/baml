@@ -96,6 +96,26 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
+  [type] Error: class `Foo` expects 1 type argument(s), got 0
+     ╭─[ classes.baml:234:32 ]
+     │
+ 234 │ function bare_in_union_param(f: Foo<int> | Foo) -> string {
+     │                                ───────┬───────  
+     │                                       ╰───────── class `Foo` expects 1 type argument(s), got 0
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: class `Foo` expects 1 type argument(s), got 0
+     ╭─[ classes.baml:237:24 ]
+     │
+ 237 │         _: Foo      => "bare",
+     │                        ───┬──  
+     │                           ╰──── class `Foo` expects 1 type argument(s), got 0
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
   [type] Error: unresolved name: fetch_as
    ╭─[ fetch_as.baml:8:29 ]
    │
