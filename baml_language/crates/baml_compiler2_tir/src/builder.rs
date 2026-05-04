@@ -187,8 +187,15 @@ impl OptionalBaseInfo {
 struct CheckedCallInner {
     /// The inferred return type after generic substitution and typevar erasure.
     result: Ty,
-    /// Whether generic bindings were inferred while checking the call.
-    had_bindings: bool,
+    /// True only when bindings were derived from inference driven by the
+    /// caller's expected type (Phase 0 reverse inference). Callers use this
+    /// to suppress a redundant result-vs-expected diagnostic, since by
+    /// construction the result equals the expected type in that case.
+    /// Bindings supplied via explicit type args at the call site (e.g.
+    /// `foo<int>(x)`) do NOT set this flag — those bindings are independent
+    /// of the expected type, so the result-vs-expected check is still
+    /// meaningful.
+    bindings_from_inference: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -1062,6 +1069,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_optional_call,
             explicit_type_arg_bindings,
         } = request;
+        let explicit_args_used = explicit_type_arg_bindings.is_some();
         let callee_ty = self.expand_alias_chains(callee_ty);
 
         match &callee_ty {
@@ -1228,7 +1236,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 CheckedCallInner {
                     result,
-                    had_bindings: !bindings.is_empty(),
+                    bindings_from_inference: !bindings.is_empty() && !explicit_args_used,
                 }
             }
             Ty::Unknown { .. } | Ty::Error { .. } => {
@@ -1237,7 +1245,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     result: Ty::Unknown {
                         attr: TyAttr::default(),
                     },
-                    had_bindings: false,
+                    bindings_from_inference: false,
                 }
             }
             _ => {
@@ -1252,7 +1260,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     result: Ty::Unknown {
                         attr: TyAttr::default(),
                     },
-                    had_bindings: false,
+                    bindings_from_inference: false,
                 }
             }
         }
@@ -2061,7 +2069,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     explicit_type_arg_bindings,
                 });
 
-                if !checked.had_bindings {
+                if !checked.bindings_from_inference {
                     self.report_result_type_mismatch(expr_id, &checked.result, expected);
                 }
 

@@ -10,6 +10,7 @@ function user.reflect_type_to_int() -> int throws never {
     let x = reflect.type_of() : type
     return x : type
   }
+  !! 503..527: type mismatch: expected int, got type
   !! 540..541: type mismatch: expected int, got type
 }
 function user.unknown_type_in_reflect() -> type throws never {

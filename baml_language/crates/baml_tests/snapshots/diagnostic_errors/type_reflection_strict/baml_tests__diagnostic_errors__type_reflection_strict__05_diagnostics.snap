@@ -3,6 +3,16 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type mismatch: expected int, got type
+    ╭─[ reflect_intrinsic_errors.baml:12:17 ]
+    │
+ 12 │     let x: int = reflect.type_of<User>();
+    │                 ────────────┬───────────  
+    │                             ╰───────────── type mismatch: expected int, got type
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected int, got type
     ╭─[ reflect_intrinsic_errors.baml:13:12 ]
     │
  13 │     return x;
