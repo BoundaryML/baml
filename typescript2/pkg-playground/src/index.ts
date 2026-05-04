@@ -33,6 +33,7 @@ export type {
   RunEntry,
   LogDecoration,
   LogLevel,
+  SourceNavigationTarget,
 } from './worker-protocol';
 
 // Utility

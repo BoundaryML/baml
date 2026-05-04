@@ -71,6 +71,7 @@ fn event_kind_to_proto(
                 name: end.name.clone(),
                 result: Some(result),
                 duration_ms,
+                error: end.error.clone().unwrap_or_default(),
             })
         }
         EventKind::SetTags(tags) => {
@@ -243,6 +244,7 @@ mod tests {
                 name: "my_func".into(),
                 result: BexExternalValue::Bool(true),
                 duration: Duration::from_millis(150),
+                error: None,
             }))),
         };
 
@@ -255,9 +257,65 @@ mod tests {
         {
             assert_eq!(end.name, "my_func");
             assert_eq!(end.duration_ms, 150);
+            assert_eq!(end.error, "");
             assert!(end.result.is_some());
         } else {
             panic!("Expected FunctionEnd event");
+        }
+    }
+
+    #[test]
+    fn test_function_end_media_serializes_for_wire() {
+        use std::sync::Arc;
+
+        use bex_events::CallId;
+        use bex_project::{BexExternalAdt, MediaContent, MediaKind, MediaValue};
+
+        let span_id = SpanId::new();
+        let media = MediaValue::new(
+            MediaKind::Image,
+            MediaContent::Base64 {
+                base64_data: "aW1hZ2U=".into(),
+            },
+            Some("image/png".into()),
+        );
+        let event = RuntimeEvent {
+            call_id: CallId(0),
+            ctx: SpanContext {
+                span_id: span_id.clone(),
+                parent_span_id: None,
+                root_span_id: span_id.clone(),
+            },
+            call_stack: vec![span_id],
+            timestamp: SystemTime::now(),
+            event: EventKind::Function(FunctionEvent::End(Box::new(FunctionEnd {
+                name: "image_func".into(),
+                result: BexExternalValue::Adt(BexExternalAdt::Media(Arc::new(media))),
+                duration: Duration::from_millis(1),
+                error: None,
+            }))),
+        };
+
+        let options = CffiHandleTableOptions::for_wire();
+        let proto = runtime_event_to_proto(&event, &options).unwrap();
+
+        let Some(ProtoEventKind {
+            kind: Some(ProtoEventKindVariant::FunctionEnd(end)),
+        }) = proto.event
+        else {
+            panic!("Expected FunctionEnd event");
+        };
+        let result = end.result.expect("expected function result");
+        match result.value {
+            Some(crate::baml::cffi::baml_outbound_value::Value::MediaValue(media)) => {
+                assert_eq!(
+                    media.value,
+                    Some(crate::baml::cffi::baml_value_media::Value::Base64(
+                        "aW1hZ2U=".into()
+                    ))
+                );
+            }
+            other => panic!("Expected media value, got {other:?}"),
         }
     }
 

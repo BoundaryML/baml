@@ -1,11 +1,24 @@
 import {
   type Disposable,
+  Position,
+  Range,
+  Selection,
+  TextEditorRevealType,
   Uri,
   ViewColumn,
   type WebviewPanel as VSCodeWebviewPanel,
   window,
+  workspace,
 } from 'vscode';
 import { getPlaygroundHtml } from './getWebviewHtml';
+
+interface SourceNavigationTarget {
+  filePath?: string;
+  line: number;
+  column: number;
+  endLine?: number;
+  endColumn?: number;
+}
 
 export class WebviewPanel {
   public static currentPanel: WebviewPanel | undefined;
@@ -17,6 +30,14 @@ export class WebviewPanel {
 
     // Dispose listener
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+    this._panel.webview.onDidReceiveMessage(
+      (message: { type?: string; source?: SourceNavigationTarget }) => {
+        if (message.type !== 'navigateToSource' || !message.source) return;
+        void this.navigateToSource(message.source);
+      },
+      null,
+      this._disposables,
+    );
   }
 
   public static async render(extensionUri: Uri, port: number) {
@@ -66,5 +87,31 @@ export class WebviewPanel {
         disposable.dispose();
       }
     }
+  }
+
+  private async navigateToSource(source: SourceNavigationTarget): Promise<void> {
+    const targetUri = source.filePath
+      ? Uri.file(source.filePath)
+      : window.activeTextEditor?.document.uri;
+    if (!targetUri) return;
+
+    const visibleEditor = window.visibleTextEditors.find(
+      (editor) => editor.document.uri.toString() === targetUri.toString(),
+    );
+    const document = visibleEditor?.document ?? await workspace.openTextDocument(targetUri);
+    const editor = await window.showTextDocument(document, {
+      viewColumn: visibleEditor?.viewColumn ?? ViewColumn.One,
+      preserveFocus: false,
+      preview: false,
+    });
+
+    const start = new Position(Math.max(0, source.line - 1), source.column);
+    const end = new Position(
+      Math.max(0, (source.endLine ?? source.line) - 1),
+      source.endColumn ?? source.column,
+    );
+    const range = new Range(start, end);
+    editor.selection = new Selection(end, start);
+    editor.revealRange(range, TextEditorRevealType.InCenter);
   }
 }

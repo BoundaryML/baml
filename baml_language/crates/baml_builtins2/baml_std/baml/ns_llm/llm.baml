@@ -39,17 +39,19 @@ function render_prompt(client: Client, function_name: string, args: map<string, 
 }
 
 function build_request(client: Client, function_name: string, args: map<string, unknown>) -> root.http.Request {
+  let return_type = get_return_type(function_name);
   let primitive_client = client.to_primitive_client();
   let specialized_prompt = render_prompt(client, function_name, args);
 
-  primitive_client.build_request(specialized_prompt)
+  primitive_client.build_request(specialized_prompt, return_type)
 }
 
 function build_request_stream(client: Client, function_name: string, args: map<string, unknown>) -> root.http.Request {
+  let return_type = get_return_type(function_name);
   let primitive_client = client.to_primitive_client();
   let specialized_prompt = render_prompt(client, function_name, args);
 
-  primitive_client.build_request_stream(specialized_prompt)
+  primitive_client.build_request_stream(specialized_prompt, return_type)
 }
 
 /// UNSAFE: do not call from user code

@@ -190,7 +190,6 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
       const [
         { MonacoVscodeApiWrapper, defaultHtmlAugmentationInstructions, defaultViewsInit },
         { createDefaultLocaleConfiguration },
-        { useWorkerFactory, Worker: WorkerRef },
         keybindingsOverride,
         lifecycleOverride,
         localizationOverride,
@@ -211,7 +210,6 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
       ] = await Promise.all([
         import('monaco-languageclient/vscodeApiWrapper'),
         import('monaco-languageclient/vscodeApiLocales'),
-        import('monaco-languageclient/workerFactory'),
         import('@codingame/monaco-vscode-keybindings-service-override'),
         import('@codingame/monaco-vscode-lifecycle-service-override'),
         import('@codingame/monaco-vscode-localization-service-override'),
@@ -377,22 +375,24 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
           ...outlineOverride.default(),
         },
         monacoWorkerFactory: () => {
-          // Custom worker factory — the `new URL(..., import.meta.url)` patterns
-          // must be in OUR source code (not node_modules) so the bundler can
-          // resolve them at build time into proper asset URLs.
-          // eslint-disable-next-line react-hooks/rules-of-hooks -- not a React hook
-          useWorkerFactory({
-            workerLoaders: {
-              editorWorkerService: () => new WorkerRef(
-                new URL('@codingame/monaco-vscode-editor-api/esm/vs/editor/editor.worker.js', import.meta.url),
-                { type: 'module' },
-              ),
-              TextMateWorker: () => new WorkerRef(
-                new URL('@codingame/monaco-vscode-textmate-service-override/worker', import.meta.url),
-                { type: 'module' },
-              ),
-            },
-          });
+          // Set MonacoEnvironment.getWorker so monaco-vscode-api uses our Worker
+          // instances directly. This is the only way to get webpack to bundle
+          // the worker entries with their dependencies — `new Worker(new URL(...))`
+          // is the literal pattern webpack's worker plugin recognizes. Going
+          // through monaco-languageclient's URL-only `useWorkerFactory` instead
+          // makes webpack copy the upstream files as raw assets, which fails
+          // because they contain unresolved bare specifier re-exports.
+          const env = ((globalThis as { MonacoEnvironment?: Record<string, unknown> }).MonacoEnvironment ??= {});
+          (env as { getWorker: (id: string, label: string) => Worker }).getWorker = (_id, label) => {
+            switch (label) {
+              case 'editorWorkerService':
+                return new Worker(new URL('./editor.worker.ts', import.meta.url), { type: 'module', name: label });
+              case 'TextMateWorker':
+                return new Worker(new URL('./textmate.worker.ts', import.meta.url), { type: 'module', name: label });
+              default:
+                throw new Error(`Unsupported monaco worker: ${label}`);
+            }
+          };
         },
         userConfiguration: {
           json: JSON.stringify({
@@ -948,20 +948,41 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         onWorkerReadyRef.current?.(worker!);
         setRuntimePort(runtimePort, { connectionVersion: connectionVersionRef.current });
         setReloadCallback(() => restartWorkerRef.current?.());
-        setNavigateToSource((source) => {
-          // Find a visible BAML editor to navigate to.
-          // NOTE: The WASM runtime exposes runtime.resolveFileId(fileId) which returns the
-          // full file path. To use it from here, we'd need to add RPC from main thread → worker.
-          // For now, we search visible BAML editors as a fallback since promptfiddle typically
-          // has a single .baml file open.
+        setNavigateToSource(async (source) => {
+          const targetEditor = source.filePath
+            ? vscode.window.visibleTextEditors.find((e) => {
+                const filename = uriToFilename(e.document.uri);
+                return e.document.uri.path === source.filePath
+                  || filename === source.filePath
+                  || (filename != null && source.filePath?.endsWith(`/${filename}`));
+              })
+            : undefined;
           const bamlEditor = vscode.window.visibleTextEditors.find(
             (e) => e.document.uri.path.endsWith('.baml') || e.document.languageId === 'baml'
           );
-          const editor = bamlEditor ?? vscode.window.activeTextEditor;
+          let editor = targetEditor;
+          if (!editor && source.filePath) {
+            const resolvedPath = source.filePath.startsWith('/')
+              ? source.filePath
+              : `/workspace/${source.filePath}`;
+            const uri = vscode.Uri.file(resolvedPath);
+            try {
+              await vscode.workspace.openTextDocument(uri);
+              editor = await vscode.window.showTextDocument(uri);
+            } catch {
+              editor = undefined;
+            }
+          }
+          editor ??= bamlEditor ?? vscode.window.activeTextEditor;
           if (editor) {
-            const position = new vscode.Position(source.line, source.column);
-            editor.selection = new vscode.Selection(position, position);
-            editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+            const start = new vscode.Position(source.line, source.column);
+            const end = new vscode.Position(
+              source.endLine ?? source.line,
+              source.endColumn ?? source.column,
+            );
+            const range = new vscode.Range(start, end);
+            editor.selection = new vscode.Selection(end, start);
+            editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
           }
         });
 

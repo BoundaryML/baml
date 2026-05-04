@@ -12,7 +12,7 @@
 
 import { createRoot, type Root } from 'react-dom/client';
 import { createElement } from 'react';
-import type { RuntimePort } from '@b/pkg-playground';
+import type { RuntimePort, SourceNavigationTarget } from '@b/pkg-playground';
 import type { Dimension } from '@codingame/monaco-vscode-api/vscode/vs/base/browser/dom';
 
 // ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ const portChangeListeners = new Set<(port: RuntimePort) => void>();
 /** Callback to reload the WASM worker (set by MonacoEditor). */
 let reloadCallback: (() => void) | null = null;
 /** Callback to navigate to a source location (set by MonacoEditor). */
-let navigateToSource: ((source: { fileId: number; line: number; column: number }) => void) | null = null;
+let navigateToSource: ((source: SourceNavigationTarget) => void) | null = null;
 
 const PANE_TYPE_ID = 'baml.executionPanel';
 
@@ -224,6 +224,6 @@ export function setReloadCallback(cb: () => void): void {
  * Set the callback to navigate to a source location.
  * Called from MonacoEditor after workbench setup.
  */
-export function setNavigateToSource(cb: (source: { fileId: number; line: number; column: number }) => void): void {
+export function setNavigateToSource(cb: (source: SourceNavigationTarget) => void): void {
   navigateToSource = cb;
 }
