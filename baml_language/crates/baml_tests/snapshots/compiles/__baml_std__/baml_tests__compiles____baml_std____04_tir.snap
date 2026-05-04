@@ -498,8 +498,8 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
 function baml.llm.Client.__make_stream<T, S>(self: baml.llm.Client, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream<T, S> throws never {
   { : baml.llm.Stream<T, S>
     let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
-    let return_type = reflect.type_of() : type
-    let stream_return_type = reflect.type_of() : type
+    let return_type = get_return_type(function_name) : type
+    let stream_return_type = get_stream_return_type(function_name) : type
     let acc = primitive.new_stream_accumulator() : baml.llm.StreamAccumulator
     let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<T, S>
     Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<T, S>

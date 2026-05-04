@@ -489,7 +489,7 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Bool(_), Ty::Literal(Literal::Bool(_), _)) => true,
         (BexExternalValue::Array { .. }, Ty::List(_, _)) => true,
         (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
-        (BexExternalValue::Instance { class_name, .. }, Ty::Class(tn, _)) => {
+        (BexExternalValue::Instance { class_name, .. }, Ty::Class(tn, _, _)) => {
             type_name_matches_external_name(class_name, tn)
         }
         (BexExternalValue::Variant { enum_name, .. }, Ty::Enum(tn, _)) => {
@@ -553,7 +553,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     if let Object::Class(class) = class_obj {
                         members
                             .iter()
-                            .find(|m| matches!(m, Ty::Class(tn, _) if *tn == class.name))
+                            .find(|m| matches!(m, Ty::Class(tn, _, _) if *tn == class.name))
                     } else {
                         None
                     }

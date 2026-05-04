@@ -374,7 +374,7 @@ impl Parser {
                         }
                     }
                     // Capitalized or otherwise — treat as class name.
-                    name => Ty::Class(TypeName::local(name.into()), TyAttr::default()),
+                    name => Ty::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default()),
                 }
             }
             other => panic!("unexpected {:?} at pos {} in type DSL", other, self.pos),

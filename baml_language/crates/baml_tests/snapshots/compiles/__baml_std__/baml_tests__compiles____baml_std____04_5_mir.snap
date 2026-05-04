@@ -271,11 +271,11 @@ fn baml.llm.parse(function_name: string, json: string) -> void {
     let _4: future<type>
     let _5: type // stream_return_type
     let _6: future<type>
-    let _7: baml.llm.StreamCache // cache
+    let _7: baml.llm.StreamCache<void, void> // cache
     let _8: type
     let _9: type
-    let _10: future<baml.llm.StreamCache>
-    let _11: baml.llm.StreamCache
+    let _10: future<baml.llm.StreamCache<void, void>>
+    let _11: baml.llm.StreamCache<void, void>
     let _12: type
     let _13: type
     let _14: future<void>
@@ -475,9 +475,9 @@ fn baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name:
     }
 }
 
-fn baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream {
+fn baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream<void, void> {
     // Locals:
-    let _0: baml.llm.Stream // _0 // return
+    let _0: baml.llm.Stream<void, void> // _0 // return
     let _1: baml.llm.Client // client // param
     let _2: string // function_name // param
     let _3: map<string, unknown> // args // param
@@ -485,7 +485,7 @@ fn baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, 
     let _5: future<string>
     let _6: baml.llm.ExecutionContext // context
     let _7: string
-    let _8: baml.llm.Stream // result
+    let _8: baml.llm.Stream<void, void> // result
     let _9: baml.llm.ExecutionContext
 
     bb0: {
@@ -513,41 +513,41 @@ fn baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, 
     }
 }
 
-fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream {
+fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream<void, void> {
     // Locals:
-    let _0: baml.llm.Stream // _0 // return
+    let _0: baml.llm.Stream<void, void> // _0 // return
     let _1: baml.llm.Client // self // param
     let _2: baml.http.SseStream // sse // param
     let _3: string // function_name // param
     let _4: baml.llm.PrimitiveClient // primitive
     let _5: type // return_type
-    let _6: type // stream_return_type
-    let _7: baml.llm.StreamAccumulator // acc
-    let _8: future<baml.llm.StreamAccumulator>
-    let _9: baml.llm.StreamCache // cache
-    let _10: type
-    let _11: type
-    let _12: future<baml.llm.StreamCache>
-    let _13: baml.llm.PrimitiveClient
-    let _14: baml.llm.StreamAccumulator
-    let _15: baml.llm.StreamCache
+    let _6: future<type>
+    let _7: type // stream_return_type
+    let _8: future<type>
+    let _9: baml.llm.StreamAccumulator // acc
+    let _10: future<baml.llm.StreamAccumulator>
+    let _11: baml.llm.StreamCache<void, void> // cache
+    let _12: type
+    let _13: type
+    let _14: future<baml.llm.StreamCache<void, void>>
+    let _15: baml.llm.PrimitiveClient
+    let _16: baml.llm.StreamAccumulator
+    let _17: baml.llm.StreamCache<void, void>
 
     bb0: {
         _4 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb1];
     }
 
     bb1: {
-        _5 = load_type(TypeArgRef(0));
-        goto -> bb2;
+        _6 = dispatch_future const fn baml.llm.get_return_type(copy _3) -> bb2;
     }
 
     bb2: {
-        _6 = load_type(TypeArgRef(1));
-        goto -> bb3;
+        _5 = await _6 -> [bb3];
     }
 
     bb3: {
-        _8 = dispatch_future const fn baml.llm.PrimitiveClient.new_stream_accumulator(copy _4) -> bb4;
+        _8 = dispatch_future const fn baml.llm.get_stream_return_type(copy _3) -> bb4;
     }
 
     bb4: {
@@ -555,24 +555,32 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
     }
 
     bb5: {
-        _10 = copy _5;
-        _11 = copy _6;
-        _12 = dispatch_future const fn baml.llm.StreamCache.new(const null, copy _10, copy _11) -> bb6;
+        _10 = dispatch_future const fn baml.llm.PrimitiveClient.new_stream_accumulator(copy _4) -> bb6;
     }
 
     bb6: {
-        _9 = await _12 -> [bb7];
+        _9 = await _10 -> [bb7];
     }
 
     bb7: {
-        _13 = copy _4;
-        _14 = copy _7;
-        _15 = copy _9;
-        _0 = baml.llm.Stream { copy _13, copy _14, copy _2, copy _15 };
-        goto -> bb8;
+        _12 = copy _5;
+        _13 = copy _7;
+        _14 = dispatch_future const fn baml.llm.StreamCache.new(const null, copy _12, copy _13) -> bb8;
     }
 
     bb8: {
+        _11 = await _14 -> [bb9];
+    }
+
+    bb9: {
+        _15 = copy _4;
+        _16 = copy _9;
+        _17 = copy _11;
+        _0 = baml.llm.Stream { copy _15, copy _16, copy _2, copy _17 };
+        goto -> bb10;
+    }
+
+    bb10: {
         return;
     }
 }
@@ -815,7 +823,7 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
 
     bb0: {
         _3 = copy _1.3;
-        _4 = is_type(copy _3, Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _4 = is_type(copy _3, Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _4 -> [bb3, bb1];
     }
 
@@ -1232,9 +1240,9 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 }
 
-fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream {
+fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<void, void> {
     // Locals:
-    let _0: baml.llm.Stream // _0 // return
+    let _0: baml.llm.Stream<void, void> // _0 // return
     let _1: baml.llm.Client // self // param
     let _2: baml.llm.ExecutionContext // context // param
     let _3: int // active_delay_ms // param
@@ -1256,7 +1264,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     let _19: baml.http.SseStream // sse
     let _20: baml.http.Request
     let _21: future<baml.http.SseStream>
-    let _22: baml.llm.Stream // stream
+    let _22: baml.llm.Stream<void, void> // stream
     let _23: baml.http.SseStream
     let _24: string
     let _25: baml.llm.Client[]
@@ -1265,7 +1273,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     let _28: bool
     let _29: baml.llm.Client
     let _30: baml.llm.Client // sub
-    let _31: baml.llm.Stream // result2
+    let _31: baml.llm.Stream<void, void> // result2
     let _32: unknown // e
     let _33: baml.errors.DevOther
     let _34: bool
@@ -1276,7 +1284,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     let _39: int
     let _40: int
     let _41: (baml.llm.Client[]) -> int throws never
-    let _42: baml.llm.Stream // result3
+    let _42: baml.llm.Stream<void, void> // result3
     let _43: baml.llm.Client
     let _44: baml.llm.Client[]
     let _45: int
@@ -1466,7 +1474,7 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
 
     bb0: {
         _4 = copy _1.3;
-        _5 = is_type(copy _4, Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _5 = is_type(copy _4, Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _5 -> [bb4, bb1];
     }
 
@@ -1574,9 +1582,9 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
     }
 }
 
-fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream {
+fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<void, void> {
     // Locals:
-    let _0: baml.llm.Stream // _0 // return
+    let _0: baml.llm.Stream<void, void> // _0 // return
     let _1: baml.llm.Client // self // param
     let _2: baml.llm.ExecutionContext // context // param
     let _3: int // inherited_delay_ms // param
@@ -1604,16 +1612,16 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
     let _25: bool
     let _26: int
     let _27: int
-    let _28: baml.llm.Stream // result2
+    let _28: baml.llm.Stream<void, void> // result2
     let _29: unknown // e
     let _30: int
     let _31: baml.errors.DevOther
     let _32: bool
-    let _33: baml.llm.Stream // result
+    let _33: baml.llm.Stream<void, void> // result
 
     bb0: {
         _4 = copy _1.3;
-        _5 = is_type(copy _4, Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _5 = is_type(copy _4, Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _5 -> [bb4, bb1];
     }
 
@@ -1761,7 +1769,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     let _35: () -> string throws baml.errors.LlmClient
     let _36: future<string>
     let _37: string
-    let _38: baml.llm.StreamCache
+    let _38: baml.llm.StreamCache<void, void>
     let _39: type
     let _40: type
     let _41: future<void>
@@ -1950,7 +1958,7 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     let _21: future<string>
     let _22: void | baml.stream.StreamNoYield // parsed
     let _23: string
-    let _24: baml.llm.StreamCache
+    let _24: baml.llm.StreamCache<void, void>
     let _25: type
     let _26: type
     let _27: future<void | baml.stream.StreamNoYield>
@@ -2040,7 +2048,7 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     }
 
     bb17: {
-        _28 = is_type(copy _22, Class(TypeName { name: "StreamNoYield", module_path: ["baml", "stream"], display_name: "baml.stream.StreamNoYield" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _28 = is_type(copy _22, Class(TypeName { name: "StreamNoYield", module_path: ["baml", "stream"], display_name: "baml.stream.StreamNoYield" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _28 -> [bb1, bb18];
     }
 

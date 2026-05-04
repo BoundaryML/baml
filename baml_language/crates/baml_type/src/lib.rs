@@ -130,7 +130,7 @@ pub enum Ty {
     },
     Media(MediaKind, TyAttr),
     Literal(Literal, TyAttr),
-    Class(TypeName, TyAttr),
+    Class(TypeName, Vec<Ty>, TyAttr),
     Enum(TypeName, TyAttr),
     /// A specific enum variant — `Status.HttpError`.
     /// Compiler-only: should not reach runtime.
@@ -227,7 +227,7 @@ impl Ty {
             Ty::Uint8Array { .. } => Ty::Uint8Array { attr },
             Ty::Media(kind, _) => Ty::Media(kind, attr),
             Ty::Literal(lit, _) => Ty::Literal(lit, attr),
-            Ty::Class(tn, _) => Ty::Class(tn, attr),
+            Ty::Class(tn, args, _) => Ty::Class(tn, args, attr),
             Ty::Enum(tn, _) => Ty::Enum(tn, attr),
             Ty::EnumVariant(tn, v, _) => Ty::EnumVariant(tn, v, attr),
             Ty::Optional(inner, _) => Ty::Optional(inner, attr),
@@ -267,7 +267,7 @@ impl Ty {
             | Ty::Function { attr, .. } => attr,
             Ty::Media(_, attr)
             | Ty::Literal(_, attr)
-            | Ty::Class(_, attr)
+            | Ty::Class(_, _, attr)
             | Ty::Enum(_, attr)
             | Ty::EnumVariant(_, _, attr)
             | Ty::Optional(_, attr)
@@ -341,9 +341,14 @@ impl Ty {
         Ty::Union(members.into_iter().collect(), TyAttr::default())
     }
 
-    /// `Class(name)` with default attributes (local module path).
+    /// `Class(name)` with default attributes (local module path), no type args.
     pub fn class(name: &str) -> Self {
-        Ty::Class(TypeName::local(name.into()), TyAttr::default())
+        Ty::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default())
+    }
+
+    /// `Class(name, args)` — a parametric class instantiation.
+    pub fn class_with_args(name: TypeName, args: Vec<Ty>) -> Self {
+        Ty::Class(name, args, TyAttr::default())
     }
 
     /// `Class(name)` under the `"user"` package (matches compiler2 output for user-defined classes).
@@ -354,6 +359,20 @@ impl Ty {
                 name: Name::new(name),
                 module_path: vec![Name::new("user")],
             },
+            Vec::new(),
+            TyAttr::default(),
+        )
+    }
+
+    /// `Class(name, args)` under the `"user"` package (matches compiler2 output for user-defined classes).
+    pub fn user_class_with_args(name: &str, args: Vec<Ty>) -> Self {
+        Ty::Class(
+            TypeName {
+                display_name: Name::new(name),
+                name: Name::new(name),
+                module_path: vec![Name::new("user")],
+            },
+            args,
             TyAttr::default(),
         )
     }
@@ -576,6 +595,12 @@ impl Ty {
             Ty::Future(_, _) => {
                 Err("Future type should not reach runtime (must be awaited)".to_string())
             }
+            Ty::Class(_, args, _) => {
+                for a in args {
+                    a.validate_runtime()?;
+                }
+                Ok(())
+            }
             Ty::Int { .. }
             | Ty::Float { .. }
             | Ty::String { .. }
@@ -584,7 +609,6 @@ impl Ty {
             | Ty::Media(..)
             | Ty::Uint8Array { .. }
             | Ty::Literal(..)
-            | Ty::Class(..)
             | Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::Opaque(..) => Ok(()),
@@ -632,7 +656,20 @@ impl fmt::Display for Ty {
                 Literal::String(s) => write!(f, "{s:?}"),
                 Literal::Bool(b) => write!(f, "{b}"),
             },
-            Ty::Class(tn, _) => write!(f, "{tn}"),
+            Ty::Class(tn, args, _) => {
+                write!(f, "{tn}")?;
+                if !args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, arg) in args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{arg}")?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
             Ty::Enum(tn, _) => write!(f, "{tn}"),
             Ty::EnumVariant(tn, variant, _) => write!(f, "{tn}.{variant}"),
             Ty::Opaque(tn, _) => write!(f, "{tn}"),

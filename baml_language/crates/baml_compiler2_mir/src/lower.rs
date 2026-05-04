@@ -125,7 +125,13 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         Tir2Ty::Primitive(PrimitiveType::Pdf, attr) => Ty::Media(MediaKind::Pdf, attr.clone()),
 
         // Named types
-        Tir2Ty::Class(qtn, _, attr) => Ty::Class(qtn_to_type_name(qtn), attr.clone()),
+        Tir2Ty::Class(qtn, type_args, attr) => {
+            let resolved_args: Vec<Ty> = type_args
+                .iter()
+                .map(|a| convert_tir2_ty(a, resolved))
+                .collect();
+            Ty::Class(qtn_to_type_name(qtn), resolved_args, attr.clone())
+        }
         Tir2Ty::Enum(qtn, attr) => Ty::Enum(qtn_to_type_name(qtn), attr.clone()),
         Tir2Ty::TypeAlias(qtn, attr) => {
             if resolved.recursive.contains(qtn) {
@@ -2138,7 +2144,7 @@ impl<'db> LoweringContext<'db> {
             };
 
         for seg in &segments[1..] {
-            if let Ty::Class(ref tn, _) = current_ty.clone() {
+            if let Ty::Class(ref tn, _, _) = current_ty.clone() {
                 if let Some(fields) = self.class_fields.get(tn) {
                     if let Some(&idx) = fields.get(seg.as_str()) {
                         let next_ty = self.class_field_ty(tn, seg);
@@ -3394,7 +3400,15 @@ impl LoweringContext<'_> {
                     TyTemplate::Class(qtn_to_type_name(qtn), template_args)
                 } else {
                     // Monomorphic class — no TypeVars in args.
-                    TyTemplate::Concrete(Ty::Class(qtn_to_type_name(qtn), attr.clone()))
+                    let resolved_args: Vec<Ty> = type_args
+                        .iter()
+                        .map(|a| convert_tir2_ty(a, &self.resolved_aliases))
+                        .collect();
+                    TyTemplate::Concrete(Ty::Class(
+                        qtn_to_type_name(qtn),
+                        resolved_args,
+                        attr.clone(),
+                    ))
                 }
             }
             // EvolvingList and EvolvingMap: treat like their non-evolving counterparts.
@@ -3567,7 +3581,7 @@ impl LoweringContext<'_> {
         // which is keyed by `TypeName`.
         let ty = self.expr_ty(expr_id);
         let type_name_key: Option<TypeName> = match &ty {
-            Ty::Class(tn, _) => Some(tn.clone()),
+            Ty::Class(tn, _, _) => Some(tn.clone()),
             _ => None,
         };
         // Prefer the TIR-resolved fully-qualified name (`<package>.<ns>.<name>`)
@@ -3844,7 +3858,7 @@ impl LoweringContext<'_> {
         };
 
         // Look up field index from class_fields
-        let field_idx = if let Ty::Class(tn, _) = unwrapped_ty {
+        let field_idx = if let Ty::Class(tn, _, _) = unwrapped_ty {
             self.class_fields
                 .get(tn)
                 .and_then(|fields| fields.get(&field_str))
@@ -3864,7 +3878,7 @@ impl LoweringContext<'_> {
                 })),
             );
         } else {
-            if let Ty::Class(tn, _) = unwrapped_ty {
+            if let Ty::Class(tn, _, _) = unwrapped_ty {
                 self.emit_panic_call(
                     &format!(
                         "internal compiler error: MIR failed to resolve field access \
@@ -4441,7 +4455,7 @@ impl LoweringContext<'_> {
                 };
 
                 for seg in &segments[1..] {
-                    if let Ty::Class(ref tn, _) = current_ty.clone() {
+                    if let Ty::Class(ref tn, _, _) = current_ty.clone() {
                         if let Some(fields) = self.class_fields.get(tn) {
                             if let Some(&idx) = fields.get(seg.as_str()) {
                                 let next_ty = self.class_field_ty(tn, seg);
@@ -4476,7 +4490,7 @@ impl LoweringContext<'_> {
                 let member_name = member.clone();
                 let base_place = self.lower_lvalue(base_id);
                 let base_ty = self.expr_ty(base_id);
-                if let Ty::Class(ref tn, _) = base_ty {
+                if let Ty::Class(ref tn, _, _) = base_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
@@ -4577,7 +4591,7 @@ impl LoweringContext<'_> {
                     Ty::Optional(inner, _) => inner.as_ref(),
                     _ => &base_ty,
                 };
-                if let Ty::Class(tn, _) = unwrapped_ty {
+                if let Ty::Class(tn, _, _) = unwrapped_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
@@ -5269,7 +5283,7 @@ impl LoweringContext<'_> {
             Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
             Ty::Null { .. } => Some(baml_type::typetag::NULL),
             Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
-            Ty::Class(tn, _) => self.class_type_tags.get(tn).copied(),
+            Ty::Class(tn, _, _) => self.class_type_tags.get(tn).copied(),
             _ => None,
         }
     }

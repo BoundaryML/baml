@@ -136,11 +136,8 @@ async fn type_of_map_to_string() {
 
 #[tokio::test]
 async fn type_of_generic_class_runs_without_crash() {
-    // Composite-of-concrete: `Container<User>` should evaluate to an Object::Type
-    // without any compile or runtime errors. Class type-args are not yet
-    // first-class in `Ty` (see baml_type/src/template.rs Class arm), so the
-    // rendered name is currently the monomorphic class name. Phase 5 / future
-    // work will add parametric-class support; tighten this assertion then.
+    // Phase 7: class type-args are now first-class in `Ty`, so the rendered
+    // name includes the type argument: "Container<User>".
     let source = format!(
         r#"
         {PRELUDE}
@@ -152,8 +149,22 @@ async fn type_of_generic_class_runs_without_crash() {
     let output = baml_test!(&source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Container".to_string()))
+        Ok(BexExternalValue::String("Container<User>".to_string()))
     );
+}
+
+#[tokio::test]
+async fn type_of_generic_class_to_string_matches_source() {
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function main() -> bool {{
+            reflect.type_of<Container<User>>().to_string() == "Container<User>"
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
 #[tokio::test]
@@ -185,7 +196,6 @@ async fn type_of_generic_class_eq() {
 }
 
 #[tokio::test]
-#[ignore = "Phase 5: requires class type-args to be first-class in Ty"]
 async fn type_of_generic_class_neq_different_arg() {
     let source = format!(
         r#"
@@ -197,6 +207,30 @@ async fn type_of_generic_class_neq_different_arg() {
     );
     let output = baml_test!(&source);
     assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+// ─── Phase 7: parametric class forwarding via generic bodies ─────────────────
+
+#[tokio::test]
+async fn wrap_in_container_to_string() {
+    // Validates Phase 5 ↔ Phase 7 composition: TypeArgRef substitution inside
+    // a generic body produces a Ty::Class with resolved type args.
+    let source = format!(
+        r#"
+        {PRELUDE}
+        function wrap_in_container<T>() -> type {{
+            reflect.type_of<Container<T>>()
+        }}
+        function main() -> string {{
+            wrap_in_container<int>().to_string()
+        }}
+        "#
+    );
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Container<int>".to_string()))
+    );
 }
 
 // ─── Structural equality ──────────────────────────────────────────────────────

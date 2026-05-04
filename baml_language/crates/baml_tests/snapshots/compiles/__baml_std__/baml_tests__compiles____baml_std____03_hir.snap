@@ -285,7 +285,7 @@ class baml.llm.VertexAiOptions {
 }
 enum baml.llm.ClientType {Primitive, Fallback, RoundRobin}
 function baml.llm.__make_stream(self: ?, sse: root.http.SseStream, function_name: string) -> baml.llm.Stream  [expr] {
-  { let primitive = self.to_primitive_client(); let return_type = reflect.type_of(); let stream_return_type = reflect.type_of(); let acc = primitive.new_stream_accumulator(); let cache: baml.llm.StreamCache = StreamCache.new(return_type, stream_return_type) } baml.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
+  { let primitive = self.to_primitive_client(); let return_type = get_return_type(function_name); let stream_return_type = get_stream_return_type(function_name); let acc = primitive.new_stream_accumulator(); let cache: baml.llm.StreamCache = StreamCache.new(return_type, stream_return_type) } baml.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
 }
 function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache) -> baml.llm.T  [builtin]
 function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache) -> baml.llm.S | root.stream.StreamNoYield  [builtin]

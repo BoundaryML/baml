@@ -401,7 +401,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
-                    Ty::Class(type_name, _) => {
+                    Ty::Class(type_name, _, _) => {
                         let &obj_idx = self
                             .class_object_indices
                             .get(type_name.display_name.as_str())?;
@@ -2339,7 +2339,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error> {
-        if let Ty::Class(tn, _) | Ty::TypeAlias(tn, _) = ty {
+        if let Ty::Class(tn, _, _) | Ty::TypeAlias(tn, _) = ty {
             let class_name_str = tn.display_name.as_str();
             if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
                 let c = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
@@ -2423,7 +2423,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
         let class_name = match self.resolve_place_type(base) {
-            Some(Ty::Class(tn, _)) => tn.display_name.to_string(),
+            Some(Ty::Class(tn, _, _)) => tn.display_name.to_string(),
             _ => return format!("{field_idx}"),
         };
         self.lookup_class_field_name(&class_name, field_idx)

@@ -216,8 +216,8 @@ class Client {
   /// DO NOT CALL FROM USER CODE
   function __make_stream<T, S>(self, sse: root.http.SseStream, function_name: string) -> Stream<T, S> {
     let primitive = self.to_primitive_client()
-    let return_type = reflect.type_of<T>()
-    let stream_return_type = reflect.type_of<S>()
+    let return_type = get_return_type(function_name)
+    let stream_return_type = get_stream_return_type(function_name)
     let acc = primitive.new_stream_accumulator()
     let cache: StreamCache<T, S> = StreamCache.new(return_type, stream_return_type)
     Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }

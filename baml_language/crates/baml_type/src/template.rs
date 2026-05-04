@@ -66,12 +66,8 @@ impl TyTemplate {
                 attr: TyAttr::default(),
             },
             Self::Class(name, args) => {
-                // Build a Class with the resolved type args embedded.
-                // Class args are not yet first-class in `Ty`, so we
-                // produce a plain `Ty::Class` for the monomorphic case and
-                // extend this when parametric class support is added.
-                let _ = args; // args are resolved but Ty::Class ignores them for now
-                Ty::Class(name.clone(), TyAttr::default())
+                let resolved: Vec<Ty> = args.iter().map(|a| a.substitute(type_args)).collect();
+                Ty::Class(name.clone(), resolved, TyAttr::default())
             }
         }
     }
@@ -150,5 +146,37 @@ mod tests {
             TyTemplate::TypeArgRef(0),
         ]);
         assert!(!tmpl.is_fully_concrete());
+    }
+
+    #[test]
+    fn class_with_type_arg_ref_substitution() {
+        // Class("Container", [TypeArgRef(0)]) with type_args=[user_class("User")]
+        // → Ty::Class("Container", [user_class("User")], _)
+        let tmpl = TyTemplate::Class(
+            TypeName::local(crate::Name::new("Container")),
+            vec![TyTemplate::TypeArgRef(0)],
+        );
+        let user = Ty::user_class("User");
+        let result = tmpl.substitute(std::slice::from_ref(&user));
+        assert_eq!(
+            result,
+            Ty::class_with_args(TypeName::local(crate::Name::new("Container")), vec![user])
+        );
+        assert!(!tmpl.is_fully_concrete());
+    }
+
+    #[test]
+    fn class_no_args_is_fully_concrete() {
+        let tmpl = TyTemplate::Class(TypeName::local(crate::Name::new("User")), vec![]);
+        assert!(tmpl.is_fully_concrete());
+        let result = tmpl.substitute(&[]);
+        assert_eq!(
+            result,
+            Ty::Class(
+                TypeName::local(crate::Name::new("User")),
+                vec![],
+                crate::TyAttr::default()
+            )
+        );
     }
 }

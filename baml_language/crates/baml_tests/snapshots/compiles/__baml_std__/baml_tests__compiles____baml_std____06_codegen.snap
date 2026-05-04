@@ -276,17 +276,25 @@ function baml.http.send(request: baml.http.Request) -> baml.http.Response {
 function baml.io.input(prompt: string?) -> string {
 }
 
-function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream {
+function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream<void, void> {
     load_var self
     call baml.llm.Client.to_primitive_client
     store_var primitive
+    load_var function_name
+    dispatch_future baml.llm.get_return_type
+    await
+    store_var return_type
+    load_var function_name
+    dispatch_future baml.llm.get_stream_return_type
+    await
+    store_var stream_return_type
     load_var primitive
     dispatch_future baml.llm.PrimitiveClient.new_stream_accumulator
     await
     store_var acc
     load_const null
-    load_type 1
-    load_type 2
+    load_var return_type
+    load_var stream_return_type
     dispatch_future baml.llm.StreamCache.new
     await
     store_var cache
@@ -761,7 +769,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     return
 }
 
-function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream {
+function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<void, void> {
     load_var self
     load_field .client_type
     discriminant
@@ -1002,7 +1010,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     return
 }
 
-function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream {
+function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<void, void> {
     load_var self
     load_field .retry
     store_var _4
@@ -1409,13 +1417,13 @@ function baml.llm.StreamAccumulator.model(self: null) -> string? {
 function baml.llm.StreamAccumulator.output_tokens(self: null) -> int? {
 }
 
-function baml.llm.StreamCache.new(target: type, streaming: type) -> baml.llm.StreamCache {
+function baml.llm.StreamCache.new(target: type, streaming: type) -> baml.llm.StreamCache<void, void> {
 }
 
-function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache) -> void {
+function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache<void, void>) -> void {
 }
 
-function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache) -> void | baml.stream.StreamNoYield {
+function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache<void, void>) -> void | baml.stream.StreamNoYield {
 }
 
 function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request {
@@ -1530,7 +1538,7 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     return
 }
 
-function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream {
+function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream<void, void> {
     load_var function_name
     dispatch_future baml.llm.get_jinja_template
     await
