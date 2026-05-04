@@ -140,12 +140,6 @@ impl Node {
         self.llm_client = Some(client_name.into());
         self
     }
-
-    #[must_use]
-    pub fn with_source_span(mut self, source_span: SourceSpan) -> Self {
-        self.source_span = Some(source_span);
-        self
-    }
 }
 
 /// A directed edge in the visualization graph.
