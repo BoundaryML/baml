@@ -185,6 +185,7 @@ export function BamlPlayground() {
             key={connectionVersion}
             port={port}
             connectionVersion={connectionVersion}
+            initialFunctionName="ClassifySentiment"
             initialArgsJson='{"text":"baml rocks"}'
           />
         ) : (

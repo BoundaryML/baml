@@ -233,18 +233,6 @@ export default function WhoAreWePage() {
             >
               The team
             </p>
-            <h2
-              style={{
-                fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
-                fontWeight: 600,
-                lineHeight: 1.15,
-                letterSpacing: '-0.02em',
-                margin: 0,
-                color: INK,
-              }}
-            >
-              Builders, in order of appearance.
-            </h2>
           </div>
 
           <div

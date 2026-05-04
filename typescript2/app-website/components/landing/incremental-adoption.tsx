@@ -3,7 +3,9 @@
 import {
   AnimatePresence,
   type MotionValue,
+  animate,
   motion,
+  useMotionValue,
   useMotionValueEvent,
   useReducedMotion,
   useScroll,
@@ -21,7 +23,7 @@ const MONO =
   '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 const HAND = '"Helvetica Neue", Helvetica, Arial, sans-serif';
 
-// Code geometry — must match CodeBlock styles below.
+// Code geometry (must match CodeBlock styles below).
 const TAB_HEIGHT = 30;
 const CODE_PAD_TOP = 12;
 const CODE_PAD_LEFT = 16;
@@ -29,99 +31,80 @@ const LINE_HEIGHT = 20;
 const lineCenterY = (n: number) =>
   TAB_HEIGHT + 1 + CODE_PAD_TOP + (n - 0.5) * LINE_HEIGHT;
 
-// Code sources — rendered verbatim
+// ── Code sources ─────────────────────────────────────────────────────────────
+
 const STEP_1_PY = `from openai import OpenAI
 import json
 
 client = OpenAI()
 
-def triage(message: str):
+def extract_invoice(text: str):
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[{
             "role": "user",
-            "content": f"""Classify this support message and extract info.
-Return JSON with: category (billing/technical/feedback),
-order_id (if mentioned), sentiment (-1 to 1), urgency (low/med/high),
-next_action (object with type and reason).
+            "content": f"""Extract invoice fields. Return JSON with
+vendor, total (float), due_date (YYYY-MM-DD),
+line_items (array of name, qty, price).
 
-Message: {message}"""
+Text: {text}"""
         }]
     )
     try:
         return json.loads(response.choices[0].message.content)
     except json.JSONDecodeError:
-        return None  # just give up
+        return None  # silent failure
 `;
 
-const STEP_2_PY = `from openai import OpenAI
-from pydantic import BaseModel, ValidationError
-from typing import Literal, Optional
-
-client = OpenAI()
-
-class NextAction(BaseModel):
-    type: Literal["auto_reply", "escalate", "create_ticket"]
-    reason: str
-
-class Triage(BaseModel):
-    category: Literal["billing", "technical", "feedback"]
-    order_id: Optional[str]
-    sentiment: float
-    urgency: Literal["low", "med", "high"]
-    next_action: NextAction
-
-def triage(message: str) -> Triage | None:
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[{
-            "role": "user",
-            "content": f"""Classify this support message...
-            (same string prompt as before)"""
-        }]
-    )
-    try:
-        return Triage.model_validate_json(
-            response.choices[0].message.content
-        )
-    except ValidationError:
-        return None
-`;
-
-const STEP_3_BAML = `class NextAction {
-  type "auto_reply" | "escalate" | "create_ticket"
-  reason string
+const STEP_2_BAML = `class LineItem {
+  name  string
+  qty   int
+  price float
 }
 
-class Triage {
-  category    "billing" | "technical" | "feedback"
-  order_id    string?
-  sentiment   float
-  urgency     "low" | "med" | "high"
-  next_action NextAction
-
-  // a real method on the class, not a schema annotation
-  function priority(self) -> int {
-    if (self.urgency == "high") { 3 }
-    else if (self.urgency == "med") { 2 }
-    else { 1 }
-  }
+class Invoice {
+  vendor     string
+  total      float
+  due_date   string
+  line_items LineItem[]
 }
 
-function Triage(message: string) -> Triage {
-  client GPT4
+function ExtractInvoice(text: string) -> Invoice {
+  client GPT4o
   prompt #"
+    Extract invoice fields from the text.
     {{ ctx.output_format }}
-    {{ _.role("user") }} {{ message }}
+    {{ _.role("user") }} {{ text }}
   "#
 }
 `;
 
-const STEP_3_PY = `from baml_client import b
+const STEP_2_PY = `from baml_client import b
 
-# typed result. priority() runs in BAML's runtime.
-result = b.Triage("my order never arrived")
-print(result.priority())  # 3
+# typed result. your python app stays in python.
+invoice = b.ExtractInvoice(raw_pdf_text)
+print(invoice.total)               # typed float
+print(invoice.line_items[0].name)  # typed string
+`;
+
+const STEP_3_BAML = `// pure BAML helpers. no LLM. typed. fast.
+function bucket(invoice: Invoice) -> "small" | "medium" | "large" {
+  if (invoice.total > 10000.0) { "large" }
+  else if (invoice.total > 1000.0) { "medium" }
+  else { "small" }
+}
+
+function summarize(invoices: Invoice[]) -> map<string, int> {
+  let counts: map<string, int> = {};
+  counts.set("small", 0);
+  counts.set("medium", 0);
+  counts.set("large", 0);
+  for (let inv in invoices) {
+    let key = bucket(inv);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  counts
+}
 `;
 
 const STEP_4_BAML = `class Answer   { text string }
@@ -132,15 +115,15 @@ type Tool = Answer | ReadFile | RunBash
 class Step { thought string  tool Tool }
 
 function PickTool(history: string[]) -> Step {
-  client GPT4
+  client GPT4o
   prompt #"
     {{ ctx.output_format }}
     {{ _.role("user") }} {{ history }}
   "#
 }
 
-// exhaustive at compile time — adding a Tool variant without
-// updating this match is a type error.
+// exhaustive at compile time.
+// adding a Tool variant without updating this is a type error.
 function dispatch(tool: Tool) -> string {
   match (tool) {
     a: Answer    => a.text,
@@ -149,9 +132,9 @@ function dispatch(tool: Tool) -> string {
   }
 }
 
-// the agent loop, in BAML itself. typed history, typed tools, typed return.
-function Agent(question: string) -> string {
-  let history: string[] = [question];
+// the agent loop, in BAML itself. typed history, typed tools.
+function main() -> string {
+  let history: string[] = [baml.io.input(">> ")];
   for (let _ = 0; _ < 5; _ += 1) {
     let step = PickTool(history);
     let result = dispatch(step.tool);
@@ -165,18 +148,12 @@ testset "agent" {
   test "answers route through dispatch" {
     assert.equal(dispatch(Answer { text: "ok" }), "ok");
   }
-
-  test "reads a file when asked" {
-    let r = dispatch(ReadFile { path: "README.md" });
-    assert.is_true(r.length() > 0);
-  }
 }
 `;
 
 type Annotation = {
   text: string;
   lineNumber: number;
-  column: number;
 };
 
 type BlockSpec = {
@@ -184,18 +161,11 @@ type BlockSpec = {
   code: string;
   lang: 'python' | 'baml';
   filename: string;
-  scale?: number;
   annotations: Annotation[];
 };
 
-/** Approximate share of code that is BAML at this step in the adoption arc.
- *  Step 1: pure Python prompt → 0%
- *  Step 2: Pydantic types added but prompt is still string → 0%
- *  Step 3: BAML schema + prompt; app code stays in Python → 50%
- *  Step 4: BAML stdlib + agent loop in BAML → 100%
- */
 type Step = {
-  bamlPercent: number;
+  marker: string;
   heading: string;
   body: string;
   blocks: BlockSpec[];
@@ -203,128 +173,112 @@ type Step = {
 
 const STEPS: Step[] = [
   {
-    blocks: [
-      {
-        annotations: [
-          {
-            column: 26,
-            lineNumber: 11,
-            text: 'string prompts.\nJSON.loads and hope.',
-          },
-          {
-            column: 16,
-            lineNumber: 22,
-            text: 'silent failure when\nJSON is malformed',
-          },
-        ],
-        code: STEP_1_PY,
-        filename: 'main.py',
-        key: 's1-py',
-        lang: 'python',
-      },
-    ],
-    bamlPercent: 0,
-    body: "A string prompt. Manual JSON parsing. No types, no retries, no guarantees. Works until it doesn't.",
+    marker: 'Step 01. Today.',
     heading: 'Every agent codebase starts here.',
-  },
-  {
+    body: 'A string prompt. Manual JSON parsing. No types. Works until it does not.',
     blocks: [
       {
+        key: 's1-py',
+        code: STEP_1_PY,
+        lang: 'python',
+        filename: 'main.py',
         annotations: [
           {
-            column: 22,
             lineNumber: 11,
-            text: 'types, on your side',
+            text: 'string prompt.\nJSON.loads and hope.',
           },
           {
-            column: 28,
-            lineNumber: 23,
-            text: 'but the model still\ngets a string.',
+            lineNumber: 22,
+            text: 'silent failure when\nJSON is malformed.',
           },
         ],
-        code: STEP_2_PY,
-        filename: 'main.py',
-        key: 's2-py',
-        lang: 'python',
       },
     ],
-    bamlPercent: 0,
-    body: 'Pydantic validates after the model responds. If the JSON is wrong, you find out at runtime. The model is still guessing at what you want.',
-    heading: 'Types help. But the prompt is still a string.',
   },
   {
+    marker: 'Option A. Function by function.',
+    heading: 'Add typed BAML functions. Keep the rest of your code.',
+    body: 'Define the schema, prompt, and client once in BAML. Generate a typed client. Your Python, TypeScript, Go, or Ruby app calls it like any other function.',
     blocks: [
       {
+        key: 's2-baml',
+        code: STEP_2_BAML,
+        lang: 'baml',
+        filename: 'invoice.baml',
         annotations: [
           {
-            column: 3,
             lineNumber: 14,
-            text: 'a real method on the class.\nnot just a schema annotation.',
-          },
-          {
-            column: 3,
-            lineNumber: 24,
             text: 'BAML injects the schema.\nthe model knows what to return.',
           },
         ],
-        code: STEP_3_BAML,
-        filename: 'triage.baml',
-        key: 's3-baml',
-        lang: 'baml',
       },
       {
+        key: 's2-py',
+        code: STEP_2_PY,
+        lang: 'python',
+        filename: 'main.py',
         annotations: [
           {
-            column: 1,
-            lineNumber: 5,
-            text: 'a BAML method, called\nfrom your Python app.',
+            lineNumber: 4,
+            text: 'fully typed in your app.\nIDE knows the shape.',
           },
         ],
-        code: STEP_3_PY,
-        filename: 'main.py',
-        key: 's3-py',
-        lang: 'python',
       },
     ],
-    bamlPercent: 50,
-    body: 'Class, prompt, and client live together — and the class has real methods. Your Python app calls a typed BAML function and even invokes BAML logic. The model never sees a hand rolled JSON schema.',
-    heading:
-      'Define the function once. Call it from anywhere.',
   },
   {
+    marker: 'Option B. Move logic into BAML.',
+    heading: 'Pure BAML helpers. Whenever you want.',
+    body: 'Move pure logic into BAML. Typed. Runs on the BAML VM. Faster than Python on object heavy workloads.',
     blocks: [
       {
+        key: 's3-baml',
+        code: STEP_3_BAML,
+        lang: 'baml',
+        filename: 'reports.baml',
         annotations: [
           {
-            column: 1,
-            lineNumber: 4,
-            text: 'tagged union — add a tool,\nadd a match arm.',
+            lineNumber: 2,
+            text: 'literal union return type.\nthe compiler enforces the set.',
           },
           {
-            column: 3,
+            lineNumber: 8,
+            text: 'real for loop.\ntyped maps. typed values.',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    marker: 'Option B. The whole agent.',
+    heading: 'Or write the whole thing in BAML.',
+    body: 'Tagged unions, exhaustive match, stdlib for io, fs, shell, http. Tests next to the code. The whole agent in one file, running on the BAML VM.',
+    blocks: [
+      {
+        key: 's4-baml',
+        code: STEP_4_BAML,
+        lang: 'baml',
+        filename: 'agent.baml',
+        annotations: [
+          {
+            lineNumber: 4,
+            text: 'tagged union. add a tool,\nadd a match arm.',
+          },
+          {
             lineNumber: 19,
             text: 'exhaustive match.\nmissing a variant is a compile error.',
           },
           {
-            column: 3,
-            lineNumber: 29,
-            text: 'a real for loop.\ncontrol flow lives in BAML.',
+            lineNumber: 28,
+            text: 'main() runs on the BAML VM.\nstdlib for io, fs, shell.',
           },
           {
-            column: 1,
-            lineNumber: 38,
+            lineNumber: 39,
             text: 'tests live next to the code.\nassertions, not snapshots.',
           },
         ],
-        code: STEP_4_BAML,
-        filename: 'agent.baml',
-        key: 's4-baml',
-        lang: 'baml',
       },
     ],
-    bamlPercent: 100,
-    body: 'A typed agent loop, in BAML itself. Tagged unions, exhaustive match, real control flow, stdlib calls, and testsets with assertions.',
-    heading: 'We need a whole new language.',
   },
 ];
 
@@ -368,7 +322,7 @@ function useTokenized(inputs: HighlightInput[]): CodeTokens[] {
         });
         if (!cancelled) setOut(results);
       } catch {
-        /* fall back to plain text — initial state already covers it */
+        /* fall back to plain text */
       }
     })();
     return () => {
@@ -380,7 +334,7 @@ function useTokenized(inputs: HighlightInput[]): CodeTokens[] {
   return out;
 }
 
-// ── Code block — editor-like surface with line numbers and per-token colors ──
+// ── Code block ───────────────────────────────────────────────────────────────
 
 function CodeBlock({
   tokens,
@@ -401,7 +355,6 @@ function CodeBlock({
         width: '100%',
       }}
     >
-      {/* Window chrome: traffic lights + filename tab */}
       <div
         style={{
           alignItems: 'center',
@@ -458,7 +411,6 @@ function CodeBlock({
         <span />
       </div>
 
-      {/* Editor body: line numbers gutter + code */}
       <div
         className="adoption-code"
         style={{
@@ -505,10 +457,7 @@ function CodeBlock({
         >
           <code style={{ fontFamily: MONO, background: 'transparent' }}>
             {tokens.map((line, i) => (
-              <div
-                key={`l-${i}`}
-                style={{ minHeight: LINE_HEIGHT }}
-              >
+              <div key={`l-${i}`} style={{ minHeight: LINE_HEIGHT }}>
                 {line.length === 0 ? (
                   <span>&#8203;</span>
                 ) : (
@@ -530,7 +479,7 @@ function CodeBlock({
   );
 }
 
-// ── Annotated block: code on the left, caption gutter on the right ───────────
+// ── Annotated block ──────────────────────────────────────────────────────────
 
 function AnnotatedBlock({
   tokens,
@@ -540,7 +489,6 @@ function AnnotatedBlock({
   block: BlockSpec;
 }) {
   const GAP = 16;
-  const transform = block.scale ? `scale(${block.scale})` : undefined;
 
   return (
     <div
@@ -549,14 +497,11 @@ function AnnotatedBlock({
         display: 'grid',
         gridTemplateColumns: '3.4fr 1fr',
         position: 'relative',
-        transform,
-        transformOrigin: 'top left',
         width: '100%',
       }}
     >
       <div style={{ minWidth: 0, position: 'relative', width: '100%' }}>
         <CodeBlock filename={block.filename} tokens={tokens} />
-        {/* Line highlights — one per annotation */}
         {block.annotations.map((a, i) => (
           <motion.div
             animate={{ opacity: 1, scaleX: 1 }}
@@ -610,26 +555,26 @@ function AnnotatedBlock({
   );
 }
 
-// ── Sticky code panel with per-step transitions ───────────────────────────────
+// ── Sticky code panel with per-step transitions ──────────────────────────────
 
 function StickyPanel({ activeStep }: { activeStep: number }) {
   const reduced = useReducedMotion();
-  const [tok1, tok2, tokBaml3, tokPy3, tokBaml4] = useTokenized([
+  const tokens = useTokenized([
     { code: STEP_1_PY, lang: 'python' },
+    { code: STEP_2_BAML, lang: 'baml' },
     { code: STEP_2_PY, lang: 'python' },
     { code: STEP_3_BAML, lang: 'baml' },
-    { code: STEP_3_PY, lang: 'python' },
     { code: STEP_4_BAML, lang: 'baml' },
   ]);
 
   const fadeT = reduced ? { duration: 0 } : { duration: 0.35 };
 
   const blockTokensByKey: Record<string, CodeTokens> = {
-    's1-py': tok1,
-    's2-py': tok2,
-    's3-baml': tokBaml3,
-    's3-py': tokPy3,
-    's4-baml': tokBaml4,
+    's1-py': tokens[0],
+    's2-baml': tokens[1],
+    's2-py': tokens[2],
+    's3-baml': tokens[3],
+    's4-baml': tokens[4],
   };
 
   return (
@@ -668,29 +613,13 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
               <AnnotatedBlock block={b} tokens={blockTokensByKey[b.key]} />
             </div>
           ))}
-          {activeStep === 3 && (
-            <div
-              style={{
-                color: MUTED,
-                fontFamily: 'var(--font-serif)',
-                fontSize: 14,
-                fontStyle: 'italic',
-                marginTop: 8,
-                textAlign: 'center',
-              }}
-            >
-              the same .baml file generates python, typescript, ruby, and go
-              clients.
-            </div>
-          )}
         </motion.div>
       </AnimatePresence>
-
     </div>
   );
 }
 
-// ── Per-step body text streamer ───────────────────────────────────────────────
+// ── Per step body text streamer ──────────────────────────────────────────────
 
 function TypingText({
   text,
@@ -735,9 +664,7 @@ export function IncrementalAdoption() {
   });
   const [activeStep, setActiveStep] = useState(0);
 
-  // Per-step body typewriter progress (0 = empty, 1 = fully typed).
-  // Type-in/out windows are short; the bulk of each step's scroll budget
-  // is the fully-typed "hold" so readers actually have time to read.
+  // Per step body typewriter progress.
   const step0Progress = useTransform(
     scrollYProgress,
     [0, 0.001, 0.18, 0.22],
@@ -750,14 +677,32 @@ export function IncrementalAdoption() {
   );
   const step2Progress = useTransform(
     scrollYProgress,
-    [0.48, 0.52, 0.70, 0.74],
+    [0.48, 0.52, 0.7, 0.74],
     [0, 1, 1, 0],
   );
-  const step3Progress = useTransform(
-    scrollYProgress,
-    [0.74, 0.78, 1],
-    [0, 1, 1],
-  );
+  // Step 4 is the last section, so the user often stops scrolling once they
+  // arrive. A scroll-driven typewriter would stall partway. Drive it on a
+  // timer instead, kicking off when the step becomes active.
+  const step3Progress = useMotionValue(0);
+  const reducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (activeStep !== 3) {
+      step3Progress.set(0);
+      return;
+    }
+    if (reducedMotion) {
+      step3Progress.set(1);
+      return;
+    }
+    const controls = animate(step3Progress, 1, {
+      delay: 0.45,
+      duration: 1.6,
+      ease: [0.22, 0.61, 0.36, 1],
+    });
+    return () => controls.stop();
+  }, [activeStep, reducedMotion, step3Progress]);
+
   const stepProgresses = [
     step0Progress,
     step1Progress,
@@ -785,39 +730,6 @@ export function IncrementalAdoption() {
         width: '100%',
       }}
     >
-      <div
-        style={{
-          margin: '0 auto',
-          marginBottom: 40,
-          maxWidth: 1360,
-          padding: '0 32px 0 48px',
-        }}
-      >
-        <p
-          style={{
-            color: '#8A8580',
-            fontSize: 13,
-            fontWeight: 500,
-            letterSpacing: '0.12em',
-            margin: 0,
-            textTransform: 'uppercase',
-          }}
-        >
-          Adopt BAML gradually
-        </p>
-        <h2
-          style={{
-            fontSize: 'clamp(2rem, 4vw, 3rem)',
-            fontWeight: 600,
-            letterSpacing: '-0.03em',
-            lineHeight: 1.05,
-            margin: '12px 0 0',
-          }}
-        >
-          From f-strings to a language, one step at a time.
-        </h2>
-      </div>
-
       <div
         style={{
           display: 'grid',
@@ -859,53 +771,31 @@ export function IncrementalAdoption() {
                   <div
                     style={{
                       alignItems: 'baseline',
+                      color: isActive ? ACCENT : '#8A8580',
                       display: 'flex',
-                      gap: 16,
+                      flexShrink: 0,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: '0.14em',
+                      textTransform: 'uppercase',
+                      transition: 'color 350ms ease',
                     }}
                   >
-                    <div
-                      style={{
-                        alignItems: 'baseline',
-                        color: isActive ? ACCENT : '#8A8580',
-                        display: 'flex',
-                        flexShrink: 0,
-                        fontSize: 11,
-                        fontWeight: 500,
-                        gap: 10,
-                        letterSpacing: '0.14em',
-                        textTransform: 'uppercase',
-                        transition: 'color 350ms ease',
-                      }}
-                    >
-                      <span>Step {String(i + 1).padStart(2, '0')}</span>
-                      <span
-                        aria-label={`${s.bamlPercent} percent BAML`}
-                        style={{
-                          color: isActive ? ACCENT : '#A8A29E',
-                          fontVariantNumeric: 'tabular-nums',
-                          fontWeight: 600,
-                          letterSpacing: '0.05em',
-                          opacity: isActive ? 1 : 0.65,
-                          transition: 'opacity 350ms ease, color 350ms ease',
-                        }}
-                      >
-                        {s.bamlPercent}% BAML
-                      </span>
-                    </div>
-                    <h3
-                      style={{
-                        color: isActive ? INK : MUTED,
-                        fontSize: 'clamp(1.25rem, 2vw, 1.65rem)',
-                        fontWeight: 600,
-                        letterSpacing: '-0.02em',
-                        lineHeight: 1.15,
-                        margin: 0,
-                        transition: 'color 350ms ease',
-                      }}
-                    >
-                      {s.heading}
-                    </h3>
+                    <span>{s.marker}</span>
                   </div>
+                  <h3
+                    style={{
+                      color: isActive ? INK : MUTED,
+                      fontSize: 'clamp(1.25rem, 2vw, 1.65rem)',
+                      fontWeight: 600,
+                      letterSpacing: '-0.02em',
+                      lineHeight: 1.15,
+                      margin: '12px 0 0',
+                      transition: 'color 350ms ease',
+                    }}
+                  >
+                    {s.heading}
+                  </h3>
                   <motion.div
                     initial={false}
                     animate={{
@@ -914,13 +804,19 @@ export function IncrementalAdoption() {
                       marginTop: isActive ? 20 : 0,
                     }}
                     transition={{
-                      maxHeight: { duration: 0.5, ease: [0.22, 0.61, 0.36, 1] },
+                      maxHeight: {
+                        duration: 0.5,
+                        ease: [0.22, 0.61, 0.36, 1],
+                      },
                       opacity: {
                         duration: 0.3,
                         ease: 'easeInOut',
                         delay: isActive ? 0.1 : 0,
                       },
-                      marginTop: { duration: 0.5, ease: [0.22, 0.61, 0.36, 1] },
+                      marginTop: {
+                        duration: 0.5,
+                        ease: [0.22, 0.61, 0.36, 1],
+                      },
                     }}
                     style={{
                       overflow: 'hidden',
@@ -952,7 +848,6 @@ export function IncrementalAdoption() {
           <StickyPanel activeStep={activeStep} />
         </div>
       </div>
-
     </section>
   );
 }
