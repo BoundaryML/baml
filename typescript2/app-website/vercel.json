@@ -1,3 +1,5 @@
 {
-  "installCommand": "npm install --legacy-peer-deps"
+  "installCommand": "echo 'install handled by buildCommand'",
+  "buildCommand": "bash scripts/vercel-build.sh",
+  "outputDirectory": ".next"
 }
