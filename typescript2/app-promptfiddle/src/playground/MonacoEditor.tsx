@@ -190,7 +190,6 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
       const [
         { MonacoVscodeApiWrapper, defaultHtmlAugmentationInstructions, defaultViewsInit },
         { createDefaultLocaleConfiguration },
-        { useWorkerFactory, Worker: WorkerRef },
         keybindingsOverride,
         lifecycleOverride,
         localizationOverride,
@@ -211,7 +210,6 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
       ] = await Promise.all([
         import('monaco-languageclient/vscodeApiWrapper'),
         import('monaco-languageclient/vscodeApiLocales'),
-        import('monaco-languageclient/workerFactory'),
         import('@codingame/monaco-vscode-keybindings-service-override'),
         import('@codingame/monaco-vscode-lifecycle-service-override'),
         import('@codingame/monaco-vscode-localization-service-override'),
@@ -377,22 +375,24 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
           ...outlineOverride.default(),
         },
         monacoWorkerFactory: () => {
-          // Custom worker factory — the `new URL(..., import.meta.url)` patterns
-          // must be in OUR source code (not node_modules) so the bundler can
-          // resolve them at build time into proper asset URLs.
-          // eslint-disable-next-line react-hooks/rules-of-hooks -- not a React hook
-          useWorkerFactory({
-            workerLoaders: {
-              editorWorkerService: () => new WorkerRef(
-                new URL('@codingame/monaco-vscode-editor-api/esm/vs/editor/editor.worker.js', import.meta.url),
-                { type: 'module' },
-              ),
-              TextMateWorker: () => new WorkerRef(
-                new URL('@codingame/monaco-vscode-textmate-service-override/worker', import.meta.url),
-                { type: 'module' },
-              ),
-            },
-          });
+          // Set MonacoEnvironment.getWorker so monaco-vscode-api uses our Worker
+          // instances directly. This is the only way to get webpack to bundle
+          // the worker entries with their dependencies — `new Worker(new URL(...))`
+          // is the literal pattern webpack's worker plugin recognizes. Going
+          // through monaco-languageclient's URL-only `useWorkerFactory` instead
+          // makes webpack copy the upstream files as raw assets, which fails
+          // because they contain unresolved bare specifier re-exports.
+          const env = ((globalThis as { MonacoEnvironment?: Record<string, unknown> }).MonacoEnvironment ??= {});
+          (env as { getWorker: (id: string, label: string) => Worker }).getWorker = (_id, label) => {
+            switch (label) {
+              case 'editorWorkerService':
+                return new Worker(new URL('./editor.worker.ts', import.meta.url), { type: 'module', name: label });
+              case 'TextMateWorker':
+                return new Worker(new URL('./textmate.worker.ts', import.meta.url), { type: 'module', name: label });
+              default:
+                throw new Error(`Unsupported monaco worker: ${label}`);
+            }
+          };
         },
         userConfiguration: {
           json: JSON.stringify({
