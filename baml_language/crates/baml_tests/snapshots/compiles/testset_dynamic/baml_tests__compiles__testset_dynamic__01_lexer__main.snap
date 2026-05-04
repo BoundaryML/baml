@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 21027
 ---
 Slash "/"
 Slash "/"
@@ -41,6 +42,7 @@ Quote "\""
 RBracket "]"
 For "for"
 LParen "("
+Let "let"
 Word "case"
 In "in"
 Word "cases"

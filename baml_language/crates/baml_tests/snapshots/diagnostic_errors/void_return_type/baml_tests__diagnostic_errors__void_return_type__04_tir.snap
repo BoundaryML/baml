@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40092
 ---
 === TIR2 ===
 type user.ExplicitHandler = (value: int) -> string throws never
@@ -139,10 +140,10 @@ function user.bad_param(x: void) -> int throws never {
 }
 function user.bad_let() -> int throws never {
   { : 1
-    let x = 1 : 1
-    let y = : "string"
+    let x: void = 1 : 1
+    let y: void = : "string"
       { : "string"
-        let z = "string" : "string"
+        let z: int = "string" : "string"
         z : "string"
       }
     1 : 1

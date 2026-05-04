@@ -285,20 +285,37 @@ impl UnionMemberParts {
             .cloned()
     }
 
-    /// Check if this member has an `INTEGER_LITERAL` token.
+    /// Check if this member has an `INTEGER_LITERAL` token, optionally
+    /// preceded by a `MINUS` token (for negative literals like `-42`).
     pub fn integer_literal(&self) -> Option<i64> {
-        self.tokens
-            .iter()
-            .find(|t| t.kind() == SyntaxKind::INTEGER_LITERAL)
-            .and_then(|t| t.text().parse().ok())
+        let mut sign = 1i64;
+        for t in &self.tokens {
+            match t.kind() {
+                SyntaxKind::MINUS => sign = -sign,
+                SyntaxKind::INTEGER_LITERAL => {
+                    return t.text().parse::<i64>().ok().map(|v| sign * v);
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
-    /// Check if this member has a `FLOAT_LITERAL` token and return its text.
+    /// Check if this member has a `FLOAT_LITERAL` token. A leading `MINUS`
+    /// negates (returned as text with a `-` prefix).
     pub fn float_literal(&self) -> Option<String> {
-        self.tokens
-            .iter()
-            .find(|t| t.kind() == SyntaxKind::FLOAT_LITERAL)
-            .map(|t| t.text().to_string())
+        let mut negate = false;
+        for t in &self.tokens {
+            match t.kind() {
+                SyntaxKind::MINUS => negate = !negate,
+                SyntaxKind::FLOAT_LITERAL => {
+                    let text = t.text().to_string();
+                    return Some(if negate { format!("-{text}") } else { text });
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     /// Get ATTRIBUTE child nodes from this union member.
@@ -550,22 +567,47 @@ impl TypeExpr {
             .map(|n| decode_regular_string_literal_text(&n.text().to_string()))
     }
 
-    /// Check if this is an integer literal type like `200`.
+    /// Check if this is an integer literal type like `200` or `-42`.
+    /// A leading `MINUS` token before the `INTEGER_LITERAL` negates the value.
     pub fn integer_literal(&self) -> Option<i64> {
-        self.syntax
+        let mut sign = 1i64;
+        for tok in self
+            .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| t.kind() == SyntaxKind::INTEGER_LITERAL)
-            .and_then(|t| t.text().parse().ok())
+        {
+            match tok.kind() {
+                SyntaxKind::MINUS => sign = -sign,
+                SyntaxKind::INTEGER_LITERAL => {
+                    return tok.text().parse::<i64>().ok().map(|v| sign * v);
+                }
+                k if k.is_trivia() => continue,
+                _ => break,
+            }
+        }
+        None
     }
 
-    /// Check if this is a float literal type like `3.14`.
+    /// Check if this is a float literal type like `3.14` or `-3.14`.
+    /// A leading `MINUS` token negates the value (returned as `-3.14` text).
     pub fn float_literal(&self) -> Option<String> {
-        self.syntax
+        let mut negate = false;
+        for tok in self
+            .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| t.kind() == SyntaxKind::FLOAT_LITERAL)
-            .map(|t| t.text().to_string())
+        {
+            match tok.kind() {
+                SyntaxKind::MINUS => negate = !negate,
+                SyntaxKind::FLOAT_LITERAL => {
+                    let text = tok.text().to_string();
+                    return Some(if negate { format!("-{text}") } else { text });
+                }
+                k if k.is_trivia() => continue,
+                _ => break,
+            }
+        }
+        None
     }
 
     /// Check if this is a boolean literal (`true` or `false`).

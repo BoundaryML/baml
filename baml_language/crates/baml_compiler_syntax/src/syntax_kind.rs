@@ -252,6 +252,7 @@ pub enum SyntaxKind {
     CATCH_CLAUSE,
     CATCH_ARM,
     CATCH_PATTERN,
+    CATCH_BINDING,
     CATCH_STACK_TRACE_BINDING,
 
     // ============ Patterns (unified) ============
@@ -280,12 +281,12 @@ pub enum SyntaxKind {
     /// `WORD` (shorthand) | `WORD ':' PATTERN` (rename / sub-pattern).
     FIELD_PATTERN,
     /// Bare type expression as a pattern (literals, paths, generics, arrays, …).
-    /// Does NOT consume `|` — that belongs to UNION_PATTERN at the pattern level.
+    /// Does NOT consume `|` — that belongs to `UNION_PATTERN` at the pattern level.
     TYPE_PATTERN,
     /// `'(' PATTERN ')'` — explicit grouping.
     PAREN_PATTERN,
     /// `'_'` (bare) or `'let' '_'` — wildcard / discard. Distinct from
-    /// BINDING_PATTERN so downstream code doesn't have to text-match `_`.
+    /// `BINDING_PATTERN` so downstream code doesn't have to text-match `_`.
     WILDCARD_PATTERN,
     THROW_EXPR,
     LAMBDA_EXPR,

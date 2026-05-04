@@ -3108,8 +3108,16 @@ impl<'a> Parser<'a> {
 
         // A bare WORD may start a destructure (`Class { ... }`) or a type/path
         // pattern. Look ahead through dotted segments for a `{`.
+        // Class destructure patterns are gated for now — emit an error and
+        // skip past the `{ ... }` to recover.
         if self.at(TokenKind::Word) && self.looks_like_destructure_pattern() {
-            self.parse_destructure_pattern(/* has_let = */ false);
+            self.error_unexpected_token(
+                "class destructure patterns are not yet supported".to_string(),
+            );
+            self.with_node(SyntaxKind::DESTRUCTURE_PATTERN, |p| {
+                p.parse_path();
+                p.parse_destructure_field_list();
+            });
             return;
         }
 
@@ -3194,9 +3202,8 @@ impl<'a> Parser<'a> {
     fn looks_like_destructure_pattern(&self) -> bool {
         // We're at a WORD. Walk forward over `(WORD)('.' WORD)*` and check for
         // `{` at the end.
-        let mut idx = match self.current_non_trivia_index() {
-            Some(i) => i,
-            None => return false,
+        let Some(mut idx) = self.current_non_trivia_index() else {
+            return false;
         };
         // Skip first WORD.
         idx = self.skip_trivia_and_comments_from(idx + 1);
@@ -3220,9 +3227,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a `let`-prefixed pattern. Either:
-    /// - `let _`           — WILDCARD_PATTERN
-    /// - `let WORD`        — simple BINDING_PATTERN
-    /// - `let PATH { fields }` — DESTRUCTURE_PATTERN with a `let` prefix
+    /// - `let _`           — `WILDCARD_PATTERN`
+    /// - `let WORD`        — simple `BINDING_PATTERN`
+    /// - `let PATH { fields }` — `DESTRUCTURE_PATTERN` with a `let` prefix
     fn parse_let_pattern(&mut self) {
         debug_assert!(self.at(TokenKind::Let));
         let start = self.events.len();
@@ -3245,9 +3252,12 @@ impl<'a> Parser<'a> {
 
         // Decide between simple binding (`let x`) and destructure
         // (`let Class { ... }`) by peeking past dotted segments for `{`.
+        // Class destructure patterns are gated for now — emit an error and
+        // skip past the `{ ... }` to recover.
         if self.looks_like_destructure_pattern() {
-            // Wrap as DESTRUCTURE_PATTERN, including the `let` we already
-            // emitted at `start`.
+            self.error_unexpected_token(
+                "class destructure patterns are not yet supported".to_string(),
+            );
             self.parse_path();
             self.parse_destructure_field_list();
             self.wrap_events_in_node(start, SyntaxKind::DESTRUCTURE_PATTERN);
@@ -3272,6 +3282,7 @@ impl<'a> Parser<'a> {
     /// wrapper begins (callers use `wrap_events_in_node` themselves in that
     /// case — see `parse_let_pattern`). For pattern atoms with no `let`, this
     /// emits a self-contained `DESTRUCTURE_PATTERN`.
+    #[allow(dead_code)] // gated — kept for when destructure patterns are re-enabled
     fn parse_destructure_pattern(&mut self, _has_let: bool) {
         self.with_node(SyntaxKind::DESTRUCTURE_PATTERN, |p| {
             p.parse_path();
@@ -3363,7 +3374,15 @@ impl<'a> Parser<'a> {
             if !p.expect(TokenKind::LParen) {
                 return;
             }
-            p.parse_pattern();
+            // The catch binding is always a bare identifier (like a function
+            // parameter), not a full pattern.
+            p.with_node(SyntaxKind::CATCH_BINDING, |p| {
+                if p.at(TokenKind::Word) {
+                    p.bump();
+                } else {
+                    p.error_unexpected_token("catch binding identifier".to_string());
+                }
+            });
             // Optional second binding: catch (e, stack_trace)
             if p.at(TokenKind::Comma) {
                 p.bump(); // consume ','
@@ -3540,35 +3559,24 @@ impl<'a> Parser<'a> {
                         }
                     }
                 } else if p.at(TokenKind::Word) {
-                    // Could be iterator-style: for (i in expr)
-                    // Or could be C-style starting with expression: for (i = 0; ...)
-                    // Look ahead to determine
-                    if p.peek(1).map(|t| t.kind == TokenKind::In).unwrap_or(false) {
-                        // Simple iterator-style without let: for (i in expr)
-                        p.bump(); // variable name
-                        p.bump(); // in
-                        p.parse_expr(); // iterator expression
-                    } else {
-                        // C-style without initializer starting with expression
-                        // Just parse as expression-based C-style
-                        p.parse_c_style_for_body();
-                    }
+                    // Bare WORD inside parens may be a C-style header starting
+                    // with an expression (`for (i = 0; cond; update)`). It
+                    // can NOT be a let-less iterator form like `for (i in
+                    // expr)` — bindings always require `let`. Defer to the
+                    // C-style path.
+                    p.parse_c_style_for_body();
                 } else if p.at(TokenKind::Semicolon) {
                     // C-style with empty initializer: for (; cond; update)
                     p.parse_c_style_for_body();
                 } else {
-                    p.error_unexpected_token("loop variable, 'let', or ';'".to_string());
+                    p.error_unexpected_token("'let' or ';'".to_string());
                 }
 
                 p.expect(TokenKind::RParen);
             } else {
-                // Non-parenthesized form: for var in expr { }
-                if p.at(TokenKind::Word) {
-                    p.bump();
-                } else {
-                    p.error_unexpected_token("loop variable".to_string());
-                }
-
+                // Non-parenthesized form: `for let <pattern> in <expr> { }`.
+                // The `let` is required — bindings always require it.
+                p.parse_for_in_pattern();
                 p.expect(TokenKind::In);
                 p.parse_expr();
             }
@@ -3582,13 +3590,44 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Check if this looks like a for-in loop (has 'in' keyword after variable name)
+    /// Check if this looks like a for-in loop. We're at `let`. Scan forward
+    /// past the (possibly complex) pattern that follows: bindings, paths,
+    /// destructures (`{ ... }`), parenthesised groups, type annotations
+    /// after `:`. Whichever of `in` / `=` / `;` we hit at the top level
+    /// (no open brackets/parens/braces) decides the form: `in` →
+    /// iterator-style, `=` or `;` → C-style.
+    ///
+    /// Uses a stack of expected closers so out-of-order delimiters (e.g.
+    /// `( [ ) ]`) bail out rather than mis-classify.
     fn looks_like_for_in_loop(&self) -> bool {
-        // We're at 'let', look for pattern: let WORD in
-        // Skip: let (0), WORD (1), check for 'in' (2)
-        self.peek(2)
-            .map(|t| t.kind == TokenKind::In)
-            .unwrap_or(false)
+        debug_assert!(self.at(TokenKind::Let));
+        let mut stack: Vec<TokenKind> = Vec::new();
+        let mut i: usize = 1; // start after `let`
+        loop {
+            let Some(tok) = self.peek(i) else {
+                return false;
+            };
+            match tok.kind {
+                TokenKind::LParen => stack.push(TokenKind::RParen),
+                TokenKind::LBracket => stack.push(TokenKind::RBracket),
+                TokenKind::LBrace => stack.push(TokenKind::RBrace),
+                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
+                    let Some(expected) = stack.pop() else {
+                        // Unbalanced closer at top level — we've walked off
+                        // the end of the for-header. Whatever this is,
+                        // it's not an iterator form.
+                        return false;
+                    };
+                    if expected != close {
+                        return false;
+                    }
+                }
+                TokenKind::In if stack.is_empty() => return true,
+                TokenKind::Equals | TokenKind::Semicolon if stack.is_empty() => return false,
+                _ => {}
+            }
+            i += 1;
+        }
     }
 
     /// Parse C-style for loop body (condition and update parts): ; cond; update
@@ -5869,7 +5908,7 @@ type Callback = (value: int) -> string throws Foo
 
     // ============ Pattern parsing ============
 
-    /// Find the first PATTERN node directly under any LET_STMT in the tree.
+    /// Find the first `PATTERN` node directly under any `LET_STMT` in the tree.
     fn first_let_pattern(root: &SyntaxNode) -> SyntaxNode {
         root.descendants()
             .find(|n| n.kind() == SyntaxKind::LET_STMT)
@@ -6380,6 +6419,7 @@ function Demo() -> int {
     }
 
     #[test]
+    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_basic_with_let() {
         // `let Class { field } = ...` — destructure with a `let` prefix at
         // the let-statement level. The chain link is a single
@@ -6421,6 +6461,7 @@ function Demo() -> int {
     }
 
     #[test]
+    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_many_fields() {
         let source = r#"
 function Demo() -> int {
@@ -6446,6 +6487,7 @@ function Demo() -> int {
     }
 
     #[test]
+    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_with_inner_let_rename() {
         // `Class { field: let renamed }` — explicit rename via inner `let`.
         // The field's value is a PATTERN containing a BINDING_PATTERN.
@@ -6481,6 +6523,7 @@ function Demo() -> int {
     }
 
     #[test]
+    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_field_typed() {
         // `Class { field: int }` — field value is a TYPE_PATTERN. Field-level
         // `:` is consumed by parse_field_pattern, NOT by the chain parser, so
@@ -6508,6 +6551,7 @@ function Demo() -> int {
     }
 
     #[test]
+    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_nested() {
         // `Class { field: Class2 { field2 } }` — nested destructure.
         let source = r#"
@@ -6543,6 +6587,7 @@ function Demo() -> int {
     }
 
     #[test]
+    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_in_match_arm_no_let() {
         // In match arms, `Class { field }` does NOT require `let` — the
         // ambiguity-with-expressions argument doesn't apply there.
@@ -6707,6 +6752,7 @@ function Demo() -> int {
     }
 
     #[test]
+    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_namespaced_class() {
         // `name.space.Class { ... }` — destructure on a dotted-path class
         // name. The path goes through parse_path inside the destructure,
@@ -7090,5 +7136,178 @@ function Demo() -> int {
             .filter(|n| n.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
             .collect();
         assert_eq!(params.len(), 2, "expected two FUNCTION_TYPE_PARAM nodes");
+    }
+
+    // ============ for-in: `let` is required ============
+    //
+    // `for ... in ...` always requires a `let`-prefixed pattern; the variable
+    // binding lives inside `LET_STMT > PATTERN`. Bare-WORD forms (`for (i in
+    // xs)` or `for i in xs`) are rejected.
+
+    /// Find the `FOR_EXPR`'s iterator-style binding: a `LET_STMT` child of `FOR_EXPR`
+    /// containing a single PATTERN child.
+    fn first_for_in_pattern(root: &SyntaxNode) -> SyntaxNode {
+        let for_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FOR_EXPR)
+            .expect("expected FOR_EXPR");
+        let let_stmt = for_expr
+            .children()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("for-in should expose its binding as a LET_STMT child");
+        let_stmt
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("LET_STMT under for-in should contain a PATTERN")
+    }
+
+    #[test]
+    fn for_in_paren_with_let_binding() {
+        let source = r#"
+function Demo() -> int {
+  for (let i in xs) {
+    1
+  }
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_for_in_pattern(&root);
+        assert_eq!(
+            child_kinds(&pattern),
+            vec![SyntaxKind::BINDING_PATTERN],
+            "for (let i in xs) should produce a BINDING_PATTERN inside PATTERN"
+        );
+    }
+
+    #[test]
+    fn for_in_no_paren_with_let_binding() {
+        // The non-parenthesized form still requires `let`.
+        let source = r#"
+function Demo() -> int {
+  for let i in xs {
+    1
+  }
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_for_in_pattern(&root);
+        assert_eq!(child_kinds(&pattern), vec![SyntaxKind::BINDING_PATTERN],);
+    }
+
+    #[test]
+    fn for_in_with_wildcard() {
+        let source = r#"
+function Demo() -> int {
+  for (let _ in xs) {
+    1
+  }
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_for_in_pattern(&root);
+        assert_eq!(
+            child_kinds(&pattern),
+            vec![SyntaxKind::WILDCARD_PATTERN],
+            "for (let _ in xs) should produce a WILDCARD_PATTERN, not a BINDING"
+        );
+    }
+
+    #[test]
+    #[ignore = "class destructure patterns gated"]
+    fn for_in_with_destructure_pattern() {
+        // The for-in binding accepts arbitrary patterns — including
+        // destructures — so long as `let` is present.
+        let source = r#"
+function Demo() -> int {
+  for (let Pair { a, b } in xs) {
+    1
+  }
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_for_in_pattern(&root);
+        assert_eq!(child_kinds(&pattern), vec![SyntaxKind::DESTRUCTURE_PATTERN],);
+    }
+
+    #[test]
+    fn for_in_paren_without_let_is_rejected() {
+        // `for (i in xs)` — bare WORD inside parens. Used to be a valid
+        // iterator form; with the unified pattern model, bindings always
+        // require `let`, so this now lands on the C-style path which
+        // immediately mis-parses, producing diagnostics.
+        let source = r#"
+function Demo() -> int {
+  for (i in xs) {
+    1
+  }
+  1
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected parse errors for let-less for-in form, got none"
+        );
+    }
+
+    #[test]
+    fn for_in_no_paren_without_let_is_rejected() {
+        // `for i in xs` (non-parenthesized) used to also be valid as a
+        // bare-WORD iterator form. Now it requires `let` — the parser sees
+        // the bare WORD where it expects `let`, errors, and produces
+        // diagnostics.
+        let source = r#"
+function Demo() -> int {
+  for i in xs {
+    1
+  }
+  1
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected parse errors for let-less non-paren for-in, got none"
+        );
+    }
+
+    #[test]
+    fn for_c_style_still_works() {
+        // C-style for loops are unaffected by the iterator-form changes.
+        let source = r#"
+function Demo() -> int {
+  for (let i = 0; i < 10; i = i + 1) {
+    1
+  }
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let for_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FOR_EXPR)
+            .expect("expected FOR_EXPR");
+        // C-style has no `KW_IN` — distinguishes it from the iterator form.
+        let has_in = for_expr.children_with_tokens().any(|c| {
+            matches!(
+                c,
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_IN
+            )
+        });
+        assert!(!has_in, "C-style for must not contain KW_IN");
     }
 }

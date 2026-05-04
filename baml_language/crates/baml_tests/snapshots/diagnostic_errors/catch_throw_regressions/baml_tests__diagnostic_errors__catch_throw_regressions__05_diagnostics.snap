@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 27928
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type mismatch: expected string, got user.Status

@@ -25,7 +25,7 @@ async fn match_typed_pattern_first_arm() {
         function main() -> string {
             let result = Success { data: "hello" };
             match (result: Success | Failure) {
-                s: Success => "success: " + s.data,
+                let s: Success => "success: " + s.data,
                 _: Failure => "failure",
             }
         }
@@ -87,8 +87,8 @@ async fn match_typed_pattern_second_arm() {
         function main() -> string {
             let result: Res = Failure { reason: "error" };
             match (result) {
-                s: Success => "success: " + s.data,
-                f: Failure => "failure: " + f.reason,
+                let s: Success => "success: " + s.data,
+                let f: Failure => "failure: " + f.reason,
             }
         }
     "#
@@ -151,8 +151,8 @@ async fn match_typed_pattern_with_field_access() {
         function main() -> int {
             let shape: Shape = Point { x: 10, y: 20 };
             match (shape) {
-                p: Point => p.x + p.y,
-                c: Circle => c.radius,
+                let p: Point => p.x + p.y,
+                let c: Circle => c.radius,
             }
         }
     "#
@@ -272,8 +272,8 @@ async fn match_guard_true() {
         function main() -> string {
             let s = Score { value: 95 };
             match (s) {
-                x: Score if x.value >= 90 => "excellent",
-                x: Score if x.value >= 70 => "good",
+                let x: Score if x.value >= 90 => "excellent",
+                let x: Score if x.value >= 70 => "good",
                 _: Score => "needs work",
             }
         }
@@ -343,8 +343,8 @@ async fn match_guard_fallthrough() {
         function main() -> string {
             let s = Score { value: 75 };
             match (s) {
-                x: Score if x.value >= 90 => "excellent",
-                x: Score if x.value >= 70 => "good",
+                let x: Score if x.value >= 90 => "excellent",
+                let x: Score if x.value >= 70 => "good",
                 _: Score => "needs work",
             }
         }
@@ -414,8 +414,8 @@ async fn match_guard_all_fail() {
         function main() -> string {
             let s = Score { value: 50 };
             match (s) {
-                x: Score if x.value >= 90 => "excellent",
-                x: Score if x.value >= 70 => "good",
+                let x: Score if x.value >= 90 => "excellent",
+                let x: Score if x.value >= 70 => "good",
                 _: Score => "needs work",
             }
         }
@@ -725,7 +725,7 @@ async fn match_mixed_literal_typed_guard() {
             match (x) {
                 0 => "zero",
                 1 if flag => "one with flag",
-                n: int => "other int"
+                let n: int => "other int"
             }
         }
         function main() -> string {
@@ -791,7 +791,7 @@ async fn match_mixed_literal_typed_guard_fallthrough() {
             match (x) {
                 0 => "zero",
                 1 if flag => "one with flag",
-                n: int => "other int"
+                let n: int => "other int"
             }
         }
         function main() -> string {
@@ -858,9 +858,9 @@ async fn match_guard_on_typed_pattern_field_access() {
 
         function classify(result: Success | Failure) -> string {
             match (result) {
-                s: Success if s.data != "" => "success with data",
-                s: Success => "empty success",
-                f: Failure => "failure"
+                let s: Success if s.data != "" => "success with data",
+                let s: Success => "empty success",
+                let f: Failure => "failure"
             }
         }
         function main() -> string {
@@ -930,9 +930,9 @@ async fn match_guard_on_typed_pattern_field_access_fails() {
 
         function classify(result: Success | Failure) -> string {
             match (result) {
-                s: Success if s.data != "" => "success with data",
-                s: Success => "empty success",
-                f: Failure => "failure"
+                let s: Success if s.data != "" => "success with data",
+                let s: Success => "empty success",
+                let f: Failure => "failure"
             }
         }
         function main() -> string {
@@ -1359,9 +1359,9 @@ async fn match_class_types_exhaustive_first() {
 
         function classify(animal: Cat | Dog | Bird) -> string {
             match (animal) {
-                c: Cat => "cat: " + c.name,
-                d: Dog => "dog: " + d.name,
-                b: Bird => "bird: " + b.name
+                let c: Cat => "cat: " + c.name,
+                let d: Dog => "dog: " + d.name,
+                let b: Bird => "bird: " + b.name
             }
         }
         function main() -> string {
@@ -1435,9 +1435,9 @@ async fn match_class_types_exhaustive_last() {
 
         function classify(animal: Cat | Dog | Bird) -> string {
             match (animal) {
-                c: Cat => "cat: " + c.name,
-                d: Dog => "dog: " + d.name,
-                b: Bird => "bird: " + b.name
+                let c: Cat => "cat: " + c.name,
+                let d: Dog => "dog: " + d.name,
+                let b: Bird => "bird: " + b.name
             }
         }
         function main() -> string {
@@ -1511,8 +1511,8 @@ async fn match_class_types_non_exhaustive_wildcard() {
 
         function classify(animal: Cat | Dog | Bird) -> string {
             match (animal) {
-                c: Cat => "cat: " + c.name,
-                d: Dog => "dog: " + d.name,
+                let c: Cat => "cat: " + c.name,
+                let d: Dog => "dog: " + d.name,
                 _ => "other"
             }
         }
@@ -1581,8 +1581,8 @@ async fn match_class_types_non_exhaustive_matched() {
 
         function classify(animal: Cat | Dog | Bird) -> string {
             match (animal) {
-                c: Cat => "cat: " + c.name,
-                d: Dog => "dog: " + d.name,
+                let c: Cat => "cat: " + c.name,
+                let d: Dog => "dog: " + d.name,
                 _ => "other"
             }
         }
@@ -1652,10 +1652,10 @@ async fn match_union_type_four_patterns_type_tag() {
         baml: r#"
             function identify(x: int | string | bool | float) -> string {
                 match (x) {
-                    n: int => "integer",
-                    s: string => "text",
-                    b: bool => "boolean",
-                    f: float => "decimal"
+                    let n: int => "integer",
+                    let s: string => "text",
+                    let b: bool => "boolean",
+                    let f: float => "decimal"
                 }
             }
         "#,
@@ -1711,10 +1711,10 @@ async fn match_multiple_typed_patterns_with_guards() {
 
         function classify(result: Success | Failure, strict: bool) -> string {
             match (result) {
-                s: Success if s.code > 200 => "redirect",
-                s: Success if strict => "strict success",
-                s: Success => "success",
-                f: Failure => "failure"
+                let s: Success if s.code > 200 => "redirect",
+                let s: Success if strict => "strict success",
+                let s: Success => "success",
+                let f: Failure => "failure"
             }
         }
         function main() -> string {
@@ -1804,10 +1804,10 @@ async fn match_class_type_tag_jump_table() {
 
         function describe(animal: Cat | Dog | Bird | Fish) -> string {
             match (animal) {
-                c: Cat  => "cat",
-                d: Dog  => "dog",
-                b: Bird => "bird",
-                f: Fish => "fish"
+                let c: Cat  => "cat",
+                let d: Dog  => "dog",
+                let b: Bird => "bird",
+                let f: Fish => "fish"
             }
         }
         function main() -> string {
@@ -1886,8 +1886,8 @@ async fn match_class_type_is_type_chain() {
 
         function describe(animal: Cat | Dog) -> string {
             match (animal) {
-                c: Cat => "cat",
-                d: Dog => "dog"
+                let c: Cat => "cat",
+                let d: Dog => "dog"
             }
         }
         function main() -> string {
@@ -1941,10 +1941,10 @@ async fn match_mixed_class_primitive_type_tag_switch() {
 
         function classify(x: MyClass | int | string | bool) -> string {
             match (x) {
-                c: MyClass => "class",
-                n: int     => "int",
-                s: string  => "string",
-                b: bool    => "bool"
+                let c: MyClass => "class",
+                let n: int     => "int",
+                let s: string  => "string",
+                let b: bool    => "bool"
             }
         }
         function main() -> string {
@@ -2022,10 +2022,10 @@ async fn match_sparse_class_type_tag_perfect_hash() {
 
         function describe(animal: Cat | Dog | Bird | Fish) -> string {
             match (animal) {
-                c: Cat  => "cat",
-                d: Dog  => "dog",
-                b: Bird => "bird",
-                f: Fish => "fish"
+                let c: Cat  => "cat",
+                let d: Dog  => "dog",
+                let b: Bird => "bird",
+                let f: Fish => "fish"
             }
         }
         function main() -> string {
@@ -2109,8 +2109,8 @@ async fn match_null_with_class_types_type_tag() {
 
         function classify(x: Cat | Dog | null) -> string {
             match (x) {
-                c: Cat  => "cat",
-                d: Dog  => "dog",
+                let c: Cat  => "cat",
+                let d: Dog  => "dog",
                 _: null => "nothing"
             }
         }
@@ -2175,10 +2175,10 @@ async fn match_dense_class_still_uses_direct_jump_table() {
 
         function describe(animal: Cat | Dog | Bird | Fish) -> string {
             match (animal) {
-                c: Cat  => "cat",
-                d: Dog  => "dog",
-                b: Bird => "bird",
-                f: Fish => "fish"
+                let c: Cat  => "cat",
+                let d: Dog  => "dog",
+                let b: Bird => "bird",
+                let f: Fish => "fish"
             }
         }
         function main() -> string {

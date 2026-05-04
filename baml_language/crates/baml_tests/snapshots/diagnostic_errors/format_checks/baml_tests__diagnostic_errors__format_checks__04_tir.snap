@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 30112
 ---
 === TIR2 ===
 function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int throws never {
@@ -1419,21 +1420,21 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
         result Add= item : int
       }
     let plain = 1 : 1 -> int
-    let typed = 2 : 2
+    let typed: int = 2 : 2
     let complex_init = a + result : int
-    let very_long_variable_name_for_testing_wrapping = map { "key": 42 } : map<string, int | string | bool | float | null>
+    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = map { "key": 42 } : map<string, int | string | bool | float | null>
     let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
-    let deeply_typed = map { "outer": map { "inner": map { "deep": 42 } } } : map<string, map<string, map<string, int | string | bool>>>
-    let trivia_var = 42 : 42
-    let trivia_var_block = 42 : 42
-    let very_long_variable_name_for_testing_wrapping = map { "key": 42 } : map<string, int | string | bool | float | null>
-    let very_long_variable_name_for_testing_wrapping = map { "key": 42 } : map<string, int | string | bool | float | null>
+    let deeply_typed: map<string, map<string, map<string, int | string | bool>>> = map { "outer": map { "inner": map { "deep": 42 } } } : map<string, map<string, map<string, int | string | bool>>>
+    let trivia_var: int = 42 : 42
+    let trivia_var_block: int = 42 : 42
+    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = map { "key": 42 } : map<string, int | string | bool | float | null>
+    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = map { "key": 42 } : map<string, int | string | bool | float | null>
     let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
     let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
     return result : int
   }
   ?? 12080..12107: unreachable code: 1 statement(s) after diverging statement
-  ?? 12187..12217: unreachable code: 1 statement(s) after diverging statement
+  ?? 12191..12221: unreachable code: 1 statement(s) after diverging statement
 }
 function user.AssertStmts(x: int, y: int) -> int throws never {
   { : int
@@ -1713,13 +1714,13 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
       _ =>
         "other" : "other"
   }
-  !! 3875..3885: unreachable arm
-  !! 3900..3907: unreachable arm
-  !! 8340..8345: operator `Mul` cannot be applied to `bool` and `bool`
-  !! 8348..8353: operator `Mul` cannot be applied to `int` and `bool`
-  !! 8376..8381: operator `Mul` cannot be applied to `bool` and `bool`
-  !! 8388..8393: operator `Mul` cannot be applied to `int` and `bool`
-  !! 8400..8405: operator `Mul` cannot be applied to `bool` and `int`
+  !! 3883..3893: unreachable arm
+  !! 3908..3915: unreachable arm
+  !! 8388..8393: operator `Mul` cannot be applied to `bool` and `bool`
+  !! 8396..8401: operator `Mul` cannot be applied to `int` and `bool`
+  !! 8424..8429: operator `Mul` cannot be applied to `bool` and `bool`
+  !! 8436..8441: operator `Mul` cannot be applied to `int` and `bool`
+  !! 8448..8453: operator `Mul` cannot be applied to `bool` and `int`
 }
 class user.MatchSuccess$stream {
   data: null | string

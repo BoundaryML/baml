@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 15291
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -42,8 +43,11 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "first"
+          PATTERN
+            BINDING_PATTERN "// Array indexing with literal
+  let first"
+              KW_LET "let"
+              WORD "first"
           EQUALS "="
           INDEX_EXPR "users[0]"
             WORD "users"
@@ -51,16 +55,20 @@ SOURCE_FILE
             INTEGER_LITERAL "0"
             R_BRACKET "]"
           SEMICOLON ";"
-        LET_STMT "// Array indexing with variable
-  let idx = 1;"
-          KW_LET "let"
-          WORD "idx"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "// Array indexing with variable
+  let idx"
+              KW_LET "let"
+              WORD "idx"
           EQUALS "="
           INTEGER_LITERAL "1"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "second"
+          PATTERN
+            BINDING_PATTERN "let second"
+              KW_LET "let"
+              WORD "second"
           EQUALS "="
           INDEX_EXPR "users[idx]"
             WORD "users"
@@ -69,8 +77,11 @@ SOURCE_FILE
             R_BRACKET "]"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "firstName"
+          PATTERN
+            BINDING_PATTERN "// Nested: array element field access
+  let firstName"
+              KW_LET "let"
+              WORD "firstName"
           EQUALS "="
           FIELD_ACCESS_EXPR
             INDEX_EXPR "users[0]"
@@ -82,8 +93,11 @@ SOURCE_FILE
             WORD "name"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "tag"
+          PATTERN
+            BINDING_PATTERN "// Deeply nested: array then field then index
+  let tag"
+              KW_LET "let"
+              WORD "tag"
           EQUALS "="
           INDEX_EXPR
             FIELD_ACCESS_EXPR

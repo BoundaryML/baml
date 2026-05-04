@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40036
 ---
 === HIR2 ===
 type user.ExplicitHandler = (value: int) -> string throws never

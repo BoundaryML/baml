@@ -328,7 +328,8 @@ fn resolution_to_item_ref(
 use baml_compiler2_ast::{
     AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, Expr as AstExpr,
     ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, PatId as AstPatId,
-    PatternKind as AstPatternKind, Stmt as AstStmt, StmtId as AstStmtId, UnaryOp as AstUnaryOp,
+    Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, TypeExpr as AstTypeExpr,
+    UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
@@ -3679,7 +3680,7 @@ impl LoweringContext<'_> {
                 // Extract binding name from pattern
                 let pat = self.body.patterns[pattern].clone();
                 let name = pat
-                    .binding_name()
+                    .binding_name(&self.body.patterns)
                     .cloned()
                     .unwrap_or_else(|| Name::new("_"));
 
@@ -3868,8 +3869,9 @@ impl LoweringContext<'_> {
                 // distinct cell.
                 {
                     let pat = &self.body.patterns[binding];
-                    if let Some(name) = pat.binding_name() {
-                        let ty = if let Some(narrow) = &pat.narrow {
+                    if let Some(name) = pat.binding_name(&self.body.patterns) {
+                        let narrow = self.pattern_narrow_type(binding);
+                        let ty = if let Some(narrow) = &narrow {
                             self.resolve_type_annotation(narrow)
                         } else {
                             self.pat_types
@@ -4394,8 +4396,6 @@ impl LoweringContext<'_> {
     ) -> bool {
         use std::collections::HashSet;
 
-        use baml_base::Literal;
-
         if arms.is_empty() {
             return false;
         }
@@ -4420,140 +4420,98 @@ impl LoweringContext<'_> {
             if guard.is_some() {
                 return false;
             }
-            let pat = &self.body.patterns[pattern];
-            match &pat.kind {
-                AstPatternKind::Literal(Literal::Int(val)) => {
-                    match &switch_kind {
-                        None => switch_kind = Some(SwitchKind::Integer),
-                        Some(SwitchKind::Integer) => {}
-                        Some(_) => return false,
-                    }
-                    let v = *val;
-                    if seen_values.insert(v) {
-                        int_arms.push((v, i));
-                    }
+            // OLD `pat.narrow.is_some()` branch: Chain encodes the narrow
+            // as a `Type` link, so recover it and treat as a TypeTag arm.
+            if self.pattern_narrow_type(pattern).is_some() {
+                match &switch_kind {
+                    None => switch_kind = Some(SwitchKind::TypeTag),
+                    Some(SwitchKind::TypeTag) => {}
+                    Some(_) => return false,
                 }
-                AstPatternKind::EnumVariant { enum_name, variant } => {
-                    let short_name = enum_name.last().unwrap().clone();
-                    let variant = variant.clone();
-                    match &switch_kind {
-                        None => {
-                            switch_kind = Some(SwitchKind::EnumDiscriminant(short_name.clone()));
+                match self.classify_pattern_type_tag(pattern) {
+                    Some(tags) => {
+                        for tag in tags {
+                            if seen_values.insert(tag) {
+                                int_arms.push((tag, i));
+                            }
                         }
-                        Some(SwitchKind::EnumDiscriminant(n)) if *n == short_name => {}
-                        _ => return false,
                     }
-                    let idx = self
-                        .enum_variants
-                        .get(&short_name)
-                        .and_then(|m| m.get(variant.as_str()))
-                        .copied();
-                    let Some(idx) = idx else { return false };
-                    let disc = i64::try_from(idx).expect("discriminant overflow");
-                    if seen_values.insert(disc) {
-                        int_arms.push((disc, i));
-                    }
+                    None => return false,
                 }
-                AstPatternKind::Or(sub_pats) => {
-                    for sub_pat_id in sub_pats {
-                        let sub_pat = &self.body.patterns[*sub_pat_id];
-                        match &sub_pat.kind {
-                            AstPatternKind::Literal(Literal::Int(val)) => {
-                                match &switch_kind {
-                                    None => switch_kind = Some(SwitchKind::Integer),
-                                    Some(SwitchKind::Integer) => {}
-                                    Some(_) => return false,
-                                }
-                                let v = *val;
-                                if seen_values.insert(v) {
-                                    int_arms.push((v, i));
-                                }
+                continue;
+            }
+
+            // Helpers that classify a pattern (the arm pattern itself, or a
+            // sub-pattern of an `Or`) into a switch kind. Mutate `switch_kind`
+            // and `int_arms`. Return `false` if the pattern disqualifies.
+            let pat = &self.body.patterns[pattern];
+            let classify_atom = |this: &Self,
+                                 atom_id: AstPatId,
+                                 atom: &AstPattern,
+                                 switch_kind: &mut Option<SwitchKind>,
+                                 int_arms: &mut Vec<(i64, usize)>,
+                                 seen_values: &mut HashSet<i64>|
+             -> bool {
+                match atom {
+                    // OLD `Literal(Int(val))`: integer switch
+                    AstPattern::Type(AstTypeExpr::Literal {
+                        value: AstLiteral::Int(val),
+                        ..
+                    }) => {
+                        match switch_kind.as_ref() {
+                            None => *switch_kind = Some(SwitchKind::Integer),
+                            Some(SwitchKind::Integer) => {}
+                            Some(_) => return false,
+                        }
+                        if seen_values.insert(*val) {
+                            int_arms.push((*val, i));
+                        }
+                        true
+                    }
+                    // OLD `EnumVariant { ... }`: integer switch with discriminant.
+                    // The new repr puts enum variants inside `Pattern::Type`;
+                    // detect via TIR.
+                    AstPattern::Type(AstTypeExpr::Path { .. })
+                        if matches!(
+                            this.pat_types.get(&(this.current_scope, atom_id)),
+                            Some(Tir2Ty::EnumVariant(_, _, _))
+                        ) =>
+                    {
+                        let Some(Tir2Ty::EnumVariant(qtn, variant, _)) =
+                            this.pat_types.get(&(this.current_scope, atom_id))
+                        else {
+                            unreachable!("guarded by matches! above");
+                        };
+                        let short_name = qtn.name().clone();
+                        let variant = variant.clone();
+                        match switch_kind.as_ref() {
+                            None => {
+                                *switch_kind =
+                                    Some(SwitchKind::EnumDiscriminant(short_name.clone()));
                             }
-                            AstPatternKind::EnumVariant { enum_name, variant } => {
-                                let short_name = enum_name.last().unwrap().clone();
-                                let variant = variant.clone();
-                                match &switch_kind {
-                                    None => {
-                                        switch_kind =
-                                            Some(SwitchKind::EnumDiscriminant(short_name.clone()));
-                                    }
-                                    Some(SwitchKind::EnumDiscriminant(n)) if *n == short_name => {}
-                                    _ => return false,
-                                }
-                                let idx = self
-                                    .enum_variants
-                                    .get(&short_name)
-                                    .and_then(|m| m.get(variant.as_str()))
-                                    .copied();
-                                let Some(idx) = idx else { return false };
-                                let disc = i64::try_from(idx).expect("discriminant overflow");
-                                if seen_values.insert(disc) {
-                                    int_arms.push((disc, i));
-                                }
-                            }
-                            AstPatternKind::Bind { .. } | AstPatternKind::Type(_) => {
-                                match &switch_kind {
-                                    None => switch_kind = Some(SwitchKind::TypeTag),
-                                    Some(SwitchKind::TypeTag) => {}
-                                    Some(_) => return false,
-                                }
-                                match self.classify_pattern_type_tag(*sub_pat_id) {
-                                    Some(tags) => {
-                                        for tag in tags {
-                                            if seen_values.insert(tag) {
-                                                int_arms.push((tag, i));
-                                            }
-                                        }
-                                    }
-                                    None => return false,
-                                }
-                            }
+                            Some(SwitchKind::EnumDiscriminant(n)) if *n == short_name => {}
                             _ => return false,
                         }
-                    }
-                }
-                AstPatternKind::Type(_) => {
-                    match &switch_kind {
-                        None => switch_kind = Some(SwitchKind::TypeTag),
-                        Some(SwitchKind::TypeTag) => {}
-                        Some(_) => return false,
-                    }
-                    match self.classify_pattern_type_tag(pattern) {
-                        Some(tags) => {
-                            for tag in tags {
-                                if seen_values.insert(tag) {
-                                    int_arms.push((tag, i));
-                                }
-                            }
+                        let idx = this
+                            .enum_variants
+                            .get(&short_name)
+                            .and_then(|m| m.get(variant.as_str()))
+                            .copied();
+                        let Some(idx) = idx else { return false };
+                        let disc = i64::try_from(idx).expect("discriminant overflow");
+                        if seen_values.insert(disc) {
+                            int_arms.push((disc, i));
                         }
-                        None => return false,
+                        true
                     }
-                }
-                _ if pat.narrow.is_some() => {
-                    match &switch_kind {
-                        None => switch_kind = Some(SwitchKind::TypeTag),
-                        Some(SwitchKind::TypeTag) => {}
-                        Some(_) => return false,
-                    }
-                    match self.classify_pattern_type_tag(pattern) {
-                        Some(tags) => {
-                            for tag in tags {
-                                if seen_values.insert(tag) {
-                                    int_arms.push((tag, i));
-                                }
-                            }
-                        }
-                        None => return false,
-                    }
-                }
-                AstPatternKind::Bind { .. } => {
-                    if self.pat_types.contains_key(&(self.current_scope, pattern)) {
-                        match &switch_kind {
-                            None => switch_kind = Some(SwitchKind::TypeTag),
+                    // OLD `Type(_)` / `Bind { .. }` (with TIR type): TypeTag.
+                    AstPattern::Type(_) | AstPattern::Bind { .. } => {
+                        match switch_kind.as_ref() {
+                            None => *switch_kind = Some(SwitchKind::TypeTag),
                             Some(SwitchKind::TypeTag) => {}
                             Some(_) => return false,
                         }
-                        match self.classify_pattern_type_tag(pattern) {
+                        match this.classify_pattern_type_tag(atom_id) {
                             Some(tags) => {
                                 for tag in tags {
                                     if seen_values.insert(tag) {
@@ -4563,22 +4521,56 @@ impl LoweringContext<'_> {
                             }
                             None => return false,
                         }
-                    } else {
-                        if i != arms.len() - 1 {
+                        true
+                    }
+                    _ => false,
+                }
+            };
+
+            match pat {
+                AstPattern::Or(sub_pats) => {
+                    for sub_pat_id in sub_pats {
+                        let sub_pat = &self.body.patterns[*sub_pat_id];
+                        if !classify_atom(
+                            self,
+                            *sub_pat_id,
+                            sub_pat,
+                            &mut switch_kind,
+                            &mut int_arms,
+                            &mut seen_values,
+                        ) {
                             return false;
                         }
-                        otherwise_idx = Some(i);
                     }
                 }
-                AstPatternKind::Wildcard => {
+                AstPattern::Wildcard => {
                     if i != arms.len() - 1 {
                         return false;
                     }
                     otherwise_idx = Some(i);
                 }
-                AstPatternKind::Null
-                | AstPatternKind::Literal(_)
-                | AstPatternKind::Class { .. } => return false,
+                // Plain `let x` without a narrow always acts as the
+                // catch-all arm, enabling jump-table dispatch. (Narrowed
+                // bindings — e.g. `let n: int` — are encoded as `Chain` and
+                // were handled by the `pattern_narrow_type` branch above.)
+                AstPattern::Bind { .. } => {
+                    if i != arms.len() - 1 {
+                        return false;
+                    }
+                    otherwise_idx = Some(i);
+                }
+                _ => {
+                    if !classify_atom(
+                        self,
+                        pattern,
+                        pat,
+                        &mut switch_kind,
+                        &mut int_arms,
+                        &mut seen_values,
+                    ) {
+                        return false;
+                    }
+                }
             }
         }
 
@@ -4942,20 +4934,58 @@ impl LoweringContext<'_> {
         failure: BlockId,
     ) {
         let pat = self.body.patterns[pat_id].clone();
-        if let Some(ty) = &pat.narrow {
-            let annotation_ty = self
-                .pat_types
-                .get(&(self.current_scope, pat_id))
-                .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
-                .unwrap_or_else(|| self.resolve_type_annotation(ty));
-            self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
+
+        // Chain folds the OLD `(kind, narrow)` shape: every non-binding link
+        // must succeed against the same scrutinee. Bind/Wildcard links have
+        // no runtime test, so skip them. Type links emit `is_type` directly
+        // (matching OLD's `pat.narrow.is_some()` codegen — even for Null,
+        // which OLD's bare `null =>` arm path special-cased to `==`). Other
+        // sub-patterns (e.g. `Or`) recurse through `lower_pattern_test`.
+        if let AstPattern::Chain(parts) = &pat {
+            let testable: Vec<AstPatId> = parts
+                .iter()
+                .copied()
+                .filter(|p| {
+                    !matches!(
+                        self.body.patterns[*p],
+                        AstPattern::Bind { .. } | AstPattern::Wildcard
+                    )
+                })
+                .collect();
+            if testable.is_empty() {
+                self.builder.goto(success);
+                return;
+            }
+            let n = testable.len();
+            for (i, sub_pat) in testable.iter().copied().enumerate() {
+                let next = if i + 1 == n {
+                    success
+                } else {
+                    self.builder.create_block()
+                };
+                if let AstPattern::Type(ty) = &self.body.patterns[sub_pat] {
+                    let ty = ty.clone();
+                    let annotation_ty = self
+                        .pat_types
+                        .get(&(self.current_scope, sub_pat))
+                        .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
+                        .unwrap_or_else(|| self.resolve_type_annotation(&ty));
+                    self.emit_is_type_branch(scrutinee, annotation_ty, next, failure);
+                } else {
+                    self.lower_pattern_test(scrutinee, sub_pat, next, failure);
+                }
+                if i + 1 < n {
+                    self.builder.set_current_block(next);
+                }
+            }
             return;
         }
-        match &pat.kind {
-            AstPatternKind::Wildcard => {
+
+        match &pat {
+            AstPattern::Wildcard => {
                 self.builder.goto(success);
             }
-            AstPatternKind::Bind { .. } => {
+            AstPattern::Bind { .. } => {
                 if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned() {
                     let resolved = self.resolved_aliases.convert(&tir_ty);
                     self.emit_is_type_branch(scrutinee, resolved, success, failure);
@@ -4963,71 +4993,78 @@ impl LoweringContext<'_> {
                     self.builder.goto(success);
                 }
             }
-            AstPatternKind::Type(ty_expr) => {
-                let annotation_ty = self
-                    .pat_types
-                    .get(&(self.current_scope, pat_id))
-                    .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
-                    .unwrap_or_else(|| self.resolve_type_annotation(ty_expr));
-                self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
-            }
-            AstPatternKind::Literal(lit) => {
-                let constant = Self::lower_literal(lit);
-                let test = Rvalue::BinaryOp {
-                    op: BinOp::Eq,
-                    left: Operand::Copy(Place::Local(scrutinee)),
-                    right: Operand::Constant(constant),
-                };
-                let test_local = self.builder.temp(Ty::Bool {
-                    attr: TyAttr::default(),
-                });
-                self.builder.assign(Place::local(test_local), test);
-                self.builder
-                    .branch(Operand::Copy(Place::Local(test_local)), success, failure);
-            }
-            AstPatternKind::Null => {
-                let test = Rvalue::BinaryOp {
-                    op: BinOp::Eq,
-                    left: Operand::Copy(Place::Local(scrutinee)),
-                    right: Operand::Constant(Constant::Null),
-                };
-                let test_local = self.builder.temp(Ty::Bool {
-                    attr: TyAttr::default(),
-                });
-                self.builder.assign(Place::local(test_local), test);
-                self.builder
-                    .branch(Operand::Copy(Place::Local(test_local)), success, failure);
-            }
-            AstPatternKind::EnumVariant {
-                enum_name: _,
-                variant,
-            } => {
-                let variant = variant.clone();
-                let enum_ref = if let Some(Tir2Ty::EnumVariant(qtn, _, _)) =
-                    self.pat_types.get(&(self.current_scope, pat_id))
+            // OLD's Pattern::Type covered structural shape tests; OLD's
+            // Pattern::Literal / Pattern::Null / Pattern::EnumVariant were
+            // separate variants. The new flat enum collapses all of those
+            // into `Pattern::Type(TypeExpr)`, so we dispatch on the inner
+            // TypeExpr to recover OLD's per-kind codegen.
+            AstPattern::Type(ty_expr) => match ty_expr {
+                AstTypeExpr::Literal { value: lit, .. } => {
+                    let constant = Self::lower_literal(lit);
+                    let test = Rvalue::BinaryOp {
+                        op: BinOp::Eq,
+                        left: Operand::Copy(Place::Local(scrutinee)),
+                        right: Operand::Constant(constant),
+                    };
+                    let test_local = self.builder.temp(Ty::Bool {
+                        attr: TyAttr::default(),
+                    });
+                    self.builder.assign(Place::local(test_local), test);
+                    self.builder
+                        .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+                }
+                AstTypeExpr::Null { .. } => {
+                    let test = Rvalue::BinaryOp {
+                        op: BinOp::Eq,
+                        left: Operand::Copy(Place::Local(scrutinee)),
+                        right: Operand::Constant(Constant::Null),
+                    };
+                    let test_local = self.builder.temp(Ty::Bool {
+                        attr: TyAttr::default(),
+                    });
+                    self.builder.assign(Place::local(test_local), test);
+                    self.builder
+                        .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+                }
+                AstTypeExpr::Path { .. }
+                    if matches!(
+                        self.pat_types.get(&(self.current_scope, pat_id)),
+                        Some(Tir2Ty::EnumVariant(_, _, _))
+                    ) =>
                 {
-                    ItemRef::EnumType {
+                    let Some(Tir2Ty::EnumVariant(qtn, variant, _)) =
+                        self.pat_types.get(&(self.current_scope, pat_id))
+                    else {
+                        unreachable!("guarded by matches! above");
+                    };
+                    let enum_ref = ItemRef::EnumType {
                         package: qtn.package().clone(),
                         namespace: qtn.namespace().clone(),
                         name: qtn.name().clone(),
-                    }
-                } else {
-                    self.builder.goto(failure);
-                    return;
-                };
-                let test = Rvalue::BinaryOp {
-                    op: BinOp::Eq,
-                    left: Operand::Copy(Place::Local(scrutinee)),
-                    right: Operand::Constant(Constant::EnumVariant { enum_ref, variant }),
-                };
-                let test_local = self.builder.temp(Ty::Bool {
-                    attr: TyAttr::default(),
-                });
-                self.builder.assign(Place::local(test_local), test);
-                self.builder
-                    .branch(Operand::Copy(Place::Local(test_local)), success, failure);
-            }
-            AstPatternKind::Or(sub_pats) => {
+                    };
+                    let variant = variant.clone();
+                    let test = Rvalue::BinaryOp {
+                        op: BinOp::Eq,
+                        left: Operand::Copy(Place::Local(scrutinee)),
+                        right: Operand::Constant(Constant::EnumVariant { enum_ref, variant }),
+                    };
+                    let test_local = self.builder.temp(Ty::Bool {
+                        attr: TyAttr::default(),
+                    });
+                    self.builder.assign(Place::local(test_local), test);
+                    self.builder
+                        .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+                }
+                _ => {
+                    let annotation_ty = self
+                        .pat_types
+                        .get(&(self.current_scope, pat_id))
+                        .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
+                        .unwrap_or_else(|| self.resolve_type_annotation(ty_expr));
+                    self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
+                }
+            },
+            AstPattern::Or(sub_pats) => {
                 if sub_pats.is_empty() {
                     self.builder.goto(failure);
                     return;
@@ -5045,9 +5082,10 @@ impl LoweringContext<'_> {
                     }
                 }
             }
-            AstPatternKind::Class { .. } => {
-                // Class destructure: the IsType test narrows to the class.
-                // Field bindings are handled in bind_pattern.
+            AstPattern::Class { .. } => {
+                // Class destructure is gated parser-side; this branch is
+                // unreachable for user code. Keep the OLD behavior for
+                // completeness in case a synthesized class pattern appears.
                 if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned() {
                     let resolved = self.resolved_aliases.convert(&tir_ty);
                     self.emit_is_type_branch(scrutinee, resolved, success, failure);
@@ -5055,14 +5093,35 @@ impl LoweringContext<'_> {
                     self.builder.goto(success);
                 }
             }
+            AstPattern::Chain(_) => unreachable!("handled above"),
+        }
+    }
+
+    /// The OLD `Pattern.narrow` field was a single optional `TypeExpr`
+    /// alongside `Pattern.kind`. The new flat enum encodes the same idea as
+    /// `Pattern::Chain(Vec<PatId>)` where the type narrows are `Type` links.
+    /// This helper recovers OLD's `narrow` view: the rightmost `Type` link of
+    /// a `Chain`, or `None` for atom patterns (including atom `Type` patterns).
+    fn pattern_narrow_type(&self, pat_id: AstPatId) -> Option<AstTypeExpr> {
+        if let AstPattern::Chain(parts) = &self.body.patterns[pat_id] {
+            parts
+                .iter()
+                .rev()
+                .find_map(|&p| match &self.body.patterns[p] {
+                    AstPattern::Type(t) => Some(t.clone()),
+                    _ => None,
+                })
+        } else {
+            None
         }
     }
 
     fn bind_pattern(&mut self, scrutinee: Local, pat_id: AstPatId) {
         let pat = &self.body.patterns[pat_id];
-        if let Some(name) = pat.binding_name() {
+        if let Some(name) = pat.binding_name(&self.body.patterns) {
             let name = name.clone();
-            let ty = if let Some(narrow) = &pat.narrow {
+            let narrow = self.pattern_narrow_type(pat_id);
+            let ty = if let Some(narrow) = &narrow {
                 self.resolve_type_annotation(narrow)
             } else {
                 self.pat_types
@@ -5096,19 +5155,27 @@ impl LoweringContext<'_> {
     /// wildcards, enum variants, and types without tag mappings.
     fn classify_pattern_type_tag(&self, pat_id: AstPatId) -> Option<Vec<i64>> {
         let pat = &self.body.patterns[pat_id];
-        if pat.narrow.is_some() {
-            let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
+        // For Chain patterns the narrow's resolved TIR type lives at the
+        // *inner* `Type` link's PatId, not at the outer Chain PatId
+        // (register_pattern_types stores `flow_ty` at the outer one).
+        if let AstPattern::Chain(parts) = pat {
+            let narrow_id = parts
+                .iter()
+                .rev()
+                .find(|&&p| matches!(self.body.patterns[p], AstPattern::Type(_)))
+                .copied()?;
+            let tir_ty = self.pat_types.get(&(self.current_scope, narrow_id))?;
             let resolved = self.resolved_aliases.convert(tir_ty);
             return self.ty_to_type_tags(&resolved);
         }
-        match &pat.kind {
-            AstPatternKind::Wildcard => None,
-            AstPatternKind::Bind { .. } => {
+        match pat {
+            AstPattern::Wildcard => None,
+            AstPattern::Bind { .. } => {
                 let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
                 let resolved = self.resolved_aliases.convert(tir_ty);
                 self.ty_to_type_tags(&resolved)
             }
-            AstPatternKind::Type(_) => {
+            AstPattern::Type(_) => {
                 let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
                 let resolved = self.resolved_aliases.convert(tir_ty);
                 self.ty_to_type_tags(&resolved)
@@ -5222,7 +5289,9 @@ impl LoweringContext<'_> {
         // for single-clause catches with a non-captured binding.
         let single_clause_binding_name = clauses.first().and_then(|c| {
             if clauses.len() == 1 && !self.pattern_binding_is_captured(c.binding) {
-                self.body.patterns[c.binding].binding_name().cloned()
+                self.body.patterns[c.binding]
+                    .binding_name(&self.body.patterns)
+                    .cloned()
             } else {
                 None
             }
@@ -5252,7 +5321,9 @@ impl LoweringContext<'_> {
 
         let mut clause_locals = Vec::with_capacity(clauses.len());
         for clause in clauses {
-            let binding_name = self.body.patterns[clause.binding].binding_name().cloned();
+            let binding_name = self.body.patterns[clause.binding]
+                .binding_name(&self.body.patterns)
+                .cloned();
             let binding_is_captured = self.pattern_binding_is_captured(clause.binding);
             let (binding_local, binding_copy_local) = match binding_name.clone() {
                 Some(name) if binding_is_captured => {
@@ -5277,7 +5348,9 @@ impl LoweringContext<'_> {
             let (stack_trace_name, stack_trace_copy_local) = if let (Some(st_pat), Some(payload)) =
                 (clause.stack_trace_binding, stack_trace_local)
             {
-                let name = self.body.patterns[st_pat].binding_name().cloned();
+                let name = self.body.patterns[st_pat]
+                    .binding_name(&self.body.patterns)
+                    .cloned();
                 let is_captured = self.pattern_binding_is_captured(st_pat);
                 match name.clone() {
                     Some(name) if is_captured => {
@@ -5318,8 +5391,7 @@ impl LoweringContext<'_> {
             for &arm_id in &clause.arms {
                 let arm = self.body.catch_arms[arm_id].clone();
                 let pat = &self.body.patterns[arm.pattern];
-                let is_wildcard =
-                    matches!(pat.kind, AstPatternKind::Wildcard) && pat.narrow.is_none();
+                let is_wildcard = matches!(pat, AstPattern::Wildcard);
                 arms.push((arm, is_wildcard, clause_idx));
             }
         }

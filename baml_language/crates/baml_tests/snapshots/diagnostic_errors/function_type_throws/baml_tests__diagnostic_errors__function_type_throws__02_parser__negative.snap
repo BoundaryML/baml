@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 31040
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -94,8 +95,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "inner"
+          PATTERN
+            BINDING_PATTERN "let inner"
+              KW_LET "let"
+              WORD "inner"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -221,8 +224,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "local"
+          PATTERN
+            BINDING_PATTERN "let local"
+              KW_LET "let"
+              WORD "local"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 39477
 ---
 === HIR2 ===
 function user.Bar(x: user.unknown_param_type) -> int  [expr] {

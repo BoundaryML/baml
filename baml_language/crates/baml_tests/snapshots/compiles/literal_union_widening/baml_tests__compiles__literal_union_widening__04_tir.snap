@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 11347
 ---
 === TIR2 ===
 function user.arrayOfInts() -> int[] throws never {
@@ -22,7 +23,7 @@ function user.nestedArray() -> int[][] throws never {
 }
 function user.annotatedLiteralUnion() -> int throws never {
   { : never
-    let x = 1 : 1
+    let x: 1 | 2 = 1 : 1
     return x : 1
   }
 }

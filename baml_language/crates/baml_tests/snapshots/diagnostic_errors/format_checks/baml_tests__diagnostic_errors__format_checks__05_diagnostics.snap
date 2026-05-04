@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 30255
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type `string` has no member `len`
@@ -440,9 +441,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Warning: unreachable code: 1 statement(s) after diverging statement
-     ╭─[ loop_stmts.baml:406:39 ]
+     ╭─[ loop_stmts.baml:406:43 ]
      │
- 406 │ ╭─▶                 n: int if n > 100 => {
+ 406 │ ╭─▶                 let n: int if n > 100 => {
  407 │ ├─▶                     continue;
      │ │                                   
      │ ╰─────────────────────────────────── unreachable code: 1 statement(s) after diverging statement

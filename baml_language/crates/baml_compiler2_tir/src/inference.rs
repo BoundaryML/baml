@@ -102,10 +102,10 @@ pub enum MemberResolution<'db> {
 pub struct ScopeInference<'db> {
     /// Type of every expression within this scope (NOT nested child scopes).
     expressions: FxHashMap<ExprId, Ty>,
-    /// Binding types: the type a variable is bound to after widening/annotation.
-    /// May differ from the initializer expression type (e.g. `let x = 1` has
-    /// expression type `Literal(1, Fresh)` but binding type `int`).
-    bindings: FxHashMap<PatId, Ty>,
+    /// Pattern types: the type each pattern is associated with. Used both for
+    /// `Pattern::Bind` (the variable's bound type, post widening) and for
+    /// `Pattern::Type` / `Pattern::Class` (the type to runtime-test against).
+    pattern_types: FxHashMap<PatId, Ty>,
     /// Member resolutions: for field-access expressions that resolved to a
     /// class field, enum variant, method, or free function — records the
     /// structural path so MIR can emit the correct `QualifiedName` and LSP
@@ -186,7 +186,7 @@ impl<'db> ScopeInference<'db> {
     /// Look up the binding type for a pattern (the type the variable is bound to,
     /// which may differ from the initializer expression type due to widening).
     pub fn binding_type(&self, pat_id: PatId) -> Option<&Ty> {
-        self.bindings.get(&pat_id)
+        self.pattern_types.get(&pat_id)
     }
 
     /// Look up the type of a parameter by index.
@@ -201,7 +201,7 @@ impl<'db> ScopeInference<'db> {
 
     /// Iterate over all (`PatId`, Ty) pairs for pattern bindings in this scope.
     pub fn iter_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
-        self.bindings.iter()
+        self.pattern_types.iter()
     }
 
     /// Look up the member resolution for an expression in this scope.
@@ -333,7 +333,7 @@ fn infer_scope_types_cycle_initial<'db>(
 ) -> ScopeInference<'db> {
     ScopeInference {
         expressions: FxHashMap::default(),
-        bindings: FxHashMap::default(),
+        pattern_types: FxHashMap::default(),
         resolutions: FxHashMap::default(),
         catch_residual_throws: FxHashMap::default(),
         exhaustive_matches: FxHashSet::default(),
@@ -853,7 +853,7 @@ pub fn infer_scope_types<'db>(
 
     let (
         expressions,
-        bindings,
+        pattern_types,
         resolutions,
         catch_residual_throws,
         exhaustive_matches,
@@ -872,7 +872,7 @@ pub fn infer_scope_types<'db>(
 
     ScopeInference {
         expressions,
-        bindings,
+        pattern_types,
         resolutions,
         catch_residual_throws,
         exhaustive_matches,

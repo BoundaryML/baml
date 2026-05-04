@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4273
 ---
 === TIR2 ===
 
@@ -137,7 +138,7 @@ function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.T
 }
 function testing.TestRegistry.serialize(self: testing.TestRegistry) -> testing.SerializedTestDef[] throws never {
   { : never
-    let items = [] : testing.SerializedTestDef[]
+    let items: SerializedTestDef[] = [] : testing.SerializedTestDef[]
     for t in self.collector.tests
       { : int
         items.push(SerializedTest { type: "test", name: t.name }) : int
@@ -206,7 +207,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
 }
 function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -> testing.TestReport throws never {
   { : testing.TestReport
-    let base_run = : () -> testing.TestReport throws never
+    let base_run: TestReportThunk = : () -> testing.TestReport throws never
       () -> TestReport { ... } : () -> testing.TestReport throws never
         {
           let start = baml.sys.now_ms()
@@ -219,7 +220,7 @@ function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -
         base_run() : testing.TestReport
       r: TestRunner =>
         { : testing.TestReport
-          let wrapped = r(base_run) : testing.TestReportThunk
+          let wrapped: TestReportThunk = r(base_run) : testing.TestReportThunk
           wrapped() : testing.TestReport
         }
   }
@@ -233,7 +234,7 @@ function testing.run_testset(run_children: testing.TestSetReportThunk, runner: t
         run_children() : testing.TestSetReport
       r: TestSetRunner =>
         { : testing.TestSetReport
-          let wrapped = r(run_children) : testing.TestSetReportThunk
+          let wrapped: TestSetReportThunk = r(run_children) : testing.TestSetReportThunk
           wrapped() : testing.TestSetReport
         }
   }

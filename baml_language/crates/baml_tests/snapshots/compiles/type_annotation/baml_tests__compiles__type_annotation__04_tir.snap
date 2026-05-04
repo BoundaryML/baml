@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 23412
 ---
 === TIR2 ===
 type user.MetaAlias = type
@@ -10,7 +11,7 @@ type user.MetaList$stream = unknown[]
 type user.MetaUnion$stream = unknown | string
 function user.test_type_annotation(function_name: string) -> string throws never {
   { : never
-    let t = baml.llm.get_return_type(function_name) : type
+    let t: type = baml.llm.get_return_type(function_name) : type
     return "ok" : "ok"
   }
 }
@@ -31,7 +32,7 @@ class user.MetaField$stream {
 }
 function user.test_let_binding(function_name: string) -> string throws never {
   { : never
-    let t = baml.llm.get_return_type(function_name) : type
+    let t: type = baml.llm.get_return_type(function_name) : type
     return "ok" : "ok"
   }
 }
@@ -47,25 +48,25 @@ function user.test_return_type(function_name: string) -> type throws never {
 }
 function user.test_optional(function_name: string) -> string throws never {
   { : never
-    let t = null : null
+    let t: type? = null : null
     return "ok" : "ok"
   }
 }
 function user.test_list(function_name: string) -> string throws never {
   { : never
-    let ts = [] : type[]
+    let ts: type[] = [] : type[]
     return "ok" : "ok"
   }
 }
 function user.test_union(function_name: string) -> string throws never {
   { : never
-    let t = "hello" : "hello"
+    let t: type | string = "hello" : "hello"
     return "ok" : "ok"
   }
 }
 function user.test_map(function_name: string) -> string throws never {
   { : never
-    let m = map {  } : map<string, type>
+    let m: map<string, type> = map {  } : map<string, type>
     return "ok" : "ok"
   }
 }
