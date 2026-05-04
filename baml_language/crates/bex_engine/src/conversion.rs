@@ -5,7 +5,7 @@
 //! representation (`BexValue`, `BexExternalValue`).
 
 use ::bex_vm_types::ObjectType;
-use baml_type::Literal;
+use baml_type::{Literal, MediaKind};
 use bex_external_types::{BexExternalAdt, BexExternalValue, Ty, UnionMetadata};
 use bex_heap::{ActiveHeapPermit, BexValue, PermitProof};
 use bex_vm::BexVm;
@@ -489,6 +489,9 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Bool(_), Ty::Literal(Literal::Bool(_), _)) => true,
         (BexExternalValue::Array { .. }, Ty::List(_, _)) => true,
         (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
+        (value, Ty::Media(kind, _)) => {
+            external_media_kind(value).is_some_and(|actual| media_kind_matches(actual, *kind))
+        }
         (BexExternalValue::Instance { class_name, .. }, Ty::Class(tn, _)) => {
             type_name_matches_external_name(class_name, tn)
         }
@@ -544,6 +547,14 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
             .find(|m| matches!(m, Ty::Bool { .. } | Ty::Literal(Literal::Bool(_), _))),
         Value::Object(ptr) => {
             let obj = unsafe { ptr.get() };
+            if let Some(actual_media_kind) = object_media_kind(obj) {
+                if let Some(member) = members.iter().find(|m| {
+                    matches!(m, Ty::Media(kind, _) if media_kind_matches(actual_media_kind, *kind))
+                }) {
+                    return Some(member);
+                }
+            }
+
             match obj {
                 Object::String(_) => members
                     .iter()
@@ -603,6 +614,99 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                 Object::Sentinel(_) => None,
             }
         }
+    }
+}
+
+fn media_kind_matches(actual: MediaKind, expected: MediaKind) -> bool {
+    expected == MediaKind::Generic || actual == expected
+}
+
+fn external_media_kind(value: &BexExternalValue) -> Option<MediaKind> {
+    match value {
+        BexExternalValue::Adt(BexExternalAdt::Media(media)) => Some(media.kind),
+        BexExternalValue::Instance { fields, .. } => {
+            fields.get("_data").and_then(external_media_kind)
+        }
+        BexExternalValue::Union { value, .. } => external_media_kind(value),
+        _ => None,
+    }
+}
+
+fn object_media_kind(obj: &Object) -> Option<MediaKind> {
+    match obj {
+        Object::RustData(arc) => {
+            external_media_kind(&bex_external_types::try_convert_rust_data(arc)?)
+        }
+        Object::Instance(instance) => instance_media_kind(instance),
+        _ => None,
+    }
+}
+
+fn instance_media_kind(instance: &bex_vm_types::Instance) -> Option<MediaKind> {
+    let class_obj = unsafe { instance.class.get() };
+    let Object::Class(class) = class_obj else {
+        return None;
+    };
+
+    class
+        .fields
+        .iter()
+        .zip(instance.fields.iter())
+        .find_map(|(class_field, value)| {
+            if class_field.name == "_data" {
+                vm_value_media_kind(value)
+            } else {
+                None
+            }
+        })
+}
+
+fn vm_value_media_kind(value: &Value) -> Option<MediaKind> {
+    match value {
+        Value::Object(ptr) => object_media_kind(unsafe { ptr.get() }),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use baml_type::TyAttr;
+
+    fn media_ty(kind: MediaKind) -> Ty {
+        Ty::Media(kind, TyAttr::default())
+    }
+
+    #[test]
+    fn wraps_raw_media_values_in_matching_union_member() {
+        let image =
+            BexExternalValue::Adt(BexExternalAdt::Media(baml_builtins2::MediaValue::from_url(
+                MediaKind::Image,
+                "https://example.test/image.png",
+                Some("image/png"),
+            )));
+        let union_ty = Ty::union([media_ty(MediaKind::Image), Ty::string()]);
+
+        let wrapped =
+            maybe_wrap_union(image, &union_ty).expect("image should match image union arm");
+
+        let BexExternalValue::Union { metadata, .. } = wrapped else {
+            panic!("expected union wrapper");
+        };
+        assert_eq!(metadata.selected_option, media_ty(MediaKind::Image));
+    }
+
+    #[test]
+    fn raw_media_values_reject_wrong_media_union_member() {
+        let audio =
+            BexExternalValue::Adt(BexExternalAdt::Media(baml_builtins2::MediaValue::from_url(
+                MediaKind::Audio,
+                "https://example.test/audio.mp3",
+                Some("audio/mpeg"),
+            )));
+        let union_ty = Ty::union([media_ty(MediaKind::Image), Ty::string()]);
+
+        assert!(maybe_wrap_union(audio, &union_ty).is_err());
     }
 }
 

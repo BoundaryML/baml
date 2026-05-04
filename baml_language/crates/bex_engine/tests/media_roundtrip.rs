@@ -14,7 +14,7 @@ mod common;
 use std::sync::Arc;
 
 use baml_builtins2::{MediaContent, MediaValue};
-use baml_type::MediaKind;
+use baml_type::{MediaKind, Ty, TyAttr};
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_external_types::BexExternalAdt;
 use common::compile_for_engine;
@@ -114,5 +114,67 @@ class Holder {
             }
         }
         other => panic!("expected Instance for unwrapped pdf, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn media_pdf_matches_union_member() {
+    let source = r#"
+class Holder {
+  inner pdf
+
+  function unwrap_union(self, prefer_text: bool) -> pdf | string {
+    if prefer_text {
+      "fallback"
+    } else {
+      self.inner
+    }
+  }
+}
+"#;
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let original = pdf_media();
+    let mut holder_fields: IndexMap<String, BexExternalValue> = IndexMap::new();
+    holder_fields.insert("inner".to_string(), pdf_instance(Arc::clone(&original)));
+    let holder_arg = BexExternalValue::Instance {
+        class_name: "user.Holder".to_string(),
+        fields: holder_fields,
+    };
+
+    let result = engine
+        .call_function(
+            "user.Holder.unwrap_union",
+            vec![holder_arg, BexExternalValue::Bool(false)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("Holder.unwrap_union should select the pdf union member");
+
+    let BexExternalValue::Union { value, metadata } = result else {
+        panic!("expected union-wrapped pdf result");
+    };
+    assert_eq!(
+        metadata.selected_option,
+        Ty::Media(MediaKind::Pdf, TyAttr::default())
+    );
+    match *value {
+        BexExternalValue::Instance { fields, .. } => match fields.get("_data") {
+            Some(BexExternalValue::Adt(BexExternalAdt::Media(arc))) => {
+                assert_eq!(arc.kind, MediaKind::Pdf);
+            }
+            other => panic!("expected media _data field, got {other:?}"),
+        },
+        other => panic!("expected media instance inside union, got {other:?}"),
     }
 }
