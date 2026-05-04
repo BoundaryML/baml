@@ -3,7 +3,7 @@
 use bex_events::{CustomEvent, EventKind, FunctionEvent, LogEvent, RuntimeEvent};
 
 use crate::{
-    HandleTableOptions,
+    CffiHandleTableOptions,
     baml::cffi::{
         self, EventKind as ProtoEventKind, FunctionEndEvent, FunctionStartEvent,
         RuntimeEvent as ProtoRuntimeEvent, SetTagsEvent, TagEntry,
@@ -16,7 +16,7 @@ use crate::{
 /// Convert a `bex_events::RuntimeEvent` to protobuf `RuntimeEvent`.
 pub fn runtime_event_to_proto(
     event: &RuntimeEvent,
-    options: &HandleTableOptions,
+    options: &CffiHandleTableOptions,
 ) -> Result<ProtoRuntimeEvent, CtypesError> {
     let timestamp_ms = event
         .timestamp
@@ -41,7 +41,7 @@ pub fn runtime_event_to_proto(
 
 fn event_kind_to_proto(
     event: &EventKind,
-    options: &HandleTableOptions,
+    options: &CffiHandleTableOptions,
 ) -> Result<ProtoEventKind, CtypesError> {
     let kind = match event {
         EventKind::Function(FunctionEvent::Start(start)) => {
@@ -117,7 +117,7 @@ fn event_kind_to_proto(
 /// Serialize a `RuntimeEvent` to protobuf bytes.
 pub fn runtime_event_to_bytes(
     event: &RuntimeEvent,
-    options: &HandleTableOptions,
+    options: &CffiHandleTableOptions,
 ) -> Result<Vec<u8>, CtypesError> {
     use prost::Message;
     let proto = runtime_event_to_proto(event, options)?;
@@ -158,7 +158,7 @@ mod tests {
             })),
         };
 
-        let options = HandleTableOptions::for_in_process();
+        let options = CffiHandleTableOptions::for_in_process();
         let proto = runtime_event_to_proto(&event, &options).unwrap();
 
         assert!(!proto.span_id.is_empty());
@@ -207,7 +207,7 @@ mod tests {
             }),
         };
 
-        let options = HandleTableOptions::for_in_process();
+        let options = CffiHandleTableOptions::for_in_process();
         let proto = runtime_event_to_proto(&event, &options).unwrap();
 
         if let Some(ProtoEventKind {
@@ -246,7 +246,7 @@ mod tests {
             }))),
         };
 
-        let options = HandleTableOptions::for_in_process();
+        let options = CffiHandleTableOptions::for_in_process();
         let proto = runtime_event_to_proto(&event, &options).unwrap();
 
         if let Some(ProtoEventKind {
@@ -282,7 +282,7 @@ mod tests {
             }),
         };
 
-        let options = HandleTableOptions::for_in_process();
+        let options = CffiHandleTableOptions::for_in_process();
         let bytes = runtime_event_to_bytes(&event, &options).unwrap();
 
         let decoded = ProtoRuntimeEvent::decode(bytes.as_slice()).unwrap();

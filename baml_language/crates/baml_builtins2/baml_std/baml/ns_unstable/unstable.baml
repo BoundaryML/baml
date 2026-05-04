@@ -1,4 +1,4 @@
-//baml:mut_vm
+//baml:vm
 function string<T>(value: T) -> string {
   $rust_function
 }

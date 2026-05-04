@@ -6,7 +6,7 @@
  * gives exhaustive switch narrowing.
  */
 
-import type { BamlJsValue, SourceLocation, TagEntry } from '@b/pkg-proto';
+import type { BamlJsValue, PlainHandleDescriptor, SourceLocation, TagEntry } from '@b/pkg-proto';
 
 /** Runtime event with BamlOutboundValue fields deserialized to BamlJsValue. */
 export interface DeserializedRuntimeEvent {
@@ -189,7 +189,7 @@ export type WorkerOutMessage =
   | { type: 'ready' }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
-  | { type: 'callFunctionResult'; id: number; result: BamlJsValue }
+  | { type: 'callFunctionResult'; id: number; result: BamlJsValue<PlainHandleDescriptor> }
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }

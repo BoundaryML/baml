@@ -27,7 +27,6 @@ class String {
     $rust_function
   }
 
-  //baml:mut_vm
   function split(self, delimiter: string) -> string[] {
     $rust_function
   }
@@ -53,6 +52,11 @@ class String {
   }
 
   function replaceAll(self, search: string, replacement: string) -> string {
+    $rust_function
+  }
+
+  /// Encodes the string as UTF-8 bytes.
+  function to_bytes(self) -> uint8array {
     $rust_function
   }
 }

@@ -121,7 +121,7 @@ impl BamlClassArray for PackageBamlImpl {
         array[start..end].to_vec()
     }
 
-    fn join(vm: &mut BexVm, array: &[Value], separator: &str) -> String {
+    fn join(vm: &BexVm, array: &[Value], separator: &str) -> String {
         array
             .iter()
             .map(|v| vm.as_string(v).cloned().unwrap_or_default())

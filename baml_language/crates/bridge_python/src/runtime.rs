@@ -132,7 +132,7 @@ impl BamlRuntime {
                 .await
                 .map_err(runtime_error_to_py)?;
 
-            let handle_options = bridge_ctypes::HandleTableOptions::for_in_process();
+            let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
             let baml_value = external_to_baml_value(&result, &handle_options).map_err(|e| {
                 pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
                     "Failed to encode result: {e}"
@@ -191,7 +191,7 @@ impl BamlRuntime {
             })
             .map_err(runtime_error_to_py)?;
 
-        let handle_options = bridge_ctypes::HandleTableOptions::for_in_process();
+        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
         let baml_value = external_to_baml_value(&result, &handle_options).map_err(|e| {
             pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!("Failed to encode result: {e}"))
         })?;

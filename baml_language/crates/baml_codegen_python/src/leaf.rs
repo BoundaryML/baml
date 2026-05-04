@@ -1,7 +1,6 @@
-//! Per-leaf symbol bundle (`LeafBody`) and leaf renderer
-//! (`render_leaf_body`). One `LeafBody` per populated leaf file, pre-
-//! sorted at build time so the renderer is a straight walk — no
-//! ordering logic at render time.
+//! Per-leaf symbol bundle and leaf renderer. One `LeafBody` per
+//! populated leaf file, pre-sorted at build time so the renderer is a
+//! straight walk — no ordering logic at render time.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -23,28 +22,24 @@ use crate::{
 
 /// All symbols that land in one leaf's body, in final render order.
 /// Each entry keeps its `SortKey` so the renderer can group function
-/// fan-out siblings (which share their parent's sort key) tightly
-/// while separating unrelated top-level definitions with the usual
-/// PEP-8 two-blank-line gap.
+/// fan-out siblings tightly (they share their parent's sort key)
+/// while separating unrelated top-level definitions.
 pub(crate) struct LeafBody {
     pub(crate) leaf: LeafPath,
     pub(crate) symbols: Vec<(EmittedSymbol, SortKey)>,
 }
 
 impl LeafBody {
-    /// Every public `py_name` in this leaf, in render order — the
-    /// exact contents of the trailing `__all__` list.
+    /// Public `py_name`s in render order — the contents of `__all__`.
+    /// Filters underscore-prefixed names defensively.
     pub(crate) fn all_names(&self) -> Vec<&str> {
         self.symbols
             .iter()
             .map(|(s, _)| s.py_name())
-            // Guard against underscore-prefixed names (G4+ may
-            // introduce some); G2 has no such names today.
             .filter(|n| !n.starts_with('_'))
             .collect()
     }
 
-    /// Which stdlib imports this leaf needs in its header.
     pub(crate) fn stdlib_imports(&self) -> Vec<&'static str> {
         let mut out = Vec::new();
         if self
@@ -54,10 +49,9 @@ impl LeafBody {
         {
             out.push("enum");
         }
-        // Any class body has `typing.Optional` / `typing.List` / etc.
-        // candidates in its field types, and type aliases always need
-        // `typing.TypeAlias`. Be generous: if any class or alias is
-        // present, import `typing`.
+        // Class field types and type aliases may use `typing.Optional`,
+        // `typing.List`, `typing.TypeAlias`, etc. — be generous and
+        // import `typing` whenever a class or alias is present.
         if self
             .symbols
             .iter()
@@ -68,24 +62,18 @@ impl LeafBody {
         out
     }
 
-    /// Whether this leaf needs `import pydantic`.
     pub(crate) fn needs_pydantic(&self) -> bool {
         self.symbols
             .iter()
             .any(|(s, _)| matches!(s, EmittedSymbol::Class(_)))
     }
 
-    /// Whether this leaf needs `from baml.baml_core import
-    /// define_function as _define_function`. True when any factory
-    /// binding (free function or companion) routes here.
     pub(crate) fn needs_define_function(&self) -> bool {
         self.symbols
             .iter()
             .any(|(s, _)| matches!(s, EmittedSymbol::Function(_)))
     }
 
-    /// Whether this leaf has any class with at least one static method.
-    /// Drives `from baml.baml_core import define_static_method`.
     pub(crate) fn needs_define_static_method(&self) -> bool {
         self.symbols.iter().any(|(s, _)| match s {
             EmittedSymbol::Class(c) => !c.static_methods.is_empty(),
@@ -93,8 +81,6 @@ impl LeafBody {
         })
     }
 
-    /// Whether this leaf has any class with at least one instance method.
-    /// Drives `from baml.baml_core import define_instance_method`.
     pub(crate) fn needs_define_instance_method(&self) -> bool {
         self.symbols.iter().any(|(s, _)| match s {
             EmittedSymbol::Class(c) => !c.instance_methods.is_empty(),
@@ -107,15 +93,12 @@ impl LeafBody {
     }
 
     /// First segments of every cross-leaf routed module path referenced
-    /// by any type expression that contributes to this leaf's `.py`,
-    /// deduped and sorted.
+    /// by this leaf's `.py`, deduped and sorted.
     ///
-    /// Per 12f §4.1: walks class fields, function/method param+return
-    /// types, and type-alias RHS. Function/method types don't render
-    /// annotations in the `.py` (factory bindings only), but they're
-    /// included for parity with `.pyi` so the import block is identical
-    /// across the two files where the underlying type sources match.
-    /// The `TYPE_CHECKING` guard makes the extras free at runtime.
+    /// Function/method types don't actually render annotations in the
+    /// `.py` (factory bindings only), but they're walked anyway so the
+    /// import block is identical across `.py` and `.pyi`. The
+    /// `TYPE_CHECKING` guard makes the extras free at runtime.
     pub(crate) fn cross_leaf_first_segments_py(&self) -> Vec<String> {
         let mut set: BTreeSet<String> = BTreeSet::new();
         let current = &self.leaf;
@@ -153,10 +136,9 @@ impl LeafBody {
         set.into_iter().collect()
     }
 
-    /// First segments for the `.pyi` companion. Walks function /
-    /// method param+return types and type-alias RHS — the type sources
-    /// that mirror into the typed surface. Class fields are not
-    /// mirrored into `.pyi` (12d §3.1), so they don't contribute.
+    /// First segments for the `.pyi` companion. Class fields are not
+    /// mirrored into `.pyi` (only methods get typed signatures), so
+    /// they don't contribute.
     pub(crate) fn cross_leaf_first_segments_pyi(&self) -> Vec<String> {
         let mut set: BTreeSet<String> = BTreeSet::new();
         let current = &self.leaf;
@@ -191,14 +173,10 @@ impl LeafBody {
         set.into_iter().collect()
     }
 
-    /// Whether this leaf's `.pyi` needs `import typing`. Per 12d §7,
-    /// any rendered signature (function, method, or type alias) pulls
-    /// in `typing` — type aliases declare `typing.TypeAlias` and
-    /// signatures may use `typing.Optional` / `typing.List` / etc.
-    /// Class field types are not mirrored into the `.pyi` (12d §3.1),
-    /// so a property-only class on its own does not require `typing`.
-    /// Generic classes pull in `typing` for the `typing.Generic[T]`
-    /// base and the leaf-level `typing.TypeVar("T")` declarations.
+    /// Whether this leaf's `.pyi` needs `import typing`. Any rendered
+    /// signature pulls it in (`typing.TypeAlias`, `typing.Optional`,
+    /// etc.). Property-only classes don't (fields aren't mirrored into
+    /// `.pyi`), but generic classes do (`typing.Generic[T]` base).
     pub(crate) fn needs_typing_pyi(&self) -> bool {
         self.symbols.iter().any(|(s, _)| match s {
             EmittedSymbol::Function(_) | EmittedSymbol::TypeAlias(_) => true,
@@ -211,11 +189,8 @@ impl LeafBody {
         })
     }
 
-    /// Union of `TypeVar` identifiers declared by any generic definition
-    /// routed to this leaf — classes, functions, and methods. Each name
-    /// appears once; the result is alphabetic so emission order is
-    /// deterministic. Per `13a` §4.2, the leaf renderer turns each entry
-    /// into a `T = typing.TypeVar("T")` line at the top of the file.
+    /// Union of `TypeVar` identifiers declared by any generic
+    /// definition routed here. Alphabetic so emission is deterministic.
     pub(crate) fn generic_typevars(&self) -> Vec<String> {
         let mut set: BTreeSet<String> = BTreeSet::new();
         for (sym, _) in &self.symbols {
@@ -242,11 +217,10 @@ impl LeafBody {
     }
 }
 
-/// Walk a `Ty` and add the first routed segment of every `Name`-bearing
-/// reference (class / enum / type alias) whose routed leaf differs from
-/// `current`. The empty-routed-leaf case (root-leaf reference from a
-/// non-root leaf) emits no import — the translator already renders such
-/// references as a bare name without prefix.
+/// Add the first routed segment of every `Name`-bearing reference
+/// whose routed leaf differs from `current`. Empty-routed-leaf
+/// references (root-leaf from a non-root leaf) emit no import — the
+/// translator renders those as bare names without prefix.
 fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
     match ty {
         Ty::Class(name, args) => {
@@ -280,6 +254,13 @@ fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
             }
             collect_cross_leaf(ret, current, out);
         }
+        // `Ty::Media(_)` is rendered by `translate_ty` as the literal
+        // dotted form `baml.media.Image` etc. — no `Name` involved, but
+        // the resulting annotation references the `baml` first-segment,
+        // so the leaf needs `baml` imported.
+        Ty::Media(_) => {
+            out.insert("baml".to_string());
+        }
         Ty::Int
         | Ty::Float
         | Ty::String
@@ -287,7 +268,6 @@ fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
         | Ty::Null
         | Ty::Literal(_)
         | Ty::Uint8Array
-        | Ty::Media(_)
         | Ty::TypeVar(_)
         | Ty::BuiltinUnknown
         | Ty::Unit
@@ -295,8 +275,6 @@ fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
     }
 }
 
-/// Group `(leaf, symbol, sort_key)` triples into a `LeafBody` per
-/// leaf, sorted by `SortKey` within each leaf.
 pub(crate) fn group_and_sort(
     triples: Vec<(LeafPath, EmittedSymbol, SortKey)>,
 ) -> BTreeMap<LeafPath, LeafBody> {
@@ -305,15 +283,14 @@ pub(crate) fn group_and_sort(
         buckets.entry(leaf).or_default().push((sym, key));
     }
 
-    // Stable sort preserves the intra-parent function fan-out order
-    // established in `expand_function` (base sync, base async,
-    // companions each sync/async).
+    // Stable sort preserves intra-parent function fan-out order (base
+    // sync, base async, companions each sync/async).
     //
     // Tertiary tie-breaker: when sort keys collide (PPIR assigns
-    // synthetic `$stream` symbols `TextRange::default()` so they all
-    // share span 0), emit type aliases last. The alias's RHS may
-    // reference stream classes that live in the same leaf, and a class
-    // must be defined before the alias's RHS evaluates.
+    // synthetic `$stream` symbols `TextRange::default()` so they share
+    // span 0), emit type aliases last — the alias's RHS may reference
+    // stream classes in the same leaf, and the class must be defined
+    // before the alias's RHS evaluates.
     let mut out: BTreeMap<LeafPath, LeafBody> = BTreeMap::new();
     for (leaf, mut pairs) in buckets {
         pairs.sort_by(|a, b| {
@@ -331,9 +308,6 @@ pub(crate) fn group_and_sort(
     out
 }
 
-/// Tertiary sort ordinal: when `SortKey` ties (e.g. PPIR-emitted
-/// stream symbols all share span 0), emit type aliases last. Other
-/// kinds keep their incoming order via stable sort.
 fn symbol_kind_ord(sym: &EmittedSymbol) -> u8 {
     match sym {
         EmittedSymbol::TypeAlias(_) => 1,
@@ -341,11 +315,8 @@ fn symbol_kind_ord(sym: &EmittedSymbol) -> u8 {
     }
 }
 
-/// Render the base-class list for a class definition. Non-generic
-/// classes render as just `pydantic.BaseModel`; generic classes append
-/// `, typing.Generic[T, …]` per `13a` §4.1. The list mirrors itself
-/// across `.py` and `.pyi` so a class's interface declaration is
-/// consistent.
+/// Non-generic: `pydantic.BaseModel`.
+/// Generic: `pydantic.BaseModel, typing.Generic[T, …]`.
 fn render_class_bases(generic_params: &[String]) -> String {
     if generic_params.is_empty() {
         "pydantic.BaseModel".to_string()
@@ -357,8 +328,139 @@ fn render_class_bases(generic_params: &[String]) -> String {
     }
 }
 
-/// Render a single symbol into one or more Python source lines.
-fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> Vec<String> {
+/// If `c` is one of the four `baml.media.{Image,Video,Audio,Pdf}` stdlib
+/// classes, return the corresponding Rust `PyO3` class name (`BamlImage`,
+/// `BamlVideo`, …). 15b §lines 14-19 specify these as re-exports of
+/// `PyO3` types holding `Arc<MediaValue>` directly; the regular Pydantic
+/// shell is suppressed for them. Hardcoded list rather than an IR
+/// flag — out of scope per 15d.
+fn media_reexport_rust_name(c: &crate::emit::class::PyClass) -> Option<&'static str> {
+    match c.source.to_string().as_str() {
+        "baml.media.Image" => Some("BamlImage"),
+        "baml.media.Video" => Some("BamlVideo"),
+        "baml.media.Audio" => Some("BamlAudio"),
+        "baml.media.Pdf" => Some("BamlPdf"),
+        _ => None,
+    }
+}
+
+fn is_media_reexport(s: &EmittedSymbol) -> bool {
+    match s {
+        EmittedSymbol::Class(c) => media_reexport_rust_name(c).is_some(),
+        _ => false,
+    }
+}
+
+// Within a method block, sync/async/companion fan-out of one source
+// method renders contiguously (`tight_to_prev`); distinct source
+// methods get a blank line between them.
+#[derive(askama::Template)]
+#[template(
+    source = r#"class {{ py_name }}({{ bases }}):
+    model_config = pydantic.ConfigDict(extra="forbid")
+{%- for prop in properties %}
+    {{ prop.name }}: {{ prop.ty_py }}
+{%- endfor %}
+{%- if !static_methods.is_empty() %}
+
+{%- for m in static_methods %}
+{%- if !loop.first && !m.tight_to_prev %}
+
+{%- endif %}
+{{ m.line }}
+{%- endfor %}
+{%- endif %}
+{%- if !instance_methods.is_empty() %}
+
+{%- for m in instance_methods %}
+{%- if !loop.first && !m.tight_to_prev %}
+
+{%- endif %}
+{{ m.line }}
+{%- endfor %}
+{%- endif %}"#,
+    ext = "py.j2",
+    escape = "none"
+)]
+struct ClassBodyPy {
+    py_name: String,
+    bases: String,
+    properties: Vec<ClassPropertyView>,
+    static_methods: Vec<MethodLineView>,
+    instance_methods: Vec<MethodLineView>,
+}
+
+struct ClassPropertyView {
+    name: String,
+    ty_py: String,
+}
+
+struct MethodLineView {
+    line: String,
+    tight_to_prev: bool,
+}
+
+// BAML forbids empty enums at parse time, so the `pass` branch below
+// is purely defensive — emitted only if the IR somehow produces one.
+#[derive(askama::Template)]
+#[template(
+    source = r#"class {{ py_name }}(str, enum.Enum):
+{%- if variants.is_empty() %}
+    pass
+{%- else %}
+{%- for v in variants %}
+    {{ v.ident }} = {{ v.value }}
+{%- endfor %}
+{%- endif %}"#,
+    ext = "py.j2",
+    escape = "none"
+)]
+struct EnumBodyPy {
+    py_name: String,
+    variants: Vec<EnumVariantView>,
+}
+
+struct EnumVariantView {
+    ident: String,
+    value: String,
+}
+
+#[derive(askama::Template)]
+#[template(
+    source = "{{ py_name }}: typing.TypeAlias = {{ rhs }}",
+    ext = "py.j2",
+    escape = "none"
+)]
+struct TypeAliasPy {
+    py_name: String,
+    rhs: String,
+}
+
+/// `tight_to_prev` is true when this method shares its
+/// `source_method_root` with the previous one (sync/async/companion
+/// fan-out). The first method also gets `true` — the template emits
+/// the leading blank line unconditionally.
+fn build_method_line_views(methods: &[PyMethodBinding]) -> Vec<MethodLineView> {
+    let mut out = Vec::with_capacity(methods.len());
+    let mut prev_root: Option<&str> = None;
+    for m in methods {
+        let root = source_method_root(&m.baml_fqn);
+        let tight_to_prev = match prev_root {
+            None => true,
+            Some(p) => p == root,
+        };
+        out.push(MethodLineView {
+            line: render_method_binding(m),
+            tight_to_prev,
+        });
+        prev_root = Some(root);
+    }
+    out
+}
+
+/// Render one symbol into its `.py` source block, including trailing `\n`.
+fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
+    use askama::Template;
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
         self_ref: None,
@@ -366,35 +468,49 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> Vec<String> {
 
     match s {
         EmittedSymbol::Class(c) => {
-            let total_method_lines = c.static_methods.len() + c.instance_methods.len();
-            let mut lines = Vec::with_capacity(2 + c.properties.len() + total_method_lines + 2);
-            let bases = render_class_bases(&c.generic_params);
-            lines.push(format!("class {}({bases}):", c.py_name));
-            lines.push("    model_config = pydantic.ConfigDict(extra=\"forbid\")".to_string());
-            for prop in &c.properties {
-                lines.push(format!(
-                    "    {}: {}",
-                    prop.name,
-                    translate_ty(&prop.ty, &ctx)
-                ));
+            if let Some(rust_name) = media_reexport_rust_name(c) {
+                return format!(
+                    "from baml.baml_core.baml_py import {rust_name} as {py_name}\n",
+                    py_name = c.py_name,
+                );
             }
-            push_method_block(&mut lines, &c.static_methods);
-            push_method_block(&mut lines, &c.instance_methods);
-            lines
+            let properties = c
+                .properties
+                .iter()
+                .map(|prop| ClassPropertyView {
+                    name: prop.name.clone(),
+                    ty_py: translate_ty(&prop.ty, &ctx),
+                })
+                .collect();
+            let mut out = ClassBodyPy {
+                py_name: c.py_name.clone(),
+                bases: render_class_bases(&c.generic_params),
+                properties,
+                static_methods: build_method_line_views(&c.static_methods),
+                instance_methods: build_method_line_views(&c.instance_methods),
+            }
+            .render()
+            .expect("class_body template should always render");
+            out.push('\n');
+            out
         }
         EmittedSymbol::Enum(e) => {
-            let mut lines = Vec::with_capacity(1 + e.variants.len().max(1));
-            lines.push(format!("class {}(str, enum.Enum):", e.py_name));
-            if e.variants.is_empty() {
-                // BAML forbids empty enums at parse time; emit a
-                // defensive `pass` if the IR somehow produces one.
-                lines.push("    pass".to_string());
-            } else {
-                for v in &e.variants {
-                    lines.push(format!("    {} = {}", v.ident, py_string(&v.value)));
-                }
+            let variants = e
+                .variants
+                .iter()
+                .map(|v| EnumVariantView {
+                    ident: v.ident.clone(),
+                    value: py_string(&v.value),
+                })
+                .collect();
+            let mut out = EnumBodyPy {
+                py_name: e.py_name.clone(),
+                variants,
             }
-            lines
+            .render()
+            .expect("enum_body template should always render");
+            out.push('\n');
+            out
         }
         EmittedSymbol::TypeAlias(a) => {
             let rhs = translate_ty(&a.resolves_to, &ctx);
@@ -405,44 +521,26 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> Vec<String> {
             } else {
                 rhs
             };
-            vec![format!("{}: typing.TypeAlias = {}", a.py_name, rhs)]
-        }
-        EmittedSymbol::Function(f) => vec![render_factory_binding(f)],
-    }
-}
-
-/// Append a class's method block to `lines`. Each source-declared
-/// method's sync/async/companion fan-out is contiguous; consecutive
-/// distinct source methods are separated by a blank line, matching the
-/// shape used for free-function fan-out at the leaf level.
-fn push_method_block(lines: &mut Vec<String>, methods: &[PyMethodBinding]) {
-    if methods.is_empty() {
-        return;
-    }
-    // One blank line separates the method block from the property
-    // block above (or from a preceding method block of a different
-    // kind).
-    lines.push(String::new());
-    let mut prev_root: Option<&str> = None;
-    for m in methods {
-        let root = source_method_root(&m.baml_fqn);
-        if let Some(prev) = prev_root {
-            // Distinct source method → blank line. Sync/async pair and
-            // parent+companion siblings share `source_method_root`, so
-            // they stay tight.
-            if prev != root {
-                lines.push(String::new());
+            let mut out = TypeAliasPy {
+                py_name: a.py_name.clone(),
+                rhs,
             }
+            .render()
+            .expect("type_alias template should always render");
+            out.push('\n');
+            out
         }
-        lines.push(render_method_binding(m));
-        prev_root = Some(root);
+        EmittedSymbol::Function(f) => {
+            let mut out = render_factory_binding(f);
+            out.push('\n');
+            out
+        }
     }
 }
 
-/// FQN prefix up to the first `$` (exclusive), or the whole FQN if
-/// there's no `$`. Sync/async pairs of a parent method share this
-/// prefix; companions of that parent also share it, since their FQN
-/// is `<parent_fqn>$<suffix>`.
+/// FQN prefix up to the first `$`. Sync/async pairs and companions
+/// of one source method all share this prefix (companion FQN is
+/// `<parent_fqn>$<suffix>`).
 fn source_method_root(fqn: &str) -> &str {
     match fqn.find('$') {
         Some(i) => &fqn[..i],
@@ -450,30 +548,17 @@ fn source_method_root(fqn: &str) -> &str {
     }
 }
 
-/// Render one factory-binding line per `PyFunction`. Sync and async
-/// stubs share the same FQN and `param_names`; only the LHS name
-/// padding and the mode literal differ.
-///
-/// Layout matches 09b §3 / G5 §5.1:
+/// One factory-binding line. Sync and async siblings emit independently
+/// but pad to align columns:
 ///
 /// ```text
 /// foo       = _define_function("<fqn>", "sync",  [<params>])
 /// foo_async = _define_function("<fqn>", "async", [<params>])
 /// ```
-///
-/// The sync LHS is right-padded with `len("_async")` spaces so its
-/// `=` aligns with the async sibling's. The mode literal is right-
-/// padded so the `[<params>]` argument starts at the same column for
-/// both modes.
-///
-/// The single-underscore alias (rather than double) avoids Python's
-/// class-body name mangling (PEP 8): a `__name`-prefixed reference
-/// inside a `class` body is textually replaced with `_ClassName__name`,
-/// breaking method-binding emission. Single underscore is unmangled
-/// and still excluded from `from module import *`.
 fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
-    // 6 = len("_async"); makes the sync LHS column-equal to its async
-    // sibling without inspecting the sibling at render time.
+    // 6 = len("_async"): sync LHS aligns with async sibling's `=`
+    // without inspecting the sibling. Mode literal padded so
+    // `[<params>]` starts at the same column for both modes.
     let (lhs_pad, mode_str) = match f.mode {
         SyncAsync::Sync => ("      ", "\"sync\", "),
         SyncAsync::Async => ("", "\"async\","),
@@ -486,10 +571,9 @@ fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
     )
 }
 
-/// Render a single static or instance method binding line. Sits one
-/// indentation level deep inside the owning class body; layout
-/// mirrors the free-function `_define_function(...)` form modulo the
-/// factory alias and the `staticmethod(...)` wrap on static methods.
+/// One method-binding line, indented for a class body. Mirrors
+/// `render_factory_binding` modulo the factory alias and the
+/// `staticmethod(...)` wrap on statics.
 fn render_method_binding(m: &PyMethodBinding) -> String {
     let (lhs_pad, mode_str) = match m.mode {
         SyncAsync::Sync => ("      ", "\"sync\", "),
@@ -504,21 +588,16 @@ fn render_method_binding(m: &PyMethodBinding) -> String {
         "{factory}({fqn}, {mode_str} {params})",
         fqn = py_string(&m.baml_fqn),
     );
+    // `staticmethod(...)` wrap stops Python's descriptor protocol from
+    // injecting the class as positional arg 0. Instance methods use
+    // the descriptor protocol and don't need a wrap.
     let rhs = match m.kind {
-        // The `staticmethod(...)` wrap is required so Python's
-        // descriptor protocol doesn't pass the class as positional
-        // arg 0 when the method is invoked through the class.
         MethodKind::Static => format!("staticmethod({inner})"),
-        // Instance methods rely on the descriptor protocol — Python
-        // auto-passes the receiver as positional arg 0 when the method
-        // is reached through an instance. No wrap.
         MethodKind::Instance => inner,
     };
     format!("    {name}{lhs_pad} = {rhs}", name = m.py_name)
 }
 
-/// Render a parameter-name list as a Python list literal.
-/// `[]` for empty, `["a", "b", ...]` otherwise.
 fn render_param_list(names: &[String]) -> String {
     if names.is_empty() {
         return "[]".to_string();
@@ -534,32 +613,24 @@ fn render_param_list(names: &[String]) -> String {
     s
 }
 
-/// Render a leaf's body section (imports + symbol bodies + `__all__`).
-/// Returns empty string if the leaf has no symbols.
-///
-/// Shape (non-empty):
+/// Leaf body: imports + symbol bodies + `__all__`. Empty string when
+/// the leaf has no symbols.
 ///
 /// ```text
 /// [blank]
-/// import enum          (if the leaf has a PyEnum)
-/// import typing        (if the leaf has a PyClass or PyTypeAlias)
-/// import pydantic      (if the leaf has a PyClass)
-/// [blank]
-/// [blank]
+/// import enum     (if any PyEnum)
+/// import typing   (if any PyClass or PyTypeAlias)
+/// import pydantic (if any PyClass)
+/// [blank × 2]
 /// <symbol body>
 /// [blank × 2 between top-level groups; 0 between function fan-out siblings]
 /// <symbol body>
-/// [blank]
-/// [blank]
+/// [blank × 2]
 /// __all__ = [
 ///     "X",
 ///     ...
 /// ]
 /// ```
-///
-/// Two blank lines between distinct top-level definitions follows
-/// PEP 8. Function fan-out siblings share their parent's sort key, so
-/// we tighten them into a contiguous block.
 pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     if body.is_empty() {
         return String::new();
@@ -569,12 +640,9 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
 
     let mut stdlibs = body.stdlib_imports();
     let cross_leaf_segments = body.cross_leaf_first_segments_py();
-    // Cross-leaf TYPE_CHECKING blocks reference `typing.TYPE_CHECKING`,
-    // so a leaf whose only typing usage is the cross-leaf block (e.g.
-    // a function-only leaf with a cross-leaf parameter type) still
-    // needs `import typing`. `stdlib_imports` returns `["enum"?,
-    // "typing"?]` in alphabetical order; appending keeps that order
-    // because "typing" sorts after "enum".
+    // The cross-leaf block uses `typing.TYPE_CHECKING`, so even a
+    // function-only leaf with a cross-leaf parameter still needs
+    // `typing`. Append (not insert) — "typing" sorts after "enum".
     if !cross_leaf_segments.is_empty() && !stdlibs.contains(&"typing") {
         stdlibs.push("typing");
     }
@@ -591,34 +659,41 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         }
     }
     // Cross-leaf imports go between the stdlib block and the factory
-    // imports, wrapped in `if typing.TYPE_CHECKING:`. The guard keeps
-    // them out of the runtime import graph — required so recursive
-    // cross-leaf type references (leaf A → leaf B → leaf A) don't
-    // create an import cycle. `from __future__ import annotations`
-    // (already in every header) makes the type annotations resolve
-    // lazily as strings, so type checkers see the imports while
-    // runtime never executes them.
+    // imports. `baml` is lifted to a runtime import — Pydantic v2
+    // resolves field annotations like `baml.media.Pdf` against the
+    // module's runtime globals at model-construction time, so the
+    // `TYPE_CHECKING` guard isn't enough. `baml/*` is stdlib (only
+    // ever imports from `baml.baml_core`) and never references user
+    // leaves, so the runtime import can't cycle.
     //
-    // Dot count = depth + 1: anchors every cross-leaf import at the
-    // `baml_sdk/` root regardless of what absolute name the package
-    // ends up with after install. One `from <dots> import <name>` per
-    // first-segment, alphabetically sorted by the BTreeSet collector.
-    if !cross_leaf_segments.is_empty() {
+    // All other first-segments stay under `if typing.TYPE_CHECKING:`
+    // so recursive cross-leaf references (leaf A → leaf B → leaf A)
+    // don't create an import cycle. `from __future__ import annotations`
+    // (in every header) makes annotations resolve lazily as strings.
+    //
+    // Dot count = depth + 1: anchors at the `baml_sdk/` root
+    // regardless of the installed package name.
+    let dots = ".".repeat(body.leaf.segments.len() + 1);
+    let (runtime_segments, type_checking_segments): (Vec<&String>, Vec<&String>) =
+        cross_leaf_segments
+            .iter()
+            .partition(|seg| seg.as_str() == "baml");
+    if !runtime_segments.is_empty() {
+        out.push('\n');
+        for seg in &runtime_segments {
+            writeln!(out, "from {dots} import {seg}").unwrap();
+        }
+    }
+    if !type_checking_segments.is_empty() {
         out.push('\n');
         out.push_str("if typing.TYPE_CHECKING:\n");
-        let dots = ".".repeat(body.leaf.segments.len() + 1);
-        for seg in &cross_leaf_segments {
+        for seg in &type_checking_segments {
             writeln!(out, "    from {dots} import {seg}").unwrap();
         }
     }
-    // Factory imports come after stdlib/pydantic, before the body —
-    // per 09b §9 / 09b2 §3 they're absolute (not relative) and aliased
-    // with a single-underscore prefix so they're private to the module.
-    // (Double underscore would trigger Python's class-body name
-    // mangling in method-binding emission, which prepends the class
-    // name to any `__name` reference and breaks the binding.)
-    // The set of factories imported per leaf is the minimal one — only
-    // those actually referenced by the leaf's bindings.
+    // Factory imports use absolute paths (`baml.baml_core` is a
+    // separate installed package, not reachable from this SDK tree)
+    // with a `_` alias to keep them private to the module.
     let needs_static_method = body.needs_define_static_method();
     let needs_instance_method = body.needs_define_instance_method();
     let mut factories: Vec<&'static str> = Vec::new();
@@ -631,9 +706,8 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     if needs_static_method {
         factories.push("define_static_method");
     }
-    // Alphabetized by original name. `define_function` < `define_instance_method`
-    // < `define_static_method` lexicographically, so the push order above
-    // already produces the alphabetized form.
+    // The push order above is already alphabetic: `define_function` <
+    // `define_instance_method` < `define_static_method`.
     if !factories.is_empty() {
         out.push('\n');
         if factories.len() == 1 {
@@ -648,11 +722,6 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         }
     }
 
-    // Per-leaf TypeVar declarations (13a §4.2). One `T = typing.TypeVar("T")`
-    // line per TypeVar declared by any generic definition routed here.
-    // Alphabetic order, deterministic. The block sits between the import
-    // section and the first symbol body, separated by the same two-blank
-    // gap used elsewhere.
     let typevars = body.generic_typevars();
     if !typevars.is_empty() {
         out.push_str("\n\n");
@@ -661,34 +730,28 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         }
     }
 
-    // Two blank lines before the first symbol group.
     out.push_str("\n\n");
 
     let mut prev: Option<(&SortKey, &EmittedSymbol)> = None;
     for (sym, key) in &body.symbols {
-        let lines = render_symbol(sym, &body.leaf);
-        if lines.is_empty() {
+        let body_text = render_symbol(sym, &body.leaf);
+        if body_text.is_empty() {
             continue;
         }
         match prev {
             None => {}
+            // Function fan-out siblings share their parent's sort key
+            // and render contiguously.
             Some((p, prev_sym))
                 if p == key
                     && matches!(prev_sym, EmittedSymbol::Function(_))
-                    && matches!(sym, EmittedSymbol::Function(_)) =>
-            {
-                // Function fan-out: siblings share their parent's
-                // sort key and render contiguously.
-            }
-            Some(_) => {
-                // New top-level definition — PEP-8 two blanks.
-                out.push_str("\n\n");
-            }
+                    && matches!(sym, EmittedSymbol::Function(_)) => {}
+            // Adjacent media re-export imports collapse into a single
+            // import block with no blank between them.
+            Some((_, prev_sym)) if is_media_reexport(prev_sym) && is_media_reexport(sym) => {}
+            Some(_) => out.push_str("\n\n"),
         }
-        for line in &lines {
-            out.push_str(line);
-            out.push('\n');
-        }
+        out.push_str(&body_text);
         prev = Some((key, sym));
     }
 
@@ -705,11 +768,100 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     out
 }
 
-/// Render a single symbol into one or more `.pyi` source lines. Per
-/// 12d §3 the body of class and enum stubs is name-only with `...`;
-/// type aliases mirror the `.py` shape; functions render as typed
-/// `def`/`async def` signatures with `...` bodies.
-fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> Vec<String> {
+#[derive(askama::Template)]
+#[template(
+    source = r#"{%- if static_methods.is_empty() && instance_methods.is_empty() -%}
+class {{ py_name }}({{ bases }}): ...
+{%- else -%}
+class {{ py_name }}({{ bases }}):
+{%- for m in static_methods %}
+{%- if !loop.first && !m.tight_to_prev %}
+
+{%- endif %}
+{{ m.block }}
+{%- endfor %}
+{%- if !static_methods.is_empty() && !instance_methods.is_empty() %}
+
+{%- endif %}
+{%- for m in instance_methods %}
+{%- if !loop.first && !m.tight_to_prev %}
+
+{%- endif %}
+{{ m.block }}
+{%- endfor %}
+{%- endif %}"#,
+    ext = "py.j2",
+    escape = "none"
+)]
+struct ClassBodyPyi {
+    py_name: String,
+    bases: String,
+    static_methods: Vec<MethodBlockView>,
+    instance_methods: Vec<MethodBlockView>,
+}
+
+struct MethodBlockView {
+    block: String,
+    tight_to_prev: bool,
+}
+
+#[derive(askama::Template)]
+#[template(
+    source = "class {{ py_name }}(str, enum.Enum): ...",
+    ext = "py.j2",
+    escape = "none"
+)]
+struct EnumBodyPyi {
+    py_name: String,
+}
+
+/// One method's `.pyi` signature block: a single `def` line for
+/// instance methods, prefixed by `@staticmethod` for statics.
+fn render_method_block_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
+    let async_kw = if matches!(m.mode, SyncAsync::Async) {
+        "async "
+    } else {
+        ""
+    };
+    let typed_params = render_method_params_pyi(m, ctx);
+    let ret_py = translate_ty(&m.return_ty, ctx);
+    let signature = format!(
+        "    {async_kw}def {name}({typed_params}) -> {ret_py}: ...",
+        name = m.py_name
+    );
+    match m.kind {
+        MethodKind::Static => format!("    @staticmethod\n{signature}"),
+        MethodKind::Instance => signature,
+    }
+}
+
+/// `.pyi` counterpart of `build_method_line_views`.
+fn build_method_block_views(
+    methods: &[PyMethodBinding],
+    ctx: &TranslateCtx,
+) -> Vec<MethodBlockView> {
+    let mut out = Vec::with_capacity(methods.len());
+    let mut prev_root: Option<&str> = None;
+    for m in methods {
+        let root = source_method_root(&m.baml_fqn);
+        let tight_to_prev = match prev_root {
+            None => true,
+            Some(p) => p == root,
+        };
+        out.push(MethodBlockView {
+            block: render_method_block_pyi(m, ctx),
+            tight_to_prev,
+        });
+        prev_root = Some(root);
+    }
+    out
+}
+
+/// Render one symbol into its `.pyi` source block. Classes and enums
+/// render name-only with `...`; type aliases mirror the `.py` shape;
+/// functions render as typed `def`/`async def` signatures.
+fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
+    use askama::Template;
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
         self_ref: None,
@@ -717,78 +869,55 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> Vec<String> {
 
     match s {
         EmittedSymbol::Class(c) => {
-            let total = c.static_methods.len() + c.instance_methods.len();
-            let bases = render_class_bases(&c.generic_params);
-            if total == 0 {
-                vec![format!("class {}({bases}): ...", c.py_name)]
-            } else {
-                let mut lines = Vec::with_capacity(1 + total * 2);
-                lines.push(format!("class {}({bases}):", c.py_name));
-                push_method_signatures_pyi(&mut lines, &c.static_methods, &ctx);
-                if !c.static_methods.is_empty() && !c.instance_methods.is_empty() {
-                    lines.push(String::new());
-                }
-                push_method_signatures_pyi(&mut lines, &c.instance_methods, &ctx);
-                lines
+            if let Some(rust_name) = media_reexport_rust_name(c) {
+                return format!(
+                    "from baml.baml_core.baml_py import {rust_name} as {py_name}\n",
+                    py_name = c.py_name,
+                );
             }
+            let mut out = ClassBodyPyi {
+                py_name: c.py_name.clone(),
+                bases: render_class_bases(&c.generic_params),
+                static_methods: build_method_block_views(&c.static_methods, &ctx),
+                instance_methods: build_method_block_views(&c.instance_methods, &ctx),
+            }
+            .render()
+            .expect("class_body.pyi template should always render");
+            out.push('\n');
+            out
         }
         EmittedSymbol::Enum(e) => {
-            vec![format!("class {}(str, enum.Enum): ...", e.py_name)]
+            let mut out = EnumBodyPyi {
+                py_name: e.py_name.clone(),
+            }
+            .render()
+            .expect("enum_body.pyi template should always render");
+            out.push('\n');
+            out
         }
         EmittedSymbol::TypeAlias(a) => {
-            // Type-alias body is identical to the `.py` form per
-            // 12d §3.3 — same `translate_ty` call and the same whole-
-            // RHS single-quote wrap for recursive aliases.
+            // Type alias is identical between `.py` and `.pyi`.
             let rhs = translate_ty(&a.resolves_to, &ctx);
             let rhs = if a.recursive { format!("'{rhs}'") } else { rhs };
-            vec![format!("{}: typing.TypeAlias = {}", a.py_name, rhs)]
-        }
-        EmittedSymbol::Function(f) => vec![render_function_signature_pyi(f, &ctx)],
-    }
-}
-
-/// Render one method signature line (or two: decorator + signature for
-/// statics) inside a class body. Each `PyMethodBinding` corresponds to
-/// one fan-out entry — sync, async, companion sync, and companion
-/// async are each rendered as their own typed signature.
-fn push_method_signatures_pyi(
-    lines: &mut Vec<String>,
-    methods: &[PyMethodBinding],
-    ctx: &TranslateCtx,
-) {
-    let mut prev_root: Option<&str> = None;
-    for m in methods {
-        let root = source_method_root(&m.baml_fqn);
-        if let Some(prev) = prev_root {
-            // Distinct source method → blank separator. Sync/async pair
-            // and parent+companion siblings share `source_method_root`,
-            // so they stay tight.
-            if prev != root {
-                lines.push(String::new());
+            let mut out = TypeAliasPy {
+                py_name: a.py_name.clone(),
+                rhs,
             }
+            .render()
+            .expect("type_alias template should always render");
+            out.push('\n');
+            out
         }
-        if matches!(m.kind, MethodKind::Static) {
-            lines.push("    @staticmethod".to_string());
+        EmittedSymbol::Function(f) => {
+            let mut out = render_function_signature_pyi(f, &ctx);
+            out.push('\n');
+            out
         }
-        let async_kw = if matches!(m.mode, SyncAsync::Async) {
-            "async "
-        } else {
-            ""
-        };
-        let typed_params = render_method_params_pyi(m, ctx);
-        let ret_py = translate_ty(&m.return_ty, ctx);
-        lines.push(format!(
-            "    {async_kw}def {name}({typed_params}) -> {ret_py}: ...",
-            name = m.py_name
-        ));
-        prev_root = Some(root);
     }
 }
 
-/// Render the parameter list of a method as `name: ty, …`. For
-/// instance methods the leading `self` (no annotation) is taken from
-/// `param_names[0]` and the remaining names are zipped with `arg_tys`;
-/// for static methods names and types are zipped 1:1.
+/// `name: ty, …` for static methods; `self, name: ty, …` for instance
+/// methods (`self` takes no annotation).
 fn render_method_params_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     match m.kind {
         MethodKind::Static => render_typed_params(&m.param_names, &m.arg_tys, ctx),
@@ -805,9 +934,6 @@ fn render_method_params_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     }
 }
 
-/// Render a free-function signature line. The async-ness lives in the
-/// `def` keyword (per 12d §3.4); the return annotation is the same
-/// for sync and async fan-out siblings.
 fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
     let async_kw = if matches!(f.mode, SyncAsync::Async) {
         "async "
@@ -822,9 +948,6 @@ fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
     )
 }
 
-/// Zip parameter names with their translated Python type expressions
-/// into a comma-separated `name: ty, …` list. Empty when both slices
-/// are empty.
 fn render_typed_params(names: &[String], tys: &[Ty], ctx: &TranslateCtx) -> String {
     let mut s = String::new();
     for (i, (n, t)) in names.iter().zip(tys.iter()).enumerate() {
@@ -838,15 +961,10 @@ fn render_typed_params(names: &[String], tys: &[Ty], ctx: &TranslateCtx) -> Stri
     s
 }
 
-/// Render a leaf's `.pyi` body section (imports + symbol bodies +
-/// `__all__`). Returns empty string if the leaf has no symbols.
-///
-/// Layout mirrors `render_leaf_body` modulo the differences spelled out
-/// in 12d §7:
-/// - `from baml.baml_core import …` factory imports are omitted
-/// - `import typing` is needed if any signature is present (function,
-///   method, or type alias) — see `LeafBody::needs_typing_pyi`
-/// - `import enum` and `import pydantic` follow the same rule as `.py`
+/// Mirrors `render_leaf_body` with these differences: no
+/// `baml.baml_core` factory imports; `typing` is needed whenever a
+/// signature is present (`needs_typing_pyi`); `enum` and `pydantic`
+/// follow the `.py` rule.
 pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     if body.is_empty() {
         return String::new();
@@ -859,10 +977,8 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         .iter()
         .any(|(s, _)| matches!(s, EmittedSymbol::Enum(_)));
     let cross_leaf_segments = body.cross_leaf_first_segments_pyi();
-    // Same rule as `.py`: typing is needed if any signature is rendered
-    // OR the cross-leaf block fires. The block uses
-    // `typing.TYPE_CHECKING`, so the import has to be in scope even if
-    // no signature would otherwise pull it in.
+    // The cross-leaf block uses `typing.TYPE_CHECKING`, so `typing`
+    // must be in scope even if no signature would pull it in.
     let needs_typing = body.needs_typing_pyi() || !cross_leaf_segments.is_empty();
     let needs_pydantic = body.needs_pydantic();
     let has_stdlib_block = needs_enum || needs_typing || needs_pydantic;
@@ -879,9 +995,8 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         }
     }
 
-    // Cross-leaf TYPE_CHECKING block — same shape as `.py` per 12f §4.2.
-    // Mirroring keeps `.py` and `.pyi` easy to diff; the guard is a
-    // no-op in `.pyi` (already type-check-only) but matters in `.py`.
+    // Same cross-leaf block as `.py`. The guard is a no-op in `.pyi`
+    // but kept for diffability.
     if !cross_leaf_segments.is_empty() {
         out.push('\n');
         out.push_str("if typing.TYPE_CHECKING:\n");
@@ -891,9 +1006,8 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         }
     }
 
-    // Per-leaf TypeVar declarations (13a §4.2). The `.pyi` re-declares
-    // them because stubs don't import from sibling `.py` files —
-    // self-contained for static checkers.
+    // The `.pyi` re-declares TypeVars because stubs don't import from
+    // sibling `.py` files.
     let typevars = body.generic_typevars();
     if !typevars.is_empty() {
         out.push_str("\n\n");
@@ -906,28 +1020,24 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
 
     let mut prev: Option<(&SortKey, &EmittedSymbol)> = None;
     for (sym, key) in &body.symbols {
-        let lines = render_symbol_pyi(sym, &body.leaf);
-        if lines.is_empty() {
+        let body_text = render_symbol_pyi(sym, &body.leaf);
+        if body_text.is_empty() {
             continue;
         }
         match prev {
             None => {}
+            // Function fan-out siblings share their parent's sort key
+            // and render contiguously.
             Some((p, prev_sym))
                 if p == key
                     && matches!(prev_sym, EmittedSymbol::Function(_))
-                    && matches!(sym, EmittedSymbol::Function(_)) =>
-            {
-                // Function fan-out: siblings share their parent's
-                // sort key and render contiguously.
-            }
-            Some(_) => {
-                out.push_str("\n\n");
-            }
+                    && matches!(sym, EmittedSymbol::Function(_)) => {}
+            // Adjacent media re-export imports collapse into a single
+            // import block (mirrors `.py`).
+            Some((_, prev_sym)) if is_media_reexport(prev_sym) && is_media_reexport(sym) => {}
+            Some(_) => out.push_str("\n\n"),
         }
-        for line in &lines {
-            out.push_str(line);
-            out.push('\n');
-        }
+        out.push_str(&body_text);
         prev = Some((key, sym));
     }
 

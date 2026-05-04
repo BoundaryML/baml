@@ -5,8 +5,15 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
 
+pub(crate) const fn release_version() -> &'static str {
+    match option_env!("BAML_RELEASE_VERSION") {
+        Some(version) => version,
+        None => env!("CARGO_PKG_VERSION"),
+    }
+}
+
 #[derive(Parser, Debug)]
-#[command(author, version, about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.", long_about = None)]
+#[command(author, version = release_version(), about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.", long_about = None)]
 #[command(styles = clap_cargo::style::CLAP_STYLING)]
 #[command(propagate_version = true)]
 pub(crate) struct RuntimeCli {
@@ -46,7 +53,7 @@ pub(crate) enum Commands {
 
     // #[command(about = "Login to Boundary Cloud (alias for `baml auth login`)", hide = true)]
     // Login(crate::auth::LoginArgs),
-    #[command(about = "Format BAML source files", name = "fmt", hide = true)]
+    #[command(about = "Format BAML source files", name = "fmt")]
     Format(crate::format::FormatArgs),
 
     // #[command(about = "Run BAML tests")]
@@ -148,4 +155,15 @@ fn baml_internal_env_is_truthy() -> bool {
     std::env::var("BAML_INTERNAL")
         .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"))
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn release_version_matches_compile_time_setting() {
+        let expected = option_env!("BAML_RELEASE_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
+        assert_eq!(release_version(), expected);
+    }
 }

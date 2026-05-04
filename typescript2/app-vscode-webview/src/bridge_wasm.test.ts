@@ -89,10 +89,27 @@ describe('BamlWasmRuntime', () => {
         bodyPromise: Promise.resolve('response body'),
       });
 
+      const stubShellResult = async () => ({
+        stdout: '',
+        stderr: 'shell not supported in browser tests',
+        exit_code: 1,
+        stdout_bytes: new Uint8Array(),
+        stderr_bytes: new Uint8Array(),
+      });
+
       const callbacks = {
         fetch: fetchCallback,
         env: (_var: string) => undefined,
         input: async () => '',
+        exec: async (
+          _program: string,
+          _args: string[] | undefined,
+          _optionsJson: string | undefined,
+        ) => stubShellResult(),
+        shell: async (
+          _command: string,
+          _optionsJson: string | undefined,
+        ) => stubShellResult(),
         lsp_send_notification: () => {},
         lsp_send_response: () => {},
         lsp_make_request: () => {},
@@ -120,10 +137,27 @@ describe('BamlWasmRuntime', () => {
         }),
       });
 
+      const stubShellResult = async () => ({
+        stdout: '',
+        stderr: 'shell not supported in browser tests',
+        exit_code: 1,
+        stdout_bytes: new Uint8Array(),
+        stderr_bytes: new Uint8Array(),
+      });
+
       const callbacks = {
         fetch: fetchCallback,
         env: (_var: string) => undefined,
         input: async () => '',
+        exec: async (
+          _program: string,
+          _args: string[] | undefined,
+          _optionsJson: string | undefined,
+        ) => stubShellResult(),
+        shell: async (
+          _command: string,
+          _optionsJson: string | undefined,
+        ) => stubShellResult(),
         lsp_send_notification: () => {},
         lsp_send_response: () => {},
         lsp_make_request: () => {},

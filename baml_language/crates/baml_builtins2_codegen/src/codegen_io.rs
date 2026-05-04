@@ -381,7 +381,7 @@ fn into_owned_expr(
         }
         BamlType::String => quote! { self.#field_ident(heap, permit)?.clone() },
         BamlType::RustType => quote! { self.#field_ident(heap, permit)? },
-        BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
+        BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { self.#field_ident(heap, permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }

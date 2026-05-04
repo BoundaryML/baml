@@ -1,0 +1,243 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.AlsoMayFail(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "also ok"
+    return
+
+  L1:
+    load_const "secondary error"
+    throw
+}
+
+function user.CatchAndRethrow(x: int) -> string {
+    load_var x
+    call user.MayFail
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    throw
+
+  L0:
+    return
+}
+
+function user.CatchWithFallback(x: int) -> string {
+    load_var x
+    call user.MayFailIntOrString
+    jump L4
+    load_var _2
+    is_type string
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _2
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _2
+    throw
+
+  L2:
+    load_const "caught int fallback"
+    jump L4
+
+  L3:
+    load_const "caught string"
+
+  L4:
+    return
+}
+
+function user.CatchWithTypedArm(x: int) -> string {
+    load_var x
+    call user.MayFail
+    jump L2
+    load_var e
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw
+
+  L1:
+    load_const "caught string"
+
+  L2:
+    return
+}
+
+function user.ChainedCatchClauses(x: int) -> string {
+    load_var x
+    call user.MayFailIntOrString
+    jump L4
+    load_var _2
+    is_type string
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _2
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _2
+    throw
+
+  L2:
+    load_const "second handler"
+    jump L4
+
+  L3:
+    load_const "first handler"
+
+  L4:
+    return
+}
+
+function user.MayFail(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const "string error"
+    throw
+}
+
+function user.MayFailIntOrString(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var x
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "ok"
+    return
+
+  L2:
+    load_const 1
+    throw
+
+  L3:
+    load_const "string error"
+    throw
+}
+
+function user.MultipleCatchArms(x: int) -> string {
+    load_var x
+    call user.MayFailIntOrString
+    jump L4
+    load_var e
+    is_type string
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var e
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    throw
+
+  L2:
+    load_const "caught int"
+    jump L4
+
+  L3:
+    load_const "caught string"
+
+  L4:
+    return
+}
+
+function user.NestedCatch(x: int) -> string {
+    load_var x
+    call user.MayFail
+    store_var inner
+    jump L0
+    load_var e
+    throw_if_panic
+    load_const "inner caught"
+    store_var inner
+
+  L0:
+    load_var x
+    call user.AlsoMayFail
+    jump L1
+    load_var e
+    throw_if_panic
+    load_var inner
+
+  L1:
+    return
+}
+
+function user.SingleCatchTyped(x: int) -> string {
+    load_var x
+    call user.MayFail
+    jump L2
+    load_var e
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw
+
+  L1:
+    load_const "caught string"
+
+  L2:
+    return
+}
+
+function user.SingleCatchWildcard(x: int) -> string {
+    load_var x
+    call user.MayFail
+    jump L0
+    load_var e
+    throw_if_panic
+    load_const "caught"
+
+  L0:
+    return
+}
+
+function user.ThrowStatement(x: int) -> string {
+    load_const "error"
+    throw
+}

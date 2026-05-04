@@ -197,13 +197,8 @@ impl BexEngine {
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
-            Object::RustData(arc) => {
-                bex_external_types::try_convert_rust_data(arc).ok_or_else(|| {
-                    EngineError::CannotConvert {
-                        type_name: "rust_data".to_string(),
-                    }
-                })
-            }
+            Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
+                .unwrap_or_else(|| BexExternalValue::RustData(arc.clone()))),
             Object::Closure(_) => Err(EngineError::CannotConvert {
                 type_name: "closure".to_string(),
             }),
@@ -314,9 +309,7 @@ impl BexEngine {
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 panic!("PromptAst values cannot be converted to VM values yet")
             }
-            BexExternalValue::Adt(BexExternalAdt::Media(_)) => {
-                panic!("Media values cannot be converted to VM values yet")
-            }
+            BexExternalValue::Adt(BexExternalAdt::Media(arc)) => vm.alloc_rust_data(arc),
             BexExternalValue::FunctionRef { global_index } => {
                 let idx = bex_vm_types::GlobalIndex::from_raw(global_index);
                 assert!(

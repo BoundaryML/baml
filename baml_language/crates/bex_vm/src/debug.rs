@@ -182,8 +182,8 @@ pub(crate) fn display_instruction(
                 format!("(invalid viz index: {index})")
             }
         }
-        Instruction::JumpTable { table_idx, default } => {
-            format!("(table {table_idx}, default {default:+})")
+        Instruction::JumpTable(table_idx) => {
+            format!("(table {table_idx})")
         }
         Instruction::DenseTag(table_idx) => {
             if let Some(table) = function.bytecode.match_hash_tables.get(*table_idx) {
@@ -196,6 +196,17 @@ pub(crate) fn display_instruction(
         | Instruction::Copy(_)
         | Instruction::BinOp(_)
         | Instruction::CmpOp(_)
+        | Instruction::AddInt
+        | Instruction::SubInt
+        | Instruction::MulInt
+        | Instruction::DivInt
+        | Instruction::ModInt
+        | Instruction::AddFloat
+        | Instruction::SubFloat
+        | Instruction::MulFloat
+        | Instruction::DivFloat
+        | Instruction::CmpIntOp(_)
+        | Instruction::CmpFloatOp(_)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -326,9 +337,20 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::InitField(_)
         | Instruction::StoreArrayElement
         | Instruction::StoreMapElement => Color::Green,
-        Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
-            Color::BrightBlue
-        }
+        Instruction::BinOp(_)
+        | Instruction::CmpOp(_)
+        | Instruction::AddInt
+        | Instruction::SubInt
+        | Instruction::MulInt
+        | Instruction::DivInt
+        | Instruction::ModInt
+        | Instruction::AddFloat
+        | Instruction::SubFloat
+        | Instruction::MulFloat
+        | Instruction::DivFloat
+        | Instruction::CmpIntOp(_)
+        | Instruction::CmpFloatOp(_)
+        | Instruction::UnaryOp(_) => Color::BrightBlue,
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
         | Instruction::JumpIfFalse(_)
@@ -567,9 +589,10 @@ fn display_bytecode_textual(function: &Function) -> String {
                 let target = ip.wrapping_add_signed(*offset);
                 jump_targets.insert(target);
             }
-            Instruction::JumpTable { table_idx, default } => {
+            Instruction::JumpTable(table_idx) => {
                 // Default target.
-                let default_target = ip.wrapping_add_signed(*default);
+                let default_target =
+                    ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
                 jump_targets.insert(default_target);
                 // Each entry in the jump table.
                 if let Some(table) = function.bytecode.jump_tables.get(*table_idx) {
@@ -699,8 +722,9 @@ fn display_instruction_textual(
                 .unwrap_or_else(|| format!("?{target}"));
             format!("jump_if_false {label}")
         }
-        Instruction::JumpTable { table_idx, default } => {
-            let default_target = ip.wrapping_add_signed(*default);
+        Instruction::JumpTable(table_idx) => {
+            let default_target =
+                ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
             let default_label = label_map
                 .get(&default_target)
                 .cloned()
@@ -738,6 +762,17 @@ fn display_instruction_textual(
         // --- Operators ---
         Instruction::BinOp(op) => format!("bin_op {op}"),
         Instruction::CmpOp(op) => format!("cmp_op {op}"),
+        Instruction::AddInt => "add_int".to_string(),
+        Instruction::SubInt => "sub_int".to_string(),
+        Instruction::MulInt => "mul_int".to_string(),
+        Instruction::DivInt => "div_int".to_string(),
+        Instruction::ModInt => "mod_int".to_string(),
+        Instruction::AddFloat => "add_float".to_string(),
+        Instruction::SubFloat => "sub_float".to_string(),
+        Instruction::MulFloat => "mul_float".to_string(),
+        Instruction::DivFloat => "div_float".to_string(),
+        Instruction::CmpIntOp(op) => format!("cmp_int_op {op}"),
+        Instruction::CmpFloatOp(op) => format!("cmp_float_op {op}"),
         Instruction::UnaryOp(op) => format!("unary_op {op}"),
 
         // --- Allocation ---
@@ -1015,8 +1050,9 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         }
 
         // Jump tables: show all target addresses.
-        Instruction::JumpTable { table_idx, default } => {
-            let default_target = ip.wrapping_add_signed(*default);
+        Instruction::JumpTable(table_idx) => {
+            let default_target =
+                ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
             let mut entries = Vec::new();
             if let Some(table) = function.bytecode.jump_tables.get(*table_idx) {
                 for entry in &table.offsets {

@@ -159,6 +159,10 @@ impl BamlClassUint8Array for PackageBamlImpl {
         base64::engine::general_purpose::STANDARD.encode(uint8array)
     }
 
+    fn to_string(uint8array: &[u8]) -> String {
+        String::from_utf8_lossy(uint8array).into_owned()
+    }
+
     #[allow(clippy::unused_unit)]
     fn sort(uint8array: &mut Vec<u8>) -> () {
         uint8array.sort_unstable();

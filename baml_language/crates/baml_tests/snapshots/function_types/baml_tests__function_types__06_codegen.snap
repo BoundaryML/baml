@@ -1,8 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13866
----
-function user.GetTransform() -> (int) -> int throws never {
-    load_const 1
-    return
-}

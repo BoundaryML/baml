@@ -1,4 +1,25 @@
-function shell(command: string) -> string throws root.errors.Io {
+class ProcessOptions {
+  cwd string?
+  env map<string, string>?
+  timeout_ms int?
+  stdin string?
+}
+
+class ShellOutput {
+  stdout uint8array
+  stderr uint8array
+  exit_code int
+
+  function ok(self) -> bool {
+    self.exit_code == 0
+  }
+}
+
+function exec(program: string, args: string[]?, options: ProcessOptions?) -> ShellOutput throws root.errors.Io | root.errors.Timeout {
+  $rust_io_function
+}
+
+function shell(command: string, options: ProcessOptions?) -> ShellOutput throws root.errors.Io | root.errors.Timeout {
   $rust_io_function
 }
 

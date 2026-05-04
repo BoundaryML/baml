@@ -1,0 +1,75 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.sum_array(arr: int[]) -> int {
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?5
+    make_cell
+    store_var ?5
+    load_const 0
+    store_deref ?2
+    alloc_array 0
+    store_var total
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var __for_idx
+    load_var arr
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_var total
+    store_var _12
+    load_const 0
+    store_var __for_idx_1
+
+  L2:
+    load_var __for_idx_1
+    load_var _12
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_deref ?2
+    return
+
+  L4:
+    load_var _12
+    load_var __for_idx_1
+    load_array_element
+    call_indirect
+    pop 1
+    load_var __for_idx_1
+    load_const 1
+    add_int
+    store_var __for_idx_1
+    jump L2
+
+  L5:
+    load_const null
+    make_cell
+    store_var i
+    load_var arr
+    load_var __for_idx
+    load_array_element
+    store_deref ?5
+    load_var total
+    load_var sum
+    load_var i
+    make_closure .<lambda(sum_array, 0)>, 2
+    call baml.Array.push
+    pop 1
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L0
+}

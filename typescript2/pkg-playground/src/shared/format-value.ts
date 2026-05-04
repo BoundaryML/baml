@@ -1,4 +1,4 @@
-import type { BamlJsValue } from '@b/pkg-proto';
+import type { BamlJsValue, PlainHandleDescriptor } from '@b/pkg-proto';
 import { getBamlType } from '../result-renderers';
 
 /**
@@ -22,7 +22,8 @@ export function formatValue(value: BamlJsValue | null | undefined, mode: 'inline
       return `<${(value as Record<string, unknown>).mime_type ?? (value as Record<string, unknown>).media_type ?? 'media'}>`;
     }
     if (bamlType === '$handle') {
-      return `<handle #${(value as Record<string, unknown>).handle_key}>`;
+      const descriptor = (value as { handle: PlainHandleDescriptor }).handle;
+      return `<handle #${descriptor.handle_key}>`;
     }
     if (bamlType === '$prompt_ast') return '<prompt_ast>';
     if (bamlType) {

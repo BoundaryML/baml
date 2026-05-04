@@ -170,6 +170,9 @@ pub enum OpErrorKind {
     #[error("Access error: {0}")]
     AccessError(#[from] bex_heap::AccessError),
 
+    #[error("IO error: {message}")]
+    Io { message: String },
+
     #[error("Operation cancelled")]
     Cancelled,
 
@@ -198,6 +201,7 @@ impl OpErrorKind {
             Self::Unsupported => SysOpErrorCategory::Unsupported,
             Self::RenderPrompt(_) => SysOpErrorCategory::RenderPrompt,
             Self::AccessError(_) => SysOpErrorCategory::AccessError,
+            Self::Io { .. } => SysOpErrorCategory::Io,
             Self::Cancelled => SysOpErrorCategory::Io,
             Self::Timeout { .. } => SysOpErrorCategory::Timeout,
             Self::NotImplemented { .. } => SysOpErrorCategory::NotImplemented,
@@ -796,6 +800,9 @@ mod tests {
             OpErrorKind::ResourceTypeMismatch { expected: "File" },
             OpErrorKind::Unsupported,
             OpErrorKind::RenderPrompt("err".into()),
+            OpErrorKind::Io {
+                message: "io error".into(),
+            },
             OpErrorKind::Cancelled,
             OpErrorKind::Timeout {
                 message: "t".into(),

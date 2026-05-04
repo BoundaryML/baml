@@ -202,7 +202,7 @@ impl WasmEventSink {
 impl bex_events::EventSink for WasmEventSink {
     fn send(&self, event: bex_events::RuntimeEvent) {
         let call_id = event.call_id.0;
-        let options = bridge_ctypes::HandleTableOptions::for_in_process();
+        let options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
         match bridge_ctypes::runtime_event_to_bytes(&event, &options) {
             Ok(data) => {
                 let notification = PlaygroundNotification::RuntimeEvent { data, call_id };

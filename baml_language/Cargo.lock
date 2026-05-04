@@ -1438,6 +1438,8 @@ dependencies = [
  "bex_vm",
  "bex_vm_types",
  "codspeed-divan-compat",
+ "darwin-kperf",
+ "darwin-kperf-events",
  "indexmap 2.13.0",
  "insta",
  "la-arena",
@@ -2735,6 +2737,28 @@ dependencies = [
  "quote",
  "syn 2.0.117",
 ]
+
+[[package]]
+name = "darwin-kperf"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac35c6401f90e50760a18a7396bedda6c5ac95b637419956419d5799aafe3eda"
+dependencies = [
+ "darwin-kperf-events",
+ "darwin-kperf-sys",
+]
+
+[[package]]
+name = "darwin-kperf-events"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89a99d8ff29e1b903ed730cabbaa8c9cd46e4b11a9d9103b59fd2e19c9c8b054"
+
+[[package]]
+name = "darwin-kperf-sys"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6096b38fb382be19435f7c2fc912577c16916c81174173ca1aab5a1c0acdd8b"
 
 [[package]]
 name = "data-encoding"

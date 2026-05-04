@@ -246,7 +246,7 @@ async fn early_return() {
       L0:
         load_var x
         load_const 5
-        bin_op +
+        add_int
         jump L2
 
       L1:
@@ -377,7 +377,7 @@ async fn recursion() {
         store_var _5
         load_var _3
         load_var _5
-        bin_op +
+        add_int
         jump L2
 
       L1:

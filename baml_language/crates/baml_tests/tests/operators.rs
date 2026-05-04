@@ -681,13 +681,13 @@ async fn assign_add() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         store_var x
         load_var x
         load_const 2
-        bin_op +
+        add_int
         store_var x
         load_var x
         return
@@ -709,13 +709,13 @@ async fn assign_subtract() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         store_var x
         load_var x
         load_const 2
-        bin_op -
+        sub_int
         store_var x
         load_var x
         return
@@ -737,13 +737,13 @@ async fn assign_multiply() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 1
         store_var x
         load_var x
         load_const 2
-        bin_op *
+        mul_int
         store_var x
         load_var x
         return
@@ -765,13 +765,13 @@ async fn assign_divide() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 10
         store_var x
         load_var x
         load_const 2
-        bin_op /
+        div_int
         store_var x
         load_var x
         return
@@ -793,13 +793,13 @@ async fn assign_modulo() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @"
+    insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const 10
         store_var x
         load_var x
         load_const 3
-        bin_op %
+        mod_int
         store_var x
         load_var x
         return

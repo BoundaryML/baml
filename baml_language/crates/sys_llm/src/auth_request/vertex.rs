@@ -209,9 +209,12 @@ async fn resolve_credentials(
 
     // 6. gcloud CLI.
     if io
-        .sys_shell("gcloud auth print-access-token --quiet 2>/dev/null".to_string())
+        .sys_shell(
+            "gcloud auth print-access-token --quiet 2>/dev/null".to_string(),
+            None,
+        )
         .await
-        .is_ok_and(|out| !out.trim().is_empty())
+        .is_ok_and(|out| !String::from_utf8_lossy(&out.stdout).trim().is_empty())
     {
         return Ok(ResolvedCredentials::GcloudCli);
     }
@@ -238,14 +241,14 @@ async fn token_from_credentials(
         ResolvedCredentials::Adc => token_from_adc(io).await,
         ResolvedCredentials::GcloudCli => {
             let output = io
-                .sys_shell("gcloud auth print-access-token --quiet".to_string())
+                .sys_shell("gcloud auth print-access-token --quiet".to_string(), None)
                 .await
                 .map_err(|e| {
                     BuildRequestError::AuthorizationFailed(format!(
                         "Google Cloud: gcloud auth print-access-token failed: {e}"
                     ))
                 })?;
-            let token = output.trim().to_string();
+            let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if token.is_empty() {
                 Err(BuildRequestError::AuthorizationFailed(
                     "Google Cloud: gcloud auth print-access-token returned empty".into(),
@@ -275,10 +278,13 @@ async fn project_id_from_credentials(
         }
         ResolvedCredentials::GcloudCli => {
             if let Ok(output) = io
-                .sys_shell("gcloud config get-value project 2>/dev/null".to_string())
+                .sys_shell(
+                    "gcloud config get-value project 2>/dev/null".to_string(),
+                    None,
+                )
                 .await
             {
-                let pid = output.trim().to_string();
+                let pid = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !pid.is_empty() {
                     return Some(pid);
                 }
@@ -349,10 +355,13 @@ async fn project_id_from_credentials(
     // gcloud CLI (if we haven't already tried it).
     if !matches!(creds, ResolvedCredentials::GcloudCli) {
         if let Ok(output) = io
-            .sys_shell("gcloud config get-value project 2>/dev/null".to_string())
+            .sys_shell(
+                "gcloud config get-value project 2>/dev/null".to_string(),
+                None,
+            )
             .await
         {
-            let pid = output.trim().to_string();
+            let pid = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !pid.is_empty() {
                 return Some(pid);
             }
@@ -1234,7 +1243,18 @@ mod tests {
         fn sys_shell(
             &self,
             _: String,
-        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            _options: Option<sys_types::generated::owned::sys::ProcessOptions>,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            sys_types::generated::owned::sys::ShellOutput,
+                            RuntimeIoError,
+                        >,
+                    > + Send
+                    + '_,
+            >,
+        > {
             Box::pin(async { Err(RuntimeIoError::Other("unsupported".into())) })
         }
     }
@@ -1319,7 +1339,18 @@ mod tests {
         fn sys_shell(
             &self,
             _: String,
-        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            _options: Option<sys_types::generated::owned::sys::ProcessOptions>,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            sys_types::generated::owned::sys::ShellOutput,
+                            RuntimeIoError,
+                        >,
+                    > + Send
+                    + '_,
+            >,
+        > {
             Box::pin(async { Err(RuntimeIoError::Other("unsupported".into())) })
         }
     }
@@ -1414,7 +1445,18 @@ mod tests {
         fn sys_shell(
             &self,
             _: String,
-        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            _options: Option<sys_types::generated::owned::sys::ProcessOptions>,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            sys_types::generated::owned::sys::ShellOutput,
+                            RuntimeIoError,
+                        >,
+                    > + Send
+                    + '_,
+            >,
+        > {
             Box::pin(async { Err(RuntimeIoError::Other("unsupported".into())) })
         }
     }
@@ -1561,7 +1603,18 @@ mod tests {
         fn sys_shell(
             &self,
             _: String,
-        ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
+            _options: Option<sys_types::generated::owned::sys::ProcessOptions>,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            sys_types::generated::owned::sys::ShellOutput,
+                            RuntimeIoError,
+                        >,
+                    > + Send
+                    + '_,
+            >,
+        > {
             Box::pin(async { Err(RuntimeIoError::Other("unsupported".into())) })
         }
     }

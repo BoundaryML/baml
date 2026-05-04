@@ -1,0 +1,3 @@
+[channel]
+name = "alpha"
+base_version = "0.11.0"

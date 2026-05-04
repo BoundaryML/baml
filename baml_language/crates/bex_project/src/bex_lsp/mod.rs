@@ -222,4 +222,4 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
 }
 
 use ::std::sync::Arc;
-pub use multi_project::{LspClientSenderTrait, new_lsp};
+pub use multi_project::{BackgroundSpawner, LspClientSenderTrait, new_lsp};

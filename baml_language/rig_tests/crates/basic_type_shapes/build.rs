@@ -109,55 +109,30 @@ fn main() {
         }
     }
 
-    // 6. conftest.py — stubs `baml.baml_core` so `baml_sdk/__init__.py`
-    //    imports succeed without the runtime package installed.
-    let conftest_py = r#"# Hand-written; stubs baml.baml_core for import-only tests.
-"""Stub `baml.baml_core` so baml_sdk imports work without the runtime."""
-import sys
-import types
-
-
-def _install_baml_stub() -> None:
-    if "baml.baml_core" in sys.modules:
-        return
-
-    baml = types.ModuleType("baml")
-    baml_core = types.ModuleType("baml.baml_core")
-
-    class BamlRuntime:  # noqa: D401
-        @staticmethod
-        def initialize_runtime(*_args, **_kwargs):
-            return None
-
-    def _make_factory(fqn, _kind, param_names):
-        def factory(*_args, **_kwargs):
-            raise RuntimeError(
-                f"baml runtime not installed (called {fqn})"
-            )
-        factory.__name__ = fqn.rsplit(".", 1)[-1]
-        factory.param_names = list(param_names)
-        return factory
-
-    baml_core.BamlRuntime = BamlRuntime
-    baml_core.define_function = _make_factory
-    baml_core.define_static_method = _make_factory
-    baml_core.define_instance_method = _make_factory
-    baml.baml_core = baml_core
-
-    sys.modules["baml"] = baml
-    sys.modules["baml.baml_core"] = baml_core
-
-
-_install_baml_stub()
-"#;
-    fs::write(generated_dir.join("conftest.py"), conftest_py).unwrap();
-
-    // 7. pyproject.toml + test.sh + test.ps1.
+    // 6. pyproject.toml + test.sh + test.ps1. Test runner does
+    //    `uv sync` then `maturin develop` against bridge_python's
+    //    Cargo.toml, installing the real `baml.baml_core` (PyO3
+    //    extension) into the project venv. `[tool.uv] package =
+    //    false` keeps uv from trying to install this directory as
+    //    a wheel; the empty `dev` group satisfies maturin's
+    //    `uv pip install --group dev` step.
     let pyproject_toml = r#"[project]
 name = "baml-test-basic-type-shapes"
 version = "0.1.0"
-requires-python = ">=3.8"
-dependencies = []
+requires-python = ">=3.9"
+dependencies = [
+    "pydantic>=2",
+    "typing-extensions",
+    "pytest>=7",
+    "ruff",
+    "maturin>=1.0,<2.0",
+]
+
+[dependency-groups]
+dev = []
+
+[tool.uv]
+package = false
 
 [tool.pytest.ini_options]
 testpaths = ["."]
@@ -183,15 +158,20 @@ if ! command -v uv &> /dev/null; then
     echo "Error: uv is not installed"
     exit 1
 fi
+BRIDGE_PYTHON_DIR="$(cd ../../../../crates/bridge_python && pwd)"
+echo "==> uv sync"
+uv sync
+echo "==> maturin develop (builds bridge_python's PyO3 extension into .venv)"
+uv run maturin develop --manifest-path "$BRIDGE_PYTHON_DIR/Cargo.toml"
 echo "==> Running Python syntax check..."
 python_files=$(find . -name "*.py" -o -name "*.pyi")
 if [ -n "$python_files" ]; then
     echo "$python_files" | xargs uv run python -m py_compile
 fi
 echo "==> Running ruff lint..."
-uv run --with ruff ruff check --config pyproject.toml baml_sdk
+uv run ruff check --config pyproject.toml baml_sdk
 echo "==> Running pytest..."
-uv run --with pytest --with pydantic --with typing-extensions pytest -v
+uv run pytest -v
 echo "==> All checks passed!"
 "#;
     fs::write(generated_dir.join("test.sh"), test_sh).unwrap();
@@ -212,6 +192,11 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Error "Error: uv is not installed"
     exit 1
 }
+$BridgePythonDir = (Resolve-Path "../../../../crates/bridge_python").Path
+Write-Host "==> uv sync"
+uv sync
+Write-Host "==> maturin develop (builds bridge_python's PyO3 extension into .venv)"
+uv run maturin develop --manifest-path (Join-Path $BridgePythonDir "Cargo.toml")
 Write-Host "==> Running Python syntax check..."
 $pythonFiles = Get-ChildItem -Recurse -Include *.py,*.pyi | ForEach-Object { $_.FullName }
 if ($pythonFiles) {
@@ -220,14 +205,14 @@ if ($pythonFiles) {
     }
 }
 Write-Host "==> Running ruff lint..."
-uv run --with ruff ruff check --config pyproject.toml baml_sdk
+uv run ruff check --config pyproject.toml baml_sdk
 Write-Host "==> Running pytest..."
-uv run --with pytest --with pydantic --with typing-extensions pytest -v
+uv run pytest -v
 Write-Host "==> All checks passed!"
 "#;
     fs::write(generated_dir.join("test.ps1"), test_ps1).unwrap();
 
-    // 8. rerun-if-changed for build.rs + every BAML and customizable
+    // 7. rerun-if-changed for build.rs + every BAML and customizable
     //    file.
     println!("cargo:rerun-if-changed=build.rs");
     watch_dir(&baml_src);

@@ -274,7 +274,7 @@ async fn handle_ws_in_message(
             };
 
             tokio::spawn(async move {
-                let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
+                let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
                 let out = match bex
                     .call_function(&name, kwargs.into(), function_call_ctx.build())
                     .await
@@ -340,7 +340,7 @@ async fn handle_ws_in_message(
                     .await
                 {
                     Ok(result) => {
-                        let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
+                        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
                         match bridge_ctypes::external_to_baml_value(&result, &handle_options) {
                             Ok(baml_val) => {
                                 let b64 = base64::engine::general_purpose::STANDARD

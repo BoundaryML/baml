@@ -22,6 +22,9 @@ pub struct JumpTableData {
     /// Symbolic names for each table entry (display only).
     /// Parallel to `offsets`: `names[i]` is the name for value `min + i`.
     pub names: Vec<Option<String>>,
+    /// Offset to jump to for out-of-range or hole values.
+    /// Set during bytecode patching after all arms are resolved.
+    pub default: isize,
 }
 
 impl JumpTableData {
@@ -35,6 +38,7 @@ impl JumpTableData {
             min,
             offsets: vec![None; size],
             names: vec![None; size],
+            default: 0, // patched later
         }
     }
 
@@ -247,6 +251,32 @@ pub enum Instruction {
     /// Format: `CMP_OP op` where `op` is the comparison operation to perform.
     CmpOp(CmpOp),
 
+    // ── Specialized arithmetic (type dispatch eliminated at compile time) ──
+    /// `[left: Int, right: Int] → [Int]`
+    AddInt,
+    /// `[left: Int, right: Int] → [Int]`
+    SubInt,
+    /// `[left: Int, right: Int] → [Int]`
+    MulInt,
+    /// `[left: Int, right: Int] → [Int]` — throws `DivisionByZero` if right == 0
+    DivInt,
+    /// `[left: Int, right: Int] → [Int]`
+    ModInt,
+
+    /// `[left: Float, right: Float] → [Float]`
+    AddFloat,
+    /// `[left: Float, right: Float] → [Float]`
+    SubFloat,
+    /// `[left: Float, right: Float] → [Float]`
+    MulFloat,
+    /// `[left: Float, right: Float] → [Float]` — throws `DivisionByZero` if right == 0.0
+    DivFloat,
+
+    /// `[left: Int, right: Int] → [Bool]`
+    CmpIntOp(CmpOp),
+    /// `[left: Float, right: Float] → [Bool]`
+    CmpFloatOp(CmpOp),
+
     /// Performs a unary operation.
     ///
     /// Format: `UNARY_OP op` where `op` is the unary operation to perform.
@@ -404,15 +434,9 @@ pub enum Instruction {
     /// If value is in range and not a hole, jumps to that offset.
     /// Otherwise jumps to `default` offset.
     ///
-    /// Format: `JUMP_TABLE table_idx, default` where:
-    /// - `table_idx` is the index into `Bytecode::jump_tables`
-    /// - `default` is the offset to jump to for out-of-range or hole values
-    JumpTable {
-        /// Index into `Bytecode::jump_tables`.
-        table_idx: usize,
-        /// Offset to jump to for out-of-range or hole values.
-        default: isize,
-    },
+    /// The default offset for out-of-range or hole values is stored in
+    /// `Bytecode::jump_tables[idx].default`.
+    JumpTable(usize),
 
     /// Extract the variant index from an enum value.
     ///
@@ -499,6 +523,13 @@ pub enum Instruction {
     ///
     /// When there are no enclosing type parameters, `ntypeargs = 0` and step 2
     /// is a no-op (backward-compatible with all existing call sites).
+    ///
+    /// Note: this struct variant carries two `usize` payloads on top of an
+    /// `ObjectIndex`, which keeps `size_of::<Instruction>() == 24` naturally.
+    /// 24 bytes is the optimal enum size on `AArch64`; benchmarks showed 16-byte
+    /// enums regressed perf by 5-12% (worse LLVM codegen, register allocation,
+    /// and branch structure — not cache pressure). `MakeClosure` being the
+    /// largest variant locks the size at 24 without needing a synthetic pad.
     MakeClosure {
         /// Index into the object pool for the underlying `Object::Function`.
         obj_idx: ObjectIndex,
@@ -741,6 +772,17 @@ impl std::fmt::Display for Instruction {
             Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
             Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
+            Instruction::AddInt => f.write_str("ADD_INT"),
+            Instruction::SubInt => f.write_str("SUB_INT"),
+            Instruction::MulInt => f.write_str("MUL_INT"),
+            Instruction::DivInt => f.write_str("DIV_INT"),
+            Instruction::ModInt => f.write_str("MOD_INT"),
+            Instruction::AddFloat => f.write_str("ADD_FLOAT"),
+            Instruction::SubFloat => f.write_str("SUB_FLOAT"),
+            Instruction::MulFloat => f.write_str("MUL_FLOAT"),
+            Instruction::DivFloat => f.write_str("DIV_FLOAT"),
+            Instruction::CmpIntOp(op) => write!(f, "CMP_INT_OP {op}"),
+            Instruction::CmpFloatOp(op) => write!(f, "CMP_FLOAT_OP {op}"),
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),
@@ -767,8 +809,8 @@ impl std::fmt::Display for Instruction {
             Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
             Instruction::VizEnter(i) => write!(f, "VIZ_ENTER {i}"),
             Instruction::VizExit(i) => write!(f, "VIZ_EXIT {i}"),
-            Instruction::JumpTable { table_idx, default } => {
-                write!(f, "JUMP_TABLE {table_idx}, {default:+}")
+            Instruction::JumpTable(table_idx) => {
+                write!(f, "JUMP_TABLE {table_idx}")
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),

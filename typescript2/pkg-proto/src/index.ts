@@ -2,7 +2,7 @@
 export { encodeCallArgs, serializeValue } from './encode';
 export { decodeCallResult, deserializeValue, handleTypeName } from './decode';
 export type { WrapHandleFn } from './decode';
-export type { BamlJsValue, BamlJsClass, BamlJsMap, BamlJsHandle, BamlJsMedia, BamlJsPromptAst, BamlJsPromptAstSimple, BamlJsPromptAstMessage, BamlSerializable } from './types';
+export type { BamlJsValue, BamlJsClass, BamlJsMap, BamlJsHandle, BamlJsMedia, BamlJsPromptAst, BamlJsPromptAstSimple, BamlJsPromptAstMessage, BamlSerializable, PlainHandleDescriptor } from './types';
 
 // Proto types (for .toBaml() implementors)
 export type {

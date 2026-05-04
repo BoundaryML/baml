@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+"""Manage the baml_language alpha release base version."""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+RELEASE_TOML = ROOT / "baml_language" / "release.toml"
+SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+
+
+@dataclass(frozen=True, order=True)
+class Version:
+    major: int
+    minor: int
+    patch: int
+
+    @classmethod
+    def parse(cls, value: str) -> "Version":
+        match = SEMVER_RE.fullmatch(value)
+        if not match:
+            raise ValueError(f"invalid base version {value!r}; expected MAJOR.MINOR.PATCH")
+        return cls(*(int(part) for part in match.groups()))
+
+    def __str__(self) -> str:
+        return f"{self.major}.{self.minor}.{self.patch}"
+
+    def bump_major(self) -> "Version":
+        return Version(self.major + 1, 0, 0)
+
+    def bump_minor(self) -> "Version":
+        return Version(self.major, self.minor + 1, 0)
+
+    def bump_patch(self) -> "Version":
+        return Version(self.major, self.minor, self.patch + 1)
+
+
+def fail(message: str) -> None:
+    print(f"error: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def parse_release_content(content: str) -> tuple[str, Version]:
+    section: str | None = None
+    channel: dict[str, str] = {}
+
+    for raw_line in content.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+            continue
+
+        if section != "channel":
+            continue
+
+        key, separator, value = line.partition("=")
+        if not separator:
+            fail(f"invalid release.toml line: {raw_line}")
+
+        key = key.strip()
+        value = value.strip()
+        if len(value) < 2 or not value.startswith('"') or not value.endswith('"'):
+            fail(f"channel.{key} must be a quoted string")
+
+        channel[key] = value[1:-1]
+
+    name = channel.get("name")
+    if name is None:
+        fail("channel.name must be a string")
+
+    base_version = channel.get("base_version")
+    if base_version is None:
+        fail("channel.base_version must be a string")
+
+    try:
+        version = Version.parse(base_version)
+    except ValueError as exc:
+        fail(str(exc))
+
+    return name, version
+
+
+def load_release(path: Path = RELEASE_TOML) -> tuple[str, Version]:
+    try:
+        content = path.read_text()
+    except FileNotFoundError:
+        fail(f"{path.relative_to(ROOT)} does not exist")
+    return parse_release_content(content)
+
+
+def write_release(version: Version) -> None:
+    RELEASE_TOML.write_text(
+        f'[channel]\nname = "alpha"\nbase_version = "{version}"\n',
+        encoding="utf-8",
+    )
+
+
+def git_output(*args: str) -> str | None:
+    try:
+        return subprocess.check_output(
+            ["git", *args],
+            cwd=ROOT,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+
+def previous_release_toml() -> str | None:
+    if not (ROOT / ".git").exists():
+        return None
+
+    candidates: list[str] = []
+    base_ref = os.environ.get("GITHUB_BASE_REF")
+    if base_ref:
+        candidates.extend([f"origin/{base_ref}", base_ref])
+    candidates.extend(["origin/canary", "origin/main"])
+
+    for candidate in candidates:
+        merge_base = git_output("merge-base", "HEAD", candidate)
+        if not merge_base:
+            continue
+        content = git_output("show", f"{merge_base}:baml_language/release.toml")
+        if content:
+            return content
+    return None
+
+
+def parse_release_toml_content(content: str) -> tuple[str, Version]:
+    try:
+        return parse_release_content(content)
+    except Exception as exc:
+        fail(f"previous baml_language/release.toml is invalid: {exc}")
+
+
+def check_release() -> None:
+    name, current = load_release()
+    if name != "alpha":
+        fail('channel.name must be "alpha"')
+
+    previous = previous_release_toml()
+    if previous is None:
+        print(f"ok: base_version {current}")
+        return
+
+    previous_name, previous_version = parse_release_toml_content(previous)
+    if previous_name != "alpha":
+        fail('previous channel.name was not "alpha"')
+
+    if current < previous_version:
+        fail(f"base_version must not decrease: {current} < {previous_version}")
+
+    print(f"ok: base_version {current}")
+
+
+def alpha_number(value: str) -> int:
+    if not re.fullmatch(r"(0|[1-9]\d*)", value):
+        raise argparse.ArgumentTypeError("alpha number must be a non-negative integer")
+    return int(value)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    subparsers.add_parser("show")
+    set_parser = subparsers.add_parser("set")
+    set_parser.add_argument("version")
+
+    bump_parser = subparsers.add_parser("bump")
+    bump_group = bump_parser.add_mutually_exclusive_group(required=True)
+    bump_group.add_argument("--major", action="store_true")
+    bump_group.add_argument("--minor", action="store_true")
+    bump_group.add_argument("--patch", action="store_true")
+
+    subparsers.add_parser("check")
+    compute_parser = subparsers.add_parser("compute")
+    compute_parser.add_argument("--alpha-number", required=True, type=alpha_number)
+
+    args = parser.parse_args()
+
+    if args.command == "show":
+        _, version = load_release()
+        print(version)
+    elif args.command == "set":
+        try:
+            version = Version.parse(args.version)
+        except ValueError as exc:
+            fail(str(exc))
+        write_release(version)
+    elif args.command == "bump":
+        _, version = load_release()
+        if args.major:
+            version = version.bump_major()
+        elif args.minor:
+            version = version.bump_minor()
+        else:
+            version = version.bump_patch()
+        write_release(version)
+    elif args.command == "check":
+        check_release()
+    elif args.command == "compute":
+        _, version = load_release()
+        print(f"{version}-alpha.{args.alpha_number}")
+
+
+if __name__ == "__main__":
+    main()
