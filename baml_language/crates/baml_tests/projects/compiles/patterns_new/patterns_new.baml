@@ -50,7 +50,7 @@ function call_int_callback(cb: (int) -> int) -> int {
 }
 
 // Match on a union of two distinct function types; dispatch by signature.
-function dispatch_callback(cb: (int) -> int | (string) -> string) -> int {
+function dispatch_callback(cb: ((int) -> int) | ((string) -> string)) -> int {
     match (cb) {
         let f: (int) -> int => f(0),
         let _: (string) -> string => 0
@@ -58,7 +58,7 @@ function dispatch_callback(cb: (int) -> int | (string) -> string) -> int {
 }
 
 // Or-pattern across two function-typed alternatives that share the same return.
-function call_either_int_caller(cb: (int) -> int | (bool) -> int) -> int {
+function call_either_int_caller(cb: ((int) -> int) | ((bool) -> int)) -> int {
     match (cb) {
         let _: (int) -> int => 1,
         let _: (bool) -> int => 2
@@ -66,15 +66,17 @@ function call_either_int_caller(cb: (int) -> int | (bool) -> int) -> int {
 }
 
 // Function-type narrow with chain-narrow position (`_: (int) -> T`).
-function dispatch_with_wildcard(cb: (int) -> int | (string) -> int) -> int {
+function dispatch_with_wildcard(cb: ((int) -> int) | ((string) -> int)) -> int {
     match (cb) {
         _: (int) -> int => 1,
         _ => 0
     }
 }
 
-// Generic function-type pattern. T is unified at the call site.
-function unwrap_typed<T>(cb: (int) -> T | (string) -> T) -> T {
+// Generic function-type pattern. T is unified at the call site. The outer
+// parens disambiguate the union — without them the parser binds `|` inside
+// the return type, yielding `(int) -> (T | (string) -> T)`.
+function unwrap_typed<T>(cb: ((int) -> T) | ((string) -> T)) -> T {
     match (cb) {
         let f: (int) -> T => f(0),
         let f: (string) -> T => f("")
@@ -100,7 +102,7 @@ function unwrap_curried(
 // Match on a function that takes a callback. The arm narrows to the
 // callback-accepting shape, then we synthesize an int callback inline.
 function call_with_callback(
-    runner: ((int) -> int) -> int | ((string) -> int) -> int
+    runner: (((int) -> int) -> int) | (((string) -> int) -> int)
 ) -> int {
     match (runner) {
         let r: ((int) -> int) -> int => r((x: int) -> int { x + 1 }),
@@ -301,8 +303,8 @@ function let_string_literal_widening() -> int {
 }
 
 // Function-type widen: narrower return → wider return.
-function let_fn_return_widen() -> int {
-    let f: (int) -> int: (int) -> int | string = (x: int) -> int { x };
+function let_fn_return_widen() -> int | string {
+    let f: (int) -> int: ((int) -> int | string) = (x: int) -> int { x };
     f(0)
 }
 

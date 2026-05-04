@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 9307
 ---
 === MIR2 ===
 fn user.test_apply_twice_inferred() -> int {
@@ -471,9 +470,9 @@ fn user.test_generic_multi_instantiation() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: (void) -> void throws never // id
-    let _2: int | 42 // a
+    let _2: int // a
     let _3: (void) -> void throws never
-    let _4: string | "hello" // b
+    let _4: string // b
     let _5: (void) -> void throws never
 
     bb0: {

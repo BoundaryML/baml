@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 17839
 ---
 === HIR2 ===
 class user.AppError {
@@ -10,13 +9,13 @@ type user.Number = int | float
 function user.bare_type_arm(v: int | string) -> int  [expr] {
   {  } match (v) { int => 1, string => 2 }
 }
-function user.call_either_int_caller(cb: (int) -> int | int) -> int  [expr] {
+function user.call_either_int_caller(cb: (int) -> int | (bool) -> int) -> int  [expr] {
   {  } match (cb) { _: (int) -> int => 1, _: (bool) -> int => 2 }
 }
 function user.call_int_callback(cb: (int) -> int) -> int  [expr] {
   {  } match (cb) { f: (int) -> int => f(10) }
 }
-function user.call_with_callback(runner: ((int) -> int) -> int | int) -> int  [expr] {
+function user.call_with_callback(runner: ((int) -> int) -> int | ((string) -> int) -> int) -> int  [expr] {
   {  } match (runner) { r: ((int) -> int) -> int => r((x: int) -> int { {  } x Add 1 }), r: ((string) -> int) -> int => r((s: string) -> int { {  } 0 }) }
 }
 function user.catch_chain_union(mode: int) -> int  [expr] {
@@ -34,10 +33,10 @@ function user.chain_narrow_then_wildcard(v: int | string | bool) -> int  [expr] 
 function user.deeply_parenthesized_binding(v: int) -> int  [expr] {
   {  } match (v) { x: int => x }
 }
-function user.dispatch_callback(cb: (int) -> int | string) -> int  [expr] {
+function user.dispatch_callback(cb: (int) -> int | (string) -> string) -> int  [expr] {
   {  } match (cb) { f: (int) -> int => f(0), _: (string) -> string => 0 }
 }
-function user.dispatch_with_wildcard(cb: (int) -> int | int) -> int  [expr] {
+function user.dispatch_with_wildcard(cb: (int) -> int | (string) -> int) -> int  [expr] {
   {  } match (cb) { _: (int) -> int => 1, _ => 0 }
 }
 function user.fn_return_widens(cb: (int) -> int | string) -> int  [expr] {
@@ -64,7 +63,7 @@ function user.int_widens_to_optional(v: int?) -> int?  [expr] {
 function user.int_widens_to_union(v: int | string) -> int  [expr] {
   {  } match (v) { n: int: int | string => 1 }
 }
-function user.let_fn_return_widen() -> int  [expr] {
+function user.let_fn_return_widen() -> int | string  [expr] {
   { let f: (int) -> int: (int) -> int | string = (x: int) -> int { {  } x } } f(0)
 }
 function user.let_four_step_widen() -> int  [expr] {
@@ -139,6 +138,6 @@ function user.risky_error(mode: int) -> int  [expr] {
 function user.unwrap_curried(f: (int) -> (int) -> (int) -> int | (string) -> (string) -> string) -> int  [expr] {
   {  } match (f) { triple: (int) -> (int) -> (int) -> int => triple(1)(2)(3), pair: (string) -> (string) -> string => 0 }
 }
-function user.unwrap_typed(cb: (int) -> user.T | user.T) -> user.T  [expr] {
+function user.unwrap_typed(cb: (int) -> user.T | (string) -> user.T) -> user.T  [expr] {
   {  } match (cb) { f: (int) -> user.T => f(0), f: (string) -> user.T => f("") }
 }

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 17815
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -308,21 +307,29 @@ SOURCE_FILE
         TYPE_EXPR
           L_PAREN "("
           FUNCTION_TYPE_PARAM
-            TYPE_EXPR "int"
-              WORD "int"
+            TYPE_EXPR
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "int"
+                  WORD "int"
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
           R_PAREN ")"
-          ARROW "->"
-          TYPE_EXPR
-            WORD "int"
-            PIPE "|"
-            L_PAREN "("
-            FUNCTION_TYPE_PARAM
+          PIPE "|"
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "string"
+                  WORD "string"
+              R_PAREN ")"
+              ARROW "->"
               TYPE_EXPR "string"
                 WORD "string"
-            R_PAREN ")"
-            ARROW "->"
-            TYPE_EXPR "string"
-              WORD "string"
+          R_PAREN ")"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "int"
@@ -393,21 +400,29 @@ SOURCE_FILE
         TYPE_EXPR
           L_PAREN "("
           FUNCTION_TYPE_PARAM
-            TYPE_EXPR "int"
-              WORD "int"
+            TYPE_EXPR
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "int"
+                  WORD "int"
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
           R_PAREN ")"
-          ARROW "->"
-          TYPE_EXPR
-            WORD "int"
-            PIPE "|"
-            L_PAREN "("
-            FUNCTION_TYPE_PARAM
-              TYPE_EXPR "bool"
-                WORD "bool"
-            R_PAREN ")"
-            ARROW "->"
-            TYPE_EXPR "int"
-              WORD "int"
+          PIPE "|"
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "bool"
+                  WORD "bool"
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+          R_PAREN ")"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "int"
@@ -473,21 +488,29 @@ SOURCE_FILE
         TYPE_EXPR
           L_PAREN "("
           FUNCTION_TYPE_PARAM
-            TYPE_EXPR "int"
-              WORD "int"
+            TYPE_EXPR
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "int"
+                  WORD "int"
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
           R_PAREN ")"
-          ARROW "->"
-          TYPE_EXPR
-            WORD "int"
-            PIPE "|"
-            L_PAREN "("
-            FUNCTION_TYPE_PARAM
-              TYPE_EXPR "string"
-                WORD "string"
-            R_PAREN ")"
-            ARROW "->"
-            TYPE_EXPR "int"
-              WORD "int"
+          PIPE "|"
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "string"
+                  WORD "string"
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+          R_PAREN ")"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "int"
@@ -544,21 +567,29 @@ SOURCE_FILE
         TYPE_EXPR
           L_PAREN "("
           FUNCTION_TYPE_PARAM
-            TYPE_EXPR "int"
-              WORD "int"
+            TYPE_EXPR
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "int"
+                  WORD "int"
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "T"
+                WORD "T"
           R_PAREN ")"
-          ARROW "->"
-          TYPE_EXPR
-            WORD "T"
-            PIPE "|"
-            L_PAREN "("
-            FUNCTION_TYPE_PARAM
-              TYPE_EXPR "string"
-                WORD "string"
-            R_PAREN ")"
-            ARROW "->"
-            TYPE_EXPR "T"
-              WORD "T"
+          PIPE "|"
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "string"
+                  WORD "string"
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "T"
+                WORD "T"
+          R_PAREN ")"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "T"
@@ -784,32 +815,40 @@ SOURCE_FILE
             TYPE_EXPR
               L_PAREN "("
               FUNCTION_TYPE_PARAM
-                TYPE_EXPR "int"
-                  WORD "int"
+                TYPE_EXPR
+                  L_PAREN "("
+                  FUNCTION_TYPE_PARAM
+                    TYPE_EXPR "int"
+                      WORD "int"
+                  R_PAREN ")"
+                  ARROW "->"
+                  TYPE_EXPR "int"
+                    WORD "int"
               R_PAREN ")"
               ARROW "->"
               TYPE_EXPR "int"
                 WORD "int"
           R_PAREN ")"
-          ARROW "->"
-          TYPE_EXPR
-            WORD "int"
-            PIPE "|"
-            L_PAREN "("
-            FUNCTION_TYPE_PARAM
-              TYPE_EXPR
-                L_PAREN "("
-                FUNCTION_TYPE_PARAM
-                  TYPE_EXPR "string"
-                    WORD "string"
-                R_PAREN ")"
-                ARROW "->"
-                TYPE_EXPR "int"
-                  WORD "int"
-            R_PAREN ")"
-            ARROW "->"
-            TYPE_EXPR "int"
-              WORD "int"
+          PIPE "|"
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR
+                  L_PAREN "("
+                  FUNCTION_TYPE_PARAM
+                    TYPE_EXPR "string"
+                      WORD "string"
+                  R_PAREN ")"
+                  ARROW "->"
+                  TYPE_EXPR "int"
+                    WORD "int"
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "int"
+                WORD "int"
+          R_PAREN ")"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "int"
@@ -2161,8 +2200,10 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR "int"
+    TYPE_EXPR "int | string"
       WORD "int"
+      PIPE "|"
+      WORD "string"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
@@ -2184,18 +2225,22 @@ SOURCE_FILE
                   TYPE_EXPR "int"
                     WORD "int"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  L_PAREN "("
-                  FUNCTION_TYPE_PARAM
-                    TYPE_EXPR "int"
-                      WORD "int"
-                  R_PAREN ")"
-                  ARROW "->"
-                  TYPE_EXPR "int | string"
-                    WORD "int"
-                    PIPE "|"
-                    WORD "string"
+              PAREN_PATTERN
+                L_PAREN "("
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR
+                      L_PAREN "("
+                      FUNCTION_TYPE_PARAM
+                        TYPE_EXPR "int"
+                          WORD "int"
+                      R_PAREN ")"
+                      ARROW "->"
+                      TYPE_EXPR "int | string"
+                        WORD "int"
+                        PIPE "|"
+                        WORD "string"
+                R_PAREN ")"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST

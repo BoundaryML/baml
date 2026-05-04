@@ -53,10 +53,30 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected string, got int
-    ╭─[ patterns_new.baml:52:15 ]
+  [type] Error: Or-pattern alternatives bind `a` with conflicting types: `int` vs `string`
+    ╭─[ patterns_new.baml:53:32 ]
     │
- 52 │         let n: int: string => 1
+ 53 │         (let a: let b: int) | (let a: let b: string) => 1
+    │                                ──────────┬─────────  
+    │                                          ╰─────────── Or-pattern alternatives bind `a` with conflicting types: `int` vs `string`
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: Or-pattern alternatives bind `b` with conflicting types: `int` vs `string`
+    ╭─[ patterns_new.baml:53:32 ]
+    │
+ 53 │         (let a: let b: int) | (let a: let b: string) => 1
+    │                                ──────────┬─────────  
+    │                                          ╰─────────── Or-pattern alternatives bind `b` with conflicting types: `int` vs `string`
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected string, got int
+    ╭─[ patterns_new.baml:64:15 ]
+    │
+ 64 │         let n: int: string => 1
     │               ──┬─  
     │                 ╰─── type mismatch: expected string, got int
     │ 
@@ -64,9 +84,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] Error: type mismatch: expected int, got "hello"
-    ╭─[ patterns_new.baml:59:15 ]
+    ╭─[ patterns_new.baml:71:15 ]
     │
- 59 │         let n: "hello": int => 1
+ 71 │         let n: "hello": int => 1
     │               ────┬───  
     │                   ╰───── type mismatch: expected int, got "hello"
     │ 
@@ -74,9 +94,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] Error: type mismatch: expected never, got int
-    ╭─[ patterns_new.baml:67:14 ]
+    ╭─[ patterns_new.baml:79:14 ]
     │
- 67 │     let x: 1: int: let y = 1;
+ 79 │     let x: 1: int: let y = 1;
     │              ──┬─  
     │                ╰─── type mismatch: expected never, got int
     │ 

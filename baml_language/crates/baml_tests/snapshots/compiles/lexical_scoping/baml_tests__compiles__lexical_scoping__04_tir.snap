@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 10658
 ---
 === TIR2 ===
 function user.branch_locals(b: bool) -> int throws never {
@@ -47,12 +46,12 @@ function user.outer_restored() -> int throws never {
   }
 }
 function user.declared_type_restored() -> string throws never {
-  { : "outer"
-    let x: string = "outer" : "outer"
+  { : string
+    let x: string = "outer" : "outer" -> string
     { : void
-      let x: int = 1 : 1
+      let x: int = 1 : 1 -> int
     }
-    x : "outer"
+    x : string
   }
 }
 function user.for_loop_restores_outer() -> int throws never {

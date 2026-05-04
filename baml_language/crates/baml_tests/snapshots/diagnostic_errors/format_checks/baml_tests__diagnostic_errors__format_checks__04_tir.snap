@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 30801
 ---
 === TIR2 ===
 function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int throws never {
@@ -1420,13 +1419,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
         result Add= item : int
       }
     let plain = 1 : 1 -> int
-    let typed: int = 2 : 2
+    let typed: int = 2 : 2 -> int
     let complex_init = a + result : int
     let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = map { "key": 42 } : map<string, int | string | bool | float | null>
     let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
     let deeply_typed: map<string, map<string, map<string, int | string | bool>>> = map { "outer": map { "inner": map { "deep": 42 } } } : map<string, map<string, map<string, int | string | bool>>>
-    let trivia_var: int = 42 : 42
-    let trivia_var_block: int = 42 : 42
+    let trivia_var: int = 42 : 42 -> int
+    let trivia_var_block: int = 42 : 42 -> int
     let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = map { "key": 42 } : map<string, int | string | bool | float | null>
     let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = map { "key": 42 } : map<string, int | string | bool | float | null>
     let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
@@ -1713,9 +1712,9 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
         "zero" : "zero"
       _ =>
         "other" : "other"
-    match (x : int) : unknown
+    match (x : int) : int
       n: int: int | string =>
-        n + 1 : unknown
+        n + 1 : int
     match (x : int) : int
       x: int | x: int =>
         x : int
@@ -1739,7 +1738,6 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
   !! 8424..8429: operator `Mul` cannot be applied to `bool` and `bool`
   !! 8436..8441: operator `Mul` cannot be applied to `int` and `bool`
   !! 8448..8453: operator `Mul` cannot be applied to `bool` and `int`
-  !! 10318..10323: operator `Add` cannot be applied to `int | string` and `1`
 }
 class user.MatchSuccess$stream {
   data: null | string

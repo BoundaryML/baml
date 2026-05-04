@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4273
 ---
 === TIR2 ===
 
@@ -207,7 +206,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
 }
 function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -> testing.TestReport throws never {
   { : testing.TestReport
-    let base_run: TestReportThunk = : () -> testing.TestReport throws never
+    let base_run: TestReportThunk = : () -> testing.TestReport throws never -> testing.TestReportThunk
       () -> TestReport { ... } : () -> testing.TestReport throws never
         {
           let start = baml.sys.now_ms()

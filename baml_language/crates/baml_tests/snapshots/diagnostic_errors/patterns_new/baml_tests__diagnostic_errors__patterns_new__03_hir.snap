@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 36841
 ---
 === HIR2 ===
 function user.binding_in_middle_of_chain() -> int  [expr] {
@@ -20,6 +19,9 @@ function user.or_different_names_two(v: int) -> int  [expr] {
 }
 function user.or_mixed_names_in_chain(v: int | string) -> int  [expr] {
   {  } match (v) { x: int | y: string => 1 }
+}
+function user.or_multiple_binds_diff_narrows(v: int | string) -> int  [expr] {
+  {  } match (v) { a: b: int | a: b: string => 1 }
 }
 function user.or_one_binds_one_doesnt(v: int) -> int  [expr] {
   {  } match (v) { x | _ => 1 }

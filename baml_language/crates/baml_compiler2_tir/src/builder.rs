@@ -2227,7 +2227,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                         self.context.report_simple(err, init);
                     }
                     if has_annotation {
-                        (Some(ty), Some(pat_ty))
+                        // Use the user's declared type as the binding's
+                        // flow type — the annotation is a contract, not a
+                        // floor. `let result: Res = Failure { .. }` keeps
+                        // `result: Res` so subsequent matches/uses see the
+                        // wider type the user wrote, not the init's inferred
+                        // narrow shape.
+                        (Some(pat_ty.clone()), Some(pat_ty))
                     } else {
                         // Unannotated lets get widened/evolving types and
                         // record no "declared type" — the contract is purely
@@ -2536,12 +2542,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             let pat_ty = self.pattern_type(pattern_id, body, arm.body);
             let pat_cases = self.pattern_cases(pattern_id, body, arm.body);
             // Narrow the scrutinee for the arm body to the intersection of
-            // its current type and the pattern's natural type.
+            // its current type and the pattern's natural type — only the
+            // values that satisfy both can reach this arm. Using `pat_ty`
+            // directly would over-widen when the pattern names cases the
+            // scrutinee can't actually produce (e.g. pattern `int | string |
+            // bool` matched against scrutinee `int | string`).
             let narrowed = if matches!(pat_ty, Ty::Never { .. }) {
                 // Bind/Wildcard: no narrowing.
                 scrutinee_ty.clone()
             } else {
-                pat_ty.clone()
+                self.intersect_types(&scrutinee_ty, &pat_ty)
             };
             // The pattern is irrefutable against the scrutinee iff its
             // natural type is `never` (catch-all) or it's a supertype of the
@@ -2997,38 +3007,42 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .iter()
                     .map(|p| self.pattern_type(*p, body, at_expr))
                     .collect();
-                // Cross-branch binding-type consistency. HIR already verified
-                // every Or branch binds the same name set, so each branch's
-                // `pattern_type` is exactly the shared binding's effective
-                // narrow — `(let x: int)` resolves to `int`, `(let x: string)`
-                // resolves to `string`. Linear scan: compare each subsequent
-                // branch's natural type to the first.
+                // Cross-branch binding-type consistency: every bound name
+                // must have mutual-subtype types across all branches. HIR
+                // already verified the name SETS match, so each branch
+                // contributes a `name -> effective_type` map; we compare
+                // per-name. One recursive walk per branch (not per name)
+                // keeps this O(N·P) instead of O(N·M·P).
                 if parts.len() > 1 {
-                    let first_names: Vec<Name> = body.patterns[parts[0]]
-                        .bound_names(&body.patterns)
-                        .into_iter()
-                        .cloned()
+                    let mut first_pairs: Vec<(Name, Ty)> = Vec::new();
+                    Self::collect_branch_binding_types(parts[0], body, &mut first_pairs, &tys[0]);
+                    let other_maps: Vec<FxHashMap<Name, Ty>> = parts
+                        .iter()
+                        .zip(tys.iter())
+                        .skip(1)
+                        .map(|(p, branch_ty)| {
+                            let mut pairs = Vec::new();
+                            Self::collect_branch_binding_types(*p, body, &mut pairs, branch_ty);
+                            pairs.into_iter().collect()
+                        })
                         .collect();
-                    if let Some(name) = first_names.first() {
-                        let first_ty = &tys[0];
-                        for (idx, ty) in tys.iter().enumerate().skip(1) {
-                            // Only emit when this branch *also* binds the
-                            // same name — otherwise HIR will already report
-                            // a name-mismatch and we'd double-fire on
-                            // `(let x: int) | (let y: string)`.
-                            let branch_names =
-                                body.patterns[parts[idx]].bound_names(&body.patterns);
-                            if !branch_names.contains(&name) {
+                    for (name, first_ty) in &first_pairs {
+                        for (idx_off, branch_map) in other_maps.iter().enumerate() {
+                            let idx = idx_off + 1;
+                            // Skip branches that don't bind this name —
+                            // HIR's name-uniformity check fires there and
+                            // we'd double-fire on `(let x: int) | (let y)`.
+                            let Some(other_ty) = branch_map.get(name) else {
                                 continue;
-                            }
-                            if !self.is_subtype(first_ty, ty) || !self.is_subtype(ty, first_ty) {
+                            };
+                            if !self.is_subtype(first_ty, other_ty)
+                                || !self.is_subtype(other_ty, first_ty)
+                            {
                                 let err = TirTypeError::OrPatternBindingTypeMismatch {
                                     name: name.clone(),
                                     first_type: first_ty.clone(),
-                                    other_type: ty.clone(),
+                                    other_type: other_ty.clone(),
                                 };
-                                // Prefer the conflicting branch's pattern span;
-                                // fall back to `at_expr` if no source map is set.
                                 if let Some(sm) = self.body_source_map.as_ref() {
                                     self.context
                                         .report_at_span(err, sm.pattern_span(parts[idx]));
@@ -3135,6 +3149,52 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let parts = parts.clone();
                 for p in parts {
                     self.register_pattern_types(p, flow_ty, declared.clone(), body);
+                }
+            }
+        }
+    }
+
+    /// Walk a single Or branch and collect every `(name, effective_type)`
+    /// pair. `branch_ty` is the branch's already-computed `pattern_type` —
+    /// for a Chain branch that's the chain's rightmost concrete narrow, for
+    /// a `Bind` branch it's `never`, etc. — and serves as the ambient type
+    /// for every Bind in the branch. One pass per branch keeps the
+    /// cross-branch mismatch check O(N·P) rather than O(N·M·P).
+    fn collect_branch_binding_types(
+        pat_id: PatId,
+        body: &ExprBody,
+        out: &mut Vec<(Name, Ty)>,
+        branch_ty: &Ty,
+    ) {
+        match &body.patterns[pat_id] {
+            ast::Pattern::Wildcard | ast::Pattern::Type(_) => {}
+            ast::Pattern::Bind { name } => {
+                out.push((name.clone(), branch_ty.clone()));
+            }
+            ast::Pattern::Class { fields, .. } => {
+                // Per-field type projection from the class is phase-2 work;
+                // for now binds inside class fields fall back to `never`.
+                let fields = fields.clone();
+                let never = Ty::Never {
+                    attr: TyAttr::default(),
+                };
+                for f in fields {
+                    Self::collect_branch_binding_types(f.pat, body, out, &never);
+                }
+            }
+            ast::Pattern::Chain(parts) | ast::Pattern::Or(parts) => {
+                // Chain: every link sees the same chain narrow (=branch_ty).
+                // Or: nested Or's own consistency check runs separately via
+                // `pattern_type`; pick the first alt as representative since
+                // HIR guarantees same-name-set across alternatives.
+                let parts = parts.clone();
+                let to_visit: &[PatId] = if matches!(&body.patterns[pat_id], ast::Pattern::Or(_)) {
+                    parts.first().map(std::slice::from_ref).unwrap_or(&[])
+                } else {
+                    &parts
+                };
+                for id in to_visit {
+                    Self::collect_branch_binding_types(*id, body, out, branch_ty);
                 }
             }
         }
@@ -5650,6 +5710,43 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// and performs equirecursive structural subtyping.
     fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
         crate::normalize::is_subtype_of(sub, sup, &self.aliases)
+    }
+
+    /// Type intersection (greatest common subtype). Used by match-arm
+    /// narrowing to compute the actual reachable type for an arm body —
+    /// the values that satisfy both the scrutinee's type AND the arm
+    /// pattern's natural type.
+    fn intersect_types(&self, a: &Ty, b: &Ty) -> Ty {
+        // Subtype shortcuts: if either side already covers the other, the
+        // intersection is the narrower side.
+        if self.is_subtype(a, b) {
+            return a.clone();
+        }
+        if self.is_subtype(b, a) {
+            return b.clone();
+        }
+        // Distribute over unions: (X | Y) ∩ T = (X ∩ T) | (Y ∩ T).
+        if let Ty::Union(members, _) = a {
+            let intersected: Vec<Ty> = members
+                .iter()
+                .map(|m| self.intersect_types(m, b))
+                .filter(|t| !matches!(t, Ty::Never { .. }))
+                .collect();
+            return match intersected.len() {
+                0 => Ty::Never {
+                    attr: TyAttr::default(),
+                },
+                1 => intersected.into_iter().next().unwrap(),
+                _ => Ty::Union(intersected, TyAttr::default()),
+            };
+        }
+        if matches!(b, Ty::Union(_, _)) {
+            return self.intersect_types(b, a);
+        }
+        // No overlap — disjoint types intersect to Never.
+        Ty::Never {
+            attr: TyAttr::default(),
+        }
     }
 
     fn infer_binary_op(

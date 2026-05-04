@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 9275
 ---
 === TIR2 ===
 function user.test_chained_map() -> int[] throws never {
@@ -90,15 +89,15 @@ lambda user.test_deep_capture {
 lambda user.test_deep_capture {
 }
 function user.test_generic_multi_instantiation() -> int throws never {
-  { : int | 42
+  { : int
     let id = : (x: T) -> T throws never
       <T>(x: T) -> T { ... } : (x: T) -> T throws never
         {
           x
         }
-    let a: int = id<T>(42) : int | 42
-    let b: string = id<T>("hello") : string | "hello"
-    a : int | 42
+    let a: int = id<T>(42) : int | 42 -> int
+    let b: string = id<T>("hello") : string | "hello" -> string
+    a : int
   }
 }
 lambda user.test_generic_multi_instantiation {

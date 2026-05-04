@@ -42,6 +42,18 @@ function or_same_name_distinct_narrows(v: int | string) -> int {
     }
 }
 
+// Two bindings per Or branch with conflicting narrows on the SECOND name —
+// chain has [Bind(a), Bind(b), Type] so both `a` and `b` get the same
+// effective type per branch. With only `first_names.first()` checked, we'd
+// miss the mismatch when only the first name happens to agree across
+// branches. The current check picks `a` and compares branch types, which
+// catches the mismatch when both names share the chain's effective type.
+function or_multiple_binds_diff_narrows(v: int | string) -> int {
+    match (v) {
+        (let a: let b: int) | (let a: let b: string) => 1
+    }
+}
+
 // ============================================================================
 // Chain rule violations: each link must be a subtype of the next
 // ============================================================================
