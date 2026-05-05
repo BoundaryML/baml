@@ -23,12 +23,15 @@ from __future__ import annotations
 import typing
 import pydantic
 
-from baml.baml_core import define_instance_method as _define_instance_method
+from baml.baml_core import (
+    BamlPyHandle as _BamlPyHandle,
+    define_instance_method as _define_instance_method,
+)
 
 
 class File(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _handle: None
+    _handle: _BamlPyHandle
     text       = _define_instance_method("baml.fs.File.text", "sync",  ["self"])
     text_async = _define_instance_method("baml.fs.File.text", "async", ["self"])
     bytes       = _define_instance_method("baml.fs.File.bytes", "sync",  ["self"])

@@ -23,6 +23,8 @@ from __future__ import annotations
 import typing
 import pydantic
 
+from baml.baml_core import BamlPyHandle as _BamlPyHandle
+
 
 class Socket(pydantic.BaseModel):
     def read(self) -> str: ...

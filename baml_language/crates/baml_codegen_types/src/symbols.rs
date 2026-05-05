@@ -190,6 +190,7 @@ impl super::Ty {
             | Ty::Enum(_)
             | Ty::TypeAlias(_)
             | Ty::TypeVar(_)
+            | Ty::RustType
             | Ty::BuiltinUnknown
             // Unions are guaranteed to not have unions thanks to .validate()
             | Ty::Union(_)

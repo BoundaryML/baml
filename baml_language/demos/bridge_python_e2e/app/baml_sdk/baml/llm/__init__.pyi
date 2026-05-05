@@ -27,6 +27,8 @@ import pydantic
 if typing.TYPE_CHECKING:
     from ... import baml
 
+from baml.baml_core import BamlPyHandle as _BamlPyHandle
+
 
 S = typing.TypeVar("S")
 T = typing.TypeVar("T")

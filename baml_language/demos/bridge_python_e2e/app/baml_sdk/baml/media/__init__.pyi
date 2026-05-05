@@ -26,6 +26,8 @@ import pydantic
 if typing.TYPE_CHECKING:
     from ... import baml
 
+from baml.baml_core import BamlPyHandle as _BamlPyHandle
+
 
 from baml.baml_core.baml_py import BamlPdf as Pdf
 from baml.baml_core.baml_py import BamlAudio as Audio

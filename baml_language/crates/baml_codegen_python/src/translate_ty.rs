@@ -82,6 +82,14 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
         ),
         Ty::Unit => "None".to_string(),
         Ty::BamlOptions => "baml.Options".to_string(),
+        // `$rust_type` fields in stdlib stubs (Response._body, SseStream._handle, …).
+        // The host-language opaque-handle wrapper is `BamlPyHandle` from the
+        // bridge runtime, imported as `_BamlPyHandle` to keep `baml` (the
+        // local relative module) from shadowing it. The single-underscore
+        // field name still triggers Pydantic v2's private-attribute handling
+        // regardless of the annotation; `_decode_class` injects the value
+        // into `__pydantic_private__` post-construction.
+        Ty::RustType => "_BamlPyHandle".to_string(),
     }
 }
 
@@ -199,6 +207,7 @@ mod tests {
             | Ty::BuiltinUnknown
             | Ty::Callable { .. }
             | Ty::Unit
+            | Ty::RustType
             | Ty::BamlOptions => {}
         }
     }

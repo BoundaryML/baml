@@ -27,6 +27,7 @@ import pydantic
 from ... import baml
 
 from baml.baml_core import (
+    BamlPyHandle as _BamlPyHandle,
     define_instance_method as _define_instance_method,
     define_static_method as _define_static_method,
 )
@@ -60,7 +61,7 @@ class PlannerState(pydantic.BaseModel):
 
 class PromptAst(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _data: None
+    _data: _BamlPyHandle
 
 
 class ClientType(str, enum.Enum):
@@ -172,7 +173,7 @@ class BedrockOptions(pydantic.BaseModel):
 
 class StreamAccumulator(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _handle: None
+    _handle: _BamlPyHandle
     add_events       = _define_instance_method("baml.llm.StreamAccumulator.add_events", "sync",  ["self", "events"])
     add_events_async = _define_instance_method("baml.llm.StreamAccumulator.add_events", "async", ["self", "events"])
     content       = _define_instance_method("baml.llm.StreamAccumulator.content", "sync",  ["self"])
@@ -191,7 +192,7 @@ class StreamAccumulator(pydantic.BaseModel):
 
 class StreamCache(pydantic.BaseModel, typing.Generic[T, S]):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _data: None
+    _data: _BamlPyHandle
     new       = staticmethod(_define_static_method("baml.llm.StreamCache.new", "sync",  ["target", "streaming"]))
     new_async = staticmethod(_define_static_method("baml.llm.StreamCache.new", "async", ["target", "streaming"]))
 

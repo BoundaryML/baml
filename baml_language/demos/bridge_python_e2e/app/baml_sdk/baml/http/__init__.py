@@ -23,7 +23,10 @@ from __future__ import annotations
 import typing
 import pydantic
 
-from baml.baml_core import define_instance_method as _define_instance_method
+from baml.baml_core import (
+    BamlPyHandle as _BamlPyHandle,
+    define_instance_method as _define_instance_method,
+)
 
 
 class Request(pydantic.BaseModel):
@@ -39,7 +42,7 @@ class Response(pydantic.BaseModel):
     status_code: int
     headers: typing.Dict[str, str]
     url: str
-    _body: None
+    _body: _BamlPyHandle
     text       = _define_instance_method("baml.http.Response.text", "sync",  ["self"])
     text_async = _define_instance_method("baml.http.Response.text", "async", ["self"])
     bytes       = _define_instance_method("baml.http.Response.bytes", "sync",  ["self"])
@@ -51,7 +54,7 @@ class Response(pydantic.BaseModel):
 class SseStream(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     url: str
-    _handle: None
+    _handle: _BamlPyHandle
     next       = _define_instance_method("baml.http.SseStream.next", "sync",  ["self"])
     next_async = _define_instance_method("baml.http.SseStream.next", "async", ["self"])
     close       = _define_instance_method("baml.http.SseStream.close", "sync",  ["self"])

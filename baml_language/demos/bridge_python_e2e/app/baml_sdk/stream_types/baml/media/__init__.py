@@ -23,25 +23,27 @@ from __future__ import annotations
 import typing
 import pydantic
 
+from baml.baml_core import BamlPyHandle as _BamlPyHandle
+
 
 class Audio(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _data: None
+    _data: _BamlPyHandle
 
 
 class Image(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _data: None
+    _data: _BamlPyHandle
 
 
 class Pdf(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _data: None
+    _data: _BamlPyHandle
 
 
 class Video(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _data: None
+    _data: _BamlPyHandle
 
 
 __all__ = [

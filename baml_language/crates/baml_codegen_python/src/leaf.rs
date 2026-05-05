@@ -88,6 +88,41 @@ impl LeafBody {
         })
     }
 
+    /// True when any class field, function/method param, or return type
+    /// in this leaf is `Ty::RustType` — i.e. needs the
+    /// `from baml.baml_core import BamlPyHandle as _BamlPyHandle` line.
+    pub(crate) fn needs_baml_pyhandle(&self) -> bool {
+        fn ty_uses_rust_type(ty: &Ty) -> bool {
+            match ty {
+                Ty::RustType => true,
+                Ty::Optional(inner) | Ty::List(inner) => ty_uses_rust_type(inner),
+                Ty::Map { key, value } => ty_uses_rust_type(key) || ty_uses_rust_type(value),
+                Ty::Union(items) => items.iter().any(ty_uses_rust_type),
+                Ty::Class(_, args) => args.iter().any(ty_uses_rust_type),
+                Ty::Callable { params, ret } => {
+                    params.iter().any(ty_uses_rust_type) || ty_uses_rust_type(ret)
+                }
+                _ => false,
+            }
+        }
+        self.symbols.iter().any(|(s, _)| match s {
+            EmittedSymbol::Class(c) => {
+                c.properties.iter().any(|p| ty_uses_rust_type(&p.ty))
+                    || c.static_methods.iter().any(|m| {
+                        m.arg_tys.iter().any(ty_uses_rust_type) || ty_uses_rust_type(&m.return_ty)
+                    })
+                    || c.instance_methods.iter().any(|m| {
+                        m.arg_tys.iter().any(ty_uses_rust_type) || ty_uses_rust_type(&m.return_ty)
+                    })
+            }
+            EmittedSymbol::Function(f) => {
+                f.arg_tys.iter().any(ty_uses_rust_type) || ty_uses_rust_type(&f.return_ty)
+            }
+            EmittedSymbol::TypeAlias(a) => ty_uses_rust_type(&a.resolves_to),
+            EmittedSymbol::Enum(_) => false,
+        })
+    }
+
     pub(crate) fn is_empty(&self) -> bool {
         self.symbols.is_empty()
     }
@@ -258,6 +293,11 @@ fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
         // dotted form `baml.media.Image` etc. — no `Name` involved, but
         // the resulting annotation references the `baml` first-segment,
         // so the leaf needs `baml` imported.
+        //
+        // `Ty::RustType` renders as `_BamlPyHandle` and gets its own
+        // `from baml.baml_core import BamlPyHandle as _BamlPyHandle`
+        // line via `needs_baml_pyhandle` — it does *not* go through
+        // the cross-leaf segment set.
         Ty::Media(_) => {
             out.insert("baml".to_string());
         }
@@ -269,6 +309,7 @@ fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
         | Ty::Literal(_)
         | Ty::Uint8Array
         | Ty::TypeVar(_)
+        | Ty::RustType
         | Ty::BuiltinUnknown
         | Ty::Unit
         | Ty::BamlOptions => {}
@@ -694,29 +735,36 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     // Factory imports use absolute paths (`baml.baml_core` is a
     // separate installed package, not reachable from this SDK tree)
     // with a `_` alias to keep them private to the module.
+    //
+    // `BamlPyHandle` shares the alias scheme: it's referenced as
+    // `_BamlPyHandle` from translate_ty so the local relative `baml`
+    // module (the SDK's own `baml.*` namespace) doesn't shadow the
+    // installed runtime package.
     let needs_static_method = body.needs_define_static_method();
     let needs_instance_method = body.needs_define_instance_method();
-    let mut factories: Vec<&'static str> = Vec::new();
+    let needs_pyhandle = body.needs_baml_pyhandle();
+    let mut runtime_imports: Vec<(&'static str, &'static str)> = Vec::new();
+    if needs_pyhandle {
+        runtime_imports.push(("BamlPyHandle", "_BamlPyHandle"));
+    }
     if needs_factory {
-        factories.push("define_function");
+        runtime_imports.push(("define_function", "_define_function"));
     }
     if needs_instance_method {
-        factories.push("define_instance_method");
+        runtime_imports.push(("define_instance_method", "_define_instance_method"));
     }
     if needs_static_method {
-        factories.push("define_static_method");
+        runtime_imports.push(("define_static_method", "_define_static_method"));
     }
-    // The push order above is already alphabetic: `define_function` <
-    // `define_instance_method` < `define_static_method`.
-    if !factories.is_empty() {
+    if !runtime_imports.is_empty() {
         out.push('\n');
-        if factories.len() == 1 {
-            let original = factories[0];
-            writeln!(out, "from baml.baml_core import {original} as _{original}").unwrap();
+        if runtime_imports.len() == 1 {
+            let (original, alias) = runtime_imports[0];
+            writeln!(out, "from baml.baml_core import {original} as {alias}").unwrap();
         } else {
             out.push_str("from baml.baml_core import (\n");
-            for original in &factories {
-                writeln!(out, "    {original} as _{original},").unwrap();
+            for (original, alias) in &runtime_imports {
+                writeln!(out, "    {original} as {alias},").unwrap();
             }
             out.push_str(")\n");
         }
@@ -1004,6 +1052,13 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         for seg in &cross_leaf_segments {
             writeln!(out, "    from {dots} import {seg}").unwrap();
         }
+    }
+
+    // `_BamlPyHandle` alias mirrors the `.py` import so type checkers
+    // can resolve `$rust_type` field annotations.
+    if body.needs_baml_pyhandle() {
+        out.push('\n');
+        out.push_str("from baml.baml_core import BamlPyHandle as _BamlPyHandle\n");
     }
 
     // The `.pyi` re-declares TypeVars because stubs don't import from

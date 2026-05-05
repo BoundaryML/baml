@@ -26,6 +26,7 @@ import pydantic
 from ... import baml
 
 from baml.baml_core import (
+    BamlPyHandle as _BamlPyHandle,
     define_instance_method as _define_instance_method,
     define_static_method as _define_static_method,
 )
