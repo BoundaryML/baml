@@ -74,8 +74,8 @@ pub fn new(
 }
 
 pub use bex_lsp::{
-    BackgroundSpawner, BexLsp, FunctionInfo, FunctionKind, FunctionOrigin, LlmCapabilities,
-    LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender, ProjectDiagnostic,
-    ProjectUpdate, TestExpandError, new_lsp,
+    BackgroundSpawner, BexLsp, FunctionInfo, FunctionKind, LlmCapabilities, LspClientSenderTrait,
+    LspError, PlaygroundNotification, PlaygroundSender, ProjectDiagnostic, ProjectUpdate,
+    TestExpandError, new_lsp,
 };
 pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};

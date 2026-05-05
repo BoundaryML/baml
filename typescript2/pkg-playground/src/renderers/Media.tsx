@@ -3,13 +3,29 @@
  */
 
 import type { FC } from 'react';
+import type { BamlJsMedia } from '@b/pkg-proto';
 import type { ResultRendererProps } from '../result-renderers';
 import { Badge } from '../components/ui/badge';
 import { CodeBlock } from '../components/ui/code-block';
-import { isBamlMedia, mediaLabel, mediaToSrc } from '../shared/media-values';
+
+function isMedia(value: unknown): value is BamlJsMedia {
+  if (value == null || typeof value !== 'object') return false;
+  const baml = (value as Record<string, unknown>).$baml;
+  if (baml == null || typeof baml !== 'object') return false;
+  return (baml as Record<string, unknown>).type === '$media';
+}
+
+function getMediaSrc(m: BamlJsMedia): string | null {
+  if (m.content_type === 'url') return m.url;
+  if (m.content_type === 'base64') {
+    const mime = m.mime_type ?? 'application/octet-stream';
+    return `data:${mime};base64,${m.base64}`;
+  }
+  return null;
+}
 
 export const MediaRenderer: FC<ResultRendererProps> = ({ value, displayMode }) => {
-  if (!isBamlMedia(value)) {
+  if (!isMedia(value)) {
     return <CodeBlock>{JSON.stringify(value, null, 2)}</CodeBlock>;
   }
 
@@ -17,8 +33,10 @@ export const MediaRenderer: FC<ResultRendererProps> = ({ value, displayMode }) =
     return <span className="font-vsc-mono text-xs text-vsc-text-faint">&lt;{value.media_type}&gt;</span>;
   }
 
-  const src = mediaToSrc(value);
-  const label = mediaLabel(value);
+  const src = getMediaSrc(value);
+  const label = value.mime_type
+    ? `${value.media_type} (${value.mime_type})`
+    : value.media_type;
 
   if (value.media_type === 'image' && src) {
     return (

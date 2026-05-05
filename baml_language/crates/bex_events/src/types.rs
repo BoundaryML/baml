@@ -90,5 +90,4 @@ pub struct FunctionEnd {
     pub name: String,
     pub result: BexExternalValue,
     pub duration: Duration,
-    pub error: Option<String>,
 }

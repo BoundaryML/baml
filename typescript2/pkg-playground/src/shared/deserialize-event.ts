@@ -28,7 +28,6 @@ export function deserializeRuntimeEvent(event: RuntimeEvent): DeserializedRuntim
             result: kind.functionEnd.result
               ? deserializeValue(kind.functionEnd.result, wrapHandle)
               : null,
-            error: kind.functionEnd.error || null,
           },
         };
         break;

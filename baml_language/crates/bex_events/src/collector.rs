@@ -375,7 +375,6 @@ mod tests {
                 name: name.to_string(),
                 result,
                 duration,
-                error: None,
             }))),
         }
     }

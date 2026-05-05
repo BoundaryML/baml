@@ -186,7 +186,6 @@ impl HostSpanManager {
                 name: entry.function_name,
                 result,
                 duration: entry.started_at.elapsed(),
-                error: None,
             }))),
         };
         event_store::emit(&event);

@@ -93,49 +93,6 @@ async fn test_simple_function_events() {
 }
 
 #[tokio::test]
-async fn test_function_error_emits_function_end_with_error() {
-    let source = r#"
-        function main() -> string {
-            baml.sys.panic("boom")
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
-            vec![],
-        )
-        .unwrap(),
-    );
-
-    let (host_ctx, guard) = setup_tracking();
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
-        .with_host_ctx(host_ctx)
-        .build();
-
-    let result = engine.call_function("main", vec![], call_ctx, true).await;
-    assert!(result.is_err(), "expected function call to fail");
-
-    let events = collect_events(&guard);
-    let summary = summarize_events(&events);
-    assert_eq!(summary, vec!["start:main", "end:main"]);
-
-    let end = events
-        .iter()
-        .find_map(|e| match &e.event {
-            EventKind::Function(FunctionEvent::End(e)) => Some(e),
-            _ => None,
-        })
-        .expect("Expected FunctionEnd event");
-
-    let error = end.error.as_deref().expect("expected FunctionEnd error");
-    assert!(error.contains("boom"), "unexpected error: {error}");
-}
-
-#[tokio::test]
 async fn test_function_with_args_events() {
     let source = r#"
         function greet(first: string, second: string) -> string {
