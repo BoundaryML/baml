@@ -1527,24 +1527,21 @@ impl BexVm {
     }
 
     /// Prepare a `YieldToCall`-style invocation: if `callee` is a
-    /// `BoundMethod`, insert the receiver at the front of `args` and return
-    /// the inner `Function`'s `HeapPtr`; otherwise return `callee` unchanged.
-    ///
-    /// This ensures that native builtins (e.g. `Array.map`) that call user
-    /// callbacks via `YieldToCall { callee, args }` work correctly with bound
-    /// methods — the receiver is transparently prepended so the arity check in
-    /// `execute_call_from_locals_offset` sees the full argument count.
+    /// `BoundMethod`, insert the receiver at the front of `args`. The returned
+    /// `HeapPtr` is `callee` unchanged — keeping the `BoundMethod` identity so
+    /// that `execute_call_from_locals_offset` can extract the receiver's
+    /// `class_type_args` to seed `frame.type_args` (needed for
+    /// `reflect.type_of<T>()` inside generic methods invoked indirectly).
+    /// `execute_call_from_locals_offset` and `load_function` both unwrap the
+    /// `BoundMethod` to its inner `Function` for dispatch.
     fn resolve_bound_method_callee(&self, callee: HeapPtr, args: &mut Vec<Value>) -> HeapPtr {
         let obj = self.get_object(callee);
         if let Object::BoundMethod(bm) = obj {
             let receiver = bm.receiver;
-            let fn_ptr = bm.function;
             // Prepend receiver so the inner function sees [self, arg1, ..., argN].
             args.insert(0, receiver);
-            fn_ptr
-        } else {
-            callee
         }
+        callee
     }
 
     fn execute_call_from_locals_offset(
@@ -3761,7 +3758,6 @@ impl BexVm {
                     );
                     let visible_arity = full_arity.saturating_sub(1);
                     let receiver = bm.receiver;
-                    let fn_ptr = bm.function;
 
                     // Pop the callee (bound_method) off the top.
                     let _popped = self.stack.ensure_pop();
@@ -3779,8 +3775,11 @@ impl BexVm {
                     // Stack: [receiver, arg1, ..., argN] — full_arity items at args_offset.
                     let locals_offset = StackIndex::from_raw(args_offset);
 
+                    // Pass the BoundMethod ptr (not bm.function) so
+                    // execute_call_from_locals_offset can extract the
+                    // receiver's class_type_args to seed frame.type_args.
                     if let Some(state) = self.execute_call_from_locals_offset(
-                        fn_ptr,
+                        callee_ptr,
                         locals_offset,
                         full_arity,
                         frame_idx,

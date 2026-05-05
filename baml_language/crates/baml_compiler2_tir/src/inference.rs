@@ -813,8 +813,77 @@ pub fn infer_scope_types<'db>(
                                             }
                                         });
 
-                                    // Seed builder with lambda params
-                                    let generic_params: Vec<Name> = func_def.generic_params.clone();
+                                    // Seed builder with lambda params.
+                                    // Mirror the Function-branch merge: a lambda assigned via
+                                    // `let f = || { ... reflect.type_of<T>() }` inside a generic
+                                    // method/function must still see the enclosing function's
+                                    // generic params (and any class-level params if the
+                                    // enclosing function is a method).  The `Let` ancestor
+                                    // hides those; walk up to the nearest `Function` scope to
+                                    // recover them.
+                                    let mut generic_params: Vec<Name> = {
+                                        let mut gp: Vec<Name> = Vec::new();
+                                        let mut current = ancestor_scope.parent;
+                                        while let Some(fsi) = current {
+                                            let scope = &index.scopes[fsi.index() as usize];
+                                            match &scope.kind {
+                                                ScopeKind::Function => {
+                                                    for fd in item_tree.functions.values() {
+                                                        if fd.span == scope.range
+                                                            && scope.name.as_ref() == Some(&fd.name)
+                                                        {
+                                                            gp.clone_from(&fd.generic_params);
+                                                            if let Some(grandparent_fsi) =
+                                                                scope.parent
+                                                            {
+                                                                let grandparent_scope = &index
+                                                                    .scopes
+                                                                    [grandparent_fsi.index()
+                                                                        as usize];
+                                                                if matches!(
+                                                                    grandparent_scope.kind,
+                                                                    ScopeKind::Class
+                                                                ) {
+                                                                    if let Some(class_name) =
+                                                                        &grandparent_scope.name
+                                                                    {
+                                                                        for class_data in item_tree
+                                                                            .classes
+                                                                            .values()
+                                                                        {
+                                                                            if class_data.name
+                                                                                == *class_name
+                                                                            {
+                                                                                let mut merged =
+                                                                                    class_data
+                                                                                        .generic_params
+                                                                                        .clone();
+                                                                                merged.extend(gp);
+                                                                                gp = merged;
+                                                                                break;
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
+                                                    break;
+                                                }
+                                                ScopeKind::Let => {
+                                                    current = scope.parent;
+                                                }
+                                                _ => break,
+                                            }
+                                        }
+                                        gp
+                                    };
+                                    for p in &func_def.generic_params {
+                                        if !generic_params.contains(p) {
+                                            generic_params.push(p.clone());
+                                        }
+                                    }
                                     builder.set_generic_params(generic_params.clone());
                                     for (i, param) in func_def.params.iter().enumerate() {
                                         let param_ty = param
