@@ -520,6 +520,18 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0004
 ─────╯
 
+  [type] Error: type mismatch: expected string, got 0
+     ╭─[ match_exprs.baml:446:6 ]
+     │
+ 446 │ ╭─▶     }
+     ┆ ┆   
+ 451 │ ├─▶     }
+     │ │           
+     │ ╰─────────── type mismatch: expected string, got 0
+     │     
+     │     Note: Error code: E0001
+─────╯
+
   [validation] Error: Name `ManyParams` defined 2 times as: function, template_string
     ╭─[ function_decls.baml:23:10 ]
     │

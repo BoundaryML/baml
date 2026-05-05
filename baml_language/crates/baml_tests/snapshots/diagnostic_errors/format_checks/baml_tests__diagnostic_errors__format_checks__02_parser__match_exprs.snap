@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 30460
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -2172,6 +2171,178 @@ SOURCE_FILE
               QUOTE """
               WORD "any"
               QUOTE """
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              UNION_PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "1"
+                    INTEGER_LITERAL "1"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "2"
+                    INTEGER_LITERAL "2"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              UNION_PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "1"
+                    INTEGER_LITERAL "1"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "/* lead */ 2"
+                    INTEGER_LITERAL "2"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              UNION_PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "1"
+                    INTEGER_LITERAL "1"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "/* b */ 2"
+                    INTEGER_LITERAL "2"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              UNION_PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "1"
+                    INTEGER_LITERAL "1"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "2"
+                    INTEGER_LITERAL "2"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "3"
+                    INTEGER_LITERAL "3"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "s"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              UNION_PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "MatchStatus.Active"
+                    WORD "MatchStatus"
+                    DOT "."
+                    WORD "Active"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "MatchStatus.Inactive"
+                    WORD "MatchStatus"
+                    DOT "."
+                    WORD "Inactive"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "MatchStatus.Pending"
+                    WORD "MatchStatus"
+                    DOT "."
+                    WORD "Pending"
+            FAT_ARROW "=>"
+            STRING_LITERAL "x"
+              QUOTE """
+              WORD "x"
+              QUOTE """
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "s"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              UNION_PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "MatchStatus.Active"
+                    WORD "MatchStatus"
+                    DOT "."
+                    WORD "Active"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "/* 2 */ MatchStatus.Inactive"
+                    WORD "MatchStatus"
+                    DOT "."
+                    WORD "Inactive"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "/* 4 */ MatchStatus.Pending"
+                    WORD "MatchStatus"
+                    DOT "."
+                    WORD "Pending"
+            FAT_ARROW "=>"
+            STRING_LITERAL "y"
+              QUOTE """
+              WORD "y"
+              QUOTE """
+          R_BRACE "}"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              UNION_PATTERN
+                PAREN_PATTERN
+                  L_PAREN "("
+                  PATTERN
+                    UNION_PATTERN
+                      TYPE_PATTERN
+                        TYPE_EXPR "1"
+                          INTEGER_LITERAL "1"
+                      PIPE "|"
+                      TYPE_PATTERN
+                        TYPE_EXPR "2"
+                          INTEGER_LITERAL "2"
+                  R_PAREN ")"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "3"
+                    INTEGER_LITERAL "3"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
           R_BRACE "}"
         R_BRACE "}"
 

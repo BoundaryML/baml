@@ -1465,7 +1465,7 @@ class user.MatchFailure {
 enum user.MatchStatus
 type user.MatchResult = user.MatchSuccess | user.MatchFailure
 function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bool) -> string throws never {
-  { : "any"
+  { : 0
     match (x : int) : "zero" | "other"
       0 =>
         "zero" : "zero"
@@ -1730,6 +1730,27 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
     match (s : user.MatchStatus) : "any"
       MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending =>
         "any" : "any"
+    match (x : int) : 0
+      1 | 2 =>
+        0 : 0
+    match (x : int) : 0
+      1 | 2 =>
+        0 : 0
+    match (x : int) : 0
+      1 | 2 =>
+        0 : 0
+    match (x : int) : 0
+      1 | 2 | 3 =>
+        0 : 0
+    match (s : user.MatchStatus) : "x"
+      MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending =>
+        "x" : "x"
+    match (s : user.MatchStatus) : "y"
+      MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending =>
+        "y" : "y"
+    match (x : int) : 0
+      1 | 2 | 3 =>
+        0 : 0
   }
   !! 3883..3893: unreachable arm
   !! 3908..3915: unreachable arm
@@ -1738,6 +1759,7 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
   !! 8424..8429: operator `Mul` cannot be applied to `bool` and `bool`
   !! 8436..8441: operator `Mul` cannot be applied to `int` and `bool`
   !! 8448..8453: operator `Mul` cannot be applied to `bool` and `int`
+  !! 12738..12902: type mismatch: expected string, got 0
 }
 class user.MatchSuccess$stream {
   data: null | string

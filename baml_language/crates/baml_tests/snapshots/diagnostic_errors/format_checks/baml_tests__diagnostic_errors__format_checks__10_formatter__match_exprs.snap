@@ -354,7 +354,11 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia between Or-pattern alternatives (block comments around `|`) =====
     match (x) {
         /* 1 arm leading */
-        (let x: /* 2c colon trailing */int) | (let x: /* 6c colon trailing */int) => x,
+        (let x: /* 2c colon trailing */int) /* 3 first trailing */
+            |/* 4 pipe trailing *//* 5 second leading */(let x: /* 6c colon trailing */int) =>
+        {
+            x
+        },
     }
 
     // ===== Multi-link chain in arm with comments at every join =====
@@ -366,7 +370,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     // ===== Nested Or wrapping a chain, with trivia at boundaries =====
     match (x) {
-        (/* outer paren leading */(let x: /* inner1 colon */int) | (let x: /* inner2 colon */int)) => {
+        (/* outer paren leading */(let x: /* inner1 colon */int) |/* between branches */(let x: /* inner2 colon */int)) => {
             x
         },
     }
@@ -378,6 +382,45 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     // ===== Bare type union arm with trivia between members =====
     match (s) {
-        MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending => "any",
+        MatchStatus.Active/* a */|/* b */MatchStatus.Inactive/* c */|/* d */MatchStatus.Pending => {
+            "any"
+        },
+    }
+
+    // ===== Single-line short union, comment after first only =====
+    match (x) {
+        1/* trail */| 2 => 0,
+    }
+
+    // ===== Single-line short union, comment before second only =====
+    match (x) {
+        1 |/* lead */2 => 0,
+    }
+
+    // ===== Comment between members, both sides of `|` =====
+    match (x) {
+        1/* a */|/* b */2 => 0,
+    }
+
+    // ===== Three-way union with comment on middle member =====
+    match (x) {
+        1 | 2/* mid */| 3 => 0,
+    }
+
+    // ===== Long enough to force multi-line, comment on first member trailing =====
+    match (s) {
+        MatchStatus.Active/* will-wrap */| MatchStatus.Inactive | MatchStatus.Pending => "x",
+    }
+
+    // ===== Mixed: block comments on every junction =====
+    match (s) {
+        MatchStatus.Active/* 1 */|/* 2 */MatchStatus.Inactive/* 3 */|/* 4 */MatchStatus.Pending => {
+            "y"
+        },
+    }
+
+    // ===== Nested Or-of-Or with trivia at outer and inner pipes =====
+    match (x) {
+        (1/* inner1 */| 2/* inner2 */)/* outer-trail */| 3 => 0,
     }
 }

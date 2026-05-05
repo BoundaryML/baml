@@ -22,6 +22,7 @@ use rowan::TextRange;
 use crate::{
     ast::{FromCST, KnownKind, StrongAstError, SyntaxNodeIter, Token, Type, tokens as t},
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
+    trivia_classifier::TriviaSliceExt,
 };
 
 /// Top-level pattern AST node — corresponds to a [`SyntaxKind::PATTERN`].
@@ -303,12 +304,12 @@ impl UnionPattern {
 }
 
 impl UnionPattern {
-    // TODO: trivia between Or-pattern alternatives (block comments before/
-    // after `|` and around member boundaries) is currently dropped. Mirroring
-    // `UnionType`'s handling almost works but breaks formatter idempotence
-    // for some cases — first pass wraps multi-line, second pass collapses to
-    // single-line. Trivia inside a chain narrow (between `:` and its type)
-    // IS preserved by `ChainPattern`; this only affects `|` boundaries.
+    /// Print as `A | B | C` on a single line, preserving trivia adjacent to
+    /// each `|` and to every member boundary. Mirrors `UnionType`'s
+    /// trivia-aware single-line printer: block comments like `A /* hint */
+    /// | B`, `A | /* hint */ B`, and `A /* end */` after the last member
+    /// all round-trip cleanly. Bails to multi-line whenever any trivia
+    /// would itself span lines, which keeps formatting idempotent.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         if printer
             .print(&*self.first, Shape::unlimited_single_line())
@@ -316,18 +317,36 @@ impl UnionPattern {
         {
             return None;
         }
-        for (pipe, pat) in &self.rest {
+        let first_trailing = printer.trivia.get_trailing_for_element(&*self.first);
+        let mut pre_pipe_len = printer.try_print_trivia_single_line_squished(first_trailing)?;
+
+        for (i, (pipe, pat)) in self.rest.iter().enumerate() {
             if printer.output.len() > shape.width {
                 return None;
             }
-            printer.print_str(" ");
+            let (pipe_leading, pipe_trailing) = printer.trivia.get_for_range_split(pipe.span());
+            let (pat_leading, pat_trailing) = printer.trivia.get_for_element(pat);
+            pre_pipe_len += printer.print_trivia_squished(pipe_leading);
+            if pre_pipe_len == 0 {
+                printer.print_spaces(1); // no block comments between previous member and `|`
+            }
+
             printer.print_raw_token(pipe);
-            printer.print_str(" ");
+
+            let mut post_pipe_len = printer.print_trivia_squished(pipe_trailing);
+            post_pipe_len += printer.print_trivia_squished(pat_leading);
+            if post_pipe_len == 0 {
+                printer.print_spaces(1); // no block comments between `|` and next member
+            }
+
             if printer
                 .print(pat, Shape::unlimited_single_line())
                 .multi_lined
             {
                 return None;
+            }
+            if i + 1 < self.rest.len() {
+                pre_pipe_len = printer.try_print_trivia_single_line_squished(pat_trailing)?;
             }
         }
         if printer.output.len() > shape.width {
@@ -348,15 +367,36 @@ impl PrintMultiLine for UnionPattern {
     ///     | ThirdPattern
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_indent = shape.indent + printer.config.indent_width;
         let mut info = printer.print(&*self.first, shape.clone());
-        for (pipe, pat) in &self.rest {
+        // Emit any line/block comments hanging off the first member's
+        // closing token before we break to the next line — keeps trailing
+        // comments attached to the right alternative.
+        printer.print_trivia_all_trailing_for(self.first.rightmost_token());
+        let inner_indent = shape.indent + printer.config.indent_width;
+
+        for (i, (pipe, pat)) in self.rest.iter().enumerate() {
             info.multi_lined = true;
+            let (pipe_leading, pipe_trailing) = printer.trivia.get_for_range_split(pipe.span());
+            let (pat_leading, pat_trailing) = printer.trivia.get_for_element(pat);
+
             printer.print_newline();
+            // Pre-pipe leading comments (e.g. `/* note */` directly before
+            // `|` on its own line) get re-emitted with a hard newline so
+            // they don't collide with the indented `|`.
+            printer.print_trivia_with_newline(pipe_leading.trim_blanks(), inner_indent);
+
             printer.print_spaces(inner_indent);
             printer.print_raw_token(pipe);
-            printer.print_str(" ");
+
+            let mut post_pipe_len = printer.print_trivia_squished(pipe_trailing);
+            post_pipe_len += printer.print_trivia_squished(pat_leading);
+            if post_pipe_len == 0 {
+                printer.print_spaces(1); // only add space if there are no block comments between
+            }
             printer.print(pat, shape.clone());
+            if i + 1 < self.rest.len() {
+                printer.print_trivia_trailing(pat_trailing);
+            }
         }
         info
     }

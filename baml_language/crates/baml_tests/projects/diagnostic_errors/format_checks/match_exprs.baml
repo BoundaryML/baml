@@ -414,4 +414,39 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
         | /* d */
         MatchStatus.Pending => "any"
     }
+
+    // ===== Single-line short union, comment after first only =====
+    match (x) {
+        1 /* trail */ | 2 => 0
+    }
+
+    // ===== Single-line short union, comment before second only =====
+    match (x) {
+        1 | /* lead */ 2 => 0
+    }
+
+    // ===== Comment between members, both sides of `|` =====
+    match (x) {
+        1 /* a */ | /* b */ 2 => 0
+    }
+
+    // ===== Three-way union with comment on middle member =====
+    match (x) {
+        1 | 2 /* mid */ | 3 => 0
+    }
+
+    // ===== Long enough to force multi-line, comment on first member trailing =====
+    match (s) {
+        MatchStatus.Active /* will-wrap */ | MatchStatus.Inactive | MatchStatus.Pending => "x"
+    }
+
+    // ===== Mixed: block comments on every junction =====
+    match (s) {
+        MatchStatus.Active /* 1 */ | /* 2 */ MatchStatus.Inactive /* 3 */ | /* 4 */ MatchStatus.Pending => "y"
+    }
+
+    // ===== Nested Or-of-Or with trivia at outer and inner pipes =====
+    match (x) {
+        (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0
+    }
 }
