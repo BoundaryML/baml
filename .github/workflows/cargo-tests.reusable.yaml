@@ -42,6 +42,11 @@ jobs:
           # Share cache across similar Linux jobs for better hit rates
           shared-key: "linux-cargo-32gb"
 
+      - name: "Setup Python 3.10+"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
       - name: "Install cargo insta"
         uses: taiki-e/install-action@v2
         with:
@@ -117,6 +122,11 @@ jobs:
           # Share cache across similar macOS jobs for better hit rates
           shared-key: "macos-cargo"
 
+      - name: "Setup Python 3.10+"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
@@ -171,6 +181,11 @@ jobs:
           workspaces: "baml_language -> target"
           # Share cache across similar Windows jobs for better hit rates
           shared-key: "windows-cargo"
+
+      - name: "Setup Python 3.10+"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
