@@ -411,6 +411,12 @@ struct LoweringContext<'db> {
     // type even when the MIR local was declared with a coarser type (e.g.
     // catch variables declared as BuiltinUnknown).
     path_root_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+    // TIR-inferred type of every prefix `segments[..=seg_idx]` for multi-segment
+    // local-rooted Path expressions. Used by the Phase-8 method-call prepend to
+    // read the receiver-prefix type (`segments[..segments.len() - 1]`) so that
+    // class-level type args are threaded correctly through depth ≥ 3 paths
+    // like `holder.box.describe()`.
+    path_segment_types: FxHashMap<(FileScopeId, AstExprId, usize), Tir2Ty>,
     // Per-segment member resolutions for multi-segment local-rooted Path expressions.
     // Set by TIR's infer_local_rooted_path; indexed by (scope, Path ExprId).
     // path_member_resolutions[(scope, expr_id)][i] is the resolution for segments[i+1].
@@ -606,7 +612,7 @@ impl<'db> LoweringContext<'db> {
             })
             .unwrap_or_else(|| index.scope_at_offset(func_span.start(), Some(&func_data.name)));
 
-        // --- Eagerly aggregate expr_types, pat_types, resolutions, exhaustive_matches, path_root_types, and path_member_resolutions from all scopes ---
+        // --- Eagerly aggregate expr_types, pat_types, resolutions, exhaustive_matches, path_root_types, path_segment_types, and path_member_resolutions from all scopes ---
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
@@ -616,6 +622,8 @@ impl<'db> LoweringContext<'db> {
         let mut exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)> =
             rustc_hash::FxHashSet::default();
         let mut path_root_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
+        let mut path_segment_types: FxHashMap<(FileScopeId, AstExprId, usize), Tir2Ty> =
+            FxHashMap::default();
         let mut path_member_resolutions: FxHashMap<
             (FileScopeId, AstExprId),
             Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
@@ -631,6 +639,7 @@ impl<'db> LoweringContext<'db> {
             >,
              exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>,
              path_root_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+             path_segment_types: &mut FxHashMap<(FileScopeId, AstExprId, usize), Tir2Ty>,
              path_member_resolutions: &mut FxHashMap<
                 (FileScopeId, AstExprId),
                 Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
@@ -652,6 +661,9 @@ impl<'db> LoweringContext<'db> {
                 for (&expr_id, ty) in inference.iter_path_root_types() {
                     path_root_types.insert((fsi, expr_id), ty.clone());
                 }
+                for (&(expr_id, seg_idx), ty) in inference.iter_path_segment_types() {
+                    path_segment_types.insert((fsi, expr_id, seg_idx), ty.clone());
+                }
                 for (&expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
                     path_member_resolutions.insert((fsi, expr_id), member_resolutions.clone());
                 }
@@ -665,6 +677,7 @@ impl<'db> LoweringContext<'db> {
             &mut resolutions,
             &mut exhaustive_matches,
             &mut path_root_types,
+            &mut path_segment_types,
             &mut path_member_resolutions,
         );
 
@@ -680,6 +693,7 @@ impl<'db> LoweringContext<'db> {
                 &mut resolutions,
                 &mut exhaustive_matches,
                 &mut path_root_types,
+                &mut path_segment_types,
                 &mut path_member_resolutions,
             );
         }
@@ -760,6 +774,7 @@ impl<'db> LoweringContext<'db> {
             resolutions,
             exhaustive_matches,
             path_root_types,
+            path_segment_types,
             path_member_resolutions,
             current_scope: func_scope_id,
             body: expr_body,
@@ -803,7 +818,7 @@ impl<'db> LoweringContext<'db> {
         let index = file_semantic_index(db, file);
         let let_scope_id: FileScopeId = index.scope_at_offset(let_span.start(), Some(&let_name));
 
-        // --- Eagerly aggregate expr_types, pat_types, resolutions, path_root_types, path_member_resolutions from let scope ---
+        // --- Eagerly aggregate expr_types, pat_types, resolutions, path_root_types, path_segment_types, path_member_resolutions from let scope ---
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
@@ -813,6 +828,8 @@ impl<'db> LoweringContext<'db> {
         let mut exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)> =
             rustc_hash::FxHashSet::default();
         let mut path_root_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
+        let mut path_segment_types: FxHashMap<(FileScopeId, AstExprId, usize), Tir2Ty> =
+            FxHashMap::default();
         let mut path_member_resolutions: FxHashMap<
             (FileScopeId, AstExprId),
             Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
@@ -828,6 +845,7 @@ impl<'db> LoweringContext<'db> {
             >,
              exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>,
              path_root_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+             path_segment_types: &mut FxHashMap<(FileScopeId, AstExprId, usize), Tir2Ty>,
              path_member_resolutions: &mut FxHashMap<
                 (FileScopeId, AstExprId),
                 Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
@@ -849,6 +867,9 @@ impl<'db> LoweringContext<'db> {
                 for (&expr_id, ty) in inference.iter_path_root_types() {
                     path_root_types.insert((fsi, expr_id), ty.clone());
                 }
+                for (&(expr_id, seg_idx), ty) in inference.iter_path_segment_types() {
+                    path_segment_types.insert((fsi, expr_id, seg_idx), ty.clone());
+                }
                 for (&expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
                     path_member_resolutions.insert((fsi, expr_id), member_resolutions.clone());
                 }
@@ -862,6 +883,7 @@ impl<'db> LoweringContext<'db> {
             &mut resolutions,
             &mut exhaustive_matches,
             &mut path_root_types,
+            &mut path_segment_types,
             &mut path_member_resolutions,
         );
 
@@ -877,6 +899,7 @@ impl<'db> LoweringContext<'db> {
                 &mut resolutions,
                 &mut exhaustive_matches,
                 &mut path_root_types,
+                &mut path_segment_types,
                 &mut path_member_resolutions,
             );
         }
@@ -930,6 +953,7 @@ impl<'db> LoweringContext<'db> {
             resolutions,
             exhaustive_matches,
             path_root_types,
+            path_segment_types,
             path_member_resolutions,
             current_scope: let_scope_id,
             body: expr_body,
@@ -1170,6 +1194,15 @@ impl<'db> LoweringContext<'db> {
     fn path_root_ty(&self, expr_id: AstExprId) -> Option<Ty> {
         self.path_root_types
             .get(&(self.current_scope, expr_id))
+            .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
+    }
+
+    /// Get the TIR-inferred type of `segments[..=seg_idx]` for a multi-segment
+    /// local-rooted Path expression. Returns `None` if not recorded.
+    #[allow(dead_code)]
+    fn path_segment_ty(&self, expr_id: AstExprId, seg_idx: usize) -> Option<Ty> {
+        self.path_segment_types
+            .get(&(self.current_scope, expr_id, seg_idx))
             .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
     }
 
@@ -2946,12 +2979,20 @@ impl LoweringContext<'_> {
                     );
                     Operand::Copy(Place::local(recv_local))
                 };
-                // Record the receiver's TIR type so that class-level type args can be
-                // threaded as leading call-site type args (De Bruijn order: class params first).
-                // `path_root_types` stores the root variable's type for multi-segment paths.
+                // Record the receiver-prefix's TIR type so that class-level type args
+                // can be threaded as leading call-site type args (De Bruijn order: class
+                // params first). For depth-2 paths like `b.describe()`, the prefix is
+                // `b` (segment 0). For depth-3 paths like `holder.box.describe()`, the
+                // prefix is `holder.box` (segment 1). In general:
+                //   prefix_idx = receiver_segments.len() - 1 = segments.len() - 2.
+                // Reading `path_root_types` here would pick up the root variable's type
+                // (e.g. `Holder`) instead of the actual receiver type (`Box<int>`),
+                // missing the class-level type args. `segments.len() >= 2` is guaranteed
+                // by the `is_local_method` predicate above.
+                let prefix_idx = segments.len() - 2;
                 receiver_path_tir_ty = self
-                    .path_root_types
-                    .get(&(self.current_scope, callee))
+                    .path_segment_types
+                    .get(&(self.current_scope, callee, prefix_idx))
                     .cloned();
                 let mut all_args = vec![receiver_op];
                 all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
@@ -2976,6 +3017,18 @@ impl LoweringContext<'_> {
                         .map(|cap_idx| Operand::Copy(Place::Capture(cap_idx)))
                 };
                 if let Some(receiver_op) = receiver_op {
+                    // Future-proof parity with `is_local_method`: prefer the
+                    // receiver-prefix's segment type so that, if the package-rooted
+                    // path ever produces a parametric instance receiver, class-level
+                    // type args still flow through the Phase-8 prepend. Today
+                    // `is_pkg_method` resolves to package-namespaced callees with
+                    // no parametric receiver, so this is a no-op
+                    // (`class_type_args.is_empty()` short-circuits the prepend).
+                    let prefix_idx = segments.len() - 2;
+                    receiver_path_tir_ty = self
+                        .path_segment_types
+                        .get(&(self.current_scope, callee, prefix_idx))
+                        .cloned();
                     let mut all_args = vec![receiver_op];
                     all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
                     (callee_op, all_args)

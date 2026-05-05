@@ -123,6 +123,12 @@ pub struct ScopeInference<'db> {
     /// are declared as `BuiltinUnknown` by `lower_catch` before `bind_pattern`
     /// has a chance to refine them).
     path_root_types: FxHashMap<ExprId, Ty>,
+    /// TIR-inferred type of every prefix `segments[..=i]` for multi-segment
+    /// local-rooted `Path` expressions. Index `0` mirrors `path_root_types`;
+    /// later indices are produced by chaining `resolve_member` over each
+    /// segment. MIR uses this to thread receiver-prefix class type-args
+    /// through method-call paths of depth ≥ 3 (e.g. `holder.box.describe()`).
+    path_segment_types: FxHashMap<(ExprId, usize), Ty>,
     /// Per-segment member resolutions for multi-segment local-rooted `Path` expressions.
     ///
     /// For `obj.a.b` (`Path(["obj", "a", "b"])`), contains resolutions for segments
@@ -240,6 +246,18 @@ impl<'db> ScopeInference<'db> {
         self.path_root_types.iter()
     }
 
+    /// Look up the type of `segments[..=seg_idx]` for a multi-segment
+    /// local-rooted `Path` expression. Index `0` mirrors `path_root_type`.
+    pub fn path_segment_type(&self, expr_id: ExprId, seg_idx: usize) -> Option<&Ty> {
+        self.path_segment_types.get(&(expr_id, seg_idx))
+    }
+
+    /// Iterate over all `((ExprId, seg_idx), Ty)` entries for multi-segment
+    /// local-rooted paths in this scope.
+    pub fn iter_path_segment_types(&self) -> impl Iterator<Item = (&(ExprId, usize), &Ty)> {
+        self.path_segment_types.iter()
+    }
+
     /// Look up per-segment member resolutions for a multi-segment local-rooted
     /// `Path` expression. Returns `None` if not recorded (e.g. package-rooted
     /// paths or paths with only a single segment).
@@ -338,6 +356,7 @@ fn infer_scope_types_cycle_initial<'db>(
         catch_residual_throws: FxHashMap::default(),
         exhaustive_matches: FxHashSet::default(),
         path_root_types: FxHashMap::default(),
+        path_segment_types: FxHashMap::default(),
         path_member_resolutions: FxHashMap::default(),
         nested_lambda_types: FxHashMap::default(),
         param_types: Vec::new(),
@@ -963,6 +982,7 @@ pub fn infer_scope_types<'db>(
         exhaustive_matches,
         diagnostics,
         path_root_types,
+        path_segment_types,
         path_member_resolutions,
         param_types,
         nested_lambda_types,
@@ -981,6 +1001,7 @@ pub fn infer_scope_types<'db>(
         catch_residual_throws,
         exhaustive_matches,
         path_root_types,
+        path_segment_types,
         path_member_resolutions,
         nested_lambda_types,
         param_types,

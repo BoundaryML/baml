@@ -305,6 +305,12 @@ pub struct TypeInferenceBuilder<'db> {
     /// chain field projections even when the MIR local was declared with a
     /// coarser type (e.g. catch variables are declared as `BuiltinUnknown`).
     pub path_root_types: FxHashMap<ExprId, Ty>,
+    /// TIR-inferred type of every prefix `segments[..=i]` for multi-segment
+    /// local-rooted `Path` expressions. Index `0` matches `path_root_types`;
+    /// later indices give the type of each chained field access. MIR uses this
+    /// to thread class-level type args from the receiver-prefix (segment
+    /// `len-2`) of method-call paths like `holder.box.describe()`.
+    pub path_segment_types: FxHashMap<(ExprId, usize), Ty>,
     /// Per-segment member resolutions for multi-segment local-rooted `Path`
     /// expressions. Populated by `infer_local_rooted_path`.
     pub path_member_resolutions: FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
@@ -496,6 +502,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             generic_params: Vec::new(),
             in_optional_chain: 0,
             path_root_types: FxHashMap::default(),
+            path_segment_types: FxHashMap::default(),
             path_member_resolutions: FxHashMap::default(),
             param_types: Vec::new(),
             nested_lambda_types: FxHashMap::default(),
@@ -520,6 +527,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashSet<ExprId>,
         TypeCheckDiagnostics<'db>,
         FxHashMap<ExprId, Ty>,
+        FxHashMap<(ExprId, usize), Ty>,
         FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
         Vec<(Name, Ty)>,
         FxHashMap<FileScopeId, Ty>,
@@ -533,6 +541,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.exhaustive_matches,
             diagnostics,
             self.path_root_types,
+            self.path_segment_types,
             self.path_member_resolutions,
             self.param_types,
             self.nested_lambda_types,
@@ -3870,6 +3879,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         // MIR catch variables are declared as BuiltinUnknown, so builder.local_ty()
         // would return a coarser type than TIR inferred here.
         self.path_root_types.insert(expr_id, root_ty.clone());
+        self.path_segment_types
+            .insert((expr_id, 0), root_ty.clone());
 
         // Chain resolve_member for remaining segments, capturing per-segment resolutions.
         let mut current_ty = root_ty;
@@ -3924,6 +3935,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx, bound);
                 current_ty = member_ty.clone();
             }
+
+            // Record the type of segments[..=seg_idx] so MIR can read the
+            // receiver-prefix type of multi-segment method calls (e.g.
+            // `holder.box.describe()` — the prefix is `holder.box` at index 1).
+            self.path_segment_types
+                .insert((expr_id, seg_idx), current_ty.clone());
 
             // Capture whatever resolution `resolve_member` (called by
             // `resolve_member_for_path_segment`) stored at `expr_id`.
@@ -6253,6 +6270,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_exhaustive_matches = std::mem::take(&mut self.exhaustive_matches);
         let saved_catch_residual_throws = std::mem::take(&mut self.catch_residual_throws);
         let saved_path_root_types = std::mem::take(&mut self.path_root_types);
+        let saved_path_segment_types = std::mem::take(&mut self.path_segment_types);
         let saved_path_member_resolutions = std::mem::take(&mut self.path_member_resolutions);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
 
@@ -6349,6 +6367,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.exhaustive_matches = saved_exhaustive_matches;
         self.catch_residual_throws = saved_catch_residual_throws;
         self.path_root_types = saved_path_root_types;
+        self.path_segment_types = saved_path_segment_types;
         self.path_member_resolutions = saved_path_member_resolutions;
         self.lambda_effective_throws = saved_lambda_effective_throws;
         self.locals = saved_locals;
