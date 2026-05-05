@@ -308,8 +308,8 @@ fn baml.llm.parse(function_name: string, json: string) -> void {
 
     bb6: {
         _11 = copy _7;
-        _12 = load_type(TypeArgRef(0));
-        _13 = load_type(TypeArgRef(1));
+        _12 = load_type(#0);
+        _13 = load_type(#1);
         _14 = dispatch_future const fn baml.llm.__sap_parse_final(copy _2, copy _11, copy _12, copy _13) -> bb7;
     }
 
@@ -823,7 +823,7 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
 
     bb0: {
         _3 = copy _1.3;
-        _4 = is_type(copy _3, Concrete(Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })));
+        _4 = is_type(copy _3, baml.llm.RetryPolicy);
         branch copy _4 -> [bb3, bb1];
     }
 
@@ -1061,7 +1061,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 
     bb10: {
-        _7 = load_type(TypeArgRef(0));
+        _7 = load_type(#0);
         goto -> bb11;
     }
 
@@ -1129,7 +1129,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
 
     bb25: {
         _27 = copy _23;
-        _28 = load_type(TypeArgRef(0));
+        _28 = load_type(#0);
         _29 = dispatch_future const fn baml.llm.PrimitiveClient.parse(copy _6, copy _27, copy _28) -> bb26;
     }
 
@@ -1345,7 +1345,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     }
 
     bb10: {
-        _7 = load_type(TypeArgRef(0));
+        _7 = load_type(#0);
         goto -> bb11;
     }
 
@@ -1474,7 +1474,7 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
 
     bb0: {
         _4 = copy _1.3;
-        _5 = is_type(copy _4, Concrete(Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })));
+        _5 = is_type(copy _4, baml.llm.RetryPolicy);
         branch copy _5 -> [bb4, bb1];
     }
 
@@ -1621,7 +1621,7 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
 
     bb0: {
         _4 = copy _1.3;
-        _5 = is_type(copy _4, Concrete(Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })));
+        _5 = is_type(copy _4, baml.llm.RetryPolicy);
         branch copy _5 -> [bb4, bb1];
     }
 
@@ -1802,12 +1802,12 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     }
 
     bb6: {
-        _10 = is_type(copy _7, Concrete(Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }));
+        _10 = is_type(copy _7, null);
         branch copy _10 -> [bb16, bb7];
     }
 
     bb7: {
-        _11 = is_type(copy _7, Concrete(String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }));
+        _11 = is_type(copy _7, string);
         branch copy _11 -> [bb8, bb9];
     }
 
@@ -1864,7 +1864,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     }
 
     bb19: {
-        _29 = is_type(copy _24, Concrete(String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }));
+        _29 = is_type(copy _24, string);
         branch copy _29 -> [bb20, bb22];
     }
 
@@ -1891,8 +1891,8 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     bb24: {
         _37 = copy _34;
         _38 = copy _1.3;
-        _39 = load_type(TypeArgRef(0));
-        _40 = load_type(TypeArgRef(1));
+        _39 = load_type(#0);
+        _40 = load_type(#1);
         _41 = dispatch_future const fn baml.llm.__sap_parse_final(copy _37, copy _38, copy _39, copy _40) -> bb25;
     }
 
@@ -1988,12 +1988,12 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     }
 
     bb5: {
-        _6 = is_type(copy _3, Concrete(Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }));
+        _6 = is_type(copy _3, null);
         branch copy _6 -> [bb23, bb6];
     }
 
     bb6: {
-        _7 = is_type(copy _3, Concrete(String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }));
+        _7 = is_type(copy _3, string);
         branch copy _7 -> [bb7, bb8];
     }
 
@@ -2038,8 +2038,8 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     bb15: {
         _23 = copy _19;
         _24 = copy _1.3;
-        _25 = load_type(TypeArgRef(0));
-        _26 = load_type(TypeArgRef(1));
+        _25 = load_type(#0);
+        _26 = load_type(#1);
         _27 = dispatch_future const fn baml.llm.__sap_parse_partial(copy _23, copy _24, copy _25, copy _26) -> bb16;
     }
 
@@ -2048,12 +2048,12 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     }
 
     bb17: {
-        _28 = is_type(copy _22, Concrete(Class(TypeName { name: "StreamNoYield", module_path: ["baml", "stream"], display_name: "baml.stream.StreamNoYield" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })));
+        _28 = is_type(copy _22, baml.stream.StreamNoYield);
         branch copy _28 -> [bb1, bb18];
     }
 
     bb18: {
-        _29 = is_type(copy _22, Concrete(Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }));
+        _29 = is_type(copy _22, void);
         branch copy _29 -> [bb19, bb1];
     }
 

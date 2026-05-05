@@ -270,7 +270,7 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
                 format!("<object {}>", idx.raw())
             }
         }
-        bex_vm_types::ConstValue::Type(template) => format!("<type_template {template:?}>"),
+        bex_vm_types::ConstValue::Type(template) => format!("<type_template {template}>"),
         bex_vm_types::ConstValue::ClassWithTypeArgs {
             class_obj,
             type_args_templates,
@@ -854,7 +854,10 @@ fn display_instruction_textual(
             let name = meta_str(const_idx);
             format!("is_type {name}")
         }
-        Instruction::LoadType(const_idx) => format!("load_type {const_idx}"),
+        Instruction::LoadType(const_idx) => {
+            let name = meta_str(const_idx);
+            format!("load_type {name}")
+        }
         Instruction::DenseTag(table_idx) => {
             let names = function
                 .bytecode

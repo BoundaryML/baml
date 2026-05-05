@@ -2,23 +2,23 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.reflect_array() -> type {
-    load_type 0
+    load_type #0[]
     return
 }
 
 function user.reflect_int_array() -> type {
-    load_type 0
+    load_type int
     call user.reflect_array
     return
 }
 
 function user.reflect_person() -> type {
-    load_type 0
+    load_type Person
     call user.reflect_type
     return
 }
 
 function user.reflect_type() -> type {
-    load_type 0
+    load_type #0
     return
 }

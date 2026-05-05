@@ -19,6 +19,8 @@
 //! `function_generic_params` ordering so that the mapping is stable across
 //! compilation.
 
+use std::fmt;
+
 use crate::{Ty, TyAttr, TypeName};
 
 /// A type expression that may contain unresolved generic-parameter references.
@@ -81,6 +83,36 @@ impl TyTemplate {
             Self::Union(parts) => parts.iter().all(TyTemplate::is_fully_concrete),
             Self::Map(k, v) => k.is_fully_concrete() && v.is_fully_concrete(),
             Self::Class(_, args) => args.iter().all(TyTemplate::is_fully_concrete),
+        }
+    }
+}
+
+impl fmt::Display for TyTemplate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Concrete(ty) => write!(f, "{ty}"),
+            Self::TypeArgRef(n) => write!(f, "#{n}"),
+            Self::Array(inner) => write!(f, "{inner}[]"),
+            Self::Optional(inner) => write!(f, "{inner}?"),
+            Self::Union(parts) => {
+                let strs: Vec<String> = parts.iter().map(ToString::to_string).collect();
+                write!(f, "{}", strs.join(" | "))
+            }
+            Self::Map(k, v) => write!(f, "map<{k}, {v}>"),
+            Self::Class(name, args) => {
+                write!(f, "{name}")?;
+                if !args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, arg) in args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{arg}")?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
         }
     }
 }

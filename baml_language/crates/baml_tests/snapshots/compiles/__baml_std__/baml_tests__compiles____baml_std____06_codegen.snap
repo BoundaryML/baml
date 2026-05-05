@@ -298,8 +298,8 @@ function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, fun
     dispatch_future baml.llm.StreamCache.new
     await
     store_var cache
-    load_type 1
-    load_type 2
+    load_type #0
+    load_type #1
     alloc_instance<2> baml.llm.Stream
     load_var primitive
     init_field ._client
@@ -691,7 +691,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     load_field .jinja_string
     load_var context
     load_field .args
-    load_type 4
+    load_type #0
     dispatch_future baml.llm.PrimitiveClient.render_prompt
     await
     store_var prompt
@@ -748,7 +748,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     store_var body
     load_var primitive
     load_var body
-    load_type 4
+    load_type #0
     dispatch_future baml.llm.PrimitiveClient.parse
     await
     jump L15
@@ -878,7 +878,7 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     load_field .jinja_string
     load_var context
     load_field .args
-    load_type 4
+    load_type #0
     dispatch_future baml.llm.PrimitiveClient.render_prompt
     await
     store_var prompt
@@ -1301,8 +1301,8 @@ function baml.llm.Stream.final(self: null) -> void {
     await
     load_var self
     load_field ._cache
-    load_type 3
-    load_type 4
+    load_type #0
+    load_type #1
     dispatch_future baml.llm.__sap_parse_final
     await
     return
@@ -1364,8 +1364,8 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
     await
     load_var self
     load_field ._cache
-    load_type 4
-    load_type 5
+    load_type #0
+    load_type #1
     dispatch_future baml.llm.__sap_parse_partial
     await
     store_var parsed
@@ -1507,8 +1507,8 @@ function baml.llm.parse(function_name: string, json: string) -> void {
     store_var cache
     load_var json
     load_var cache
-    load_type 1
-    load_type 2
+    load_type #0
+    load_type #1
     dispatch_future baml.llm.__sap_parse_final
     await
     return

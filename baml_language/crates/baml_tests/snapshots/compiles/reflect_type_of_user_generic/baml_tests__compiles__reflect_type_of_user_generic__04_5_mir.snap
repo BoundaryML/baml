@@ -7,7 +7,7 @@ fn user.reflect_array() -> type {
     let _0: type // _0 // return
 
     bb0: {
-        _0 = load_type(Array(TypeArgRef(0)));
+        _0 = load_type(#0[]);
         goto -> bb1;
     }
 
@@ -22,7 +22,7 @@ fn user.reflect_int_array() -> type {
     let _1: type
 
     bb0: {
-        _1 = load_type(Concrete(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }));
+        _1 = load_type(int);
         _0 = call const fn user.reflect_array<copy _1>() -> [bb1];
     }
 
@@ -37,7 +37,7 @@ fn user.reflect_person() -> type {
     let _1: type
 
     bb0: {
-        _1 = load_type(Concrete(Class(TypeName { name: "Person", module_path: ["user"], display_name: "Person" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })));
+        _1 = load_type(Person);
         _0 = call const fn user.reflect_type<copy _1>() -> [bb1];
     }
 
@@ -51,7 +51,7 @@ fn user.reflect_type() -> type {
     let _0: type // _0 // return
 
     bb0: {
-        _0 = load_type(TypeArgRef(0));
+        _0 = load_type(#0);
         goto -> bb1;
     }
 

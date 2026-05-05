@@ -424,7 +424,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         } => {
             write!(f, "is_type(")?;
             write_operand(f, operand)?;
-            write!(f, ", {ty_template:?})")
+            write!(f, ", {ty_template})")
         }
         Rvalue::MakeClosure {
             lambda_idx,
@@ -450,7 +450,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write!(f, ")")
         }
         Rvalue::LoadType(template) => {
-            write!(f, "load_type({template:?})")
+            write!(f, "load_type({template})")
         }
     }
 }

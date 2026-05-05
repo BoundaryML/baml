@@ -2463,7 +2463,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error> {
         let const_idx = self.add_constant(ConstValue::Type(template.clone()));
         let inst = self.emit(Instruction::LoadType(const_idx));
-        self.set_operand(inst, OperandMeta::Const(format!("type:{template:?}")));
+        self.set_operand(inst, OperandMeta::Const(template.to_string()));
         Ok(())
     }
 

@@ -6,7 +6,7 @@ fn user.f() -> type {
     let _0: type // _0 // return
 
     bb0: {
-        _0 = load_type(TypeArgRef(0));
+        _0 = load_type(#0);
         goto -> bb1;
     }
 
