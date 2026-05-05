@@ -51,9 +51,10 @@ pub(crate) fn ensure_rustls_crypto_provider() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }
 
-#[cfg(any(
-    target_arch = "wasm32",
-    all(not(feature = "ring-crypto"), not(feature = "aws-crypto"))
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    not(feature = "ring-crypto"),
+    not(feature = "aws-crypto")
 ))]
 pub(crate) fn ensure_rustls_crypto_provider() {}
 
