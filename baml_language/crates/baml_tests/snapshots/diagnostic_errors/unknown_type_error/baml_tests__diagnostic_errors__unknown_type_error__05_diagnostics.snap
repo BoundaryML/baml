@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 39556
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: unresolved type: blah
@@ -29,6 +28,16 @@ assertion_line: 39556
  13 │ function Baz() -> unknown_optional? {
     │                  ─────────┬────────  
     │                           ╰────────── unresolved type: unknown_optional
+    │ 
+    │ Note: Error code: E0002
+────╯
+
+  [type] Error: unresolved type: Status.Typo
+    ╭─[ unknown_type_error.baml:26:37 ]
+    │
+ 26 │ function StatusTypoInTypePosition(s: Status.Typo) -> int {
+    │                                     ──────┬─────  
+    │                                           ╰─────── unresolved type: Status.Typo
     │ 
     │ Note: Error code: E0002
 ────╯

@@ -3135,14 +3135,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
 
-            ast::Pattern::Class { fields, .. } => {
-                // Recurse into fields. Phase 2: project field types from
-                // the class for proper field-pattern types; for now pass
-                // `flow_ty` through as a fallback.
-                let fields = fields.clone();
-                for f in fields {
-                    self.register_pattern_types(f.pat, flow_ty, declared.clone(), body);
-                }
+            ast::Pattern::Class { .. } => {
+                // TODO(class-destructure): project each field's declared type
+                // via `lookup_class_fields(qn, args)` from `flow_ty` and recurse
+                // with the field type, not `flow_ty`. `Pattern::Class` is
+                // parser-gated so this is unreachable from user syntax today.
+                todo!("class-pattern field-type projection in register_pattern_types");
             }
 
             ast::Pattern::Chain(parts) | ast::Pattern::Or(parts) => {

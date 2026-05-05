@@ -204,8 +204,14 @@ pub fn lower_type_expr_in_ns(
                             None
                         }
                     });
-                    if let Some(def) = enum_resolved {
-                        if matches!(def, Definition::Enum(_)) {
+                    if let Some(def @ Definition::Enum(enum_loc)) = enum_resolved {
+                        // Verify the variant actually exists on the enum;
+                        // otherwise `Status.Typo` would silently produce a
+                        // bogus `Ty::EnumVariant` and downstream code would
+                        // never see `UnresolvedType`.
+                        let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
+                        let enum_data = &item_tree[enum_loc.id(db)];
+                        if enum_data.variants.iter().any(|v| v.name == *variant) {
                             return Ty::EnumVariant(
                                 qualify_def(db, def, enum_short),
                                 variant.clone(),
