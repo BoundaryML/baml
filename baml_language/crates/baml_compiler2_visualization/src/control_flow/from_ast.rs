@@ -210,11 +210,18 @@ impl<'a> AstGraphBuilder<'a> {
                 let needs_scope =
                     matches!(init_expr, ast::Expr::If { .. } | ast::Expr::Match { .. });
                 if needs_scope {
-                    // `format_pattern` already prefixes top-level Binds with
-                    // `let ` (and chains-of-Bind start with `let n …`), so we
-                    // don't prepend our own keyword here.
+                    // `format_pattern` prefixes top-level `Bind` patterns
+                    // with `let ` so they don't collapse with bare path arms;
+                    // for non-Bind patterns (`_`, type patterns, class
+                    // destructures, …) we still need the keyword to render
+                    // the let-statement as a declaration rather than an
+                    // assignment.
                     let pat_name = self.format_pattern(*pattern);
-                    let label = format!("{pat_name} = ...");
+                    let label = if pat_name.starts_with("let ") {
+                        format!("{pat_name} = ...")
+                    } else {
+                        format!("let {pat_name} = ...")
+                    };
                     self.emit_other_scope(*init, Some(label));
                 } else {
                     self.visit_expr(*init);
@@ -1229,6 +1236,44 @@ mod tests {
             .find(|n| matches!(n.node_type, NodeType::OtherScope))
             .expect("should have OtherScope");
         assert_eq!(scope.label, "let x = ...");
+    }
+
+    #[test]
+    fn let_with_wildcard_pattern_keeps_let_keyword() {
+        // Non-Bind let-stmt patterns (Wildcard, Type, Class destructure)
+        // need the explicit `let ` keyword in CFG labels — without it the
+        // node renders like an assignment (`_ = ...`) instead of a
+        // declaration. Regression: previously `format_pattern` was assumed
+        // to prefix every let pattern with `let `, but it only does so for
+        // top-level Binds.
+        let body = make_ast_body(|exprs, stmts, patterns, _| {
+            let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
+            let then_b = exprs.alloc(ast::Expr::Literal(ast::Literal::Int(1)));
+            let else_b = exprs.alloc(ast::Expr::Literal(ast::Literal::Int(2)));
+            let if_expr = exprs.alloc(ast::Expr::If {
+                condition: cond,
+                then_branch: then_b,
+                else_branch: Some(else_b),
+            });
+            let pat = patterns.alloc(ast::Pattern::Wildcard);
+            let let_stmt = stmts.alloc(ast::Stmt::Let {
+                pattern: pat,
+                initializer: Some(if_expr),
+                is_watched: false,
+                origin: ast::LetOrigin::Source,
+            });
+            Some(exprs.alloc(ast::Expr::Block {
+                stmts: vec![let_stmt],
+                tail_expr: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let scope = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::OtherScope))
+            .expect("should have OtherScope");
+        assert_eq!(scope.label, "let _ = ...");
     }
 
     #[test]

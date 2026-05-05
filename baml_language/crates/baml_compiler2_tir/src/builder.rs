@@ -2201,51 +2201,56 @@ impl<'db> TypeInferenceBuilder<'db> {
                 initializer,
                 ..
             } => {
-                let (init_ty_opt, declared_for_scope) = if let Some(init) = *initializer {
-                    // Compute the pattern's natural type. This validates
-                    // chain links pairwise and emits diagnostics for invalid
-                    // chains. The most-specific narrow (leftmost link of the
-                    // chain) is the user's annotation, if any.
-                    let pat_ty = self.pattern_type(*pattern, body, init);
-                    let has_annotation = !matches!(pat_ty, Ty::Never { .. });
-                    let ty = if !has_annotation || matches!(pat_ty, Ty::Void { .. }) {
-                        // No annotation, or annotation is void (already
-                        // reported by AST). Just infer.
-                        self.infer_expr(init, body)
-                    } else {
-                        self.check_expr(init, body, &pat_ty)
-                    };
-                    if matches!(ty, Ty::Void { .. }) {
-                        let err = if matches!(
-                            body.exprs[init],
-                            Expr::Call { .. } | Expr::OptionalCall { .. }
-                        ) {
-                            TirTypeError::VoidFunctionResultUsed
+                let (init_result_ty, binding_flow_ty, declared_for_scope) =
+                    if let Some(init) = *initializer {
+                        // Compute the pattern's natural type. This validates
+                        // chain links pairwise and emits diagnostics for invalid
+                        // chains. The most-specific narrow (leftmost link of the
+                        // chain) is the user's annotation, if any.
+                        let pat_ty = self.pattern_type(*pattern, body, init);
+                        let has_annotation = !matches!(pat_ty, Ty::Never { .. });
+                        let ty = if !has_annotation || matches!(pat_ty, Ty::Void { .. }) {
+                            // No annotation, or annotation is void (already
+                            // reported by AST). Just infer.
+                            self.infer_expr(init, body)
                         } else {
-                            TirTypeError::VoidUsedAsValue
+                            self.check_expr(init, body, &pat_ty)
                         };
-                        self.context.report_simple(err, init);
-                    }
-                    if has_annotation {
-                        // Use the user's declared type as the binding's
-                        // flow type — the annotation is a contract, not a
-                        // floor. `let result: Res = Failure { .. }` keeps
-                        // `result: Res` so subsequent matches/uses see the
-                        // wider type the user wrote, not the init's inferred
-                        // narrow shape.
-                        (Some(pat_ty.clone()), Some(pat_ty))
+                        if matches!(ty, Ty::Void { .. }) {
+                            let err = if matches!(
+                                body.exprs[init],
+                                Expr::Call { .. } | Expr::OptionalCall { .. }
+                            ) {
+                                TirTypeError::VoidFunctionResultUsed
+                            } else {
+                                TirTypeError::VoidUsedAsValue
+                            };
+                            self.context.report_simple(err, init);
+                        }
+                        if has_annotation {
+                            // Use the user's declared type as the binding's
+                            // flow type — the annotation is a contract, not a
+                            // floor. `let result: Res = Failure { .. }` keeps
+                            // `result: Res` so subsequent matches/uses see the
+                            // wider type the user wrote, not the init's inferred
+                            // narrow shape. Keep the init's real result type
+                            // around separately for the divergence check below
+                            // — `let x: T = throw ...` must still mark the
+                            // surrounding block divergent.
+                            (Some(ty), Some(pat_ty.clone()), Some(pat_ty))
+                        } else {
+                            // Unannotated lets get widened/evolving types and
+                            // record no "declared type" — the contract is purely
+                            // the inferred shape.
+                            let flow_ty = ty.clone().widen_fresh().make_evolving();
+                            (Some(ty), Some(flow_ty), None)
+                        }
                     } else {
-                        // Unannotated lets get widened/evolving types and
-                        // record no "declared type" — the contract is purely
-                        // the inferred shape.
-                        (Some(ty.widen_fresh().make_evolving()), None)
-                    }
-                } else {
-                    (None, None)
-                };
+                        (None, None, None)
+                    };
 
-                let diverges = matches!(init_ty_opt, Some(Ty::Never { .. }));
-                if let Some(flow_ty) = init_ty_opt {
+                let diverges = matches!(init_result_ty, Some(Ty::Never { .. }));
+                if !diverges && let Some(flow_ty) = binding_flow_ty {
                     self.register_pattern_types(*pattern, &flow_ty, declared_for_scope, body);
                 }
                 diverges
@@ -3155,11 +3160,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             // For `Type` patterns we override the just-inserted entry with
             // the *natural* type (from the TypeExpr) — MIR uses that to
             // know what to runtime-test the scrutinee against (e.g., int
-            // literal `1` vs. structural `int`).
+            // literal `1` vs. structural `int`). Mirror `resolve_type_expr`'s
+            // bare-primitive sugar check so `int`/`string`/`image`/etc. land
+            // as their `Ty::Primitive` rather than going through the package
+            // lookup path and falling back to `Ty::Unknown`.
             ast::Pattern::Type(_) => {
                 if let ast::Pattern::Type(t) = &body.patterns[pat_id] {
                     let t = t.clone();
-                    let resolved = self.lower_pattern_type_expr_silent(&t);
+                    let resolved = self.resolve_pattern_type_expr_silent(&t);
                     self.pattern_types.insert(pat_id, resolved);
                 }
             }
@@ -3225,6 +3233,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
         }
+    }
+
+    /// Silent variant of `resolve_type_expr` — checks bare-primitive sugar
+    /// (`int`/`string`/media names) before falling through to the package
+    /// lookup path. Used by `register_pattern_types` so primitive Type
+    /// patterns don't degrade to `Unknown` on the second-pass override.
+    fn resolve_pattern_type_expr_silent(&self, ty: &TypeExpr) -> Ty {
+        if let TypeExpr::Path { segments, .. } = ty
+            && segments.len() == 1
+            && let Some(resolved) = bare_type_sugar_to_ty(&segments[0])
+        {
+            return resolved;
+        }
+        self.lower_pattern_type_expr_silent(ty)
     }
 
     /// Resolve a `TypeExpr` without emitting any diagnostics — used by

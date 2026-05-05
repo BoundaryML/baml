@@ -63,6 +63,14 @@ impl MatchPattern {
             SyntaxKind::PAREN_PATTERN => ParenPattern::from_node(&node).map(MatchPattern::Paren),
             SyntaxKind::UNION_PATTERN => UnionPattern::from_node(&node).map(MatchPattern::Union),
             SyntaxKind::CHAIN_PATTERN => ChainPattern::from_node(&node).map(MatchPattern::Chain),
+            // Class destructure patterns are emitted by the parser
+            // (`Foo { a, b: <pat>, ... }`) and lowered by the compiler, but
+            // the formatter doesn't have a printer for them yet. Surface a
+            // clear panic so we don't silently bottom out in the catch-all
+            // `UnexpectedKindDesc` branch.
+            SyntaxKind::DESTRUCTURE_PATTERN => {
+                todo!("formatter support for class destructure patterns")
+            }
             found => Err(StrongAstError::UnexpectedKindDesc {
                 expected_desc: "a pattern kind".into(),
                 found,
@@ -242,10 +250,20 @@ impl ParenPattern {
 
 impl Printable for ParenPattern {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        // Preserve trivia between the parens and the inner pattern. Without
+        // this, comments like `( /* hint */ Foo )` or `( Foo /* trail */ )`
+        // are silently dropped — data loss and an idempotence break for
+        // re-formatting. Mirrors the trivia handling in `ChainPattern`.
         printer.print_raw_token(&self.open_paren);
-        printer.print(&*self.pattern, shape);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        printer.print_trivia_squished(open_trailing);
+        let pat_leading = printer.trivia.get_leading_for_element(&*self.pattern);
+        printer.print_trivia_squished(pat_leading);
+        let info = printer.print(&*self.pattern, shape);
+        let pat_trailing = printer.trivia.get_trailing_for_element(&*self.pattern);
+        printer.print_trivia_squished(pat_trailing);
         printer.print_raw_token(&self.close_paren);
-        PrintInfo::default_single_line()
+        info
     }
     fn leftmost_token(&self) -> TextRange {
         self.open_paren.span()

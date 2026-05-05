@@ -366,7 +366,9 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     // ===== Nested Or wrapping a chain, with trivia at boundaries =====
     match (x) {
-        ((let x: /* inner1 colon */int) | (let x: /* inner2 colon */int)) => x,
+        (/* outer paren leading */(let x: /* inner1 colon */int) | (let x: /* inner2 colon */int)) => {
+            x
+        },
     }
 
     // ===== Wildcard chain narrow with trivia =====
