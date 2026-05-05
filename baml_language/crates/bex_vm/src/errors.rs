@@ -169,6 +169,13 @@ pub enum VmRustFnError {
     BamlError(#[from] VmBamlError),
     #[error("{0}")]
     InternalError(#[from] VmInternalError),
+    /// A pre-built exception `Value` to throw directly as a catchable error.
+    ///
+    /// Used by native functions that need to throw user-defined class instances
+    /// (e.g. `baml.json.JsonParseError`) without going through the
+    /// `VmPanic` / `VmBamlError` enumeration machinery.
+    #[error("thrown value")]
+    Thrown(Value),
 }
 
 #[derive(Debug, Clone, PartialEq)]

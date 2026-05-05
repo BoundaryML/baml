@@ -1813,6 +1813,7 @@ impl BexVm {
             VmRustFnError::Panic(panic) => VmError::Thrown(self.panic_to_exception_value(panic)),
             VmRustFnError::BamlError(err) => VmError::Thrown(self.error_to_exception_value(err)),
             VmRustFnError::InternalError(err) => VmError::InternalError(err),
+            VmRustFnError::Thrown(value) => VmError::Thrown(value),
         }
     }
 

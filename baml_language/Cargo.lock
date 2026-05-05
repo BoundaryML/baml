@@ -1678,6 +1678,7 @@ dependencies = [
  "colored",
  "indexmap 2.13.0",
  "log",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "web-time",

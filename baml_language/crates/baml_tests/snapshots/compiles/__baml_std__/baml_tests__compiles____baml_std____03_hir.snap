@@ -175,6 +175,9 @@ class baml.json.JsonSerializationError {
   reason: string
 }
 type baml.json.json = null | bool | int | float | string | baml.json.json[] | map<string, baml.json.json>
+function baml.json.parse(s: string) -> baml.json.json  [builtin]
+function baml.json.stringify(j: baml.json.json) -> string  [builtin]
+function baml.json.stringify_pretty(j: baml.json.json) -> string  [builtin]
 
 --- <builtin>/baml/ns_llm/llm.baml ---
 class baml.llm.ExecutionContext {
