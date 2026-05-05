@@ -161,6 +161,21 @@ function baml.http.text(self: ?) -> string  [builtin]
 --- <builtin>/baml/ns_io/io.baml ---
 function baml.io.input(prompt: string?) -> string  [builtin]
 
+--- <builtin>/baml/ns_json/json.baml ---
+class baml.json.JsonDecodeError {
+  message: string
+  path: string
+}
+class baml.json.JsonParseError {
+  message: string
+}
+class baml.json.JsonSerializationError {
+  message: string
+  path: string
+  reason: string
+}
+type baml.json.json = null | bool | int | float | string | baml.json.json[] | map<string, baml.json.json>
+
 --- <builtin>/baml/ns_llm/llm.baml ---
 class baml.llm.ExecutionContext {
   jinja_string: string

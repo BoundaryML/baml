@@ -199,6 +199,34 @@ class baml.http.SseStream$stream {
 
 --- <builtin>/baml/ns_io/io.baml ---
 
+--- <builtin>/baml/ns_json/json.baml ---
+type baml.json.json = null | bool | int | float | string | baml.json.json[] | map<string, baml.json.json>
+class baml.json.JsonParseError {
+  message: string
+}
+class baml.json.JsonDecodeError {
+  message: string
+  path: string
+}
+class baml.json.JsonSerializationError {
+  message: string
+  path: string
+  reason: string
+}
+type baml.json.json$stream = null | bool | int | float | string | baml.json.json$stream[] | map<string, baml.json.json$stream>
+class baml.json.JsonParseError$stream {
+  message: null | string
+}
+class baml.json.JsonDecodeError$stream {
+  message: null | string
+  path: null | string
+}
+class baml.json.JsonSerializationError$stream {
+  message: null | string
+  path: null | string
+  reason: null | string
+}
+
 --- <builtin>/baml/ns_llm/llm.baml ---
 class baml.llm.OrchestrationStep {
   primitive_client: baml.llm.PrimitiveClient

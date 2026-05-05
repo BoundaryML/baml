@@ -54,6 +54,11 @@ namespace baml.http:
   function send
 namespace baml.io:
   function input
+namespace baml.json:
+  class JsonDecodeError { methods: [] }
+  class JsonParseError { methods: [] }
+  class JsonSerializationError { methods: [] }
+  type json
 namespace baml.llm:
   class AnthropicOptions { methods: [] }
   class AzureOpenAiOptions { methods: [] }
