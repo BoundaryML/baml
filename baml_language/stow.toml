@@ -127,5 +127,8 @@ name = "sys"
 link_crates = ["baml_type",  "bex_heap", "bex_vm_types"]
 
 [[namespaces]]
+name = "codegen"
+
+[[namespaces]]
 name = "surface"
 name_exceptions = {"baml_cli" = "baml_cli", "baml_playground_wasm" = "baml_playground_wasm" }

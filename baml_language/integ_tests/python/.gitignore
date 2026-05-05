@@ -1,6 +1,0 @@
-baml_client/
-baml_sdk/
-*.egg-info/
-.venv/
-__pycache__/
-.pytest_cache/

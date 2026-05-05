@@ -63,6 +63,24 @@ jobs:
         run: cargo insta test --workspace --all-features --unreferenced reject
         working-directory: baml_language
 
+      - name: "Run language test suites"
+        run: |
+          found=0
+          for dir in baml_language/languages/*/; do
+            lang=$(basename "$dir")
+            if [ -f "$dir/test.sh" ]; then
+              echo "==> Running $lang test suite"
+              bash "$dir/test.sh"
+              found=$((found + 1))
+            else
+              echo "::error::languages/$lang/ exists but has no test.sh"
+              exit 1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::warning::No language test suites found in languages/*/"
+          fi
+
       - name: "Check documentation"
         run: cargo doc --all --no-deps
         working-directory: baml_language
@@ -113,6 +131,24 @@ jobs:
           cargo test --all-features --doc
         working-directory: baml_language
 
+      - name: "Run language test suites"
+        run: |
+          found=0
+          for dir in baml_language/languages/*/; do
+            lang=$(basename "$dir")
+            if [ -f "$dir/test.sh" ]; then
+              echo "==> Running $lang test suite"
+              bash "$dir/test.sh"
+              found=$((found + 1))
+            else
+              echo "::error::languages/$lang/ exists but has no test.sh"
+              exit 1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::warning::No language test suites found in languages/*/"
+          fi
+
   cargo-test-windows:
     name: "cargo test (windows)"
     runs-on: blacksmith-4vcpu-windows-2025
@@ -150,6 +186,24 @@ jobs:
           cargo nextest run --all-features
           cargo test --all-features --doc
         working-directory: baml_language
+
+      - name: "Run language test suites"
+        run: |
+          found=0
+          for dir in baml_language/languages/*/; do
+            lang=$(basename "$dir")
+            if [ -f "$dir/test.sh" ]; then
+              echo "==> Running $lang test suite"
+              bash "$dir/test.sh"
+              found=$((found + 1))
+            else
+              echo "::error::languages/$lang/ exists but has no test.sh"
+              exit 1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::warning::No language test suites found in languages/*/"
+          fi
 
   cargo-test-wasm:
     name: "cargo test (wasm)"
