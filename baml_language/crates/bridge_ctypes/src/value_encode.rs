@@ -19,7 +19,7 @@ use crate::{
 ///
 /// Opaque types (Handle, Resource, `FunctionRef`, Adt) are inserted into `handle_table`
 /// and encoded as `BamlHandle` messages so the host can round-trip them back.
-pub fn external_to_outbound(
+pub fn external_to_baml_value(
     value: &BexExternalValue,
     options: &CffiHandleTableOptions,
 ) -> Result<BamlOutboundValue, CtypesError> {
@@ -35,7 +35,7 @@ pub fn external_to_outbound(
         } => {
             let values: Result<Vec<BamlOutboundValue>, CtypesError> = items
                 .iter()
-                .map(|v| external_to_outbound(v, options))
+                .map(|v| external_to_baml_value(v, options))
                 .collect();
             Some(BamlValueVariant::ListValue(BamlValueList {
                 item_type: Some(ty_to_field_type(element_type)),
@@ -51,7 +51,7 @@ pub fn external_to_outbound(
             for (key, val) in entries {
                 baml_entries.push(BamlOutboundMapEntry {
                     key: key.clone(),
-                    value: Some(external_to_outbound(val, options)?),
+                    value: Some(external_to_baml_value(val, options)?),
                 });
             }
             Some(BamlValueVariant::MapValue(BamlValueMap {
@@ -65,7 +65,7 @@ pub fn external_to_outbound(
             for (key, val) in fields {
                 baml_fields.push(BamlOutboundMapEntry {
                     key: key.clone(),
-                    value: Some(external_to_outbound(val, options)?),
+                    value: Some(external_to_baml_value(val, options)?),
                 });
             }
             Some(BamlValueVariant::ClassValue(BamlValueClass {
@@ -88,7 +88,7 @@ pub fn external_to_outbound(
             is_dynamic: false,
         })),
         BexExternalValue::Union { value, metadata } => {
-            let inner = external_to_outbound(value, options)?;
+            let inner = external_to_baml_value(value, options)?;
             Some(BamlValueVariant::UnionVariantValue(Box::new(
                 BamlValueUnionVariant {
                     name: metadata.name.as_ref().map(|n| BamlTyName {
@@ -120,7 +120,7 @@ pub fn external_to_outbound(
         }
         BexExternalValue::RustData(arc) => {
             if let Some(converted) = bex_project::try_convert_rust_data(arc) {
-                return external_to_outbound(&converted, options);
+                return external_to_baml_value(&converted, options);
             }
             let table_value = CffiHandleTableEntry::RustData(BexRustData(arc.clone()));
             let ht = table_value.handle_type();
@@ -342,7 +342,7 @@ mod tests {
         ))));
         let value = BexExternalValue::RustData(prompt);
         let options = CffiHandleTableOptions::for_in_process();
-        let handle = extract_handle(external_to_outbound(&value, &options).unwrap());
+        let handle = extract_handle(external_to_baml_value(&value, &options).unwrap());
         assert_eq!(handle.handle_type, BamlHandleType::AdtPromptAst as i32);
     }
 
@@ -358,7 +358,7 @@ mod tests {
         ));
         let value = BexExternalValue::RustData(media);
         let options = CffiHandleTableOptions::for_in_process();
-        let handle = extract_handle(external_to_outbound(&value, &options).unwrap());
+        let handle = extract_handle(external_to_baml_value(&value, &options).unwrap());
         assert_eq!(handle.handle_type, BamlHandleType::AdtMediaImage as i32);
     }
 
@@ -367,7 +367,7 @@ mod tests {
         let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
         let value = BexExternalValue::RustData(unknown);
         let options = CffiHandleTableOptions::for_in_process();
-        let handle = extract_handle(external_to_outbound(&value, &options).unwrap());
+        let handle = extract_handle(external_to_baml_value(&value, &options).unwrap());
         assert_eq!(handle.handle_type, BamlHandleType::UntaggedRustData as i32);
     }
 }

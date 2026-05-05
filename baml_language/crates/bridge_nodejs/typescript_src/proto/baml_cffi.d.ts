@@ -1,10 +1,3 @@
-/**
- * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
- *
- * Source: baml_language/crates/bridge_nodejs/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml/cffi/v1/*.proto
- * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
- */
 import * as $protobuf from "protobufjs";
 import Long = require("long");
 /** Namespace baml. */
@@ -19,10 +12,8 @@ export namespace baml {
             /** BamlHandleType enum. */
             enum BamlHandleType {
                 HANDLE_UNSPECIFIED = 0,
-                HANDLE_UNKNOWN = 1,
-                RESOURCE_FILE = 2,
-                RESOURCE_SOCKET = 3,
-                RESOURCE_HTTP_RESPONSE = 4,
+                UNTAGGED_RUST_DATA = 1,
+                UNTAGGED_BEX_HEAP = 2,
                 FUNCTION_REF = 5,
                 ADT_MEDIA_IMAGE = 6,
                 ADT_MEDIA_AUDIO = 7,

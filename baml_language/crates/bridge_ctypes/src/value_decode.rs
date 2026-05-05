@@ -159,8 +159,7 @@ pub fn kwargs_to_bex_values(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::baml::cffi::BamlHandle;
-    use crate::handle_table::CffiHandleTableEntry;
+    use crate::{baml::cffi::BamlHandle, handle_table::CffiHandleTableEntry};
 
     #[test]
     fn inbound_handle_drains_table_entry() {
