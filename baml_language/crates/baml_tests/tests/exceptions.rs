@@ -3908,6 +3908,34 @@ async fn catch_four_typed_arms_plus_bind_jump_table_rethrows_panic() {
     assert_uncaught_panic(&output.result, "baml.panics.DivisionByZero");
 }
 
+/// A final bind-only chain is also a catch-all and must still guard panics.
+#[tokio::test]
+async fn catch_four_typed_arms_plus_bind_chain_rethrows_panic() {
+    let output = baml_test_optimized!(
+        r#"
+        class ErrA { x int }
+        class ErrB { x int }
+        class ErrC { x int }
+        class ErrD { x int }
+
+        function risky() -> int {
+            1 / 0
+        }
+
+        function main() -> int {
+            risky() catch (e) {
+                _: ErrA => 10,
+                _: ErrB => 20,
+                _: ErrC => 30,
+                _: ErrD => 40,
+                let other: let alias => 99
+            }
+        }
+    "#
+    );
+    assert_uncaught_panic(&output.result, "baml.panics.DivisionByZero");
+}
+
 #[tokio::test]
 async fn catch_four_primitive_wildcard_on_float() {
     // Throw a float — no arm matches, falls through to wildcard.

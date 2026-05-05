@@ -5169,6 +5169,19 @@ impl LoweringContext<'_> {
         }
     }
 
+    fn is_irrefutable_catch_all(&self, pat_id: AstPatId) -> bool {
+        match &self.body.patterns[pat_id] {
+            AstPattern::Wildcard | AstPattern::Bind { .. } => true,
+            AstPattern::Chain(parts) => parts
+                .iter()
+                .all(|part| self.is_irrefutable_catch_all(*part)),
+            AstPattern::Or(parts) => parts
+                .iter()
+                .any(|part| self.is_irrefutable_catch_all(*part)),
+            AstPattern::Type(_) | AstPattern::Class { .. } => false,
+        }
+    }
+
     /// The OLD `Pattern.narrow` field was a single optional `TypeExpr`
     /// alongside `Pattern.kind`. The new flat enum encodes the same idea as
     /// `Pattern::Chain(Vec<PatId>)` where the type narrows are `Type` links.
@@ -5502,8 +5515,7 @@ impl LoweringContext<'_> {
         for (clause_idx, clause) in clauses.iter().enumerate() {
             for &arm_id in &clause.arms {
                 let arm = self.body.catch_arms[arm_id].clone();
-                let pat = &self.body.patterns[arm.pattern];
-                let is_wildcard = matches!(pat, AstPattern::Wildcard | AstPattern::Bind { .. });
+                let is_wildcard = self.is_irrefutable_catch_all(arm.pattern);
                 arms.push((arm, is_wildcard, clause_idx));
             }
         }
