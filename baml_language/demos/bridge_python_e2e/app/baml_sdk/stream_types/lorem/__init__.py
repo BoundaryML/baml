@@ -29,6 +29,19 @@ if typing.TYPE_CHECKING:
     from ... import lorem
 
 
+class FetchSseResult(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    count: typing.Union[int, None]
+    first_chunk: typing.Union[str, None]
+    last_chunk: typing.Union[str, None]
+
+
+class StreamedExtractResult(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    partial_count: typing.Union[int, None]
+    final: typing.List[Resume]
+
+
 class Address(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     street: typing.Union[str, None]
@@ -72,6 +85,8 @@ class Resume(pydantic.BaseModel):
 
 
 __all__ = [
+    "FetchSseResult",
+    "StreamedExtractResult",
     "Address",
     "Bar",
     "Box",

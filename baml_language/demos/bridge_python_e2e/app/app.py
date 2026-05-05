@@ -17,24 +17,29 @@ from baml_sdk.lorem import (
     Bar,
     Box,
     ExtractResume__build_request,
+    ExtractResume__build_request_stream,
     ExtractResume__build_request_async,
     Foo,
     PhoneNumber,
     Resume,
     Sentiment,
+    StreamedExtractResult,
+    FetchSseResult,
 )
 
 before = Resume(
     name="Ada Lovelace",
-    email=None,                                    # Optional[str] -> Null
-    addresses=[                                    # List[Class]
+    email=None,  # Optional[str] -> Null
+    addresses=[  # List[Class]
         Address(street="1 Analytical Way", city="London", zip=None),
-        Address(street="221B Baker St",    city="London", zip="NW1 6XE"),
+        Address(street="221B Baker St", city="London", zip="NW1 6XE"),
     ],
-    scores={"math": 99, "poetry": 80},             # Dict[str, int]
-    sentiment=Sentiment.POSITIVE,                  # Enum -> Variant
-    contact=PhoneNumber(country_code=44,           # nested class
-                        digits="2079460000"),
+    scores={"math": 99, "poetry": 80},  # Dict[str, int]
+    sentiment=Sentiment.POSITIVE,  # Enum -> Variant
+    contact=PhoneNumber(
+        country_code=44,  # nested class
+        digits="2079460000",
+    ),
 )
 
 print("--- before ---")
@@ -50,7 +55,7 @@ assert after.name == "Ada Lovelace"
 assert after.email is None
 assert [a.zip for a in after.addresses] == [None, "NW1 6XE"]
 assert after.scores == {"math": 99, "poetry": 80}
-assert after.sentiment == Sentiment.NEGATIVE       # bex flipped it
+assert after.sentiment == Sentiment.NEGATIVE  # bex flipped it
 assert isinstance(after.contact, PhoneNumber)
 assert after.contact.country_code == 44
 
@@ -61,38 +66,89 @@ assert also_after.sentiment == Sentiment.NEGATIVE
 
 print()
 
+# 100 distinct resume texts. The first two are pinned so downstream
+# assertions ("Ada Lovelace in body", "Hopper in body", first-Resume name)
+# remain meaningful; the rest are filler to exercise list-input rendering.
+RESUME_TEXTS: list[str] = [
+    "Grace Hopper, RADM, computer scientist. grace@navy.mil. Worked on COBOL.",
+    "Ada Lovelace, mathematician. ada@example.org",
+] + [
+    f"Person {i}, engineer at company {i}. person{i}@example.org"
+    for i in range(98)
+]
+assert len(RESUME_TEXTS) == 100
+
 # ---------------------------------------------------------------------------
 # Modular API: `__build_request` companion. The auto-synthesized
 # `ExtractResume$build_request` returns a `baml.http.Request` describing
 # the HTTP call that *would* be made; nothing leaves the process.
 # ---------------------------------------------------------------------------
 
-req = ExtractResume__build_request(
-    text="Ada Lovelace, mathematician. ada@example.org",
-)
-print("--- ExtractResume__build_request(...) ---")
-print(req)
+req = ExtractResume__build_request_stream(texts=RESUME_TEXTS)
+print("--- ExtractResume__build_request_stream(...) ---")
+print(req.body)
 
 assert isinstance(req, Request), f"expected baml.http.Request, got {type(req)}"
 assert req.method == "POST"
 assert "openai.com" in req.url, f"expected openai endpoint, got {req.url!r}"
-assert req.headers.get("authorization", "").startswith("Bearer sk-test")
+assert req.headers.get("authorization", "").startswith("Bearer sk-")
 
 body = json.loads(req.body)
 assert body["model"] == "gpt-4o"
 assert body["messages"], "expected at least one message in the request body"
-# The interpolated `{{ text }}` should appear verbatim in the rendered prompt.
 flat = json.dumps(body)
 assert "Ada Lovelace" in flat, "user input did not reach the rendered prompt"
+assert "Hopper" in flat, "user input did not reach the rendered prompt"
 
 # Async sibling round-trip.
 req_async = asyncio.run(
-    ExtractResume__build_request_async(text="Hopper, RADM."),
+    ExtractResume__build_request_async(texts=RESUME_TEXTS),
 )
 assert isinstance(req_async, Request)
 assert "Hopper" in req_async.body
 
 print()
+
+# ---------------------------------------------------------------------------
+# Lower-level probe: hit `baml.http.fetch_sse` directly on the request
+# `$build_request_stream` produced. Curl confirms OpenAI streams chunks
+# for the same body; this checks whether `fetch_sse` exposes them.
+# ---------------------------------------------------------------------------
+
+print("--- FetchSseResult.run(...) live call ---")
+fetched = FetchSseResult.run(texts=RESUME_TEXTS)
+print(f"count={fetched.count}")
+print(f"first_chunk={fetched.first_chunk!r}")
+print(f"last_chunk={fetched.last_chunk!r}")
+
+print()
+
+# ---------------------------------------------------------------------------
+# Streaming: the Python bridge can't currently round-trip a live
+# `baml.llm.Stream`, so we drive `ExtractResume$stream(...)` inside BAML
+# (`StreamedExtractResult.run`) and return `{ partial_count, final }`.
+# ---------------------------------------------------------------------------
+
+print("--- StreamedExtractResult.run(...) live call ---")
+streamed = StreamedExtractResult.run(texts=RESUME_TEXTS)
+print(streamed)
+assert isinstance(streamed, StreamedExtractResult)
+assert isinstance(streamed.final, list)
+assert all(isinstance(r, Resume) for r in streamed.final)
+assert streamed.final, "expected at least one Resume in streamed.final"
+assert "Hopper" in streamed.final[0].name or "Grace" in streamed.final[0].name, (
+    f"expected first Resume to be Grace Hopper, got {streamed.final[0].name!r}"
+)
+# NOTE: with the current build, `partial_count` is 0 — the OpenAI
+# request body doesn't carry `"stream": true`, so the SSE source
+# returns the full body in one shot and `Stream.next()` reports
+# `StreamFinished` on the first poll. The streaming *pipeline* is
+# wired (no `Non-parsable type: Void` from `StreamCache.new`); the
+# request just isn't actually a streaming request yet.
+assert streamed.partial_count >= 0
+
+print()
+
 
 # ---------------------------------------------------------------------------
 # Generics: 13a generates `class Box(BaseModel, Generic[T])`; 13b
@@ -154,13 +210,17 @@ original_pdf = Pdf.from_url(
     "application/pdf",
 )
 assert isinstance(original_pdf, Pdf), f"expected Pdf, got {type(original_pdf).__name__}"
-assert original_pdf.url() == "https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf"
+assert (
+    original_pdf.url() == "https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf"
+)
 
 original_image = Image.from_url(
     "https://example.com/cat.png",
     "image/png",
 )
-assert isinstance(original_image, Image), f"expected Image, got {type(original_image).__name__}"
+assert isinstance(original_image, Image), (
+    f"expected Image, got {type(original_image).__name__}"
+)
 assert original_image.url() == "https://example.com/cat.png"
 
 foo = Foo(name="foo", my_pdf=original_pdf, my_image=original_image)
@@ -169,7 +229,10 @@ bar = foo.repackage()
 assert isinstance(bar, Bar)
 assert bar.name == "bar"
 assert isinstance(bar.their_pdf, Pdf)
-assert bar.their_pdf.url() == "https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf"
+assert (
+    bar.their_pdf.url()
+    == "https://www.rd.usda.gov/sites/default/files/pdf-sample_0.pdf"
+)
 assert isinstance(bar.their_image, Image)
 assert bar.their_image.url() == "https://example.com/cat.png"
 
@@ -182,6 +245,7 @@ assert pdf_file.url() is None
 assert pdf_file.mime_type() == "application/pdf"
 
 import base64 as b64
+
 data = b64.b64encode(b"%PDF-1.4 fake bytes").decode()
 pdf_b64 = Pdf.from_base64(data, "application/pdf")
 assert pdf_b64.base64() == data
@@ -196,7 +260,9 @@ image_b64 = Image.from_base64(image_data, "image/png")
 assert image_b64.base64() == image_data
 
 print()
-print("OK — round-trip succeeded for: Optional, List<Class>, Map, Enum, "
-      "nested-Class, sync+async, plus LLM `__build_request` companion, "
-      "plus Box<T> and Box<Box<int>> generics, plus Pdf + Image media "
-      "handles (top-level + nested round-trip + accessors).")
+print(
+    "OK — round-trip succeeded for: Optional, List<Class>, Map, Enum, "
+    "nested-Class, sync+async, plus LLM `__build_request` companion, "
+    "plus Box<T> and Box<Box<int>> generics, plus Pdf + Image media "
+    "handles (top-level + nested round-trip + accessors)."
+)

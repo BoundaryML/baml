@@ -23,6 +23,12 @@ from __future__ import annotations
 import pydantic
 
 
+class FetchSseResult(pydantic.BaseModel): ...
+
+
+class StreamedExtractResult(pydantic.BaseModel): ...
+
+
 class Address(pydantic.BaseModel): ...
 
 
@@ -42,6 +48,8 @@ class Resume(pydantic.BaseModel): ...
 
 
 __all__ = [
+    "FetchSseResult",
+    "StreamedExtractResult",
     "Address",
     "Bar",
     "Box",

@@ -985,11 +985,12 @@ fn compute_stream_return_type(
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let mut diags = Vec::new();
-    let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+    let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
         type_expr,
         pkg_items,
         &pkg_info.namespace_path,
+        &[],
         &mut diags,
     );
     // Diagnostics are intentionally discarded here — same as
