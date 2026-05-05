@@ -5175,6 +5175,13 @@ impl LoweringContext<'_> {
     fn bind_pattern_inner(&mut self, scrutinee: Local, pat_id: AstPatId, root: AstPatId) {
         match self.body.patterns[pat_id].clone() {
             AstPattern::Bind { name } => {
+                // For Or-patterns we look up `pat_types` against the inner
+                // bind's `pat_id`, not the outer `root`. That's safe because
+                // TIR rejects Or-branches whose shared bindings disagree on
+                // type (`OrPatternBindingTypeMismatch`), so by the time we
+                // reach MIR every alternative's bind for `name` carries the
+                // same type. If you ever loosen that TIR invariant, switch
+                // this lookup to `root` so we don't over-narrow.
                 let narrow = self.pattern_narrow_type(root);
                 let ty = if let Some(narrow) = &narrow {
                     self.resolve_type_annotation(narrow)

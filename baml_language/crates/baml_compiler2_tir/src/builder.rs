@@ -2318,14 +2318,36 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 };
 
-                // 3. Bind every Pattern::Bind reachable in the loop binding
-                // pattern to the element type. For-in patterns are simple
-                // (`let i in xs`) but the same machinery handles future
-                // destructure forms uniformly.
-                let snapshot = self.snapshot_scoped_locals();
-                self.register_pattern_types(*binding, &elem_ty, None, body);
+                // 3. Validate the binding pattern against the element type.
+                // `pattern_type` walks the chain rules and returns the user's
+                // declared type (or `never` if unannotated). When annotated,
+                // require `elem_ty <: pat_ty` so each iteration's element is
+                // representable by the binding — `for (let n: int in
+                // int_or_string_xs)` would silently bind a string as `int`
+                // without this check.
+                let pat_ty = self.pattern_type(*binding, body, *for_body);
+                let has_annotation = !matches!(pat_ty, Ty::Never { .. });
+                let (flow_ty, declared_for_scope) = if has_annotation {
+                    if !self.is_subtype(&elem_ty, &pat_ty) {
+                        self.context.report_simple(
+                            TirTypeError::TypeMismatch {
+                                expected: pat_ty.clone(),
+                                got: elem_ty,
+                            },
+                            *collection,
+                        );
+                    }
+                    (pat_ty.clone(), Some(pat_ty))
+                } else {
+                    (elem_ty, None)
+                };
 
-                // 4. Check the body
+                // 4. Bind every Pattern::Bind reachable in the loop binding
+                // pattern to the validated flow type.
+                let snapshot = self.snapshot_scoped_locals();
+                self.register_pattern_types(*binding, &flow_ty, declared_for_scope, body);
+
+                // 5. Check the body
                 self.infer_expr(*for_body, body);
                 self.restore_scoped_locals(snapshot);
                 false
@@ -2562,8 +2584,15 @@ impl<'db> TypeInferenceBuilder<'db> {
             // with everything, so they would spuriously mark every later arm
             // as unreachable.
             let scrutinee_is_error = matches!(scrutinee_ty, Ty::Unknown { .. } | Ty::Error { .. });
+            // Recovery pattern types (`Unknown`/`Error`) trivially satisfy
+            // `is_subtype(scrutinee, pat_ty)` — without this guard, a malformed
+            // earlier arm would mark every later arm unreachable and suppress
+            // `NonExhaustiveMatch`.
+            let pat_is_error = matches!(pat_ty, Ty::Unknown { .. } | Ty::Error { .. });
             let covers_all = matches!(pat_ty, Ty::Never { .. })
-                || (!scrutinee_is_error && self.is_subtype(&scrutinee_ty, &pat_ty));
+                || (!scrutinee_is_error
+                    && !pat_is_error
+                    && self.is_subtype(&scrutinee_ty, &pat_ty));
 
             let mut unreachable = catch_all_seen;
             if !unreachable && arm.guard.is_none() {

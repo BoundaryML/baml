@@ -232,7 +232,7 @@ impl DiagnosticId {
             DiagnosticId::DuplicateVariant => "E0013",
             DiagnosticId::DuplicateMethod => "E0093",
             DiagnosticId::DuplicateBinding => "E0094",
-            DiagnosticId::RefutablePatternInLet => "E0095",
+            DiagnosticId::RefutablePatternInLet => "E0111",
             DiagnosticId::DuplicateAttribute => "E0014",
             DiagnosticId::UnknownAttribute => "E0015",
             DiagnosticId::InvalidAttributeContext => "E0016",
