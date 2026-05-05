@@ -3959,6 +3959,7 @@ impl LoweringContext<'_> {
                                 None,
                                 false,
                             );
+                            self.builder.fresh_cell(alias);
                             self.builder.assign(
                                 Place::local(alias),
                                 Rvalue::Use(Operand::Copy(Place::Local(local))),

@@ -131,6 +131,24 @@ async fn for_let_chain_of_bindings() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(12)));
 }
 
+// for-let chain aliases need the same per-iteration fresh cell as the first
+// binding; otherwise closures that escape the loop can share the alias cell.
+#[tokio::test]
+async fn for_let_chain_alias_capture_per_iteration() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let funcs: (() -> int)[] = [];
+            for (let a: let b in [1, 2, 3]) {
+                funcs.push(() -> int { b })
+            };
+            funcs[0]() * 100 + funcs[1]() * 10 + funcs[2]()
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(123)));
+}
+
 // for-let with Or-of-same-binding — both branches bind `x`, body uses it.
 #[tokio::test]
 async fn for_let_or_of_same_binding() {
