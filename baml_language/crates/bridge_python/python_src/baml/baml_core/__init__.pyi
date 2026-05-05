@@ -18,6 +18,10 @@ class BamlHandle:
     def handle_type(self) -> int: ...
 
 
+class BamlPyHandle:
+    def handle_type(self) -> int: ...
+
+
 class UnknownHandle:
     def __init__(self, handle: BamlHandle) -> None: ...
     @property

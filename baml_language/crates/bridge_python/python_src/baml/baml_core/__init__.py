@@ -15,6 +15,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Literal, Sequence, Unio
 from .baml_py import (
     AbortController,
     BamlHandle,
+    BamlPyHandle,
     BamlRuntime,
     Collector as _RustCollector,
     FunctionLog as _RustFunctionLog,
@@ -325,6 +326,7 @@ def define_instance_method(
 __all__ = [
     "AbortController",
     "BamlHandle",
+    "BamlPyHandle",
     "BamlRuntime",
     "Collector",
     "FunctionLog",
