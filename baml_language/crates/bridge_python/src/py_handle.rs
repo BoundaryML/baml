@@ -5,7 +5,7 @@
 //! no global table indirection. The `HANDLE_TABLE` is only used to bridge
 //! the FFI wire (insert on the encode side, drain on the decode side).
 
-use bridge_ctypes::CffiHandleTableEntry;
+use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE};
 use pyo3::prelude::*;
 
 #[pyclass]
@@ -37,4 +37,31 @@ impl BamlPyHandle {
     pub fn new(entry: CffiHandleTableEntry) -> Self {
         Self { entry }
     }
+}
+
+/// Drain `HANDLE_TABLE[key]` into a fresh `BamlPyHandle`. Used by
+/// `proto.py::_decode_handle`. Raises `RuntimeError` if the key is
+/// absent (which would mean the encoder failed to insert, or the same
+/// key was decoded twice).
+#[pyfunction]
+pub fn take_pyhandle_from_table(key: u64) -> PyResult<BamlPyHandle> {
+    let arc_entry = HANDLE_TABLE.drain(key).ok_or_else(|| {
+        pyo3::exceptions::PyRuntimeError::new_err(format!(
+            "BAML handle key {key} is not in HANDLE_TABLE"
+        ))
+    })?;
+    Ok(BamlPyHandle {
+        entry: (*arc_entry).clone(),
+    })
+}
+
+/// Insert a clone of `pyhandle.entry` into `HANDLE_TABLE`, return
+/// `(key, handle_type as i32)`. The original `BamlPyHandle` stays
+/// usable — Python may pass the same handle to multiple calls.
+#[pyfunction]
+pub fn put_pyhandle_into_table(pyhandle: &BamlPyHandle) -> (u64, i32) {
+    let entry = pyhandle.entry.clone();
+    let ht = entry.handle_type() as i32;
+    let key = HANDLE_TABLE.insert(entry);
+    (key, ht)
 }

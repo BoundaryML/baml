@@ -429,82 +429,38 @@ def _decode_enum(enum_value) -> Any:
 
 
 def _decode_handle(handle) -> Any:
-    """Map `(key, handle_type)` to a Python object per 09e §3.
-
-    Known stdlib handle classes (`Image`, `Audio`, …, `File`) live under
-    `<sdk_root>.baml.media.*` / `<sdk_root>.baml.io.*`. Those classes
-    don't exist yet (phase 6 codegen lands them), so for now we resolve
-    `HANDLE_UNKNOWN` and the opaque variants and let the rest surface as
-    `BamlError` — BEX shouldn't emit them until the stdlib is wired.
-
-    Media handle types bypass `BamlHandle` entirely — the PyO3 media
-    classes resolve the raw key against `HANDLE_TABLE` themselves via
-    `_take_from_handle_table`. Other handle-backed stdlib classes
-    (File/Socket/Response) and the `UnknownHandle` fallback still take a
-    `BamlHandle` instance until that class is removed in a later phase.
+    """Drain `HANDLE_TABLE[handle.key]`, wrap in `BamlPyHandle`, dispatch
+    on its host-derived `handle_type()`. The wire `handle.handle_type`
+    field is not consulted — `BamlPyHandle.handle_type()` is the source
+    of truth.
     """
-    from . import UnknownHandle  # local import: defined in __init__.py
+    from .baml_py import take_pyhandle_from_table
+    pyhandle = take_pyhandle_from_table(handle.key)
     HT = baml_inbound_pb2.BamlHandleType
-    ht = handle.handle_type
+    ht = pyhandle.handle_type()
 
-    # Media stdlib classes — resolve the raw key directly. We do this
-    # before constructing a BamlHandle so the media path never touches
-    # that wrapper.
-    if ht in (
-        HT.ADT_MEDIA_IMAGE,
-        HT.ADT_MEDIA_AUDIO,
-        HT.ADT_MEDIA_VIDEO,
-        HT.ADT_MEDIA_PDF,
-    ):
-        subpath = _HANDLE_TYPE_SUBPATHS[ht]
-        cls = _resolve_under_sdk_root(subpath)
-        if cls is None:
-            raise BamlError(
-                f"BEX returned handle_type {ht!r} but {subpath!r} is not "
-                f"defined under sdk_root"
-            )
-        return cls._take_from_handle_table(handle.key)
-
-    wrapped = BamlHandle(handle.key, handle.handle_type)
-
-    if ht in (HT.UNTAGGED_RUST_DATA, HT.UNTAGGED_BEX_HEAP):
-        return UnknownHandle(wrapped)
-    # Opaque-to-Python ADTs — surface as `UnknownHandle` per 09e §3.
-    if ht in (HT.ADT_PROMPT_AST, HT.ADT_COLLECTOR, HT.ADT_TYPE):
-        return UnknownHandle(wrapped)
+    if ht == HT.ADT_MEDIA_IMAGE:
+        return BamlImage._from_pyhandle(pyhandle)
+    if ht == HT.ADT_MEDIA_AUDIO:
+        return BamlAudio._from_pyhandle(pyhandle)
+    if ht == HT.ADT_MEDIA_VIDEO:
+        return BamlVideo._from_pyhandle(pyhandle)
+    if ht == HT.ADT_MEDIA_PDF:
+        return BamlPdf._from_pyhandle(pyhandle)
     if ht == HT.HANDLE_UNSPECIFIED:
         raise BamlError("BEX emitted HANDLE_UNSPECIFIED (Rust-side bug)")
-    if ht == HT.FUNCTION_REF:
-        raise BamlError("Function-ref handles do not cross FFI today")
-    if ht == HT.ADT_MEDIA_GENERIC:
-        raise BamlError("Generic media has no stdlib class today")
 
-    # Named stdlib handle classes — resolve lazily against sdk_root.
-    # Each class exposes a `__handle`-keyword constructor (09e §3).
-    subpath = _HANDLE_TYPE_SUBPATHS.get(ht)
-    if subpath is None:
-        raise BamlError(f"Unknown BamlHandleType {ht!r}")
-    cls = _resolve_under_sdk_root(subpath)
-    if cls is None:
-        raise BamlError(
-            f"BEX returned handle_type {ht!r} but {subpath!r} is not "
-            f"defined under sdk_root"
-        )
-    return cls(__handle=wrapped)
-
-
-_HANDLE_TYPE_SUBPATHS = {
-    baml_inbound_pb2.BamlHandleType.ADT_MEDIA_IMAGE: "baml.media.Image",
-    baml_inbound_pb2.BamlHandleType.ADT_MEDIA_AUDIO: "baml.media.Audio",
-    baml_inbound_pb2.BamlHandleType.ADT_MEDIA_VIDEO: "baml.media.Video",
-    baml_inbound_pb2.BamlHandleType.ADT_MEDIA_PDF: "baml.media.Pdf",
-}
+    # Everything else (UNTAGGED_RUST_DATA, UNTAGGED_BEX_HEAP, FUNCTION_REF,
+    # ADT_PROMPT_AST, ADT_COLLECTOR, ADT_TYPE, ADT_MEDIA_GENERIC): bare
+    # BamlPyHandle. The outer codegen class (if any) wraps it via
+    # `_decode_class` → private-attr injection.
+    return pyhandle
 
 
 def _resolve_under_sdk_root(subpath: str) -> Optional[type]:
     """Import `<sdk_root>.<subpath>` and return the trailing attr, or None
-    if any step fails. Used for stdlib handle classes that may not yet be
-    wired in the sim tree."""
+    if any step fails. Still used by `_baml_ty_to_python_type` for media
+    type resolution."""
     sdk_root = _safe_sdk_root()
     if not sdk_root:
         return None
