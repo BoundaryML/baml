@@ -1,4 +1,11 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "dhilan/website-v1": true
+    }
+  },
   "installCommand": "cd .. && pnpm install --frozen-lockfile --prod=false",
   "buildCommand": "bash scripts/vercel-build.sh"
 }

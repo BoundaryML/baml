@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
+import posthog from 'posthog-js';
 import { Calendar, Code } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Markdown } from '@/components/magicui/markdown';
-
 
 interface PodcastEpisode {
   date: string;
@@ -45,28 +45,28 @@ const getYouTubeVideoId = (url: string) => {
 async function fetchReadmeFromGitHub(codeUrl: string): Promise<string> {
   try {
     // Convert GitHub tree URL to raw README URL
-    const rawUrl = codeUrl
-      .replace('github.com', 'raw.githubusercontent.com')
-      .replace('/tree/', '/')
-      + '/README.md';
-    
+    const rawUrl =
+      codeUrl
+        .replace('github.com', 'raw.githubusercontent.com')
+        .replace('/tree/', '/') + '/README.md';
+
     const response = await fetch(rawUrl);
     if (!response.ok) {
       // Try README.md with different casing
-      const altUrl = codeUrl
-        .replace('github.com', 'raw.githubusercontent.com')
-        .replace('/tree/', '/')
-        + '/readme.md';
-      
+      const altUrl =
+        codeUrl
+          .replace('github.com', 'raw.githubusercontent.com')
+          .replace('/tree/', '/') + '/readme.md';
+
       const altResponse = await fetch(altUrl);
       if (!altResponse.ok) {
         throw new Error('README not found');
       }
       return await altResponse.text();
     }
-    
+
     const content = await response.text();
-    
+
     // Convert HTML img tags to markdown image syntax
     const processedContent = content.replace(
       /<img[^>]+src="([^"]+)"[^>]*>/g,
@@ -75,9 +75,9 @@ async function fetchReadmeFromGitHub(codeUrl: string): Promise<string> {
         const altMatch = match.match(/alt="([^"]*)"/);
         const alt = altMatch ? altMatch[1] : 'image';
         return `![${alt}](${src})`;
-      }
+      },
     );
-    
+
     return processedContent;
   } catch (error) {
     console.error('Failed to fetch README:', error);
@@ -101,7 +101,9 @@ export function EpisodeModal({ episode, isOpen, onClose }: EpisodeModalProps) {
 
   if (!episode) return null;
 
-  const videoId = episode.youtubeUrl ? getYouTubeVideoId(episode.youtubeUrl) : null;
+  const videoId = episode.youtubeUrl
+    ? getYouTubeVideoId(episode.youtubeUrl)
+    : null;
   const isUpcoming = new Date(episode.date) > new Date();
 
   return (
@@ -127,7 +129,6 @@ export function EpisodeModal({ episode, isOpen, onClose }: EpisodeModalProps) {
                 </div>
               </div>
             </div>
-
           </div>
         </DialogHeader>
 
@@ -153,7 +154,8 @@ export function EpisodeModal({ episode, isOpen, onClose }: EpisodeModalProps) {
                 Upcoming Event
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                This episode hasn't aired yet. RSVP to get notified when it goes live.
+                This episode hasn't aired yet. RSVP to get notified when it goes
+                live.
               </p>
             </div>
           )}
@@ -173,7 +175,7 @@ export function EpisodeModal({ episode, isOpen, onClose }: EpisodeModalProps) {
               ) : readmeContent ? (
                 <div className="prose prose-sm max-w-none">
                   <div className="text-sm text-muted-foreground">
-                    <Markdown 
+                    <Markdown
                       className="text-sm text-muted-foreground"
                       components={{
                         img: ({ src, alt, ...props }) => (
@@ -228,7 +230,17 @@ export function EpisodeModal({ episode, isOpen, onClose }: EpisodeModalProps) {
             )}
             {episode.rsvpUrl && isUpcoming && (
               <Button asChild size="sm">
-                <Link href={episode.rsvpUrl} target="_blank">
+                <Link
+                  href={episode.rsvpUrl}
+                  onClick={() =>
+                    posthog.capture('podcast_rsvp_clicked', {
+                      episode_id: episode.id,
+                      episode_number: episode.episodeNumber,
+                      episode_title: episode.title,
+                    })
+                  }
+                  target="_blank"
+                >
                   <Calendar className="h-4 w-4 mr-2" />
                   RSVP
                 </Link>
@@ -236,7 +248,17 @@ export function EpisodeModal({ episode, isOpen, onClose }: EpisodeModalProps) {
             )}
             {episode.youtubeUrl && !isUpcoming && (
               <Button asChild variant="outline" size="sm">
-                <Link href={episode.youtubeUrl} target="_blank">
+                <Link
+                  href={episode.youtubeUrl}
+                  onClick={() =>
+                    posthog.capture('podcast_youtube_watched', {
+                      episode_id: episode.id,
+                      episode_number: episode.episodeNumber,
+                      episode_title: episode.title,
+                    })
+                  }
+                  target="_blank"
+                >
                   Watch on YouTube
                 </Link>
               </Button>

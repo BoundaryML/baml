@@ -1,5 +1,6 @@
 'use client';
 
+import posthog from 'posthog-js';
 import { useState } from 'react';
 
 const INIT = 'INIT';
@@ -98,6 +99,8 @@ export function NewsletterForm() {
       .then((res: any) => [res.ok, res.json(), res])
       .then(([ok, dataPromise, res]) => {
         if (ok) {
+          posthog.identify(email, { email });
+          posthog.capture('newsletter_subscribed', { email });
           resetForm();
           setFormState(SUCCESS);
         } else {

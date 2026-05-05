@@ -4,6 +4,7 @@
 'use client';
 import { Star } from 'lucide-react';
 import Link from 'next/link';
+import posthog from 'posthog-js';
 import { useEffect, useState } from 'react';
 import { FaGithub } from 'react-icons/fa';
 
@@ -34,6 +35,9 @@ export const GithubStars = () => {
     <Link
       className="group flex flex-row items-center justify-center gap-x-2 rounded-full border-[1px] border-[#30363d] bg-[#161b22] px-1.5 py-1 text-sm font-light leading-6 text-white transition duration-200 ease-in-out hover:scale-[1.05] hover:bg-zinc-900"
       href="https://github.com/boundaryml/baml"
+      onClick={() =>
+        posthog.capture('github_stars_clicked', { star_count: displayStars })
+      }
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
       target="_blank"

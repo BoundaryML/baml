@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { b } from '@/baml_client';
+import { postHogClient } from '@/lib/posthog';
 
 // GET route handler
 export async function POST(req: NextRequest) {
@@ -44,5 +45,19 @@ export async function POST(req: NextRequest) {
   const result = text?.includes('N/A') ? '' : text;
   // strip out the ---
   const result2 = result.replace(/---/g, '');
+
+  const posthog = postHogClient();
+  if (posthog) {
+    posthog.capture({
+      distinctId: 'anonymous',
+      event: 'api_completion_requested',
+      properties: {
+        language,
+        has_result: result2.trim().length > 0,
+      },
+    });
+    await posthog.shutdown();
+  }
+
   return NextResponse.json({ prediction: result2 });
 }

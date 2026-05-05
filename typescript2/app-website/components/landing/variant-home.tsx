@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import posthog from 'posthog-js';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 
@@ -607,6 +608,12 @@ const HeroSection = () => {
                   commandMap={{ bash: selected.command } as const}
                   darkTheme="none"
                   lightTheme="none"
+                  onCopy={(command) =>
+                    posthog.capture('install_command_copied', {
+                      install_path: installPath,
+                      command,
+                    })
+                  }
                   showMultiplePackageOptions={false}
                 />
               </div>
@@ -615,7 +622,12 @@ const HeroSection = () => {
                   <button
                     className="rounded-md px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
                     key={opt.id}
-                    onClick={() => setInstallPath(opt.id)}
+                    onClick={() => {
+                      setInstallPath(opt.id);
+                      posthog.capture('install_path_selected', {
+                        install_path: opt.id,
+                      });
+                    }}
                     style={
                       installPath === opt.id
                         ? {

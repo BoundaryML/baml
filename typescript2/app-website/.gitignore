@@ -38,3 +38,5 @@ next-env.d.ts
 # wasm binaries
 /public/wasm/
 docs/playground-and-wasm.md
+.env.local
+posthog-setup-report.md

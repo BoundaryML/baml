@@ -11,7 +11,7 @@ export const env = createEnv({
     NEXT_PUBLIC_APP_ENV: z
       .enum(['development', 'production', 'test'])
       .default('development'),
-    NEXT_PUBLIC_POSTHOG_HOST: z.string().default('https://us.i.posthog.com'),
+    NEXT_PUBLIC_POSTHOG_HOST: z.string().default('/relay-JkOu'),
     NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
   },
 

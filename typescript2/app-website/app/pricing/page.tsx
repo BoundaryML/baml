@@ -2,6 +2,7 @@
 
 import { Check, HelpCircle, Minus } from 'lucide-react';
 import Link from 'next/link';
+import posthog from 'posthog-js';
 import { useState } from 'react';
 import { siteConfig } from '@/app/_lib/config';
 import { FooterSection } from '@/components/footer-section';
@@ -100,7 +101,12 @@ export default function PricingPage() {
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground'
                 }`}
-                onClick={() => setBillingCycle('monthly')}
+                onClick={() => {
+                  setBillingCycle('monthly');
+                  posthog.capture('pricing_billing_cycle_changed', {
+                    billing_cycle: 'monthly',
+                  });
+                }}
               >
                 Monthly
               </button>
@@ -110,7 +116,12 @@ export default function PricingPage() {
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground'
                 }`}
-                onClick={() => setBillingCycle('yearly')}
+                onClick={() => {
+                  setBillingCycle('yearly');
+                  posthog.capture('pricing_billing_cycle_changed', {
+                    billing_cycle: 'yearly',
+                  });
+                }}
               >
                 Yearly
                 <span className="ml-2 text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
@@ -171,7 +182,18 @@ export default function PricingPage() {
                     }`}
                     variant={plan.isPopular ? 'default' : 'outline'}
                   >
-                    <Link href={plan.href}>{plan.buttonText}</Link>
+                    <Link
+                      href={plan.href}
+                      onClick={() =>
+                        posthog.capture('pricing_plan_cta_clicked', {
+                          plan_name: plan.name,
+                          billing_cycle: billingCycle,
+                          button_text: plan.buttonText,
+                        })
+                      }
+                    >
+                      {plan.buttonText}
+                    </Link>
                   </Button>
 
                   <div className="space-y-3">
