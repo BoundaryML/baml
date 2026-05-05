@@ -375,6 +375,12 @@ def _parameterize(cls, generic_args):
         return cls
 
 
+# Single-underscore "private" field names that codegen emits for
+# handle-backed stdlib classes. Source of truth: `rg '\$rust_type'
+# baml_language/crates/baml_builtins2/`.
+_HANDLE_FIELD_NAMES = ("_handle", "_data", "_body")
+
+
 def _decode_class(class_value) -> Any:
     """Resolve a `BamlValueClass` to a typed Pydantic model instance.
 
@@ -394,23 +400,34 @@ def _decode_class(class_value) -> Any:
     fqn = class_value.name.name
     cls = _resolve_type(fqn)
 
-    # Media stdlib classes (`baml.media.*`) are PyO3 types holding
-    # `Arc<MediaValue>`. The engine emits them as
-    # `class_value { name: "baml.media.Pdf", fields: { _data: handle_value }}`
-    # (its on-wire shape mirrors the BAML class definition); the inner
-    # `_data` decode already constructed a fresh `BamlPdf` via
-    # `_decode_handle` → `cls._take_from_handle_table(...)`. Unwrap and
-    # return it directly — `BamlPdf` is not a Pydantic model and has no
-    # `model_validate`.
+    # Media stdlib classes (`baml.media.*`) are PyO3 types wrapping a
+    # `BamlPyHandle`. The engine emits them as
+    # `class_value { name: "baml.media.Pdf", fields: { _data: handle_value }}`;
+    # the inner `_data` decode already constructed a fresh `BamlPdf` via
+    # `_decode_handle` → `cls._from_pyhandle(...)`. Unwrap and return it
+    # directly — `BamlPdf` is not a Pydantic model.
     if cls in _MEDIA_PYO3_TYPES and "_data" in field_dict:
         return field_dict["_data"]
 
     parameterized = _parameterize(cls, class_value.name.generic_args)
-    if issubclass(cls, pydantic.BaseModel):
-        return parameterized.model_validate(field_dict)
-    # Not a BaseModel — shouldn't happen for a well-formed SDK; fall back
-    # to a plain dict so callers aren't silently lied to.
-    return field_dict
+    if not issubclass(cls, pydantic.BaseModel):
+        # Not a BaseModel — shouldn't happen for a well-formed SDK; fall
+        # back to a plain dict so callers aren't silently lied to.
+        return field_dict
+
+    # Separate handle-backed private attrs from regular fields. Pydantic
+    # v2 doesn't accept private attrs via kwargs; we set them on
+    # `__pydantic_private__` post-construction.
+    private_fields = {
+        k: field_dict.pop(k) for k in _HANDLE_FIELD_NAMES if k in field_dict
+    }
+    instance = parameterized.model_validate(field_dict)
+    if private_fields:
+        if instance.__pydantic_private__ is None:
+            instance.__pydantic_private__ = {}
+        for name, value in private_fields.items():
+            instance.__pydantic_private__[name] = value
+    return instance
 
 
 def _decode_enum(enum_value) -> Any:
