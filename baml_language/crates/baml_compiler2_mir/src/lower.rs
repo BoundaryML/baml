@@ -5503,7 +5503,7 @@ impl LoweringContext<'_> {
             for &arm_id in &clause.arms {
                 let arm = self.body.catch_arms[arm_id].clone();
                 let pat = &self.body.patterns[arm.pattern];
-                let is_wildcard = matches!(pat, AstPattern::Wildcard);
+                let is_wildcard = matches!(pat, AstPattern::Wildcard | AstPattern::Bind { .. });
                 arms.push((arm, is_wildcard, clause_idx));
             }
         }
