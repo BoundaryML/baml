@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13828
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -136,10 +137,12 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "Model.GPT4o"
-              WORD "Model"
-              DOT "."
-              WORD "GPT4o"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "Model.GPT4o"
+                  WORD "Model"
+                  DOT "."
+                  WORD "GPT4o"
             FAT_ARROW "=>"
             STRING_LITERAL "gpt4o"
               QUOTE """
@@ -147,10 +150,12 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "Model.GPT4oMini"
-              WORD "Model"
-              DOT "."
-              WORD "GPT4oMini"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "Model.GPT4oMini"
+                  WORD "Model"
+                  DOT "."
+                  WORD "GPT4oMini"
             FAT_ARROW "=>"
             STRING_LITERAL "gpt4o-mini"
               QUOTE """
@@ -158,10 +163,12 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "Model.O3"
-              WORD "Model"
-              DOT "."
-              WORD "O3"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "Model.O3"
+                  WORD "Model"
+                  DOT "."
+                  WORD "O3"
             FAT_ARROW "=>"
             STRING_LITERAL "o3"
               QUOTE """
@@ -193,8 +200,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -217,8 +226,9 @@ SOURCE_FILE
                 R_BRACE "}"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """
@@ -250,8 +260,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -261,8 +273,9 @@ SOURCE_FILE
                 WORD "O3"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """
@@ -341,12 +354,14 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "root.Status.Ok"
-              WORD "root"
-              DOT "."
-              WORD "Status"
-              DOT "."
-              WORD "Ok"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "root.Status.Ok"
+                  WORD "root"
+                  DOT "."
+                  WORD "Status"
+                  DOT "."
+                  WORD "Ok"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """
@@ -354,12 +369,14 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "root.Status.Failed"
-              WORD "root"
-              DOT "."
-              WORD "Status"
-              DOT "."
-              WORD "Failed"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "root.Status.Failed"
+                  WORD "root"
+                  DOT "."
+                  WORD "Status"
+                  DOT "."
+                  WORD "Failed"
             FAT_ARROW "=>"
             STRING_LITERAL "failed"
               QUOTE """
@@ -367,12 +384,14 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "root.Status.Pending"
-              WORD "root"
-              DOT "."
-              WORD "Status"
-              DOT "."
-              WORD "Pending"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "root.Status.Pending"
+                  WORD "root"
+                  DOT "."
+                  WORD "Status"
+                  DOT "."
+                  WORD "Pending"
             FAT_ARROW "=>"
             STRING_LITERAL "pending"
               QUOTE """
@@ -485,14 +504,16 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "root.llm.Status.Ready"
-              WORD "root"
-              DOT "."
-              WORD "llm"
-              DOT "."
-              WORD "Status"
-              DOT "."
-              WORD "Ready"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "root.llm.Status.Ready"
+                  WORD "root"
+                  DOT "."
+                  WORD "llm"
+                  DOT "."
+                  WORD "Status"
+                  DOT "."
+                  WORD "Ready"
             FAT_ARROW "=>"
             STRING_LITERAL "ready"
               QUOTE """
@@ -500,14 +521,16 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "root.llm.Status.Generating"
-              WORD "root"
-              DOT "."
-              WORD "llm"
-              DOT "."
-              WORD "Status"
-              DOT "."
-              WORD "Generating"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "root.llm.Status.Generating"
+                  WORD "root"
+                  DOT "."
+                  WORD "llm"
+                  DOT "."
+                  WORD "Status"
+                  DOT "."
+                  WORD "Generating"
             FAT_ARROW "=>"
             STRING_LITERAL "generating"
               QUOTE """
@@ -515,14 +538,16 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "root.llm.Status.Done"
-              WORD "root"
-              DOT "."
-              WORD "llm"
-              DOT "."
-              WORD "Status"
-              DOT "."
-              WORD "Done"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "root.llm.Status.Done"
+                  WORD "root"
+                  DOT "."
+                  WORD "llm"
+                  DOT "."
+                  WORD "Status"
+                  DOT "."
+                  WORD "Done"
             FAT_ARROW "=>"
             STRING_LITERAL "done"
               QUOTE """
@@ -609,14 +634,16 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "root.auth.Role.Admin"
-              WORD "root"
-              DOT "."
-              WORD "auth"
-              DOT "."
-              WORD "Role"
-              DOT "."
-              WORD "Admin"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "root.auth.Role.Admin"
+                  WORD "root"
+                  DOT "."
+                  WORD "auth"
+                  DOT "."
+                  WORD "Role"
+                  DOT "."
+                  WORD "Admin"
             FAT_ARROW "=>"
             STRING_LITERAL "admin"
               QUOTE """
@@ -624,14 +651,16 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "root.auth.Role.User"
-              WORD "root"
-              DOT "."
-              WORD "auth"
-              DOT "."
-              WORD "Role"
-              DOT "."
-              WORD "User"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "root.auth.Role.User"
+                  WORD "root"
+                  DOT "."
+                  WORD "auth"
+                  DOT "."
+                  WORD "Role"
+                  DOT "."
+                  WORD "User"
             FAT_ARROW "=>"
             STRING_LITERAL "user"
               QUOTE """
@@ -639,14 +668,16 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "root.auth.Role.Guest"
-              WORD "root"
-              DOT "."
-              WORD "auth"
-              DOT "."
-              WORD "Role"
-              DOT "."
-              WORD "Guest"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "root.auth.Role.Guest"
+                  WORD "root"
+                  DOT "."
+                  WORD "auth"
+                  DOT "."
+                  WORD "Role"
+                  DOT "."
+                  WORD "Guest"
             FAT_ARROW "=>"
             STRING_LITERAL "guest"
               QUOTE """
@@ -738,10 +769,12 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "Model.GPT4o"
-              WORD "Model"
-              DOT "."
-              WORD "GPT4o"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "Model.GPT4o"
+                  WORD "Model"
+                  DOT "."
+                  WORD "GPT4o"
             FAT_ARROW "=>"
             STRING_LITERAL "gpt4o"
               QUOTE """
@@ -749,10 +782,12 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "Model.GPT4oMini"
-              WORD "Model"
-              DOT "."
-              WORD "GPT4oMini"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "Model.GPT4oMini"
+                  WORD "Model"
+                  DOT "."
+                  WORD "GPT4oMini"
             FAT_ARROW "=>"
             STRING_LITERAL "mini"
               QUOTE """
@@ -760,10 +795,12 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "Model.O3"
-              WORD "Model"
-              DOT "."
-              WORD "O3"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "Model.O3"
+                  WORD "Model"
+                  DOT "."
+                  WORD "O3"
             FAT_ARROW "=>"
             STRING_LITERAL "o3"
               QUOTE """

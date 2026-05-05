@@ -61,6 +61,35 @@ fn unescape_string_literal(text: &str) -> String {
     result
 }
 
+/// Match an optional single leading `MINUS` followed by exactly one `target`
+/// literal token, skipping trivia. Returns `(negated, token)` on a clean
+/// match. Rejects `--42` (multiple signs), intervening non-trivia tokens, or
+/// a missing literal — caller treats those as "not a signed literal." Used by
+/// both `UnionMemberParts` and `TypeExpr` so the two paths agree on what
+/// counts as a signed integer / float literal.
+fn scan_signed_literal_token(
+    tokens: impl IntoIterator<Item = SyntaxToken>,
+    target: SyntaxKind,
+) -> Option<(bool, SyntaxToken)> {
+    let mut negated = false;
+    let mut saw_minus = false;
+    for tok in tokens {
+        match tok.kind() {
+            k if k.is_trivia() => continue,
+            SyntaxKind::MINUS => {
+                if saw_minus {
+                    return None;
+                }
+                saw_minus = true;
+                negated = true;
+            }
+            k if k == target => return Some((negated, tok)),
+            _ => return None,
+        }
+    }
+    None
+}
+
 fn decode_regular_string_literal_text(text: &str) -> String {
     let trimmed = text.trim();
     if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
@@ -285,20 +314,23 @@ impl UnionMemberParts {
             .cloned()
     }
 
-    /// Check if this member has an `INTEGER_LITERAL` token.
+    /// Check if this member has an `INTEGER_LITERAL` token, optionally
+    /// preceded by a single `MINUS` token (for negative literals like `-42`).
+    /// Rejects `--42` and any other shape.
     pub fn integer_literal(&self) -> Option<i64> {
-        self.tokens
-            .iter()
-            .find(|t| t.kind() == SyntaxKind::INTEGER_LITERAL)
-            .and_then(|t| t.text().parse().ok())
+        let (negated, tok) =
+            scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::INTEGER_LITERAL)?;
+        let v = tok.text().parse::<i64>().ok()?;
+        Some(if negated { -v } else { v })
     }
 
-    /// Check if this member has a `FLOAT_LITERAL` token and return its text.
+    /// Check if this member has a `FLOAT_LITERAL` token. A single leading
+    /// `MINUS` negates (returned as text with a `-` prefix).
     pub fn float_literal(&self) -> Option<String> {
-        self.tokens
-            .iter()
-            .find(|t| t.kind() == SyntaxKind::FLOAT_LITERAL)
-            .map(|t| t.text().to_string())
+        let (negated, tok) =
+            scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::FLOAT_LITERAL)?;
+        let text = tok.text().to_string();
+        Some(if negated { format!("-{text}") } else { text })
     }
 
     /// Get ATTRIBUTE child nodes from this union member.
@@ -550,22 +582,28 @@ impl TypeExpr {
             .map(|n| decode_regular_string_literal_text(&n.text().to_string()))
     }
 
-    /// Check if this is an integer literal type like `200`.
+    /// Check if this is an integer literal type like `200` or `-42`. A
+    /// single leading `MINUS` negates; `--42` and other shapes return `None`.
     pub fn integer_literal(&self) -> Option<i64> {
-        self.syntax
+        let tokens = self
+            .syntax
             .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| t.kind() == SyntaxKind::INTEGER_LITERAL)
-            .and_then(|t| t.text().parse().ok())
+            .filter_map(rowan::NodeOrToken::into_token);
+        let (negated, tok) = scan_signed_literal_token(tokens, SyntaxKind::INTEGER_LITERAL)?;
+        let v = tok.text().parse::<i64>().ok()?;
+        Some(if negated { -v } else { v })
     }
 
-    /// Check if this is a float literal type like `3.14`.
+    /// Check if this is a float literal type like `3.14` or `-3.14`. A
+    /// single leading `MINUS` negates the value (returned as `-3.14` text).
     pub fn float_literal(&self) -> Option<String> {
-        self.syntax
+        let tokens = self
+            .syntax
             .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| t.kind() == SyntaxKind::FLOAT_LITERAL)
-            .map(|t| t.text().to_string())
+            .filter_map(rowan::NodeOrToken::into_token);
+        let (negated, tok) = scan_signed_literal_token(tokens, SyntaxKind::FLOAT_LITERAL)?;
+        let text = tok.text().to_string();
+        Some(if negated { format!("-{text}") } else { text })
     }
 
     /// Check if this is a boolean literal (`true` or `false`).

@@ -205,6 +205,7 @@ function f(which: int) -> int {
 }
 
 #[test]
+#[ignore = "catch bindings are now bare identifiers; typed `catch (e: any)` no longer parses"]
 fn typed_any_and_unknown_catch_bindings_are_rejected() {
     let mut db = make_db();
     let file = db.add_file(

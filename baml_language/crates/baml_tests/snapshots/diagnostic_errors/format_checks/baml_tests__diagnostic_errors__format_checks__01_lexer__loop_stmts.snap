@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 29328
 ---
 Slash "/"
 Slash "/"
@@ -3022,6 +3023,7 @@ Semicolon ";"
 IntegerLiteral "0"
 RBrace "}"
 Comma ","
+Let "let"
 Word "n"
 Colon ":"
 Word "int"
@@ -3036,6 +3038,7 @@ Semicolon ";"
 Word "n"
 RBrace "}"
 Comma ","
+Let "let"
 Word "n"
 Colon ":"
 Word "int"

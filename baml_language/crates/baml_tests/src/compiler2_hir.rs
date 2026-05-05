@@ -594,7 +594,13 @@ mod tests {
             .visible_binding_at(use_scope, init_x_offset, &Name::new("x"))
             .expect("initializer x should resolve");
 
-        assert_eq!(resolved.site, x_bindings[0].site);
+        assert_eq!(
+            index
+                .local_binding(resolved)
+                .expect("initializer x should resolve to a local binding")
+                .site,
+            x_bindings[0].site
+        );
     }
 
     #[test]

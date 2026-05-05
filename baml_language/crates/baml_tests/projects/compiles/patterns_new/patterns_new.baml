@@ -1,0 +1,391 @@
+// Patterns: weird union and binding cases.
+
+// Same typed binding repeated across both `|` branches with explicit parens.
+function or_with_repeated_typed_binding(v: int | string) -> int {
+    match (v) {
+        (let x: int) | (let x: int) => x,
+        let _ => 0
+    }
+}
+
+// Same bare binding repeated across multiple `|` branches.
+function or_with_repeated_bare_binding(v: int) -> int {
+    match (v) {
+        let x | let x | let x => x
+    }
+}
+
+// Wildcard arm last; non-trivial chain narrow in the first arm.
+function chain_narrow_then_wildcard(v: int | string | bool) -> int {
+    match (v) {
+        let n: int => n,
+        _ => 0
+    }
+}
+
+// Multiple type narrows in a chain — rightmost is the effective annotation.
+function multi_narrow_chain(v: int) -> int {
+    match (v) {
+        let n: int: int => n
+    }
+}
+
+// Bare type pattern (no binding, no narrow) in match-arm position.
+function bare_type_arm(v: int | string) -> int {
+    match (v) {
+        int => 1,
+        string => 2
+    }
+}
+
+// ============================================================================
+// Function-type patterns
+// ============================================================================
+
+// Match on a single function type — arm narrows to the callable.
+function call_int_callback(cb: (int) -> int) -> int {
+    match (cb) {
+        let f: (int) -> int => f(10)
+    }
+}
+
+// Match on a union of two distinct function types; dispatch by signature.
+function dispatch_callback(cb: ((int) -> int) | ((string) -> string)) -> int {
+    match (cb) {
+        let f: (int) -> int => f(0),
+        let _: (string) -> string => 0
+    }
+}
+
+// Or-pattern across two function-typed alternatives that share the same return.
+function call_either_int_caller(cb: ((int) -> int) | ((bool) -> int)) -> int {
+    match (cb) {
+        let _: (int) -> int => 1,
+        let _: (bool) -> int => 2
+    }
+}
+
+// Function-type narrow with chain-narrow position (`_: (int) -> T`).
+function dispatch_with_wildcard(cb: ((int) -> int) | ((string) -> int)) -> int {
+    match (cb) {
+        _: (int) -> int => 1,
+        _ => 0
+    }
+}
+
+// Generic function-type pattern. T is unified at the call site. The outer
+// parens disambiguate the union — without them the parser binds `|` inside
+// the return type, yielding `(int) -> (T | (string) -> T)`.
+function unwrap_typed<T>(cb: ((int) -> T) | ((string) -> T)) -> T {
+    match (cb) {
+        let f: (int) -> T => f(0),
+        let f: (string) -> T => f("")
+    }
+}
+
+// ============================================================================
+// Triple higher-order: function returning a function returning a function
+// ============================================================================
+
+// `f: (int) -> (int) -> (int) -> int` — three-deep curried int function.
+// `g: (string) -> (string) -> string`   — two-deep curried string function.
+// The match dispatches on which curried shape was passed and unwraps it.
+function unwrap_curried(
+    f: ((int) -> (int) -> (int) -> int) | ((string) -> (string) -> string)
+) -> int {
+    match (f) {
+        let triple: (int) -> (int) -> (int) -> int => triple(1)(2)(3),
+        let pair: (string) -> (string) -> string => 0
+    }
+}
+
+// Match on a function that takes a callback. The arm narrows to the
+// callback-accepting shape, then we synthesize an int callback inline.
+function call_with_callback(
+    runner: (((int) -> int) -> int) | (((string) -> int) -> int)
+) -> int {
+    match (runner) {
+        let r: ((int) -> int) -> int => r((x: int) -> int { x + 1 }),
+        let r: ((string) -> int) -> int => r((s: string) -> int { 0 })
+    }
+}
+
+// ============================================================================
+// Chain narrows + subtyping: each link must be a subtype of the next, so the
+// chain widens left-to-right. The rightmost concrete narrow is the effective
+// annotation.
+// ============================================================================
+
+// Literal-narrow widening to primitive: `1 <: int`.
+function literal_widens_to_int(v: int) -> int {
+    match (v) {
+        let n: 1: int => n,
+    }
+}
+
+// Primitive-narrow widening to optional: `int <: int?`.
+function int_widens_to_optional(v: int?) -> int? {
+    match (v) {
+        let n: int: int? => n,
+    }
+}
+
+// Primitive widening to union: `int <: int | string`.
+function int_widens_to_union(v: int | string) -> int {
+    match (v) {
+        let n: int: int | string => 1,
+    }
+}
+
+// Function-type widening: a narrower return type is a subtype of a wider one,
+// so `(int) -> int <: (int) -> int | string`.
+function fn_return_widens(cb: (int) -> int | string) -> int {
+    match (cb) {
+        let _: (int) -> int: (int) -> int | string => 1,
+    }
+}
+
+// Class subtype widening through a structural alias.
+type Number = int | float
+function int_widens_to_alias(v: Number) -> int {
+    match (v) {
+        let n: int: Number => 1,
+    }
+}
+
+// ============================================================================
+// Nested unions and chains in parentheses
+// ============================================================================
+
+// Paren wrapping a binding atom; the chain's narrow lives outside the parens.
+function paren_atom_outer_chain(v: int) -> int {
+    match (v) {
+        (let x): int => x
+    }
+}
+
+// Paren wrapping a union; chain narrow applies to the whole union.
+function paren_union_outer_chain(v: int) -> int {
+    match (v) {
+        (let x | let x): int => x
+    }
+}
+
+// Doubly-parenthesized atom — `(((let x)))` should round-trip and bind `x`.
+function deeply_parenthesized_binding(v: int) -> int {
+    match (v) {
+        (((let x))): int => x
+    }
+}
+
+// Paren-wrapped Or with each branch itself a chain.
+function paren_chains_in_or(v: int) -> int {
+    match (v) {
+        ((let x: int)) | ((let x: int)) => 1
+    }
+}
+
+// Paren-wrapped function-type pattern with a wider chain narrow.
+function paren_fn_pattern_with_chain(cb: (int) -> int) -> int {
+    match (cb) {
+        let f: ((int) -> int): (int) -> int => f(0)
+    }
+}
+
+// ============================================================================
+// for-let with crazy chains
+// ============================================================================
+
+// for-let with a single type narrow.
+function for_let_with_narrow(items: int[]) -> int {
+    let sum = 0;
+    for (let n: int in items) {
+        sum += n
+    }
+    sum
+}
+
+// for-let where the chain widens through a union — the binding type is the
+// rightmost concrete narrow.
+function for_let_chain_widening(items: int[]) -> int {
+    let sum = 0;
+    for (let n: int: int | string in items) {
+        sum += 1
+    }
+    sum
+}
+
+// for-let with a function-type narrow.
+function for_let_fn_narrow(items: ((int) -> int)[]) -> int {
+    let total = 0;
+    for (let f: (int) -> int in items) {
+        total += f(0)
+    }
+    total
+}
+
+// for-let with multi-link chain on a heterogeneous list.
+function for_let_multi_chain(items: (int | string | bool)[]) -> int {
+    let count = 0;
+    for (let v: int: int | string | bool in items) {
+        count += 1
+    }
+    count
+}
+
+// ============================================================================
+// catch arms with crazy chains
+// ============================================================================
+
+class AppError { code int }
+
+function risky_error(mode: int) -> int throws AppError | string {
+    if (mode == 0) {
+        throw AppError { code: 1 }
+    }
+    throw "boom"
+}
+
+// Catch arm with a chain narrow of a union — binds the joined type.
+function catch_chain_union(mode: int) -> int {
+    risky_error(mode) catch (e) {
+        AppError | string => 1
+    }
+}
+
+// Catch arms with paren-wrapped Or chains, each branch a typed binding.
+function catch_paren_or_chain(mode: int) -> int {
+    risky_error(mode) catch (e) {
+        (let _: AppError) | (let _: string) => 1
+    }
+}
+
+// Catch arms with widening chain narrows (literal -> primitive -> union).
+function catch_widening_chain(mode: int) -> int {
+    risky_error(mode) catch (e) {
+        let s: string => 1,
+        let app: AppError => 2
+    }
+}
+
+// ============================================================================
+// let-statement chain narrows (multi-link widening)
+// ============================================================================
+
+// Two-step widen: literal → primitive.
+function let_literal_to_primitive() -> int {
+    let x: 1: int = 1;
+    x
+}
+
+// Three-step widen: literal → primitive → union.
+function let_three_step_widen() -> int {
+    let x: 1: int: int | string = 1;
+    1
+}
+
+// Four-step widen: literal → primitive → 2-union → 3-union.
+function let_four_step_widen() -> int {
+    let x: 1: int: int | string: int | string | float = 1;
+    1
+}
+
+// Primitive → optional → optional-union (each step a supertype of the prior).
+function let_widen_to_nullable_union() -> int {
+    let x: int: int?: int | string | null = 1;
+    1
+}
+
+// String literal → primitive → union of literals + primitive.
+function let_string_literal_widening() -> int {
+    let s: "hello": string: string | int = "hello";
+    1
+}
+
+// Function-type widen: narrower return → wider return. The widened side
+// uses parens around the return type so `int | string` stays inside the
+// function type — without them, `(int) -> int | string` in pattern position
+// parses as a UNION_PATTERN of [(int) -> int, string].
+function let_fn_return_widen() -> int | string {
+    let f: (int) -> int: (int) -> (int | string) = (x: int) -> int { x };
+    f(0)
+}
+
+// List-element widen: int[] <: (int | string)[].
+function let_list_widen(items: int[]) -> int {
+    let xs: int[]: (int | string)[] = items;
+    xs.length()
+}
+
+// Bare wildcard chain: `_: T: U` is allowed (Wildcard contributes Never which
+// is a subtype of everything). Effective annotation is the rightmost.
+function let_wildcard_chain() -> int {
+    let _: int: int | string = 1;
+    1
+}
+
+// Mixed chain: literal narrowing through nullable.
+function let_literal_to_nullable() -> int {
+    let x: 0: int: int? = 0;
+    1
+}
+
+// ============================================================================
+// Type unions with suffixes wrapped in many layers of parens
+// ============================================================================
+
+// Single-layer paren around a union with array suffix.
+function nested_paren_union_array_one(items: (int | string)[]) -> int {
+    items.length()
+}
+
+// Two paren layers: `((int | string)[])` is the same as `(int | string)[]`.
+function nested_paren_union_array_two(items: ((int | string)[])) -> int {
+    items.length()
+}
+
+// Three paren layers. Chain narrow on the outside.
+function nested_paren_union_array_three(v: (((int | string)[])[])) -> int {
+    v.length()
+}
+
+// Chained suffix: union with `[]` wrapped, then `?` outside.
+function nested_paren_union_array_optional(v: ((int | string)[])?) -> int {
+    match (v) {
+        let _: ((int | string)[])? => 1
+    }
+}
+
+// In a let-stmt chain narrow: paren'd union with array suffix, widened to
+// optional outer.
+function let_nested_paren_union_chain(items: (int | string)[]) -> int {
+    let xs: (int | string)[]: ((int | string)[])? = items;
+    1
+}
+
+// In a match arm, deeply parenthesized type union as the pattern.
+function match_nested_paren_union(v: (int | string)[]) -> int {
+    match (v) {
+        let _: (((int | string)[])) => 1
+    }
+}
+
+// ============================================================================
+// Match-arm intersection across aliases with overlapping expansions
+// ============================================================================
+
+// Two aliases that share a single concrete member: `string`. The match arm's
+// pattern type is `AliasB` and the scrutinee type is `AliasA`, so the
+// arm-narrowed binding type must be the intersection of their expansions
+// (`string`). If `intersect_types` doesn't expand aliases first, both sides
+// look opaque to the union-distribution branch and the binding collapses to
+// `never` — the arm body would then fail to call `string` methods on `s`.
+type AliasA = int | string
+type AliasB = string | bool
+
+function alias_intersection_in_match_arm(v: AliasA) -> int {
+    match (v) {
+        let s: AliasB => s.length(),
+        let _ => 0
+    }
+}
