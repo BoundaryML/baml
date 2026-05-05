@@ -37,6 +37,27 @@ pub use types::LlmOpError;
 // --- Public API: only what sys_types and bex_engine tests actually use ---
 pub use types::SapStreamCache;
 
+#[cfg(all(not(target_arch = "wasm32"), feature = "ring-crypto"))]
+pub(crate) fn ensure_rustls_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    not(feature = "ring-crypto"),
+    feature = "aws-crypto"
+))]
+pub(crate) fn ensure_rustls_crypto_provider() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}
+
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    not(feature = "ring-crypto"),
+    not(feature = "aws-crypto")
+))]
+pub(crate) fn ensure_rustls_crypto_provider() {}
+
 // ============================================================================
 // Clean (owned-type) entry points for trait-based dispatch
 // ============================================================================

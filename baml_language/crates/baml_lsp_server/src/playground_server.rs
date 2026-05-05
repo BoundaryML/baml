@@ -475,6 +475,7 @@ async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
         .unwrap_or("/");
     let target_url = format!("{upstream}{uri_path_and_query}");
 
+    ensure_rustls_crypto_provider();
     let mut fwd = reqwest::Client::new().request(method, &target_url);
     for (name, value) in req.headers() {
         if name == header::HOST {
@@ -516,6 +517,19 @@ async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
     let resp_bytes = upstream_resp.bytes().await.unwrap_or_default();
     builder.body(Body::from(resp_bytes)).unwrap()
 }
+
+#[cfg(feature = "ring-crypto")]
+fn ensure_rustls_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
+#[cfg(all(not(feature = "ring-crypto"), feature = "aws-crypto"))]
+fn ensure_rustls_crypto_provider() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}
+
+#[cfg(all(not(feature = "ring-crypto"), not(feature = "aws-crypto")))]
+fn ensure_rustls_crypto_provider() {}
 
 /// Proxy a WebSocket upgrade request (e.g. Vite HMR) to the upstream dev server.
 async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {

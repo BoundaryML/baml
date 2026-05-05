@@ -51,7 +51,9 @@ wiremock = { workspace = true }
 workspace = true
 
 [features]
-default = [  ]
+default = [ "aws-crypto" ]
+aws-crypto = [ "sys_ops/aws-crypto" ]
+ring-crypto = [ "sys_ops/ring-crypto" ]
 heap_debug = [
   "bex_vm/heap_debug",
   "bex_heap/heap_debug",

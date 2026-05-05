@@ -6,6 +6,16 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[features]
+default = [ "aws-crypto" ]
+aws-crypto = [
+  "dep:rustls",
+  "google-cloud-auth/default-rustls-provider",
+  "rustls?/aws_lc_rs",
+  "rustls?/std",
+]
+ring-crypto = [ "dep:rustls", "rustls?/ring", "rustls?/std" ]
+
 [dependencies]
 baml_base = { workspace = true }
 baml_builtins2 = { workspace = true }
@@ -44,6 +54,7 @@ aws-config = { workspace = true, features = [
   "sso",
 ] }
 google-cloud-auth = { workspace = true }
+rustls = { workspace = true, optional = true }
 tokio = { workspace = true, features = [ "rt-multi-thread" ] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
