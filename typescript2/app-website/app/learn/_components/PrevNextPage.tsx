@@ -1,4 +1,5 @@
 import { useAtom, useAtomValue } from 'jotai';
+import posthog from 'posthog-js';
 import { useEffect } from 'react';
 import {
   lessonsAtom,
@@ -107,13 +108,33 @@ export default function PrevNextPage() {
 
   return (
     <div className="flex flex-row gap-2 w-full justify-center text-2xl">
-      <span className={linkStyle} onClick={() => previousPage()}>
+      <span
+        className={linkStyle}
+        onClick={() => {
+          previousPage();
+          posthog.capture('learn_page_navigated', {
+            direction: 'previous',
+            lesson_index: lessonAndPageId.lessonIndex,
+            page_index: lessonAndPageId.pageIndex,
+          });
+        }}
+      >
         &lt;
       </span>
       <span className="w-2">{lessonAndPageId.pageIndex + 1}</span>{' '}
       <span className="w-2">/</span>{' '}
       <span className="w-2">{pagesInLesson}</span>
-      <span className={linkStyle} onClick={() => nextPage()}>
+      <span
+        className={linkStyle}
+        onClick={() => {
+          nextPage();
+          posthog.capture('learn_page_navigated', {
+            direction: 'next',
+            lesson_index: lessonAndPageId.lessonIndex,
+            page_index: lessonAndPageId.pageIndex,
+          });
+        }}
+      >
         &gt;
       </span>
     </div>

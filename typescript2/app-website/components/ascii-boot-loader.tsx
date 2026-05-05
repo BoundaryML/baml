@@ -30,17 +30,15 @@ const FADE_MS = 260;
 const HAS_SHOWN_KEY = 'baml-ascii-boot-loader-shown';
 
 export function AsciiBootLoader() {
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [leaving, setLeaving] = useState(false);
   const [shownChars, setShownChars] = useState<number | null>(null);
 
   useEffect(() => {
     if (window.sessionStorage.getItem(HAS_SHOWN_KEY) === '1') {
+      setVisible(false);
       return;
     }
-
-    window.sessionStorage.setItem(HAS_SHOWN_KEY, '1');
-    setVisible(true);
 
     const reduced = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
@@ -49,7 +47,10 @@ export function AsciiBootLoader() {
     if (reduced) {
       setShownChars(BAML_ASCII.length);
       const hold = window.setTimeout(() => setLeaving(true), 120);
-      const done = window.setTimeout(() => setVisible(false), 120 + FADE_MS);
+      const done = window.setTimeout(() => {
+        window.sessionStorage.setItem(HAS_SHOWN_KEY, '1');
+        setVisible(false);
+      }, 120 + FADE_MS);
       return () => {
         window.clearTimeout(hold);
         window.clearTimeout(done);
@@ -74,7 +75,10 @@ export function AsciiBootLoader() {
 
       holdTimer = window.setTimeout(() => {
         setLeaving(true);
-        doneTimer = window.setTimeout(() => setVisible(false), FADE_MS);
+        doneTimer = window.setTimeout(() => {
+          window.sessionStorage.setItem(HAS_SHOWN_KEY, '1');
+          setVisible(false);
+        }, FADE_MS);
       }, HOLD_MS);
     };
 

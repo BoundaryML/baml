@@ -3,6 +3,7 @@
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowRight, Calendar, Code, Play } from 'lucide-react';
 import Link from 'next/link';
+import posthog from 'posthog-js';
 
 const INK = '#1A1612';
 const MUTED = '#5C5852';
@@ -48,6 +49,14 @@ export function PodcastEpisodesGrid({ episodes }: PodcastEpisodesGridProps) {
             className="podcast-card"
             href={`/podcast/${episode.slug}`}
             key={episode.id}
+            onClick={() =>
+              posthog.capture('podcast_episode_clicked', {
+                episode_id: episode.id,
+                episode_number: episode.episodeNumber,
+                episode_title: episode.title,
+                is_upcoming: isUpcoming,
+              })
+            }
             style={{
               color: 'inherit',
               display: 'block',

@@ -10,6 +10,12 @@ export const onRequestError: Instrumentation.onRequestError = async (
 ) => {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { postHogClient } = await import('./lib/posthog');
+    const posthog = postHogClient();
+
+    if (!posthog) {
+      return;
+    }
+
     let distinctId = null;
 
     if (request.headers.cookie) {
@@ -29,6 +35,7 @@ export const onRequestError: Instrumentation.onRequestError = async (
       }
     }
 
-    postHogClient().captureException(err, distinctId || undefined);
+    posthog.captureException(err, distinctId || undefined);
+    await posthog.shutdown();
   }
 };

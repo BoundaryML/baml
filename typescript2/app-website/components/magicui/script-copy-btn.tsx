@@ -15,6 +15,7 @@ interface ScriptCopyBtnProps extends HTMLAttributes<HTMLDivElement> {
   commandMap: Record<string, string>;
   className?: string;
   linkHref?: string;
+  onCopy?: (command: string) => void;
 }
 
 export function ScriptCopyBtn({
@@ -25,6 +26,7 @@ export function ScriptCopyBtn({
   commandMap,
   className,
   linkHref,
+  onCopy,
 }: ScriptCopyBtnProps) {
   const packageManagers = Object.keys(commandMap);
   const [packageManager, setPackageManager] = useState<string>(
@@ -38,6 +40,7 @@ export function ScriptCopyBtn({
     navigator.clipboard.writeText(command);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    onCopy?.(command);
   };
 
   return (
@@ -91,7 +94,9 @@ export function ScriptCopyBtn({
           <div className="min-w-0 w-full grow font-mono">
             <button
               type="button"
-              aria-label={linkHref ? 'Open docs' : copied ? 'Copied' : 'Copy to clipboard'}
+              aria-label={
+                linkHref ? 'Open docs' : copied ? 'Copied' : 'Copy to clipboard'
+              }
               onClick={() => {
                 if (linkHref) {
                   window.open(linkHref, '_blank', 'noopener,noreferrer');
@@ -108,11 +113,7 @@ export function ScriptCopyBtn({
           </div>
           <Button
             aria-label={
-              linkHref
-                ? 'Open docs'
-                : copied
-                  ? 'Copied'
-                  : 'Copy to clipboard'
+              linkHref ? 'Open docs' : copied ? 'Copied' : 'Copy to clipboard'
             }
             className="relative ml-2 hidden rounded-md md:block cursor-pointer"
             onClick={() => {
