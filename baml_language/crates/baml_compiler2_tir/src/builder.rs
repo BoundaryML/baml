@@ -5778,19 +5778,26 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// the values that satisfy both the scrutinee's type AND the arm
     /// pattern's natural type.
     fn intersect_types(&self, a: &Ty, b: &Ty) -> Ty {
+        // Expand aliases up front so two aliases over overlapping unions
+        // (e.g. `AliasA = int | string` ∩ `AliasB = string | bool`) reach
+        // the union-distribution branch and pick out the shared member,
+        // instead of falling through to `Never`.
+        let a = self.expand_alias_chains(a.clone());
+        let b = self.expand_alias_chains(b.clone());
+
         // Subtype shortcuts: if either side already covers the other, the
         // intersection is the narrower side.
-        if self.is_subtype(a, b) {
-            return a.clone();
+        if self.is_subtype(&a, &b) {
+            return a;
         }
-        if self.is_subtype(b, a) {
-            return b.clone();
+        if self.is_subtype(&b, &a) {
+            return b;
         }
         // Distribute over unions: (X | Y) ∩ T = (X ∩ T) | (Y ∩ T).
-        if let Ty::Union(members, _) = a {
+        if let Ty::Union(members, _) = &a {
             let intersected: Vec<Ty> = members
                 .iter()
-                .map(|m| self.intersect_types(m, b))
+                .map(|m| self.intersect_types(m, &b))
                 .filter(|t| !matches!(t, Ty::Never { .. }))
                 .collect();
             return match intersected.len() {
@@ -5801,8 +5808,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 _ => Ty::Union(intersected, TyAttr::default()),
             };
         }
-        if matches!(b, Ty::Union(_, _)) {
-            return self.intersect_types(b, a);
+        if matches!(&b, Ty::Union(_, _)) {
+            return self.intersect_types(&b, &a);
         }
         // No overlap — disjoint types intersect to Never.
         Ty::Never {

@@ -360,7 +360,20 @@ function user.match_nested_paren_union(v: (int | string)[]) -> int throws never 
         1 : 1
   }
 }
+type user.AliasA = int | string
+type user.AliasB = string | bool
+function user.alias_intersection_in_match_arm(v: user.AliasA) -> int throws never {
+  { : int | 0
+    match (v : user.AliasA) : int | 0
+      s: AliasB =>
+        s.length() : int
+      _ =>
+        0 : 0
+  }
+}
 type user.Number$stream = int | float
 class user.AppError$stream {
   code: null | int
 }
+type user.AliasA$stream = int | string
+type user.AliasB$stream = string | bool

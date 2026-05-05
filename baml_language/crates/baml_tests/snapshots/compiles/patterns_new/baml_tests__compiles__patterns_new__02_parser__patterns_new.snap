@@ -2696,6 +2696,74 @@ SOURCE_FILE
             INTEGER_LITERAL "1"
           R_BRACE "}"
         R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "AliasA"
+    EQUALS "="
+    TYPE_EXPR "int | string"
+      WORD "int"
+      PIPE "|"
+      WORD "string"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "AliasB"
+    EQUALS "="
+    TYPE_EXPR "string | bool"
+      WORD "string"
+      PIPE "|"
+      WORD "bool"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "alias_intersection_in_match_arm"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "AliasA"
+          WORD "AliasA"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "v"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let s"
+                  KW_LET "let"
+                  WORD "s"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "AliasB"
+                    WORD "AliasB"
+            FAT_ARROW "=>"
+            CALL_EXPR
+              PATH_EXPR "s.length"
+                WORD "s"
+                DOT "."
+                WORD "length"
+              CALL_ARGS "()"
+                L_PAREN "("
+                R_PAREN ")"
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              WILDCARD_PATTERN "let _"
+                KW_LET "let"
+                WORD "_"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
+          R_BRACE "}"
+        R_BRACE "}"
 
 === ERRORS ===
 None

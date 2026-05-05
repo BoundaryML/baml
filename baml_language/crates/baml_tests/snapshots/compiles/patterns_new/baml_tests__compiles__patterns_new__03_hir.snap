@@ -5,7 +5,12 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.AppError {
   code: int
 }
+type user.AliasA = int | string
+type user.AliasB = string | bool
 type user.Number = int | float
+function user.alias_intersection_in_match_arm(v: user.AliasA) -> int  [expr] {
+  {  } match (v) { s: user.AliasB => s.length(), _ => 0 }
+}
 function user.bare_type_arm(v: int | string) -> int  [expr] {
   {  } match (v) { int => 1, string => 2 }
 }

@@ -386,3 +386,23 @@ function match_nested_paren_union(v: (int | string)[]) -> int {
         let _: (((int | string)[])) => 1,
     }
 }
+
+// ============================================================================
+// Match-arm intersection across aliases with overlapping expansions
+// ============================================================================
+
+// Two aliases that share a single concrete member: `string`. The match arm's
+// pattern type is `AliasB` and the scrutinee type is `AliasA`, so the
+// arm-narrowed binding type must be the intersection of their expansions
+// (`string`). If `intersect_types` doesn't expand aliases first, both sides
+// look opaque to the union-distribution branch and the binding collapses to
+// `never` — the arm body would then fail to call `string` methods on `s`.
+type AliasA = int | string;
+type AliasB = string | bool;
+
+function alias_intersection_in_match_arm(v: AliasA) -> int {
+    match (v) {
+        let s: AliasB => s.length(),
+        let _ => 0,
+    }
+}
