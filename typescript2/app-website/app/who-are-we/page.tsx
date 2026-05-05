@@ -1,10 +1,10 @@
-import { Github, MessageCircle } from 'lucide-react';
+import { ArrowRight, Github, MessageCircle } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 
-const BG = '#ffffff';
+const BG = '#FBF7ED';
 const INK = '#1A1612';
 const MUTED = '#5C5852';
 const BORDER = '#D9D3C4';
@@ -119,7 +119,7 @@ export default function WhoAreWePage() {
               margin: 0,
             }}
           >
-            The team behind BAML
+            Hiring
           </p>
           <h1
             style={{
@@ -132,7 +132,7 @@ export default function WhoAreWePage() {
               maxWidth: 980,
             }}
           >
-            Who are we?
+            Our Team
           </h1>
           <div style={{ marginTop: 28, maxWidth: 720 }}>
             <p
@@ -143,20 +143,10 @@ export default function WhoAreWePage() {
                 margin: 0,
               }}
             >
-              We believe structured-output LLM work needs typed prompt
-              boundaries. So we're building BAML:{' '}
-              <span
-                style={{
-                  fontFamily: 'var(--font-serif)',
-                  fontStyle: 'italic',
-                  fontWeight: 500,
-                  color: ACCENT,
-                }}
-              >
-                a statically-typed, expression-oriented language with
-                first-class LLM functions
-              </span>
-              .
+              baml looks for people that like hard problems. We are building a
+              programming language, compiler, VM, LSP, playground, and generated
+              clients for the parts of AI engineering that break when demos
+              become products.
             </p>
             <p
               style={{
@@ -166,17 +156,40 @@ export default function WhoAreWePage() {
                 margin: '14px 0 0',
               }}
             >
-              Yes, we're that crazy.
+              The work is unusually broad:{' '}
               <span
                 style={{
-                  marginLeft: 8,
-                  fontSize: 14,
-                  color: EYEBROW,
+                  fontFamily: 'var(--font-serif)',
+                  fontStyle: 'italic',
+                  fontWeight: 500,
+                  color: ACCENT,
                 }}
               >
-                (we literally use Notion to present slides)
+                language design, distributed systems, developer tools, product
+                taste, and production ML weirdness
               </span>
+              .
             </p>
+            <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
+              <Link
+                href="/jobs"
+                style={{
+                  alignItems: 'center',
+                  background: INK,
+                  borderRadius: 6,
+                  color: '#ffffff',
+                  display: 'inline-flex',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  gap: 8,
+                  padding: '12px 20px',
+                  textDecoration: 'none',
+                }}
+              >
+                See open roles
+                <ArrowRight size={16} />
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -231,7 +244,7 @@ export default function WhoAreWePage() {
                 margin: 0,
               }}
             >
-              The team
+              People building BAML
             </p>
           </div>
 
@@ -402,7 +415,7 @@ export default function WhoAreWePage() {
         </div>
       </section>
 
-      {/* Join community */}
+      {/* Hiring CTA */}
       <section
         style={{
           padding: '80px 48px 120px',
@@ -420,7 +433,7 @@ export default function WhoAreWePage() {
               margin: 0,
             }}
           >
-            Get involved
+            Join us
           </p>
           <h2
             style={{
@@ -432,7 +445,7 @@ export default function WhoAreWePage() {
               color: INK,
             }}
           >
-            Join the community.
+            Work on the hard parts.
           </h2>
           <p
             style={{
@@ -443,8 +456,9 @@ export default function WhoAreWePage() {
               maxWidth: 560,
             }}
           >
-            Ready to build type-safe AI applications? Join thousands of
-            developers who are already using BAML in production.
+            We are looking for people who can move between product and systems,
+            write clearly, debug patiently, and care about making AI software
+            less fragile.
           </p>
           <div
             style={{
@@ -472,6 +486,25 @@ export default function WhoAreWePage() {
             >
               <Github size={16} />
               Star on GitHub
+            </Link>
+            <Link
+              href="/jobs"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '12px 20px',
+                borderRadius: 6,
+                background: ACCENT,
+                color: '#ffffff',
+                fontSize: 14,
+                fontWeight: 500,
+                textDecoration: 'none',
+                transition: 'opacity 200ms ease',
+              }}
+            >
+              Open roles
+              <ArrowRight size={16} />
             </Link>
             <Link
               href="https://boundaryml.com/discord"

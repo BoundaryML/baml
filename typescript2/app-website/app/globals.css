@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&display=swap");
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
@@ -388,25 +388,25 @@
 :root {
   --radius: 0.625rem;
   /* Variant-inspired light theme */
-  --background: #ffffff;
+  --background: #fbf7ed;
   --foreground: #141414;
-  --card: #FAFAF9;
+  --card: #fffdf6;
   --card-foreground: #141414;
-  --popover: #FAFAF9;
+  --popover: #fffdf6;
   --popover-foreground: #141414;
-  --primary: #7C3AED;
-  --primary-foreground: #E8E3DB;
+  --primary: #7c3aed;
+  --primary-foreground: #e8e3db;
   --secondary: #059669;
-  --secondary-foreground: #E8E3DB;
-  --muted: #D8D1C6;
-  --muted-foreground: #57534E;
-  --accent: #7C3AED;
-  --accent-foreground: #E8E3DB;
-  --destructive: #DC2626;
-  --destructive-foreground: #F9FAFB;
-  --border: #C8C2B7;
-  --input: #C8C2B7;
-  --ring: #7C3AED;
+  --secondary-foreground: #e8e3db;
+  --muted: #e8e1d2;
+  --muted-foreground: #57534e;
+  --accent: #7c3aed;
+  --accent-foreground: #e8e3db;
+  --destructive: #dc2626;
+  --destructive-foreground: #f9fafb;
+  --border: #d8cfbd;
+  --input: #d8cfbd;
+  --ring: #7c3aed;
 
   --color-one: oklch(83% 0.12 65); /* #ffbd7a */
   --color-two: oklch(72% 0.15 340); /* #fe8bbb */
@@ -420,71 +420,72 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: #E8E3DB;
+  --sidebar: #e8e3db;
   --sidebar-foreground: #141414;
-  --sidebar-primary: #7C3AED;
-  --sidebar-primary-foreground: #E8E3DB;
-  --sidebar-accent: #D8D1C6;
+  --sidebar-primary: #7c3aed;
+  --sidebar-primary-foreground: #e8e3db;
+  --sidebar-accent: #d8d1c6;
   --sidebar-accent-foreground: #141414;
-  --sidebar-border: #C8C2B7;
-  --sidebar-ring: #7C3AED;
+  --sidebar-border: #c8c2b7;
+  --sidebar-ring: #7c3aed;
 }
 
-/* Scoped dark VS-Code-themed surface for the playground. Wraps the editor
+/* Scoped editor-themed surface for the playground. Wraps the editor
  * and ExecutionPanel so pkg-playground components (which use bg-card,
- * text-foreground, vsc-* utilities, etc.) inherit dark values without
+ * text-foreground, vsc-* utilities, etc.) inherit local values without
  * leaking back into the marketing-site theme. */
 .baml-playground-root {
-  color-scheme: dark;
+  color-scheme: light;
 
   /* vsc-* token defaults */
-  --vsc-bg: #1f1f1f;
-  --vsc-bg-secondary: #181818;
-  --vsc-surface: #181818;
-  --vsc-panel: #1f1f1f;
-  --vsc-border: #2b2b2b;
-  --vsc-border-subtle: #2b2b2b;
-  --vsc-text: #cccccc;
-  --vsc-text-bright: #ffffff;
-  --vsc-text-muted: #858585;
-  --vsc-text-faint: #6b6b6b;
-  --vsc-accent: #0078d4;
+  --vsc-bg: #fffdf6;
+  --vsc-bg-secondary: #f4eee2;
+  --vsc-surface: #f7f0e4;
+  --vsc-panel: #fffdf6;
+  --vsc-border: #d8cfbd;
+  --vsc-border-subtle: #e5dccb;
+  --vsc-text: #2b2520;
+  --vsc-text-bright: #1a1612;
+  --vsc-text-muted: #6f675c;
+  --vsc-text-faint: #9a9083;
+  --vsc-accent: #6d28d9;
   --vsc-accent-fg: #ffffff;
-  --vsc-accent-hover: #026ec1;
-  --vsc-list-hover: #2a2d2e;
-  --vsc-green: #3fb950;
-  --vsc-red: #f85149;
-  --vsc-yellow: #d29922;
-  --vsc-yellow-subtle: rgba(210, 153, 34, 0.15);
-  --vsc-link: #3794ff;
-  --vsc-input-bg: #313131;
-  --vsc-input-fg: #cccccc;
-  --vsc-input-border: transparent;
-  --font-vsc-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  --font-vsc-mono-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+  --vsc-accent-hover: #5b21b6;
+  --vsc-list-hover: #eee6d8;
+  --vsc-green: #047857;
+  --vsc-red: #c2410c;
+  --vsc-yellow: #a16207;
+  --vsc-yellow-subtle: rgba(161, 98, 7, 0.12);
+  --vsc-link: #6d28d9;
+  --vsc-input-bg: #fffdf6;
+  --vsc-input-fg: #2b2520;
+  --vsc-input-border: #d8cfbd;
+  --font-vsc-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-vsc-mono-family: "SF Mono", "Fira Code", Consolas, monospace;
 
   /* Override shadcn tokens for descendants (dialogs, popovers, buttons inside
-   * the playground render dark). Light-theme values stay on the rest of
-   * the site since this scope only cascades into the playground. */
-  --background: #1f1f1f;
-  --foreground: #cccccc;
-  --card: #1f1f1f;
-  --card-foreground: #cccccc;
-  --popover: #1f1f1f;
-  --popover-foreground: #cccccc;
-  --primary: #0078d4;
+   * the playground). Site values stay on the rest of the page since this
+   * scope only cascades into the playground. */
+  --background: #fffdf6;
+  --foreground: #2b2520;
+  --card: #fffdf6;
+  --card-foreground: #2b2520;
+  --popover: #fffdf6;
+  --popover-foreground: #2b2520;
+  --primary: #6d28d9;
   --primary-foreground: #ffffff;
-  --secondary: #181818;
-  --secondary-foreground: #cccccc;
-  --muted: #181818;
-  --muted-foreground: #858585;
-  --accent: #2a2d2e;
-  --accent-foreground: #cccccc;
-  --destructive: #f85149;
+  --secondary: #f4eee2;
+  --secondary-foreground: #2b2520;
+  --muted: #f4eee2;
+  --muted-foreground: #6f675c;
+  --accent: #eee6d8;
+  --accent-foreground: #2b2520;
+  --destructive: #c2410c;
   --destructive-foreground: #ffffff;
-  --border: #2b2b2b;
-  --input: transparent;
-  --ring: #007fd4;
+  --border: #d8cfbd;
+  --input: #d8cfbd;
+  --ring: #6d28d9;
 
   background-color: var(--vsc-bg);
   color: var(--vsc-text);
@@ -531,8 +532,23 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco,
-      Consolas, 'Liberation Mono', 'Courier New', monospace;
+    background-image:
+      radial-gradient(
+        circle at 1px 1px,
+        rgba(42, 37, 32, 0.035) 1px,
+        transparent 0
+      ),
+      linear-gradient(
+        180deg,
+        rgba(255, 253, 246, 0.82),
+        rgba(251, 247, 237, 0.82)
+      );
+    background-size:
+      18px 18px,
+      100% 100%;
+    font-family:
+      "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      "Liberation Mono", "Courier New", monospace;
     font-size: 14px;
     line-height: 1.5;
   }
@@ -635,20 +651,41 @@ code[data-line-numbers] > [data-line]::before {
 
 /* Playground hint animations */
 @keyframes fade-in-hint {
-  0% { opacity: 0; transform: translateY(6px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes pulse-subtle {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 @keyframes bounce-gentle {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
 }
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 .animate-fade-in-hint {
   animation: fade-in-hint 0.6s ease-out 2s both;

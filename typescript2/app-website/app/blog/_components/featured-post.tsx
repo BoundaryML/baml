@@ -17,8 +17,6 @@ interface FeaturedPostProps {
 }
 
 export function FeaturedPost({ post }: FeaturedPostProps) {
-  const postImage = post.og?.image || post.firstImage;
-
   return (
     <Link
       href={`/blog/${post.slug}`}
@@ -46,43 +44,13 @@ export function FeaturedPost({ post }: FeaturedPostProps) {
           style={{
             position: 'relative',
             aspectRatio: '16 / 10',
-            background: postImage
-              ? CARD_BG
-              : 'linear-gradient(135deg, #4C1D95 0%, #6D28D9 45%, #8B5CF6 100%)',
+            background: CARD_BG,
             borderRight: `1px solid ${BORDER}`,
             overflow: 'hidden',
           }}
           className="blog-featured-image"
         >
-          {postImage ? (
-            <Image
-              alt={post.title}
-              className="object-cover"
-              fill
-              priority
-              sizes="(max-width: 900px) 100vw, 60vw"
-              src={postImage}
-              style={{ objectFit: 'cover' }}
-            />
-          ) : (
-            <div
-              aria-hidden
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'rgba(255,255,255,0.85)',
-                fontFamily: 'var(--font-serif)',
-                fontStyle: 'italic',
-                fontSize: 'clamp(2.5rem, 5vw, 4rem)',
-                letterSpacing: '-0.02em',
-              }}
-            >
-              BAML
-            </div>
-          )}
+          <FeaturedPreviewArt title={post.title} tag={post.tags[0]} />
         </div>
 
         <div
@@ -249,5 +217,67 @@ export function FeaturedPost({ post }: FeaturedPostProps) {
         }
       `}</style>
     </Link>
+  );
+}
+
+function FeaturedPreviewArt({ title, tag }: { title: string; tag?: string }) {
+  const category = formatCategoryForDisplay(tag ?? 'blog');
+
+  return (
+    <div
+      aria-hidden
+      style={{
+        background:
+          'radial-gradient(circle at 82% 18%, rgba(109,40,217,0.16), transparent 30%), linear-gradient(180deg, #FFFDF6 0%, #F4EEE2 100%)',
+        inset: 0,
+        padding: 32,
+        position: 'absolute',
+      }}
+    >
+      <div
+        style={{
+          border: `1px solid ${BORDER}`,
+          borderRadius: 6,
+          height: '100%',
+          overflow: 'hidden',
+          background: '#FFFDF6',
+        }}
+      >
+        <div
+          style={{
+            background: '#F4EEE2',
+            borderBottom: `1px solid ${BORDER}`,
+            color: EYEBROW,
+            fontSize: 11,
+            letterSpacing: '0.12em',
+            padding: '9px 12px',
+            textTransform: 'uppercase',
+          }}
+        >
+          {category}
+        </div>
+        <div
+          style={{
+            color: INK,
+            fontSize: 'clamp(1.6rem, 3vw, 2.4rem)',
+            fontWeight: 500,
+            letterSpacing: '-0.025em',
+            lineHeight: 1.08,
+            padding: 18,
+          }}
+        >
+          {title}
+        </div>
+        <div
+          style={{
+            background: ACCENT,
+            height: 2,
+            margin: '8px 18px 0',
+            opacity: 0.55,
+            width: 96,
+          }}
+        />
+      </div>
+    </div>
   );
 }

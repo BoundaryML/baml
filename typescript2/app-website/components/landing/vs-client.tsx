@@ -138,6 +138,79 @@ async fn extract_user(text: &str) -> anyhow::Result<User> {
 }
 `;
 
+const LANGGRAPH_NATIVE = `from typing import Literal, TypedDict
+from langgraph.graph import END, StateGraph
+from openai import OpenAI
+import json
+
+client = OpenAI()
+
+class State(TypedDict):
+    ticket: str
+    intent: str
+    priority: str
+    reply: str
+
+def classify(state: State):
+    raw = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": f"""
+Classify this ticket as refund, bug, upgrade, or question.
+Also return priority low, medium, or high as JSON.
+
+Ticket: {state["ticket"]}
+"""}],
+    ).choices[0].message.content
+    parsed = json.loads(raw)
+    return {"intent": parsed["intent"], "priority": parsed["priority"]}
+
+def route(state: State) -> Literal["draft", "escalate"]:
+    return "escalate" if state["priority"] == "high" else "draft"
+
+def draft(state: State):
+    return {"reply": f"We can help with your {state['intent']} request."}
+
+graph = StateGraph(State)
+graph.add_node("classify", classify)
+graph.add_node("draft", draft)
+graph.add_node("escalate", lambda s: {"reply": "Escalating to support."})
+graph.set_entry_point("classify")
+graph.add_conditional_edges("classify", route)
+graph.add_edge("draft", END)
+graph.add_edge("escalate", END)
+app = graph.compile()
+`;
+
+const AI_SDK_NATIVE = `import { generateObject, streamText } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
+
+const Ticket = z.object({
+  intent: z.enum(["refund", "bug", "upgrade", "question"]),
+  priority: z.enum(["low", "medium", "high"]),
+});
+
+export async function POST(req: Request) {
+  const { ticket } = await req.json();
+
+  const triage = await generateObject({
+    model: openai("gpt-4o"),
+    schema: Ticket,
+    prompt: \`Classify this support ticket: \${ticket}\`,
+  });
+
+  const reply = streamText({
+    model: openai("gpt-4o"),
+    prompt: \`Write a support reply for:
+intent: \${triage.object.intent}
+priority: \${triage.object.priority}
+ticket: \${ticket}\`,
+  });
+
+  return reply.toDataStreamResponse();
+}
+`;
+
 const BAML_USER = `class User {
   name  string
   email string
@@ -155,7 +228,94 @@ function ExtractUser(text: string) -> User {
 }
 `;
 
-type Sample = { code: string; lang: 'python' | 'typescript' | 'go' | 'rust' | 'baml'; filename: string };
+const BAML_WORKFLOW = `class Ticket {
+  intent   "refund" | "bug" | "upgrade" | "question"
+  priority "low" | "medium" | "high"
+  summary  string
+}
+
+function ClassifyTicket(text: string) -> Ticket {
+  client GPT4o
+  prompt #"
+    Classify this support ticket.
+    {{ ctx.output_format }}
+    {{ _.role("user") }} {{ text }}
+  "#
+}
+
+function DraftReply(text: string, ticket: Ticket) -> string {
+  client GPT4o
+  prompt #"
+    Write a concise support reply.
+    Intent: {{ ticket.intent }}
+    Priority: {{ ticket.priority }}
+    Ticket: {{ text }}
+  "#
+}
+
+function HandleTicket(text: string) -> string {
+  let ticket = ClassifyTicket(text)
+  if (ticket.priority == "high") {
+    return "Escalating: " + ticket.summary
+  }
+  DraftReply(text, ticket)
+}
+`;
+
+const PY_CALLER = `from baml_client import b
+
+user = b.ExtractUser("Ada, ada@example.com, pro, 37")
+print(user.email)
+`;
+
+const TS_CALLER = `import { b } from "@/baml_client";
+
+const user = await b.ExtractUser("Ada, ada@example.com, pro, 37");
+console.log(user.email);
+`;
+
+const GO_CALLER = `package main
+
+import "context"
+import b "example.com/app/baml_client"
+
+func main() {
+  user, err := b.ExtractUser(context.Background(), "Ada, ada@example.com, pro, 37")
+  if err != nil { panic(err) }
+  println(user.Email)
+}
+`;
+
+const RUST_CALLER = `use baml_client::b;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let user = b::extract_user("Ada, ada@example.com, pro, 37").await?;
+    println!("{}", user.email);
+    Ok(())
+}
+`;
+
+const PY_WORKFLOW_CALLER = `from baml_client import b
+
+reply = b.HandleTicket("I was charged twice and need a refund today")
+print(reply)
+`;
+
+const TS_WORKFLOW_CALLER = `import { b } from "@/baml_client";
+
+export async function POST(req: Request) {
+  const { ticket } = await req.json();
+  const reply = await b.HandleTicket(ticket);
+  return Response.json({ reply });
+}
+`;
+
+type Sample = {
+  code: string;
+  filename: string;
+  lang: 'python' | 'typescript' | 'go' | 'rust' | 'baml';
+};
 
 type Comparison = {
   id: string;
@@ -163,6 +323,8 @@ type Comparison = {
   headline: string;
   body: string;
   bullets: string[];
+  baml: Sample;
+  caller: Sample;
   native: Sample;
 };
 
@@ -178,6 +340,8 @@ const COMPARISONS: Comparison[] = [
       'Same Python app calls BAML through a generated typed client.',
       'Pydantic still works. BAML replaces the prompt and parse boundary, not your data layer.',
     ],
+    baml: { code: BAML_USER, lang: 'baml', filename: 'extract.baml' },
+    caller: { code: PY_CALLER, lang: 'python', filename: 'app.py' },
     native: { code: PY_NATIVE, lang: 'python', filename: 'extract.py' },
   },
   {
@@ -191,6 +355,8 @@ const COMPARISONS: Comparison[] = [
       'Streams typed partials into your UI without bespoke JSON parsers.',
       'Drop in next to Zod. Use BAML at the LLM boundary, Zod elsewhere.',
     ],
+    baml: { code: BAML_USER, lang: 'baml', filename: 'extract.baml' },
+    caller: { code: TS_CALLER, lang: 'typescript', filename: 'route.ts' },
     native: { code: TS_NATIVE, lang: 'typescript', filename: 'extract.ts' },
   },
   {
@@ -204,6 +370,8 @@ const COMPARISONS: Comparison[] = [
       'No more boilerplate ChatCompletionRequest setup per function.',
       'Tests live next to the code. Run with baml test.',
     ],
+    baml: { code: BAML_USER, lang: 'baml', filename: 'extract.baml' },
+    caller: { code: GO_CALLER, lang: 'go', filename: 'main.go' },
     native: { code: GO_NATIVE, lang: 'go', filename: 'extract.go' },
   },
   {
@@ -215,9 +383,49 @@ const COMPARISONS: Comparison[] = [
       'One .baml file replaces request building, JSON parsing, and error plumbing.',
       'Schema-aware parsing handles partial and malformed model output.',
       'Run pure BAML on the BAML VM, or call it from Rust through a generated client.',
-      'BAML\'s class layout is contiguous and resolved at compile time.',
+      "BAML's class layout is contiguous and resolved at compile time.",
     ],
+    baml: { code: BAML_USER, lang: 'baml', filename: 'extract.baml' },
+    caller: { code: RUST_CALLER, lang: 'rust', filename: 'main.rs' },
     native: { code: RUST_NATIVE, lang: 'rust', filename: 'extract.rs' },
+  },
+  {
+    id: 'langgraph',
+    tab: 'LangGraph',
+    headline: 'BAML vs LangGraph.',
+    body: 'LangGraph is a graph runtime. BAML is the typed language boundary around the model calls inside that runtime. For many workflows, the BAML version is just functions, control flow, tests, and generated clients.',
+    bullets: [
+      'Use BAML inside LangGraph when you need a graph, or use BAML alone when the workflow is mostly typed model calls.',
+      'The prompt, schema, parsing, and tests live in the same file.',
+      'Control flow can be plain BAML functions instead of graph nodes for simple workflows.',
+      'Generated Python keeps app code small and typed.',
+    ],
+    baml: { code: BAML_WORKFLOW, lang: 'baml', filename: 'support.baml' },
+    caller: {
+      code: PY_WORKFLOW_CALLER,
+      lang: 'python',
+      filename: 'support_flow.py',
+    },
+    native: { code: LANGGRAPH_NATIVE, lang: 'python', filename: 'graph.py' },
+  },
+  {
+    id: 'ai-sdk',
+    tab: 'AI SDK',
+    headline: 'BAML vs AI SDK.',
+    body: 'AI SDK is great at request and streaming plumbing. BAML is better at making the model boundary a reusable typed function with tests, providers, and generated clients.',
+    bullets: [
+      'Keep AI SDK for UI streaming, use BAML for prompts and typed outputs.',
+      'BAML functions are reusable outside one route handler.',
+      'Provider switching is a client block, not a rewrite across handlers.',
+      'Tests sit next to the function instead of in app-layer fixtures.',
+    ],
+    baml: { code: BAML_WORKFLOW, lang: 'baml', filename: 'support.baml' },
+    caller: {
+      code: TS_WORKFLOW_CALLER,
+      lang: 'typescript',
+      filename: 'route.ts',
+    },
+    native: { code: AI_SDK_NATIVE, lang: 'typescript', filename: 'route.ts' },
   },
 ];
 
@@ -481,10 +689,12 @@ const dotMark = {
 // ── Comparison block ─────────────────────────────────────────────────────────
 
 function ComparisonView({
+  bamlCallTokens,
   comparison,
   nativeTokens,
   bamlTokens,
 }: {
+  bamlCallTokens: CodeTokens;
   comparison: Comparison;
   nativeTokens: CodeTokens;
   bamlTokens: CodeTokens;
@@ -542,7 +752,16 @@ function ComparisonView({
           </div>
           <div>
             <div style={miniLabelRight}>BAML</div>
-            <CodeBlock filename="extract.baml" tokens={bamlTokens} />
+            <div style={{ display: 'grid', gap: 14 }}>
+              <CodeBlock
+                filename={comparison.baml.filename}
+                tokens={bamlTokens}
+              />
+              <CodeBlock
+                filename={comparison.caller.filename}
+                tokens={bamlCallTokens}
+              />
+            </div>
           </div>
         </div>
 
@@ -590,25 +809,20 @@ const miniLabelRight = {
 export function VsClient() {
   const [activeId, setActiveId] = useState<string>(COMPARISONS[0].id);
 
-  // Tokenize all native samples + the shared BAML sample once.
-  const tokens = useTokenized([
-    { code: PY_NATIVE, lang: 'python' },
-    { code: TS_NATIVE, lang: 'typescript' },
-    { code: GO_NATIVE, lang: 'go' },
-    { code: RUST_NATIVE, lang: 'rust' },
-    { code: BAML_USER, lang: 'baml' },
-  ]);
+  const tokens = useTokenized(
+    COMPARISONS.flatMap((comparison) => [
+      comparison.native,
+      comparison.baml,
+      comparison.caller,
+    ]),
+  );
 
-  const nativeByLang: Record<string, CodeTokens> = {
-    python: tokens[0],
-    typescript: tokens[1],
-    go: tokens[2],
-    rust: tokens[3],
-  };
-  const bamlTokens = tokens[4];
-
-  const active =
-    COMPARISONS.find((c) => c.id === activeId) ?? COMPARISONS[0];
+  const active = COMPARISONS.find((c) => c.id === activeId) ?? COMPARISONS[0];
+  const activeIndex = COMPARISONS.findIndex((c) => c.id === active.id);
+  const tokenOffset = Math.max(activeIndex, 0) * 3;
+  const nativeTokens = tokens[tokenOffset] ?? [];
+  const bamlTokens = tokens[tokenOffset + 1] ?? [];
+  const bamlCallTokens = tokens[tokenOffset + 2] ?? [];
 
   return (
     <>
@@ -661,9 +875,9 @@ export function VsClient() {
               maxWidth: 720,
             }}
           >
-            Same task, four languages. Extract a typed user from a string.
-            Notice where the schema lives, where parsing happens, and how much
-            code is doing structural work versus business logic.
+            Same task, multiple stacks. Notice where the schema lives, where
+            parsing happens, how workflows are expressed, and what the calling
+            code looks like after BAML generates the client.
           </p>
 
           <VsTabs activeId={activeId} onChange={setActiveId} />
@@ -677,9 +891,10 @@ export function VsClient() {
           }}
         >
           <ComparisonView
+            bamlCallTokens={bamlCallTokens}
             bamlTokens={bamlTokens}
             comparison={active}
-            nativeTokens={nativeByLang[active.id] ?? tokens[0]}
+            nativeTokens={nativeTokens}
           />
         </div>
       </section>
@@ -691,18 +906,8 @@ export function VsClient() {
 
 // ── Closing CTA ──────────────────────────────────────────────────────────────
 
-const INSTALL_PROMPT = `Set up BAML in this project.
-
-1. Install the BAML CLI for my OS.
-2. Run \`baml init\` and add baml_src/ to the project.
-3. Create one example typed function: a class for the schema,
-   a function block with a prompt and a client, and a generator
-   block targeting the language this project already uses.
-4. Run \`baml generate\` and show me how to call the function
-   from my code.
-
-Use https://docs.boundaryml.com as the source of truth. Ask me
-which LLM provider to wire up before writing the client block.`;
+const INSTALL_PROMPT =
+  'claude plugin add boundaryml/baml && claude "Use the BAML plugin to add one typed LLM function to this codebase."';
 
 function ClosingCta() {
   const [copied, setCopied] = useState(false);
@@ -792,7 +997,7 @@ function ClosingCta() {
                 textTransform: 'uppercase' as const,
               }}
             >
-              <span>paste into Claude Code or Cursor</span>
+              <span>same Claude plugin install as the homepage</span>
               <button
                 onClick={handleCopy}
                 style={{
@@ -849,10 +1054,9 @@ function ClosingCta() {
                 maxWidth: 460,
               }}
             >
-              Drop this into Claude Code, Cursor, or any coding agent. It will
-              install the CLI, scaffold a typed function, generate the client
-              for your language, and show you how to call it. No man pages, no
-              flag spelunking.
+              This matches the homepage install path. The agent gets the BAML
+              plugin, adds one typed LLM function, generates the client for your
+              language, and shows the app-side call site.
             </p>
             <div
               style={{

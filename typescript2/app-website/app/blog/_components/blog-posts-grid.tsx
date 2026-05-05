@@ -21,14 +21,11 @@ export function BlogPostsGrid({ posts }: BlogPostsGridProps) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns:
-          'repeat(auto-fill, minmax(min(100%, 320px), 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))',
         gap: 24,
       }}
     >
       {posts.map((post) => {
-        const postImage = post.og?.image || post.firstImage;
-
         return (
           <Link
             href={`/blog/${post.slug}`}
@@ -57,41 +54,12 @@ export function BlogPostsGrid({ posts }: BlogPostsGridProps) {
                 style={{
                   position: 'relative',
                   aspectRatio: '16 / 10',
-                  background: postImage
-                    ? CARD_BG
-                    : 'linear-gradient(135deg, #4C1D95 0%, #6D28D9 45%, #8B5CF6 100%)',
+                  background: CARD_BG,
                   borderBottom: `1px solid ${BORDER}`,
                   overflow: 'hidden',
                 }}
               >
-                {postImage ? (
-                  <Image
-                    alt={post.title}
-                    className="object-cover"
-                    fill
-                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    src={postImage}
-                    style={{ objectFit: 'cover' }}
-                  />
-                ) : (
-                  <div
-                    aria-hidden
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'rgba(255,255,255,0.85)',
-                      fontFamily: 'var(--font-serif)',
-                      fontStyle: 'italic',
-                      fontSize: 'clamp(2rem, 4vw, 3rem)',
-                      letterSpacing: '-0.02em',
-                    }}
-                  >
-                    BAML
-                  </div>
-                )}
+                <BlogPreviewArt title={post.title} tag={post.tags[0]} />
               </div>
 
               <div
@@ -182,7 +150,9 @@ export function BlogPostsGrid({ posts }: BlogPostsGridProps) {
                     justifyContent: 'space-between',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+                  >
                     {post.author?.imageUrl && (
                       <div
                         style={{
@@ -249,6 +219,60 @@ export function BlogPostsGrid({ posts }: BlogPostsGridProps) {
         }
         .blog-card:hover .blog-card-cta { color: ${ACCENT}; }
       `}</style>
+    </div>
+  );
+}
+
+function BlogPreviewArt({ title, tag }: { title: string; tag?: string }) {
+  const category = formatCategoryForDisplay(tag ?? 'blog');
+
+  return (
+    <div
+      aria-hidden
+      style={{
+        background:
+          'linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.18))',
+        inset: 0,
+        padding: 20,
+        position: 'absolute',
+      }}
+    >
+      <div
+        style={{
+          color: EYEBROW,
+          fontFamily:
+            '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+          fontSize: 10,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+        }}
+      >
+        {category}
+      </div>
+      <div
+        style={{
+          color: INK,
+          fontSize: 'clamp(1.25rem, 2.2vw, 1.8rem)',
+          fontWeight: 500,
+          letterSpacing: '-0.02em',
+          lineHeight: 1.15,
+          marginTop: 22,
+          maxWidth: '88%',
+        }}
+      >
+        {title}
+      </div>
+      <div
+        style={{
+          background: ACCENT,
+          bottom: 20,
+          height: 2,
+          left: 20,
+          opacity: 0.55,
+          position: 'absolute',
+          width: 72,
+        }}
+      />
     </div>
   );
 }

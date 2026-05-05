@@ -7,6 +7,11 @@ const RULE = '#E5DFD0';
 const MONO =
   '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 const BODY = `var(--font-geist-sans), "Helvetica Neue", Helvetica, Arial, sans-serif`;
+const PURPLE = '#6D28D9';
+const GREEN = '#047857';
+const AMBER = '#B45309';
+const BLUE = '#2563EB';
+const COMMENT = '#8A8580';
 
 const SCHEMA_SNIPPET = `// comments explain the schema to humans
 // and are stripped before the LLM sees the prompt
@@ -180,7 +185,7 @@ function CodeBlock({
           padding: '12px 14px',
         }}
       >
-        <code style={{ fontFamily: MONO }}>{children}</code>
+        <code style={{ fontFamily: MONO }}>{highlightSyntax(children)}</code>
       </pre>
       <figcaption
         style={{
@@ -195,6 +200,58 @@ function CodeBlock({
       </figcaption>
     </figure>
   );
+}
+
+function highlightSyntax(code: string) {
+  return code.split('\n').map((line, lineIndex) => (
+    <span key={`line-${lineIndex}`}>
+      {highlightLine(line)}
+      {lineIndex < code.split('\n').length - 1 ? '\n' : null}
+    </span>
+  ));
+}
+
+function highlightLine(line: string) {
+  const commentStart = line.indexOf('//');
+  const codePart = commentStart >= 0 ? line.slice(0, commentStart) : line;
+  const commentPart = commentStart >= 0 ? line.slice(commentStart) : '';
+
+  return (
+    <>
+      {highlightCodePart(codePart)}
+      {commentPart ? (
+        <span style={{ color: COMMENT }}>{commentPart}</span>
+      ) : null}
+    </>
+  );
+}
+
+function highlightCodePart(part: string) {
+  const pieces = part.split(
+    /(\{\{[^}]+\}\}|#?"[^"]*"|`[^`]*`|\b[A-Z][A-Za-z0-9_]*\b|\b(?:class|function|client|provider|options|model|prompt|test|testset|let|return|if|for|match|type|in|is|string|int|bool|float)\b|\b(?:baml|ctx|assert|input)\b)/g,
+  );
+
+  return pieces.map((piece, index) => {
+    if (!piece) return null;
+    let color = INK;
+    if (/^\{\{/.test(piece)) color = PURPLE;
+    else if (/^#?"/.test(piece) || /^`/.test(piece)) color = AMBER;
+    else if (
+      /^(class|function|client|provider|options|model|prompt|test|testset|let|return|if|for|match|type|in|is)$/.test(
+        piece,
+      )
+    )
+      color = PURPLE;
+    else if (/^(string|int|bool|float)$/.test(piece)) color = GREEN;
+    else if (/^(baml|ctx|assert|input)$/.test(piece)) color = BLUE;
+    else if (/^[A-Z]/.test(piece)) color = GREEN;
+
+    return (
+      <span key={`${piece}-${index}`} style={{ color }}>
+        {piece}
+      </span>
+    );
+  });
 }
 
 export function ThesisClient() {

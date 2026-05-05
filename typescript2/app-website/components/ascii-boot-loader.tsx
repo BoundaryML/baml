@@ -24,9 +24,9 @@ const BAML_ASCII = String.raw`          _____                    _____          
         \::/____/                \::/    /                \::/    /                \::/    /
          ~~                       \/____/                  \/____/                  \/____/`;
 
-const TYPE_MS = 1450;
-const HOLD_MS = 1000;
-const FADE_MS = 360;
+const TYPE_MS = 1050;
+const HOLD_MS = 260;
+const FADE_MS = 260;
 const HAS_SHOWN_KEY = 'baml-ascii-boot-loader-shown';
 
 export function AsciiBootLoader() {
@@ -95,7 +95,7 @@ export function AsciiBootLoader() {
       aria-live="polite"
       style={{
         alignItems: 'center',
-        background: '#ffffff',
+        background: '#FBF7ED',
         color: '#6D28D9',
         display: 'flex',
         inset: 0,

@@ -17,14 +17,17 @@ const podcastPlatforms = [
 
 export const metadata: Metadata = {
   title: '🦄 ai that works: Weekly AI Development Sessions | BAML Podcast',
-  description: 'Join our weekly interactive sessions where we build real AI applications together. Learn practical techniques for building production-ready AI systems with BAML.',
+  description:
+    'Join our weekly interactive sessions where we build real AI applications together. Learn practical techniques for building production-ready AI systems with BAML.',
   alternates: {
     canonical: 'https://boundaryml.com/podcast',
   },
-  keywords: 'AI podcast, LLM development, BAML, AI engineering, machine learning, developer podcast, AI applications',
+  keywords:
+    'AI podcast, LLM development, BAML, AI engineering, machine learning, developer podcast, AI applications',
   openGraph: {
     title: '🦄 ai that works: Weekly AI Development Sessions',
-    description: 'Join our weekly interactive sessions where we build real AI applications together. Learn practical techniques for building production-ready AI systems.',
+    description:
+      'Join our weekly interactive sessions where we build real AI applications together. Learn practical techniques for building production-ready AI systems.',
     url: 'https://boundaryml.com/podcast',
     siteName: 'BAML',
     type: 'website',
@@ -40,7 +43,8 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: '🦄 ai that works: Weekly AI Development Sessions',
-    description: 'Join our weekly interactive sessions where we build real AI applications together.',
+    description:
+      'Join our weekly interactive sessions where we build real AI applications together.',
     images: ['https://boundaryml.com/baml-og-background.png'],
     creator: '@boundaryml',
     site: '@boundaryml',
@@ -55,7 +59,7 @@ export default async function PodcastPage() {
       className="mx-auto relative"
       style={{
         maxWidth: 1600,
-        background: '#ffffff',
+        background: '#FBF7ED',
       }}
     >
       <Navbar />
