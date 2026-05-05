@@ -941,10 +941,11 @@ impl<'db> LoweringContext<'db> {
         false
     }
 
-    fn binding_id_for_pattern_site(
+    fn binding_id_for_pattern_site_name(
         &self,
         pattern: AstPatId,
         site: DefinitionSite,
+        name: &Name,
     ) -> Option<BindingId> {
         let index = file_semantic_index(self.db, self.file);
         let pattern_span = self
@@ -957,39 +958,66 @@ impl<'db> LoweringContext<'db> {
             if !Self::scope_is_descendant_or_self(index, scope_id, self.current_scope) {
                 continue;
             }
-            for binding in &bindings.bindings {
+            for (binding_idx, binding) in bindings.bindings.iter().enumerate() {
                 let pattern_matches_name_range = pattern_span.is_none_or(|span| {
                     span == binding.name_range
                         || (span.start() <= binding.name_range.start()
                             && binding.name_range.end() <= span.end())
                 });
-                if binding.site == site && binding.pattern == pattern && pattern_matches_name_range
+                if binding.site == site
+                    && binding.pattern == pattern
+                    && binding.name == *name
+                    && pattern_matches_name_range
                 {
-                    return Some(BindingId {
-                        scope: scope_id,
-                        site,
-                    });
+                    return Some(BindingId::local(scope_id, binding_idx));
                 }
             }
         }
         None
     }
 
-    fn binding_id_for_statement(&self, stmt_id: AstStmtId, pattern: AstPatId) -> Option<BindingId> {
-        self.binding_id_for_pattern_site(pattern, DefinitionSite::Statement(stmt_id))
+    fn binding_id_for_pattern_site_any(
+        &self,
+        pattern: AstPatId,
+        site: DefinitionSite,
+    ) -> Option<BindingId> {
+        let index = file_semantic_index(self.db, self.file);
+        for (scope_idx, bindings) in index.scope_bindings.iter().enumerate() {
+            let scope_id = FileScopeId::new(u32::try_from(scope_idx).expect("scope id overflow"));
+            if !Self::scope_is_descendant_or_self(index, scope_id, self.current_scope) {
+                continue;
+            }
+            for (binding_idx, binding) in bindings.bindings.iter().enumerate() {
+                if binding.site == site && binding.pattern == pattern {
+                    return Some(BindingId::local(scope_id, binding_idx));
+                }
+            }
+        }
+        None
     }
 
-    fn record_pattern_binding_local(&mut self, pattern: AstPatId, local: Local) {
-        if let Some(binding_id) =
-            self.binding_id_for_pattern_site(pattern, DefinitionSite::PatternBinding(pattern))
-        {
+    fn binding_id_for_statement_name(
+        &self,
+        stmt_id: AstStmtId,
+        pattern: AstPatId,
+        name: &Name,
+    ) -> Option<BindingId> {
+        self.binding_id_for_pattern_site_name(pattern, DefinitionSite::Statement(stmt_id), name)
+    }
+
+    fn record_pattern_binding_local(&mut self, pattern: AstPatId, name: &Name, local: Local) {
+        if let Some(binding_id) = self.binding_id_for_pattern_site_name(
+            pattern,
+            DefinitionSite::PatternBinding(pattern),
+            name,
+        ) {
             self.binding_locals.insert(binding_id, local);
         }
     }
 
     fn pattern_binding_is_captured(&self, pattern: AstPatId) -> bool {
         let Some(binding_id) =
-            self.binding_id_for_pattern_site(pattern, DefinitionSite::PatternBinding(pattern))
+            self.binding_id_for_pattern_site_any(pattern, DefinitionSite::PatternBinding(pattern))
         else {
             return false;
         };
@@ -1257,13 +1285,8 @@ impl LoweringContext<'_> {
                 .builder
                 .declare_local(Some(param_name.clone()), param_ty, None, false);
             self.locals.insert(param_name.clone(), local);
-            self.binding_locals.insert(
-                BindingId {
-                    scope: self.current_scope,
-                    site: DefinitionSite::Parameter(param_idx),
-                },
-                local,
-            );
+            self.binding_locals
+                .insert(BindingId::parameter(self.current_scope, param_idx), local);
         }
 
         // Entry and exit blocks
@@ -1508,13 +1531,8 @@ impl LoweringContext<'_> {
                 .builder
                 .declare_local(Some(param.name.clone()), param_ty, None, false);
             self.locals.insert(param.name.clone(), local);
-            self.binding_locals.insert(
-                BindingId {
-                    scope: self.current_scope,
-                    site: DefinitionSite::Parameter(param_idx),
-                },
-                local,
-            );
+            self.binding_locals
+                .insert(BindingId::parameter(self.current_scope, param_idx), local);
         }
 
         // Create entry and exit blocks.
@@ -3706,10 +3724,12 @@ impl LoweringContext<'_> {
                     );
                 }
 
-                self.locals.insert(first_name, local);
-                if let Some(binding_id) = self.binding_id_for_statement(stmt_id, pattern) {
+                if let Some(binding_id) =
+                    self.binding_id_for_statement_name(stmt_id, pattern, &first_name)
+                {
                     self.binding_locals.insert(binding_id, local);
                 }
+                self.locals.insert(first_name, local);
 
                 // Additional chain-link bindings get their own locals that
                 // copy from the first. `let x: let y` ⇒ y = x at runtime.
@@ -3724,6 +3744,11 @@ impl LoweringContext<'_> {
                         Place::local(alias),
                         Rvalue::Use(Operand::Copy(Place::Local(local))),
                     );
+                    if let Some(binding_id) =
+                        self.binding_id_for_statement_name(stmt_id, pattern, extra)
+                    {
+                        self.binding_locals.insert(binding_id, alias);
+                    }
                     self.locals.insert(extra.clone(), alias);
                 }
 
@@ -3919,10 +3944,12 @@ impl LoweringContext<'_> {
                             Place::local(local),
                             Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
                         );
-                        self.locals.insert(first_name, local);
-                        if let Some(binding_id) = self.binding_id_for_statement(stmt_id, binding) {
+                        if let Some(binding_id) =
+                            self.binding_id_for_statement_name(stmt_id, binding, &first_name)
+                        {
                             self.binding_locals.insert(binding_id, local);
                         }
+                        self.locals.insert(first_name, local);
                         // Additional chain-link bindings: each is an alias of
                         // the first, like in let-stmt lowering.
                         for extra in names.iter().skip(1) {
@@ -3936,6 +3963,11 @@ impl LoweringContext<'_> {
                                 Place::local(alias),
                                 Rvalue::Use(Operand::Copy(Place::Local(local))),
                             );
+                            if let Some(binding_id) =
+                                self.binding_id_for_statement_name(stmt_id, binding, extra)
+                            {
+                                self.binding_locals.insert(binding_id, alias);
+                            }
                             self.locals.insert(extra.clone(), alias);
                         }
                     }
@@ -5198,8 +5230,8 @@ impl LoweringContext<'_> {
                     Place::local(local),
                     Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
                 );
+                self.record_pattern_binding_local(root, &name, local);
                 self.locals.insert(name, local);
-                self.record_pattern_binding_local(root, local);
             }
             AstPattern::Chain(parts) => {
                 // Every Bind in a chain refers to the same scrutinee value
@@ -5415,18 +5447,18 @@ impl LoweringContext<'_> {
             let (binding_local, binding_copy_local) = match binding_name.clone() {
                 Some(name) if binding_is_captured => {
                     let local = self.builder.declare_local(
-                        Some(name),
+                        Some(name.clone()),
                         Ty::BuiltinUnknown {
                             attr: TyAttr::default(),
                         },
                         None,
                         false,
                     );
-                    self.record_pattern_binding_local(clause.binding, local);
+                    self.record_pattern_binding_local(clause.binding, &name, local);
                     (Some(local), Some(local))
                 }
-                Some(_) => {
-                    self.record_pattern_binding_local(clause.binding, error_local);
+                Some(name) => {
+                    self.record_pattern_binding_local(clause.binding, &name, error_local);
                     (Some(error_local), None)
                 }
                 None => (None, None),
@@ -5449,11 +5481,11 @@ impl LoweringContext<'_> {
                             None,
                             false,
                         );
-                        self.record_pattern_binding_local(st_pat, local);
+                        self.record_pattern_binding_local(st_pat, &name, local);
                         (Some(name), Some(local))
                     }
                     Some(name) => {
-                        self.record_pattern_binding_local(st_pat, payload);
+                        self.record_pattern_binding_local(st_pat, &name, payload);
                         (Some(name), Some(payload))
                     }
                     None => (None, None),

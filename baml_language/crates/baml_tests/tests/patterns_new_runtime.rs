@@ -281,3 +281,23 @@ async fn match_or_of_chain_bindings_swapped() {
     );
     assert_eq!(output.result, Ok(BexExternalValue::Int(14)));
 }
+
+// Regression: each name introduced by a multi-bind chain needs its own binding
+// identity for closure capture. If `let x: let y` collapses both names to the
+// same BindingId, the lambda below captures `x` instead of the reassigned `y`.
+#[tokio::test]
+async fn chain_second_binding_capture_after_reassign() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let x: let y = 1;
+            y = 2;
+            let f = () -> int {
+                y
+            };
+            f()
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}

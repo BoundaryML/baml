@@ -278,14 +278,11 @@ fn local_binding_id_at(
     // initializer/statement, so identify them by their recorded name range.
     for ancestor_id in index.ancestor_scopes(scope_id) {
         let bindings = &index.scope_bindings[ancestor_id.index() as usize];
-        for binding in bindings.bindings.iter().rev() {
+        for (binding_idx, binding) in bindings.bindings.iter().enumerate().rev() {
             if &binding.name == name
                 && (binding.name_range.contains(offset) || binding.name_range.start() == offset)
             {
-                return Some(BindingId {
-                    scope: ancestor_id,
-                    site: binding.site,
-                });
+                return Some(BindingId::local(ancestor_id, binding_idx));
             }
         }
     }
