@@ -14,6 +14,34 @@ import { BamlEditor } from './BamlEditor';
 
 const DEFAULT_BAML = `// BAML Playground - Try editing and running!
 
+function ClassifyTicket(text: string) -> TicketIntent {
+  client OpenAI
+  prompt #"
+    Classify the user's support request.
+
+    Text: {{text}}
+
+    {{ ctx.output_format }}
+  "#
+}
+
+function DraftReply(text: string, intent: TicketIntent) -> string {
+  client OpenAI
+  prompt #"
+    Write a concise support reply.
+
+    Intent: {{intent}}
+    Ticket: {{text}}
+  "#
+}
+
+enum TicketIntent {
+  REFUND
+  BUG
+  UPGRADE
+  QUESTION
+}
+
 client OpenAI {
   provider openai
   options {
@@ -22,29 +50,12 @@ client OpenAI {
   }
 }
 
-enum Sentiment {
-  POSITIVE
-  NEGATIVE
-  NEUTRAL
+test "refund" {
+  ClassifyTicket("I was charged twice and need the second payment refunded.")
 }
 
-function ClassifySentiment(text: string) -> Sentiment {
-  client OpenAI
-  prompt #"
-    Classify the sentiment of the following text.
-
-    Text: {{text}}
-
-    Respond with exactly one of: POSITIVE, NEGATIVE, or NEUTRAL.
-  "#
-}
-
-test "happy" {
-  ClassifySentiment("I absolutely love this product! It exceeded all my expectations.")
-}
-
-test "sad" {
-  ClassifySentiment("This was terrible. Complete waste of money and time.")
+test "bug" {
+  ClassifyTicket("The dashboard crashes whenever I upload a CSV.")
 }
 `;
 
@@ -56,7 +67,9 @@ export function BamlPlayground() {
   const [code, setCode] = useState(DEFAULT_BAML);
   const [port, setPort] = useState<RuntimePort | null>(null);
   const [connectionVersion, setConnectionVersion] = useState(0);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
+    'loading',
+  );
   const [statusMsg, setStatusMsg] = useState('Loading runtime…');
 
   const portRef = useRef<RuntimePort | null>(null);
@@ -89,7 +102,9 @@ export function BamlPlayground() {
       });
     } catch (err) {
       setStatus('error');
-      setStatusMsg(`Failed to spawn worker: ${err instanceof Error ? err.message : String(err)}`);
+      setStatusMsg(
+        `Failed to spawn worker: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return;
     }
     workerRef.current = worker;
@@ -185,8 +200,8 @@ export function BamlPlayground() {
             key={connectionVersion}
             port={port}
             connectionVersion={connectionVersion}
-            initialFunctionName="ClassifySentiment"
-            initialArgsJson='{"text":"baml rocks"}'
+            initialFunctionName="ClassifyTicket"
+            initialArgsJson='{"text":"I was charged twice and need the second payment refunded."}'
           />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-vsc-text-faint">

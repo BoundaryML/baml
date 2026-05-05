@@ -85,63 +85,40 @@ const TrustMarquee = () => (
 );
 
 const ROTATING_WORDS = [
-  'evaluating',
-  'testing',
   'verifying',
+  'orchestrating',
+  'testing',
   'debugging',
   'shipping',
-  'deploying',
-  'orchestrating',
+  'using',
 ];
 const HOLD_MS = 1400;
 const TRANSITION_MS = 400;
-const SETTLE_MS = 900;
 
 const RotatingWord = () => {
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
   const [reduced, setReduced] = useState(false);
-  const [settled, setSettled] = useState(false);
 
   useEffect(() => {
     setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   }, []);
 
   useEffect(() => {
-    // With reduced motion, jump straight to the terminal word.
     if (reduced) {
-      setSettled(true);
       return;
     }
 
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const advance = (next: number) => {
+    const timer = setInterval(() => {
       setVisible(false);
-      timer = setTimeout(() => {
-        setIndex(next);
+      window.setTimeout(() => {
+        setIndex((current) => (current + 1) % ROTATING_WORDS.length);
         setVisible(true);
-        timer = setTimeout(() => {
-          if (next === ROTATING_WORDS.length - 1) {
-            setVisible(false);
-            timer = setTimeout(() => setSettled(true), TRANSITION_MS);
-            return;
-          }
-          advance(next + 1);
-        }, HOLD_MS);
       }, TRANSITION_MS);
-    };
-
-    timer = setTimeout(() => advance(1), HOLD_MS);
-
-    const handleVisibility = () => {
-      if (document.visibilityState === 'hidden' && timer) clearTimeout(timer);
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
+    }, HOLD_MS + TRANSITION_MS);
 
     return () => {
-      if (timer) clearTimeout(timer);
-      document.removeEventListener('visibilitychange', handleVisibility);
+      clearInterval(timer);
     };
   }, [reduced]);
 
@@ -151,44 +128,28 @@ const RotatingWord = () => {
       aria-live="polite"
       style={{
         color: '#6D28D9',
-        columnGap: settled ? 0 : '0.18em',
-        display: 'inline-flex',
+        display: 'inline-block',
         fontFamily: 'var(--font-serif)',
+        fontSize: '0.94em',
         fontStyle: 'italic',
         fontWeight: 500,
         lineHeight: 1.12,
+        minWidth: '10ch',
         verticalAlign: 'baseline',
-        transition: reduced
-          ? 'none'
-          : `column-gap ${SETTLE_MS}ms cubic-bezier(0.4,0,0.2,1)`,
       }}
     >
       <span
-        aria-hidden={settled}
         style={{
           display: 'inline-block',
-          maxWidth: settled ? 0 : '9.5em',
-          opacity: visible && !settled ? 1 : 0,
+          opacity: visible ? 1 : 0,
           overflow: 'hidden',
           transition: reduced
             ? 'none'
-            : `opacity ${TRANSITION_MS}ms cubic-bezier(0.4,0,0.2,1), max-width ${SETTLE_MS}ms cubic-bezier(0.16,1,0.3,1)`,
+            : `opacity ${TRANSITION_MS}ms cubic-bezier(0.4,0,0.2,1)`,
           whiteSpace: 'nowrap',
         }}
       >
         {ROTATING_WORDS[index]}
-      </span>
-      <span
-        style={{
-          display: 'inline-block',
-          transform: 'translateX(0)',
-          transition: reduced
-            ? 'none'
-            : `transform ${SETTLE_MS}ms cubic-bezier(0.4,0,0.2,1)`,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        AI
       </span>
     </span>
   );
@@ -240,7 +201,10 @@ const customStyles = {
     width: '100%',
   },
   container: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FBF7ED',
+    backgroundImage:
+      'radial-gradient(circle at 1px 1px, rgba(42,37,32,0.035) 1px, transparent 0)',
+    backgroundSize: '18px 18px',
     color: '#1A1612',
     display: 'flex',
     flexDirection: 'column',
@@ -472,7 +436,7 @@ const customStyles = {
   root: {
     '--accent': '#6D28D9',
     '--accent-hover': '#5B21B6',
-    '--bg': '#ffffff',
+    '--bg': '#FBF7ED',
     '--border': '#D9D3C4',
     '--fg': '#1A1612',
     '--secondary': '#6D28D9',
@@ -574,14 +538,12 @@ const HeroCodeWindow = () => (
   </div>
 );
 
-type InstallPath = 'claude' | 'docs';
+type InstallPath = 'claude' | 'codex';
 
 const claudeInstallPrompt =
-  'Read https://www.boundaryml.com/llms.txt and help me add BAML to this codebase. Prefer the smallest working integration: identify the language/framework, install the right package, initialize BAML if needed, generate the typed client, and wire one existing LLM call through BAML.';
-const docsInstallLabel = 'Read the installation guide';
-const docsInstallHref =
-  'https://docs.boundaryml.com/guide/introduction/what-is-baml';
-
+  'claude plugin add boundaryml/baml && claude "Use the BAML plugin to add one typed LLM function to this codebase."';
+const codexInstallPrompt =
+  'codex plugin add boundaryml/baml && codex "Use the BAML plugin to add one typed LLM function to this codebase."';
 const installOptions: {
   id: InstallPath;
   label: string;
@@ -590,10 +552,16 @@ const installOptions: {
 }[] = [
   {
     command: claudeInstallPrompt,
+    icon: '/Claude Color SVG.svg',
     id: 'claude',
-    label: 'Agent prompt',
+    label: 'Claude plugin',
   },
-  { command: docsInstallLabel, id: 'docs', label: 'Docs' },
+  {
+    command: codexInstallPrompt,
+    icon: '/Codex Color.svg',
+    id: 'codex',
+    label: 'Codex plugin',
+  },
 ];
 
 const HeroSection = () => {
@@ -609,9 +577,11 @@ const HeroSection = () => {
       <div style={customStyles.heroLeft}>
         <div>
           <h1 style={customStyles.h1}>
-            A language
+            A language for
             <br />
-            for <RotatingWord />
+            <RotatingWord />
+            <br />
+            AI
           </h1>
           <p style={customStyles.p}>
             Python and Java were built for humans. BAML was built for agents.
@@ -637,9 +607,6 @@ const HeroSection = () => {
                   commandMap={{ bash: selected.command } as const}
                   darkTheme="none"
                   lightTheme="none"
-                  linkHref={
-                    installPath === 'docs' ? docsInstallHref : undefined
-                  }
                   showMultiplePackageOptions={false}
                 />
               </div>
@@ -713,7 +680,7 @@ const HeroSection = () => {
             className="group text-[#5C5852] hover:text-[#A78BFA] no-underline transition-colors duration-500 ease-out"
             href="/how-the-playground-works"
             style={{
-              backgroundColor: '#ffffff',
+              backgroundColor: '#FBF7ED',
               borderTop: '1px solid #D9D3C4',
               flexShrink: 0,
               fontSize: '13px',
@@ -741,7 +708,7 @@ const FeatureIndex = () => {
     {
       meta: 'Compiler',
       num: '02',
-      title: 'Schema aware parsing (bex_sap)',
+      title: 'Error-correcting parser (bex_sap)',
       version: 'core',
     },
     {
@@ -788,9 +755,7 @@ const FeatureIndex = () => {
 const StatementSection = () => (
   <section style={customStyles.statementSection}>
     <div style={customStyles.statementText}>
-      <p style={customStyles.statementP}>
-        Agents write it. Agents run in it.
-      </p>
+      <p style={customStyles.statementP}>Agents write it. Agents run in it.</p>
       <p style={customStyles.statementP}>
         <strong>The agent is the program</strong>.
       </p>
@@ -838,12 +803,10 @@ const LegacyCodeWindow = () => (
             <span style={customStyles.cm}>
               {'// no exhaustiveness check at the language level'}
             </span>
-            {'\n'}{' '}
-            <span style={customStyles.kw}>if</span> (t.kind ==={' '}
+            {'\n'} <span style={customStyles.kw}>if</span> (t.kind ==={' '}
             <span style={customStyles.st}>'answer'</span>){' '}
             <span style={customStyles.kw}>return</span> t.text;
-            {'\n'}{' '}
-            <span style={customStyles.kw}>if</span> (t.kind ==={' '}
+            {'\n'} <span style={customStyles.kw}>if</span> (t.kind ==={' '}
             <span style={customStyles.st}>'readFile'</span>){' '}
             <span style={customStyles.kw}>return</span>{' '}
             <span style={customStyles.fn}>read</span>(t.path);
@@ -901,18 +864,22 @@ const BamlCodeWindow = () => (
             <span style={customStyles.ty}>Tool</span>) -&gt;{' '}
             <span style={customStyles.ty}>string</span> {'{'}
             {'\n'} <span style={customStyles.kw}>match</span> (tool) {'{'}
-            {'\n'}{'    a: '}
+            {'\n'}
+            {'    a: '}
             <span style={customStyles.ty}>Answer</span>
             {'    => a.text,'}
-            {'\n'}{'    r: '}
+            {'\n'}
+            {'    r: '}
             <span style={customStyles.ty}>ReadFile</span>
             {'  => baml.fs.'}
             <span style={customStyles.fn}>read</span>(r.path),
-            {'\n'}{'    b: '}
+            {'\n'}
+            {'    b: '}
             <span style={customStyles.ty}>RunBash</span>
             {'   => baml.sys.'}
             <span style={customStyles.fn}>shell</span>(b.command),
-            {'\n'}{'  }'}
+            {'\n'}
+            {'  }'}
             {'\n'}
             {'}'}
           </code>

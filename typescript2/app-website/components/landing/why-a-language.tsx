@@ -1,4 +1,4 @@
-const BG = '#ffffff';
+const BG = '#FBF7ED';
 const INK = '#1A1612';
 const BORDER = '#D9D3C4';
 const ACCENT = '#6D28D9';
@@ -27,17 +27,41 @@ const BAML_ASCII = String.raw`          _____                    _____          
          ~~                       \/____/                  \/____/                  \/____/`;
 
 const LEFT = [
-  'Schema aware parsing',
-  'Tagged union match dispatch',
-  'Typed errors and retries',
-  'Generics, lambdas, namespaces',
+  {
+    label: 'Error-correcting parser',
+    syntax: 'function Extract(img: Image) -> Receipt',
+  },
+  {
+    label: 'Tagged union match dispatch',
+    syntax: 'match (tool) { r: ReadFile => read(r.path) }',
+  },
+  {
+    label: 'Typed errors and retries',
+    syntax: 'function Fetch() -> Result throws Timeout',
+  },
+  {
+    label: 'Generics, lambdas, namespaces',
+    syntax: 'function Apply<T>(f: (x: T) -> T, x: T) -> T',
+  },
 ];
 
 const RIGHT = [
-  'Better context',
-  'Streaming with typed partials',
-  'One interface, every LLM provider',
-  'Tests live next to your prompts',
+  {
+    label: 'Better context',
+    syntax: 'baml-cli describe',
+  },
+  {
+    label: 'Streaming with typed partials',
+    syntax: 'stream Extract(img) -> partial Receipt',
+  },
+  {
+    label: 'One interface, every LLM provider',
+    syntax: 'client "openai/gpt-4o"',
+  },
+  {
+    label: 'Tests live next to your prompts',
+    syntax: 'test Happy { functions [Classify] }',
+  },
 ];
 
 export function WhyALanguage() {
@@ -51,7 +75,8 @@ export function WhyALanguage() {
         @media (max-width: 900px) {
           .why-cols { grid-template-columns: 1fr !important; max-width: 420px !important; }
           .why-divider { display: none !important; }
-          .why-item { line-height: 2.2em !important; font-size: 15px !important; }
+          .why-item { line-height: 1.35 !important; font-size: 15px !important; }
+          .why-item code { white-space: normal !important; }
         }
       `}</style>
 
@@ -68,7 +93,8 @@ export function WhyALanguage() {
             aria-label="BAML"
             style={{
               color: ACCENT,
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+              fontFamily:
+                'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
               fontSize: 'clamp(5px, 0.78vw, 12px)',
               fontWeight: 600,
               lineHeight: 1,
@@ -103,10 +129,11 @@ export function WhyALanguage() {
             }}
           >
             BAML is a programming language, built in{' '}
-            <span style={{ color: ACCENT, fontWeight: 500 }}>Rust</span>{' '}
-            and used by some of the world&apos;s largest companies. It has a
+            <span style={{ color: ACCENT, fontWeight: 500 }}>Rust</span> and
+            used by some of the world&apos;s largest companies. It has a
             compiler, VM, LSP, formatter, type system (with inferred error
-            types), and drops into <span style={{ fontWeight: 500 }}>Python</span>,{' '}
+            types), and drops into{' '}
+            <span style={{ fontWeight: 500 }}>Python</span>,{' '}
             <span style={{ fontWeight: 500 }}>TypeScript</span>,{' '}
             <span style={{ fontWeight: 500 }}>Go</span>, and the{' '}
             <span style={{ fontWeight: 500 }}>browser</span> so teams can adopt
@@ -134,28 +161,41 @@ export function WhyALanguage() {
             />
             <Column items={RIGHT} />
           </div>
-
         </div>
       </div>
     </section>
   );
 }
 
-function Column({ items }: { items: string[] }) {
+function Column({ items }: { items: { label: string; syntax: string }[] }) {
   return (
     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
       {items.map((item) => (
         <li
-          key={item}
+          key={item.label}
           className="why-item"
           style={{
             fontSize: '17px',
             fontWeight: 400,
             color: INK,
-            lineHeight: '2.5em',
+            lineHeight: 1.35,
+            marginBottom: 26,
           }}
         >
-          {item}
+          <span>{item.label}</span>
+          <code
+            style={{
+              color: '#6D28D9',
+              display: 'block',
+              fontSize: '11px',
+              lineHeight: 1.35,
+              marginTop: 6,
+              opacity: 0.72,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {item.syntax}
+          </code>
         </li>
       ))}
     </ul>

@@ -2,158 +2,320 @@
 
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowRight, Calendar, Code, Play } from 'lucide-react';
-import Image from 'next/image';
 import Link from 'next/link';
-import { Card } from '@/components/ui/card';
+
+const INK = '#1A1612';
+const MUTED = '#5C5852';
+const BORDER = '#D9D3C4';
+const ACCENT = '#6D28D9';
+const EYEBROW = '#8A8580';
+const CARD_BG = '#FBF8F1';
+const MONO =
+  '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 
 interface PodcastEpisode {
+  codeUrl?: string;
   date: string;
   description: string;
   episodeNumber: string;
   featured: boolean;
   id: number;
   rsvpUrl?: string;
+  slug: string;
   title: string;
   topics: string[];
-  codeUrl?: string;
   youtubeUrl?: string;
-  slug: string;
 }
 
 interface PodcastEpisodesGridProps {
   episodes: PodcastEpisode[];
 }
 
-// Helper function to extract YouTube video ID from URL
-const getYouTubeVideoId = (url: string) => {
-  const match = url.match(
-    /(?:youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/embed\/)([^&\n?#]+)/,
-  );
-  return match ? match[1] : null;
-};
-
 export function PodcastEpisodesGrid({ episodes }: PodcastEpisodesGridProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 auto-rows-fr">
+    <div
+      style={{
+        display: 'grid',
+        gap: 24,
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))',
+      }}
+    >
       {episodes.map((episode) => {
         const isUpcoming = new Date(episode.date) > new Date();
+
         return (
-        <Link href={`/podcast/${episode.slug}`} key={episode.id}>
-          <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer py-0 flex flex-col h-full gap-0">
-          {/* Cover Image - YouTube Thumbnail */}
-          {episode.youtubeUrl && getYouTubeVideoId(episode.youtubeUrl) && (
-            <div className="relative h-40 sm:h-48">
-              <Image
-                alt={episode.title}
-                className="object-cover w-full h-full"
-                height={512}
-                src={`https://img.youtube.com/vi/${getYouTubeVideoId(episode.youtubeUrl)}/0.jpg`}
-                width={512}
-              />
-              {/* Play button overlay */}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Play
-                    className="w-6 h-6 sm:w-8 sm:h-8 text-white ml-0.5 sm:ml-1"
-                    fill="currentColor"
+          <Link
+            className="podcast-card"
+            href={`/podcast/${episode.slug}`}
+            key={episode.id}
+            style={{
+              color: 'inherit',
+              display: 'block',
+              textDecoration: 'none',
+            }}
+          >
+            <article
+              className="podcast-card-article"
+              style={{
+                background: '#ffffff',
+                border: `1px solid ${BORDER}`,
+                borderRadius: 8,
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+                overflow: 'hidden',
+                transition: 'box-shadow 200ms ease, transform 200ms ease',
+              }}
+            >
+              <div
+                style={{
+                  aspectRatio: '16 / 10',
+                  background: CARD_BG,
+                  borderBottom: `1px solid ${BORDER}`,
+                  overflow: 'hidden',
+                  position: 'relative',
+                }}
+              >
+                <EpisodePreviewArt episode={episode} isUpcoming={isUpcoming} />
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flex: 1,
+                  flexDirection: 'column',
+                  gap: 16,
+                  padding: '24px 24px 20px',
+                }}
+              >
+                <div
+                  style={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    gap: 10,
+                  }}
+                >
+                  <span
+                    style={{
+                      color: ACCENT,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      letterSpacing: '0.14em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {episode.episodeNumber}
+                  </span>
+                  <span
+                    style={{
+                      background: BORDER,
+                      borderRadius: '50%',
+                      height: 3,
+                      width: 3,
+                    }}
                   />
+                  <span
+                    style={{
+                      color: EYEBROW,
+                      fontSize: 11,
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    {formatDistanceToNow(new Date(episode.date), {
+                      addSuffix: true,
+                    })}
+                  </span>
+                </div>
+
+                <h3
+                  style={{
+                    color: INK,
+                    display: '-webkit-box',
+                    fontSize: 19,
+                    fontWeight: 600,
+                    letterSpacing: '-0.015em',
+                    lineHeight: 1.25,
+                    margin: 0,
+                    overflow: 'hidden',
+                    WebkitBoxOrient: 'vertical',
+                    WebkitLineClamp: 2,
+                  }}
+                >
+                  {episode.title}
+                </h3>
+
+                <p
+                  style={{
+                    color: MUTED,
+                    display: '-webkit-box',
+                    fontSize: 14,
+                    lineHeight: 1.55,
+                    margin: 0,
+                    overflow: 'hidden',
+                    WebkitBoxOrient: 'vertical',
+                    WebkitLineClamp: 3,
+                  }}
+                >
+                  {episode.description}
+                </p>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    marginTop: 'auto',
+                  }}
+                >
+                  {episode.topics.slice(0, 3).map((topic) => (
+                    <span
+                      key={topic}
+                      style={{
+                        background: '#F4EEE2',
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 999,
+                        color: MUTED,
+                        fontSize: 11,
+                        padding: '4px 8px',
+                      }}
+                    >
+                      {topic}
+                    </span>
+                  ))}
+                </div>
+
+                <div
+                  style={{
+                    alignItems: 'center',
+                    borderTop: `1px solid ${BORDER}`,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    paddingTop: 16,
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    {episode.codeUrl && !isUpcoming && (
+                      <span
+                        style={{
+                          alignItems: 'center',
+                          color: EYEBROW,
+                          display: 'inline-flex',
+                          fontSize: 12,
+                          gap: 5,
+                        }}
+                      >
+                        <Code size={12} />
+                        Code
+                      </span>
+                    )}
+                    {episode.rsvpUrl && !episode.youtubeUrl && (
+                      <span
+                        style={{
+                          alignItems: 'center',
+                          color: EYEBROW,
+                          display: 'inline-flex',
+                          fontSize: 12,
+                          gap: 5,
+                        }}
+                      >
+                        <Calendar size={12} />
+                        RSVP
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className="podcast-card-cta"
+                    style={{
+                      alignItems: 'center',
+                      color: INK,
+                      display: 'inline-flex',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      gap: 4,
+                    }}
+                  >
+                    {episode.youtubeUrl
+                      ? 'Watch'
+                      : isUpcoming
+                        ? 'RSVP'
+                        : 'View'}
+                    <ArrowRight size={12} />
+                  </span>
                 </div>
               </div>
-            </div>
-          )}
-          {!episode.youtubeUrl && isUpcoming && (
-            <div className="relative h-40 sm:h-48 bg-gradient-to-br from-primary/15 to-transparent flex items-center justify-center">
-              <div className="text-primary text-xs sm:text-sm font-medium flex items-center gap-2 bg-background/80 backdrop-blur px-3 py-1 rounded-full border border-primary/20">
-                <span className="h-2 w-2 bg-primary rounded-full animate-pulse" />
-                Upcoming • {formatDistanceToNow(new Date(episode.date), { addSuffix: true })}
-              </div>
-            </div>
-          )}
-
-          <div className="p-4 sm:p-6 flex flex-col flex-1">
-            {/* Episode number and date */}
-            <div className="flex items-center gap-2 sm:gap-3 text-xs text-muted-foreground mb-3">
-              <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                {episode.episodeNumber}
-              </span>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                <span>
-                  {formatDistanceToNow(new Date(episode.date), {
-                    addSuffix: true,
-                  })}
-                </span>
-              </div>
-            </div>
-
-            {/* Title */}
-            <h3 className="text-lg sm:text-xl font-semibold mb-2 line-clamp-2">
-              {episode.title}
-            </h3>
-
-            {/* Description */}
-            <p className="text-muted-foreground text-sm mb-4 flex-1 line-clamp-3 sm:line-clamp-4">
-              {episode.description}
-            </p>
-
-            {/* Topics */}
-            <div className="flex flex-wrap gap-1 sm:gap-2 mb-4">
-              {episode.topics.slice(0, 3).map((topic) => (
-                <span
-                  className="text-xs bg-muted px-2 py-1 rounded-full"
-                  key={topic}
-                >
-                  {topic}
-                </span>
-              ))}
-              {episode.topics.length > 3 && (
-                <span className="text-xs text-muted-foreground">
-                  +{episode.topics.length - 3} more
-                </span>
-              )}
-            </div>
-
-            {/* Bottom section with actions */}
-            <div className="flex items-center justify-between mt-auto">
-              <div className="flex items-center gap-2">
-                {/* Code link if available */}
-                {episode.codeUrl && !isUpcoming && (
-                  <Link
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    href={episode.codeUrl}
-                    onClick={(e) => e.stopPropagation()}
-                    target="_blank"
-                  >
-                    <Code className="h-3 w-3" />
-                    <span className="hidden sm:inline">Demo Code</span>
-                    <span className="sm:hidden">Code</span>
-                  </Link>
-                )}
-
-                {/* RSVP link if available */}
-                {episode.rsvpUrl && !episode.youtubeUrl && (
-                  <Link
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    href={episode.rsvpUrl}
-                    onClick={(e) => e.stopPropagation()}
-                    target="_blank"
-                  >
-                    <Calendar className="h-3 w-3" />
-                    <span>RSVP</span>
-                  </Link>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <span className="text-sm">{episode.youtubeUrl ? 'Watch' : (isUpcoming ? 'RSVP' : 'View')}</span>
-                <ArrowRight className="h-3 w-3" />
-              </div>
-            </div>
-          </div>
-        </Card>
-        </Link>
+            </article>
+          </Link>
         );
       })}
+
+      <style>{`
+        .podcast-card:hover .podcast-card-article {
+          box-shadow: 0 16px 40px -24px rgba(0,0,0,0.18);
+          transform: translateY(-2px);
+        }
+        .podcast-card:hover .podcast-card-cta { color: ${ACCENT}; }
+      `}</style>
+    </div>
+  );
+}
+
+function EpisodePreviewArt({
+  episode,
+  isUpcoming,
+}: {
+  episode: PodcastEpisode;
+  isUpcoming: boolean;
+}) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        background:
+          'radial-gradient(circle at 78% 22%, rgba(109,40,217,0.16), transparent 28%), linear-gradient(180deg, #FFFDF6 0%, #F4EEE2 100%)',
+        inset: 0,
+        padding: 20,
+        position: 'absolute',
+      }}
+    >
+      <div
+        style={{
+          alignItems: 'center',
+          color: ACCENT,
+          display: 'flex',
+          fontFamily: MONO,
+          fontSize: 11,
+          gap: 8,
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+        }}
+      >
+        <Play size={13} />
+        {isUpcoming ? 'Live soon' : 'Session'}
+      </div>
+      <div
+        style={{
+          color: INK,
+          fontSize: 'clamp(1.25rem, 2.2vw, 1.8rem)',
+          fontWeight: 500,
+          letterSpacing: '-0.02em',
+          lineHeight: 1.15,
+          marginTop: 22,
+          maxWidth: '88%',
+        }}
+      >
+        {episode.title}
+      </div>
+      <div
+        style={{
+          background: ACCENT,
+          bottom: 20,
+          height: 2,
+          left: 20,
+          opacity: 0.55,
+          position: 'absolute',
+          width: 72,
+        }}
+      />
     </div>
   );
 }

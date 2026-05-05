@@ -23,7 +23,12 @@ const bamlLang = convertTextmateToShiki(bamlTextmate as Record<string, any>);
 // Component
 // ---------------------------------------------------------------------------
 
-export function BamlEditor({ value, onChange, disabled, chromeless }: BamlEditorProps) {
+export function BamlEditor({
+  value,
+  onChange,
+  disabled,
+  chromeless,
+}: BamlEditorProps) {
   const [tokens, setTokens] = useState<ThemedToken[][] | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
@@ -35,7 +40,7 @@ export function BamlEditor({ value, onChange, disabled, chromeless }: BamlEditor
       try {
         const result = await codeToTokens(value, {
           lang: bamlLang as any,
-          theme: 'github-dark',
+          theme: 'github-light',
         });
         if (!cancelled) setTokens(result.tokens);
       } catch {
@@ -58,15 +63,13 @@ export function BamlEditor({ value, onChange, disabled, chromeless }: BamlEditor
   const highlightedLines = tokens
     ? tokens.map((line, li) => (
         <div key={li} className="min-h-[1.5rem]">
-          {line.length === 0 ? (
-            '​'
-          ) : (
-            line.map((token, ti) => (
-              <span key={ti} style={{ color: token.color }}>
-                {token.content}
-              </span>
-            ))
-          )}
+          {line.length === 0
+            ? '​'
+            : line.map((token, ti) => (
+                <span key={ti} style={{ color: token.color }}>
+                  {token.content}
+                </span>
+              ))}
         </div>
       ))
     : value.split('\n').map((line, i) => (
@@ -76,7 +79,7 @@ export function BamlEditor({ value, onChange, disabled, chromeless }: BamlEditor
       ));
 
   return (
-    <div className="relative flex flex-col h-full bg-[#0d1117]">
+    <div className="relative flex flex-col h-full bg-[#FFFDF6]">
       {!chromeless && (
         <div className="flex items-center justify-between border-b border-border bg-muted/50 px-4 py-2">
           <span className="text-sm font-medium">main.baml</span>
@@ -95,7 +98,7 @@ export function BamlEditor({ value, onChange, disabled, chromeless }: BamlEditor
         {/* Transparent textarea — captures all input */}
         <textarea
           ref={textareaRef}
-          className="absolute inset-0 w-full h-full p-4 font-mono text-sm leading-6 bg-transparent text-transparent caret-white resize-none outline-none overflow-auto whitespace-pre-wrap break-words"
+          className="absolute inset-0 w-full h-full p-4 font-mono text-sm leading-6 bg-transparent text-transparent caret-[#6D28D9] resize-none outline-none overflow-auto whitespace-pre-wrap break-words"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onScroll={handleScroll}
