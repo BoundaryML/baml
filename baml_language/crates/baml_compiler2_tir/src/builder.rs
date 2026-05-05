@@ -2334,13 +2334,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let has_annotation = !matches!(pat_ty, Ty::Never { .. });
                 let (flow_ty, declared_for_scope) = if has_annotation {
                     if !self.is_subtype(&elem_ty, &pat_ty) {
-                        self.context.report_simple(
-                            TirTypeError::TypeMismatch {
-                                expected: pat_ty.clone(),
-                                got: elem_ty,
-                            },
-                            *collection,
-                        );
+                        // Anchor the diagnostic to the binding pattern: the
+                        // bad annotation is what's wrong, not the iterable.
+                        let err = TirTypeError::TypeMismatch {
+                            expected: pat_ty.clone(),
+                            got: elem_ty,
+                        };
+                        if let Some(sm) = self.body_source_map.as_ref() {
+                            self.context.report_at_span(err, sm.pattern_span(*binding));
+                        } else {
+                            self.context.report_simple(err, *collection);
+                        }
                     }
                     (pat_ty.clone(), Some(pat_ty))
                 } else {
@@ -2832,6 +2836,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 result_members.push(arm_ty);
 
                 self.restore_scoped_locals(arm_snapshot);
+                // `restore_scoped_locals` rolls back `locals`, but
+                // `pattern_types` is global state that the per-arm
+                // `register_pattern_types(clause.binding, ...)` mutated.
+                // Without this re-insertion, MIR/LSP would see whichever arm
+                // ran last as the clause header binding's type, even though
+                // the clause-level binding outlives any single arm.
+                self.pattern_types
+                    .insert(clause.binding, clause_binding_ty.clone());
 
                 for handled in &throw_matches.definitely_handled {
                     residual.remove(handled);
