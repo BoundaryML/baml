@@ -467,7 +467,7 @@ def _decode_handle(handle) -> Any:
 
     wrapped = BamlHandle(handle.key, handle.handle_type)
 
-    if ht == HT.HANDLE_UNKNOWN:
+    if ht in (HT.UNTAGGED_RUST_DATA, HT.UNTAGGED_BEX_HEAP):
         return UnknownHandle(wrapped)
     # Opaque-to-Python ADTs — surface as `UnknownHandle` per 09e §3.
     if ht in (HT.ADT_PROMPT_AST, HT.ADT_COLLECTOR, HT.ADT_TYPE):
@@ -498,9 +498,6 @@ _HANDLE_TYPE_SUBPATHS = {
     baml_inbound_pb2.BamlHandleType.ADT_MEDIA_AUDIO: "baml.media.Audio",
     baml_inbound_pb2.BamlHandleType.ADT_MEDIA_VIDEO: "baml.media.Video",
     baml_inbound_pb2.BamlHandleType.ADT_MEDIA_PDF: "baml.media.Pdf",
-    baml_inbound_pb2.BamlHandleType.RESOURCE_FILE: "baml.io.File",
-    baml_inbound_pb2.BamlHandleType.RESOURCE_SOCKET: "baml.net.Socket",
-    baml_inbound_pb2.BamlHandleType.RESOURCE_HTTP_RESPONSE: "baml.http.Response",
 }
 
 

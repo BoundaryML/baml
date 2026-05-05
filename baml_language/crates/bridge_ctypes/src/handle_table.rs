@@ -61,9 +61,9 @@ impl CffiHandleTableEntry {
     /// Map this value to its proto `BamlHandleType` tag.
     pub fn handle_type(&self) -> BamlHandleType {
         match self {
-            Self::BexHeapHandle(_) => BamlHandleType::HandleUnknown,
+            Self::BexHeapHandle(_) => BamlHandleType::UntaggedBexHeap,
             Self::FunctionRef { .. } => BamlHandleType::FunctionRef,
-            Self::RustData(_) => BamlHandleType::HandleUnknown,
+            Self::RustData(_) => BamlHandleType::UntaggedRustData,
             Self::Adt(adt) => match adt {
                 BexExternalAdt::Collector(_) => BamlHandleType::AdtCollector,
                 BexExternalAdt::Type(_) => BamlHandleType::AdtType,
