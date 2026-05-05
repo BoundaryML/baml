@@ -1501,10 +1501,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                 generic_args,
                 ..
             } => {
-                // Allow `baml.errors.*` and `root.errors.*` (fully qualified).
+                // Allow `baml.errors.*`, `root.errors.*`, and `baml.json.*` (fully qualified).
+                // `baml.json.JsonParseError` / `baml.json.JsonDecodeError` /
+                // `baml.json.JsonSerializationError` are stdlib error types just like
+                // `baml.errors.*` ones; they need the same exemption.
                 let is_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
-                    && segments[1].as_str() == "errors";
+                    && (segments[1].as_str() == "errors" || segments[1].as_str() == "json");
                 // Allow single-segment class names (e.g. `JsonParseError`) in
                 // builtin files — the class is resolvable in the current namespace
                 // and TIR will type-check it.  This allows builtin functions to
