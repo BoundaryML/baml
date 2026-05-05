@@ -5,9 +5,27 @@ edition.workspace = true
 description = "Native LSP server for BAML using bex_project"
 
 [features]
-default = [  ]
+default = [ "aws-crypto" ]
+aws-crypto = [
+  "dep:rustls",
+  "reqwest/rustls",
+  "rustls?/aws_lc_rs",
+  "rustls?/std",
+  "bex_project/aws-crypto",
+  "bridge_ctypes/aws-crypto",
+  "sys_native/aws-crypto",
+]
+ring-crypto = [
+  "dep:rustls",
+  "reqwest/rustls-no-provider",
+  "rustls?/ring",
+  "rustls?/std",
+  "bex_project/ring-crypto",
+  "bridge_ctypes/ring-crypto",
+  "sys_native/ring-crypto",
+]
 native-tls = [ "reqwest/native-tls", "sys_native/native-tls" ]
-rustls = [ "reqwest/rustls", "sys_native/rustls" ]
+rustls = [ "aws-crypto" ]
 
 [dependencies]
 baml_compiler2_visualization = { workspace = true }
@@ -32,6 +50,7 @@ parking_lot = { workspace = true }
 prost = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
+rustls = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

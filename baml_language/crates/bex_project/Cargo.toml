@@ -57,3 +57,8 @@ tokio = { workspace = true, features = [ "sync", "rt" ] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = { workspace = true }
+
+[features]
+default = [ "aws-crypto" ]
+aws-crypto = [ "bex_engine/aws-crypto" ]
+ring-crypto = [ "bex_engine/ring-crypto" ]
