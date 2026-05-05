@@ -180,6 +180,15 @@ impl CffiHandleTable {
             .remove(&key)
             .is_some()
     }
+
+    /// Atomically resolve and remove. Returns the entry or None if the
+    /// key was already absent.
+    pub fn drain(&self, key: u64) -> Option<Arc<CffiHandleTableEntry>> {
+        self.entries
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&key)
+    }
 }
 
 impl Default for CffiHandleTable {
@@ -267,6 +276,19 @@ mod tests {
         let key = table.insert(make_function_ref());
         assert!(table.release(key));
         assert!(!table.release(key)); // second release returns false
+    }
+
+    #[test]
+    fn drain_removes_entry() {
+        let table = CffiHandleTable::new();
+        let key = table.insert(make_function_ref());
+        let drained = table.drain(key).expect("drain should return entry");
+        assert!(matches!(
+            &*drained,
+            CffiHandleTableEntry::FunctionRef { global_index: 42 }
+        ));
+        assert!(table.resolve(key).is_none());
+        assert!(table.drain(key).is_none());
     }
 
     #[test]
