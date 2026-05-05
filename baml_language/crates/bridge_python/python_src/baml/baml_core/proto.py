@@ -7,8 +7,8 @@ structural mismatches surface as `CallAck.error` → `BamlError`.
 
 Outbound (09e): `baml_outbound.proto` → Python value. Decoding is driven
 by the FQN metadata embedded on `BamlValueClass` / `BamlValueEnum` and
-the `handle_type` enum on `BamlHandle`; the caller's declared Python
-return type plays no runtime role.
+the host-derived `handle_type()` of `BamlPyHandle`; the caller's declared
+Python return type plays no runtime role.
 """
 
 from __future__ import annotations
