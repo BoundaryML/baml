@@ -395,23 +395,29 @@ fn user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
     let _1: (int) -> int | string throws never // cb // param
     let _2: bool
     let _3: bool
+    let _4: bool
 
     bb0: {
         _2 = is_type(copy _1, Function { params: [Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, throws: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _2 -> [bb1, bb3];
+        branch copy _2 -> [bb1, bb4];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Function { params: [Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), throws: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb2, bb3];
+        _3 = is_type(copy _1, Function { params: [Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], ret: Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, throws: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _0 = const 1_i64;
-        goto -> bb3;
+        _4 = is_type(copy _1, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _4 -> [bb3, bb4];
     }
 
     bb3: {
+        _0 = const 1_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }

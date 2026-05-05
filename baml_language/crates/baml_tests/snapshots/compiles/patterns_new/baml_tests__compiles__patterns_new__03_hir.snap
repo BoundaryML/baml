@@ -19,7 +19,7 @@ function user.call_with_callback(runner: ((int) -> int) -> int | ((string) -> in
   {  } match (runner) { r: ((int) -> int) -> int => r((x: int) -> int { {  } x Add 1 }), r: ((string) -> int) -> int => r((s: string) -> int { {  } 0 }) }
 }
 function user.catch_chain_union(mode: int) -> int  [expr] {
-  {  } risky_error(mode) catch (e) { err: user.AppError | string => 1 }
+  {  } risky_error(mode) catch (e) { user.AppError | string => 1 }
 }
 function user.catch_paren_or_chain(mode: int) -> int  [expr] {
   {  } risky_error(mode) catch (e) { _: user.AppError | _: string => 1 }

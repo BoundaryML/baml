@@ -243,7 +243,7 @@ function user.catch_chain_union(mode: int) -> int throws never {
   { : int | 1
     catch (risky_error(mode) : int) : unknown
       catch (e)
-        err: AppError | string =>
+        AppError | string =>
           1 : 1
   }
 }

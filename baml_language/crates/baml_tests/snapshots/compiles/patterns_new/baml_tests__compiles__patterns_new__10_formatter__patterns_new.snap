@@ -264,7 +264,7 @@ function risky_error(mode: int) -> int throws AppError | string {
 // Catch arm with a chain narrow of a union — binds the joined type.
 function catch_chain_union(mode: int) -> int {
     risky_error(mode) catch (e) {
-        let err: AppError | string => 1
+        AppError | string => 1
     }
 }
 
@@ -317,9 +317,12 @@ function let_string_literal_widening() -> int {
     1
 }
 
-// Function-type widen: narrower return → wider return.
+// Function-type widen: narrower return → wider return. The widened side
+// uses parens around the return type so `int | string` stays inside the
+// function type — without them, `(int) -> int | string` in pattern position
+// parses as a UNION_PATTERN of [(int) -> int, string].
 function let_fn_return_widen() -> int | string {
-    let f: (int) -> int: ((int) -> int | string) = (x: int) -> int {
+    let f: (int) -> int: (int) -> (int | string) = (x: int) -> int {
         x
     };
     f(0)

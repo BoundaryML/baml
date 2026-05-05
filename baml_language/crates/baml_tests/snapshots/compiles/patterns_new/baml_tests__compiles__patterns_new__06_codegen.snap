@@ -230,12 +230,18 @@ function user.dispatch_with_wildcard(cb: (int) -> int throws never | (string) ->
 function user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
     load_var cb
     is_type (int) -> int throws never
-    pop_jump_if_false L0
+    pop_jump_if_false L1
     load_var cb
-    is_type (int) -> int | string throws never
+    is_type (int) -> int throws never
     pop_jump_if_false L0
+    jump L1
 
   L0:
+    load_var cb
+    is_type string
+    pop_jump_if_false L1
+
+  L1:
     load_const 1
     return
 }

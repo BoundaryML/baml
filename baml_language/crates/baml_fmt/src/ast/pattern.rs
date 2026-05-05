@@ -389,7 +389,10 @@ impl ChainPattern {
 
 impl Printable for ChainPattern {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&*self.first, shape.clone());
+        // Accumulate multi-line state from every link so callers like
+        // `LetStmt` / `ForIteratorArgs` don't mistakenly treat the chain as
+        // single-line after a child emitted newlines.
+        let mut info = printer.print(&*self.first, shape.clone());
         for (i, (colon, pat)) in self.rest.iter().enumerate() {
             printer.print_raw_token(colon);
             printer.print_str(" ");
@@ -400,7 +403,7 @@ impl Printable for ChainPattern {
             printer.print_trivia_squished(colon_trailing);
             let pat_leading = printer.trivia.get_leading_for_element(pat);
             printer.print_trivia_squished(pat_leading);
-            printer.print(pat, shape.clone());
+            info.multi_lined |= printer.print(pat, shape.clone()).multi_lined;
             // Trailing trivia on each link except the LAST — for the last
             // link, the trailing trivia belongs to the surrounding context
             // (e.g. the match-arm body) and printing it here would duplicate.
@@ -409,7 +412,7 @@ impl Printable for ChainPattern {
                 printer.print_trivia_squished(pat_trailing);
             }
         }
-        PrintInfo::default_single_line()
+        info
     }
     fn leftmost_token(&self) -> TextRange {
         self.first.leftmost_token()

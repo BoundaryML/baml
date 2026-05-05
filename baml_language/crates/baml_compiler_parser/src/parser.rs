@@ -1844,7 +1844,7 @@ impl<'a> Parser<'a> {
     /// to `UNION_PATTERN`).
     pub(crate) fn parse_type_with(&mut self, consume_union: bool) {
         self.with_node(SyntaxKind::TYPE_EXPR, |p| {
-            p.parse_type_primary();
+            p.parse_type_primary(consume_union);
 
             if p.pending_greaters > 0 {
                 // Don't parse modifiers until we've used all
@@ -1863,7 +1863,7 @@ impl<'a> Parser<'a> {
                 } else if consume_union && p.at(TokenKind::Pipe) {
                     // Union type: string | int | "user" | "assistant"
                     p.bump();
-                    p.parse_type_primary();
+                    p.parse_type_primary(consume_union);
                 } else if p.at(TokenKind::At) {
                     // All attributes (both type and field) are consumed inside TYPE_EXPR.
                     // Disambiguation happens during lowering, which has the structural
@@ -1879,7 +1879,7 @@ impl<'a> Parser<'a> {
         });
     }
 
-    fn parse_type_primary(&mut self) {
+    fn parse_type_primary(&mut self, consume_union: bool) {
         // Check for string literal types: "user" | "assistant"
         if self.parse_any_string() {
             return;
@@ -1990,7 +1990,7 @@ impl<'a> Parser<'a> {
             //
             // We parse the contents as function type parameters (which can be either
             // `name: type` or just `type`), then check for `->` to determine which case.
-            self.parse_paren_or_function_type();
+            self.parse_paren_or_function_type(consume_union);
         } else {
             self.error_unexpected_token("type".to_string());
         }
@@ -2003,7 +2003,7 @@ impl<'a> Parser<'a> {
     /// - Function type: `(x: int, y: int) -> bool` or `(int, int) -> bool`
     ///
     /// The key distinguisher is the presence of `->` after the closing `)`.
-    fn parse_paren_or_function_type(&mut self) {
+    fn parse_paren_or_function_type(&mut self, consume_union: bool) {
         // We'll parse the content first, then decide based on whether `->` follows.
         // For function types, we wrap in FUNCTION_TYPE; for parens, we just have the inner type.
 
@@ -2040,7 +2040,10 @@ impl<'a> Parser<'a> {
             // This is a function type: wrap everything in FUNCTION_TYPE node
             // Note: The tokens are already emitted, we just need to parse the return type
             self.bump(); // ->
-            self.parse_type(); // return type
+            // Forward `consume_union` so that pattern-atom callers (which
+            // pass `false`) leave a trailing `|` to the surrounding
+            // `UNION_PATTERN` instead of swallowing it into the return type.
+            self.parse_type_with(consume_union); // return type
             if self.at(TokenKind::Throws) {
                 self.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
                     p.bump(); // throws
@@ -4259,6 +4262,8 @@ impl<'a> Parser<'a> {
                 // - `Question` for optional `T?`
                 // - `Pipe` for unions `A | B`
                 // - `IntegerLiteral` / `FloatLiteral` for literal-union members
+                // - `Minus` to allow negative numeric literal types (`-1`)
+                //   that `parse_type_primary` accepts as type atoms
                 // - `Quote` / `Hash` for string-literal types (`"a"`,
                 //   `#"raw"#`)
                 // - `LParen` / `RParen` for parenthesized union types
@@ -4272,6 +4277,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Pipe
                 | TokenKind::IntegerLiteral
                 | TokenKind::FloatLiteral
+                | TokenKind::Minus
                 | TokenKind::Quote
                 | TokenKind::Hash
                 | TokenKind::LParen
@@ -6465,6 +6471,50 @@ function Demo() -> int {
     }
 
     #[test]
+    fn pattern_unparenthesized_function_type_union_splits_on_pipe() {
+        // `(int) -> int | string` in pattern position must parse as a
+        // UNION_PATTERN of two TYPE_PATTERNs ([fn, string]) rather than a
+        // single function type whose return swallows `| string`.
+        // Regression: `parse_paren_or_function_type` used to call
+        // `parse_type()` (which consumes `|`) for the return type even when
+        // the outer caller asked for `consume_union = false`.
+        let source = r#"
+function Demo() -> int {
+  let f: (int) -> int | string = 1;
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_let_pattern(&root);
+        let chain = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
+            .expect("expected CHAIN_PATTERN");
+        let union = chain
+            .children()
+            .find(|n| n.kind() == SyntaxKind::UNION_PATTERN)
+            .expect("expected UNION_PATTERN — function-type return must not swallow `| string`");
+        let atoms: Vec<_> = union
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::TYPE_PATTERN)
+            .collect();
+        assert_eq!(atoms.len(), 2, "expected 2 union atoms");
+        assert!(
+            atoms[0].text().to_string().contains("->"),
+            "first atom should be the function type, got `{}`",
+            atoms[0].text()
+        );
+        assert!(
+            atoms[1].text().to_string().contains("string"),
+            "second atom should be `string`, got `{}`",
+            atoms[1].text()
+        );
+    }
+
+    #[test]
     #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_basic_with_let() {
         // `let Class { field } = ...` — destructure with a `let` prefix at
@@ -7144,6 +7194,33 @@ function Demo() -> int {
         assert!(atoms[0].text().to_string().contains("-1"));
         assert!(atoms[1].text().to_string().contains('0'));
         assert!(atoms[2].text().to_string().contains('1'));
+    }
+
+    #[test]
+    fn generic_args_with_negative_integer_literal() {
+        // `Factory<-1>(x)` — `<-1>` should disambiguate as GENERIC_ARGS, not as
+        // a comparison with a unary-minus literal. Without `Minus` in
+        // `looks_like_generic_args`'s allow-list, the parser falls back to
+        // comparison parsing and `(x)` becomes detached.
+        let source = r#"
+function Demo() -> int {
+  let y = Factory<-1>(x);
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let generic_args = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+            .expect("expected GENERIC_ARGS for `Factory<-1>(x)`");
+        let text = generic_args.text().to_string();
+        assert!(
+            text.contains("-1"),
+            "expected `-1` inside GENERIC_ARGS, got `{text}`"
+        );
     }
 
     #[test]
