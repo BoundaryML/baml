@@ -976,11 +976,7 @@ impl<'db> LoweringContext<'db> {
         None
     }
 
-    fn binding_id_for_pattern_site_any(
-        &self,
-        pattern: AstPatId,
-        site: DefinitionSite,
-    ) -> Option<BindingId> {
+    fn any_pattern_binding_is_captured(&self, pattern: AstPatId, site: DefinitionSite) -> bool {
         let index = file_semantic_index(self.db, self.file);
         for (scope_idx, bindings) in index.scope_bindings.iter().enumerate() {
             let scope_id = FileScopeId::new(u32::try_from(scope_idx).expect("scope id overflow"));
@@ -989,11 +985,14 @@ impl<'db> LoweringContext<'db> {
             }
             for (binding_idx, binding) in bindings.bindings.iter().enumerate() {
                 if binding.site == site && binding.pattern == pattern {
-                    return Some(BindingId::local(scope_id, binding_idx));
+                    let binding_id = BindingId::local(scope_id, binding_idx);
+                    if bindings.captured_bindings.contains(&binding_id) {
+                        return true;
+                    }
                 }
             }
         }
-        None
+        false
     }
 
     fn binding_id_for_statement_name(
@@ -1016,16 +1015,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn pattern_binding_is_captured(&self, pattern: AstPatId) -> bool {
-        let Some(binding_id) =
-            self.binding_id_for_pattern_site_any(pattern, DefinitionSite::PatternBinding(pattern))
-        else {
-            return false;
-        };
-        let index = file_semantic_index(self.db, self.file);
-        index
-            .scope_bindings
-            .get(binding_id.scope.index() as usize)
-            .is_some_and(|bindings| bindings.captured_bindings.contains(&binding_id))
+        self.any_pattern_binding_is_captured(pattern, DefinitionSite::PatternBinding(pattern))
     }
 
     fn binding_id_for_name_at(&self, expr_id: AstExprId, name: &Name) -> Option<BindingId> {
@@ -3705,11 +3695,11 @@ impl LoweringContext<'_> {
                     .into_iter()
                     .cloned()
                     .collect();
-                let first_name = names.first().cloned().unwrap_or_else(|| Name::new("_"));
+                let first_name = names.first().cloned();
 
                 let local_ty = self.pat_ty(pattern);
                 let local = self.builder.declare_local(
-                    Some(first_name.clone()),
+                    first_name.clone(),
                     local_ty.clone(),
                     None,
                     is_watched,
@@ -3724,12 +3714,14 @@ impl LoweringContext<'_> {
                     );
                 }
 
-                if let Some(binding_id) =
-                    self.binding_id_for_statement_name(stmt_id, pattern, &first_name)
-                {
-                    self.binding_locals.insert(binding_id, local);
+                if let Some(first_name) = first_name {
+                    if let Some(binding_id) =
+                        self.binding_id_for_statement_name(stmt_id, pattern, &first_name)
+                    {
+                        self.binding_locals.insert(binding_id, local);
+                    }
+                    self.locals.insert(first_name, local);
                 }
-                self.locals.insert(first_name, local);
 
                 // Additional chain-link bindings get their own locals that
                 // copy from the first. `let x: let y` ⇒ y = x at runtime.

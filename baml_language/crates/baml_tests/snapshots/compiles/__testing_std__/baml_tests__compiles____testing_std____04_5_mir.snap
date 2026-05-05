@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4327
 ---
 === MIR2 ===
 
@@ -302,7 +301,7 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     let _30: string
     let _31: int
     let _32: int
-    let _33: int // _
+    let _33: int
     let _34: (testing.TestRegistration[], testing.TestRegistration) -> int throws never
     let _35: testing.TestRegistration
     let _36: string
@@ -446,7 +445,7 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     let _30: string
     let _31: int
     let _32: int
-    let _33: int // _
+    let _33: int
     let _34: (testing.TestSetRegistration[], testing.TestSetRegistration) -> int throws never
     let _35: testing.TestSetRegistration
     let _36: string
