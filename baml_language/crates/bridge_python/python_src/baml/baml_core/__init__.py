@@ -2,7 +2,7 @@
 #
 # Everything generated `baml_sdk.*` code imports from the bridge lives here:
 # PyO3 runtime classes, the protobuf encoder/decoder, the three factory
-# entry points, the `UnknownHandle` wrapper, and `get_runtime()`.
+# entry points, and `get_runtime()`.
 #
 # The top-level `baml` package intentionally re-exports only this submodule;
 # see `../__init__.py`.
@@ -14,7 +14,6 @@ from typing import Any, Awaitable, Callable, Dict, List, Literal, Sequence, Unio
 
 from .baml_py import (
     AbortController,
-    BamlHandle,
     BamlPyHandle,
     BamlRuntime,
     Collector as _RustCollector,
@@ -106,40 +105,6 @@ class Collector(_RustCollector):
 
     def id(self, function_log_id):
         return _wrap_log(super().id(function_log_id))
-
-
-# ---------------------------------------------------------------------------
-# UnknownHandle — pure-Python wrapper that *holds* a BamlHandle.
-# BEP-030 §Appendix: `UnknownHandle(__handle = BamlHandle(...))`.
-# ---------------------------------------------------------------------------
-
-
-class UnknownHandle:
-    """Fallback Python container for a BAML external value whose concrete
-    wrapper class has not been bound (e.g. an ADT variant not yet covered
-    by codegen). Holds a `BamlHandle` by composition.
-
-    BEP-030 Appendix sketches the constructor as
-    ``UnknownHandle(__handle=BamlHandle(...))``; implemented here as a
-    single positional parameter (``UnknownHandle(handle)``) to sidestep
-    Python's name-mangling of ``__handle`` inside a class body.
-    """
-
-    __slots__ = ("_handle",)
-
-    def __init__(self, handle: BamlHandle) -> None:
-        self._handle = handle
-
-    @property
-    def key(self) -> int:
-        return self._handle.key
-
-    @property
-    def handle_type(self) -> int:
-        return self._handle.handle_type
-
-    def __repr__(self) -> str:
-        return f"UnknownHandle(key={self._handle.key}, handle_type={self._handle.handle_type})"
 
 
 # ---------------------------------------------------------------------------
@@ -325,7 +290,6 @@ def define_instance_method(
 
 __all__ = [
     "AbortController",
-    "BamlHandle",
     "BamlPyHandle",
     "BamlRuntime",
     "Collector",
@@ -335,7 +299,6 @@ __all__ = [
     "LLMCall",
     "Timing",
     "Usage",
-    "UnknownHandle",
     "BamlCtxManager",
     "BamlError",
     "BamlCancelledError",
