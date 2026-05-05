@@ -12,7 +12,7 @@ use crate::{
         baml_outbound_value::Value as BamlValueVariant, baml_ty::Type as FieldType,
     },
     error::CtypesError,
-    handle_table::{CffiHandleTableEntry, CffiHandleTableOptions},
+    handle_table::{BexRustData, CffiHandleTableEntry, CffiHandleTableOptions},
 };
 
 /// Convert `BexExternalValue` to `BamlOutboundValue` for FFI return.
@@ -122,7 +122,13 @@ pub fn external_to_baml_value(
             if let Some(converted) = bex_project::try_convert_rust_data(arc) {
                 return external_to_baml_value(&converted, options);
             }
-            Some(BamlValueVariant::StringValue("<native handle>".to_string()))
+            let table_value = CffiHandleTableEntry::RustData(BexRustData(arc.clone()));
+            let ht = table_value.handle_type();
+            let key = options.table.insert(table_value);
+            Some(BamlValueVariant::HandleValue(BamlHandle {
+                key,
+                handle_type: ht as i32,
+            }))
         }
 
         // All opaque types → insert into handle table, encode as BamlHandle.
@@ -320,7 +326,14 @@ mod tests {
     use bex_project::{BexExternalValue, MediaContent, MediaValue, PromptAst, PromptAstSimple};
 
     use super::*;
-    use crate::baml::cffi::baml_outbound_value::Value as BamlValueVariant;
+    use crate::baml::cffi::{BamlHandleType, baml_outbound_value::Value as BamlValueVariant};
+
+    fn extract_handle(out: BamlOutboundValue) -> BamlHandle {
+        match out.value {
+            Some(BamlValueVariant::HandleValue(h)) => h,
+            other => panic!("expected HandleValue, got {other:?}"),
+        }
+    }
 
     #[test]
     fn rust_data_prompt_ast_converts_to_handle() {
@@ -329,12 +342,8 @@ mod tests {
         ))));
         let value = BexExternalValue::RustData(prompt);
         let options = CffiHandleTableOptions::for_in_process();
-        let result = external_to_baml_value(&value, &options);
-        assert!(result.is_ok());
-        assert!(matches!(
-            result.unwrap().value,
-            Some(BamlValueVariant::HandleValue(_))
-        ));
+        let handle = extract_handle(external_to_baml_value(&value, &options).unwrap());
+        assert_eq!(handle.handle_type, BamlHandleType::AdtPromptAst as i32);
     }
 
     #[test]
@@ -349,24 +358,16 @@ mod tests {
         ));
         let value = BexExternalValue::RustData(media);
         let options = CffiHandleTableOptions::for_in_process();
-        let result = external_to_baml_value(&value, &options);
-        assert!(result.is_ok());
-        assert!(matches!(
-            result.unwrap().value,
-            Some(BamlValueVariant::HandleValue(_))
-        ));
+        let handle = extract_handle(external_to_baml_value(&value, &options).unwrap());
+        assert_eq!(handle.handle_type, BamlHandleType::AdtMediaImage as i32);
     }
 
     #[test]
-    fn rust_data_unknown_type_returns_fallback_string() {
+    fn rust_data_unknown_type_inserts_handle() {
         let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
         let value = BexExternalValue::RustData(unknown);
         let options = CffiHandleTableOptions::for_in_process();
-        let result = external_to_baml_value(&value, &options);
-        let value = result.unwrap().value;
-        assert_eq!(
-            value,
-            Some(BamlValueVariant::StringValue("<native handle>".to_string()))
-        );
+        let handle = extract_handle(external_to_baml_value(&value, &options).unwrap());
+        assert_eq!(handle.handle_type, BamlHandleType::UntaggedRustData as i32);
     }
 }

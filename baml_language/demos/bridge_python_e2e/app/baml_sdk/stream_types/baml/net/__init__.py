@@ -23,10 +23,12 @@ from __future__ import annotations
 import typing
 import pydantic
 
+from baml.baml_core import BamlPyHandle as _BamlPyHandle
+
 
 class Socket(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _handle: None
+    _handle: _BamlPyHandle
 
 
 __all__ = [

@@ -19,10 +19,8 @@ export namespace baml {
             /** BamlHandleType enum. */
             enum BamlHandleType {
                 HANDLE_UNSPECIFIED = 0,
-                HANDLE_UNKNOWN = 1,
-                RESOURCE_FILE = 2,
-                RESOURCE_SOCKET = 3,
-                RESOURCE_HTTP_RESPONSE = 4,
+                UNTAGGED_RUST_DATA = 1,
+                UNTAGGED_BEX_HEAP = 2,
                 FUNCTION_REF = 5,
                 ADT_MEDIA_IMAGE = 6,
                 ADT_MEDIA_AUDIO = 7,

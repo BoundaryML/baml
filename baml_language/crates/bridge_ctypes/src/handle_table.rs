@@ -12,6 +12,17 @@ use bex_project::{BexExternalAdt, BexExternalValue, Handle, MediaKind};
 
 use crate::baml::cffi::BamlHandleType;
 
+/// Newtype wrapper around opaque `$rust_type` objects
+/// (`Arc<dyn Any + Send + Sync>`) stored as a handle.
+#[derive(Clone)]
+pub struct BexRustData(pub Arc<dyn std::any::Any + Send + Sync>);
+
+impl std::fmt::Debug for BexRustData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("BexRustData").finish()
+    }
+}
+
 /// Subset of `BexExternalValue` that can be held as a handle.
 /// Enforces at the type level that primitives/containers never enter the table.
 #[derive(Clone, Debug)]
@@ -19,6 +30,7 @@ pub enum CffiHandleTableEntry {
     BexHeapHandle(Handle),
     FunctionRef { global_index: usize },
     Adt(BexExternalAdt),
+    RustData(BexRustData),
 }
 
 pub struct CffiHandleTableOptions<'a> {
@@ -49,8 +61,9 @@ impl CffiHandleTableEntry {
     /// Map this value to its proto `BamlHandleType` tag.
     pub fn handle_type(&self) -> BamlHandleType {
         match self {
-            Self::BexHeapHandle(_) => BamlHandleType::HandleUnknown,
+            Self::BexHeapHandle(_) => BamlHandleType::UntaggedBexHeap,
             Self::FunctionRef { .. } => BamlHandleType::FunctionRef,
+            Self::RustData(_) => BamlHandleType::UntaggedRustData,
             Self::Adt(adt) => match adt {
                 BexExternalAdt::Collector(_) => BamlHandleType::AdtCollector,
                 BexExternalAdt::Type(_) => BamlHandleType::AdtType,
@@ -77,6 +90,7 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
                 Ok(Self::FunctionRef { global_index })
             }
             BexExternalValue::Adt(a) => Ok(Self::Adt(a)),
+            BexExternalValue::RustData(arc) => Ok(Self::RustData(BexRustData(arc))),
             BexExternalValue::Null
             | BexExternalValue::Int(_)
             | BexExternalValue::Float(_)
@@ -87,8 +101,7 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
             | BexExternalValue::Instance { .. }
             | BexExternalValue::Variant { .. }
             | BexExternalValue::Union { .. }
-            | BexExternalValue::Uint8Array(_)
-            | BexExternalValue::RustData(_) => {
+            | BexExternalValue::Uint8Array(_) => {
                 Err("only opaque BexExternalValue variants can be held as handles")
             }
         }
@@ -103,6 +116,7 @@ impl From<CffiHandleTableEntry> for BexExternalValue {
                 BexExternalValue::FunctionRef { global_index }
             }
             CffiHandleTableEntry::Adt(a) => BexExternalValue::Adt(a),
+            CffiHandleTableEntry::RustData(BexRustData(arc)) => BexExternalValue::RustData(arc),
         }
     }
 }
@@ -165,6 +179,15 @@ impl CffiHandleTable {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(&key)
             .is_some()
+    }
+
+    /// Atomically resolve and remove. Returns the entry or None if the
+    /// key was already absent.
+    pub fn drain(&self, key: u64) -> Option<Arc<CffiHandleTableEntry>> {
+        self.entries
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&key)
     }
 }
 
@@ -253,6 +276,19 @@ mod tests {
         let key = table.insert(make_function_ref());
         assert!(table.release(key));
         assert!(!table.release(key)); // second release returns false
+    }
+
+    #[test]
+    fn drain_removes_entry() {
+        let table = CffiHandleTable::new();
+        let key = table.insert(make_function_ref());
+        let drained = table.drain(key).expect("drain should return entry");
+        assert!(matches!(
+            &*drained,
+            CffiHandleTableEntry::FunctionRef { global_index: 42 }
+        ));
+        assert!(table.resolve(key).is_none());
+        assert!(table.drain(key).is_none());
     }
 
     #[test]

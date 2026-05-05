@@ -24,16 +24,14 @@ if str(SIM_ROOT) not in sys.path:
 def test_import_surface():
     """Every symbol named in the phase-3 exit criteria resolves."""
     from baml.baml_core import (
-        BamlHandle,
+        BamlPyHandle,
         BamlRuntime,
-        UnknownHandle,
         define_function,
         get_runtime,
     )
 
-    assert BamlHandle is not None
+    assert BamlPyHandle is not None
     assert BamlRuntime is not None
-    assert UnknownHandle is not None
     assert callable(define_function)
     assert callable(get_runtime)
 

@@ -27,6 +27,7 @@ import pydantic
 from ... import baml
 
 from baml.baml_core import (
+    BamlPyHandle as _BamlPyHandle,
     define_instance_method as _define_instance_method,
     define_static_method as _define_static_method,
 )
@@ -60,7 +61,7 @@ class PlannerState(pydantic.BaseModel):
 
 class PromptAst(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _data: None
+    _data: _BamlPyHandle
 
 
 class ClientType(str, enum.Enum):
@@ -172,7 +173,7 @@ class BedrockOptions(pydantic.BaseModel):
 
 class StreamAccumulator(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _handle: None
+    _handle: _BamlPyHandle
     add_events       = _define_instance_method("baml.llm.StreamAccumulator.add_events", "sync",  ["self", "events"])
     add_events_async = _define_instance_method("baml.llm.StreamAccumulator.add_events", "async", ["self", "events"])
     content       = _define_instance_method("baml.llm.StreamAccumulator.content", "sync",  ["self"])
@@ -191,7 +192,7 @@ class StreamAccumulator(pydantic.BaseModel):
 
 class StreamCache(pydantic.BaseModel, typing.Generic[T, S]):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _data: None
+    _data: _BamlPyHandle
     new       = staticmethod(_define_static_method("baml.llm.StreamCache.new", "sync",  ["target", "streaming"]))
     new_async = staticmethod(_define_static_method("baml.llm.StreamCache.new", "async", ["target", "streaming"]))
 
@@ -217,10 +218,10 @@ class PrimitiveClient(pydantic.BaseModel):
     render_prompt_async = _define_instance_method("baml.llm.PrimitiveClient.render_prompt", "async", ["self", "template", "args", "return_type"])
     specialize_prompt       = _define_instance_method("baml.llm.PrimitiveClient.specialize_prompt", "sync",  ["self", "prompt"])
     specialize_prompt_async = _define_instance_method("baml.llm.PrimitiveClient.specialize_prompt", "async", ["self", "prompt"])
-    build_request       = _define_instance_method("baml.llm.PrimitiveClient.build_request", "sync",  ["self", "prompt"])
-    build_request_async = _define_instance_method("baml.llm.PrimitiveClient.build_request", "async", ["self", "prompt"])
-    build_request_stream       = _define_instance_method("baml.llm.PrimitiveClient.build_request_stream", "sync",  ["self", "prompt"])
-    build_request_stream_async = _define_instance_method("baml.llm.PrimitiveClient.build_request_stream", "async", ["self", "prompt"])
+    build_request       = _define_instance_method("baml.llm.PrimitiveClient.build_request", "sync",  ["self", "prompt", "return_type"])
+    build_request_async = _define_instance_method("baml.llm.PrimitiveClient.build_request", "async", ["self", "prompt", "return_type"])
+    build_request_stream       = _define_instance_method("baml.llm.PrimitiveClient.build_request_stream", "sync",  ["self", "prompt", "return_type"])
+    build_request_stream_async = _define_instance_method("baml.llm.PrimitiveClient.build_request_stream", "async", ["self", "prompt", "return_type"])
     new_stream_accumulator       = _define_instance_method("baml.llm.PrimitiveClient.new_stream_accumulator", "sync",  ["self"])
     new_stream_accumulator_async = _define_instance_method("baml.llm.PrimitiveClient.new_stream_accumulator", "async", ["self"])
     validate_finish_reason       = _define_instance_method("baml.llm.PrimitiveClient.validate_finish_reason", "sync",  ["self", "finish_reason"])

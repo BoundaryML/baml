@@ -127,6 +127,11 @@ pub enum Ty {
     /// Void/Unit type - the type of effectful expressions.
     Unit,
     BamlOptions,
+    /// Opaque Rust-managed state — `$rust_type` fields in stdlib stubs
+    /// (e.g. `Response._body`, `SseStream._handle`). Generators render
+    /// this as the host-language opaque-handle type (Python:
+    /// `baml.baml_core.BamlPyHandle`).
+    RustType,
 }
 
 impl Ty {
@@ -149,6 +154,7 @@ impl Ty {
             Ty::BuiltinUnknown => None,
             Ty::Callable { .. } => None,
             Ty::Unit => None,
+            Ty::RustType => None,
             Ty::Literal(lit) => Some(DefaultValue::Literal(lit.clone())),
             Ty::Optional(_) | Ty::Null => Some(DefaultValue::Null),
         }
@@ -166,6 +172,7 @@ impl Ty {
             | Ty::Enum(_)
             | Ty::TypeAlias(_)
             | Ty::TypeVar(_)
+            | Ty::RustType
             | Ty::BuiltinUnknown => Ok(()),
             Ty::Class(_, args) => args.iter().try_for_each(Ty::validate),
             Ty::Callable { params, ret } => {
@@ -256,6 +263,7 @@ impl fmt::Display for Ty {
                     types.iter().map(std::string::ToString::to_string).collect();
                 write!(f, "({})", parts.join(" | "))
             }
+            Ty::RustType => write!(f, "$rust_type"),
             Ty::Literal(lit) => match lit {
                 baml_base::Literal::Int(v) => write!(f, "int({v})"),
                 baml_base::Literal::Float(s) => write!(f, "float({s})"),

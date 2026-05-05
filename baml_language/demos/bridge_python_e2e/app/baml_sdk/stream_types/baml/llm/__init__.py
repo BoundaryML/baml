@@ -28,6 +28,8 @@ from .... import baml
 if typing.TYPE_CHECKING:
     from .... import stream_types
 
+from baml.baml_core import BamlPyHandle as _BamlPyHandle
+
 
 class ExecutionContext(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
@@ -119,7 +121,7 @@ class PrimitiveClientOptions(pydantic.BaseModel):
 
 class PromptAst(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _data: None
+    _data: _BamlPyHandle
 
 
 class RetryPolicy(pydantic.BaseModel):
@@ -140,12 +142,12 @@ class Stream(pydantic.BaseModel):
 
 class StreamAccumulator(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _handle: None
+    _handle: _BamlPyHandle
 
 
 class StreamCache(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
-    _data: None
+    _data: _BamlPyHandle
 
 
 class VertexAiOptions(pydantic.BaseModel):

@@ -23,6 +23,8 @@ from __future__ import annotations
 import typing
 import pydantic
 
+from baml.baml_core import BamlPyHandle as _BamlPyHandle
+
 
 class Request(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
@@ -37,13 +39,13 @@ class Response(pydantic.BaseModel):
     status_code: typing.Union[int, None]
     headers: typing.Dict[str, str]
     url: typing.Union[str, None]
-    _body: None
+    _body: _BamlPyHandle
 
 
 class SseStream(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     url: typing.Union[str, None]
-    _handle: None
+    _handle: _BamlPyHandle
 
 
 __all__ = [

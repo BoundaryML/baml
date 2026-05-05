@@ -23,6 +23,8 @@ from __future__ import annotations
 import typing
 import pydantic
 
+from baml.baml_core import BamlPyHandle as _BamlPyHandle
+
 
 class File(pydantic.BaseModel):
     def text(self) -> str: ...

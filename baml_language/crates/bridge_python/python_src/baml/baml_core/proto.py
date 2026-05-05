@@ -7,8 +7,8 @@ structural mismatches surface as `CallAck.error` → `BamlError`.
 
 Outbound (09e): `baml_outbound.proto` → Python value. Decoding is driven
 by the FQN metadata embedded on `BamlValueClass` / `BamlValueEnum` and
-the `handle_type` enum on `BamlHandle`; the caller's declared Python
-return type plays no runtime role.
+the host-derived `handle_type()` of `BamlPyHandle`; the caller's declared
+Python return type plays no runtime role.
 """
 
 from __future__ import annotations
@@ -21,7 +21,13 @@ from typing import Any, Dict, List, Optional
 import pydantic
 
 from baml.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
-from .baml_py import BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlVideo
+from .baml_py import (
+    BamlAudio,
+    BamlImage,
+    BamlPdf,
+    BamlPyHandle,
+    BamlVideo,
+)
 from .errors import BamlError
 
 
@@ -40,20 +46,6 @@ _MEDIA_PYO3_TYPES = tuple(_MEDIA_CLASS_TO_FQN.keys())
 # ---------------------------------------------------------------------------
 # Encoding: Python kwargs → CallFunctionArgs (09d §2)
 # ---------------------------------------------------------------------------
-
-
-def _handle_from_handle_backed(value: Any) -> Optional[BamlHandle]:
-    """If `value` is a handle-backed Pydantic class (carries a `_handle:
-    BamlHandle` PrivateAttr), return that handle; else None.
-
-    Detection is structural: any Pydantic model with a `_handle` attribute
-    isinstance-ing to `BamlHandle` qualifies. Keeps the encoder agnostic to
-    the concrete stdlib class list — `Image`, `Audio`, `File`, etc.
-    """
-    handle = getattr(value, "_handle", None)
-    if isinstance(handle, BamlHandle):
-        return handle
-    return None
 
 
 def _base_class_for_fqn(cls: type) -> type:
@@ -174,37 +166,30 @@ def _set_inbound_value(inbound_value, value: Any, *, kwarg_name: str) -> None:
         ev.value = value.name
         return
 
+    # `BamlPyHandle` is its own top-level inbound variant — peer to
+    # `class_value` / `enum_value` / etc. Must precede `pydantic.BaseModel`
+    # so a future `BamlPyHandle` subclass would land here, and must
+    # precede the media-class branch since the media types compose a
+    # `BamlPyHandle` internally and recurse here on `_to_pyhandle()`.
+    if isinstance(value, BamlPyHandle):
+        from .baml_py import put_pyhandle_into_table
+        key, ht = put_pyhandle_into_table(value)
+        inbound_value.handle.key = key
+        # Wire field stays populated for cross-bridge compat.
+        inbound_value.handle.handle_type = ht
+        return
+
     # Media PyO3 types — wrap into an `InboundClassValue` per 15b. The
-    # encoder borrows the inner `Arc<MediaValue>` into the global handle
-    # table (via `_to_handle()`), then emits a class-shaped inbound where
-    # the only field is `_data` carrying that handle. The engine's
-    # `convert_external_to_vm_value` looks up the class by qualified
-    # name (`baml.media.Pdf` etc.) and lowers `_data` back into a
-    # VM-side `RustData` wrapping the same Arc.
-    #
-    # The handle-table slot is owned by the engine for the duration of
-    # the call — once `convert_external_to_vm_value` allocates a
-    # `RustData` on the VM heap (which holds its own `Arc::clone`), the
-    # slot can be released. See `arc_from_handle` notes in
-    # `bridge_python/src/media.rs`.
+    # only field is `_data`, recursively encoded; the recursion lands on
+    # the `BamlPyHandle` branch above.
     if isinstance(value, _MEDIA_PYO3_TYPES):
         cv = inbound_value.class_value
         cv.name = _MEDIA_CLASS_TO_FQN[type(value)]
         data_entry = cv.fields.add()
         data_entry.string_key = "_data"
-        _copy_handle(data_entry.value.handle, value._to_handle())
-        return
-
-    # Handle-backed Pydantic classes (`baml.io.File`, `baml.net.Socket`,
-    # …) must be checked before the generic `BaseModel` branch — they
-    # carry a real `_handle` we want to send verbatim instead of the
-    # Pydantic shell. Media classes (Image/Audio/Video/Pdf) intentionally
-    # don't carry a `_handle` PrivateAttr after 15d M2 — they're PyO3
-    # types holding `Arc<MediaValue>` directly and take the
-    # media-specific branch above.
-    handle = _handle_from_handle_backed(value)
-    if handle is not None:
-        _copy_handle(inbound_value.handle, handle)
+        _set_inbound_value(
+            data_entry.value, value._to_pyhandle(), kwarg_name=kwarg_name
+        )
         return
 
     if isinstance(value, pydantic.BaseModel):
@@ -223,27 +208,21 @@ def _set_inbound_value(inbound_value, value: Any, *, kwarg_name: str) -> None:
         # second level.
         for k, v in dict(value).items():
             _set_inbound_map_entry(cv.fields.add(), k, v, kwarg_name=kwarg_name)
-        return
-
-    if isinstance(value, BamlHandle):
-        _copy_handle(inbound_value.handle, value)
-        return
-
-    # UnknownHandle composes a BamlHandle; pull it out.
-    from . import UnknownHandle  # local import: defined in __init__.py
-    if isinstance(value, UnknownHandle):
-        _copy_handle(inbound_value.handle, value._handle)
+        # Private attrs aren't iterated by `dict(value)`. Codegen emits
+        # `$rust_type` fields as private attrs (single-underscore names);
+        # walk them explicitly so `BamlPyHandle`-backed shells round-trip.
+        # `__pydantic_private__` is None when the model declares no
+        # private attrs.
+        private = getattr(value, "__pydantic_private__", None) or {}
+        for k, v in private.items():
+            if isinstance(v, BamlPyHandle):
+                _set_inbound_map_entry(cv.fields.add(), k, v, kwarg_name=kwarg_name)
         return
 
     raise TypeError(
         f"Cannot encode argument {kwarg_name!r} of type "
         f"{type(value).__name__} into baml_inbound.proto"
     )
-
-
-def _copy_handle(dst, src: BamlHandle) -> None:
-    dst.key = src.key
-    dst.handle_type = src.handle_type
 
 
 def _set_inbound_map_entry(entry, key: Any, value: Any, *, kwarg_name: str) -> None:
@@ -370,6 +349,12 @@ def _parameterize(cls, generic_args):
         return cls
 
 
+# Single-underscore "private" field names that codegen emits for
+# handle-backed stdlib classes. Source of truth: `rg '\$rust_type'
+# baml_language/crates/baml_builtins2/`.
+_HANDLE_FIELD_NAMES = ("_handle", "_data", "_body")
+
+
 def _decode_class(class_value) -> Any:
     """Resolve a `BamlValueClass` to a typed Pydantic model instance.
 
@@ -389,23 +374,34 @@ def _decode_class(class_value) -> Any:
     fqn = class_value.name.name
     cls = _resolve_type(fqn)
 
-    # Media stdlib classes (`baml.media.*`) are PyO3 types holding
-    # `Arc<MediaValue>`. The engine emits them as
-    # `class_value { name: "baml.media.Pdf", fields: { _data: handle_value }}`
-    # (its on-wire shape mirrors the BAML class definition); the inner
-    # `_data` decode already constructed a fresh `BamlPdf` via
-    # `_decode_handle` → `cls._from_handle(...)`. Unwrap and return it
-    # directly — `BamlPdf` is not a Pydantic model and has no
-    # `model_validate`.
+    # Media stdlib classes (`baml.media.*`) are PyO3 types wrapping a
+    # `BamlPyHandle`. The engine emits them as
+    # `class_value { name: "baml.media.Pdf", fields: { _data: handle_value }}`;
+    # the inner `_data` decode already constructed a fresh `BamlPdf` via
+    # `_decode_handle` → `cls._from_pyhandle(...)`. Unwrap and return it
+    # directly — `BamlPdf` is not a Pydantic model.
     if cls in _MEDIA_PYO3_TYPES and "_data" in field_dict:
         return field_dict["_data"]
 
     parameterized = _parameterize(cls, class_value.name.generic_args)
-    if issubclass(cls, pydantic.BaseModel):
-        return parameterized.model_validate(field_dict)
-    # Not a BaseModel — shouldn't happen for a well-formed SDK; fall back
-    # to a plain dict so callers aren't silently lied to.
-    return field_dict
+    if not issubclass(cls, pydantic.BaseModel):
+        # Not a BaseModel — shouldn't happen for a well-formed SDK; fall
+        # back to a plain dict so callers aren't silently lied to.
+        return field_dict
+
+    # Separate handle-backed private attrs from regular fields. Pydantic
+    # v2 doesn't accept private attrs via kwargs; we set them on
+    # `__pydantic_private__` post-construction.
+    private_fields = {
+        k: field_dict.pop(k) for k in _HANDLE_FIELD_NAMES if k in field_dict
+    }
+    instance = parameterized.model_validate(field_dict)
+    if private_fields:
+        if instance.__pydantic_private__ is None:
+            instance.__pydantic_private__ = {}
+        for name, value in private_fields.items():
+            instance.__pydantic_private__[name] = value
+    return instance
 
 
 def _decode_enum(enum_value) -> Any:
@@ -424,72 +420,38 @@ def _decode_enum(enum_value) -> Any:
 
 
 def _decode_handle(handle) -> Any:
-    """Map `(key, handle_type)` to a Python object per 09e §3.
-
-    Known stdlib handle classes (`Image`, `Audio`, …, `File`) live under
-    `<sdk_root>.baml.media.*` / `<sdk_root>.baml.io.*`. Those classes
-    don't exist yet (phase 6 codegen lands them), so for now we resolve
-    `HANDLE_UNKNOWN` and the opaque variants and let the rest surface as
-    `BamlError` — BEX shouldn't emit them until the stdlib is wired.
+    """Drain `HANDLE_TABLE[handle.key]`, wrap in `BamlPyHandle`, dispatch
+    on its host-derived `handle_type()`. The wire `handle.handle_type`
+    field is not consulted — `BamlPyHandle.handle_type()` is the source
+    of truth.
     """
-    from . import UnknownHandle  # local import: defined in __init__.py
+    from .baml_py import take_pyhandle_from_table
+    pyhandle = take_pyhandle_from_table(handle.key)
     HT = baml_inbound_pb2.BamlHandleType
-    wrapped = BamlHandle(handle.key, handle.handle_type)
+    ht = pyhandle.handle_type()
 
-    ht = handle.handle_type
-    if ht == HT.HANDLE_UNKNOWN:
-        return UnknownHandle(wrapped)
-    # Opaque-to-Python ADTs — surface as `UnknownHandle` per 09e §3.
-    if ht in (HT.ADT_PROMPT_AST, HT.ADT_COLLECTOR, HT.ADT_TYPE):
-        return UnknownHandle(wrapped)
+    if ht == HT.ADT_MEDIA_IMAGE:
+        return BamlImage._from_pyhandle(pyhandle)
+    if ht == HT.ADT_MEDIA_AUDIO:
+        return BamlAudio._from_pyhandle(pyhandle)
+    if ht == HT.ADT_MEDIA_VIDEO:
+        return BamlVideo._from_pyhandle(pyhandle)
+    if ht == HT.ADT_MEDIA_PDF:
+        return BamlPdf._from_pyhandle(pyhandle)
     if ht == HT.HANDLE_UNSPECIFIED:
         raise BamlError("BEX emitted HANDLE_UNSPECIFIED (Rust-side bug)")
-    if ht == HT.FUNCTION_REF:
-        raise BamlError("Function-ref handles do not cross FFI today")
-    if ht == HT.ADT_MEDIA_GENERIC:
-        raise BamlError("Generic media has no stdlib class today")
 
-    # Named stdlib handle classes — resolve lazily against sdk_root.
-    # Each class exposes a `__handle`-keyword constructor (09e §3).
-    subpath = _HANDLE_TYPE_SUBPATHS.get(ht)
-    if subpath is None:
-        raise BamlError(f"Unknown BamlHandleType {ht!r}")
-    cls = _resolve_under_sdk_root(subpath)
-    if cls is None:
-        raise BamlError(
-            f"BEX returned handle_type {ht!r} but {subpath!r} is not "
-            f"defined under sdk_root"
-        )
-    # Media stdlib classes (`baml.media.*`) are PyO3 types holding
-    # `Arc<MediaValue>`. Their `_from_handle` classmethod resolves the
-    # handle table → unwraps the Arc → releases the slot. Other handle-
-    # backed stdlib classes (File/Socket/Response) keep the legacy
-    # `__handle`-keyword constructor.
-    if ht in (
-        HT.ADT_MEDIA_IMAGE,
-        HT.ADT_MEDIA_AUDIO,
-        HT.ADT_MEDIA_VIDEO,
-        HT.ADT_MEDIA_PDF,
-    ):
-        return cls._from_handle(wrapped)
-    return cls(__handle=wrapped)
-
-
-_HANDLE_TYPE_SUBPATHS = {
-    baml_inbound_pb2.BamlHandleType.ADT_MEDIA_IMAGE: "baml.media.Image",
-    baml_inbound_pb2.BamlHandleType.ADT_MEDIA_AUDIO: "baml.media.Audio",
-    baml_inbound_pb2.BamlHandleType.ADT_MEDIA_VIDEO: "baml.media.Video",
-    baml_inbound_pb2.BamlHandleType.ADT_MEDIA_PDF: "baml.media.Pdf",
-    baml_inbound_pb2.BamlHandleType.RESOURCE_FILE: "baml.io.File",
-    baml_inbound_pb2.BamlHandleType.RESOURCE_SOCKET: "baml.net.Socket",
-    baml_inbound_pb2.BamlHandleType.RESOURCE_HTTP_RESPONSE: "baml.http.Response",
-}
+    # Everything else (UNTAGGED_RUST_DATA, UNTAGGED_BEX_HEAP, FUNCTION_REF,
+    # ADT_PROMPT_AST, ADT_COLLECTOR, ADT_TYPE, ADT_MEDIA_GENERIC): bare
+    # BamlPyHandle. The outer codegen class (if any) wraps it via
+    # `_decode_class` → private-attr injection.
+    return pyhandle
 
 
 def _resolve_under_sdk_root(subpath: str) -> Optional[type]:
     """Import `<sdk_root>.<subpath>` and return the trailing attr, or None
-    if any step fails. Used for stdlib handle classes that may not yet be
-    wired in the sim tree."""
+    if any step fails. Still used by `_baml_ty_to_python_type` for media
+    type resolution."""
     sdk_root = _safe_sdk_root()
     if not sdk_root:
         return None

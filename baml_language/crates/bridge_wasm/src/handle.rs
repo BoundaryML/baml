@@ -7,10 +7,8 @@ use wasm_bindgen::prelude::*;
 fn type_name(ht: BamlHandleType) -> &'static str {
     match ht {
         BamlHandleType::HandleUnspecified => "unspecified",
-        BamlHandleType::HandleUnknown => "unknown",
-        BamlHandleType::ResourceFile => "file",
-        BamlHandleType::ResourceSocket => "socket",
-        BamlHandleType::ResourceHttpResponse => "http_response",
+        BamlHandleType::UntaggedRustData => "rust_data",
+        BamlHandleType::UntaggedBexHeap => "bex_heap",
         BamlHandleType::FunctionRef => "function_ref",
         BamlHandleType::AdtMediaImage => "image",
         BamlHandleType::AdtMediaAudio => "audio",
@@ -48,7 +46,7 @@ impl BamlHandle {
         BamlHandle {
             key,
             handle_type: BamlHandleType::try_from(handle_type)
-                .unwrap_or(BamlHandleType::HandleUnknown),
+                .unwrap_or(BamlHandleType::HandleUnspecified),
         }
     }
 
