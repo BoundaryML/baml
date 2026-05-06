@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.level1(s: string) -> void {
+    load_type #0
+    load_var s
+    call baml.json.from_string
+    return
+}
+
+function user.level2(s: string) -> void {
+    load_type #0
+    load_var s
+    call user.level1
+    return
+}
+
+function user.level3(s: string) -> void {
+    load_type #0
+    load_var s
+    call user.level2
+    return
+}

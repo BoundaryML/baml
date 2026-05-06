@@ -24,11 +24,9 @@ fn user.test_generic_capture(box: Box<User>) -> string {
 fn .<lambda(test_generic_capture, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: string
 
     bb0: {
-        _1 = const "name";
-        _0 = copy capture[0].0[_1];
+        _0 = copy capture[0].0.0;
         goto -> bb1;
     }
 
@@ -41,11 +39,9 @@ fn user.test_generic_chain(box: Box<User>) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Box<User> // box // param
-    let _2: string
 
     bb0: {
-        _2 = const "name";
-        _0 = copy _1.0[_2];
+        _0 = copy _1.0.0;
         goto -> bb1;
     }
 
@@ -58,11 +54,9 @@ fn user.test_nested_generic_chain(box: Box<Box<User>>) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Box<Box<User>> // box // param
-    let _2: string
 
     bb0: {
-        _2 = const "value";
-        _0 = copy _1.0[_2];
+        _0 = copy _1.0.0.0;
         goto -> bb1;
     }
 

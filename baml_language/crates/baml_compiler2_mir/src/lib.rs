@@ -7,7 +7,7 @@ pub mod pretty;
 pub use ir::*;
 pub use lower::{
     ResolvedAliases, convert_tir2_ty, def_to_item_ref, lower_function, lower_let_body,
-    qtn_to_type_name,
+    qtn_to_type_name, tir2_to_template,
 };
 
 /// Database trait for compiler2 MIR queries.

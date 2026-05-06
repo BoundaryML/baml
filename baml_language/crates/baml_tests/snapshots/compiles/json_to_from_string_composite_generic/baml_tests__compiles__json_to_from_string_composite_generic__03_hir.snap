@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+class user.Container {
+  item: user.T
+}
+class user.User {
+  name: string
+}
+function user.decode_container(s: string) -> user.Container  [expr] {
+  {  } baml.json.from_string(s)
+}

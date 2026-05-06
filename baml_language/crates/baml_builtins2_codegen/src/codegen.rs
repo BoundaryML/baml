@@ -31,6 +31,8 @@ fn is_fallible(path: &str) -> bool {
                 | "baml.Uint8Array.from_hex"
                 | "baml.Uint8Array.from_base64"
                 | "baml.json.parse"
+                | "baml.json.to_string"
+                | "baml.json.from_string"
         )
 }
 

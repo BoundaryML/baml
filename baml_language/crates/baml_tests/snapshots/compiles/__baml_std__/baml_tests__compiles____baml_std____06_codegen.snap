@@ -276,6 +276,9 @@ function baml.http.send(request: baml.http.Request) -> baml.http.Response {
 function baml.io.input(prompt: string?) -> string {
 }
 
+function baml.json.from_string(s: string) -> void {
+}
+
 function baml.json.parse(s: string) -> baml.json.json {
 }
 
@@ -283,6 +286,9 @@ function baml.json.stringify(j: baml.json.json) -> string {
 }
 
 function baml.json.stringify_pretty(j: baml.json.json) -> string {
+}
+
+function baml.json.to_string(v: void) -> string {
 }
 
 function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream<void, void> {

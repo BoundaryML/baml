@@ -393,7 +393,19 @@ impl Function {
 #[derive(Clone, Debug)]
 pub struct ClassField {
     pub name: String,
+    /// Resolved field type with `TypeVar`s erased to `Ty::Void`.
+    ///
+    /// Used by paths that don't care about parametric class type-args
+    /// (codegen, `sys_ops` walking, output-format rendering).  For typed
+    /// runtime walking against an `Instance::class_type_args` binding, use
+    /// `field_template` and call `substitute` on it instead.
     pub field_type: Ty,
+    /// Field-type template with `TypeArgRef(N)` leaves for class-level
+    /// generic params (`N` indexes into `Instance::class_type_args`).
+    ///
+    /// Populated by emit using the enclosing class's `generic_params`.  For
+    /// non-generic classes this is `TyTemplate::Concrete(field_type.clone())`.
+    pub field_template: baml_type::TyTemplate,
     pub description: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,

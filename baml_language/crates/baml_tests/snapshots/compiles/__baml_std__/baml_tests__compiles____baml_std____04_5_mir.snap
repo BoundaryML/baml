@@ -158,11 +158,15 @@ fn baml.http.Response.text = builtin(io)
 
 fn baml.io.input = builtin(io)
 
+fn baml.json.from_string = builtin(vm)
+
 fn baml.json.parse = builtin(vm)
 
 fn baml.json.stringify = builtin(vm)
 
 fn baml.json.stringify_pretty = builtin(vm)
+
+fn baml.json.to_string = builtin(vm)
 
 fn baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request {
     // Locals:

@@ -14,15 +14,14 @@ function user.test_generic_capture(box: Box<User>) -> string {
 function user.test_generic_chain(box: Box<User>) -> string {
     load_var box
     load_field .value
-    load_const "name"
-    load_map_element
+    load_field .0
     return
 }
 
 function user.test_nested_generic_chain(box: Box<Box<User>>) -> string {
     load_var box
     load_field .value
-    load_const "value"
-    load_map_element
+    load_field .0
+    load_field .0
     return
 }

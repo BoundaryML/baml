@@ -309,6 +309,21 @@ pub struct BexVm {
     /// Process argv passed to the engine at startup. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
     pub argv: Arc<[String]>,
+
+    /// Type-args of the *currently dispatching* call, populated by the
+    /// `Instruction::Call` handler from the leading `ntypeargs` `Object::Type`
+    /// stack slots before invoking the callee.
+    ///
+    /// For bytecode callees this is redundant (the type-args are written into
+    /// the new frame's `type_args` field by the Call writeback), but for native
+    /// callees it is the only channel — the native dispatch path does not push
+    /// a bytecode frame, so without this slot any leading type-args would be
+    /// silently dropped.
+    ///
+    /// Saved/restored across nested `Call` instructions; native handlers that
+    /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
+    /// even if the inner callback uses different ones.
+    pending_call_type_args: Vec<baml_type::Ty>,
 }
 
 /// VM execution state.
@@ -593,7 +608,21 @@ impl BexVm {
             traced_frames: Vec::new(),
             current_span_context: None,
             argv,
+            pending_call_type_args: Vec::new(),
         }
+    }
+
+    /// Type-args of the currently dispatching call.
+    ///
+    /// Populated by `Instruction::Call` when the call carries `ntypeargs > 0`.
+    /// For BAML→BAML calls these are also written into the callee's frame; for
+    /// BAML→native calls this slot is the **only** channel, since native
+    /// dispatch does not push a bytecode frame.
+    ///
+    /// Returns an empty slice for calls with `ntypeargs == 0` and from outside
+    /// any call dispatch context.
+    pub fn current_call_type_args(&self) -> &[baml_type::Ty] {
+        &self.pending_call_type_args
     }
 
     /// Read an object from the heap via `HeapPtr`.
@@ -875,12 +904,24 @@ impl BexVm {
             .collect();
         let globals = GlobalPool::from_vec(globals_vec);
 
-        // Build resolved_class_names: convert ObjectIndex -> HeapPtr
-        let resolved_class_names: HashMap<String, HeapPtr> = bytecode
+        // Build resolved_class_names: convert ObjectIndex -> HeapPtr.
+        //
+        // Enum HeapPtrs are folded into the same map: BAML's type namespace is
+        // shared across classes and enums (a class and an enum cannot share an
+        // FQN), so callers that need name-based runtime lookup (e.g.
+        // `baml.json.from_string<Color>(...)`) can dispatch on the resulting
+        // `Object` kind.
+        let mut resolved_class_names: HashMap<String, HeapPtr> = bytecode
             .resolved_class_names
             .into_iter()
             .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw())))
             .collect();
+        resolved_class_names.extend(
+            bytecode
+                .resolved_enums_names
+                .into_iter()
+                .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw()))),
+        );
 
         Ok(Self::new(
             heap,
@@ -3709,13 +3750,29 @@ impl BexVm {
                 // Native frame, also not the target of a type-arg writeback).
                 let frames_before = self.frames.len();
 
+                // Expose the type-args to the callee through `vm
+                // .current_call_type_args()`.  For BAML→BAML calls the values
+                // also flow through the new frame's `type_args` field below;
+                // for BAML→native calls this slot is the only channel.
+                // Save/restore the previous slot so a native handler that
+                // re-enters the VM via YieldToCall sees its own type-args even
+                // when the inner callback uses different ones.
+                let prev_pending_call_type_args =
+                    std::mem::replace(&mut self.pending_call_type_args, type_args.clone());
+
                 let result = self.execute_call_from_locals_offset(
                     callee_ptr,
                     locals_offset,
                     arg_count,
                     frame_idx,
                     function,
-                )?;
+                );
+
+                // Restore the previous slot regardless of how the call
+                // resolved (success, thrown error, yield).  The native
+                // handler has already consumed the slot at this point.
+                self.pending_call_type_args = prev_pending_call_type_args;
+                let result = result?;
 
                 // Append call-site type_args to the newly-pushed bytecode
                 // frame's existing type_args (which were pre-seeded from

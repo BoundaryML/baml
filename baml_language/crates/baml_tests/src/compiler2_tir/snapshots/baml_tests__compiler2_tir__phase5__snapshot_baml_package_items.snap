@@ -59,9 +59,11 @@ namespace baml.json:
   class JsonParseError { methods: [] }
   class JsonSerializationError { methods: [] }
   type json
+  function from_string<T>
   function parse
   function stringify
   function stringify_pretty
+  function to_string<T>
 namespace baml.llm:
   class AnthropicOptions { methods: [] }
   class AzureOpenAiOptions { methods: [] }
