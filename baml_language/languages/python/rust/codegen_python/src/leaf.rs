@@ -171,54 +171,22 @@ impl LeafBody {
         set.into_iter().collect()
     }
 
-    /// First segments for the `.pyi` companion. Class fields are not
-    /// mirrored into `.pyi` (only methods get typed signatures), so
-    /// they don't contribute.
+    /// First segments for the `.pyi` companion. Now that class fields
+    /// are mirrored into `.pyi`, the walk shape matches `.py` exactly —
+    /// properties, methods, function/alias types all contribute.
     pub(crate) fn cross_leaf_first_segments_pyi(&self) -> Vec<String> {
-        let mut set: BTreeSet<String> = BTreeSet::new();
-        let current = &self.leaf;
-        for (sym, _) in &self.symbols {
-            match sym {
-                EmittedSymbol::Class(c) => {
-                    for m in &c.static_methods {
-                        for ty in &m.arg_tys {
-                            collect_cross_leaf(ty, current, &mut set);
-                        }
-                        collect_cross_leaf(&m.return_ty, current, &mut set);
-                    }
-                    for m in &c.instance_methods {
-                        for ty in &m.arg_tys {
-                            collect_cross_leaf(ty, current, &mut set);
-                        }
-                        collect_cross_leaf(&m.return_ty, current, &mut set);
-                    }
-                }
-                EmittedSymbol::Function(f) => {
-                    for ty in &f.arg_tys {
-                        collect_cross_leaf(ty, current, &mut set);
-                    }
-                    collect_cross_leaf(&f.return_ty, current, &mut set);
-                }
-                EmittedSymbol::TypeAlias(a) => {
-                    collect_cross_leaf(&a.resolves_to, current, &mut set);
-                }
-                EmittedSymbol::Enum(_) => {}
-            }
-        }
-        set.into_iter().collect()
+        self.cross_leaf_first_segments_py()
     }
 
     /// Whether this leaf's `.pyi` needs `import typing`. Any rendered
-    /// signature pulls it in (`typing.TypeAlias`, `typing.Optional`,
-    /// etc.). Property-only classes don't (fields aren't mirrored into
-    /// `.pyi`), but generic classes do (`typing.Generic[T]` base).
+    /// signature, type alias, or class pulls it in — class field types
+    /// may resolve to `typing.Optional[…]` / `typing.List[…]` / etc.,
+    /// and the generic base is `typing.Generic[…]`. Mirrors the `.py`
+    /// "be generous" rule (`stdlib_imports`).
     pub(crate) fn needs_typing_pyi(&self) -> bool {
         self.symbols.iter().any(|(s, _)| match s {
-            EmittedSymbol::Function(_) | EmittedSymbol::TypeAlias(_) => true,
-            EmittedSymbol::Class(c) => {
-                !c.static_methods.is_empty()
-                    || !c.instance_methods.is_empty()
-                    || !c.generic_params.is_empty()
+            EmittedSymbol::Class(_) | EmittedSymbol::Function(_) | EmittedSymbol::TypeAlias(_) => {
+                true
             }
             EmittedSymbol::Enum(_) => false,
         })
@@ -818,10 +786,16 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
 
 #[derive(askama::Template)]
 #[template(
-    source = r#"{%- if static_methods.is_empty() && instance_methods.is_empty() -%}
+    source = r#"{%- if properties.is_empty() && static_methods.is_empty() && instance_methods.is_empty() -%}
 class {{ py_name }}({{ bases }}): ...
 {%- else -%}
 class {{ py_name }}({{ bases }}):
+{%- for prop in properties %}
+    {{ prop.name }}: {{ prop.ty_py }}
+{%- endfor %}
+{%- if !properties.is_empty() && (!static_methods.is_empty() || !instance_methods.is_empty()) %}
+
+{%- endif %}
 {%- for m in static_methods %}
 {%- if !loop.first && !m.tight_to_prev %}
 
@@ -844,6 +818,7 @@ class {{ py_name }}({{ bases }}):
 struct ClassBodyPyi {
     py_name: String,
     bases: String,
+    properties: Vec<ClassPropertyView>,
     static_methods: Vec<MethodBlockView>,
     instance_methods: Vec<MethodBlockView>,
 }
@@ -851,16 +826,6 @@ struct ClassBodyPyi {
 struct MethodBlockView {
     block: String,
     tight_to_prev: bool,
-}
-
-#[derive(askama::Template)]
-#[template(
-    source = "class {{ py_name }}(str, enum.Enum): ...",
-    ext = "py.j2",
-    escape = "none"
-)]
-struct EnumBodyPyi {
-    py_name: String,
 }
 
 /// One method's `.pyi` signature block: a single `def` line for
@@ -905,9 +870,11 @@ fn build_method_block_views(
     out
 }
 
-/// Render one symbol into its `.pyi` source block. Classes and enums
-/// render name-only with `...`; type aliases mirror the `.py` shape;
-/// functions render as typed `def`/`async def` signatures.
+/// Render one symbol into its `.pyi` source block. Classes carry
+/// typed field declarations and method signature stubs; enums carry
+/// their variant lines verbatim; type aliases mirror the `.py` shape;
+/// functions render as typed `def`/`async def` signatures. An empty
+/// class (no fields, no methods) collapses to `class Foo(...): ...`.
 fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
     use askama::Template;
     let ctx = TranslateCtx {
@@ -923,9 +890,18 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                     py_name = c.py_name,
                 );
             }
+            let properties = c
+                .properties
+                .iter()
+                .map(|prop| ClassPropertyView {
+                    name: prop.name.clone(),
+                    ty_py: translate_ty(&prop.ty, &ctx),
+                })
+                .collect();
             let mut out = ClassBodyPyi {
                 py_name: c.py_name.clone(),
                 bases: render_class_bases(&c.generic_params),
+                properties,
                 static_methods: build_method_block_views(&c.static_methods, &ctx),
                 instance_methods: build_method_block_views(&c.instance_methods, &ctx),
             }
@@ -935,11 +911,22 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
             out
         }
         EmittedSymbol::Enum(e) => {
-            let mut out = EnumBodyPyi {
+            // Enum body is identical between `.py` and `.pyi` —
+            // reuse the `.py` template directly.
+            let variants = e
+                .variants
+                .iter()
+                .map(|v| EnumVariantView {
+                    ident: v.ident.clone(),
+                    value: py_string(&v.value),
+                })
+                .collect();
+            let mut out = EnumBodyPy {
                 py_name: e.py_name.clone(),
+                variants,
             }
             .render()
-            .expect("enum_body.pyi template should always render");
+            .expect("enum_body template should always render");
             out.push('\n');
             out
         }
