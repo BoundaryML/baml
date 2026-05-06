@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion, MotionProps } from 'motion/react';
+import { AnimatePresence, type MotionProps, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 
 import { cn } from '@/lib/utils';
@@ -14,12 +14,12 @@ interface WordRotateProps {
 
 export function WordRotate({
   words,
-  duration = 2500,
+  duration = 3200,
   motionProps = {
-    initial: { opacity: 0, y: -50 },
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: 50 },
-    transition: { duration: 0.25, ease: 'easeOut' },
+    initial: { opacity: 0, y: -50 },
+    transition: { duration: 0.4, ease: 'easeOut' },
   },
   className,
 }: WordRotateProps) {
@@ -38,8 +38,8 @@ export function WordRotate({
     <div className="overflow-hidden py-2">
       <AnimatePresence mode="wait">
         <motion.h1
-          key={words[index]}
           className={cn(className)}
+          key={words[index]}
           {...motionProps}
         >
           {words[index]}
