@@ -146,7 +146,9 @@ base64 = "0.22"
 bitcode = { version = "0.6", features = [ "serde" ] }
 libsui = { version = "0.14" }
 reqwest = { version = "0.13.1", default-features = false, features = [
+  "blocking",
   "json",
+  "rustls",
   "stream",
 ] }
 rowan = { version = "0.16" }
@@ -193,6 +195,7 @@ wasm-bindgen-test = "0.3"
 js-sys = "0.3"
 webbrowser = "1.0.5"
 strum = { version = "0.26", features = [ "derive" ] }
+tar = "0.4"
 pyo3 = { version = "0.28", default-features = false }
 pyo3-async-runtimes = { version = "0.28" }
 pyo3-build-config = "0.28"
@@ -208,6 +211,7 @@ web-time = "1.1.0"
 getrandom = { version = "0.2" }
 rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
 sha2 = { version = "0.10", features = [ "oid" ] }
+zip = { version = "2", default-features = false, features = [ "deflate" ] }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

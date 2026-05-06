@@ -14,6 +14,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::{
+    io::{Cursor, Read},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -25,9 +26,13 @@ use baml_project::ProjectDatabase;
 use bex_engine::BexEngine;
 use bex_vm_types::types::Program;
 use clap::Args;
+use sha2::{Digest, Sha256};
 use sys_native::SysOpsExt;
 
-use crate::project_load::{check_project_diagnostics, load_project_from};
+use crate::{
+    commands::release_version,
+    project_load::{check_project_diagnostics, load_project_from},
+};
 
 /// Section name where the packed envelope lives inside the host binary.
 /// Kept in sync with `baml_pack_host::SECTION_NAME`.
@@ -54,6 +59,13 @@ pub struct PackArgs {
     /// Defaults to `./<target-name>`.
     #[arg(short, long)]
     pub output: Option<PathBuf>,
+
+    /// Target triple for the packaged executable.
+    /// Defaults to the host platform. When this differs from the host,
+    /// `baml pack` downloads the matching pack host from GitHub release
+    /// artifacts.
+    #[arg(long = "target", value_name = "TRIPLE")]
+    pub target_triple: Option<String>,
 
     /// Output format baked into the binary. Defaults to `json`; packaged
     /// binaries are production tools whose primary reader is another
@@ -108,15 +120,16 @@ impl PackArgs {
         let serialized = bitcode::serialize(&envelope)
             .map_err(|e| anyhow!("Failed to serialize pack envelope: {e}"))?;
 
-        let host_bytes = read_host_binary()?;
+        let target_triple = self.resolved_target_triple()?;
+        let host_bytes = read_host_binary(target_triple)?;
         let output_path = self
             .output
             .clone()
-            .unwrap_or_else(|| PathBuf::from(&resolved.default_basename));
+            .unwrap_or_else(|| default_output_path(&resolved.default_basename, target_triple));
 
         let mut output_file = std::fs::File::create(&output_path)
             .with_context(|| format!("Failed to create {}", output_path.display()))?;
-        write_executable(&host_bytes, &serialized, &mut output_file)?;
+        write_executable(&host_bytes, &serialized, &mut output_file, target_triple)?;
 
         #[cfg(unix)]
         {
@@ -136,6 +149,13 @@ impl PackArgs {
             output_path.display()
         );
         Ok(crate::ExitCode::Success)
+    }
+
+    fn resolved_target_triple(&self) -> Result<&str> {
+        match self.target_triple.as_deref() {
+            Some(target) => validate_release_target_triple(target),
+            None => release_host_target_triple(),
+        }
     }
 
     /// Load and compile either the enclosing project or, for a `.baml`
@@ -270,46 +290,273 @@ fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
     name.to_string()
 }
 
-fn read_host_binary() -> Result<Vec<u8>> {
+fn read_host_binary(target_triple: &str) -> Result<Vec<u8>> {
     let exe = std::env::current_exe().context("Failed to locate current executable")?;
     let dir = exe
         .parent()
         .ok_or_else(|| anyhow!("Cannot determine directory of current executable"))?;
-    let host_name = if cfg!(windows) {
-        "baml-pack-host.exe"
-    } else {
-        "baml-pack-host"
-    };
-    let host_path = dir.join(host_name);
-    if !host_path.exists() {
-        anyhow::bail!(
-            "Could not find `{host_name}` next to the current binary at {}",
+    let host_name = host_binary_name(target_triple);
+    let host_path = dir.join(&host_name);
+    if target_triple == release_host_target_triple()? && host_path.exists() {
+        return std::fs::read(&host_path)
+            .with_context(|| format!("Failed to read {}", host_path.display()));
+    }
+
+    if target_triple == release_host_target_triple()? {
+        eprintln!(
+            "`{host_name}` was not found next to the current binary at {}; downloading from GitHub release artifacts...",
             dir.display()
         );
+    } else {
+        eprintln!(
+            "Packaging for `{target_triple}`; downloading `{host_name}` from GitHub release artifacts..."
+        );
     }
-    std::fs::read(&host_path).with_context(|| format!("Failed to read {}", host_path.display()))
+    download_host_binary_from_release(target_triple, &host_name)
 }
 
-fn write_executable(host_bytes: &[u8], data: &[u8], writer: &mut std::fs::File) -> Result<()> {
-    let target = std::env::consts::OS;
-    if target.contains("linux") {
+fn host_binary_name(target_triple: &str) -> String {
+    if target_triple.ends_with("windows-msvc") {
+        "baml-pack-host.exe".to_string()
+    } else {
+        "baml-pack-host".to_string()
+    }
+}
+
+fn download_host_binary_from_release(target: &str, host_name: &str) -> Result<Vec<u8>> {
+    let version = release_version_for_download();
+    let url = release_archive_url(&version, target);
+
+    let archive_bytes = download_release_asset(&url)?;
+    verify_release_archive_checksum(&archive_bytes, &url)?;
+
+    extract_host_from_archive(&archive_bytes, &url, host_name)
+}
+
+fn download_release_asset(url: &str) -> Result<Vec<u8>> {
+    let response = reqwest::blocking::get(url)
+        .with_context(|| format!("Failed to download BAML release asset from {url}"))?
+        .error_for_status()
+        .with_context(|| format!("Failed to download BAML release asset from {url}"))?;
+    let bytes = response
+        .bytes()
+        .with_context(|| format!("Failed to read BAML release asset from {url}"))?;
+    Ok(bytes.to_vec())
+}
+
+fn verify_release_archive_checksum(archive_bytes: &[u8], archive_url: &str) -> Result<()> {
+    let checksum_url = release_archive_checksum_url(archive_url);
+    let checksum_text = download_release_asset(&checksum_url)?;
+    let checksum_text = std::str::from_utf8(&checksum_text)
+        .with_context(|| format!("Checksum asset {checksum_url} was not valid UTF-8"))?;
+    verify_release_archive_checksum_text(archive_bytes, archive_url, checksum_text).with_context(
+        || format!("Failed to verify BAML release archive checksum from {checksum_url}"),
+    )
+}
+
+fn verify_release_archive_checksum_text(
+    archive_bytes: &[u8],
+    archive_url: &str,
+    checksum_text: &str,
+) -> Result<()> {
+    let archive_name = archive_url
+        .rsplit('/')
+        .next()
+        .ok_or_else(|| anyhow!("Archive URL did not contain a file name: {archive_url}"))?;
+    let expected = parse_release_checksum(checksum_text, archive_name)?;
+    let actual = format!("{:x}", Sha256::digest(archive_bytes));
+    if actual != expected {
+        anyhow::bail!(
+            "Checksum mismatch for BAML release archive {archive_name}: expected {expected}, got {actual}"
+        );
+    }
+    Ok(())
+}
+
+fn release_archive_checksum_url(archive_url: &str) -> String {
+    format!("{archive_url}.sha256")
+}
+
+fn parse_release_checksum(checksum_text: &str, archive_name: &str) -> Result<String> {
+    for line in checksum_text.lines() {
+        let mut parts = line.split_whitespace();
+        let Some(hash) = parts.next() else {
+            continue;
+        };
+        let Some(name) = parts.next() else {
+            continue;
+        };
+        if name == archive_name {
+            return validate_sha256(hash);
+        }
+    }
+    anyhow::bail!("Checksum file did not contain an entry for {archive_name}")
+}
+
+fn validate_sha256(hash: &str) -> Result<String> {
+    if hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        Ok(hash.to_ascii_lowercase())
+    } else {
+        anyhow::bail!("Invalid SHA-256 checksum `{hash}`")
+    }
+}
+
+fn release_version_for_download() -> String {
+    std::env::var("BAML_PACK_HOST_RELEASE_VERSION")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| release_version().to_string())
+}
+
+fn release_archive_url(version: &str, target: &str) -> String {
+    if let Ok(base_url) = std::env::var("BAML_PACK_HOST_RELEASE_BASE_URL") {
+        let base = base_url.trim_end_matches('/');
+        return format!("{base}/{}", release_archive_filename(version, target));
+    }
+
+    let repo = std::env::var("BAML_PACK_HOST_RELEASE_REPO")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| "BoundaryML/baml".to_string());
+    release_archive_url_for_repo(version, target, &repo)
+}
+
+fn release_archive_url_for_repo(version: &str, target: &str, repo: &str) -> String {
+    format!(
+        "https://github.com/{repo}/releases/download/baml-language-{version}/{}",
+        release_archive_filename(version, target)
+    )
+}
+
+fn release_archive_filename(version: &str, target: &str) -> String {
+    let ext = if target.ends_with("windows-msvc") {
+        "zip"
+    } else {
+        "tar.gz"
+    };
+    format!("baml-language-{version}-{target}.{ext}")
+}
+
+fn release_host_target_triple() -> Result<&'static str> {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => Ok("aarch64-apple-darwin"),
+        ("macos", "x86_64") => Ok("x86_64-apple-darwin"),
+        ("linux", "x86_64") => Ok("x86_64-unknown-linux-gnu"),
+        ("windows", "x86_64") => Ok("x86_64-pc-windows-msvc"),
+        (os, arch) => anyhow::bail!(
+            "No released `baml-pack-host` artifact is available for {arch}-{os}. \
+             Install `baml-pack-host` next to the `baml` binary to use `baml pack` on this platform."
+        ),
+    }
+}
+
+fn validate_release_target_triple(target: &str) -> Result<&str> {
+    match target {
+        "aarch64-apple-darwin"
+        | "x86_64-apple-darwin"
+        | "x86_64-unknown-linux-gnu"
+        | "x86_64-pc-windows-msvc" => Ok(target),
+        _ => anyhow::bail!(
+            "Unsupported pack target `{target}`. Supported targets: {}",
+            SUPPORTED_PACK_TARGETS.join(", ")
+        ),
+    }
+}
+
+const SUPPORTED_PACK_TARGETS: &[&str] = &[
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+];
+
+fn default_output_path(default_basename: &str, target_triple: &str) -> PathBuf {
+    let mut path = PathBuf::from(default_basename);
+    if target_triple.ends_with("windows-msvc")
+        && path.extension().and_then(|ext| ext.to_str()) != Some("exe")
+    {
+        path.set_extension("exe");
+    }
+    path
+}
+
+fn extract_host_from_archive(archive_bytes: &[u8], url: &str, host_name: &str) -> Result<Vec<u8>> {
+    if url.ends_with(".zip") {
+        extract_host_from_zip(archive_bytes, host_name)
+    } else {
+        extract_host_from_tar_gz(archive_bytes, host_name)
+    }
+    .with_context(|| format!("Failed to extract `{host_name}` from release archive {url}"))
+}
+
+fn extract_host_from_tar_gz(archive_bytes: &[u8], host_name: &str) -> Result<Vec<u8>> {
+    let decoder = flate2::read::GzDecoder::new(Cursor::new(archive_bytes));
+    let mut archive = tar::Archive::new(decoder);
+    for entry in archive.entries().context("Failed to read tar entries")? {
+        let mut entry = entry.context("Failed to read tar entry")?;
+        if entry
+            .path()
+            .ok()
+            .and_then(|path| path.file_name().map(|name| name == host_name))
+            .unwrap_or(false)
+        {
+            let mut bytes = Vec::new();
+            entry
+                .read_to_end(&mut bytes)
+                .context("Failed to read host binary from tar archive")?;
+            return Ok(bytes);
+        }
+    }
+    anyhow::bail!("Release archive did not contain `{host_name}`")
+}
+
+fn extract_host_from_zip(archive_bytes: &[u8], host_name: &str) -> Result<Vec<u8>> {
+    let mut archive =
+        zip::ZipArchive::new(Cursor::new(archive_bytes)).context("Failed to read zip archive")?;
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .with_context(|| format!("Failed to read zip entry {i}"))?;
+        if Path::new(file.name())
+            .file_name()
+            .map(|name| name == host_name)
+            .unwrap_or(false)
+        {
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes)
+                .context("Failed to read host binary from zip archive")?;
+            return Ok(bytes);
+        }
+    }
+    anyhow::bail!("Release archive did not contain `{host_name}`")
+}
+
+fn write_executable(
+    host_bytes: &[u8],
+    data: &[u8],
+    writer: &mut std::fs::File,
+    target_triple: &str,
+) -> Result<()> {
+    if target_triple.contains("linux") {
         libsui::Elf::new(host_bytes)
             .append(PACK_SECTION_NAME, data, writer)
             .context("Failed to write ELF binary")?;
-    } else if target.contains("windows") {
+    } else if target_triple.contains("windows") {
         libsui::PortableExecutable::from(host_bytes)
             .context("Failed to parse PE binary")?
             .write_resource(PACK_SECTION_NAME, data.to_vec())
             .context("Failed to write PE resource")?
             .build(writer)
             .context("Failed to build PE binary")?;
-    } else {
+    } else if target_triple.contains("apple-darwin") {
         libsui::Macho::from(host_bytes.to_vec())
             .context("Failed to parse Mach-O binary")?
             .write_section(PACK_SECTION_NAME, data.to_vec())
             .context("Failed to write Mach-O section")?
             .build_and_sign(writer)
             .context("Failed to build Mach-O binary")?;
+    } else {
+        anyhow::bail!("Unsupported pack target `{target_triple}`");
     }
     Ok(())
 }
@@ -338,6 +585,7 @@ mod tests {
             target: None,
             function: None,
             output: None,
+            target_triple: None,
             output_format: OutputFormat::Json,
             from: PathBuf::from("."),
         }
@@ -494,6 +742,161 @@ mod tests {
         }
         let parsed = Wrapper::try_parse_from(["baml-pack"]).unwrap();
         assert!(matches!(parsed.args.output_format, OutputFormat::Json));
+    }
+
+    #[test]
+    fn test_pack_target_triple_flag_parses() {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Wrapper {
+            #[command(flatten)]
+            args: PackArgs,
+        }
+        let parsed =
+            Wrapper::try_parse_from(["baml-pack", "--target", "x86_64-pc-windows-msvc"]).unwrap();
+        assert_eq!(
+            parsed.args.target_triple.as_deref(),
+            Some("x86_64-pc-windows-msvc")
+        );
+    }
+
+    // ── GitHub release fallback ───────────────────────────────────────
+
+    #[test]
+    fn test_release_archive_filename_uses_platform_extension() {
+        assert_eq!(
+            release_archive_filename("1.2.3-alpha.4", "x86_64-unknown-linux-gnu"),
+            "baml-language-1.2.3-alpha.4-x86_64-unknown-linux-gnu.tar.gz"
+        );
+        assert_eq!(
+            release_archive_filename("1.2.3-alpha.4", "x86_64-pc-windows-msvc"),
+            "baml-language-1.2.3-alpha.4-x86_64-pc-windows-msvc.zip"
+        );
+    }
+
+    #[test]
+    fn test_release_archive_url_defaults_to_github_release_asset() {
+        let url = release_archive_url_for_repo(
+            "1.2.3-alpha.4",
+            "x86_64-unknown-linux-gnu",
+            "BoundaryML/baml",
+        );
+        assert_eq!(
+            url,
+            "https://github.com/BoundaryML/baml/releases/download/baml-language-1.2.3-alpha.4/baml-language-1.2.3-alpha.4-x86_64-unknown-linux-gnu.tar.gz"
+        );
+    }
+
+    #[test]
+    fn test_release_archive_checksum_url_matches_uploaded_asset() {
+        assert_eq!(
+            release_archive_checksum_url(
+                "https://github.com/BoundaryML/baml/releases/download/baml-language-1.2.3-alpha.4/baml-language-1.2.3-alpha.4-x86_64-unknown-linux-gnu.tar.gz"
+            ),
+            "https://github.com/BoundaryML/baml/releases/download/baml-language-1.2.3-alpha.4/baml-language-1.2.3-alpha.4-x86_64-unknown-linux-gnu.tar.gz.sha256"
+        );
+    }
+
+    #[test]
+    fn test_verify_release_archive_checksum_text() {
+        let archive_name = "baml-language-1.2.3-alpha.4-x86_64-unknown-linux-gnu.tar.gz";
+        let archive_url = format!("https://example.com/releases/{archive_name}");
+        let archive_bytes = b"fake archive bytes";
+        let digest = format!("{:x}", Sha256::digest(archive_bytes));
+        let checksum_text = format!("{digest}  {archive_name}\n");
+
+        verify_release_archive_checksum_text(archive_bytes, &archive_url, &checksum_text).unwrap();
+
+        let err =
+            verify_release_archive_checksum_text(b"different bytes", &archive_url, &checksum_text)
+                .unwrap_err();
+        assert!(format!("{err}").contains("Checksum mismatch"));
+    }
+
+    #[test]
+    fn test_validate_release_target_triple_accepts_supported_targets() {
+        for target in SUPPORTED_PACK_TARGETS {
+            assert_eq!(validate_release_target_triple(target).unwrap(), *target);
+        }
+    }
+
+    #[test]
+    fn test_validate_release_target_triple_rejects_unknown_target() {
+        let err = validate_release_target_triple("wasm32-unknown-unknown").unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("Unsupported pack target"), "got: {msg}");
+        assert!(msg.contains("x86_64-unknown-linux-gnu"), "got: {msg}");
+    }
+
+    #[test]
+    fn test_host_binary_name_follows_target_triple() {
+        assert_eq!(
+            host_binary_name("x86_64-unknown-linux-gnu"),
+            "baml-pack-host"
+        );
+        assert_eq!(
+            host_binary_name("x86_64-pc-windows-msvc"),
+            "baml-pack-host.exe"
+        );
+    }
+
+    #[test]
+    fn test_default_output_path_adds_exe_for_windows_target() {
+        assert_eq!(
+            default_output_path("main", "x86_64-pc-windows-msvc"),
+            PathBuf::from("main.exe")
+        );
+        assert_eq!(
+            default_output_path("main.exe", "x86_64-pc-windows-msvc"),
+            PathBuf::from("main.exe")
+        );
+        assert_eq!(
+            default_output_path("main", "x86_64-unknown-linux-gnu"),
+            PathBuf::from("main")
+        );
+    }
+
+    #[test]
+    fn test_extract_host_from_tar_gz() {
+        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        {
+            let mut builder = tar::Builder::new(&mut gzip);
+            let bytes = b"fake host";
+            let mut header = tar::Header::new_gnu();
+            header.set_size(bytes.len() as u64);
+            header.set_mode(0o755);
+            header.set_cksum();
+            builder
+                .append_data(&mut header, "nested/baml-pack-host", &bytes[..])
+                .unwrap();
+            builder.finish().unwrap();
+        }
+        let archive = gzip.finish().unwrap();
+        assert_eq!(
+            extract_host_from_tar_gz(&archive, "baml-pack-host").unwrap(),
+            b"fake host"
+        );
+    }
+
+    #[test]
+    fn test_extract_host_from_zip() {
+        use std::io::Write;
+
+        let mut archive = Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut archive);
+            zip.start_file(
+                "nested/baml-pack-host.exe",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            zip.write_all(b"fake windows host").unwrap();
+            zip.finish().unwrap();
+        }
+        assert_eq!(
+            extract_host_from_zip(&archive.into_inner(), "baml-pack-host.exe").unwrap(),
+            b"fake windows host"
+        );
     }
 
     // ── Envelope roundtrip ────────────────────────────────────────────

@@ -35,13 +35,18 @@ bitcode = { workspace = true }
 clap = { workspace = true, features = [ "color", "env" ] }
 clap-cargo = { workspace = true }
 ctrlc = { workspace = true }
+flate2 = { workspace = true }
 libsui = { workspace = true }
 regex = { workspace = true }
+reqwest = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 strsim = { workspace = true }
+tar = { workspace = true }
 text-size = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
+zip = { workspace = true }
 
 [features]
 default = [ "native-tls", "aws-crypto" ]
