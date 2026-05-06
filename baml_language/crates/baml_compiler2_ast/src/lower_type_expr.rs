@@ -315,25 +315,33 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
 
     // Check for named/primitive type or map type
     if let Some(name) = parts.dotted_name() {
-        if name == "map" {
-            if let Some(type_args_node) = parts.type_args() {
-                let type_arg_exprs: Vec<_> = type_args_node
+        let type_arg_exprs: Vec<_> = parts
+            .type_args()
+            .map(|type_args_node| {
+                type_args_node
                     .children()
                     .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
                     .map(|n| baml_compiler_syntax::ast::TypeExpr::cast(n).unwrap())
-                    .collect();
+                    .collect()
+            })
+            .unwrap_or_default();
 
-                if type_arg_exprs.len() == 2 {
-                    let key = lower_type_expr_inner(&type_arg_exprs[0], false);
-                    let value = lower_type_expr_inner(&type_arg_exprs[1], false);
-                    return TypeExpr::Map {
-                        key: Box::new(key),
-                        value: Box::new(value),
-                        attrs: vec![],
-                    };
-                }
+        if name == "map" {
+            if type_arg_exprs.len() == 2 {
+                let key = lower_type_expr_inner(&type_arg_exprs[0], false);
+                let value = lower_type_expr_inner(&type_arg_exprs[1], false);
+                return TypeExpr::Map {
+                    key: Box::new(key),
+                    value: Box::new(value),
+                    attrs: vec![],
+                };
             }
         }
+
+        let generic_args: Vec<TypeExpr> = type_arg_exprs
+            .iter()
+            .map(|arg| lower_type_expr_inner(arg, false))
+            .collect();
 
         return match name.as_str() {
             "true" => TypeExpr::Literal {
@@ -344,16 +352,11 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
                 value: baml_base::Literal::Bool(false),
                 attrs: vec![],
             },
-            _ => lower_from_type_name(&name),
+            _ => lower_from_type_name_with_generic_args(&name, generic_args),
         };
     }
 
     TypeExpr::Unknown { attrs: vec![] }
-}
-
-/// Create a `TypeExpr` from a type name string (primitive or user-defined).
-fn lower_from_type_name(name: &str) -> TypeExpr {
-    lower_from_type_name_with_generic_args(name, vec![])
 }
 
 /// Create a `TypeExpr` from a type name string with optional generic arguments.

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18056
 ---
 === MIR2 ===
 fn user.alias_intersection_in_match_arm(v: int | string) -> int {
@@ -695,25 +696,31 @@ fn user.int_widens_to_optional(v: int?) -> int? {
     let _1: int? // v // param
     let _2: bool
     let _3: bool
-    let _4: int? // n
+    let _4: bool
+    let _5: int? // n
 
     bb0: {
         _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _2 -> [bb1, bb3];
+        branch copy _2 -> [bb1, bb4];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Optional(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _3 -> [bb2, bb3];
+        _3 = copy _1 == const null;
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _4 = copy _1;
-        _0 = copy _4;
-        goto -> bb3;
+        _4 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _4 -> [bb3, bb4];
     }
 
     bb3: {
+        _5 = copy _1;
+        _0 = copy _5;
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }
@@ -1013,18 +1020,24 @@ fn user.nested_paren_union_array_optional(v: (int | string)[]?) -> int {
     let _0: int // _0 // return
     let _1: (int | string)[]? // v // param
     let _2: bool
+    let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Optional(List(Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
-        branch copy _2 -> [bb1, bb2];
+        _2 = copy _1 == const null;
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _0 = const 1_i64;
-        goto -> bb2;
+        _3 = is_type(copy _1, List(Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _3 -> [bb2, bb3];
     }
 
     bb2: {
+        _0 = const 1_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -1062,32 +1075,46 @@ fn user.or_with_repeated_bare_binding(v: int) -> int {
     let _0: int // _0 // return
     let _1: int // v // param
     let _2: bool
-    let _3: bool
+    let _3: int // x
     let _4: bool
     let _5: int // x
+    let _6: bool
+    let _7: int // x
 
     bb0: {
         _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb5, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb3, bb2];
+        _4 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _4 -> [bb4, bb2];
     }
 
     bb2: {
-        _4 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _4 -> [bb3, bb4];
+        _6 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _6 -> [bb3, bb6];
     }
 
     bb3: {
-        _5 = copy _1;
-        _0 = copy _5;
-        goto -> bb4;
+        _7 = copy _1;
+        _0 = copy _7;
+        goto -> bb6;
     }
 
     bb4: {
+        _5 = copy _1;
+        _0 = copy _5;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _3 = copy _1;
+        _0 = copy _3;
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
@@ -1097,31 +1124,38 @@ fn user.or_with_repeated_typed_binding(v: int | string) -> int {
     let _0: int // _0 // return
     let _1: int | string // v // param
     let _2: bool
-    let _3: bool
-    let _4: int // x
+    let _3: int // x
+    let _4: bool
+    let _5: int // x
 
     bb0: {
         _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb3, bb2];
+        _4 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _4 -> [bb3, bb2];
     }
 
     bb2: {
         _0 = const 0_i64;
-        goto -> bb4;
+        goto -> bb5;
     }
 
     bb3: {
-        _4 = copy _1;
-        _0 = copy _4;
-        goto -> bb4;
+        _5 = copy _1;
+        _0 = copy _5;
+        goto -> bb5;
     }
 
     bb4: {
+        _3 = copy _1;
+        _0 = copy _3;
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -1158,20 +1192,25 @@ fn user.paren_chains_in_or(v: int) -> int {
 
     bb0: {
         _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _2 -> [bb2, bb1];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
         _3 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
-        branch copy _3 -> [bb2, bb3];
+        branch copy _3 -> [bb2, bb4];
     }
 
     bb2: {
         _0 = const 1_i64;
-        goto -> bb3;
+        goto -> bb4;
     }
 
     bb3: {
+        _0 = const 1_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }

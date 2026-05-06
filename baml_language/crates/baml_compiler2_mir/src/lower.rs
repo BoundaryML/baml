@@ -400,6 +400,7 @@ struct LoweringContext<'db> {
     // TypeName with module_path. Upgrading to TypeName would require resolving the
     // enum's package at each match site.
     class_fields: IndexMap<TypeName, IndexMap<String, usize>>,
+    class_field_types: IndexMap<TypeName, IndexMap<String, Ty>>,
     enum_variants: IndexMap<Name, IndexMap<String, usize>>,
     /// Pre-computed type tags for class types, used by `SwitchKind::TypeTag`
     /// for union-type switch optimization (ported from MIR 1).
@@ -451,7 +452,9 @@ impl<'db> LoweringContext<'db> {
         pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
         pkg_name: &Name,
         class_fields: &mut IndexMap<TypeName, IndexMap<String, usize>>,
+        class_field_types: &mut IndexMap<TypeName, IndexMap<String, Ty>>,
         enum_variants: &mut IndexMap<Name, IndexMap<String, usize>>,
+        resolved_aliases: &ResolvedAliases,
     ) {
         for (ns_names, ns) in &pkg_items.namespaces {
             // Build module_path: [pkg_name] ++ ns_names
@@ -472,10 +475,34 @@ impl<'db> LoweringContext<'db> {
                         };
 
                         let mut fields = IndexMap::new();
+                        let mut field_types = IndexMap::new();
+                        let pkg_ns = baml_compiler2_hir::file_package::file_package(db, cfile)
+                            .namespace_path;
+                        let mut diags = Vec::new();
                         for (idx, field) in class_data.fields.iter().enumerate() {
                             fields.insert(field.name.to_string(), idx);
+                            let field_ty = field
+                                .type_expr
+                                .as_ref()
+                                .map(|te| {
+                                    let tir_ty =
+                                        baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                                            db,
+                                            &te.expr,
+                                            pkg_items,
+                                            &pkg_ns,
+                                            &class_data.generic_params,
+                                            &mut diags,
+                                        );
+                                    resolved_aliases.convert(&tir_ty)
+                                })
+                                .unwrap_or(Ty::Null {
+                                    attr: TyAttr::default(),
+                                });
+                            field_types.insert(field.name.to_string(), field_ty);
                         }
-                        class_fields.insert(tn, fields);
+                        class_fields.insert(tn.clone(), fields);
+                        class_field_types.insert(tn, field_types);
                     }
                     Definition::Enum(enum_loc) => {
                         let efile = enum_loc.file(db);
@@ -647,8 +674,10 @@ impl<'db> LoweringContext<'db> {
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
         let mut class_fields: IndexMap<TypeName, IndexMap<String, usize>> = IndexMap::new();
+        let mut class_field_types: IndexMap<TypeName, IndexMap<String, Ty>> = IndexMap::new();
         let mut enum_variants: IndexMap<Name, IndexMap<String, usize>> = IndexMap::new();
 
         // Include classes from dependency packages first (e.g., "baml" builtins).
@@ -661,7 +690,9 @@ impl<'db> LoweringContext<'db> {
                 dep_items,
                 &dep_name,
                 &mut class_fields,
+                &mut class_field_types,
                 &mut enum_variants,
+                &resolved_aliases,
             );
         }
 
@@ -672,14 +703,14 @@ impl<'db> LoweringContext<'db> {
             pkg_items,
             &pkg_info.package,
             &mut class_fields,
+            &mut class_field_types,
             &mut enum_variants,
+            &resolved_aliases,
         );
 
         // Build class_type_tags using the same file-iteration order as the emitter,
         // so that switch arms get the same integer tags as runtime class.type_tag fields.
         let class_type_tags = Self::build_class_type_tags(db);
-
-        let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
         // --- Determine arity from function signature ---
         let sig = baml_compiler2_ppir::function_signature(db, func_loc);
@@ -728,6 +759,7 @@ impl<'db> LoweringContext<'db> {
             func_loc: Some(func_loc),
             scope_func_name: Some(func_data.name.clone()),
             class_fields,
+            class_field_types,
             enum_variants,
             class_type_tags,
             pending_lambdas: Vec::new(),
@@ -844,8 +876,10 @@ impl<'db> LoweringContext<'db> {
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
         let mut class_fields: IndexMap<TypeName, IndexMap<String, usize>> = IndexMap::new();
+        let mut class_field_types: IndexMap<TypeName, IndexMap<String, Ty>> = IndexMap::new();
         let mut enum_variants: IndexMap<Name, IndexMap<String, usize>> = IndexMap::new();
 
         // Include classes from dependency packages first.
@@ -857,7 +891,9 @@ impl<'db> LoweringContext<'db> {
                 dep_items,
                 &dep_name,
                 &mut class_fields,
+                &mut class_field_types,
                 &mut enum_variants,
+                &resolved_aliases,
             );
         }
 
@@ -868,14 +904,14 @@ impl<'db> LoweringContext<'db> {
             pkg_items,
             &pkg_info.package,
             &mut class_fields,
+            &mut class_field_types,
             &mut enum_variants,
+            &resolved_aliases,
         );
 
         // Build class_type_tags using the same file-iteration order as the emitter,
         // so that switch arms get the same integer tags as runtime class.type_tag fields.
         let class_type_tags = Self::build_class_type_tags(db);
-
-        let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
 
         LoweringContext {
             db,
@@ -898,6 +934,7 @@ impl<'db> LoweringContext<'db> {
             func_loc: None,
             scope_func_name: Some(let_name),
             class_fields,
+            class_field_types,
             enum_variants,
             class_type_tags,
             resolved_aliases,
@@ -1126,6 +1163,10 @@ impl<'db> LoweringContext<'db> {
             .unwrap_or(Ty::Void {
                 attr: TyAttr::default(),
             })
+    }
+
+    fn is_pattern_type_recovery(ty: &Ty) -> bool {
+        matches!(ty, Ty::Void { .. } | Ty::BuiltinUnknown { .. })
     }
 
     /// Get the TIR-inferred root segment type for a multi-segment Path expression.
@@ -3684,6 +3725,49 @@ impl LoweringContext<'_> {
                 initializer,
                 is_watched,
                 ..
+            } if self.pattern_contains_class(pattern) => {
+                let local_ty = self.pat_ty(pattern);
+                let scrutinee = self.builder.temp(local_ty);
+
+                if let Some(init) = initializer {
+                    self.lower_expr(init, Place::local(scrutinee));
+                } else {
+                    self.builder.assign(
+                        Place::local(scrutinee),
+                        Rvalue::Use(Operand::Constant(Constant::Null)),
+                    );
+                }
+
+                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false, is_watched);
+
+                let names: Vec<Name> = self.body.patterns[pattern]
+                    .bound_names(&self.body.patterns)
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                for name in names {
+                    if let Some(&local) = self.locals.get(&name)
+                        && let Some(binding_id) =
+                            self.binding_id_for_statement_name(stmt_id, pattern, &name)
+                    {
+                        self.binding_locals.insert(binding_id, local);
+                    }
+                }
+
+                if is_watched {
+                    for name in self.body.patterns[pattern].bound_names(&self.body.patterns) {
+                        if let Some(&local) = self.locals.get(name) {
+                            self.watched_locals_stack.push(local);
+                        }
+                    }
+                }
+            }
+
+            AstStmt::Let {
+                pattern,
+                initializer,
+                is_watched,
+                ..
             } => {
                 // Extract binding names from pattern. A simple `let x` has
                 // one name; a chain `let x: let y: let z` has three. The
@@ -3905,64 +3989,20 @@ impl LoweringContext<'_> {
                         kind: IndexKind::Array,
                     })),
                 );
-                // Bind the pattern to the element local, inserting FreshCell
-                // before the assignment so each iteration's closures capture a
-                // distinct cell.
-                {
-                    let pat = &self.body.patterns[binding];
-                    let names: Vec<Name> = pat
-                        .bound_names(&self.body.patterns)
-                        .into_iter()
-                        .cloned()
-                        .collect();
-                    if let Some(first_name) = names.first().cloned() {
-                        let narrow = self.pattern_narrow_type(binding);
-                        let ty = if let Some(narrow) = &narrow {
-                            self.resolve_type_annotation(narrow)
-                        } else {
-                            self.pat_types
-                                .get(&(self.current_scope, binding))
-                                .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
-                                .unwrap_or_else(|| self.builder.local_ty(elem_local))
-                        };
-                        let local = self.builder.declare_local(
-                            Some(first_name.clone()),
-                            ty.clone(),
-                            None,
-                            false,
-                        );
-                        self.builder.fresh_cell(local);
-                        self.builder.assign(
-                            Place::local(local),
-                            Rvalue::Use(Operand::Copy(Place::Local(elem_local))),
-                        );
-                        if let Some(binding_id) =
-                            self.binding_id_for_statement_name(stmt_id, binding, &first_name)
-                        {
-                            self.binding_locals.insert(binding_id, local);
-                        }
-                        self.locals.insert(first_name, local);
-                        // Additional chain-link bindings: each is an alias of
-                        // the first, like in let-stmt lowering.
-                        for extra in names.iter().skip(1) {
-                            let alias = self.builder.declare_local(
-                                Some(extra.clone()),
-                                ty.clone(),
-                                None,
-                                false,
-                            );
-                            self.builder.fresh_cell(alias);
-                            self.builder.assign(
-                                Place::local(alias),
-                                Rvalue::Use(Operand::Copy(Place::Local(local))),
-                            );
-                            if let Some(binding_id) =
-                                self.binding_id_for_statement_name(stmt_id, binding, extra)
-                            {
-                                self.binding_locals.insert(binding_id, alias);
-                            }
-                            self.locals.insert(extra.clone(), alias);
-                        }
+                // Bind the pattern to the element local. FreshCell before each
+                // assignment gives closures a distinct cell per iteration.
+                self.bind_pattern_with_fresh_cells(elem_local, binding);
+                let names: Vec<Name> = self.body.patterns[binding]
+                    .bound_names(&self.body.patterns)
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                for name in names {
+                    if let Some(&local) = self.locals.get(&name)
+                        && let Some(binding_id) =
+                            self.binding_id_for_statement_name(stmt_id, binding, &name)
+                    {
+                        self.binding_locals.insert(binding_id, local);
                     }
                 }
 
@@ -4898,8 +4938,14 @@ impl LoweringContext<'_> {
         let arm = &arms[0];
         let rest = &arms[1..];
 
-        // Exhaustive last arm: skip the pattern test — it must match.
-        if exhaustive && rest.is_empty() && arm.guard.is_none() {
+        // Exhaustive last arm: skip the pattern test — it must match. Do not
+        // take this shortcut for Or-patterns because bindings must come from
+        // the specific alternative that matched.
+        if exhaustive
+            && rest.is_empty()
+            && arm.guard.is_none()
+            && !matches!(self.body.patterns[arm.pattern], AstPattern::Or(_))
+        {
             let saved_locals = self.locals.clone();
             let watched_depth = self.watched_locals_stack.len();
             self.bind_pattern(scrutinee, arm.pattern);
@@ -4914,6 +4960,45 @@ impl LoweringContext<'_> {
             // Restore both the name→local map AND truncate the watched stack
             // back to the arm-entry depth (mirrors `lower_scoped_block`).
             self.restore_locals_after_scope(saved_locals, watched_depth);
+            return;
+        }
+
+        if let AstPattern::Or(parts) = self.body.patterns[arm.pattern].clone() {
+            let bb_next = self.builder.create_block();
+            for (idx, part) in parts.iter().copied().enumerate() {
+                let bb_body = self.builder.create_block();
+                let bb_alt_next = if idx + 1 == parts.len() {
+                    bb_next
+                } else {
+                    self.builder.create_block()
+                };
+
+                self.lower_pattern_test(scrutinee, part, bb_body, bb_alt_next);
+
+                self.builder.set_current_block(bb_body);
+                let saved_locals = self.locals.clone();
+                let watched_depth = self.watched_locals_stack.len();
+                self.bind_pattern(scrutinee, part);
+                if let Some(guard) = arm.guard {
+                    let guard_op = self.lower_to_operand(guard);
+                    let bb_guarded = self.builder.create_block();
+                    self.builder.branch(guard_op, bb_guarded, bb_next);
+                    self.builder.set_current_block(bb_guarded);
+                }
+                self.lower_expr(arm.body, dest.clone());
+                if !self.builder.is_current_terminated() {
+                    self.emit_unwatch_to_depth(watched_depth);
+                    self.builder.goto(join);
+                }
+                self.restore_locals_after_scope(saved_locals, watched_depth);
+
+                if idx + 1 < parts.len() {
+                    self.builder.set_current_block(bb_alt_next);
+                }
+            }
+
+            self.builder.set_current_block(bb_next);
+            self.lower_match_chain(scrutinee, rest, dest, join, exhaustive);
             return;
         }
 
@@ -4983,6 +5068,183 @@ impl LoweringContext<'_> {
         }
     }
 
+    fn emit_is_tir_type_branch(
+        &mut self,
+        scrutinee: Local,
+        ty: &Tir2Ty,
+        success: BlockId,
+        failure: BlockId,
+    ) {
+        let mut visited = HashSet::new();
+        self.emit_is_tir_type_branch_inner(scrutinee, ty, success, failure, &mut visited);
+    }
+
+    fn emit_is_tir_type_branch_inner(
+        &mut self,
+        scrutinee: Local,
+        ty: &Tir2Ty,
+        success: BlockId,
+        failure: BlockId,
+        visited: &mut HashSet<String>,
+    ) {
+        match ty {
+            Tir2Ty::Union(members, _) => {
+                let mut remaining = members.iter().peekable();
+                while let Some(member) = remaining.next() {
+                    if remaining.peek().is_none() {
+                        self.emit_is_tir_type_branch_inner(
+                            scrutinee, member, success, failure, visited,
+                        );
+                    } else {
+                        let next_check = self.builder.create_block();
+                        self.emit_is_tir_type_branch_inner(
+                            scrutinee, member, success, next_check, visited,
+                        );
+                        self.builder.set_current_block(next_check);
+                    }
+                }
+            }
+            Tir2Ty::Optional(inner, _) => {
+                let test = Rvalue::BinaryOp {
+                    op: BinOp::Eq,
+                    left: Operand::Copy(Place::Local(scrutinee)),
+                    right: Operand::Constant(Constant::Null),
+                };
+                let test_local = self.builder.temp(Ty::Bool {
+                    attr: TyAttr::default(),
+                });
+                self.builder.assign(Place::local(test_local), test);
+
+                let bb_inner = self.builder.create_block();
+                self.builder
+                    .branch(Operand::Copy(Place::Local(test_local)), success, bb_inner);
+                self.builder.set_current_block(bb_inner);
+                self.emit_is_tir_type_branch_inner(scrutinee, inner, success, failure, visited);
+            }
+            Tir2Ty::Class(qtn, type_args, _) if !type_args.is_empty() => {
+                let erased = self.resolved_aliases.convert(ty);
+                let class_fields = self.lookup_tir_class_fields(qtn, type_args);
+                if class_fields.is_empty() {
+                    self.emit_is_type_branch(scrutinee, erased, success, failure);
+                    return;
+                }
+
+                let class_success = self.builder.create_block();
+                self.emit_is_type_branch(scrutinee, erased, class_success, failure);
+                self.builder.set_current_block(class_success);
+
+                let key = format!("{qtn:?}<{type_args:?}>");
+                if !visited.insert(key.clone()) {
+                    self.builder.goto(success);
+                    return;
+                }
+
+                let class_tn = qtn_to_type_name(qtn);
+                let fields: Vec<_> = class_fields.into_iter().collect();
+                for (idx, (field_name, field_ty)) in fields.iter().enumerate() {
+                    let next = if idx + 1 == fields.len() {
+                        success
+                    } else {
+                        self.builder.create_block()
+                    };
+
+                    let Some(field_idx) = self
+                        .class_fields
+                        .get(&class_tn)
+                        .and_then(|fields| fields.get(field_name.as_str()))
+                        .copied()
+                    else {
+                        self.builder.goto(failure);
+                        visited.remove(&key);
+                        return;
+                    };
+
+                    let field_local = self.builder.temp(self.resolved_aliases.convert(field_ty));
+                    self.builder.assign(
+                        Place::local(field_local),
+                        Rvalue::Use(Operand::Copy(Place::Field {
+                            base: Box::new(Place::Local(scrutinee)),
+                            field: field_idx,
+                        })),
+                    );
+                    self.emit_is_tir_type_branch_inner(
+                        field_local,
+                        field_ty,
+                        next,
+                        failure,
+                        visited,
+                    );
+                    if idx + 1 < fields.len() {
+                        self.builder.set_current_block(next);
+                    }
+                }
+
+                visited.remove(&key);
+            }
+            _ => {
+                let resolved = self.resolved_aliases.convert(ty);
+                self.emit_is_type_branch(scrutinee, resolved, success, failure);
+            }
+        }
+    }
+
+    fn lookup_tir_class_fields(
+        &self,
+        class_name: &QualifiedTypeName,
+        class_type_args: &[Tir2Ty],
+    ) -> IndexMap<Name, Tir2Ty> {
+        let pkg_id = PackageId::new(self.db, class_name.package().clone());
+        let pkg_items_for_class = package_items(self.db, pkg_id);
+        let Some(Definition::Class(class_loc)) =
+            pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())
+        else {
+            return IndexMap::new();
+        };
+
+        let file = class_loc.file(self.db);
+        let ns_context = file_package(self.db, file).namespace_path;
+        let item_tree = file_item_tree(self.db, file);
+        let class_data = &item_tree[class_loc.id(self.db)];
+        let bindings = baml_compiler2_tir::generics::bind_type_vars(
+            &class_data.generic_params,
+            class_type_args,
+        );
+
+        let mut result = IndexMap::new();
+        for field in &class_data.fields {
+            let mut diags = Vec::new();
+            let field_ty = field
+                .type_expr
+                .as_ref()
+                .map(|te| {
+                    if bindings.is_empty() {
+                        baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                            self.db,
+                            &te.expr,
+                            pkg_items_for_class,
+                            &ns_context,
+                            &class_data.generic_params,
+                            &mut diags,
+                        )
+                    } else {
+                        baml_compiler2_tir::generics::lower_type_expr_with_generics(
+                            self.db,
+                            &te.expr,
+                            pkg_items_for_class,
+                            &ns_context,
+                            &bindings,
+                            &mut diags,
+                        )
+                    }
+                })
+                .unwrap_or(Tir2Ty::Unknown {
+                    attr: baml_compiler2_tir::ty::TyAttr::default(),
+                });
+            result.insert(field.name.clone(), field_ty);
+        }
+        result
+    }
+
     /// Look up the integer type tag for a type. Returns `Some(tag)` for
     /// primitives (INT=0, STRING=1, etc.) and classes (`CLASS_BASE` + index),
     /// or `None` for types that don't have a tag (unions, generics, etc.).
@@ -4996,6 +5258,76 @@ impl LoweringContext<'_> {
             Ty::Class(tn, _) => self.class_type_tags.get(tn).copied(),
             _ => None,
         }
+    }
+
+    fn pattern_contains_class(&self, pat_id: AstPatId) -> bool {
+        match &self.body.patterns[pat_id] {
+            AstPattern::Class { .. } => true,
+            AstPattern::Chain(parts) | AstPattern::Or(parts) => {
+                parts.iter().any(|p| self.pattern_contains_class(*p))
+            }
+            AstPattern::Wildcard | AstPattern::Bind { .. } | AstPattern::Type(_) => false,
+        }
+    }
+
+    fn class_pattern_fields(&self, pat_id: AstPatId) -> Vec<baml_compiler2_ast::FieldPat> {
+        match &self.body.patterns[pat_id] {
+            AstPattern::Class { fields, .. } => fields.clone(),
+            _ => Vec::new(),
+        }
+    }
+
+    fn class_pattern_type_name(&self, pat_id: AstPatId) -> Option<TypeName> {
+        let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
+        match convert_tir2_ty(tir_ty, &self.resolved_aliases) {
+            Ty::Class(tn, _) => Some(tn),
+            _ => None,
+        }
+    }
+
+    fn class_pattern_field_ty(&self, pat_id: AstPatId, field: &Name) -> Option<Ty> {
+        let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
+        let Tir2Ty::Class(qtn, type_args, _) = tir_ty else {
+            return None;
+        };
+        let fields = self.lookup_tir_class_fields(qtn, type_args);
+        fields
+            .get(field)
+            .map(|field_ty| self.resolved_aliases.convert(field_ty))
+    }
+
+    fn project_class_pattern_field(
+        &mut self,
+        scrutinee: Local,
+        class_pat_id: AstPatId,
+        field_pat_id: AstPatId,
+        field: &Name,
+    ) -> Option<Local> {
+        let class_tn = self.class_pattern_type_name(class_pat_id)?;
+        let field_idx = self
+            .class_fields
+            .get(&class_tn)?
+            .get(field.as_str())
+            .copied()?;
+        let inferred_pat_ty = self.pat_ty(field_pat_id);
+        let source_field_ty = self.class_pattern_field_ty(class_pat_id, field);
+        let cached_field_ty = self
+            .class_field_types
+            .get(&class_tn)
+            .and_then(|fields| fields.get(field.as_str()))
+            .cloned();
+        let field_ty = source_field_ty
+            .or_else(|| cached_field_ty.filter(|ty| !Self::is_pattern_type_recovery(ty)))
+            .unwrap_or(inferred_pat_ty);
+        let field_local = self.builder.temp(field_ty);
+        self.builder.assign(
+            Place::local(field_local),
+            Rvalue::Use(Operand::Copy(Place::Field {
+                base: Box::new(Place::Local(scrutinee)),
+                field: field_idx,
+            })),
+        );
+        Some(field_local)
     }
 
     fn lower_pattern_test(
@@ -5037,12 +5369,14 @@ impl LoweringContext<'_> {
                 };
                 if let AstPattern::Type(ty) = &self.body.patterns[sub_pat] {
                     let ty = ty.clone();
-                    let annotation_ty = self
-                        .pat_types
-                        .get(&(self.current_scope, sub_pat))
-                        .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
-                        .unwrap_or_else(|| self.resolve_type_annotation(&ty));
-                    self.emit_is_type_branch(scrutinee, annotation_ty, next, failure);
+                    if let Some(tir_ty) =
+                        self.pat_types.get(&(self.current_scope, sub_pat)).cloned()
+                    {
+                        self.emit_is_tir_type_branch(scrutinee, &tir_ty, next, failure);
+                    } else {
+                        let annotation_ty = self.resolve_type_annotation(&ty);
+                        self.emit_is_type_branch(scrutinee, annotation_ty, next, failure);
+                    }
                 } else {
                     self.lower_pattern_test(scrutinee, sub_pat, next, failure);
                 }
@@ -5059,8 +5393,7 @@ impl LoweringContext<'_> {
             }
             AstPattern::Bind { .. } => {
                 if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned() {
-                    let resolved = self.resolved_aliases.convert(&tir_ty);
-                    self.emit_is_type_branch(scrutinee, resolved, success, failure);
+                    self.emit_is_tir_type_branch(scrutinee, &tir_ty, success, failure);
                 } else {
                     self.builder.goto(success);
                 }
@@ -5128,12 +5461,13 @@ impl LoweringContext<'_> {
                         .branch(Operand::Copy(Place::Local(test_local)), success, failure);
                 }
                 _ => {
-                    let annotation_ty = self
-                        .pat_types
-                        .get(&(self.current_scope, pat_id))
-                        .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
-                        .unwrap_or_else(|| self.resolve_type_annotation(ty_expr));
-                    self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
+                    if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned()
+                    {
+                        self.emit_is_tir_type_branch(scrutinee, &tir_ty, success, failure);
+                    } else {
+                        let annotation_ty = self.resolve_type_annotation(ty_expr);
+                        self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
+                    }
                 }
             },
             AstPattern::Or(sub_pats) => {
@@ -5155,14 +5489,43 @@ impl LoweringContext<'_> {
                 }
             }
             AstPattern::Class { .. } => {
-                // Class destructure is gated parser-side; this branch is
-                // unreachable for user code. Keep the OLD behavior for
-                // completeness in case a synthesized class pattern appears.
-                if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned() {
-                    let resolved = self.resolved_aliases.convert(&tir_ty);
-                    self.emit_is_type_branch(scrutinee, resolved, success, failure);
+                let class_success = if self.class_pattern_fields(pat_id).is_empty() {
+                    success
                 } else {
+                    self.builder.create_block()
+                };
+
+                if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned() {
+                    self.emit_is_tir_type_branch(scrutinee, &tir_ty, class_success, failure);
+                } else if class_success == success {
                     self.builder.goto(success);
+                } else {
+                    self.builder.goto(class_success);
+                }
+
+                if class_success != success {
+                    self.builder.set_current_block(class_success);
+                    let fields = self.class_pattern_fields(pat_id);
+                    for (idx, field) in fields.iter().enumerate() {
+                        let next = if idx + 1 == fields.len() {
+                            success
+                        } else {
+                            self.builder.create_block()
+                        };
+                        if let Some(field_local) = self.project_class_pattern_field(
+                            scrutinee,
+                            pat_id,
+                            field.pat,
+                            &field.field,
+                        ) {
+                            self.lower_pattern_test(field_local, field.pat, next, failure);
+                        } else {
+                            self.builder.goto(failure);
+                        }
+                        if idx + 1 < fields.len() {
+                            self.builder.set_current_block(next);
+                        }
+                    }
                 }
             }
             AstPattern::Chain(_) => unreachable!("handled above"),
@@ -5207,10 +5570,22 @@ impl LoweringContext<'_> {
         // match-arm's pattern, etc.), never by the inner Bind. To wire up
         // closure capture lookups correctly, we register the local against
         // that root.
-        self.bind_pattern_inner(scrutinee, pat_id, pat_id);
+        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, false, false);
     }
 
-    fn bind_pattern_inner(&mut self, scrutinee: Local, pat_id: AstPatId, root: AstPatId) {
+    fn bind_pattern_with_fresh_cells(&mut self, scrutinee: Local, pat_id: AstPatId) {
+        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, true, false);
+    }
+
+    fn bind_pattern_inner(
+        &mut self,
+        scrutinee: Local,
+        pat_id: AstPatId,
+        root: AstPatId,
+        narrow_root: AstPatId,
+        fresh_cell: bool,
+        is_watched: bool,
+    ) {
         match self.body.patterns[pat_id].clone() {
             AstPattern::Bind { name } => {
                 // For Or-patterns we look up `pat_types` against the inner
@@ -5220,7 +5595,7 @@ impl LoweringContext<'_> {
                 // reach MIR every alternative's bind for `name` carries the
                 // same type. If you ever loosen that TIR invariant, switch
                 // this lookup to `root` so we don't over-narrow.
-                let narrow = self.pattern_narrow_type(root);
+                let narrow = self.pattern_narrow_type(narrow_root);
                 let ty = if let Some(narrow) = &narrow {
                     self.resolve_type_annotation(narrow)
                 } else {
@@ -5231,7 +5606,10 @@ impl LoweringContext<'_> {
                 };
                 let local = self
                     .builder
-                    .declare_local(Some(name.clone()), ty, None, false);
+                    .declare_local(Some(name.clone()), ty, None, is_watched);
+                if fresh_cell {
+                    self.builder.fresh_cell(local);
+                }
                 self.builder.assign(
                     Place::local(local),
                     Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
@@ -5244,22 +5622,37 @@ impl LoweringContext<'_> {
                 // (each link is a refinement, not a sub-projection). Bind
                 // them all in order, keeping the root pat_id.
                 for p in parts {
-                    self.bind_pattern_inner(scrutinee, p, root);
+                    self.bind_pattern_inner(scrutinee, p, root, pat_id, fresh_cell, is_watched);
                 }
             }
             AstPattern::Or(parts) => {
                 // HIR ensures each Or branch binds the same name set; pick
                 // the first branch's bindings (every branch agrees).
                 if let Some(first) = parts.first() {
-                    self.bind_pattern_inner(scrutinee, *first, root);
+                    self.bind_pattern_inner(
+                        scrutinee,
+                        *first,
+                        root,
+                        narrow_root,
+                        fresh_cell,
+                        is_watched,
+                    );
                 }
             }
             AstPattern::Class { fields, .. } => {
-                // Class destructure is parser-gated. Recurse into field
-                // patterns for completeness — field projection lookup is
-                // phase-2 work, so the scrutinee is shared for now.
                 for f in fields {
-                    self.bind_pattern_inner(scrutinee, f.pat, root);
+                    if let Some(field_local) =
+                        self.project_class_pattern_field(scrutinee, pat_id, f.pat, &f.field)
+                    {
+                        self.bind_pattern_inner(
+                            field_local,
+                            f.pat,
+                            root,
+                            f.pat,
+                            fresh_cell,
+                            is_watched,
+                        );
+                    }
                 }
             }
             AstPattern::Wildcard | AstPattern::Type(_) => {}
@@ -5280,6 +5673,9 @@ impl LoweringContext<'_> {
     /// wildcards, enum variants, and types without tag mappings.
     fn classify_pattern_type_tag(&self, pat_id: AstPatId) -> Option<Vec<i64>> {
         let pat = &self.body.patterns[pat_id];
+        if self.pattern_contains_class(pat_id) {
+            return None;
+        }
         // For Chain patterns the narrow's resolved TIR type lives at the
         // *inner* `Type` link's PatId, not at the outer Chain PatId
         // (register_pattern_types stores `flow_ty` at the outer one).

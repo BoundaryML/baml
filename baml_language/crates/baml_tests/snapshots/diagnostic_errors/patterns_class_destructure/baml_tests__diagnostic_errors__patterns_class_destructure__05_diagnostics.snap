@@ -1,0 +1,363 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: type `user.Person` has no member `missing`
+    ╭─[ patterns_class_destructure.baml:31:18 ]
+    │
+ 31 │     let Person { missing } = Person {
+    │                  ───┬───  
+    │                     ╰───── type `user.Person` has no member `missing`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [hir] Error: Duplicate field `age` in class destructure pattern
+    ╭─[ patterns_class_destructure.baml:42:9 ]
+    │
+ 41 │         age: let first,
+    │         ─┬─  
+    │          ╰─── field `age` first destructured here
+ 42 │         age: let second
+    │         ─┬─  
+    │          ╰─── field `age` destructured again here
+    │ 
+    │ Note: Error code: E0012
+────╯
+
+  [hir] Error: Duplicate field `age` in class destructure pattern
+    ╭─[ patterns_class_destructure.baml:53:26 ]
+    │
+ 53 │         Person { age: _, age: _ } => 1
+    │                  ─┬─     ─┬─  
+    │                   ╰─────────── field `age` first destructured here
+    │                           │   
+    │                           ╰─── field `age` destructured again here
+    │ 
+    │ Note: Error code: E0012
+────╯
+
+  [hir] Error: Duplicate binding `age` in pattern
+    ╭─[ patterns_class_destructure.baml:60:22 ]
+    │
+ 58 │ ╭─▶     let Person {
+ 59 │ ├─▶         age,
+    │ │                  
+    │ ╰────────────────── `age` first bound here
+ 60 │             flexible_age: let age
+    │                          ────┬───  
+    │                              ╰───── `age` bound again here
+    │     
+    │     Note: Error code: E0094
+────╯
+
+  [hir] Error: Duplicate binding `field` in pattern
+    ╭─[ patterns_class_destructure.baml:71:42 ]
+    │
+ 71 │         field: let field: SameNameInner { field }
+    │               ─────┬────                 ───┬──  
+    │                    ╰───────────────────────────── `field` first bound here
+    │                                             │    
+    │                                             ╰──── `field` bound again here
+    │ 
+    │ Note: Error code: E0094
+────╯
+
+  [hir] Error: Duplicate binding `field` in pattern
+    ╭─[ patterns_class_destructure.baml:82:31 ]
+    │
+ 81 │         field: SameNameInner { field },
+    │                               ───┬──  
+    │                                  ╰──── `field` first bound here
+ 82 │         other: SameNameInner { field }
+    │                               ───┬──  
+    │                                  ╰──── `field` bound again here
+    │ 
+    │ Note: Error code: E0094
+────╯
+
+  [type] Error: type `user.Address` has no member `missing`
+    ╭─[ patterns_class_destructure.baml:92:28 ]
+    │
+ 92 │         address: Address { missing }
+    │                            ───┬───  
+    │                               ╰───── type `user.Address` has no member `missing`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [type] Error: type `user.Person` has no member `missing`
+     ╭─[ patterns_class_destructure.baml:103:18 ]
+     │
+ 103 │         Person { missing } => 1,
+     │                  ───┬───  
+     │                     ╰───── type `user.Person` has no member `missing`
+     │ 
+     │ Note: Error code: E0007
+─────╯
+
+  [type] Error: unresolved name: MissingClass
+     ╭─[ patterns_class_destructure.baml:109:32 ]
+     │
+ 109 │ ╭─▶     let MissingClass { age } = Person {
+     ┆ ┆   
+ 113 │ ├─▶     };
+     │ │            
+     │ ╰──────────── unresolved name: MissingClass
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] Error: type mismatch: expected int, got string
+     ╭─[ patterns_class_destructure.baml:119:22 ]
+     │
+ 119 │         Person { age: string } => 1,
+     │                      ───┬───  
+     │                         ╰───── type mismatch: expected int, got string
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:124:57 ]
+     │
+ 124 │ ╭─▶ function class_destructure_invalid_chain_type() -> int {
+ 125 │ ├─▶     let Person { age }: Address = Person {
+     │ │                                                
+     │ ╰──────────────────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [type] Error: type mismatch: expected user.Address, got user.Person
+     ╭─[ patterns_class_destructure.baml:124:57 ]
+     │
+ 124 │ ╭─▶ function class_destructure_invalid_chain_type() -> int {
+ 125 │ ├─▶     let Person { age }: Address = Person {
+     │ │                                                
+     │ ╰──────────────────────────────────────────────── type mismatch: expected user.Address, got user.Person
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: class `Box` expects 1 type argument(s), got 0
+     ╭─[ patterns_class_destructure.baml:135:16 ]
+     │
+ 135 │         Box => 1
+     │                ┬  
+     │                ╰── class `Box` expects 1 type argument(s), got 0
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: class `Box` expects 1 type argument(s), got 0
+     ╭─[ patterns_class_destructure.baml:141:27 ]
+     │
+ 141 │         let value: Box => 1
+     │                           ┬  
+     │                           ╰── class `Box` expects 1 type argument(s), got 0
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: type mismatch: expected never, got user.Box
+     ╭─[ patterns_class_destructure.baml:145:90 ]
+     │
+ 145 │ ╭─▶ function class_destructure_chain_binding_middle_link_is_invalid(boxed: Box<int>) -> int {
+ 146 │ ├─▶     let Box { value }: let alias: Box<int> = boxed;
+     │ │                                                         
+     │ ╰───────────────────────────────────────────────────────── type mismatch: expected never, got user.Box
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:158:92 ]
+     │
+ 158 │ ╭─▶ function let_top_level_class_narrows_union_scrutinee_is_refutable(v: Person | int) -> int {
+ 159 │ ├─▶     let Person { age } = v;
+     │ │                                 
+     │ ╰───────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in for-let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:164:10 ]
+     │
+ 164 │     for (let Person { age } in [
+     │          ─────────┬────────  
+     │                   ╰────────── refutable pattern in for-let binding; refutable patterns belong in `match`
+     │ 
+     │ Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:173:74 ]
+     │
+ 173 │ ╭─▶ function let_class_field_type_narrower_than_field_is_refutable() -> int {
+ 174 │ ├─▶     let Person { flexible_age: int } = Person {
+     │ │                                                     
+     │ ╰───────────────────────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:182:77 ]
+     │
+ 182 │ ╭─▶ function let_class_field_literal_narrower_than_field_is_refutable() -> int {
+ 183 │ ├─▶     let Person { age: 1 } = Person {
+     │ │                                          
+     │ ╰────────────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:191:77 ]
+     │
+ 191 │ ╭─▶ function nested_class_field_type_narrower_than_field_is_refutable() -> int {
+     ┆ ┆   
+ 194 │ ├─▶     } = Person {
+     │ │                      
+     │ ╰────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in for-let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:203:10 ]
+     │
+ 203 │     for (let Person { flexible_age: int } in [
+     │          ────────────────┬───────────────  
+     │                          ╰───────────────── refutable pattern in for-let binding; refutable patterns belong in `match`
+     │ 
+     │ Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:211:78 ]
+     │
+ 211 │ ╭─▶ function let_optional_class_field_narrower_than_field_is_refutable() -> int {
+ 212 │ ├─▶     let OptionalPerson { age: int } = OptionalPerson { age: 1 };
+     │ │                                                                      
+     │ ╰────────────────────────────────────────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:217:53 ]
+     │
+ 217 │ ╭─▶     let boxed: Box<string> = Box { value: "ready" };
+ 218 │ ├─▶     let Box { value: int } = boxed;
+     │ │                                         
+     │ ╰───────────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [hir] Error: Or-pattern alternatives must bind the same names. Inconsistent across branches: age
+     ╭─[ patterns_class_destructure.baml:231:16 ]
+     │
+ 231 │ ╭─▶     match (v) {
+ 232 │ ├─▶         Person { age } | int => age
+     │ │                                         
+     │ ╰───────────────────────────────────────── alternatives bind different names
+     │     
+     │     Note: Error code: E0094
+─────╯
+
+  [type] Error: Or-pattern alternatives bind `age` with conflicting types: `int` vs `string`
+     ╭─[ patterns_class_destructure.baml:238:25 ]
+     │
+ 238 │         Person { age } | Admin { age } => 1
+     │                         ───────┬──────  
+     │                                ╰──────── Or-pattern alternatives bind `age` with conflicting types: `int` vs `string`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
+     ╭─[ patterns_class_destructure.baml:244:49 ]
+     │
+ 244 │         (Box { value: let value }: Box<int>) | (Box { value: let value }: Box<string>) => 1
+     │                                                 ──────────────────┬──────────────────  
+     │                                                                   ╰──────────────────── Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [hir] Error: Duplicate binding `value` in pattern
+     ╭─[ patterns_class_destructure.baml:253:49 ]
+     │
+ 253 │         value: let value: SameNameInner { field: let value }
+     │               ─────┬────                        ─────┬────  
+     │                    ╰──────────────────────────────────────── `value` first bound here
+     │                                                      │      
+     │                                                      ╰────── `value` bound again here
+     │ 
+     │ Note: Error code: E0094
+─────╯
+
+  [type] Error: type mismatch: expected int, got string
+     ╭─[ patterns_class_destructure.baml:260:41 ]
+     │
+ 260 │         Person { address: Address { zip: string } } => 1,
+     │                                         ───┬───  
+     │                                            ╰───── type mismatch: expected int, got string
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: type `user.Person` has no member `missing`
+     ╭─[ patterns_class_destructure.baml:267:9 ]
+     │
+ 267 │         missing: let renamed
+     │         ───┬───  
+     │            ╰───── type `user.Person` has no member `missing`
+     │ 
+     │ Note: Error code: E0007
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:277:50 ]
+     │
+ 277 │ ╭─▶     let f: (Person) -> int = (p: Person) -> int {
+ 278 │ ├─▶         let Person { age: string } = p;
+     │ │                                             
+     │ ╰───────────────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [type] Error: type mismatch: expected int, got string
+     ╭─[ patterns_class_destructure.baml:278:26 ]
+     │
+ 278 │         let Person { age: string } = p;
+     │                          ───┬───  
+     │                             ╰───── type mismatch: expected int, got string
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:278:38 ]
+     │
+ 278 │         let Person { age: string } = p;
+     │                                      ┬  
+     │                                      ╰── refutable pattern in let binding; refutable patterns belong in `match`
+     │ 
+     │ Note: Error code: E0111
+─────╯
+
+  [type] Error: type mismatch: expected int, got string
+     ╭─[ patterns_class_destructure.baml:278:38 ]
+     │
+ 278 │         let Person { age: string } = p;
+     │                                      ┬  
+     │                                      ╰── type mismatch: expected int, got string
+     │ 
+     │ Note: Error code: E0001
+─────╯

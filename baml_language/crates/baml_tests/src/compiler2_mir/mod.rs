@@ -142,3 +142,28 @@ fn object_construction() {
     );
     mir_snapshot!("object_construction", render_mir(&db, file));
 }
+
+#[test]
+fn generic_class_destructure_field_projection_uses_instantiated_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        class Box<T> {
+            value T
+        }
+
+        function f(boxed: Box<int>) -> int {
+            let Box { value } = boxed;
+            return value;
+        }
+        "#,
+    );
+    let output = render_mir(&db, file);
+    assert!(
+        !output
+            .lines()
+            .any(|line| line.trim_start().starts_with("let _") && line.contains(": void")),
+        "generic class destructure lowered a projected field through a void local:\n{output}"
+    );
+}

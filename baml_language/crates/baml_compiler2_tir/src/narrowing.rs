@@ -28,7 +28,10 @@ use baml_base::Name;
 use baml_compiler2_ast::{BinaryOp, Expr, ExprBody, ExprId, UnaryOp};
 use rustc_hash::FxHashMap;
 
-use crate::ty::{PrimitiveType, Ty, TyAttr};
+use crate::{
+    builder::LocalBinding,
+    ty::{PrimitiveType, Ty, TyAttr},
+};
 
 // ── Narrowing descriptor ──────────────────────────────────────────────────────
 
@@ -254,31 +257,38 @@ pub fn remove_null(ty: &Ty) -> Ty {
 /// Returns `Vec<(Name, Option<Ty>)>` — the saved originals for later restoration.
 /// `None` means the name was not in `locals` before (e.g. a parameter that
 /// wasn't shadowed as a local yet).
-pub fn apply_then_narrowings(
+pub(crate) fn apply_then_narrowings(
     narrowings: &[Narrowing],
-    locals: &mut FxHashMap<Name, Ty>,
+    locals: &mut FxHashMap<Name, LocalBinding>,
 ) -> Vec<(Name, Option<Ty>)> {
     let saved = narrowings
         .iter()
-        .map(|n| (n.name.clone(), locals.get(&n.name).cloned()))
+        .map(|n| {
+            (
+                n.name.clone(),
+                locals
+                    .get(&n.name)
+                    .map(|binding| binding.current_ty.clone()),
+            )
+        })
         .collect();
     for n in narrowings {
-        locals.insert(n.name.clone(), n.then_type.clone());
+        set_current_type(locals, n.name.clone(), n.then_type.clone());
     }
     saved
 }
 
 /// Restore original types and then apply else-branch narrowings.
-pub fn restore_and_apply_else(
+pub(crate) fn restore_and_apply_else(
     narrowings: &[Narrowing],
     saved: &[(Name, Option<Ty>)],
-    locals: &mut FxHashMap<Name, Ty>,
+    locals: &mut FxHashMap<Name, LocalBinding>,
 ) {
     // Restore originals
     for (name, original) in saved {
         match original {
             Some(ty) => {
-                locals.insert(name.clone(), ty.clone());
+                set_current_type(locals, name.clone(), ty.clone());
             }
             None => {
                 locals.remove(name);
@@ -287,16 +297,19 @@ pub fn restore_and_apply_else(
     }
     // Apply else narrowings
     for n in narrowings {
-        locals.insert(n.name.clone(), n.else_type.clone());
+        set_current_type(locals, n.name.clone(), n.else_type.clone());
     }
 }
 
 /// Restore types to their state before narrowing was applied.
-pub fn restore_narrowings(saved: Vec<(Name, Option<Ty>)>, locals: &mut FxHashMap<Name, Ty>) {
+pub(crate) fn restore_narrowings(
+    saved: Vec<(Name, Option<Ty>)>,
+    locals: &mut FxHashMap<Name, LocalBinding>,
+) {
     for (name, original) in saved {
         match original {
             Some(ty) => {
-                locals.insert(name, ty);
+                set_current_type(locals, name, ty);
             }
             None => {
                 locals.remove(&name);
@@ -311,11 +324,29 @@ pub fn restore_narrowings(saved: Vec<(Name, Option<Ty>)>, locals: &mut FxHashMap
 /// (returns, breaks, etc.), the else-type is what holds for the remainder
 /// of the enclosing block. This is called in `check_stmt` after detecting
 /// that a `Stmt::Expr(Expr::If)` with a diverging then-branch was processed.
-pub fn apply_post_diverge_narrowings(narrowings: &[Narrowing], locals: &mut FxHashMap<Name, Ty>) {
+pub(crate) fn apply_post_diverge_narrowings(
+    narrowings: &[Narrowing],
+    locals: &mut FxHashMap<Name, LocalBinding>,
+) {
     for n in narrowings {
         // Only narrow variables that are already in scope
-        if locals.contains_key(&n.name) {
-            locals.insert(n.name.clone(), n.else_type.clone());
+        if let Some(binding) = locals.get_mut(&n.name) {
+            binding.current_ty = n.else_type.clone();
         }
+    }
+}
+
+fn set_current_type(locals: &mut FxHashMap<Name, LocalBinding>, name: Name, ty: Ty) {
+    if let Some(binding) = locals.get_mut(&name) {
+        binding.current_ty = ty;
+    } else {
+        locals.insert(
+            name,
+            LocalBinding {
+                current_ty: ty,
+                declared_ty: None,
+                pattern: None,
+            },
+        );
     }
 }

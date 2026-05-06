@@ -93,10 +93,30 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected never, got int
-    ╭─[ patterns_new.baml:79:14 ]
+  [type] Error: type mismatch: expected 1 | 2, got int
+    ╭─[ patterns_new.baml:80:13 ]
     │
- 79 │     let x: 1: int: let y = 1;
+ 80 │     let bad: int: 1 | 2: 1 = 1;
+    │             ──┬─  
+    │               ╰─── type mismatch: expected 1 | 2, got int
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected 1, got 1 | 2
+    ╭─[ patterns_new.baml:80:18 ]
+    │
+ 80 │     let bad: int: 1 | 2: 1 = 1;
+    │                  ───┬──  
+    │                     ╰──── type mismatch: expected 1, got 1 | 2
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected never, got int
+    ╭─[ patterns_new.baml:88:14 ]
+    │
+ 88 │     let x: 1: int: let y = 1;
     │              ──┬─  
     │                ╰─── type mismatch: expected never, got int
     │ 
