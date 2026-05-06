@@ -3,11 +3,11 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
-  class Array<T> { methods: [length, at, push, pop, concat, reverse, slice, join, map, to_json, from_json] }
+  class Array<T> { methods: [length, at, push, pop, concat, reverse, slice, join, map, to_json] }
   class Bool { methods: [to_json] }
   class Float { methods: [to_json] }
   class Int { methods: [to_json] }
-  class Map<K, V> { methods: [length, has, keys, values, set, get, to_json, from_json] }
+  class Map<K, V> { methods: [length, has, keys, values, set, get, to_json] }
   class Null { methods: [to_json] }
   class String { methods: [to_json, length, toLowerCase, toUpperCase, trim, includes, startsWith, endsWith, split, substring, replace, indexOf, charAt, matches, replaceAll, to_bytes] }
   class TypeValue { methods: [to_string, to_json, from_json] }

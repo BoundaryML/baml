@@ -1160,6 +1160,40 @@ impl BexVm {
             .unwrap_or_else(|| panic!("resolve_class: class {name:?} not found"))
     }
 
+    /// Look up a function by its fully-qualified name by scanning `vm.globals`.
+    ///
+    /// Returns `Some(ptr)` for the first `Object::Function` whose `name` matches,
+    /// or `None` if no such function exists in the global pool.
+    ///
+    /// This is O(globals) and intended for use in native methods that need to
+    /// dispatch to a dynamically resolved method (e.g. `Map.to_json`). Not
+    /// suitable for hot paths; callers that need repeated lookups should cache
+    /// the result.
+    pub fn find_function_by_name(&self, name: &str) -> Option<HeapPtr> {
+        for v in &self.globals {
+            if let Value::Object(ptr) = v {
+                if let Object::Function(f) = self.get_object(*ptr) {
+                    if f.name == name {
+                        return Some(*ptr);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Allocate a `BoundMethod` on the heap, binding `function` (a `HeapPtr`
+    /// pointing to an `Object::Function`) to `receiver`.
+    ///
+    /// When the bound method is called via `YieldToCall`, the VM automatically
+    /// inserts `receiver` as the first argument (`self`).
+    pub fn alloc_bound_method(&mut self, function: HeapPtr, receiver: Value) -> Value {
+        Value::Object(
+            self.tlab
+                .alloc(Object::BoundMethod(BoundMethod { function, receiver })),
+        )
+    }
+
     /// Allocate a type descriptor object on the heap.
     pub fn alloc_type(&mut self, ty: baml_type::Ty) -> Value {
         Value::Object(self.tlab.alloc(Object::Type(Box::new(ty))))

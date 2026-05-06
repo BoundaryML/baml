@@ -39,6 +39,12 @@ class Array<T> {
   function map<U, E>(self, f: (T) -> U throws E) -> U[] throws E {
     $rust_function
   }
+
+  //baml:mut_vm
+  //baml:may_yield
+  function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+    $rust_function
+  }
 }
 
 class Map<K, V> {
@@ -67,6 +73,12 @@ class Map<K, V> {
 
   //baml:vm
   function get(self, key: K) -> V? {
+    $rust_function
+  }
+
+  //baml:mut_vm
+  //baml:may_yield
+  function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
     $rust_function
   }
 }

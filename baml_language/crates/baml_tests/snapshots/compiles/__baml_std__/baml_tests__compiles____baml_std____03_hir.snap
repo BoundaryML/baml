@@ -17,12 +17,6 @@ class baml.Map {
 }
 function baml.at(self: ?, index: int) -> baml.T?  [builtin]
 function baml.concat(self: ?, other: baml.T[]) -> baml.T[]  [builtin]
-function baml.from_json(j: baml.json.json) -> baml.Array  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
-function baml.from_json(j: baml.json.json) -> baml.Map  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
 function baml.get(self: ?, key: baml.K) -> baml.V?  [builtin]
 function baml.has(self: ?, key: baml.K) -> bool  [builtin]
 function baml.join(self: ?, separator: string) -> string  [builtin]
@@ -35,12 +29,8 @@ function baml.push(self: ?, item: baml.T) -> int  [builtin]
 function baml.reverse(self: ?) -> baml.T[]  [builtin]
 function baml.set(self: ?, key: baml.K, value: baml.V) -> null  [builtin]
 function baml.slice(self: ?, start: int, end: int) -> baml.T[]  [builtin]
-function baml.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function baml.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
+function baml.to_json(self: ?) -> baml.json.json  [builtin]
+function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.values(self: ?) -> baml.V[]  [builtin]
 
 --- <builtin>/baml/core.baml ---

@@ -172,6 +172,90 @@ async fn null_to_json_resolves_and_executes() {
     assert_eq!(output.result, Ok(BexExternalValue::Null));
 }
 
+// ── Phase 5b.4: Array<T>.to_json and Map<K,V>.to_json ────────────────────────
+
+#[tokio::test]
+async fn array_of_int_to_json_returns_json_array() {
+    // `let a: int[] = [1, 2, 3]; a.to_json()` must return a json array [1, 2, 3].
+    let source = r#"
+        function main() -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let a: int[] = [1, 2, 3];
+            a.to_json()
+        }
+    "#;
+    let output = baml_test!(source);
+    // The result should be a BAML array value. We stringify to verify shape.
+    match &output.result {
+        Ok(v) => {
+            let s = format!("{v:?}");
+            assert!(
+                s.contains("1") && s.contains("2") && s.contains("3"),
+                "expected [1,2,3] json array, got {s}"
+            );
+        }
+        Err(e) => panic!("expected ok result, got error: {e:?}"),
+    }
+}
+
+#[tokio::test]
+async fn array_of_class_to_json_honors_override() {
+    // `class B { x: int  function to_json(self) -> baml.json.json { 99 } }`
+    // `bs.to_json()` must call B's override for each element, returning [99, 99].
+    let source = r#"
+        class B {
+            x int
+
+            function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                99
+            }
+        }
+        function main() -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let bs: B[] = [B { x: 1 }, B { x: 2 }];
+            bs.to_json()
+        }
+    "#;
+    let output = baml_test!(source);
+    match &output.result {
+        Ok(v) => {
+            let s = format!("{v:?}");
+            // Each B maps to 99, so result should be [99, 99].
+            assert!(
+                s.contains("99"),
+                "expected B.to_json override to produce 99 per element, got {s}"
+            );
+            // Should NOT contain the raw field value 1 or 2.
+            assert!(
+                !s.contains("\"x\""),
+                "expected override to suppress auto-derive field map, got {s}"
+            );
+        }
+        Err(e) => panic!("expected ok result, got error: {e:?}"),
+    }
+}
+
+#[tokio::test]
+async fn map_of_int_to_json_returns_json_map() {
+    // `let m: map<string, int> = {"a": 1, "b": 2}; m.to_json()` must return
+    // a json map {"a": 1, "b": 2}.
+    let source = r#"
+        function main() -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let m: map<string, int> = {"a": 1, "b": 2};
+            m.to_json()
+        }
+    "#;
+    let output = baml_test!(source);
+    match &output.result {
+        Ok(v) => {
+            let s = format!("{v:?}");
+            assert!(
+                s.contains("\"a\"") && s.contains("\"b\""),
+                "expected map keys 'a' and 'b' in result, got {s}"
+            );
+        }
+        Err(e) => panic!("expected ok result, got error: {e:?}"),
+    }
+}
+
 // ── Phase 5b.2.3: universal TypeVar `to_json` / `from_json` ──────────────────
 
 #[tokio::test]

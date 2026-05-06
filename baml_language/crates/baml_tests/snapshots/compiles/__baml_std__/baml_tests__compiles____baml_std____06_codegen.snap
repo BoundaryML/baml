@@ -7,16 +7,6 @@ function baml.Array.at(self: null, index: int) -> void? {
 function baml.Array.concat(self: null, other: void[]) -> void[] {
 }
 
-function baml.Array.from_json(j: baml.json.json) -> baml.Array<void> {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.Array<#0>
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.Array.join(self: null, separator: string) -> string {
 }
 
@@ -39,11 +29,6 @@ function baml.Array.slice(self: null, start: int, end: int) -> void[] {
 }
 
 function baml.Array.to_json(self: null) -> baml.json.json {
-    load_type baml.Array<#0>
-    load_var self
-    call baml.json.to_string
-    call baml.json.parse
-    return
 }
 
 function baml.Bool.to_json(self: null) -> baml.json.json {
@@ -53,16 +38,6 @@ function baml.Float.to_json(self: null) -> baml.json.json {
 }
 
 function baml.Int.to_json(self: null) -> baml.json.json {
-}
-
-function baml.Map.from_json(j: baml.json.json) -> baml.Map<void, void> {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.Map<#0, #1>
-    load_var _2
-    call baml.json.from_string
-    return
 }
 
 function baml.Map.get(self: null, key: void) -> void? {
@@ -81,11 +56,6 @@ function baml.Map.set(self: null, key: void, value: void) -> null {
 }
 
 function baml.Map.to_json(self: null) -> baml.json.json {
-    load_type baml.Map<#0, #1>
-    load_var self
-    call baml.json.to_string
-    call baml.json.parse
-    return
 }
 
 function baml.Map.values(self: null) -> void[] {

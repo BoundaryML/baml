@@ -14,19 +14,7 @@ class baml.Bool$stream {
 --- <builtin>/baml/containers.baml ---
 class baml.Array {
 }
-function baml.Array.to_json(self: baml.Array) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Array<T>>(self)) : baml.json.json
-}
-function baml.Array.from_json(j: baml.json.json) -> baml.Array<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : baml.Array<T>
-}
 class baml.Map {
-}
-function baml.Map.to_json(self: baml.Map) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Map<K, V>>(self)) : baml.json.json
-}
-function baml.Map.from_json(j: baml.json.json) -> baml.Map<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : baml.Map<K, V>
 }
 class baml.Array$stream {
 }
