@@ -53,7 +53,7 @@ console_error_panic = [ "console_error_panic_hook" ]
 workspace = true
 
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = false
+wasm-opt = [ "-Os" ]
 
 [package.metadata.wasm-pack.profile.dev]
 wasm-opt = false
