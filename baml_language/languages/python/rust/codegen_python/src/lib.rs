@@ -1589,7 +1589,7 @@ mod tests {
     }
 
     #[test]
-    fn pyi_class_renders_name_only_with_ellipsis() {
+    fn pyi_class_renders_typed_field_declarations() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(
@@ -1608,18 +1608,23 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
 
-        // Class is name-only with ellipsis (12d §3.1).
-        assert!(leaf.contains("class Resume(pydantic.BaseModel): ...\n"));
-        // Field declarations and pydantic config are NOT mirrored.
+        // Field declarations are mirrored into the stub so type
+        // checkers can see the public Pydantic surface.
+        let expected = "class Resume(pydantic.BaseModel):\n\
+                        \x20   name: str\n\
+                        \x20   email: typing.Optional[str]\n";
+        assert!(leaf.contains(expected), "pyi missing class body:\n{leaf}");
+        // The collapsed `class Foo(...): ...` form must not appear here.
+        assert!(!leaf.contains("class Resume(pydantic.BaseModel): ..."));
+        // `model_config` is a runtime concern and stays out of the stub.
         assert!(!leaf.contains("model_config"));
-        assert!(!leaf.contains("name: str"));
-        assert!(!leaf.contains("email:"));
-        // pydantic is still imported (for the class base).
         assert!(leaf.contains("import pydantic"));
+        // Property type uses `typing.Optional`, so typing is required.
+        assert!(leaf.contains("import typing"));
     }
 
     #[test]
-    fn pyi_enum_renders_name_only_with_ellipsis() {
+    fn pyi_enum_renders_each_variant() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["ipsum"], "Sentiment");
         pool.insert(
@@ -1646,11 +1651,10 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("ipsum/__init__.pyi")];
 
-        // Enum is name-only with ellipsis (12d §3.2).
-        assert!(leaf.contains("class Sentiment(str, enum.Enum): ...\n"));
-        // Variants are NOT mirrored.
-        assert!(!leaf.contains("POSITIVE = "));
-        assert!(!leaf.contains("NEGATIVE = "));
+        let expected = "class Sentiment(str, enum.Enum):\n\
+                        \x20   POSITIVE = \"POSITIVE\"\n\
+                        \x20   NEGATIVE = \"NEGATIVE\"\n";
+        assert!(leaf.contains(expected), "pyi missing enum body:\n{leaf}");
         assert!(leaf.contains("import enum"));
     }
 
@@ -1860,9 +1864,8 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
 
-        // No methods → name-only stub, even when the `.py` carries
-        // properties.
-        assert!(leaf.contains("class Resume(pydantic.BaseModel): ...\n"));
+        // Field declaration is mirrored, but no method block exists.
+        assert!(leaf.contains("class Resume(pydantic.BaseModel):\n    a: int\n"));
         assert!(!leaf.contains("def "));
     }
 
@@ -1882,22 +1885,20 @@ mod tests {
     }
 
     #[test]
-    fn pyi_typing_imported_when_signatures_present() {
-        // Pure-class leaf with no methods does not need typing in
-        // its `.pyi` (no signatures, no field declarations mirrored).
+    fn pyi_typing_imported_for_class_or_signature() {
+        // Any class (now that fields are mirrored), function, or alias
+        // pulls `import typing` into the `.pyi`. Mirrors the `.py`
+        // "be generous" rule so field types like `typing.Optional[…]`
+        // and the `typing.Generic[…]` base resolve.
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
-        assert!(
-            !leaf.contains("import typing"),
-            "no typing expected in:\n{leaf}"
-        );
+        assert!(leaf.contains("import typing"), "typing expected:\n{leaf}");
 
-        // Add a function — typing now required (signatures may use
-        // `typing.Optional` / `typing.List` / etc., per 12d §7).
+        // Adding a function still results in typing being imported.
         let f = cg_name("user", &["lorem"], "ping");
         pool.insert(f, func_sym("ping", "x.baml", 100));
         let out = to_source_code(&pool, &[]);
@@ -1967,14 +1968,16 @@ mod tests {
             py.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum\n"),
             "py missing guarded ipsum import:\n{py}"
         );
-        // The pyi mirrors the `.py` import block (12f §4.2).
+        // The pyi mirrors the `.py` import block: a class field whose
+        // type lives in another leaf now triggers the same guarded
+        // relative import on the stub side, since fields are typed
+        // there too.
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
-        // `.pyi` only needs the import when a *signature* (not a class
-        // field) references the cross-leaf type. This class has only a
-        // property; methods/aliases would also trigger the import.
-        // Property-only classes don't mirror fields into `.pyi`, so the
-        // pyi here legitimately has no cross-leaf segments.
-        assert!(!pyi.contains("if typing.TYPE_CHECKING:"));
+        assert!(
+            pyi.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum\n"),
+            "pyi missing guarded ipsum import:\n{pyi}"
+        );
+        assert!(pyi.contains("    sentiment: ipsum.Sentiment\n"));
     }
 
     #[test]
@@ -2392,15 +2395,22 @@ mod tests {
             "TypeVar should be declared exactly once:\n{leaf}"
         );
 
-        // The .pyi mirrors the same generic shape.
+        // The .pyi mirrors the same generic shape, including the
+        // typed field declaration.
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(
             pyi.contains("T = typing.TypeVar(\"T\")"),
             "pyi missing TypeVar:\n{pyi}",
         );
         assert!(
-            pyi.contains("class Box(pydantic.BaseModel, typing.Generic[T]): ..."),
+            pyi.contains("class Box(pydantic.BaseModel, typing.Generic[T]):\n    item: T\n"),
             "pyi missing Generic[T] on Box:\n{pyi}",
+        );
+        assert!(
+            pyi.contains(
+                "class Crate(pydantic.BaseModel, typing.Generic[T]):\n    contents: typing.List[Box[T]]\n",
+            ),
+            "pyi missing typed Crate body:\n{pyi}",
         );
     }
 
