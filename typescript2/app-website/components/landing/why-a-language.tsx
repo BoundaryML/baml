@@ -10,11 +10,21 @@ import {
   RadioTower,
   Terminal,
 } from 'lucide-react';
+import Image from 'next/image';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
+import type { IconType } from 'react-icons';
+import {
+  SiClaude,
+  SiGo,
+  SiGooglegemini,
+  SiOpenai,
+  SiTypescript,
+} from 'react-icons/si';
 
 type Feature = {
   body: string;
+  code: string;
   details: string[];
   Icon: LucideIcon;
   id: string;
@@ -26,6 +36,20 @@ type Feature = {
 const FEATURES: Feature[] = [
   {
     body: 'Turn messy model responses into the shape your app declared, with structured failures when the output cannot be recovered.',
+    code: `class Receipt {
+  vendor string
+  total float
+}
+
+function ExtractReceipt(text: string) -> Receipt {
+  client GPT4o
+  prompt #"
+    Extract the receipt fields.
+    {{ ctx.output_format }}
+
+    {{ _.role("user") }} {{ text }}
+  "#
+}`,
     details: ['schema-aware parser', 'repair passes', 'typed failure paths'],
     Icon: CheckCheck,
     id: 'parser',
@@ -35,6 +59,15 @@ const FEATURES: Feature[] = [
   },
   {
     body: 'Model prompts can share abstractions like normal code, so larger systems do not collapse into copy-pasted prompt files.',
+    code: `// baml_src/ns_eval/metrics.baml
+class Score {
+  passed bool
+  reason string
+}
+
+function First<T>(items: T[]) -> T? {
+  items.at(0)
+}`,
     details: ['generic helpers', 'inline lambdas', 'namespaces'],
     Icon: Braces,
     id: 'generics',
@@ -44,6 +77,20 @@ const FEATURES: Feature[] = [
   },
   {
     body: 'Give agents and humans a compiler-produced map of the project: functions, types, clients, tests, and call surfaces.',
+    code: `// baml describe surfaces this shape
+class Config {
+  model string
+}
+
+function Judge(
+  config: root.Config,
+  output: string
+) -> root.eval.Score {
+  root.eval.Score {
+    passed: output.length() > 0,
+    reason: "checked with " + config.model,
+  }
+}`,
     details: ['project summaries', 'agent context', 'compiler-backed facts'],
     Icon: Terminal,
     id: 'describe',
@@ -53,6 +100,16 @@ const FEATURES: Feature[] = [
   },
   {
     body: 'Stream typed partial objects instead of raw tokens, so interfaces and agents can react before the final result lands.',
+    code: `class Agenda {
+  start_time string @stream.done
+  items (Talk | Social)[]
+  description string @stream.with_state
+}
+
+class Talk {
+  type "talk" @stream.not_null
+  title string
+}`,
     details: ['partial types', 'incremental UI', 'typed stream states'],
     Icon: RadioTower,
     id: 'streaming',
@@ -62,6 +119,15 @@ const FEATURES: Feature[] = [
   },
   {
     body: 'Keep prompt tests beside the prompt functions they exercise, with assertions that survive refactors better than screenshots.',
+    code: `testset "triage" {
+  test "password reset" {
+    let ticket = TriageTicket(
+      "I cannot reset my password"
+    );
+
+    assert.equal(ticket.priority, "medium");
+  }
+}`,
     details: ['inline testsets', 'typed assertions', 'local eval loops'],
     Icon: Bug,
     id: 'tests',
@@ -71,6 +137,22 @@ const FEATURES: Feature[] = [
   },
   {
     body: 'Represent failures and tool choices as types, then handle retries and dispatch with exhaustive match branches.',
+    code: `class ParseError {
+  message string
+}
+
+function RequireTitle(value: string) -> string throws ParseError {
+  if (value.trim().length() == 0) {
+    throw ParseError { message: "missing title" };
+  };
+  value
+}
+
+function SafeTitle(value: string) -> string {
+  RequireTitle(value) catch (e) {
+    _: ParseError => "untitled",
+  }
+}`,
     details: ['typed errors', 'retry policy', 'union match dispatch'],
     Icon: GitBranch,
     id: 'typed-errors',
@@ -80,8 +162,28 @@ const FEATURES: Feature[] = [
   },
 ];
 
-const APP_LANGUAGES = ['Python', 'TypeScript', 'Go'];
-const LLM_PROVIDERS = ['OpenAI', 'Anthropic', 'Google'];
+const APP_CLIENTS: {
+  color: string;
+  Icon?: IconType;
+  imageSrc?: string;
+  label: string;
+  symbol?: string;
+}[] = [
+  { color: '#3776AB', imageSrc: '/python-icon.png', label: 'Python' },
+  { color: '#3178C6', Icon: SiTypescript, label: 'TypeScript' },
+  { color: '#00ADD8', Icon: SiGo, label: 'Go' },
+  { color: '#6D28D9', label: 'More clients', symbol: '+' },
+];
+
+const LLM_PROVIDERS: {
+  color: string;
+  Icon: IconType;
+  label: string;
+}[] = [
+  { color: '#111111', Icon: SiOpenai, label: 'OpenAI' },
+  { color: '#D97757', Icon: SiClaude, label: 'Claude' },
+  { color: '#4285F4', Icon: SiGooglegemini, label: 'Gemini' },
+];
 
 export function WhyALanguage() {
   const [activeFeatureId, setActiveFeatureId] = useState(FEATURES[0].id);
@@ -151,8 +253,15 @@ function ArchitectureStack({
           title="Application"
         >
           <div className="flex flex-wrap justify-center gap-2">
-            {APP_LANGUAGES.map((language) => (
-              <TechPill key={language}>{language}</TechPill>
+            {APP_CLIENTS.map((client) => (
+              <IconPill
+                color={client.color}
+                Icon={client.Icon}
+                imageSrc={client.imageSrc}
+                key={client.label}
+                label={client.label}
+                symbol={client.symbol}
+              />
             ))}
           </div>
         </LayerCard>
@@ -185,7 +294,12 @@ function ArchitectureStack({
         >
           <div className="flex flex-wrap justify-center gap-2">
             {LLM_PROVIDERS.map((provider) => (
-              <TechPill key={provider}>{provider}</TechPill>
+              <IconPill
+                color={provider.color}
+                Icon={provider.Icon}
+                key={provider.label}
+                label={provider.label}
+              />
             ))}
           </div>
         </LayerCard>
@@ -277,13 +391,12 @@ function LayerCard({
       <motion.div
         animate={{
           boxShadow: isActive
-            ? `0 28px 90px -54px ${activeTint ?? '#6D28D9'}, 0 0 0 1px ${activeTint ?? '#6D28D9'}33`
-            : '0 24px 70px -48px rgba(26,22,18,0.55), 0 1px 0 rgba(255,255,255,0.65) inset',
+            ? `0 0 0 1px ${activeTint ?? '#6D28D9'}33`
+            : '0 1px 0 rgba(255,255,255,0.65) inset',
           y: [0, -7, 0],
         }}
         className={[
           'relative rounded-lg border border-[#D9D3C4] bg-[#FFFCF6]/78 p-5 backdrop-blur-xl',
-          'before:pointer-events-none before:absolute before:inset-x-5 before:-bottom-4 before:h-4 before:skew-x-[-28deg] before:rounded-b-lg before:border before:border-t-0 before:border-[#CFC6B5] before:bg-[#E9E0CF]',
         ].join(' ')}
         transition={{
           boxShadow: { duration: 0.25 },
@@ -292,7 +405,6 @@ function LayerCard({
           ease: 'easeInOut',
           repeat: Number.POSITIVE_INFINITY,
         }}
-        whileHover={{ scale: 1.012 }}
       >
         <div
           className="absolute inset-0 rounded-lg opacity-60"
@@ -332,17 +444,19 @@ function FeatureChip({
 
   return (
     <button
-      className="group flex min-h-[70px] items-center gap-2 overflow-hidden rounded-md border bg-white/55 px-3 py-3 text-left transition-colors hover:bg-white/85"
+      className="group grid min-h-[70px] grid-cols-[auto_minmax(0,1fr)] items-center gap-2 overflow-hidden rounded-md border bg-white/80 px-3 py-3 text-left shadow-[0_8px_24px_-22px_rgba(26,22,18,0.45)] transition-[background-color,border-color,box-shadow] hover:bg-white hover:shadow-[0_16px_34px_-26px_rgba(26,22,18,0.55)] focus:outline-none focus:ring-2 focus:ring-[#6D28D9]/25"
       onFocus={onActivate}
       onMouseEnter={onActivate}
       style={{
-        borderColor: isActive ? `${feature.tint}66` : '#D9D3C4',
-        boxShadow: isActive ? `0 10px 28px -24px ${feature.tint}` : 'none',
+        borderColor: isActive ? `${feature.tint}80` : '#CFC6B5',
+        boxShadow: isActive
+          ? `0 0 0 1px ${feature.tint}30, 0 16px 38px -28px ${feature.tint}`
+          : undefined,
       }}
       type="button"
     >
       <span
-        className="grid size-8 shrink-0 place-items-center rounded-md border transition-transform group-hover:scale-105"
+        className="grid size-8 shrink-0 place-items-center rounded-md border"
         style={{
           background: `${feature.tint}12`,
           borderColor: `${feature.tint}33`,
@@ -360,10 +474,39 @@ function FeatureChip({
   );
 }
 
-function TechPill({ children }: { children: ReactNode }) {
+function IconPill({
+  color,
+  Icon,
+  imageSrc,
+  label,
+  symbol,
+}: {
+  color: string;
+  Icon?: IconType;
+  imageSrc?: string;
+  label: string;
+  symbol?: string;
+}) {
   return (
-    <span className="rounded-full border border-[#D9D3C4] bg-white/55 px-3 py-1.5 font-mono text-[11px] tracking-[0.02em] text-[#5C5852]">
-      {children}
+    <span
+      aria-label={label}
+      className="grid size-10 place-items-center rounded-full border border-[#D9D3C4] bg-white/65"
+      role="img"
+      title={label}
+    >
+      {imageSrc ? (
+        <Image alt="" aria-hidden height={20} src={imageSrc} width={20} />
+      ) : Icon ? (
+        <Icon aria-hidden size={18} style={{ color }} />
+      ) : (
+        <span
+          aria-hidden
+          className="font-mono text-lg font-semibold leading-none"
+          style={{ color }}
+        >
+          {symbol}
+        </span>
+      )}
     </span>
   );
 }
