@@ -3738,7 +3738,7 @@ impl LoweringContext<'_> {
                     );
                 }
 
-                self.bind_pattern(scrutinee, pattern);
+                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false, is_watched);
 
                 let names: Vec<Name> = self.body.patterns[pattern]
                     .bound_names(&self.body.patterns)
@@ -3755,7 +3755,11 @@ impl LoweringContext<'_> {
                 }
 
                 if is_watched {
-                    self.watched_locals_stack.push(scrutinee);
+                    for name in self.body.patterns[pattern].bound_names(&self.body.patterns) {
+                        if let Some(&local) = self.locals.get(name) {
+                            self.watched_locals_stack.push(local);
+                        }
+                    }
                 }
             }
 
@@ -5566,11 +5570,11 @@ impl LoweringContext<'_> {
         // match-arm's pattern, etc.), never by the inner Bind. To wire up
         // closure capture lookups correctly, we register the local against
         // that root.
-        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, false);
+        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, false, false);
     }
 
     fn bind_pattern_with_fresh_cells(&mut self, scrutinee: Local, pat_id: AstPatId) {
-        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, true);
+        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, true, false);
     }
 
     fn bind_pattern_inner(
@@ -5580,6 +5584,7 @@ impl LoweringContext<'_> {
         root: AstPatId,
         narrow_root: AstPatId,
         fresh_cell: bool,
+        is_watched: bool,
     ) {
         match self.body.patterns[pat_id].clone() {
             AstPattern::Bind { name } => {
@@ -5601,7 +5606,7 @@ impl LoweringContext<'_> {
                 };
                 let local = self
                     .builder
-                    .declare_local(Some(name.clone()), ty, None, false);
+                    .declare_local(Some(name.clone()), ty, None, is_watched);
                 if fresh_cell {
                     self.builder.fresh_cell(local);
                 }
@@ -5617,14 +5622,21 @@ impl LoweringContext<'_> {
                 // (each link is a refinement, not a sub-projection). Bind
                 // them all in order, keeping the root pat_id.
                 for p in parts {
-                    self.bind_pattern_inner(scrutinee, p, root, pat_id, fresh_cell);
+                    self.bind_pattern_inner(scrutinee, p, root, pat_id, fresh_cell, is_watched);
                 }
             }
             AstPattern::Or(parts) => {
                 // HIR ensures each Or branch binds the same name set; pick
                 // the first branch's bindings (every branch agrees).
                 if let Some(first) = parts.first() {
-                    self.bind_pattern_inner(scrutinee, *first, root, narrow_root, fresh_cell);
+                    self.bind_pattern_inner(
+                        scrutinee,
+                        *first,
+                        root,
+                        narrow_root,
+                        fresh_cell,
+                        is_watched,
+                    );
                 }
             }
             AstPattern::Class { fields, .. } => {
@@ -5632,7 +5644,14 @@ impl LoweringContext<'_> {
                     if let Some(field_local) =
                         self.project_class_pattern_field(scrutinee, pat_id, f.pat, &f.field)
                     {
-                        self.bind_pattern_inner(field_local, f.pat, root, f.pat, fresh_cell);
+                        self.bind_pattern_inner(
+                            field_local,
+                            f.pat,
+                            root,
+                            f.pat,
+                            fresh_cell,
+                            is_watched,
+                        );
                     }
                 }
             }

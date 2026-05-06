@@ -81,6 +81,43 @@ async fn watch_primitive_nested_scope() {
 }
 
 #[tokio::test]
+async fn watch_class_destructure_initializes_and_unwatches_binding() {
+    let output = baml_test!(
+        r#"
+        class Point {
+            x int
+            y int
+        }
+
+        function main() -> int {
+            watch let Point { x } = Point { x: 1, y: 2 };
+            x
+        }
+    "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        alloc_instance user.Point
+        load_const 1
+        init_field .x
+        load_const 2
+        init_field .y
+        load_field .x
+        store_var x
+        load_const "x"
+        load_const null
+        watch x
+        load_var x
+        unwatch x
+        return
+    }
+    "#);
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
 async fn watch_default_filter() {
     // Expected notifications: [["value"]]
     // (value = 0 is no-op (same value), value = 6 triggers notification)

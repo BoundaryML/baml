@@ -70,6 +70,7 @@ struct PatternShape {
     ty: Ty,
     cases: BTreeSet<String>,
     contains_class: bool,
+    summary_may_drop_coverage: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -2695,6 +2696,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             let pat_analysis = self.pattern_natural_type(pattern_id, body, arm.body);
             let pattern_contains_class = pat_analysis.root.contains_class;
+            let pattern_summary_may_drop_coverage = pat_analysis.root.summary_may_drop_coverage;
             let pat_ty = pat_analysis.root.ty.clone();
             let pat_cases = pat_analysis.root.cases.clone();
             // Narrow the scrutinee for the arm body to the intersection of
@@ -2750,7 +2752,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             let covers_all = matches!(pat_ty, Ty::Never { .. })
                 || (!scrutinee_is_error
                     && !pat_is_error
-                    && if pattern_contains_class {
+                    && if pattern_contains_class || pattern_summary_may_drop_coverage {
                         pattern_flow.covers_flow
                     } else {
                         self.is_subtype(&scrutinee_ty, &pat_ty)
@@ -3256,6 +3258,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 },
                 cases: BTreeSet::new(),
                 contains_class: false,
+                summary_may_drop_coverage: false,
             },
 
             ast::Pattern::Type(t) => {
@@ -3265,6 +3268,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     cases: self.cases_for_ty(&ty),
                     ty,
                     contains_class: false,
+                    summary_may_drop_coverage: false,
                 }
             }
 
@@ -3311,6 +3315,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     cases: self.cases_for_ty(&class_ty),
                     ty: class_ty,
                     contains_class: true,
+                    summary_may_drop_coverage: false,
                 }
             }
 
@@ -3370,6 +3375,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ty,
                     cases,
                     contains_class: shapes.iter().any(|shape| shape.contains_class),
+                    summary_may_drop_coverage: shapes
+                        .iter()
+                        .any(|shape| shape.summary_may_drop_coverage),
                 }
             }
 
@@ -3450,6 +3458,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ),
                     cases,
                     contains_class: shapes.iter().any(|shape| shape.contains_class),
+                    summary_may_drop_coverage: shapes.iter().any(|shape| {
+                        shape.summary_may_drop_coverage || matches!(shape.ty, Ty::Never { .. })
+                    }),
                 }
             }
         };
