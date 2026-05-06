@@ -697,6 +697,12 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     if !cross_leaf_segments.is_empty() && !stdlibs.contains(&"typing") {
         stdlibs.push("typing");
     }
+    // Generic functions emit `T = typing.TypeVar("T")` lines below; the
+    // `Class`/`TypeAlias` rule in `stdlib_imports` doesn't catch the
+    // function-only-but-generic case (e.g. stdlib `baml.unstable.string<T>`).
+    if !body.generic_typevars().is_empty() && !stdlibs.contains(&"typing") {
+        stdlibs.push("typing");
+    }
     let needs_pydantic = body.needs_pydantic();
     let needs_factory = body.needs_define_function();
     let has_stdlib_block = !stdlibs.is_empty() || needs_pydantic;
