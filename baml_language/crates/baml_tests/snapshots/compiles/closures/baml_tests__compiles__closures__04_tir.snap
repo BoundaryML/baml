@@ -186,7 +186,7 @@ class user.Encoder$stream {
   charset: null | string
 }
 class user.Box$stream {
-  value: null | unknown
+  value: null | T
 }
 class user.Calculator$stream {
   op: null | string
