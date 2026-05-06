@@ -37,7 +37,7 @@ export function SiteBanner() {
 
   return (
     <Link
-      href="/series-a"
+      href="/fundraiser"
       className="site-banner"
       style={{
         display: 'flex',

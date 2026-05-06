@@ -174,8 +174,8 @@ type Step = {
 const STEPS: Step[] = [
   {
     marker: 'Step 01. Today.',
-    heading: 'Every agent codebase starts here.',
-    body: 'A string prompt. Manual JSON parsing. No types. Works until it does not.',
+    heading: 'Strings, json.loads, fingers crossed.',
+    body: 'A string prompt. Manual JSON parsing. No types. Keep this file open — the rest of the timeline lifts pieces out of it, one at a time.',
     blocks: [
       {
         key: 's1-py',
@@ -196,9 +196,9 @@ const STEPS: Step[] = [
     ],
   },
   {
-    marker: 'Option A. Function by function.',
-    heading: 'Add typed BAML functions. Keep the rest of your code.',
-    body: 'Define the schema, prompt, and client once in BAML. Generate a typed client. Your Python, TypeScript, Go, or Ruby app calls it like any other function.',
+    marker: 'Step 02. Lift one prompt out.',
+    heading: 'The first typed BAML function.',
+    body: 'Schema, prompt, and client live once in BAML. Your Python keeps running. The only thing that changes is how that one call looks — and that the result is typed.',
     blocks: [
       {
         key: 's2-baml',
@@ -227,9 +227,9 @@ const STEPS: Step[] = [
     ],
   },
   {
-    marker: 'Option B. Move logic into BAML.',
-    heading: 'Pure BAML helpers. Whenever you want.',
-    body: 'Move pure logic into BAML. Typed. Runs on the BAML VM. Faster than Python on object heavy workloads.',
+    marker: 'Step 03. Move the helpers next.',
+    heading: 'Pure logic, no LLM, typed and fast.',
+    body: 'Bucket and summarize stop being Python helpers. They become BAML functions running on the BAML VM — exhaustive, typed, faster than Python on object-heavy workloads.',
     blocks: [
       {
         key: 's3-baml',
@@ -250,9 +250,9 @@ const STEPS: Step[] = [
     ],
   },
   {
-    marker: 'Option B. The whole agent.',
-    heading: 'Or write the whole thing in BAML.',
-    body: 'Tagged unions, exhaustive match, stdlib for io, fs, shell, http. Tests next to the code. The whole agent in one file, running on the BAML VM.',
+    marker: 'Step 04. The whole loop.',
+    heading: 'Orchestration in BAML itself.',
+    body: 'Tagged unions, exhaustive match, stdlib for io, fs, shell, http. Tests next to the code. The agent loop is now BAML — Python is gone.',
     blocks: [
       {
         key: 's4-baml',
@@ -555,6 +555,197 @@ function AnnotatedBlock({
   );
 }
 
+// ── Migration progress artifact ──────────────────────────────────────────────
+
+function MigrationProgress({
+  activeStep,
+}: {
+  activeStep: number;
+}) {
+  const SIZE = 60;
+  const STROKE = 4;
+  const RADIUS = (SIZE - STROKE) / 2;
+  const CIRC = 2 * Math.PI * RADIUS;
+  const pct = Math.round((activeStep / (STEPS.length - 1)) * 100);
+  const dashOffset = CIRC * (1 - pct / 100);
+
+  const showLamb = activeStep >= 3;
+
+  return (
+    <div
+      style={{
+        alignItems: 'center',
+        background: '#FBF8F1',
+        border: `1px solid ${BORDER}`,
+        borderRadius: 10,
+        display: 'flex',
+        gap: 16,
+        padding: '14px 18px',
+      }}
+    >
+      <div
+        style={{
+          flexShrink: 0,
+          height: SIZE,
+          position: 'relative',
+          width: SIZE,
+        }}
+      >
+        <svg
+          aria-hidden
+          height={SIZE}
+          style={{
+            inset: 0,
+            position: 'absolute',
+            transform: 'rotate(-90deg)',
+          }}
+          width={SIZE}
+        >
+          <circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            fill="none"
+            r={RADIUS}
+            stroke="#EBE5D5"
+            strokeWidth={STROKE}
+          />
+          <motion.circle
+            animate={{ strokeDashoffset: dashOffset }}
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            fill="none"
+            r={RADIUS}
+            stroke={ACCENT}
+            strokeDasharray={CIRC}
+            strokeLinecap="round"
+            strokeWidth={STROKE}
+            initial={false}
+            transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
+          />
+        </svg>
+        <div
+          style={{
+            alignItems: 'center',
+            background: BG,
+            borderRadius: '50%',
+            display: 'grid',
+            inset: STROKE + 2,
+            placeItems: 'center',
+            position: 'absolute',
+          }}
+        >
+          <AnimatePresence initial={false} mode="wait">
+            {showLamb ? (
+              <motion.img
+                alt="BAML"
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                height={36}
+                initial={{ opacity: 0, scale: 0.7 }}
+                key="lamb"
+                src="/bamllogopurple.svg"
+                style={{ display: 'block', objectFit: 'contain' }}
+                transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
+                width={36}
+              />
+            ) : (
+              <motion.img
+                alt="Python"
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                height={30}
+                initial={{ opacity: 0, scale: 0.7 }}
+                key="python"
+                src="/python-icon.png"
+                style={{ display: 'block', objectFit: 'contain' }}
+                transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
+                width={30}
+              />
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          flex: 1,
+          flexDirection: 'column',
+          gap: 6,
+          minWidth: 0,
+        }}
+      >
+        <div
+          style={{
+            color: '#8A8580',
+            fontFamily: MONO,
+            fontSize: 10.5,
+            fontWeight: 600,
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Migration progress
+        </div>
+        <div
+          style={{
+            alignItems: 'baseline',
+            display: 'flex',
+            gap: 8,
+          }}
+        >
+          <span
+            style={{
+              color: INK,
+              fontFamily: MONO,
+              fontSize: 18,
+              fontVariantNumeric: 'tabular-nums',
+              fontWeight: 600,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            {pct}%
+          </span>
+          <span
+            style={{
+              color: MUTED,
+              fontFamily: MONO,
+              fontSize: 12,
+              letterSpacing: '0.04em',
+            }}
+          >
+            BAML
+          </span>
+        </div>
+        <div
+          aria-hidden
+          style={{
+            alignItems: 'center',
+            display: 'flex',
+            gap: 6,
+            marginTop: 2,
+          }}
+        >
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={`dot-${i}`}
+              style={{
+                background: i <= activeStep ? ACCENT : 'transparent',
+                border: `1px solid ${i <= activeStep ? ACCENT : '#C9C2B0'}`,
+                borderRadius: '50%',
+                height: 7,
+                transition:
+                  'background-color 280ms ease, border-color 280ms ease',
+                width: 7,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Sticky code panel with per-step transitions ──────────────────────────────
 
 function StickyPanel({ activeStep }: { activeStep: number }) {
@@ -579,9 +770,12 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
 
   return (
     <div
+      className="step-code-scroll"
       style={{
         height: '100%',
         minHeight: 520,
+        overflowY: 'auto',
+        paddingRight: 8,
         position: 'relative',
         width: '100%',
       }}
@@ -596,8 +790,8 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
             display: 'flex',
             flexDirection: 'column',
             gap: 12,
-            inset: 0,
-            position: 'absolute',
+            minHeight: '100%',
+            position: 'relative',
           }}
           transition={fadeT}
         >
@@ -839,13 +1033,21 @@ export function IncrementalAdoption() {
         <div
           style={{
             alignSelf: 'start',
-            height: 'min(760px, 88vh)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            height: 'min(840px, 92vh)',
             overflow: 'hidden',
             position: 'sticky',
-            top: 'calc(var(--navigation-height, 56px) + 32px)',
+            top: 'calc(var(--navigation-height, 56px) + 24px)',
           }}
         >
-          <StickyPanel activeStep={activeStep} />
+          <MigrationProgress
+            activeStep={activeStep}
+          />
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <StickyPanel activeStep={activeStep} />
+          </div>
         </div>
       </div>
     </section>

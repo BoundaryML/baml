@@ -58,32 +58,10 @@ const teamMembers: TeamMember[] = [
     bio: 'Greg works at the seam between product and compiler — translating things developers want to do into things the compiler can guarantee. He cares deeply about the path from "I have an idea" to "it just works".',
   },
   {
-    name: 'Chris Watts',
+    name: 'Dhilan Shah',
     role: 'Engineer',
-    image: '/seawatts.png',
-    linkedin: 'https://www.linkedin.com/in/seawatts',
-    bio: 'Chris owns the React and Next.js integrations and most of the developer-facing surface area. If you have ever pasted a BAML schema into an editor and watched it light up correctly, that is partly him.',
-  },
-  {
-    name: 'Anish Palakurthi',
-    role: 'Intern · S24',
-    image: '/profile-anish.png',
-    linkedin: 'https://www.linkedin.com/in/anish-palakurthi/',
-    bio: 'Anish works on the marketing site, the playground, and the thousand small things that make BAML feel like a real product. He thinks the best documentation is a well-designed example.',
-  },
-  {
-    name: 'Rahul',
-    role: 'Intern · S25',
-    image: '/rahult.jpg',
-    linkedin: 'https://www.linkedin.com/in/ba11b0y/',
-    bio: 'Rahul focuses on the VS Code extension and the LSP — the daily-driver experience for anyone writing BAML. He is the person to ask why your editor is doing something it should not.',
-  },
-  {
-    name: 'Egor',
-    role: 'Intern · S25',
-    image: '/egor.jpg',
-    linkedin: 'https://www.linkedin.com/in/egor-l/',
-    bio: 'Egor works on the language core and tooling pipeline — the part of BAML that turns a .baml file into something every client SDK agrees on. He likes problems where the answer has to be exactly right.',
+    image: '/dhilan.jpg',
+    bio: 'Dhilan works across the stack on the parts of BAML that developers actually touch — the website, the playground, and the integrations that make the language feel approachable. He believes the fastest way to learn a tool is to try it and have it not get in your way.',
   },
 ];
 
