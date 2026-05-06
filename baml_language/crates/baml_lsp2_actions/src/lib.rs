@@ -99,7 +99,10 @@ pub use describe::{
 };
 pub use fixes::{Fix, FixKind, fixes_at};
 pub use grep::{GrepMode, GrepOptions, GrepResult, MatchAnnotation, TextMatch, grep, list_symbols};
-pub use listing::{ListingEntry, list_namespace_items, list_package_items, non_user_package_names};
+pub use listing::{
+    ListingEntry, ResolvedTarget, list_namespace_items, list_package_items, non_user_package_names,
+    resolve_target,
+};
 pub use outline::{OutlineItem, file_outline};
 pub use search::{SymbolInfo, search_symbols};
 pub use tokens::{SemanticToken, SemanticTokenType, TOKEN_TYPES, semantic_tokens};

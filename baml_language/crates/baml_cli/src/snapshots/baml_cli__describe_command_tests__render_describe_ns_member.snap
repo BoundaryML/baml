@@ -1,0 +1,12 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+field model  ns_llm/models.baml:3
+
+    model string
+
+container:
+  class            Config                           ns_llm/models.baml:2
+
+references (0):

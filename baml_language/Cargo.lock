@@ -1079,6 +1079,7 @@ dependencies = [
  "clap",
  "clap-cargo",
  "ctrlc",
+ "insta",
  "regex",
  "serde_json",
  "strsim",

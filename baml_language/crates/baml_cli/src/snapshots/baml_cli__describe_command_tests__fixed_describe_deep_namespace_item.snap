@@ -1,0 +1,11 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+class Baz  ns_foo/ns_bar/types.baml:2
+
+class Baz {
+    field int
+}
+
+references (0):

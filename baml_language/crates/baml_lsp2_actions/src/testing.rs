@@ -372,7 +372,7 @@ impl ProjectTest {
         format!(
             "{:<16} {:<32} {}:{}",
             entry.kind.as_str(),
-            entry.fqn,
+            entry.fqn(),
             filename,
             entry.line,
         )

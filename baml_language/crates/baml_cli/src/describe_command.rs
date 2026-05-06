@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use baml_db::baml_compiler2_hir;
-use baml_lsp2_actions::{SymbolDescription, describe};
+use baml_lsp2_actions::{ResolvedTarget, SymbolDescription, describe};
 use baml_project::ProjectDatabase;
 use clap::Args;
 
@@ -32,6 +32,39 @@ pub struct DescribeArgs {
     pub json: bool,
 }
 
+/// Dispatch a name string to a `ResolvedTarget`.
+///
+/// Handles the package-name prefix routing (user vs. builtin packages) and
+/// delegates within-package path resolution to `baml_lsp2_actions::resolve_target`.
+///
+/// - Empty string → `Package(user)`
+/// - `"baml"` → `Package(baml)`
+/// - `"baml.env"` → `resolve_target(baml_pkg, "env")` → `Namespace`
+/// - `"foo.bar.Baz"` → `resolve_target(user_pkg, "foo.bar.Baz")` → `Item`
+pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTarget<'db>> {
+    if name.is_empty() {
+        let user_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("user"));
+        return Some(ResolvedTarget::Package(user_pkg));
+    }
+
+    let (first, rest) = name.split_once('.').unwrap_or((name, ""));
+
+    // Builtin package shadows user namespace with same name.
+    let builtin_packages = baml_lsp2_actions::non_user_package_names(db);
+    if builtin_packages.contains(first) {
+        let pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new(first));
+        return if rest.is_empty() {
+            Some(ResolvedTarget::Package(pkg))
+        } else {
+            baml_lsp2_actions::resolve_target(db, pkg, rest)
+        };
+    }
+
+    // User package.
+    let user_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("user"));
+    baml_lsp2_actions::resolve_target(db, user_pkg, name)
+}
+
 impl DescribeArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let (db, from, baml_files) = load_project_from(&self.from)?;
@@ -47,43 +80,14 @@ impl DescribeArgs {
             );
         }
 
-        // ── No name → project-level listing ─────────────────────────────────
-        if self.name.is_none() {
-            let user_package_id = resolve_user_package_id(&db);
-            let entries = baml_lsp2_actions::list_package_items(&db, user_package_id);
-            if entries.is_empty() {
-                eprintln!("No symbols found.");
-                return Ok(crate::ExitCode::Other);
-            }
-            if self.json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&listing_to_json(&db, &entries, &from))
-                        .context("Failed to serialize output as JSON")?
-                );
-            } else {
-                render_listing(&entries, &from);
-            }
-            return Ok(crate::ExitCode::Success);
-        }
+        let name = self.name.as_deref().unwrap_or("");
+        let target = dispatch(&db, name);
 
-        let name = self.name.as_deref().unwrap();
-        let segments: Vec<&str> = name.split('.').collect();
-
-        let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
-
-        // Detect known builtin package names.
-        let builtin_packages = baml_lsp2_actions::non_user_package_names(&db);
-
-        // Check if first segment is a builtin package.
-        if builtin_packages.contains(segments[0]) {
-            let pkg_id =
-                baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new(segments[0]));
-            if segments.len() == 1 {
-                // `baml describe baml` → list entire builtin package
-                let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
+        match target {
+            Some(ResolvedTarget::Package(pkg)) => {
+                let entries = baml_lsp2_actions::list_package_items(&db, pkg);
                 if entries.is_empty() {
-                    eprintln!("No symbols found in package: {}", segments[0]);
+                    eprintln!("No symbols found.");
                     return Ok(crate::ExitCode::Other);
                 }
                 if self.json {
@@ -95,205 +99,119 @@ impl DescribeArgs {
                 } else {
                     render_listing(&entries, &from);
                 }
-                return Ok(crate::ExitCode::Success);
-            } else {
-                // `baml describe baml.env` → list sub-namespace within builtin package
-                let ns_path: Vec<baml_db::Name> =
-                    segments[1..].iter().map(baml_db::Name::new).collect();
-                if let Some(entries) =
-                    baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path)
+                Ok(crate::ExitCode::Success)
+            }
+            Some(ResolvedTarget::Namespace { package, ns_path }) => {
+                let entries = baml_lsp2_actions::list_namespace_items(&db, package, &ns_path)
+                    .unwrap_or_default();
+                if entries.is_empty() {
+                    eprintln!("No symbols found in namespace.");
+                    return Ok(crate::ExitCode::Other);
+                }
+                if self.json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&listing_to_json(&db, &entries, &from))
+                            .context("Failed to serialize output as JSON")?
+                    );
+                } else {
+                    render_listing(&entries, &from);
+                }
+                Ok(crate::ExitCode::Success)
+            }
+            Some(ResolvedTarget::Item(def)) => {
+                let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
+                if let Some(desc) =
+                    baml_lsp2_actions::describe_by_definition(&db, &describe_files, def)
                 {
                     if self.json {
+                        let json = crate::grep_command::description_to_json(
+                            &db,
+                            &desc,
+                            self.budget,
+                            &from,
+                        );
                         println!(
                             "{}",
-                            serde_json::to_string_pretty(&listing_to_json(&db, &entries, &from))
+                            serde_json::to_string_pretty(&[json])
                                 .context("Failed to serialize output as JSON")?
                         );
                     } else {
-                        render_listing(&entries, &from);
+                        render_description(&db, &desc, self.budget, &from);
                     }
-                    return Ok(crate::ExitCode::Success);
+                    Ok(crate::ExitCode::Success)
+                } else {
+                    eprintln!("No symbol found: {name}");
+                    Ok(crate::ExitCode::Other)
                 }
-                // Fall through to describe if namespace not found (might be an item).
             }
-        }
-
-        // Check if first segment is a user namespace.
-        let user_package_id = resolve_user_package_id(&db);
-        if segments.len() == 1 {
-            // Single segment: check if it's a namespace name.
-            let ns_name = baml_db::Name::new(segments[0]);
-            let is_user_ns = {
-                let user_pkg = baml_compiler2_hir::package::package_items(&db, user_package_id);
-                user_pkg
-                    .namespaces
-                    .keys()
-                    .any(|k| k == &vec![ns_name.clone()])
-            };
-            if is_user_ns {
-                if let Some(entries) =
-                    baml_lsp2_actions::list_namespace_items(&db, user_package_id, &[ns_name])
-                {
+            Some(ResolvedTarget::Member {
+                parent,
+                member_name,
+            }) => {
+                let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
+                if let Some(desc) = baml_lsp2_actions::describe_item_member(
+                    &db,
+                    &describe_files,
+                    parent,
+                    member_name.as_str(),
+                ) {
                     if self.json {
+                        let json = crate::grep_command::description_to_json(
+                            &db,
+                            &desc,
+                            self.budget,
+                            &from,
+                        );
                         println!(
                             "{}",
-                            serde_json::to_string_pretty(&listing_to_json(&db, &entries, &from))
+                            serde_json::to_string_pretty(&[json])
                                 .context("Failed to serialize output as JSON")?
                         );
                     } else {
-                        render_listing(&entries, &from);
+                        render_description(&db, &desc, self.budget, &from);
                     }
+                    Ok(crate::ExitCode::Success)
+                } else {
+                    eprintln!("No symbol found: {name}");
+                    Ok(crate::ExitCode::Other)
+                }
+            }
+            None => {
+                // Substring fallback (existing behavior for unresolved names).
+                let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
+                let descriptions = describe(&db, &describe_files, name);
+
+                if descriptions.is_empty() {
+                    eprintln!("No symbol found: {name}");
+                    return Ok(crate::ExitCode::Other);
+                }
+
+                if self.json {
+                    let budget = self.budget;
+                    let json_output: Vec<serde_json::Value> = descriptions
+                        .iter()
+                        .map(|d| crate::grep_command::description_to_json(&db, d, budget, &from))
+                        .collect();
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&json_output)
+                            .context("Failed to serialize output as JSON")?
+                    );
                     return Ok(crate::ExitCode::Success);
                 }
-            }
-        }
 
-        // ── Dot-notation resolution for user package items/members ───────────
-        if segments.len() >= 2 {
-            // Determine if the first segment is a user namespace.
-            let ns_name = baml_db::Name::new(segments[0]);
-            let is_user_ns = {
-                let user_pkg = baml_compiler2_hir::package::package_items(&db, user_package_id);
-                user_pkg
-                    .namespaces
-                    .keys()
-                    .any(|k| k == &vec![ns_name.clone()])
-            };
-
-            if is_user_ns {
-                // segments[0] is a namespace, segments[1] is an item name.
-                let item_name = baml_db::Name::new(segments[1]);
-                let ns_path = vec![ns_name.clone()];
-                let item_def = {
-                    let user_pkg = baml_compiler2_hir::package::package_items(&db, user_package_id);
-                    user_pkg
-                        .lookup_type(&ns_path, &item_name)
-                        .or_else(|| user_pkg.lookup_value(&ns_path, &item_name))
-                };
-
-                if let Some(def) = item_def {
-                    if segments.len() == 2 {
-                        // `baml describe llm.Config` → item detail
-                        if let Some(desc) =
-                            baml_lsp2_actions::describe_by_definition(&db, &describe_files, def)
-                        {
-                            if self.json {
-                                let json = crate::grep_command::description_to_json(
-                                    &db,
-                                    &desc,
-                                    self.budget,
-                                    &from,
-                                );
-                                println!(
-                                    "{}",
-                                    serde_json::to_string_pretty(&[json])
-                                        .context("Failed to serialize output as JSON")?
-                                );
-                            } else {
-                                render_description(&db, &desc, self.budget, &from);
-                            }
-                            return Ok(crate::ExitCode::Success);
-                        }
-                    } else if segments.len() == 3 {
-                        // `baml describe llm.Config.name` → member detail
-                        if let Some(desc) = baml_lsp2_actions::describe_item_member(
-                            &db,
-                            &describe_files,
-                            def,
-                            segments[2],
-                        ) {
-                            if self.json {
-                                let json = crate::grep_command::description_to_json(
-                                    &db,
-                                    &desc,
-                                    self.budget,
-                                    &from,
-                                );
-                                println!(
-                                    "{}",
-                                    serde_json::to_string_pretty(&[json])
-                                        .context("Failed to serialize output as JSON")?
-                                );
-                            } else {
-                                render_description(&db, &desc, self.budget, &from);
-                            }
-                            return Ok(crate::ExitCode::Success);
-                        }
+                for (i, desc) in descriptions.iter().enumerate() {
+                    if i > 0 {
+                        println!();
+                        println!();
                     }
+                    render_description(&db, desc, self.budget, &from);
                 }
-            } else {
-                // Not a namespace — try as [item, member] in root namespace.
-                let item_name = baml_db::Name::new(segments[0]);
-                let root_ns: Vec<baml_db::Name> = vec![];
-                let item_def = {
-                    let user_pkg = baml_compiler2_hir::package::package_items(&db, user_package_id);
-                    user_pkg
-                        .lookup_type(&root_ns, &item_name)
-                        .or_else(|| user_pkg.lookup_value(&root_ns, &item_name))
-                };
 
-                if let Some(def) = item_def {
-                    if segments.len() == 2 {
-                        // `baml describe Point.x` → member detail
-                        if let Some(desc) = baml_lsp2_actions::describe_item_member(
-                            &db,
-                            &describe_files,
-                            def,
-                            segments[1],
-                        ) {
-                            if self.json {
-                                let json = crate::grep_command::description_to_json(
-                                    &db,
-                                    &desc,
-                                    self.budget,
-                                    &from,
-                                );
-                                println!(
-                                    "{}",
-                                    serde_json::to_string_pretty(&[json])
-                                        .context("Failed to serialize output as JSON")?
-                                );
-                            } else {
-                                render_description(&db, &desc, self.budget, &from);
-                            }
-                            return Ok(crate::ExitCode::Success);
-                        }
-                    }
-                }
+                Ok(crate::ExitCode::Success)
             }
         }
-
-        // Fall through to existing describe() for single-name lookup.
-        let descriptions = describe(&db, &describe_files, name);
-
-        if descriptions.is_empty() {
-            eprintln!("No symbol found: {name}");
-            return Ok(crate::ExitCode::Other);
-        }
-
-        if self.json {
-            let budget = self.budget;
-            let json_output: Vec<serde_json::Value> = descriptions
-                .iter()
-                .map(|d| crate::grep_command::description_to_json(&db, d, budget, &from))
-                .collect();
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&json_output)
-                    .context("Failed to serialize output as JSON")?
-            );
-            return Ok(crate::ExitCode::Success);
-        }
-
-        for (i, desc) in descriptions.iter().enumerate() {
-            if i > 0 {
-                println!();
-                println!();
-            }
-            render_description(&db, desc, self.budget, &from);
-        }
-
-        Ok(crate::ExitCode::Success)
     }
 }
 
@@ -304,6 +222,17 @@ pub fn render_description(
     budget: usize,
     project_root: &std::path::Path,
 ) {
+    let _ = write_description(&mut std::io::stdout(), db, desc, budget, project_root);
+}
+
+/// Render a SymbolDescription to a writer with budget-based output.
+pub fn write_description(
+    w: &mut impl std::io::Write,
+    db: &ProjectDatabase,
+    desc: &SymbolDescription,
+    budget: usize,
+    project_root: &std::path::Path,
+) -> std::io::Result<()> {
     let file_path = desc.file.path(db);
     let file_text = desc.file.text(db);
     let line_num = line_number_at_offset(file_text, desc.name_span.start().into());
@@ -313,18 +242,19 @@ pub fn render_description(
     let rel_path = relative_path(&file_path, project_root);
     let path_display = rel_path.display();
 
-    println!(
+    writeln!(
+        w,
         "{kind_str} {name}  {path_display}:{line_num}",
         name = desc.name
-    );
+    )?;
 
     let mut lines_used = 1;
 
     // ── Docstring ────────────────────────────────────────────────────────────
     if let Some(ref doc) = desc.docstring {
-        println!();
+        writeln!(w)?;
         for line in doc.lines() {
-            println!("/// {line}");
+            writeln!(w, "/// {line}")?;
             lines_used += 1;
         }
     }
@@ -337,23 +267,23 @@ pub fn render_description(
     let body_lines: Vec<&str> = desc.full_body.lines().collect();
 
     if !is_local {
-        println!();
+        writeln!(w)?;
         let available_for_body = budget.saturating_sub(lines_used);
         if body_lines.len() <= available_for_body {
             for line in &body_lines {
-                println!("{line}");
+                writeln!(w, "{line}")?;
             }
             lines_used += body_lines.len();
         } else if available_for_body >= 5 {
             let truncated = truncate_body(&body_lines, available_for_body);
             for line in &truncated {
-                println!("{line}");
+                writeln!(w, "{line}")?;
             }
             lines_used += truncated.len();
         } else {
             let elided = shape_with_elision(&desc.shape, &desc.full_body);
             for line in elided.lines() {
-                println!("{line}");
+                writeln!(w, "{line}")?;
             }
             lines_used += elided.lines().count();
         }
@@ -361,103 +291,115 @@ pub fn render_description(
 
     // ── Instance methods ─────────────────────────────────────────────────────
     if !desc.instance_methods.is_empty() {
-        println!();
-        println!("instance_methods:");
+        writeln!(w)?;
+        writeln!(w, "instance_methods:")?;
         for m in &desc.instance_methods {
             let m_path = relative_path(&m.file.path(db), project_root);
             let m_line = line_number_at_offset(m.file.text(db), m.name_span.start().into());
-            println!(
+            writeln!(
+                w,
                 "  {:<16} {:<32} {}:{}",
                 m.kind.as_str(),
                 m.name,
                 m_path.display(),
                 m_line
-            );
+            )?;
         }
     }
 
     // ── Static methods ───────────────────────────────────────────────────────
     if !desc.static_methods.is_empty() {
-        println!();
-        println!("static_methods:");
+        writeln!(w)?;
+        writeln!(w, "static_methods:")?;
         for m in &desc.static_methods {
             let m_path = relative_path(&m.file.path(db), project_root);
             let m_line = line_number_at_offset(m.file.text(db), m.name_span.start().into());
-            println!(
+            writeln!(
+                w,
                 "  {:<16} {:<32} {}:{}",
                 m.kind.as_str(),
                 m.name,
                 m_path.display(),
                 m_line
-            );
+            )?;
         }
     }
 
     // ── Container ────────────────────────────────────────────────────────────
     if let Some(ref c) = desc.container {
-        println!();
-        println!("container:");
+        writeln!(w)?;
+        writeln!(w, "container:")?;
         let c_path = relative_path(&c.file.path(db), project_root);
         let c_line = line_number_at_offset(c.file.text(db), c.name_span.start().into());
-        println!(
+        writeln!(
+            w,
             "  {:<16} {:<32} {}:{}",
             c.kind.as_str(),
             c.name,
             c_path.display(),
             c_line
-        );
+        )?;
     }
 
     // ── Dependencies ─────────────────────────────────────────────────────────
     if !desc.dependencies.is_empty() {
-        println!();
-        println!("dependencies:");
+        writeln!(w)?;
+        writeln!(w, "dependencies:")?;
         for dep in &desc.dependencies {
             let dep_path = relative_path(&dep.file.path(db), project_root);
             let dep_line = line_number_at_offset(dep.file.text(db), dep.name_span.start().into());
-            println!(
+            writeln!(
+                w,
                 "  {:<16} {:<32} {}:{}",
                 dep.kind.as_str(),
                 dep.name,
                 dep_path.display(),
                 dep_line,
-            );
+            )?;
         }
     }
 
     // ── References ───────────────────────────────────────────────────────────
-    println!();
-    println!("references ({}):", desc.references.len());
+    writeln!(w)?;
+    writeln!(w, "references ({}):", desc.references.len())?;
     for r in &desc.references {
         let ref_path = relative_path(&r.file.path(db), project_root);
-        println!(
+        writeln!(
+            w,
             "  {}:{}  {}",
             ref_path.display(),
             r.line_number,
             r.line_text.trim()
-        );
+        )?;
     }
 
     let _ = lines_used; // budget tracking removed with new format
-}
-
-/// Resolve the user package's PackageId.
-fn resolve_user_package_id(db: &ProjectDatabase) -> baml_compiler2_hir::package::PackageId<'_> {
-    baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("user"))
+    Ok(())
 }
 
 /// Render a flat listing of entries to stdout.
 fn render_listing(entries: &[baml_lsp2_actions::ListingEntry], project_root: &std::path::Path) {
+    let _ = write_listing(&mut std::io::stdout(), entries, project_root);
+}
+
+/// Render a flat listing of entries to a writer.
+pub fn write_listing(
+    w: &mut impl std::io::Write,
+    entries: &[baml_lsp2_actions::ListingEntry],
+    project_root: &std::path::Path,
+) -> std::io::Result<()> {
     for entry in entries {
         let rel = relative_path(std::path::Path::new(&entry.file_path), project_root);
-        println!(
+        writeln!(
+            w,
             "{:<16} {:<32} {}:{}",
             entry.kind.as_str(),
-            entry.fqn,
+            entry.fqn(),
             rel.display(),
             entry.line,
-        );
+        )?;
     }
+    Ok(())
 }
 
 /// Convert listing entries to JSON array.
@@ -473,7 +415,7 @@ fn listing_to_json(
             let rel = relative_path(std::path::Path::new(&entry.file_path), project_root);
             serde_json::json!({
                 "kind": entry.kind.as_str(),
-                "name": entry.fqn,
+                "name": entry.fqn(),
                 "file": rel.to_string_lossy(),
                 "line": entry.line,
             })

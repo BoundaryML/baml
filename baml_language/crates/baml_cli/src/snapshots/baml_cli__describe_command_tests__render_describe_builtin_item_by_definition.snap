@@ -1,0 +1,36 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+class String  <builtin>/baml/string.baml:1
+
+class String {
+  function length(self) -> int {
+    $rust_function
+  }
+
+  function toLowerCase(self) -> string {
+    $rust_function
+  }
+
+  function toUpperCase(self) -> string {
+    $rust_function
+  }
+
+  function trim(self) -> string {
+  ... skipped 35 lines ...
+  function matches(self, pattern: string) -> bool {
+    $rust_function
+  }
+
+  function replaceAll(self, search: string, replacement: string) -> string {
+    $rust_function
+  }
+
+  /// Encodes the string as UTF-8 bytes.
+  function to_bytes(self) -> uint8array {
+    $rust_function
+  }
+}
+
+references (0):
