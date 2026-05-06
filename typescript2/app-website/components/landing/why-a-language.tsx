@@ -1,165 +1,125 @@
-const BG = '#FBF7ED';
-const INK = '#1A1612';
-const BORDER = '#D9D3C4';
-const ACCENT = '#6D28D9';
-const DASH = 'rgba(109, 40, 217, 0.35)';
+'use client';
 
-const BAML_ASCII = String.raw`          _____                    _____                    _____                    _____
-         /\    \                  /\    \                  /\    \                  /\    \
-        /::\    \                /::\    \                /::\____\                /::\____\
-       /::::\    \              /::::\    \              /::::|   |               /:::/    /
-      /::::::\    \            /::::::\    \            /:::::|   |              /:::/    /
-     /:::/\:::\    \          /:::/\:::\    \          /::::::|   |             /:::/    /
-    /:::/__\:::\    \        /:::/__\:::\    \        /:::/|::|   |            /:::/    /
-   /::::\   \:::\    \      /::::\   \:::\    \      /:::/ |::|   |           /:::/    /
-  /::::::\   \:::\    \    /::::::\   \:::\    \    /:::/  |::|___|______    /:::/    /
- /:::/\:::\   \:::\ ___\  /:::/\:::\   \:::\    \  /:::/   |::::::::\    \  /:::/    /
-/:::/__\:::\   \:::|    |/:::/  \:::\   \:::\____\/:::/    |:::::::::\____\/:::/____/
-\:::\   \:::\  /:::|____|\::/    \:::\  /:::/    /\::/    / ~~~~~/:::/    /\:::\    \
- \:::\   \:::\/:::/    /  \/____/ \:::\/:::/    /  \/____/      /:::/    /  \:::\    \
-  \:::\   \::::::/    /            \::::::/    /               /:::/    /    \:::\    \
-   \:::\   \::::/    /              \::::/    /               /:::/    /      \:::\    \
-    \:::\  /:::/    /               /:::/    /               /:::/    /        \:::\    \
-     \:::\/:::/    /               /:::/    /               /:::/    /          \:::\    \
-      \::::::/    /               /:::/    /               /:::/    /            \:::\    \
-       \::::/    /               /:::/    /               /:::/    /              \:::\____\
-        \::/____/                \::/    /                \::/    /                \::/    /
-         ~~                       \/____/                  \/____/                  \/____/`;
+import { motion } from 'framer-motion';
+import {
+  Braces,
+  Bug,
+  CheckCheck,
+  GitBranch,
+  type LucideIcon,
+  RadioTower,
+  Terminal,
+} from 'lucide-react';
+import type { ReactNode } from 'react';
+import { useState } from 'react';
 
-const LEFT = [
+type Feature = {
+  body: string;
+  details: string[];
+  Icon: LucideIcon;
+  id: string;
+  outcome: string;
+  tint: string;
+  title: string;
+};
+
+const FEATURES: Feature[] = [
   {
-    label: 'Error-correcting parser',
-    syntax: 'function Extract(img: Image) -> Receipt',
+    body: 'Turn messy model responses into the shape your app declared, with structured failures when the output cannot be recovered.',
+    details: ['schema-aware parser', 'repair passes', 'typed failure paths'],
+    Icon: CheckCheck,
+    id: 'parser',
+    outcome: 'Less brittle JSON handling',
+    tint: '#0F766E',
+    title: 'Parser',
   },
   {
-    label: 'Tagged union match dispatch',
-    syntax: 'match (tool) { r: ReadFile => read(r.path) }',
+    body: 'Model prompts can share abstractions like normal code, so larger systems do not collapse into copy-pasted prompt files.',
+    details: ['generic helpers', 'inline lambdas', 'namespaces'],
+    Icon: Braces,
+    id: 'generics',
+    outcome: 'Reusable prompt architecture',
+    tint: '#6D28D9',
+    title: 'Generics',
   },
   {
-    label: 'Typed errors and retries',
-    syntax: 'function Fetch() -> Result throws Timeout',
+    body: 'Give agents and humans a compiler-produced map of the project: functions, types, clients, tests, and call surfaces.',
+    details: ['project summaries', 'agent context', 'compiler-backed facts'],
+    Icon: Terminal,
+    id: 'describe',
+    outcome: 'Better context on demand',
+    tint: '#2563EB',
+    title: 'Describe',
   },
   {
-    label: 'Generics, lambdas, namespaces',
-    syntax: 'function Apply<T>(f: (x: T) -> T, x: T) -> T',
+    body: 'Stream typed partial objects instead of raw tokens, so interfaces and agents can react before the final result lands.',
+    details: ['partial types', 'incremental UI', 'typed stream states'],
+    Icon: RadioTower,
+    id: 'streaming',
+    outcome: 'Progress before completion',
+    tint: '#B45309',
+    title: 'Streaming',
+  },
+  {
+    body: 'Keep prompt tests beside the prompt functions they exercise, with assertions that survive refactors better than screenshots.',
+    details: ['inline testsets', 'typed assertions', 'local eval loops'],
+    Icon: Bug,
+    id: 'tests',
+    outcome: 'Prompt changes with guardrails',
+    tint: '#BE123C',
+    title: 'Tests',
+  },
+  {
+    body: 'Represent failures and tool choices as types, then handle retries and dispatch with exhaustive match branches.',
+    details: ['typed errors', 'retry policy', 'union match dispatch'],
+    Icon: GitBranch,
+    id: 'typed-errors',
+    outcome: 'Agent control flow you can audit',
+    tint: '#4D7C0F',
+    title: 'Typed Errors',
   },
 ];
 
-const RIGHT = [
-  {
-    label: 'Better context',
-    syntax: 'baml-cli describe',
-  },
-  {
-    label: 'Streaming with typed partials',
-    syntax: 'stream Extract(img) -> partial Receipt',
-  },
-  {
-    label: 'One interface, every LLM provider',
-    syntax: 'client "openai/gpt-4o"',
-  },
-  {
-    label: 'Tests live next to your prompts',
-    syntax: 'test Happy { functions [Classify] }',
-  },
-];
+const APP_LANGUAGES = ['Python', 'TypeScript', 'Go'];
+const LLM_PROVIDERS = ['OpenAI', 'Anthropic', 'Google'];
 
 export function WhyALanguage() {
+  const [activeFeatureId, setActiveFeatureId] = useState(FEATURES[0].id);
+  const activeFeature =
+    FEATURES.find((feature) => feature.id === activeFeatureId) ?? FEATURES[0];
+
   return (
-    <section
-      className="w-full"
-      aria-label="BAML"
-      style={{ backgroundColor: BG }}
-    >
-      <style>{`
-        @media (max-width: 900px) {
-          .why-cols { grid-template-columns: 1fr !important; max-width: 420px !important; }
-          .why-divider { display: none !important; }
-          .why-item { line-height: 1.35 !important; font-size: 15px !important; }
-          .why-item code { white-space: normal !important; }
-        }
-      `}</style>
+    <section aria-labelledby="features-heading" className="w-full bg-[#FBF7ED]">
+      <div className="mx-auto max-w-[1600px] border-b border-[#D9D3C4] px-6 py-20 sm:px-12 sm:py-28">
+        <div className="mx-auto grid max-w-[1240px] items-start gap-14 lg:grid-cols-[0.72fr_1.28fr] lg:gap-16">
+          <div className="lg:sticky lg:top-[calc(var(--navigation-height,56px)+48px)]">
+            <p className="mb-5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#8A8580]">
+              Features
+            </p>
 
-      <div
-        className="mx-auto"
-        style={{
-          maxWidth: '1600px',
-          borderBottom: `1px solid ${BORDER}`,
-          padding: '99px 48px 132px',
-        }}
-      >
-        <div className="mx-auto flex w-full max-w-[900px] flex-col items-center text-center">
-          <pre
-            aria-label="BAML"
-            style={{
-              color: ACCENT,
-              fontFamily:
-                'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-              fontSize: 'clamp(5px, 0.78vw, 12px)',
-              fontWeight: 600,
-              lineHeight: 1,
-              margin: '0 0 28px',
-              maxWidth: '100%',
-              overflow: 'hidden',
-              textAlign: 'left',
-              whiteSpace: 'pre',
-            }}
-          >
-            {BAML_ASCII}
-          </pre>
+            <h2
+              className="mb-7 max-w-[560px] text-[clamp(2.15rem,4.4vw,4.4rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-[#1A1612]"
+              id="features-heading"
+            >
+              BAML is a programming language.
+            </h2>
 
-          <div
-            aria-hidden="true"
-            style={{
-              width: 56,
-              borderTop: `1px dashed ${DASH}`,
-              margin: '0 0 28px',
-            }}
-          />
+            <p className="max-w-[540px] text-[clamp(1rem,1.35vw,1.15rem)] leading-[1.62] text-[#5C5852]">
+              Built in{' '}
+              <span className="font-semibold text-[#1A1612]">Rust</span> and
+              used by some of the world&apos;s largest companies. It has a
+              compiler, VM, LSP, formatter, type system with inferred error
+              types, and drops into any system so teams can adopt it
+              incrementally without rewriting their stack.
+            </p>
+          </div>
 
-          <p
-            style={{
-              fontSize: 'clamp(17px, 1.6vw, 20px)',
-              fontWeight: 400,
-              lineHeight: 1.55,
-              letterSpacing: '-0.005em',
-              color: INK,
-              maxWidth: 720,
-              margin: '0 0 88px',
-            }}
-          >
-            BAML is a programming language, built in{' '}
-            <span style={{ color: ACCENT, fontWeight: 500 }}>Rust</span> and
-            used by some of the world&apos;s largest companies. It has a
-            compiler, VM, LSP, formatter, type system (with inferred error
-            types), and drops into{' '}
-            <span style={{ fontWeight: 500 }}>Python</span>,{' '}
-            <span style={{ fontWeight: 500 }}>TypeScript</span>,{' '}
-            <span style={{ fontWeight: 500 }}>Go</span>, and the{' '}
-            <span style={{ fontWeight: 500 }}>browser</span> so teams can adopt
-            it incrementally without rewriting their stack.
-          </p>
-
-          <div
-            className="why-cols"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr auto 1fr',
-              columnGap: '48px',
-              width: '100%',
-              maxWidth: '800px',
-              textAlign: 'center',
-              alignItems: 'stretch',
-              justifyItems: 'center',
-            }}
-          >
-            <Column items={LEFT} />
-            <div
-              aria-hidden="true"
-              className="why-divider"
-              style={{ borderLeft: `1px dashed ${DASH}`, width: 0 }}
+          <div className="relative min-h-[760px] lg:min-h-[720px]">
+            <ArchitectureStack
+              activeFeature={activeFeature}
+              activeFeatureId={activeFeatureId}
+              onActiveFeatureChange={setActiveFeatureId}
             />
-            <Column items={RIGHT} />
           </div>
         </div>
       </div>
@@ -167,37 +127,243 @@ export function WhyALanguage() {
   );
 }
 
-function Column({ items }: { items: { label: string; syntax: string }[] }) {
+function ArchitectureStack({
+  activeFeature,
+  activeFeatureId,
+  onActiveFeatureChange,
+}: {
+  activeFeature: Feature;
+  activeFeatureId: string;
+  onActiveFeatureChange: (id: string) => void;
+}) {
+  const ActiveIcon = activeFeature.Icon;
+
   return (
-    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-      {items.map((item) => (
-        <li
-          key={item.label}
-          className="why-item"
-          style={{
-            fontSize: '17px',
-            fontWeight: 400,
-            color: INK,
-            lineHeight: 1.35,
-            marginBottom: 26,
-          }}
+    <div className="relative h-full lg:translate-x-10 lg:grid lg:grid-cols-[minmax(0,540px)_300px] lg:items-start lg:gap-12">
+      <div
+        className="relative mx-auto flex max-w-[760px] flex-col items-center gap-10 lg:mx-0 lg:max-w-[540px] lg:gap-0"
+        style={{ perspective: '1200px' }}
+      >
+        <LayerCard
+          className="z-30 w-[78%]"
+          eyebrow="Top Layer"
+          floatDelay={0}
+          title="Application"
         >
-          <span>{item.label}</span>
-          <code
+          <div className="flex flex-wrap justify-center gap-2">
+            {APP_LANGUAGES.map((language) => (
+              <TechPill key={language}>{language}</TechPill>
+            ))}
+          </div>
+        </LayerCard>
+
+        <LayerCard
+          activeTint={activeFeature.tint}
+          className="z-20 -mt-4 w-full lg:-mt-1 lg:w-[108%]"
+          eyebrow="Control Plane"
+          floatDelay={0.18}
+          isActive
+          title="BAML Control Plane"
+        >
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {FEATURES.map((feature) => (
+              <FeatureChip
+                feature={feature}
+                isActive={feature.id === activeFeatureId}
+                key={feature.id}
+                onActivate={() => onActiveFeatureChange(feature.id)}
+              />
+            ))}
+          </div>
+        </LayerCard>
+
+        <LayerCard
+          className="z-10 -mt-4 w-[82%] lg:-mt-1"
+          eyebrow="Bottom Layer"
+          floatDelay={0.36}
+          title="LLM Infrastructure"
+        >
+          <div className="flex flex-wrap justify-center gap-2">
+            {LLM_PROVIDERS.map((provider) => (
+              <TechPill key={provider}>{provider}</TechPill>
+            ))}
+          </div>
+        </LayerCard>
+      </div>
+
+      <motion.aside
+        animate={{ opacity: 1, x: 0, y: 0 }}
+        className="mt-8 rounded-lg border border-[#D9D3C4] bg-[#FFFCF6]/90 p-5 shadow-[0_22px_70px_-46px_rgba(26,22,18,0.55)] backdrop-blur-md lg:sticky lg:top-[170px] lg:mt-44 lg:w-[300px]"
+        initial={{ opacity: 0, x: 10, y: 8 }}
+        key={activeFeature.id}
+        transition={{ duration: 0.22, ease: [0.22, 0.61, 0.36, 1] }}
+      >
+        <div className="mb-4 flex items-center gap-3">
+          <div
+            className="grid size-10 place-items-center rounded-md border"
             style={{
-              color: '#6D28D9',
-              display: 'block',
-              fontSize: '11px',
-              lineHeight: 1.35,
-              marginTop: 6,
-              opacity: 0.72,
-              whiteSpace: 'nowrap',
+              background: `${activeFeature.tint}12`,
+              borderColor: `${activeFeature.tint}38`,
+              color: activeFeature.tint,
             }}
           >
-            {item.syntax}
-          </code>
-        </li>
-      ))}
-    </ul>
+            <ActiveIcon aria-hidden size={19} strokeWidth={1.8} />
+          </div>
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#8A8580]">
+              Feature Detail
+            </div>
+            <h3 className="text-lg font-semibold leading-tight tracking-[-0.015em] text-[#1A1612]">
+              {activeFeature.title}
+            </h3>
+          </div>
+        </div>
+
+        <p className="text-sm leading-6 text-[#5C5852]">{activeFeature.body}</p>
+
+        <div
+          className="mt-4 rounded-md border px-3 py-2 text-sm font-semibold"
+          style={{
+            background: `${activeFeature.tint}0F`,
+            borderColor: `${activeFeature.tint}30`,
+            color: activeFeature.tint,
+          }}
+        >
+          {activeFeature.outcome}
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {activeFeature.details.map((detail) => (
+            <span
+              className="rounded-full border border-[#D9D3C4] bg-[#F4EFE2] px-2.5 py-1 font-mono text-[10px] leading-none tracking-[0.02em] text-[#6B6258]"
+              key={detail}
+            >
+              {detail}
+            </span>
+          ))}
+        </div>
+      </motion.aside>
+    </div>
+  );
+}
+
+function LayerCard({
+  activeTint,
+  children,
+  className,
+  eyebrow,
+  floatDelay,
+  isActive = false,
+  title,
+}: {
+  activeTint?: string;
+  children: ReactNode;
+  className: string;
+  eyebrow: string;
+  floatDelay: number;
+  isActive?: boolean;
+  title: string;
+}) {
+  return (
+    <div
+      className={[
+        'lg:[transform:rotateX(12deg)_rotateZ(-1.2deg)]',
+        className,
+      ].join(' ')}
+      style={{
+        transformStyle: 'preserve-3d',
+      }}
+    >
+      <motion.div
+        animate={{
+          boxShadow: isActive
+            ? `0 28px 90px -54px ${activeTint ?? '#6D28D9'}, 0 0 0 1px ${activeTint ?? '#6D28D9'}33`
+            : '0 24px 70px -48px rgba(26,22,18,0.55), 0 1px 0 rgba(255,255,255,0.65) inset',
+          y: [0, -7, 0],
+        }}
+        className={[
+          'relative rounded-lg border border-[#D9D3C4] bg-[#FFFCF6]/78 p-5 backdrop-blur-xl',
+          'before:pointer-events-none before:absolute before:inset-x-5 before:-bottom-4 before:h-4 before:skew-x-[-28deg] before:rounded-b-lg before:border before:border-t-0 before:border-[#CFC6B5] before:bg-[#E9E0CF]',
+        ].join(' ')}
+        transition={{
+          boxShadow: { duration: 0.25 },
+          delay: floatDelay,
+          duration: 5.2,
+          ease: 'easeInOut',
+          repeat: Number.POSITIVE_INFINITY,
+        }}
+        whileHover={{ scale: 1.012 }}
+      >
+        <div
+          className="absolute inset-0 rounded-lg opacity-60"
+          style={{
+            background:
+              'linear-gradient(135deg, rgba(255,255,255,0.68), rgba(255,255,255,0.08))',
+          }}
+        />
+        <div className="relative">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-[#8A8580]">
+                {eyebrow}
+              </p>
+              <h3 className="text-xl font-semibold tracking-[-0.02em] text-[#1A1612]">
+                {title}
+              </h3>
+            </div>
+          </div>
+          {children}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function FeatureChip({
+  feature,
+  isActive,
+  onActivate,
+}: {
+  feature: Feature;
+  isActive: boolean;
+  onActivate: () => void;
+}) {
+  const Icon = feature.Icon;
+
+  return (
+    <button
+      className="group flex min-h-[70px] items-center gap-2 overflow-hidden rounded-md border bg-white/55 px-3 py-3 text-left transition-colors hover:bg-white/85"
+      onFocus={onActivate}
+      onMouseEnter={onActivate}
+      style={{
+        borderColor: isActive ? `${feature.tint}66` : '#D9D3C4',
+        boxShadow: isActive ? `0 10px 28px -24px ${feature.tint}` : 'none',
+      }}
+      type="button"
+    >
+      <span
+        className="grid size-8 shrink-0 place-items-center rounded-md border transition-transform group-hover:scale-105"
+        style={{
+          background: `${feature.tint}12`,
+          borderColor: `${feature.tint}33`,
+          color: feature.tint,
+        }}
+      >
+        <Icon aria-hidden size={16} strokeWidth={1.9} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[13px] font-semibold leading-tight text-[#1A1612]">
+          {feature.title}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function TechPill({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-full border border-[#D9D3C4] bg-white/55 px-3 py-1.5 font-mono text-[11px] tracking-[0.02em] text-[#5C5852]">
+      {children}
+    </span>
   );
 }
