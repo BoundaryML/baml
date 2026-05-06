@@ -40,7 +40,7 @@ class TestCollector {
     let count = 0
     let hash_prefix = full_name + "#"
     for (let t in self.tests) {
-      if (t.name == full_name || t.name.startsWith(hash_prefix)) { count += 1 } else { null }
+      if (t.name == full_name || t.name.starts_with(hash_prefix)) { count += 1 } else { null }
     }
     let final_name = if (count > 0) { full_name + "#" + baml.unstable.string(count + 1) } else { full_name }
     let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner })
@@ -51,7 +51,7 @@ class TestCollector {
     let count = 0
     let hash_prefix = full_name + "#"
     for (let ts in self.testsets) {
-      if (ts.name == full_name || ts.name.startsWith(hash_prefix)) { count += 1 } else { null }
+      if (ts.name == full_name || ts.name.starts_with(hash_prefix)) { count += 1 } else { null }
     }
     let final_name = if (count > 0) { full_name + "#" + baml.unstable.string(count + 1) } else { full_name }
     let _ = self.testsets.push(TestSetRegistration { name: final_name, collector: collector, runner: runner })
@@ -143,7 +143,7 @@ class TestRegistry {
     for (let k in self.expansions.keys()) {
       let sub = self.expansions[k]
       // Check if the name could be in this sub-registry (segment-aware prefix match)
-      if (name.startsWith(k + "/")) {
+      if (name.starts_with(k + "/")) {
         return sub.run_test(name)
       }
     }
@@ -172,7 +172,7 @@ class TestRegistry {
     // Search in expanded sub-registries using segment-aware prefix match
     for (let k in self.expansions.keys()) {
       let sub = self.expansions[k]
-      if (name.startsWith(k + "/")) {
+      if (name.starts_with(k + "/")) {
         return sub.expand_set(name)
       }
     }

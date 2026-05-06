@@ -342,7 +342,7 @@ impl QualifiedName {
     ///
     /// For builtins, this produces strings like:
     /// - `"baml.Array.length"`
-    /// - `"baml.String.toLowerCase"`
+    /// - `"baml.String.to_lower_case"`
     /// - `"baml.env.get"`
     ///
     /// For local items, this is just the name.
@@ -607,7 +607,7 @@ mod tests {
         // Ensure from_builtin_path and to_runtime_string roundtrip correctly
         let paths = [
             "baml.Array.length",
-            "baml.String.toLowerCase",
+            "baml.String.to_lower_case",
             "baml.Map.keys",
             "baml.deep_copy",
             "baml.http.Response.text",

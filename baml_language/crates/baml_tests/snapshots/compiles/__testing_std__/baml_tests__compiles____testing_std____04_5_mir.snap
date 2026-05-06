@@ -106,7 +106,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
         _35 = copy _36[_37];
         _40 = copy _34;
         _39 = copy _40 + const "/";
-        _38 = call const fn baml.String.startsWith(copy _2, copy _39) -> [bb7];
+        _38 = call const fn baml.String.starts_with(copy _2, copy _39) -> [bb7];
     }
 
     bb7: {
@@ -686,7 +686,7 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     bb13: {
         _23 = copy _18.0;
         _24 = copy _11;
-        _19 = call const fn baml.String.startsWith(copy _23, copy _24) -> [bb14];
+        _19 = call const fn baml.String.starts_with(copy _23, copy _24) -> [bb14];
     }
 
     bb14: {
@@ -830,7 +830,7 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     bb13: {
         _23 = copy _18.0;
         _24 = copy _11;
-        _19 = call const fn baml.String.startsWith(copy _23, copy _24) -> [bb14];
+        _19 = call const fn baml.String.starts_with(copy _23, copy _24) -> [bb14];
     }
 
     bb14: {
@@ -920,7 +920,7 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
         _20 = copy _21[_22];
         _25 = copy _19;
         _24 = copy _25 + const "/";
-        _23 = call const fn baml.String.startsWith(copy _2, copy _24) -> [bb7];
+        _23 = call const fn baml.String.starts_with(copy _2, copy _24) -> [bb7];
     }
 
     bb7: {

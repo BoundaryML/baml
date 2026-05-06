@@ -4,7 +4,7 @@ source: crates/baml_tests/tests/bytecode_format/main.rs
 function assert.contains(haystack: string, needle: string) -> null {
   28   0    load_var 1             (haystack)
        1    load_var 2             (needle)
-       2    call 54 ntypeargs=0    (baml.String.includes)
+       2    call 52 ntypeargs=0    (baml.String.includes)
        3    unary_op !             
        4    pop_jump_if_false +2   (to 6)
        5    jump +3                (to 8)
@@ -144,11 +144,11 @@ function testing.SerializedTest.from_json(j: baml.json.json) -> testing.Serializ
 function testing.SerializedTest.to_json(self: null) -> baml.json.json {
   78   0    load_var 1            (self)
        1    load_field 0          (type)
-       2    call 40 ntypeargs=0   (baml.String.to_json)
+       2    call 41 ntypeargs=0   (baml.String.to_json)
        3    store_var 2           (_2)
        4    load_var 1            (self)
        5    load_field 1          (name)
-       6    call 40 ntypeargs=0   (baml.String.to_json)
+       6    call 41 ntypeargs=0   (baml.String.to_json)
        7    store_var 3           (_5)
        8    load_var 2            (_2)
        9    load_var 3            (_5)
@@ -196,7 +196,7 @@ function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.Seria
 function testing.SerializedTestSet.to_json(self: null) -> baml.json.json {
   83   0    load_var 1            (self)
        1    load_field 0          (name)
-       2    call 40 ntypeargs=0   (baml.String.to_json)
+       2    call 41 ntypeargs=0   (baml.String.to_json)
        3    store_var 2           (_2)
        4    load_var 1            (self)
        5    load_field 1          (items)
@@ -392,7 +392,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
        78   load_var 10                      (t)
        79   load_field 0                     (name)
        80   load_var 7                       (hash_prefix)
-       81   call 51 ntypeargs=0              (baml.String.startsWith)
+       81   call 48 ntypeargs=0              (baml.String.starts_with)
        82   pop_jump_if_false +5             (to 87)
        83   load_var 6                       (count)
        84   load_const 5                     (1)
@@ -496,7 +496,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
        78   load_var 10                      (ts)
        79   load_field 0                     (name)
        80   load_var 7                       (hash_prefix)
-       81   call 51 ntypeargs=0              (baml.String.startsWith)
+       81   call 48 ntypeargs=0              (baml.String.starts_with)
        82   pop_jump_if_false +5             (to 87)
        83   load_var 6                       (count)
        84   load_const 5                     (1)
@@ -513,7 +513,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
 function testing.TestCollector.to_json(self: null) -> baml.json.json {
   29   0    load_var 1            (self)
        1    load_field 0          (prefix)
-       2    call 40 ntypeargs=0   (baml.String.to_json)
+       2    call 41 ntypeargs=0   (baml.String.to_json)
        3    store_var 2           (_2)
        4    load_var 1            (self)
        5    load_field 1          (tests)
@@ -625,7 +625,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         38    load_var 11                      (k)
         39    load_const 2                     ("/")
         40    bin_op +                         
-        41    call 51 ntypeargs=0              (baml.String.startsWith)
+        41    call 48 ntypeargs=0              (baml.String.starts_with)
         42    pop_jump_if_false +2             (to 44)
         43    jump +6                          (to 49)
 
@@ -799,7 +799,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         38   load_var 8             (k)
         39   load_const 2           ("/")
         40   bin_op +               
-        41   call 51 ntypeargs=0    (baml.String.startsWith)
+        41   call 48 ntypeargs=0    (baml.String.starts_with)
 
   145   42   pop_jump_if_false +2   (to 44)
         43   jump +6                (to 49)
@@ -1241,7 +1241,7 @@ function user.ErrorInfo.to_json(self: null) -> baml.json.json {
        3    store_var 2           (_2)
        4    load_var 1            (self)
        5    load_field 1          (message)
-       6    call 40 ntypeargs=0   (baml.String.to_json)
+       6    call 41 ntypeargs=0   (baml.String.to_json)
        7    store_var 3           (_5)
        8    load_var 2            (_2)
        9    load_var 3            (_5)
@@ -1293,7 +1293,7 @@ function user.Report.to_json(self: null) -> baml.json.json {
        3    store_var 2           (_2)
        4    load_var 1            (self)
        5    load_field 1          (label)
-       6    call 40 ntypeargs=0   (baml.String.to_json)
+       6    call 41 ntypeargs=0   (baml.String.to_json)
        7    store_var 3           (_5)
        8    load_var 1            (self)
        9    load_field 2          (breakdown)
@@ -1378,7 +1378,7 @@ function user.User.promote(self: null, bonus: int) -> Report {
 function user.User.to_json(self: null) -> baml.json.json {
   3   0    load_var 1            (self)
       1    load_field 0          (name)
-      2    call 40 ntypeargs=0   (baml.String.to_json)
+      2    call 41 ntypeargs=0   (baml.String.to_json)
       3    store_var 2           (_2)
       4    load_var 1            (self)
       5    load_field 1          (age)

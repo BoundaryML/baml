@@ -214,7 +214,7 @@ async fn string_to_lower_case() {
         r#"
         function main() -> string {
             let s = "HELLO World";
-            s.toLowerCase()
+            s.to_lower_case()
         }
     "#
     );
@@ -222,7 +222,7 @@ async fn string_to_lower_case() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const "HELLO World"
-        call baml.String.toLowerCase
+        call baml.String.to_lower_case
         return
     }
     "#);
@@ -239,7 +239,7 @@ async fn string_to_upper_case() {
         r#"
         function main() -> string {
             let s = "hello WORLD";
-            s.toUpperCase()
+            s.to_upper_case()
         }
     "#
     );
@@ -247,7 +247,7 @@ async fn string_to_upper_case() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const "hello WORLD"
-        call baml.String.toUpperCase
+        call baml.String.to_upper_case
         return
     }
     "#);
@@ -312,7 +312,7 @@ async fn string_starts_with() {
         r#"
         function main() -> bool {
             let s = "hello world";
-            s.startsWith("hello")
+            s.starts_with("hello")
         }
     "#
     );
@@ -321,7 +321,7 @@ async fn string_starts_with() {
     function main() -> bool {
         load_const "hello world"
         load_const "hello"
-        call baml.String.startsWith
+        call baml.String.starts_with
         return
     }
     "#);
@@ -335,7 +335,7 @@ async fn string_ends_with() {
         r#"
         function main() -> bool {
             let s = "hello world";
-            s.endsWith("world")
+            s.ends_with("world")
         }
     "#
     );
@@ -344,7 +344,7 @@ async fn string_ends_with() {
     function main() -> bool {
         load_const "hello world"
         load_const "world"
-        call baml.String.endsWith
+        call baml.String.ends_with
         return
     }
     "#);

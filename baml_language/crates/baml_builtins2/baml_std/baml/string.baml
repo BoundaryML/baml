@@ -8,11 +8,11 @@ class String {
     $rust_function
   }
 
-  function toLowerCase(self) -> string {
+  function to_lower_case(self) -> string {
     $rust_function
   }
 
-  function toUpperCase(self) -> string {
+  function to_upper_case(self) -> string {
     $rust_function
   }
 
@@ -24,11 +24,11 @@ class String {
     $rust_function
   }
 
-  function startsWith(self, prefix: string) -> bool {
+  function starts_with(self, prefix: string) -> bool {
     $rust_function
   }
 
-  function endsWith(self, suffix: string) -> bool {
+  function ends_with(self, suffix: string) -> bool {
     $rust_function
   }
 
@@ -44,11 +44,11 @@ class String {
     $rust_function
   }
 
-  function indexOf(self, search: string) -> int {
+  function index_of(self, search: string) -> int {
     $rust_function
   }
 
-  function charAt(self, index: int) -> string {
+  function char_at(self, index: int) -> string {
     $rust_function
   }
 
@@ -56,7 +56,7 @@ class String {
     $rust_function
   }
 
-  function replaceAll(self, search: string, replacement: string) -> string {
+  function replace_all(self, search: string, replacement: string) -> string {
     $rust_function
   }
 

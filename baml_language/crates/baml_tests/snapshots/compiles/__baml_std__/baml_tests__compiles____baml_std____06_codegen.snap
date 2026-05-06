@@ -97,10 +97,10 @@ function baml.Null.from_json(j: baml.json.json) -> baml.Null {
 function baml.Null.to_json(self: null) -> baml.json.json {
 }
 
-function baml.String.charAt(self: null, index: int) -> string {
+function baml.String.char_at(self: null, index: int) -> string {
 }
 
-function baml.String.endsWith(self: null, suffix: string) -> bool {
+function baml.String.ends_with(self: null, suffix: string) -> bool {
 }
 
 function baml.String.from_json(j: baml.json.json) -> baml.String {
@@ -111,7 +111,7 @@ function baml.String.from_json(j: baml.json.json) -> baml.String {
 function baml.String.includes(self: null, search: string) -> bool {
 }
 
-function baml.String.indexOf(self: null, search: string) -> int {
+function baml.String.index_of(self: null, search: string) -> int {
 }
 
 function baml.String.length(self: null) -> int {
@@ -123,28 +123,28 @@ function baml.String.matches(self: null, pattern: string) -> bool {
 function baml.String.replace(self: null, search: string, replacement: string) -> string {
 }
 
-function baml.String.replaceAll(self: null, search: string, replacement: string) -> string {
+function baml.String.replace_all(self: null, search: string, replacement: string) -> string {
 }
 
 function baml.String.split(self: null, delimiter: string) -> string[] {
 }
 
-function baml.String.startsWith(self: null, prefix: string) -> bool {
+function baml.String.starts_with(self: null, prefix: string) -> bool {
 }
 
 function baml.String.substring(self: null, start: int, end: int) -> string {
-}
-
-function baml.String.toLowerCase(self: null) -> string {
-}
-
-function baml.String.toUpperCase(self: null) -> string {
 }
 
 function baml.String.to_bytes(self: null) -> uint8array {
 }
 
 function baml.String.to_json(self: null) -> baml.json.json {
+}
+
+function baml.String.to_lower_case(self: null) -> string {
+}
+
+function baml.String.to_upper_case(self: null) -> string {
 }
 
 function baml.String.trim(self: null) -> string {

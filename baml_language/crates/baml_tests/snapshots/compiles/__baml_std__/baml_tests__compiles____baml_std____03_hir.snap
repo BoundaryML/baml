@@ -858,24 +858,24 @@ function baml.to_json(self: ?) -> baml.json.json  [builtin]
 --- <builtin>/baml/string.baml ---
 class baml.String {
 }
-function baml.charAt(self: ?, index: int) -> string  [builtin]
-function baml.endsWith(self: ?, suffix: string) -> bool  [builtin]
+function baml.char_at(self: ?, index: int) -> string  [builtin]
+function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
 function baml.from_json(j: baml.json.json) -> baml.String  [expr] {
   baml.String {  }
 }
 function baml.includes(self: ?, search: string) -> bool  [builtin]
-function baml.indexOf(self: ?, search: string) -> int  [builtin]
+function baml.index_of(self: ?, search: string) -> int  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.matches(self: ?, pattern: string) -> bool  [builtin]
 function baml.replace(self: ?, search: string, replacement: string) -> string  [builtin]
-function baml.replaceAll(self: ?, search: string, replacement: string) -> string  [builtin]
+function baml.replace_all(self: ?, search: string, replacement: string) -> string  [builtin]
 function baml.split(self: ?, delimiter: string) -> string[]  [builtin]
-function baml.startsWith(self: ?, prefix: string) -> bool  [builtin]
+function baml.starts_with(self: ?, prefix: string) -> bool  [builtin]
 function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
-function baml.toLowerCase(self: ?) -> string  [builtin]
-function baml.toUpperCase(self: ?) -> string  [builtin]
 function baml.to_bytes(self: ?) -> uint8array  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
+function baml.to_lower_case(self: ?) -> string  [builtin]
+function baml.to_upper_case(self: ?) -> string  [builtin]
 function baml.trim(self: ?) -> string  [builtin]
 
 --- <builtin>/baml/type_class.baml ---

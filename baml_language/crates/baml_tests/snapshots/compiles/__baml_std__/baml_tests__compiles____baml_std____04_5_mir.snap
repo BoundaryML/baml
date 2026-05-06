@@ -6745,9 +6745,9 @@ fn baml.Null.from_json(j: baml.json.json) -> baml.Null {
 
 fn baml.Null.to_json = builtin(vm)
 
-fn baml.String.charAt = builtin(vm)
+fn baml.String.char_at = builtin(vm)
 
-fn baml.String.endsWith = builtin(vm)
+fn baml.String.ends_with = builtin(vm)
 
 fn baml.String.from_json(j: baml.json.json) -> baml.String {
     // Locals:
@@ -6766,7 +6766,7 @@ fn baml.String.from_json(j: baml.json.json) -> baml.String {
 
 fn baml.String.includes = builtin(vm)
 
-fn baml.String.indexOf = builtin(vm)
+fn baml.String.index_of = builtin(vm)
 
 fn baml.String.length = builtin(vm)
 
@@ -6774,21 +6774,21 @@ fn baml.String.matches = builtin(vm)
 
 fn baml.String.replace = builtin(vm)
 
-fn baml.String.replaceAll = builtin(vm)
+fn baml.String.replace_all = builtin(vm)
 
 fn baml.String.split = builtin(vm)
 
-fn baml.String.startsWith = builtin(vm)
+fn baml.String.starts_with = builtin(vm)
 
 fn baml.String.substring = builtin(vm)
-
-fn baml.String.toLowerCase = builtin(vm)
-
-fn baml.String.toUpperCase = builtin(vm)
 
 fn baml.String.to_bytes = builtin(vm)
 
 fn baml.String.to_json = builtin(vm)
+
+fn baml.String.to_lower_case = builtin(vm)
+
+fn baml.String.to_upper_case = builtin(vm)
 
 fn baml.String.trim = builtin(vm)
 
