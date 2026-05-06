@@ -102,16 +102,19 @@ fn user.HasWith.to_json(self: HasWith) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: HasWith // self // param
-    let _2: string
-    let _3: type
+    let _2: baml.json.json
+    let _3: int
+    let _4: HasWith
 
     bb0: {
-        _3 = load_type(HasWith);
-        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+        _0 = { const "with": copy _2 };
+        goto -> bb2;
     }
 
     bb2: {
@@ -123,16 +126,19 @@ fn user.Foo.to_json(self: Foo) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: Foo // self // param
-    let _2: string
-    let _3: type
+    let _2: baml.json.json
+    let _3: int
+    let _4: Foo
 
     bb0: {
-        _3 = load_type(Foo);
-        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+        _0 = { const "x": copy _2 };
+        goto -> bb2;
     }
 
     bb2: {

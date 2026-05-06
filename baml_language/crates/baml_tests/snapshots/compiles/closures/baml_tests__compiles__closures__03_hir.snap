@@ -111,28 +111,28 @@ function user.test_unbound_in_map() -> string[]  [expr] {
   { let employees = [user.Employee { first: "Alice", last: "Smith" }, user.Employee { first: "Bob", last: "Jones" }] } employees.map(Employee.full_name)
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "min": self.min.to_json(), "max": self.max.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "encoder": self.encoder.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "op": self.op.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "prefix": self.prefix.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "first": self.first.to_json(), "last": self.last.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "value": self.value.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "value": self.value.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "charset": self.charset.to_json() }
 }
 function user.unwrap(self: ?) -> user.T  [expr] {
   {  } self.value

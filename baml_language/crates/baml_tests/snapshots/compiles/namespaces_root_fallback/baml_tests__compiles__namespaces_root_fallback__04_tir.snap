@@ -6,7 +6,7 @@ class user.Config {
   key: string
 }
 function user.Config.to_json(self: user.Config) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Config>(self)) : baml.json.json
+  map { "key": self.key.to_json() } : map<string, baml.json.json>
 }
 function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Config
@@ -18,7 +18,7 @@ class user.llm.Response {
   text: string
 }
 function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Response>(self)) : baml.json.json
+  map { "text": self.text.to_json() } : map<string, baml.json.json>
 }
 function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.llm.Response

@@ -29,7 +29,8 @@ class user.NotJSON {
   inner: unknown
 }
 function user.NotJSON.to_json(self: user.NotJSON) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<NotJSON>(self)) : baml.json.json
+  map { "inner": self.inner.to_json() } : map<string, unknown>
+  !! 92..97: unresolved type: name
 }
 function user.NotJSON.from_json(j: baml.json.json) -> user.NotJSON throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.NotJSON

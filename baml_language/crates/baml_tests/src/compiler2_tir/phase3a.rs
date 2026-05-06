@@ -183,12 +183,12 @@ fn calling_class_as_function() {
         "test.baml",
         "class Foo { name string }\nfunction f() -> int { return Foo(1); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Foo {
       name: string
     }
     function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<Foo>(self)) : baml.json.json
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.Foo
@@ -202,7 +202,7 @@ fn calling_class_as_function() {
     class user.Foo$stream {
       name: null | string
     }
-    ");
+    "#);
 }
 
 // ── 3A-6. MissingReturnExpression diagnostic ─────────────────────────────
@@ -445,13 +445,13 @@ class Dog { name string
 legs int }
 function f(x: Cat | Dog) -> string { return x.name; }"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Cat {
       name: string
       legs: int
     }
     function user.Cat.to_json(self: user.Cat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<Cat>(self)) : baml.json.json
+      map { "name": self.name.to_json(), "legs": self.legs.to_json() } : map<string, baml.json.json>
     }
     function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.Cat
@@ -461,7 +461,7 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
       legs: int
     }
     function user.Dog.to_json(self: user.Dog) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<Dog>(self)) : baml.json.json
+      map { "name": self.name.to_json(), "legs": self.legs.to_json() } : map<string, baml.json.json>
     }
     function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.Dog
@@ -479,7 +479,7 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
       name: null | string
       legs: null | int
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -493,13 +493,13 @@ class Dog { name string
 tail bool }
 function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Cat {
       name: string
       whiskers: int
     }
     function user.Cat.to_json(self: user.Cat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<Cat>(self)) : baml.json.json
+      map { "name": self.name.to_json(), "whiskers": self.whiskers.to_json() } : map<string, baml.json.json>
     }
     function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.Cat
@@ -509,7 +509,7 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       tail: bool
     }
     function user.Dog.to_json(self: user.Dog) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<Dog>(self)) : baml.json.json
+      map { "name": self.name.to_json(), "tail": self.tail.to_json() } : map<string, baml.json.json>
     }
     function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.Dog
@@ -528,7 +528,7 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       name: null | string
       tail: null | bool
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -542,12 +542,12 @@ class C { age int }
 function f(x: A | B | C) -> string { return x.name; }"#,
     );
     // C has no `name` field → error on the whole union
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.A {
       name: string
     }
     function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.A
@@ -556,7 +556,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       name: string
     }
     function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.B
@@ -565,7 +565,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       age: int
     }
     function user.C.to_json(self: user.C) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<C>(self)) : baml.json.json
+      map { "age": self.age.to_json() } : map<string, baml.json.json>
     }
     function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.C
@@ -585,7 +585,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     class user.C$stream {
       age: null | int
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -599,12 +599,12 @@ class C { age int }
 function f(x: A | B | C) -> string { return x.name; }"#,
     );
     // C has no `name` field → error on the whole union
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.A {
       name: string
     }
     function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.A
@@ -613,7 +613,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       age: string
     }
     function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+      map { "age": self.age.to_json() } : map<string, baml.json.json>
     }
     function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.B
@@ -622,7 +622,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       age: int
     }
     function user.C.to_json(self: user.C) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<C>(self)) : baml.json.json
+      map { "age": self.age.to_json() } : map<string, baml.json.json>
     }
     function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.C
@@ -643,7 +643,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     class user.C$stream {
       age: null | int
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -656,12 +656,12 @@ class B { value string }
 function f(x: A | B) -> string { return x.value; }"#,
     );
     // Both have `value` but different types → union of field types
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.A {
       value: int
     }
     function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+      map { "value": self.value.to_json() } : map<string, baml.json.json>
     }
     function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.A
@@ -670,7 +670,7 @@ function f(x: A | B) -> string { return x.value; }"#,
       value: string
     }
     function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+      map { "value": self.value.to_json() } : map<string, baml.json.json>
     }
     function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.B
@@ -687,7 +687,7 @@ function f(x: A | B) -> string { return x.value; }"#,
     class user.B$stream {
       value: null | string
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -700,12 +700,12 @@ class B { name string }
 function f(x: A | B | null) -> string { return x.name; }"#,
     );
     // null in union → can't access field (needs narrowing first)
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.A {
       name: string
     }
     function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.A
@@ -714,7 +714,7 @@ function f(x: A | B | null) -> string { return x.name; }"#,
       name: string
     }
     function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.B
@@ -732,7 +732,7 @@ function f(x: A | B | null) -> string { return x.name; }"#,
     class user.B$stream {
       name: null | string
     }
-    ");
+    "#);
 }
 
 // ── Null coalescing operator (??) ──────────────────────────────────────────

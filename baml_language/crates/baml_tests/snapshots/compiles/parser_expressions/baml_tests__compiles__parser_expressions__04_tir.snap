@@ -26,7 +26,7 @@ class user.User {
   tags: string[]
 }
 function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<User>(self)) : baml.json.json
+  map { "name": self.name.to_json(), "profile": self.profile.to_json(), "tags": self.tags.to_json() } : map<string, baml.json.json>
 }
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.User
@@ -36,7 +36,7 @@ class user.Profile {
   settings: user.Settings
 }
 function user.Profile.to_json(self: user.Profile) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Profile>(self)) : baml.json.json
+  map { "bio": self.bio.to_json(), "settings": self.settings.to_json() } : map<string, baml.json.json>
 }
 function user.Profile.from_json(j: baml.json.json) -> user.Profile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Profile
@@ -45,7 +45,7 @@ class user.Settings {
   theme: string
 }
 function user.Settings.to_json(self: user.Settings) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Settings>(self)) : baml.json.json
+  map { "theme": self.theme.to_json() } : map<string, baml.json.json>
 }
 function user.Settings.from_json(j: baml.json.json) -> user.Settings throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Settings
@@ -68,7 +68,7 @@ class user.IndexUser {
   tags: string[]
 }
 function user.IndexUser.to_json(self: user.IndexUser) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<IndexUser>(self)) : baml.json.json
+  map { "name": self.name.to_json(), "age": self.age.to_json(), "tags": self.tags.to_json() } : map<string, baml.json.json>
 }
 function user.IndexUser.from_json(j: baml.json.json) -> user.IndexUser throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.IndexUser

@@ -42,16 +42,19 @@ fn user.AppConfig.to_json(self: AppConfig) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: AppConfig // self // param
-    let _2: string
-    let _3: type
+    let _2: baml.json.json
+    let _3: string
+    let _4: AppConfig
 
     bb0: {
-        _3 = load_type(AppConfig);
-        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+        _0 = { const "api_key": copy _2 };
+        goto -> bb2;
     }
 
     bb2: {
@@ -84,19 +87,31 @@ fn user.llm.openai.OpenAIResponse.to_json(self: llm.openai.OpenAIResponse) -> ba
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: llm.openai.OpenAIResponse // self // param
-    let _2: string
-    let _3: type
+    let _2: baml.json.json
+    let _3: string
+    let _4: llm.openai.OpenAIResponse
+    let _5: baml.json.json
+    let _6: string
+    let _7: llm.openai.OpenAIResponse
 
     bb0: {
-        _3 = load_type(llm.openai.OpenAIResponse);
-        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+        _7 = copy _1;
+        _6 = copy _7.1;
+        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
     }
 
     bb2: {
+        _0 = { const "text": copy _2, const "model": copy _5 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }

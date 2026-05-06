@@ -19,7 +19,7 @@ class user.RiskFactor {
   severity: float
 }
 function user.RiskFactor.to_json(self: user.RiskFactor) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<RiskFactor>(self)) : baml.json.json
+  map { "type": self.type.to_json(), "severity": self.severity.to_json() } : map<string, baml.json.json>
 }
 function user.RiskFactor.from_json(j: baml.json.json) -> user.RiskFactor throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.RiskFactor
@@ -28,7 +28,7 @@ class user.MetaField {
   type: type
 }
 function user.MetaField.to_json(self: user.MetaField) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<MetaField>(self)) : baml.json.json
+  map { "type": self.type.to_json() } : map<string, baml.json.json>
 }
 function user.MetaField.from_json(j: baml.json.json) -> user.MetaField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.MetaField

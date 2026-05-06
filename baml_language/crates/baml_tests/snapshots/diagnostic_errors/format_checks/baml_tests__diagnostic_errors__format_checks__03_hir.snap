@@ -57,22 +57,22 @@ function user.from_json(j: baml.json.json) -> user.ChainItem  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "bio": self.bio.to_json(), "settings": self.settings.to_json(), "items": self.items.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "created_at": self.created_at.to_json(), "tags": self.tags.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "label": self.label.to_json(), "value": self.value.to_json(), "metadata": self.metadata.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json(), "profile": self.profile.to_json(), "tags": self.tags.to_json(), "scores": self.scores.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "color": self.color.to_json(), "font": self.font.to_json(), "size": self.size.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "theme": self.theme.to_json(), "notifications": self.notifications.to_json(), "preferences": self.preferences.to_json() }
 }
 class user.A {
   x: int
@@ -386,127 +386,127 @@ function user.processData(first_input: map<string, int>, second_input: int | str
   {  } map { "result": 1 }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "level3": self.level3.to_json(), "value": self.value?.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "field1": self.field1.to_json(), "field2": self.field2.to_json(), "field3": self.field3.to_json(), "field4": self.field4.to_json(), "field5": self.field5.to_json(), "field6": self.field6.to_json(), "field7": self.field7.to_json(), "field8": self.field8.to_json(), "field9": self.field9.to_json(), "field10": self.field10.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "level2": self.level2.to_json(), "items": self.items.to_json(), "mapping": self.mapping.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json(), "age": self.age.to_json(), "active": self.active.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "data": self.data.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json(), "age": self.age.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json(), "age": self.age.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "level1": self.level1.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "a": self.a.to_json(), "b": self.b.to_json(), "c": self.c.to_json(), "d": self.d.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "data": self.data.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json(), "age": self.age.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "a": self.a.to_json(), "b": self.b.to_json(), "c": self.c.to_json(), "d": self.d.to_json(), "e": self.e.to_json(), "f": self.f.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json(), "age": self.age.to_json(), "active": self.active.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json(), "age": self.age.to_json(), "active": self.active.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json(), "age": self.age.to_json(), "active": self.active.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "x": self.x.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json(), "age": self.age.to_json(), "active": self.active.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json(), "age": self.age.to_json(), "active": self.active.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map {  }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "value": self.value.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json(), "data": self.data.to_json(), "config": self.config.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "data": self.data.to_json(), "nested": self.nested.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "inner": self.inner.to_json(), "list": self.list.to_json(), "optional": self.optional?.to_json(), "mapping": self.mapping.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json(), "summary": self.summary?.to_json() }
 }
 function user.ArrayConfigClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "ArrayConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "stop_sequences": ["END", "STOP", "DONE"] } } }
@@ -839,10 +839,10 @@ function user.from_json(j: baml.json.json) -> user.MatchFailure  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "reason": self.reason.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "data": self.data.to_json() }
 }
 class user.OtherPoint {
   x: int
@@ -870,13 +870,13 @@ function user.from_json(j: baml.json.json) -> user.OtherTriple  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "p": self.p.to_json(), "q": self.q.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json(), "y": self.y.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "a": self.a.to_json(), "b": self.b.to_json(), "c": self.c.to_json() }
 }
 class user.TypeAliasFailure {
   reason: string
@@ -953,8 +953,8 @@ function user.from_json(j: baml.json.json) -> user.TypeAliasFailure  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "reason": self.reason.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "data": self.data.to_json() }
 }

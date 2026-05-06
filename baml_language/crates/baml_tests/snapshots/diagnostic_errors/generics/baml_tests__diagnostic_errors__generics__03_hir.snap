@@ -119,40 +119,40 @@ function user.swap(self: ?) -> user.Pair  [expr] {
   {  } user.Pair { first: self.second, second: self.first }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "data": self.data.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "value": self.value.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "data": self.data.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "data": self.data.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "inner": self.inner.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "items": self.items.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "value": self.value.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "data": self.data.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "value": self.value?.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "first": self.first.to_json(), "second": self.second.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "value": self.value.to_json() }
 }
 function user.unwrap(self: ?) -> user.T  [expr] {
   {  } self.inner.get()
@@ -212,5 +212,5 @@ function user.from_json(j: baml.json.json) -> user.Todo  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "id": self.id.to_json(), "title": self.title.to_json(), "completed": self.completed.to_json(), "userId": self.userId.to_json() }
 }

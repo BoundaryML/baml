@@ -677,12 +677,12 @@ function f(u: MaybeUser) -> string? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.User {
       name: string
     }
     function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<User>(self)) : baml.json.json
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.User
@@ -697,7 +697,7 @@ function f(u: MaybeUser) -> string? {
       name: null | string
     }
     type user.MaybeUser$stream = null | user.User$stream
-    ");
+    "#);
 }
 
 #[test]

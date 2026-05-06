@@ -27,19 +27,44 @@ fn user.Education.to_json(self: Education) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: Education // self // param
-    let _2: string
-    let _3: type
+    let _2: baml.json.json
+    let _3: string
+    let _4: Education
+    let _5: baml.json.json
+    let _6: (Degree) -> baml.json.json throws never
+    let _7: Degree
+    let _8: Education
+    let _9: string
+    let _10: baml.json.json
+    let _11: int
+    let _12: Education
 
     bb0: {
-        _3 = load_type(Education);
-        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = const "to_json";
+        _6 = copy _7[_9];
+        _5 = call copy _6() -> [bb2];
     }
 
     bb2: {
+        _12 = copy _1;
+        _11 = copy _12.2;
+        _10 = call const fn baml.Int.to_json(copy _11) -> [bb3];
+    }
+
+    bb3: {
+        _0 = { const "school": copy _2, const "degree": copy _5, const "year": copy _10 };
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }
@@ -69,19 +94,53 @@ fn user.Resume.to_json(self: Resume) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: Resume // self // param
-    let _2: string
-    let _3: type
+    let _2: baml.json.json
+    let _3: string
+    let _4: Resume
+    let _5: baml.json.json
+    let _6: Education[]
+    let _7: Resume
+    let _8: baml.json.json
+    let _9: (Degree) -> baml.json.json throws never
+    let _10: Degree
+    let _11: Resume
+    let _12: string
+    let _13: baml.json.json
+    let _14: Education[]
+    let _15: Resume
 
     bb0: {
-        _3 = load_type(Resume);
-        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+        _7 = copy _1;
+        _6 = copy _7.1;
+        _5 = call const fn baml.Array.to_json(copy _6) -> [bb2];
     }
 
     bb2: {
+        _11 = copy _1;
+        _10 = copy _11.2;
+        _12 = const "to_json";
+        _9 = copy _10[_12];
+        _8 = call copy _9() -> [bb3];
+    }
+
+    bb3: {
+        _15 = copy _1;
+        _14 = copy _15.3;
+        _13 = call const fn baml.Array.to_json(copy _14) -> [bb4];
+    }
+
+    bb4: {
+        _0 = { const "name": copy _2, const "education": copy _5, const "highest_degree": copy _8, const "aliases": copy _13 };
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }

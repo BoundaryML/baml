@@ -73,7 +73,7 @@ function user.Worker.scale(self: user.Worker, value: int) -> int throws never {
   }
 }
 function user.Worker.to_json(self: user.Worker) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Worker>(self)) : baml.json.json
+  map { "factor": self.factor.to_json() } : map<string, baml.json.json>
 }
 function user.Worker.from_json(j: baml.json.json) -> user.Worker throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Worker

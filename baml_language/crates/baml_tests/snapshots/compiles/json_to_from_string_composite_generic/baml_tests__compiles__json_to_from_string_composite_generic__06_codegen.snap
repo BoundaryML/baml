@@ -12,10 +12,13 @@ function user.Container.from_json(j: baml.json.json) -> Container<void> {
 }
 
 function user.Container.to_json(self: null) -> baml.json.json {
-    load_type Container<#0>
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .item
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    load_const "item"
+    alloc_map 1
     return
 }
 
@@ -30,10 +33,11 @@ function user.User.from_json(j: baml.json.json) -> User {
 }
 
 function user.User.to_json(self: null) -> baml.json.json {
-    load_type User
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .name
+    call baml.String.to_json
+    load_const "name"
+    alloc_map 1
     return
 }
 

@@ -3,6 +3,26 @@ source: crates/baml_tests/src/generated_tests.rs
 assertion_line: 25257
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] Error: type `user.GRole` has no member `to_json`
+    ╭─[ block_attrs.baml:90:7 ]
+    │
+ 90 │ class GComplex {
+    │       ────┬───  
+    │           ╰───── type `user.GRole` has no member `to_json`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [type] Error: type `user.GStatus` has no member `to_json`
+    ╭─[ block_attrs.baml:90:7 ]
+    │
+ 90 │ class GComplex {
+    │       ────┬───  
+    │           ╰───── type `user.GStatus` has no member `to_json`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
   [hir] Error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ nested.baml:12:12 ]
     │

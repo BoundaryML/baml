@@ -18,3 +18,23 @@ assertion_line: 34531
    │ 
    │ Note: Error code: E0011
 ───╯
+
+  [type] Error: type `user.llm.Response` has no member `body`
+   ╭─[ b.baml:2:7 ]
+   │
+ 2 │ class Response {
+   │       ────┬───  
+   │           ╰───── type `user.llm.Response` has no member `body`
+   │ 
+   │ Note: Error code: E0007
+───╯
+
+  [type] Error: type `user.llm.Response` has no member `status`
+   ╭─[ b.baml:2:7 ]
+   │
+ 2 │ class Response {
+   │       ────┬───  
+   │           ╰───── type `user.llm.Response` has no member `status`
+   │ 
+   │ Note: Error code: E0007
+───╯

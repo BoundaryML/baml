@@ -130,9 +130,12 @@ function user.Wrapper.from_json(j: baml.json.json) -> Wrapper {
 }
 
 function user.Wrapper.to_json(self: null) -> baml.json.json {
-    load_type Wrapper
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .data
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    load_const "data"
+    alloc_map 1
     return
 }

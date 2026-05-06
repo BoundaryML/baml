@@ -7,7 +7,7 @@ class user.WithAliasUnion {
   data: user.Ints | string
 }
 function user.WithAliasUnion.to_json(self: user.WithAliasUnion) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<WithAliasUnion>(self)) : baml.json.json
+  map { "data": self.data.to_json() } : map<string, baml.json.json>
 }
 function user.WithAliasUnion.from_json(j: baml.json.json) -> user.WithAliasUnion throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.WithAliasUnion

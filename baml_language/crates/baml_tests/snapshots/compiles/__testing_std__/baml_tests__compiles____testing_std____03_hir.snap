@@ -46,22 +46,16 @@ function testing.expand_set(self: ?, name: string) -> testing.SerializedTestDef[
 function testing.find_testset(self: ?, name: string) -> testing.TestSetRegistration  [expr] {
   { for ts in self.testsets {  } if (ts.name Eq name) { return ts }; throw "TestSet not found: " Add name }
 }
-function testing.from_json(j: baml.json.json) -> testing.TestRegistration  [expr] {
+function testing.from_json(j: baml.json.json) -> testing.TestCollector  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function testing.from_json(j: baml.json.json) -> testing.TestRegistry  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function testing.from_json(j: baml.json.json) -> testing.SerializedTest  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
-function testing.from_json(j: baml.json.json) -> testing.TestSetRegistration  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
 function testing.from_json(j: baml.json.json) -> testing.SerializedTestSet  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
-function testing.from_json(j: baml.json.json) -> testing.TestCollector  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
-function testing.from_json(j: baml.json.json) -> testing.TestRegistry  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function testing.new(collector: testing.TestCollector) -> testing.TestRegistry  [expr] {
@@ -89,22 +83,22 @@ function testing.serialize(self: ?) -> testing.SerializedTestDef[]  [expr] {
   { let items: testing.SerializedTestDef[] = []; for t in self.collector.tests {  } items.push(testing.SerializedTest { type: "test", name: t.name }); for ts in self.collector.testsets { let expanded = self.expansions.get(ts.name) } match (expanded) { sub: testing.TestRegistry => {  } items.push(testing.SerializedTestSet { name: ts.name, items: sub.serialize(), loadingTimeMs: sub.loading_time_ms }), null => {  } items.push(testing.SerializedTest { type: "lazyTestSet", name: ts.name }) }; return items }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  {  } baml.json.parse(baml.json.to_string(self))
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "type": self.type.to_json(), "name": self.name.to_json() }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  {  } baml.json.parse(baml.json.to_string(self))
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json(), "items": self.items.to_json(), "loadingTimeMs": self.loadingTimeMs.to_json() }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "prefix": self.prefix.to_json(), "tests": self.tests.to_json(), "testsets": self.testsets.to_json() }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "collector": self.collector.to_json(), "expansions": self.expansions.to_json(), "loading_time_ms": self.loading_time_ms.to_json() }
 }
 
 --- captures ---
@@ -144,11 +138,11 @@ function testing.from_json(j: baml.json.json) -> testing.TestSetReport  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "outcome": self.outcome.to_json(), "runs": self.runs.to_json() }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "outcome": self.outcome.to_json(), "duration_ms": self.duration_ms.to_json() }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "outcome": self.outcome.to_json(), "passed": self.passed.to_json(), "failed": self.failed.to_json(), "total": self.total.to_json(), "results": self.results.to_json() }
 }

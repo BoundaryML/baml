@@ -14,7 +14,7 @@ function user.from_json(j: baml.json.json) -> user.Education  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "school": self.school.to_json(), "degree": self.degree.to_json(), "year": self.year.to_json() }
 }
 class user.Resume {
   name: string
@@ -26,5 +26,5 @@ function user.from_json(j: baml.json.json) -> user.Resume  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json(), "education": self.education.to_json(), "highest_degree": self.highest_degree.to_json(), "aliases": self.aliases.to_json() }
 }

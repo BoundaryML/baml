@@ -1407,6 +1407,105 @@ impl<'db> TypeInferenceBuilder<'db> {
                     bindings_from_inference: false,
                 }
             }
+            Ty::Union(arms, _) => {
+                // When ALL union arms are functions (e.g. method lookup on a union
+                // type such as the `json` alias `null | bool | int | ... | json[]`),
+                // fold them into a single representative callable.
+                //
+                // Fold rules:
+                //   params  — first arm's params (all arms share the same method
+                //             signature modulo the `self` type, which is erased here)
+                //   ret     — union of all return types (deduped)
+                //   throws  — union of all throws types (deduped)
+                //
+                // This is sound because the call site's actual value will be one of
+                // the union arms at runtime, so the folded return / throws is an
+                // over-approximation that covers all possible outcomes.
+                let arms_clone = arms.clone();
+                let expanded: Vec<Ty> = arms_clone
+                    .iter()
+                    .map(|a| self.expand_alias_chains(a.clone()))
+                    .collect();
+
+                let all_fns = expanded.iter().all(|a| matches!(a, Ty::Function { .. }));
+                if all_fns && !expanded.is_empty() {
+                    // Extract (params, ret, throws) from each arm.
+                    let fn_components: Vec<_> = expanded
+                        .iter()
+                        .map(|a| {
+                            let Ty::Function {
+                                params,
+                                ret,
+                                throws,
+                                ..
+                            } = a
+                            else {
+                                unreachable!()
+                            };
+                            (params.clone(), *ret.clone(), *throws.clone())
+                        })
+                        .collect();
+
+                    // Use first arm's params as representative.
+                    let first_params = fn_components[0].0.clone();
+
+                    // Union of all return types (deduplicated).
+                    let ret_set: BTreeSet<Ty> =
+                        fn_components.iter().map(|(_, r, _)| r.clone()).collect();
+                    let folded_ret = match ret_set.len() {
+                        1 => ret_set.into_iter().next().unwrap(),
+                        _ => Ty::Union(ret_set.into_iter().collect(), TyAttr::default()),
+                    };
+
+                    // Union of all throws types (flattened and deduplicated).
+                    let mut throws_set: BTreeSet<Ty> = BTreeSet::new();
+                    for (_, _, t) in &fn_components {
+                        throws_set.extend(crate::throw_inference::flatten_ty_to_facts(t));
+                    }
+                    let folded_throws = match throws_set.len() {
+                        0 => Ty::Never {
+                            attr: TyAttr::default(),
+                        },
+                        1 => throws_set.into_iter().next().unwrap(),
+                        _ => Ty::Union(throws_set.into_iter().collect(), TyAttr::default()),
+                    };
+
+                    let folded_fn = Ty::Function {
+                        params: first_params,
+                        ret: Box::new(folded_ret),
+                        throws: Box::new(folded_throws),
+                        attr: TyAttr::default(),
+                    };
+
+                    return self.check_call_inner(CallCheckRequest {
+                        context: CallContext {
+                            expr_id,
+                            args,
+                            body,
+                            expected,
+                        },
+                        callee_ty: folded_fn,
+                        is_method_call,
+                        is_optional_call,
+                        explicit_type_arg_bindings,
+                    });
+                }
+
+                // Not all arms are functions — report not callable.
+                self.context.report_simple(
+                    TirTypeError::NotCallable {
+                        ty: callee_ty.clone(),
+                    },
+                    expr_id,
+                );
+                self.infer_args_for_recovery(args, body);
+                CheckedCallInner {
+                    result: Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                    bindings_from_inference: false,
+                }
+            }
             _ => {
                 self.context.report_simple(
                     TirTypeError::NotCallable {
@@ -3256,12 +3355,18 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Validate declared `throws` against effective escaping throws from the body.
+    ///
+    /// `warn_extraneous` controls whether a warning is emitted when the declared
+    /// throws clause contains types that never actually escape from the body.
+    /// Pass `false` for auto-derived methods whose throws clause is declared
+    /// conservatively rather than in response to what the body actually throws.
     pub fn check_throws_contract(
         &mut self,
         body: &ExprBody,
         declared_throws: Option<&TypeExpr>,
         throws_span: Option<TextRange>,
         fallback_span: TextRange,
+        warn_extraneous: bool,
     ) {
         let Some(declared_expr) = declared_throws else {
             return;
@@ -3280,7 +3385,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         for diag in diags {
             self.context.report_at_span(diag, span);
         }
-        self.check_throws_surface(body, &declared_ty, span, true);
+        self.check_throws_surface(body, &declared_ty, span, warn_extraneous);
     }
 
     fn required_match_cases(&self, ty: &Ty) -> Option<BTreeSet<String>> {
@@ -4145,6 +4250,31 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             callee_ty.clone()
         };
+
+        // When the callee has a union type (e.g., a method called on a union-typed
+        // field like `(string | int | MyClass).to_json()`), every member of the union
+        // is a separate function that might execute.  Conservatively union all of
+        // their throws — if every member is a function we can compute a precise
+        // answer; otherwise fall through to return `None` (unknown).
+        if let Ty::Union(ref members, _) = typed_callee {
+            let mut all_throws: BTreeSet<Ty> = BTreeSet::new();
+            for member in members {
+                if let Ty::Function { throws, .. } = member {
+                    all_throws.extend(crate::throw_inference::flatten_ty_to_facts(throws));
+                } else {
+                    // At least one member is not a function — can't compute throws,
+                    // return None to let the fallback handle it.
+                    return None;
+                }
+            }
+            // All members were functions; return the union of their throws.
+            return Some(
+                Self::ty_from_concrete_facts(&all_throws).unwrap_or(Ty::Never {
+                    attr: TyAttr::default(),
+                }),
+            );
+        }
+
         let Ty::Function { params, throws, .. } = typed_callee else {
             return None;
         };
@@ -5098,6 +5228,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Enum(enum_name, _) => {
+                // `to_json` on an enum: returns the variant name as a JSON string.
+                // BEP-038 specifies the enum JSON representation as its variant name string.
+                // Throws `never` — enum serialization always succeeds.
+                if member.as_str() == "to_json" {
+                    return Ty::Function {
+                        params: vec![(Some(Name::new("self")), base_ty.clone())],
+                        ret: Box::new(json_alias_ty()),
+                        throws: Box::new(Ty::Never {
+                            attr: TyAttr::default(),
+                        }),
+                        attr: TyAttr::default(),
+                    };
+                }
+
                 // Validate that the variant exists
                 let variants = self.lookup_enum_variants(enum_name);
                 if variants.contains(member) {
@@ -5445,6 +5589,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Enum(enum_name, _) => {
+                // `to_json` on an enum (path-segment form): same as the
+                // `resolve_member_on_ty` arm above — variant name as JSON string.
+                if member.as_str() == "to_json" {
+                    return Ty::Function {
+                        params: vec![(Some(Name::new("self")), base_ty.clone())],
+                        ret: Box::new(json_alias_ty()),
+                        throws: Box::new(Ty::Never {
+                            attr: TyAttr::default(),
+                        }),
+                        attr: TyAttr::default(),
+                    };
+                }
+
                 // Use the no-side-effect helper.
                 if self.enum_has_variant(enum_name, member) {
                     return self.resolve_member(base_ty, member, path_id, bound);

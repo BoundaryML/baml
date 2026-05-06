@@ -16,7 +16,9 @@ use std::{
 };
 
 use baml_base::Name;
-use baml_compiler2_ast::{AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId};
+use baml_compiler2_ast::{
+    self as ast, AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId,
+};
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
@@ -552,11 +554,17 @@ pub fn infer_scope_types<'db>(
                         }
 
                         // Validate declared `throws` against effective escaping throws.
+                        // Auto-derived methods (e.g. synthesized `to_json` / `from_json`)
+                        // use a conservative throws clause that may be wider than what
+                        // any particular class actually throws — suppress the extraneous
+                        // warning for those so users aren't misled.
+                        let warn_extraneous = func_data.origin != ast::FunctionOrigin::AutoDerive;
                         builder.check_throws_contract(
                             expr_body,
                             sig.throws.as_ref(),
                             sig_sm.throws_type_span,
                             func_data.span,
+                            warn_extraneous,
                         );
                     }
                     found = true;

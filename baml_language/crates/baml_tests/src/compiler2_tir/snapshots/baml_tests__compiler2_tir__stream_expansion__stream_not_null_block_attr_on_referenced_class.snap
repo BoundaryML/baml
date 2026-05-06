@@ -7,7 +7,7 @@ class user.NotNullEducation {
   year: int
 }
 function user.NotNullEducation.to_json(self: user.NotNullEducation) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<NotNullEducation>(self)) : baml.json.json
+  map { "school": self.school.to_json(), "year": self.year.to_json() } : map<string, baml.json.json>
 }
 function user.NotNullEducation.from_json(j: baml.json.json) -> user.NotNullEducation throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.NotNullEducation
@@ -17,7 +17,7 @@ class user.References {
   educations: user.NotNullEducation[]
 }
 function user.References.to_json(self: user.References) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<References>(self)) : baml.json.json
+  map { "education": self.education.to_json(), "educations": self.educations.to_json() } : map<string, baml.json.json>
 }
 function user.References.from_json(j: baml.json.json) -> user.References throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.References

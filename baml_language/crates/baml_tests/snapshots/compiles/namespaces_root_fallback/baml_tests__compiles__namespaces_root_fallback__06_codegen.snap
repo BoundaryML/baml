@@ -12,10 +12,11 @@ function user.Config.from_json(j: baml.json.json) -> Config {
 }
 
 function user.Config.to_json(self: null) -> baml.json.json {
-    load_type Config
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .key
+    call baml.String.to_json
+    load_const "key"
+    alloc_map 1
     return
 }
 
@@ -30,10 +31,11 @@ function user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
 }
 
 function user.llm.Response.to_json(self: null) -> baml.json.json {
-    load_type llm.Response
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call baml.String.to_json
+    load_const "text"
+    alloc_map 1
     return
 }
 

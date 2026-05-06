@@ -7,7 +7,7 @@ class user.Point {
   y: int
 }
 function user.Point.to_json(self: user.Point) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Point>(self)) : baml.json.json
+  map { "x": self.x.to_json(), "y": self.y.to_json() } : map<string, baml.json.json>
 }
 function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Point
@@ -51,7 +51,7 @@ class user.Point {
   y: int
 }
 function user.Point.to_json(self: user.Point) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Point>(self)) : baml.json.json
+  map { "x": self.x.to_json(), "y": self.y.to_json() } : map<string, baml.json.json>
 }
 function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Point
@@ -61,7 +61,7 @@ class user.Vec2D {
   q: user.Point
 }
 function user.Vec2D.to_json(self: user.Vec2D) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Vec2D>(self)) : baml.json.json
+  map { "p": self.p.to_json(), "q": self.q.to_json() } : map<string, baml.json.json>
 }
 function user.Vec2D.from_json(j: baml.json.json) -> user.Vec2D throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Vec2D

@@ -6,7 +6,7 @@ class user.AppConfig {
   api_key: string
 }
 function user.AppConfig.to_json(self: user.AppConfig) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<AppConfig>(self)) : baml.json.json
+  map { "api_key": self.api_key.to_json() } : map<string, baml.json.json>
 }
 function user.AppConfig.from_json(j: baml.json.json) -> user.AppConfig throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.AppConfig
@@ -24,7 +24,7 @@ class user.llm.openai.OpenAIResponse {
   model: string
 }
 function user.llm.openai.OpenAIResponse.to_json(self: user.llm.openai.OpenAIResponse) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<OpenAIResponse>(self)) : baml.json.json
+  map { "text": self.text.to_json(), "model": self.model.to_json() } : map<string, baml.json.json>
 }
 function user.llm.openai.OpenAIResponse.from_json(j: baml.json.json) -> user.llm.openai.OpenAIResponse throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.llm.openai.OpenAIResponse

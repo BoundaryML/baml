@@ -12,10 +12,11 @@ function user.Person.from_json(j: baml.json.json) -> Person {
 }
 
 function user.Person.to_json(self: null) -> baml.json.json {
-    load_type Person
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .name
+    call baml.String.to_json
+    load_const "name"
+    alloc_map 1
     return
 }
 

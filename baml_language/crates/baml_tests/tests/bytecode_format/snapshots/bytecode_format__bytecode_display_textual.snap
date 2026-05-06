@@ -95,10 +95,21 @@ function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
 }
 
 function testing.RunReport.to_json(self: null) -> baml.json.json {
-    load_type testing.RunReport
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .outcome
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    store_var _2
+    load_var self
+    load_field .duration_ms
+    call baml.Int.to_json
+    store_var _7
+    load_var _2
+    load_var _7
+    load_const "outcome"
+    load_const "duration_ms"
+    alloc_map 2
     return
 }
 
@@ -113,10 +124,19 @@ function testing.SerializedTest.from_json(j: baml.json.json) -> testing.Serializ
 }
 
 function testing.SerializedTest.to_json(self: null) -> baml.json.json {
-    load_type testing.SerializedTest
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .type
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "type"
+    load_const "name"
+    alloc_map 2
     return
 }
 
@@ -131,10 +151,25 @@ function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.Seria
 }
 
 function testing.SerializedTestSet.to_json(self: null) -> baml.json.json {
-    load_type testing.SerializedTestSet
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .name
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .items
+    call baml.Array.to_json
+    store_var _5
+    load_var self
+    load_field .loadingTimeMs
+    call baml.Int.to_json
+    store_var _8
+    load_var _2
+    load_var _5
+    load_var _8
+    load_const "name"
+    load_const "items"
+    load_const "loadingTimeMs"
+    alloc_map 3
     return
 }
 
@@ -443,20 +478,25 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
 }
 
 function testing.TestCollector.to_json(self: null) -> baml.json.json {
-    load_type testing.TestCollector
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
-    return
-}
-
-function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
-    load_var j
-    call baml.json.stringify
+    load_field .prefix
+    call baml.String.to_json
     store_var _2
-    load_type testing.TestRegistration
+    load_var self
+    load_field .tests
+    call baml.Array.to_json
+    store_var _5
+    load_var self
+    load_field .testsets
+    call baml.Array.to_json
+    store_var _8
     load_var _2
-    call baml.json.from_string
+    load_var _5
+    load_var _8
+    load_const "prefix"
+    load_const "tests"
+    load_const "testsets"
+    alloc_map 3
     return
 }
 
@@ -833,10 +873,25 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
 }
 
 function testing.TestRegistry.to_json(self: null) -> baml.json.json {
-    load_type testing.TestRegistry
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .collector
+    call testing.TestCollector.to_json
+    store_var _2
+    load_var self
+    load_field .expansions
+    call baml.Map.to_json
+    store_var _5
+    load_var self
+    load_field .loading_time_ms
+    call baml.Int.to_json
+    store_var _8
+    load_var _2
+    load_var _5
+    load_var _8
+    load_const "collector"
+    load_const "expansions"
+    load_const "loading_time_ms"
+    alloc_map 3
     return
 }
 
@@ -851,20 +906,21 @@ function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
 }
 
 function testing.TestReport.to_json(self: null) -> baml.json.json {
-    load_type testing.TestReport
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
-    return
-}
-
-function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
-    load_var j
-    call baml.json.stringify
+    load_field .outcome
+    load_const "to_json"
+    load_map_element
+    call_indirect
     store_var _2
-    load_type testing.TestSetRegistration
+    load_var self
+    load_field .runs
+    call baml.Array.to_json
+    store_var _7
     load_var _2
-    call baml.json.from_string
+    load_var _7
+    load_const "outcome"
+    load_const "runs"
+    alloc_map 2
     return
 }
 
@@ -887,10 +943,39 @@ function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetRe
 }
 
 function testing.TestSetReport.to_json(self: null) -> baml.json.json {
-    load_type testing.TestSetReport
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .outcome
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    store_var _2
+    load_var self
+    load_field .passed
+    call baml.Int.to_json
+    store_var _7
+    load_var self
+    load_field .failed
+    call baml.Int.to_json
+    store_var _10
+    load_var self
+    load_field .total
+    call baml.Int.to_json
+    store_var _13
+    load_var self
+    load_field .results
+    call baml.Array.to_json
+    store_var _16
+    load_var _2
+    load_var _7
+    load_var _10
+    load_var _13
+    load_var _16
+    load_const "outcome"
+    load_const "passed"
+    load_const "failed"
+    load_const "total"
+    load_const "results"
+    alloc_map 5
     return
 }
 
@@ -961,10 +1046,19 @@ function user.ErrorInfo.from_json(j: baml.json.json) -> ErrorInfo {
 }
 
 function user.ErrorInfo.to_json(self: null) -> baml.json.json {
-    load_type ErrorInfo
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .code
+    call baml.Int.to_json
+    store_var _2
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "code"
+    load_const "message"
+    alloc_map 2
     return
 }
 
@@ -979,10 +1073,25 @@ function user.Report.from_json(j: baml.json.json) -> Report {
 }
 
 function user.Report.to_json(self: null) -> baml.json.json {
-    load_type Report
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .score
+    call baml.Int.to_json
+    store_var _2
+    load_var self
+    load_field .label
+    call baml.String.to_json
+    store_var _5
+    load_var self
+    load_field .breakdown
+    call baml.Map.to_json
+    store_var _8
+    load_var _2
+    load_var _5
+    load_var _8
+    load_const "score"
+    load_const "label"
+    load_const "breakdown"
+    alloc_map 3
     return
 }
 
@@ -1023,10 +1132,27 @@ function user.User.promote(self: null, bonus: int) -> Report {
 }
 
 function user.User.to_json(self: null) -> baml.json.json {
-    load_type User
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .name
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .age
+    call baml.Int.to_json
+    store_var _5
+    load_var self
+    load_field .role
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    store_var _8
+    load_var _2
+    load_var _5
+    load_var _8
+    load_const "name"
+    load_const "age"
+    load_const "role"
+    alloc_map 3
     return
 }
 

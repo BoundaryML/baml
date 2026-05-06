@@ -6,7 +6,7 @@ class user.MyRunner {
   threshold: float
 }
 function user.MyRunner.to_json(self: user.MyRunner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<MyRunner>(self)) : baml.json.json
+  map { "threshold": self.threshold.to_json() } : map<string, baml.json.json>
 }
 function user.MyRunner.from_json(j: baml.json.json) -> user.MyRunner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.MyRunner

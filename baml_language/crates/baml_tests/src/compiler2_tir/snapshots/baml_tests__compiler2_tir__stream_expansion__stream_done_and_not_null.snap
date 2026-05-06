@@ -9,7 +9,7 @@ class user.Combined {
   score: float
 }
 function user.Combined.to_json(self: user.Combined) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Combined>(self)) : baml.json.json
+  map { "id": self.id.to_json(), "name": self.name.to_json(), "age": self.age.to_json(), "score": self.score.to_json() } : map<string, baml.json.json>
 }
 function user.Combined.from_json(j: baml.json.json) -> user.Combined throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Combined

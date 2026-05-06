@@ -24,10 +24,10 @@ function user.from_json(j: baml.json.json) -> user.MetaField  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "type": self.type.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "type": self.type.to_json(), "severity": self.severity.to_json() }
 }
 function user.test_let_binding(function_name: string) -> string  [expr] {
   { let t: type = baml.llm.get_return_type(function_name); return "ok" }

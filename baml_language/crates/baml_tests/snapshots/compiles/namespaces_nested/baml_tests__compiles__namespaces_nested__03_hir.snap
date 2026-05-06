@@ -12,7 +12,7 @@ function user.from_json(j: baml.json.json) -> user.AppConfig  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "api_key": self.api_key.to_json() }
 }
 class user.llm.openai.OpenAIResponse {
   text: string
@@ -22,5 +22,5 @@ function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.OpenAIR
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "text": self.text.to_json(), "model": self.model.to_json() }
 }

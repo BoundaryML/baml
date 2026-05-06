@@ -6,7 +6,7 @@ class user.Config {
   key: string
 }
 function user.Config.to_json(self: user.Config) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Config>(self)) : baml.json.json
+  map { "key": self.key.to_json() } : map<string, baml.json.json>
 }
 function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Config
@@ -15,7 +15,7 @@ class user.Response {
   text: string
 }
 function user.Response.to_json(self: user.Response) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Response>(self)) : baml.json.json
+  map { "text": self.text.to_json() } : map<string, baml.json.json>
 }
 function user.Response.from_json(j: baml.json.json) -> user.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Response
@@ -37,7 +37,9 @@ class user.RootWithStreamFields {
   llm_stream: user.llm.Config$stream
 }
 function user.RootWithStreamFields.to_json(self: user.RootWithStreamFields) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<RootWithStreamFields>(self)) : baml.json.json
+  map { "own_stream": self.own_stream.to_json(), "llm_stream": self.llm_stream.to_json() } : map<string, unknown>
+  !! 808..828: type `user.Config$stream` has no member `to_json`
+  !! 808..828: type `user.llm.Config$stream` has no member `to_json`
 }
 function user.RootWithStreamFields.from_json(j: baml.json.json) -> user.RootWithStreamFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.RootWithStreamFields
@@ -56,7 +58,7 @@ class user.llm.Config {
   model: string
 }
 function user.llm.Config.to_json(self: user.llm.Config) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Config>(self)) : baml.json.json
+  map { "model": self.model.to_json() } : map<string, baml.json.json>
 }
 function user.llm.Config.from_json(j: baml.json.json) -> user.llm.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.llm.Config
@@ -65,7 +67,7 @@ class user.llm.Response {
   text: string
 }
 function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Response>(self)) : baml.json.json
+  map { "text": self.text.to_json() } : map<string, baml.json.json>
 }
 function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.llm.Response
@@ -87,7 +89,9 @@ class user.llm.LlmWithStreamFields {
   root_stream: user.Config$stream
 }
 function user.llm.LlmWithStreamFields.to_json(self: user.llm.LlmWithStreamFields) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<LlmWithStreamFields>(self)) : baml.json.json
+  map { "own_stream": self.own_stream.to_json(), "root_stream": self.root_stream.to_json() } : map<string, unknown>
+  !! 410..429: type `user.llm.Response$stream` has no member `to_json`
+  !! 410..429: type `user.Config$stream` has no member `to_json`
 }
 function user.llm.LlmWithStreamFields.from_json(j: baml.json.json) -> user.llm.LlmWithStreamFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.llm.LlmWithStreamFields

@@ -8,7 +8,7 @@ class user.WithChainedAlias {
   data: user.MyList | string
 }
 function user.WithChainedAlias.to_json(self: user.WithChainedAlias) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<WithChainedAlias>(self)) : baml.json.json
+  map { "data": self.data.to_json() } : map<string, baml.json.json>
 }
 function user.WithChainedAlias.from_json(j: baml.json.json) -> user.WithChainedAlias throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.WithChainedAlias

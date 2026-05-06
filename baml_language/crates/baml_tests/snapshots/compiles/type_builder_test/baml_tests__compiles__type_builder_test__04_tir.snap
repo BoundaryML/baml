@@ -21,7 +21,7 @@ class user.TopLevelClass {
   a: string
 }
 function user.TopLevelClass.to_json(self: user.TopLevelClass) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<TopLevelClass>(self)) : baml.json.json
+  map { "a": self.a.to_json() } : map<string, baml.json.json>
 }
 function user.TopLevelClass.from_json(j: baml.json.json) -> user.TopLevelClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.TopLevelClass

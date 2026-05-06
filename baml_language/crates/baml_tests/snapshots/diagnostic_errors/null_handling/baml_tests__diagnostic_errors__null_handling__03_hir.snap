@@ -51,14 +51,14 @@ function user.from_json(j: baml.json.json) -> user.Profile  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "name": self.name.to_json(), "address": self.address?.to_json(), "scores": self.scores?.to_json(), "settings": self.settings?.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "street": self.street.to_json(), "zip": self.zip?.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "value": self.value.to_json(), "next": self.next?.to_json(), "children": self.children?.to_json(), "labels": self.labels?.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "id": self.id.to_json(), "profile": self.profile?.to_json() }
 }

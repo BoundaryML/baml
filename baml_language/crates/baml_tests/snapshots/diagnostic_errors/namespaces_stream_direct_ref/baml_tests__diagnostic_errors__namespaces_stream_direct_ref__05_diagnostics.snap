@@ -25,6 +25,26 @@ assertion_line: 34944
     │     Note: Error code: E0001
 ────╯
 
+  [type] Error: type `user.Config$stream` has no member `to_json`
+    ╭─[ main.baml:30:7 ]
+    │
+ 30 │ class RootWithStreamFields {
+    │       ──────────┬─────────  
+    │                 ╰─────────── type `user.Config$stream` has no member `to_json`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [type] Error: type `user.llm.Config$stream` has no member `to_json`
+    ╭─[ main.baml:30:7 ]
+    │
+ 30 │ class RootWithStreamFields {
+    │       ──────────┬─────────  
+    │                 ╰─────────── type `user.llm.Config$stream` has no member `to_json`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
   [type] Error: type mismatch: expected string, got null | string
     ╭─[ models.baml:12:58 ]
     │
@@ -45,4 +65,24 @@ assertion_line: 34944
     │ ╰─────────────── type mismatch: expected string, got null | string
     │     
     │     Note: Error code: E0001
+────╯
+
+  [type] Error: type `user.Config$stream` has no member `to_json`
+    ╭─[ models.baml:22:7 ]
+    │
+ 22 │ class LlmWithStreamFields {
+    │       ─────────┬─────────  
+    │                ╰─────────── type `user.Config$stream` has no member `to_json`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [type] Error: type `user.llm.Response$stream` has no member `to_json`
+    ╭─[ models.baml:22:7 ]
+    │
+ 22 │ class LlmWithStreamFields {
+    │       ─────────┬─────────  
+    │                ╰─────────── type `user.llm.Response$stream` has no member `to_json`
+    │ 
+    │ Note: Error code: E0007
 ────╯

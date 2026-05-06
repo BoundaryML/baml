@@ -31,10 +31,11 @@ function user.Foo.from_json(j: baml.json.json) -> Foo {
 }
 
 function user.Foo.to_json(self: null) -> baml.json.json {
-    load_type Foo
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .x
+    call baml.Int.to_json
+    load_const "x"
+    alloc_map 1
     return
 }
 
@@ -49,10 +50,11 @@ function user.HasWith.from_json(j: baml.json.json) -> HasWith {
 }
 
 function user.HasWith.to_json(self: null) -> baml.json.json {
-    load_type HasWith
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .with
+    call baml.Int.to_json
+    load_const "with"
+    alloc_map 1
     return
 }
 

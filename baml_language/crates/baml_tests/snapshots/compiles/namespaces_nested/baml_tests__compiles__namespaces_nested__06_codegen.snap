@@ -12,10 +12,11 @@ function user.AppConfig.from_json(j: baml.json.json) -> AppConfig {
 }
 
 function user.AppConfig.to_json(self: null) -> baml.json.json {
-    load_type AppConfig
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .api_key
+    call baml.String.to_json
+    load_const "api_key"
+    alloc_map 1
     return
 }
 
@@ -39,9 +40,18 @@ function user.llm.openai.OpenAIResponse.from_json(j: baml.json.json) -> llm.open
 }
 
 function user.llm.openai.OpenAIResponse.to_json(self: null) -> baml.json.json {
-    load_type llm.openai.OpenAIResponse
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .1
+    call baml.String.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "text"
+    load_const "model"
+    alloc_map 2
     return
 }

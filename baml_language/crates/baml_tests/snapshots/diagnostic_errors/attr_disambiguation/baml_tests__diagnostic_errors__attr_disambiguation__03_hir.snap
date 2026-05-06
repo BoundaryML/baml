@@ -68,25 +68,25 @@ function user.from_json(j: baml.json.json) -> user.GAliased  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "lat": self.lat.to_json(), "lng": self.lng.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "statuses": self.statuses.to_json(), "maybe_status": self.maybe_status?.to_json(), "role_or_status": self.role_or_status.to_json(), "points": self.points.to_json(), "maybe_point": self.maybe_point?.to_json(), "config_map": self.config_map.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "status": self.status.to_json(), "role": self.role.to_json(), "point": self.point.to_json(), "coord": self.coord.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json(), "y": self.y.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "status": self.status.to_json(), "role": self.role.to_json(), "name": self.name.to_json(), "location": self.location.to_json(), "fallback": self.fallback.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "severity": self.severity.to_json(), "priority": self.priority.to_json(), "title": self.title.to_json(), "config": self.config.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "key": self.key.to_json(), "value": self.value.to_json() }
 }
 enum user.GroupF {F1, F2, F3, F4, F5, F6}
 class user.MFoo {
@@ -107,10 +107,10 @@ function user.from_json(j: baml.json.json) -> user.OrderingModifiers  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "c1": self.c1?.to_json(), "c2": self.c2?.to_json(), "c3": self.c3.to_json(), "c4": self.c4.to_json(), "c5": self.c5?.to_json(), "c6": self.c6.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json() }
 }
 class user.AliasInNestedTypes {
   d1: user.NFoo[]
@@ -140,13 +140,13 @@ function user.from_json(j: baml.json.json) -> user.AliasInNestedTypes  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "d1": self.d1.to_json(), "d2": self.d2.to_json(), "d3": self.d3.to_json(), "d4": self.d4.to_json(), "d5": self.d5.to_json(), "d6": self.d6.to_json(), "d7": self.d7.to_json(), "d8": self.d8.to_json(), "d9": self.d9.to_json(), "d10": self.d10.to_json() }
 }
 class user.EA {
   x: int
@@ -189,16 +189,16 @@ function user.from_json(j: baml.json.json) -> user.EA  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json() }
 }
 class user.Fizz {
   x: int
@@ -221,10 +221,10 @@ function user.from_json(j: baml.json.json) -> user.OrderingSimple  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "a1": self.a1.to_json(), "a2": self.a2.to_json(), "a3": self.a3.to_json(), "a4": self.a4.to_json(), "a5": self.a5.to_json(), "a6": self.a6.to_json(), "a7": self.a7.to_json(), "a8": self.a8.to_json(), "a9": self.a9.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json() }
 }
 class user.OrderingUnions {
   b1: user.UA | user.UB | user.UC
@@ -264,14 +264,14 @@ function user.from_json(j: baml.json.json) -> user.UB  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "b1": self.b1.to_json(), "b2": self.b2.to_json(), "b3": self.b3.to_json(), "b4": self.b4.to_json(), "b5": self.b5.to_json(), "b6": self.b6.to_json(), "b7": self.b7.to_json(), "b8": self.b8.to_json(), "b9": self.b9.to_json(), "b10": self.b10.to_json(), "b11": self.b11.to_json(), "b12": self.b12.to_json(), "b13": self.b13.to_json(), "b14": self.b14.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "x": self.x.to_json() }
 }

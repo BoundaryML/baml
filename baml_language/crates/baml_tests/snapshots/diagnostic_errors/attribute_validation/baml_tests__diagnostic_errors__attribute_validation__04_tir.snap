@@ -6,7 +6,7 @@ class user.HasDuplicateDescription {
   name: string
 }
 function user.HasDuplicateDescription.to_json(self: user.HasDuplicateDescription) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<HasDuplicateDescription>(self)) : baml.json.json
+  map { "name": self.name.to_json() } : map<string, baml.json.json>
 }
 function user.HasDuplicateDescription.from_json(j: baml.json.json) -> user.HasDuplicateDescription throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.HasDuplicateDescription
@@ -17,7 +17,7 @@ class user.HasDuplicateField {
   name: int
 }
 function user.HasDuplicateField.to_json(self: user.HasDuplicateField) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<HasDuplicateField>(self)) : baml.json.json
+  map { "name": self.name.to_json(), "age": self.age.to_json(), "name": self.name.to_json() } : map<string, baml.json.json>
 }
 function user.HasDuplicateField.from_json(j: baml.json.json) -> user.HasDuplicateField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.HasDuplicateField
@@ -26,7 +26,7 @@ class user.HasDuplicateFieldAttr {
   name: string @alias("n") @description("Name") @alias("nm")
 }
 function user.HasDuplicateFieldAttr.to_json(self: user.HasDuplicateFieldAttr) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<HasDuplicateFieldAttr>(self)) : baml.json.json
+  map { "name": self.name.to_json() } : map<string, baml.json.json>
 }
 function user.HasDuplicateFieldAttr.from_json(j: baml.json.json) -> user.HasDuplicateFieldAttr throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.HasDuplicateFieldAttr

@@ -6,7 +6,7 @@ class user.Inner {
   value: string
 }
 function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Inner>(self)) : baml.json.json
+  map { "value": self.value.to_json() } : map<string, baml.json.json>
 }
 function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Inner

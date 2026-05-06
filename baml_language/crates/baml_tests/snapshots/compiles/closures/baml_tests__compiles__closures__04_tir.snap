@@ -11,7 +11,7 @@ function user.Formatter.format(self: user.Formatter, text: string) -> string thr
   }
 }
 function user.Formatter.to_json(self: user.Formatter) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Formatter>(self)) : baml.json.json
+  map { "prefix": self.prefix.to_json() } : map<string, baml.json.json>
 }
 function user.Formatter.from_json(j: baml.json.json) -> user.Formatter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Formatter
@@ -26,7 +26,7 @@ function user.RangeCheck.is_valid(self: user.RangeCheck, n: int) -> bool throws 
   }
 }
 function user.RangeCheck.to_json(self: user.RangeCheck) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<RangeCheck>(self)) : baml.json.json
+  map { "min": self.min.to_json(), "max": self.max.to_json() } : map<string, baml.json.json>
 }
 function user.RangeCheck.from_json(j: baml.json.json) -> user.RangeCheck throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.RangeCheck
@@ -41,7 +41,7 @@ function user.Counter.increment(self: user.Counter) -> int throws never {
   }
 }
 function user.Counter.to_json(self: user.Counter) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Counter>(self)) : baml.json.json
+  map { "value": self.value.to_json() } : map<string, baml.json.json>
 }
 function user.Counter.from_json(j: baml.json.json) -> user.Counter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Counter
@@ -61,7 +61,7 @@ function user.Employee.greet(self: user.Employee, greeting: string) -> string th
   }
 }
 function user.Employee.to_json(self: user.Employee) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Employee>(self)) : baml.json.json
+  map { "first": self.first.to_json(), "last": self.last.to_json() } : map<string, baml.json.json>
 }
 function user.Employee.from_json(j: baml.json.json) -> user.Employee throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Employee
@@ -70,7 +70,7 @@ class user.Config {
   encoder: user.Encoder
 }
 function user.Config.to_json(self: user.Config) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Config>(self)) : baml.json.json
+  map { "encoder": self.encoder.to_json() } : map<string, baml.json.json>
 }
 function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Config
@@ -84,7 +84,7 @@ function user.Encoder.encode(self: user.Encoder, data: string) -> string throws 
   }
 }
 function user.Encoder.to_json(self: user.Encoder) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Encoder>(self)) : baml.json.json
+  map { "charset": self.charset.to_json() } : map<string, baml.json.json>
 }
 function user.Encoder.from_json(j: baml.json.json) -> user.Encoder throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Encoder
@@ -98,7 +98,7 @@ function user.Box.unwrap(self: user.Box) -> unknown throws never {
   }
 }
 function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Box<T>>(self)) : baml.json.json
+  map { "value": self.value.to_json() } : map<string, baml.json.json>
 }
 function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Box<T>
@@ -119,7 +119,7 @@ function user.Calculator.compute(self: user.Calculator, a: int, b: int) -> int t
   }
 }
 function user.Calculator.to_json(self: user.Calculator) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Calculator>(self)) : baml.json.json
+  map { "op": self.op.to_json() } : map<string, baml.json.json>
 }
 function user.Calculator.from_json(j: baml.json.json) -> user.Calculator throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Calculator

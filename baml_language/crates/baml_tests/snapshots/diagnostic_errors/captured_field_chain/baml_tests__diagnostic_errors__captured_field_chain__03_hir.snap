@@ -28,10 +28,10 @@ function user.test_map_chain(data: map<string, map<string, int>>) -> int  [expr]
   {  } data.a.b
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "inner": self.inner.to_json(), "name": self.name.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "value": self.value.to_json() }
 }
 
 --- captures ---

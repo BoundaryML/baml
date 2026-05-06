@@ -6,7 +6,7 @@ class user.Inner {
   value: string
 }
 function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Inner>(self)) : baml.json.json
+  map { "value": self.value.to_json() } : map<string, baml.json.json>
 }
 function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Inner
@@ -16,7 +16,7 @@ class user.WithOptionals {
   inner: user.Inner?
 }
 function user.WithOptionals.to_json(self: user.WithOptionals) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<WithOptionals>(self)) : baml.json.json
+  map { "name": self.name?.to_json(), "inner": self.inner?.to_json() } : map<string, baml.json.json?>
 }
 function user.WithOptionals.from_json(j: baml.json.json) -> user.WithOptionals throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.WithOptionals

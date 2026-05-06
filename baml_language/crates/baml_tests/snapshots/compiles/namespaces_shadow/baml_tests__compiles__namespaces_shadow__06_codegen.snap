@@ -12,10 +12,11 @@ function user.foo.Bar.from_json(j: baml.json.json) -> foo.Bar {
 }
 
 function user.foo.Bar.to_json(self: null) -> baml.json.json {
-    load_type foo.Bar
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call baml.String.to_json
+    load_const "y"
+    alloc_map 1
     return
 }
 
@@ -30,9 +31,10 @@ function user.foo.from_json(j: baml.json.json) -> foo {
 }
 
 function user.foo.to_json(self: null) -> baml.json.json {
-    load_type foo
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .x
+    call baml.Int.to_json
+    load_const "x"
+    alloc_map 1
     return
 }

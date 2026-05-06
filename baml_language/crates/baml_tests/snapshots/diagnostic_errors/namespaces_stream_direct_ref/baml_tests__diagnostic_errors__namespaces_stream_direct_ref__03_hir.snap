@@ -29,13 +29,13 @@ function user.from_json(j: baml.json.json) -> user.Response  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "text": self.text.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "key": self.key.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "own_stream": self.own_stream.to_json(), "llm_stream": self.llm_stream.to_json() }
 }
 class user.llm.Config {
   model: string
@@ -63,11 +63,11 @@ function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "text": self.text.to_json() }
 }
 function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "model": self.model.to_json() }
 }
 function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "own_stream": self.own_stream.to_json(), "root_stream": self.root_stream.to_json() }
 }

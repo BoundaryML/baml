@@ -12,10 +12,19 @@ function user.Config.from_json(j: baml.json.json) -> Config {
 }
 
 function user.Config.to_json(self: null) -> baml.json.json {
-    load_type Config
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .key
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .env
+    call baml.String.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "key"
+    load_const "env"
+    alloc_map 2
     return
 }
 
@@ -30,10 +39,19 @@ function user.Error.from_json(j: baml.json.json) -> Error {
 }
 
 function user.Error.to_json(self: null) -> baml.json.json {
-    load_type Error
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .code
+    call baml.Int.to_json
+    store_var _2
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "code"
+    load_const "message"
+    alloc_map 2
     return
 }
 
@@ -184,10 +202,19 @@ function user.RootWithCrossNsAlias.from_json(j: baml.json.json) -> RootWithCross
 }
 
 function user.RootWithCrossNsAlias.to_json(self: null) -> baml.json.json {
-    load_type RootWithCrossNsAlias
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .llm_alias
+    call user.llm.Response.to_json
+    store_var _2
+    load_var self
+    load_field .own_alias
+    call user.Config.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "llm_alias"
+    load_const "own_alias"
+    alloc_map 2
     return
 }
 
@@ -202,10 +229,51 @@ function user.RootWithCrossNsFields.from_json(j: baml.json.json) -> RootWithCros
 }
 
 function user.RootWithCrossNsFields.to_json(self: null) -> baml.json.json {
-    load_type RootWithCrossNsFields
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .own_config
+    call user.Config.to_json
+    store_var _2
+    load_var self
+    load_field .llm_config
+    call user.llm.Config.to_json
+    store_var _5
+    load_var self
+    load_field .auth_config
+    call user.auth.Config.to_json
+    store_var _8
+    load_var self
+    load_field .llm_response
+    call user.llm.Response.to_json
+    store_var _11
+    load_var self
+    load_field .nested_client
+    call user.llm.openai.Client.to_json
+    store_var _14
+    load_var self
+    load_field .own_status
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    store_var _17
+    load_var self
+    load_field .own_alias
+    call user.Config.to_json
+    store_var _22
+    load_var _2
+    load_var _5
+    load_var _8
+    load_var _11
+    load_var _14
+    load_var _17
+    load_var _22
+    load_const "own_config"
+    load_const "llm_config"
+    load_const "auth_config"
+    load_const "llm_response"
+    load_const "nested_client"
+    load_const "own_status"
+    load_const "own_alias"
+    alloc_map 7
     return
 }
 
@@ -454,10 +522,19 @@ function user.auth.Config.from_json(j: baml.json.json) -> auth.Config {
 }
 
 function user.auth.Config.to_json(self: null) -> baml.json.json {
-    load_type auth.Config
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .1
+    call baml.String.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "provider"
+    load_const "secret"
+    alloc_map 2
     return
 }
 
@@ -472,10 +549,19 @@ function user.auth.Error.from_json(j: baml.json.json) -> auth.Error {
 }
 
 function user.auth.Error.to_json(self: null) -> baml.json.json {
-    load_type auth.Error
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .1
+    call baml.Bool.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "realm"
+    load_const "expired"
+    alloc_map 2
     return
 }
 
@@ -490,10 +576,21 @@ function user.auth.Token.from_json(j: baml.json.json) -> auth.Token {
 }
 
 function user.auth.Token.to_json(self: null) -> baml.json.json {
-    load_type auth.Token
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .1
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "value"
+    load_const "role"
+    alloc_map 2
     return
 }
 
@@ -508,10 +605,19 @@ function user.llm.Config.from_json(j: baml.json.json) -> llm.Config {
 }
 
 function user.llm.Config.to_json(self: null) -> baml.json.json {
-    load_type llm.Config
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .1
+    call baml.Float.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "model"
+    load_const "temperature"
+    alloc_map 2
     return
 }
 
@@ -526,10 +632,19 @@ function user.llm.Error.from_json(j: baml.json.json) -> llm.Error {
 }
 
 function user.llm.Error.to_json(self: null) -> baml.json.json {
-    load_type llm.Error
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .1
+    call baml.Bool.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "reason"
+    load_const "retryable"
+    alloc_map 2
     return
 }
 
@@ -769,10 +884,63 @@ function user.llm.LlmWithCrossNsFields.from_json(j: baml.json.json) -> llm.LlmWi
 }
 
 function user.llm.LlmWithCrossNsFields.to_json(self: null) -> baml.json.json {
-    load_type llm.LlmWithCrossNsFields
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call user.llm.Config.to_json
+    store_var _2
+    load_var self
+    load_field .1
+    call user.llm.Response.to_json
+    store_var _5
+    load_var self
+    load_field .2
+    call user.Config.to_json
+    store_var _8
+    load_var self
+    load_field .3
+    call user.Error.to_json
+    store_var _11
+    load_var self
+    load_field .4
+    call user.auth.Config.to_json
+    store_var _14
+    load_var self
+    load_field .5
+    call user.llm.openai.Client.to_json
+    store_var _17
+    load_var self
+    load_field .6
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    store_var _20
+    load_var self
+    load_field .7
+    call user.llm.Config.to_json
+    store_var _25
+    load_var self
+    load_field .8
+    call user.Config.to_json
+    store_var _28
+    load_var _2
+    load_var _5
+    load_var _8
+    load_var _11
+    load_var _14
+    load_var _17
+    load_var _20
+    load_var _25
+    load_var _28
+    load_const "own_config"
+    load_const "own_response"
+    load_const "root_config"
+    load_const "root_error"
+    load_const "auth_config"
+    load_const "nested_client"
+    load_const "own_status"
+    load_const "own_alias"
+    load_const "root_alias"
+    alloc_map 9
     return
 }
 
@@ -787,10 +955,19 @@ function user.llm.LlmWithRootAlias.from_json(j: baml.json.json) -> llm.LlmWithRo
 }
 
 function user.llm.LlmWithRootAlias.to_json(self: null) -> baml.json.json {
-    load_type llm.LlmWithRootAlias
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call user.Config.to_json
+    store_var _2
+    load_var self
+    load_field .1
+    call user.llm.Response.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "root_alias"
+    load_const "own_alias"
+    alloc_map 2
     return
 }
 
@@ -805,10 +982,19 @@ function user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
 }
 
 function user.llm.Response.to_json(self: null) -> baml.json.json {
-    load_type llm.Response
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .1
+    call baml.Int.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "text"
+    load_const "tokens"
+    alloc_map 2
     return
 }
 
@@ -823,10 +1009,19 @@ function user.llm.openai.Client.from_json(j: baml.json.json) -> llm.openai.Clien
 }
 
 function user.llm.openai.Client.to_json(self: null) -> baml.json.json {
-    load_type llm.openai.Client
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .1
+    call baml.String.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "api_key"
+    load_const "org_id"
+    alloc_map 2
     return
 }
 
@@ -841,10 +1036,19 @@ function user.llm.openai.Error.from_json(j: baml.json.json) -> llm.openai.Error 
 }
 
 function user.llm.openai.Error.to_json(self: null) -> baml.json.json {
-    load_type llm.openai.Error
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .0
+    call baml.Int.to_json
+    store_var _2
+    load_var self
+    load_field .1
+    call baml.String.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "status_code"
+    load_const "body"
+    alloc_map 2
     return
 }
 

@@ -12,7 +12,7 @@ class user.FieldAttributes {
   multiple: string? @description("Multiple attributes") @alias("multiple_alias")
 }
 function user.FieldAttributes.to_json(self: user.FieldAttributes) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<FieldAttributes>(self)) : baml.json.json
+  map { "money": self.money.to_json(), "currency": self.currency.to_json(), "name": self.name.to_json(), "summary": self.summary.to_json(), "details": self.details?.to_json(), "state": self.state.to_json(), "multiple": self.multiple?.to_json() } : map<string, baml.json.json | baml.json.json?>
 }
 function user.FieldAttributes.from_json(j: baml.json.json) -> user.FieldAttributes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.FieldAttributes
@@ -21,7 +21,7 @@ class user.ClassAttributes {
   name: string
 }
 function user.ClassAttributes.to_json(self: user.ClassAttributes) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<ClassAttributes>(self)) : baml.json.json
+  map { "name": self.name.to_json() } : map<string, baml.json.json>
 }
 function user.ClassAttributes.from_json(j: baml.json.json) -> user.ClassAttributes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.ClassAttributes
@@ -146,7 +146,7 @@ class user.User {
   email: string
 }
 function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<User>(self)) : baml.json.json
+  map { "id": self.id.to_json(), "name": self.name.to_json(), "email": self.email.to_json() } : map<string, baml.json.json>
 }
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.User

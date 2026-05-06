@@ -105,12 +105,12 @@ fn class_field_access() {
         "test.baml",
         "class Foo { name string }\nfunction f(x: Foo) -> string { return x.name; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Foo {
       name: string
     }
     function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<Foo>(self)) : baml.json.json
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.Foo
@@ -123,7 +123,7 @@ fn class_field_access() {
     class user.Foo$stream {
       name: null | string
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -147,12 +147,12 @@ fn unresolved_field() {
         "test.baml",
         "class Foo { name string }\nfunction f(x: Foo) -> string { return x.missing; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Foo {
       name: string
     }
     function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<Foo>(self)) : baml.json.json
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.Foo
@@ -166,7 +166,7 @@ fn unresolved_field() {
     class user.Foo$stream {
       name: null | string
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -184,12 +184,12 @@ function f(data: Data) -> string {
   return data.inner.foo;
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Data {
       name: string
     }
     function user.Data.to_json(self: user.Data) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<Data>(self)) : baml.json.json
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.Data.from_json(j: baml.json.json) -> user.Data throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.Data
@@ -203,7 +203,7 @@ function f(data: Data) -> string {
     class user.Data$stream {
       name: null | string
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -221,12 +221,12 @@ function f(s: Sentiment) -> string {
   return s.feelin;
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Sentiment {
       feeling: string
     }
     function user.Sentiment.to_json(self: user.Sentiment) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<Sentiment>(self)) : baml.json.json
+      map { "feeling": self.feeling.to_json() } : map<string, baml.json.json>
     }
     function user.Sentiment.from_json(j: baml.json.json) -> user.Sentiment throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.Sentiment
@@ -240,7 +240,7 @@ function f(s: Sentiment) -> string {
     class user.Sentiment$stream {
       feeling: null | string
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -304,14 +304,14 @@ fn enum_variant_resolution() {
 fn resolve_class_fields_query() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "class Point { x int\ny float\nlabel string }");
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Point {
       x: int
       y: float
       label: string
     }
     function user.Point.to_json(self: user.Point) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      baml.json.parse(baml.json.to_string<Point>(self)) : baml.json.json
+      map { "x": self.x.to_json(), "y": self.y.to_json(), "label": self.label.to_json() } : map<string, baml.json.json>
     }
     function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       baml.json.from_string<T>(baml.json.stringify(j)) : user.Point
@@ -321,7 +321,7 @@ fn resolve_class_fields_query() {
       y: null | float
       label: null | string
     }
-    ");
+    "#);
 }
 
 #[test]

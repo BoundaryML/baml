@@ -11,7 +11,7 @@ function user.Box.get(self: user.Box) -> unknown throws never {
   }
 }
 function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Box<T>>(self)) : baml.json.json
+  map { "value": self.value.to_json() } : map<string, baml.json.json>
 }
 function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Box<T>
@@ -31,7 +31,7 @@ function user.Wrapper.of(value: unknown) -> user.Wrapper<unknown> throws never {
   }
 }
 function user.Wrapper.to_json(self: user.Wrapper) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Wrapper<T>>(self)) : baml.json.json
+  map { "data": self.data.to_json() } : map<string, baml.json.json>
 }
 function user.Wrapper.from_json(j: baml.json.json) -> user.Wrapper<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Wrapper<T>
@@ -61,7 +61,7 @@ function user.Pair.swap(self: user.Pair) -> user.Pair<unknown, unknown> throws n
   }
 }
 function user.Pair.to_json(self: user.Pair) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Pair<A, B>>(self)) : baml.json.json
+  map { "first": self.first.to_json(), "second": self.second.to_json() } : map<string, baml.json.json>
 }
 function user.Pair.from_json(j: baml.json.json) -> user.Pair<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Pair<A, B>
@@ -93,7 +93,7 @@ function user.Maker.from_value(params: unknown) -> user.Maker<unknown> throws ne
   }
 }
 function user.Maker.to_json(self: user.Maker) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Maker<T>>(self)) : baml.json.json
+  map { "data": self.data.to_json() } : map<string, baml.json.json>
 }
 function user.Maker.from_json(j: baml.json.json) -> user.Maker<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Maker<T>
@@ -113,7 +113,7 @@ function user.Holder.get_data(self: user.Holder) -> unknown throws never {
   !! 2283..2371: type mismatch: expected T, got string
 }
 function user.Holder.to_json(self: user.Holder) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Holder<T>>(self)) : baml.json.json
+  map { "data": self.data.to_json() } : map<string, baml.json.json>
 }
 function user.Holder.from_json(j: baml.json.json) -> user.Holder<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Holder<T>
@@ -134,7 +134,7 @@ function user.Shadow.bad<T>(x: T) -> T throws never {
   !! 2686..2799: type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
 }
 function user.Shadow.to_json(self: user.Shadow) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Shadow<T>>(self)) : baml.json.json
+  map { "value": self.value.to_json() } : map<string, baml.json.json>
 }
 function user.Shadow.from_json(j: baml.json.json) -> user.Shadow<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Shadow<T>
@@ -163,7 +163,7 @@ class user.Plain {
   name: string
 }
 function user.Plain.to_json(self: user.Plain) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Plain>(self)) : baml.json.json
+  map { "name": self.name.to_json() } : map<string, baml.json.json>
 }
 function user.Plain.from_json(j: baml.json.json) -> user.Plain throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Plain
@@ -183,7 +183,7 @@ function user.Container.unwrap(self: user.Container) -> unknown throws never {
   }
 }
 function user.Container.to_json(self: user.Container) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Container<T>>(self)) : baml.json.json
+  map { "inner": self.inner.to_json() } : map<string, baml.json.json>
 }
 function user.Container.from_json(j: baml.json.json) -> user.Container<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Container<T>
@@ -208,7 +208,7 @@ function user.Factory.get(self: user.Factory) -> unknown throws never {
   }
 }
 function user.Factory.to_json(self: user.Factory) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Factory<T>>(self)) : baml.json.json
+  map { "data": self.data.to_json() } : map<string, baml.json.json>
 }
 function user.Factory.from_json(j: baml.json.json) -> user.Factory<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Factory<T>
@@ -232,7 +232,7 @@ function user.MaybeBox.get_or_default(self: user.MaybeBox, default: unknown) -> 
   }
 }
 function user.MaybeBox.to_json(self: user.MaybeBox) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<MaybeBox<T>>(self)) : baml.json.json
+  map { "value": self.value?.to_json() } : map<string, baml.json.json?>
 }
 function user.MaybeBox.from_json(j: baml.json.json) -> user.MaybeBox<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.MaybeBox<T>
@@ -252,7 +252,7 @@ function user.Stack.peek(self: user.Stack) -> unknown throws never {
   }
 }
 function user.Stack.to_json(self: user.Stack) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Stack<T>>(self)) : baml.json.json
+  map { "items": self.items.to_json() } : map<string, baml.json.json>
 }
 function user.Stack.from_json(j: baml.json.json) -> user.Stack<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Stack<T>
@@ -267,7 +267,7 @@ class user.Foo {
   value: T
 }
 function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Foo<T>>(self)) : baml.json.json
+  map { "value": self.value.to_json() } : map<string, baml.json.json>
 }
 function user.Foo.from_json(j: baml.json.json) -> user.Foo<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Foo<T>
@@ -327,7 +327,7 @@ class user.Todo {
   userId: int
 }
 function user.Todo.to_json(self: user.Todo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Todo>(self)) : baml.json.json
+  map { "id": self.id.to_json(), "title": self.title.to_json(), "completed": self.completed.to_json(), "userId": self.userId.to_json() } : map<string, baml.json.json>
 }
 function user.Todo.from_json(j: baml.json.json) -> user.Todo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Todo

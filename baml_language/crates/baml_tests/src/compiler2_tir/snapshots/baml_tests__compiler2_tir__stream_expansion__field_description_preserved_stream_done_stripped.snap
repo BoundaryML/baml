@@ -7,7 +7,7 @@ class user.WithDesc {
   age: int @description("Age in years")
 }
 function user.WithDesc.to_json(self: user.WithDesc) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<WithDesc>(self)) : baml.json.json
+  map { "name": self.name.to_json(), "age": self.age.to_json() } : map<string, baml.json.json>
 }
 function user.WithDesc.from_json(j: baml.json.json) -> user.WithDesc throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.WithDesc
