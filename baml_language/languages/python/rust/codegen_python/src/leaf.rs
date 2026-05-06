@@ -366,6 +366,9 @@ fn is_media_reexport(s: &EmittedSymbol) -> bool {
 #[derive(askama::Template)]
 #[template(
     source = r#"class {{ py_name }}({{ bases }}):
+{%- if let Some(doc) = docstring %}
+    {{ doc }}
+{%- endif %}
     model_config = pydantic.ConfigDict(extra="forbid")
 {%- for prop in properties %}
     {{ prop.name }}: {{ prop.ty_py }}
@@ -394,6 +397,13 @@ fn is_media_reexport(s: &EmittedSymbol) -> bool {
 struct ClassBodyPy {
     py_name: String,
     bases: String,
+    /// Pre-rendered `"""…"""` body docstring (class summary plus a
+    /// folded `Attributes:` section listing each `///`-documented
+    /// field). `None` when neither the class nor any field carries a
+    /// `///`. Field-level `///` is intentionally not emitted as an
+    /// inline `# …` comment — the `Attributes:` section is the sole
+    /// channel.
+    docstring: Option<String>,
     properties: Vec<ClassPropertyView>,
     static_methods: Vec<MethodLineView>,
     instance_methods: Vec<MethodLineView>,
@@ -414,6 +424,9 @@ struct MethodLineView {
 #[derive(askama::Template)]
 #[template(
     source = r#"class {{ py_name }}(str, enum.Enum):
+{%- if let Some(doc) = docstring %}
+    {{ doc }}
+{%- endif %}
 {%- if variants.is_empty() %}
     pass
 {%- else %}
@@ -426,6 +439,11 @@ struct MethodLineView {
 )]
 struct EnumBodyPy {
     py_name: String,
+    /// Pre-rendered `"""…"""` body docstring (enum summary plus a
+    /// folded `Members:` section listing each `///`-documented
+    /// variant). `None` when neither the enum nor any variant carries
+    /// a `///`.
+    docstring: Option<String>,
     variants: Vec<EnumVariantView>,
 }
 
@@ -491,9 +509,21 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                     ty_py: translate_ty(&prop.ty, &ctx),
                 })
                 .collect();
+            let attrs: Vec<(String, Option<String>)> = c
+                .properties
+                .iter()
+                .map(|p| (p.name.clone(), p.docstring.clone()))
+                .collect();
+            let docstring = crate::utils::format_class_docstring(
+                c.docstring.as_deref(),
+                &attrs,
+                "Attributes",
+                "    ",
+            );
             let mut out = ClassBodyPy {
                 py_name: c.py_name.clone(),
                 bases: render_class_bases(&c.generic_params),
+                docstring,
                 properties,
                 static_methods: build_method_line_views(&c.static_methods),
                 instance_methods: build_method_line_views(&c.instance_methods),
@@ -512,8 +542,20 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                     value: py_string(&v.value),
                 })
                 .collect();
+            let members: Vec<(String, Option<String>)> = e
+                .variants
+                .iter()
+                .map(|v| (v.ident.clone(), v.docstring.clone()))
+                .collect();
+            let docstring = crate::utils::format_class_docstring(
+                e.docstring.as_deref(),
+                &members,
+                "Members",
+                "    ",
+            );
             let mut out = EnumBodyPy {
                 py_name: e.py_name.clone(),
+                docstring,
                 variants,
             }
             .render()
@@ -829,7 +871,9 @@ struct MethodBlockView {
 }
 
 /// One method's `.pyi` signature block: a single `def` line for
-/// instance methods, prefixed by `@staticmethod` for statics.
+/// instance methods, prefixed by `@staticmethod` for statics. When the
+/// method carries a `///` docstring, replaces the trailing `...` with a
+/// `"""..."""` body so `__doc__` resolves at runtime.
 fn render_method_block_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     let async_kw = if matches!(m.mode, SyncAsync::Async) {
         "async "
@@ -838,10 +882,19 @@ fn render_method_block_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     };
     let typed_params = render_method_params_pyi(m, ctx);
     let ret_py = translate_ty(&m.return_ty, ctx);
-    let signature = format!(
-        "    {async_kw}def {name}({typed_params}) -> {ret_py}: ...",
-        name = m.py_name
-    );
+    let signature = match m.docstring.as_deref() {
+        Some(doc) => {
+            let rendered = crate::utils::format_docstring(doc, "        ");
+            format!(
+                "    {async_kw}def {name}({typed_params}) -> {ret_py}:\n        {rendered}",
+                name = m.py_name
+            )
+        }
+        None => format!(
+            "    {async_kw}def {name}({typed_params}) -> {ret_py}: ...",
+            name = m.py_name
+        ),
+    };
     match m.kind {
         MethodKind::Static => format!("    @staticmethod\n{signature}"),
         MethodKind::Instance => signature,
@@ -912,7 +965,9 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
         }
         EmittedSymbol::Enum(e) => {
             // Enum body is identical between `.py` and `.pyi` —
-            // reuse the `.py` template directly.
+            // reuse the `.py` template directly. The `.pyi` form
+            // omits the body docstring; `__doc__` resolves against
+            // the `.py` definition.
             let variants = e
                 .variants
                 .iter()
@@ -923,6 +978,7 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                 .collect();
             let mut out = EnumBodyPy {
                 py_name: e.py_name.clone(),
+                docstring: None,
                 variants,
             }
             .render()
@@ -977,10 +1033,19 @@ fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
     };
     let typed_params = render_typed_params(&f.param_names, &f.arg_tys, ctx);
     let ret_py = translate_ty(&f.return_ty, ctx);
-    format!(
-        "{async_kw}def {name}({typed_params}) -> {ret_py}: ...",
-        name = f.py_name
-    )
+    match f.docstring.as_deref() {
+        Some(doc) => {
+            let rendered = crate::utils::format_docstring(doc, "    ");
+            format!(
+                "{async_kw}def {name}({typed_params}) -> {ret_py}:\n    {rendered}",
+                name = f.py_name
+            )
+        }
+        None => format!(
+            "{async_kw}def {name}({typed_params}) -> {ret_py}: ...",
+            name = f.py_name
+        ),
+    }
 }
 
 fn render_typed_params(names: &[String], tys: &[Ty], ctx: &TranslateCtx) -> String {

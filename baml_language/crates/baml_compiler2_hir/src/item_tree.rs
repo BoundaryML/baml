@@ -73,6 +73,8 @@ pub struct Function {
     /// Declarative metadata, if this function was declared with declarative syntax.
     pub declarative_meta: Option<ast::DeclarativeMeta>,
     pub origin: ast::FunctionOrigin,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<String>,
     /// Full source span of the function.
     pub span: TextRange,
 }
@@ -91,6 +93,8 @@ pub struct ClassField {
     pub name: Name,
     pub type_expr: Option<ast::SpannedTypeExpr>,
     pub attributes: Vec<Attribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,6 +110,8 @@ pub struct Class {
     pub methods: Vec<LocalItemId<FunctionMarker>>,
     /// Block-level attributes (@@description, @@alias, etc.).
     pub attributes: Vec<Attribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<String>,
     /// Full source span of the class declaration.
     pub span: TextRange,
 }
@@ -116,6 +122,8 @@ pub struct EnumVariant {
     pub name: Name,
     /// Field-level attributes (@description, @alias, @skip, etc.).
     pub attributes: Vec<Attribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,6 +133,8 @@ pub struct Enum {
     pub variants: Vec<EnumVariant>,
     /// Block-level attributes (@@description, @@alias, etc.).
     pub attributes: Vec<Attribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<String>,
     /// Full source span of the enum declaration.
     pub span: TextRange,
 }
@@ -330,6 +340,7 @@ impl ItemTree {
                 body: f.body.clone(),
                 declarative_meta: f.declarative_meta.clone(),
                 origin: f.origin,
+                docstring: f.docstring.clone(),
                 span: f.span,
             },
         );
@@ -345,6 +356,7 @@ impl ItemTree {
                 name: f.name.clone(),
                 type_expr: f.type_expr.clone(),
                 attributes: f.attributes.iter().map(Attribute::from).collect(),
+                docstring: f.docstring.clone(),
             })
             .collect();
         self.classes.insert(
@@ -355,6 +367,7 @@ impl ItemTree {
                 fields,
                 methods: Vec::new(),
                 attributes: c.attributes.iter().map(Attribute::from).collect(),
+                docstring: c.docstring.clone(),
                 span: c.span,
             },
         );
@@ -380,6 +393,7 @@ impl ItemTree {
             .map(|v| EnumVariant {
                 name: v.name.clone(),
                 attributes: v.attributes.iter().map(Attribute::from).collect(),
+                docstring: v.docstring.clone(),
             })
             .collect();
         self.enums.insert(
@@ -388,6 +402,7 @@ impl ItemTree {
                 name: e.name.clone(),
                 variants,
                 attributes: e.attributes.iter().map(Attribute::from).collect(),
+                docstring: e.docstring.clone(),
                 span: e.span,
             },
         );

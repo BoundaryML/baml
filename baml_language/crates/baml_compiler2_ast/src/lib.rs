@@ -10,6 +10,7 @@
 pub mod ast;
 pub(crate) mod companions;
 pub(crate) mod disambiguate;
+pub mod docstring;
 pub(crate) mod lower_config_item;
 pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
@@ -18,6 +19,7 @@ pub mod lowering_diagnostic;
 
 pub use ast::*;
 pub use disambiguate::is_field_attr;
+pub use docstring::extract_docstring;
 pub use lower_cst::{
     lower_file, lower_file_with_file_id, synthesize_llm_builtin_call,
     synthesize_llm_make_stream_call,

@@ -873,7 +873,6 @@ fn resolve_type_for_item(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Opt
 fn extract_docstring(db: &dyn Db, file: SourceFile, item_range: TextRange) -> Option<String> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
 
-    // Find the item node.
     let token = match tree.token_at_offset(item_range.start()) {
         rowan::TokenAtOffset::Single(t) => t,
         rowan::TokenAtOffset::Between(_, right) => right,
@@ -881,47 +880,7 @@ fn extract_docstring(db: &dyn Db, file: SourceFile, item_range: TextRange) -> Op
     };
 
     let item_node = token.parent_ancestors().find(|n| is_item_node(n.kind()))?;
-
-    // Walk backward through siblings/trivia before the item node looking for
-    // consecutive /// comments.
-    let mut doc_lines: Vec<String> = Vec::new();
-
-    // Get all tokens before the item node's start that are trivia.
-    // We look at preceding siblings of the item node.
-    let mut prev = item_node.prev_sibling_or_token();
-    while let Some(node_or_token) = prev {
-        match node_or_token {
-            rowan::NodeOrToken::Token(ref tok) => {
-                match tok.kind() {
-                    SyntaxKind::LINE_COMMENT => {
-                        let text = tok.text();
-                        if let Some(doc) = text.strip_prefix("///") {
-                            // Strip one leading space if present.
-                            let doc = doc.strip_prefix(' ').unwrap_or(doc);
-                            doc_lines.push(doc.to_string());
-                        } else {
-                            // Regular comment, stop collecting.
-                            break;
-                        }
-                    }
-                    SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE => {
-                        // Skip whitespace between doc comments.
-                    }
-                    _ => break,
-                }
-            }
-            rowan::NodeOrToken::Node(_) => break,
-        }
-        prev = node_or_token.prev_sibling_or_token();
-    }
-
-    if doc_lines.is_empty() {
-        return None;
-    }
-
-    // Lines were collected in reverse order.
-    doc_lines.reverse();
-    Some(doc_lines.join("\n"))
+    baml_compiler2_ast::extract_docstring(&item_node)
 }
 
 // ── Dependency discovery ─────────────────────────────────────────────────────
