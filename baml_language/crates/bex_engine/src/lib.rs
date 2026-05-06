@@ -589,7 +589,15 @@ impl BexEngine {
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
         let heap_permit_manager = Arc::new(HeapPermitManager::new());
-        // we just created the permit manager so this will never block
+        // We just created the permit manager so `new_permit` will not block:
+        // the only synchronization inside is the `holders` mutex which is
+        // uncontended at this point. `futures::executor::block_on` (rather
+        // than `tokio::runtime::Handle::block_on`) is used so that this
+        // constructor stays callable from inside a tokio runtime.
+        //
+        // If `new_permit` ever takes a real lock or schedules async work,
+        // this assumption breaks and the constructor would deadlock — at
+        // which point we'd have to make `BexEngine::new` async (TODO).
         let futures_permit = futures::executor::block_on(
             heap_permit_manager
                 .new_permit(FutureManagerInner::new(Tlab::new_empty(Arc::clone(&heap)))),
@@ -1390,8 +1398,11 @@ impl BexEngine {
                     let mut future_permit = self.futures.acquire().await;
                     let (future_id, future_ptr) = future_permit.new_future(future_cancel.clone());
                     vm.stack.push(Value::Object(future_ptr));
-                    if future_cancel.is_cancelled() {
+                    if cancel.is_cancelled() {
                         // Early cancellation-- don't need to even start the future.
+                        // (`future_cancel` is a child of `cancel` and is only cancelled
+                        // here via parent inheritance, so checking `cancel` directly is
+                        // equivalent and matches the post-exec safepoint below.)
                         future_permit.cancel_future(future_id)?;
                         drop(future_permit);
                         continue;
@@ -1438,13 +1449,21 @@ impl BexEngine {
                         }
                         SysOpResult::Async(fut) => {
                             let task = Arc::clone(self).run_future(fut, future_id, future_cancel);
+                            // Surface invariant violations from `run_future` (e.g.
+                            // `FutureNotFound` from a double-transition bug). In normal
+                            // operation each future is only transitioned once by this
+                            // task, so any error is a bug worth investigating.
                             #[cfg(not(target_arch = "wasm32"))]
                             tokio::spawn(async move {
-                                let _ = task.await;
+                                if let Err(err) = task.await {
+                                    tracing::error!(?err, "spawned future task failed");
+                                }
                             });
                             #[cfg(target_arch = "wasm32")]
                             wasm_bindgen_futures::spawn_local(async move {
-                                let _ = task.await;
+                                if let Err(err) = task.await {
+                                    tracing::error!(?err, "spawned future task failed");
+                                }
                             });
                         }
                     }

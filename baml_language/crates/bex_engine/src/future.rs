@@ -169,12 +169,24 @@ impl FutureManagerGuard<'_> {
         // so we are the unique caller; the heap object is alive because
         // the entry roots it via `RootHaver::collect_roots`.
         let fut = unsafe { entry.future_ref() }?;
+        let observed = FutureType::of(fut);
         debug_assert!(
             matches!(fut.read(), FutureRead::Pending(_)),
             "internal_error_future called on non-Pending future {id:?} \
-             (actual: {:?}); invariant violated",
-            FutureType::of(fut)
+             (actual: {observed:?}); invariant violated"
         );
+        if !matches!(fut.read(), FutureRead::Pending(_)) {
+            // Release-build invariant guard: a previously-resolved future
+            // should never re-enter this path. Surfacing as an error
+            // (rather than the legacy silent overwrite) makes the bug
+            // observable to telemetry / `tracing::error!` in `run_future`.
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "internal_error_future called on non-Pending future {id:?} \
+                     (actual: {observed:?})"
+                ),
+            });
+        }
         // SAFETY: single-writer via future_permit Mutex.
         unsafe { fut.set_internal_error() };
         let set = entry.ready.set(Err(err));
@@ -182,6 +194,14 @@ impl FutureManagerGuard<'_> {
             set.is_ok(),
             "Should not have been ready if the heap future was pending."
         );
+        if set.is_err() {
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "internal_error_future: SetOnce already set for future {id:?}; \
+                     invariant violated"
+                ),
+            });
+        }
         Ok(())
     }
 
@@ -207,29 +227,59 @@ impl FutureManagerGuard<'_> {
         id: FutureId,
         transition: impl FnOnce(&bex_vm_types::Future),
     ) -> Result<FutureState, EngineError> {
+        // Phase 1: pre-check the state without removing. A non-Pending
+        // heap state means the caller has already routed this id through
+        // a terminal helper (or `internal_error_future`'s leak); in that
+        // case we must not remove the entry, since doing so would discard
+        // the leaked `SetOnce` payload and silently lose the error.
+        {
+            let entry_ref = self
+                .inner
+                .active_futures
+                .get(&id)
+                .ok_or(EngineError::FutureNotFound { future_id: id })?;
+            // SAFETY: the `FutureManagerGuard` holds the future_permit Mutex.
+            let fut = unsafe { entry_ref.future_ref() }?;
+            let observed = FutureType::of(fut);
+            debug_assert!(
+                matches!(fut.read(), FutureRead::Pending(_)),
+                "complete_pending called with non-Pending heap state for {id:?} \
+                 (actual: {observed:?}); invariant violated — only fulfill/err/cancel may \
+                 route through this helper"
+            );
+            if !matches!(fut.read(), FutureRead::Pending(_)) {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "complete_pending called with non-Pending heap state for {id:?} \
+                         (actual: {observed:?})"
+                    ),
+                });
+            }
+        }
+        // Phase 2: state is Pending. Remove the entry and apply the
+        // transition under the future_permit Mutex (single-writer).
         let entry = self
             .inner
             .active_futures
             .remove(&id)
-            .ok_or(EngineError::FutureNotFound { future_id: id })?;
-        // SAFETY: the `FutureManagerGuard` holds the future_permit Mutex,
-        // so we are the unique caller; the heap object is alive because
-        // we just removed the entry that was rooting it (the entry is
-        // still owned by us locally).
+            .expect("entry was present in phase 1 and we hold the future_permit");
+        // SAFETY: the entry is still rooting the heap object via local
+        // ownership; the future_permit Mutex enforces single-writer.
         let fut = unsafe { entry.future_ref() }?;
-        debug_assert!(
-            matches!(fut.read(), FutureRead::Pending(_)),
-            "complete_pending called with non-Pending heap state for {id:?} \
-             (actual: {:?}); invariant violated — only fulfill/err/cancel may \
-             route through this helper",
-            FutureType::of(fut)
-        );
         transition(fut);
         let set = entry.ready.set(Ok(()));
         debug_assert!(
             set.is_ok(),
             "Should not have been ready if the heap future was pending."
         );
+        if set.is_err() {
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "complete_pending: SetOnce already set for future {id:?}; \
+                     invariant violated"
+                ),
+            });
+        }
         Ok(entry)
     }
     /// Returns a Rust future that resolves when the BAML future is ready.
@@ -469,10 +519,11 @@ mod tests {
     async fn fulfill_after_internal_error_is_disallowed() {
         // Once an entry is in the leaked InternalError state, none of the
         // terminal-transition helpers (fulfill/err/cancel) should subsequently
-        // succeed against it: the `complete_pending` invariant is "entry exists
-        // and heap is Pending". In debug builds the debug_assert fires; in
-        // release builds the heap state is non-Pending and the call still
-        // produces a `FutureNotFound`-or-equivalent error path.
+        // succeed against it. In debug builds the `debug_assert` fires; in
+        // release builds the call returns an `EngineError::TypeMismatch`
+        // *without* removing the entry, so the original error stays pinned
+        // to the registry's `SetOnce` for surfacing through a later VM
+        // `Await(future_id)` yield.
         //
         // We exercise the release-build path by skipping under
         // `cfg(debug_assertions)` — the panic there is the documented
@@ -483,20 +534,31 @@ mod tests {
         let mgr = make_manager().await;
         let mut guard = mgr.acquire().await;
         let (id, _) = guard.new_future(CancellationToken::new());
-        guard
-            .internal_error_future(
-                id,
-                EngineError::TypeMismatch {
-                    message: "stale".into(),
-                },
-            )
-            .unwrap();
-        // The release-build path: `fulfill_future`'s `complete_pending` happily
-        // overwrites the heap to `Ready` and removes the entry. This is
-        // tolerated rather than guaranteed (the `complete_pending` debug_assert
-        // fails in debug builds). The point of the test is to pin the
-        // observable behavior of the leaked state.
-        let _ = guard.fulfill_future(id, Value::Int(0));
+        let original = EngineError::TypeMismatch {
+            message: "stale".into(),
+        };
+        guard.internal_error_future(id, original.clone()).unwrap();
+        assert_eq!(guard.active_future_count(), 1);
+
+        // Release-build behavior: `fulfill_future` rejects the call (the
+        // pre-check observes a non-Pending heap state) and leaves the
+        // leaked entry untouched.
+        let result = guard.fulfill_future(id, Value::Int(0));
+        assert!(
+            matches!(result, Err(EngineError::TypeMismatch { .. })),
+            "fulfill_future after internal_error should reject in release; got {result:?}"
+        );
+        assert_eq!(
+            guard.active_future_count(),
+            1,
+            "leaked InternalError entry must survive a rejected fulfill"
+        );
+
+        // The waiter still resolves to the original error.
+        let waiter = guard.future_ready(id).expect("waiter should be created");
+        drop(guard);
+        let surfaced = waiter.await.expect_err("InternalError should propagate");
+        assert_eq!(surfaced, original);
     }
 
     #[tokio::test]
