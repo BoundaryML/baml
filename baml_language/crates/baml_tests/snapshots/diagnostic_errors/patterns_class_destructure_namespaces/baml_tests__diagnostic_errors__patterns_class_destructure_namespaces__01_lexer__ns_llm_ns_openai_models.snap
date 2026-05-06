@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+Class "class"
+Word "Box"
+Less "<"
+Word "T"
+Greater ">"
+LBrace "{"
+Word "value"
+Word "T"
+RBrace "}"
+Class "class"
+Word "Response"
+LBrace "{"
+Word "score"
+Word "int"
+RBrace "}"

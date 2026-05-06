@@ -65,6 +65,8 @@ pub enum Hir2Diagnostic {
     /// first site is treated as the original; the rest are reported as
     /// duplicates.
     DuplicatePatternBinding { name: Name, sites: Vec<TextRange> },
+    /// A class destructure names the same field more than once.
+    DuplicatePatternField { name: Name, sites: Vec<TextRange> },
     /// An `Or` pattern's alternatives don't all bind the same name set.
     /// A name introduced in some alternatives but not others would only
     /// sometimes be in scope in the arm body — semantically incoherent.
@@ -76,16 +78,6 @@ pub enum Hir2Diagnostic {
         or_span: TextRange,
         /// Names that appear in some alternatives but not all.
         mismatched_names: Vec<Name>,
-    },
-    /// A `let` statement or `for-let` binding uses a refutable pattern
-    /// (one that can fail to match). These contexts require an
-    /// irrefutable pattern; refutable forms belong in `match`.
-    RefutablePatternInLet {
-        /// Span of the offending pattern.
-        pattern_span: TextRange,
-        /// Where the binding lives — for the diagnostic message
-        /// (`"let"` vs `"for-let"`).
-        context: &'static str,
     },
 }
 
@@ -223,6 +215,31 @@ impl Hir2Diagnostic {
                 }
                 diag.with_phase(DiagnosticPhase::Hir)
             }
+            Hir2Diagnostic::DuplicatePatternField { name, sites } => {
+                let first = sites.first().copied().unwrap_or_default();
+                let rest = sites.get(1..).unwrap_or(&[]);
+                let mut diag = Diagnostic::error(
+                    DiagnosticId::DuplicateField,
+                    format!("Duplicate field `{name}` in class destructure pattern"),
+                )
+                .with_secondary(
+                    Span {
+                        file_id,
+                        range: first,
+                    },
+                    format!("field `{name}` first destructured here"),
+                );
+                for range in rest {
+                    diag = diag.with_primary(
+                        Span {
+                            file_id,
+                            range: *range,
+                        },
+                        format!("field `{name}` destructured again here"),
+                    );
+                }
+                diag.with_phase(DiagnosticPhase::Hir)
+            }
             Hir2Diagnostic::OrPatternBindingMismatch {
                 or_span,
                 mismatched_names,
@@ -245,17 +262,6 @@ impl Hir2Diagnostic {
                 )
                 .with_phase(DiagnosticPhase::Hir)
             }
-            Hir2Diagnostic::RefutablePatternInLet { pattern_span, context } => Diagnostic::error(
-                DiagnosticId::RefutablePatternInLet,
-                format!(
-                    "refutable pattern in {context} binding; refutable patterns belong in `match`",
-                ),
-            )
-            .with_primary(
-                Span { file_id, range: *pattern_span },
-                "this pattern can fail to match",
-            )
-            .with_phase(DiagnosticPhase::Hir),
         }
     }
 }

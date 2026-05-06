@@ -1,0 +1,454 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Outer // outer
+    let _2: llm.openai.Box
+    let _3: llm.openai.Outer
+    let _4: llm.openai.Box
+    let _5: void
+    let _6: string // value
+
+    bb0: {
+        _2 = user.llm.openai.Box { const "done" };
+        _1 = user.llm.openai.Outer { copy _2 };
+        _3 = copy _1;
+        _4 = copy _3.0;
+        _5 = copy _4.0;
+        _6 = copy _5;
+        _0 = call const fn baml.String.length(copy _6) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.DeepGenericDestructureQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Outer // outer
+    let _2: llm.openai.Box
+    let _3: llm.openai.Outer
+    let _4: llm.openai.Box
+    let _5: void
+    let _6: int // value
+
+    bb0: {
+        _2 = user.llm.openai.Box { const 52_i64 };
+        _1 = user.llm.openai.Outer { copy _2 };
+        _3 = copy _1;
+        _4 = copy _3.0;
+        _5 = copy _4.0;
+        _6 = copy _5;
+        _0 = copy _6;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.DestructureNamespaceQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Response // response
+    let _2: llm.openai.Response
+    let _3: int
+    let _4: int // score
+
+    bb0: {
+        _1 = user.llm.openai.Response { const "ok", const 45_i64 };
+        _2 = copy _1;
+        _3 = copy _2.1;
+        _4 = copy _3;
+        _0 = copy _4;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.DestructureNamespaceQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Response // response
+    let _2: bool
+    let _3: int
+    let _4: bool
+    let _5: bool
+    let _6: int
+    let _7: bool
+    let _8: bool
+    let _9: int
+    let _10: int // matched
+
+    bb0: {
+        _1 = user.llm.openai.Response { const "ok", const 46_i64 };
+        _2 = is_type(copy _1, Class(TypeName { name: "Response", module_path: ["user", "llm", "openai"], display_name: "llm.openai.Response" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = copy _1.1;
+        _4 = copy _3 == const 0_i64;
+        branch copy _4 -> [bb6, bb2];
+    }
+
+    bb2: {
+        _5 = is_type(copy _1, Class(TypeName { name: "Response", module_path: ["user", "llm", "openai"], display_name: "llm.openai.Response" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _5 -> [bb3, bb7];
+    }
+
+    bb3: {
+        _6 = copy _1.1;
+        _7 = is_type(copy _6, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _7 -> [bb4, bb7];
+    }
+
+    bb4: {
+        _8 = is_type(copy _1, Class(TypeName { name: "Response", module_path: ["user", "llm", "openai"], display_name: "llm.openai.Response" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _8 -> [bb5, bb7];
+    }
+
+    bb5: {
+        _9 = copy _1.1;
+        _10 = copy _9;
+        _0 = copy _10;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _0 = const 0_i64;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn user.DestructureQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Response // response
+    let _2: llm.openai.Response
+    let _3: int
+    let _4: int // score
+
+    bb0: {
+        _1 = user.llm.openai.Response { const "ok", const 41_i64 };
+        _2 = copy _1;
+        _3 = copy _2.1;
+        _4 = copy _3;
+        _0 = copy _4;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.DestructureQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Response // response
+    let _2: bool
+    let _3: int
+    let _4: bool
+    let _5: bool
+    let _6: int
+    let _7: bool
+    let _8: bool
+    let _9: int
+    let _10: int // matched
+
+    bb0: {
+        _1 = user.llm.openai.Response { const "ok", const 42_i64 };
+        _2 = is_type(copy _1, Class(TypeName { name: "Response", module_path: ["user", "llm", "openai"], display_name: "llm.openai.Response" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = copy _1.1;
+        _4 = copy _3 == const 0_i64;
+        branch copy _4 -> [bb6, bb2];
+    }
+
+    bb2: {
+        _5 = is_type(copy _1, Class(TypeName { name: "Response", module_path: ["user", "llm", "openai"], display_name: "llm.openai.Response" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _5 -> [bb3, bb7];
+    }
+
+    bb3: {
+        _6 = copy _1.1;
+        _7 = is_type(copy _6, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _7 -> [bb4, bb7];
+    }
+
+    bb4: {
+        _8 = is_type(copy _1, Class(TypeName { name: "Response", module_path: ["user", "llm", "openai"], display_name: "llm.openai.Response" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _8 -> [bb5, bb7];
+    }
+
+    bb5: {
+        _9 = copy _1.1;
+        _10 = copy _9;
+        _0 = copy _10;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _0 = const 0_i64;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn user.GenericDestructureNamespaceQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Box // boxed
+    let _2: llm.openai.Box
+    let _3: void
+    let _4: string // value
+
+    bb0: {
+        _1 = user.llm.openai.Box { const "ok" };
+        _2 = copy _1;
+        _3 = copy _2.0;
+        _4 = copy _3;
+        _0 = call const fn baml.String.length(copy _4) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.GenericDestructureQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Box // boxed
+    let _2: llm.openai.Box
+    let _3: void
+    let _4: int // value
+
+    bb0: {
+        _1 = user.llm.openai.Box { const 49_i64 };
+        _2 = copy _1;
+        _3 = copy _2.0;
+        _4 = copy _3;
+        _0 = copy _4;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.GenericTypePatternNamespaceQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Box | llm.openai.Box // boxed
+    let _2: bool
+    let _3: int
+    let _4: bool
+    let _5: bool
+    let _6: string
+    let _7: bool
+
+    bb0: {
+        _1 =  { const "ready" };
+        _2 = is_type(copy _1, Class(TypeName { name: "Box", module_path: ["user", "llm", "openai"], display_name: "llm.openai.Box" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = copy _1.0;
+        _4 = is_type(copy _3, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _4 -> [bb5, bb2];
+    }
+
+    bb2: {
+        _5 = is_type(copy _1, Class(TypeName { name: "Box", module_path: ["user", "llm", "openai"], display_name: "llm.openai.Box" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _5 -> [bb3, bb6];
+    }
+
+    bb3: {
+        _6 = copy _1.0;
+        _7 = is_type(copy _6, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _7 -> [bb4, bb6];
+    }
+
+    bb4: {
+        _0 = const 51_i64;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _0 = const 0_i64;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.GenericTypePatternQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Box | llm.openai.Box // boxed
+    let _2: bool
+    let _3: string
+    let _4: bool
+    let _5: bool
+    let _6: int
+    let _7: bool
+
+    bb0: {
+        _1 =  { const 50_i64 };
+        _2 = is_type(copy _1, Class(TypeName { name: "Box", module_path: ["user", "llm", "openai"], display_name: "llm.openai.Box" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = copy _1.0;
+        _4 = is_type(copy _3, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _4 -> [bb5, bb2];
+    }
+
+    bb2: {
+        _5 = is_type(copy _1, Class(TypeName { name: "Box", module_path: ["user", "llm", "openai"], display_name: "llm.openai.Box" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _5 -> [bb3, bb6];
+    }
+
+    bb3: {
+        _6 = copy _1.0;
+        _7 = is_type(copy _6, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _7 -> [bb4, bb6];
+    }
+
+    bb4: {
+        _0 = const 50_i64;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _0 = const 0_i64;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.TypePatternNamespaceQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Response // response
+
+    bb0: {
+        _1 = user.llm.openai.Response { const "ok", const 47_i64 };
+        _0 = copy _1.1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TypePatternNamespaceQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Response // response
+    let _2: bool
+
+    bb0: {
+        _1 = user.llm.openai.Response { const "ok", const 48_i64 };
+        _2 = is_type(copy _1, Class(TypeName { name: "Response", module_path: ["user", "llm", "openai"], display_name: "llm.openai.Response" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _0 = copy _1.1;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.TypePatternQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Response // response
+
+    bb0: {
+        _1 = user.llm.openai.Response { const "ok", const 43_i64 };
+        _0 = copy _1.1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TypePatternQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Response // response
+    let _2: bool
+
+    bb0: {
+        _1 = user.llm.openai.Response { const "ok", const 44_i64 };
+        _2 = is_type(copy _1, Class(TypeName { name: "Response", module_path: ["user", "llm", "openai"], display_name: "llm.openai.Response" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _0 = copy _1.1;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.llm.openai.DestructureBareInNamespace(response: llm.openai.Response) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: llm.openai.Response // response // param
+    let _2: llm.openai.Response
+    let _3: int
+    let _4: int // score
+
+    bb0: {
+        _2 = copy _1;
+        _3 = copy _2.1;
+        _4 = copy _3;
+        _0 = copy _4;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

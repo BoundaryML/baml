@@ -395,6 +395,88 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
+    WORD "literal_chain_valid_then_invalid_cases_are_checked"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            CHAIN_PATTERN
+              BINDING_PATTERN "let ok"
+                KW_LET "let"
+                WORD "ok"
+              COLON ":"
+              TYPE_PATTERN
+                TYPE_EXPR "1"
+                  INTEGER_LITERAL "1"
+              COLON ":"
+              UNION_PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "1"
+                    INTEGER_LITERAL "1"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "2"
+                    INTEGER_LITERAL "2"
+              COLON ":"
+              UNION_PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "1"
+                    INTEGER_LITERAL "1"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "2"
+                    INTEGER_LITERAL "2"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "3"
+                    INTEGER_LITERAL "3"
+              COLON ":"
+              TYPE_PATTERN
+                TYPE_EXPR "int"
+                  WORD "int"
+          EQUALS "="
+          INTEGER_LITERAL "1"
+          SEMICOLON ";"
+        LET_STMT
+          PATTERN
+            CHAIN_PATTERN
+              BINDING_PATTERN "let bad"
+                KW_LET "let"
+                WORD "bad"
+              COLON ":"
+              TYPE_PATTERN
+                TYPE_EXPR "int"
+                  WORD "int"
+              COLON ":"
+              UNION_PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "1"
+                    INTEGER_LITERAL "1"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "2"
+                    INTEGER_LITERAL "2"
+              COLON ":"
+              TYPE_PATTERN
+                TYPE_EXPR "1"
+                  INTEGER_LITERAL "1"
+          EQUALS "="
+          INTEGER_LITERAL "1"
+          SEMICOLON ";"
+        BINARY_EXPR "ok + bad"
+          WORD "ok"
+          PLUS "+"
+          WORD "bad"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
     WORD "binding_in_middle_of_chain"
     PARAMETER_LIST "()"
       L_PAREN "("

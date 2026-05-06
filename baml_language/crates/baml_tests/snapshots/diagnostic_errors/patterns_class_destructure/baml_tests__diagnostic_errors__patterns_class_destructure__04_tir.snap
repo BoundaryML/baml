@@ -1,0 +1,281 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.Address {
+  zip: int
+}
+class user.Person {
+  age: int
+  flexible_age: int | string
+  address: user.Address
+}
+class user.SameNameInner {
+  field: int
+}
+class user.SameNameOuter {
+  field: user.SameNameInner
+  other: user.SameNameInner
+}
+class user.Box {
+  value: T
+}
+function user.class_destructure_unknown_field_in_let() -> int throws never {
+  { : 0
+    let Person { missing: missing } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
+    0 : 0
+  }
+  !! 552..560: type `user.Person` has no member `missing`
+}
+function user.class_destructure_duplicate_field_key_in_let() -> int throws never {
+  { : int
+    let Person { age: first, age: second } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
+    first + second : int
+  }
+}
+function user.class_destructure_duplicate_field_key_with_wildcards() -> int throws never {
+  { : 1
+    match (Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person) : 1
+      Person { age: _, age: _ } =>
+        1 : 1
+  }
+}
+function user.class_destructure_duplicate_binding_name_across_fields() -> int throws never {
+  { : 0
+    let Person { age: age, flexible_age: age } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
+    0 : 0
+  }
+}
+function user.nested_class_destructure_duplicate_binding_name_in_field_chain() -> int throws never {
+  { : 0
+    let SameNameOuter { field: field: SameNameInner { field: field } } = SameNameOuter { field: SameNameInner { field: 1 }, other: SameNameInner { field: 2 } } : user.SameNameOuter
+    0 : 0
+  }
+}
+function user.nested_class_destructure_duplicate_binding_name_across_nested_fields() -> int throws never {
+  { : 0
+    let SameNameOuter { field: SameNameInner { field: field }, other: SameNameInner { field: field } } = SameNameOuter { field: SameNameInner { field: 1 }, other: SameNameInner { field: 2 } } : user.SameNameOuter
+    0 : 0
+  }
+}
+function user.nested_class_destructure_unknown_field_in_let() -> int throws never {
+  { : 0
+    let Person { address: Address { missing: missing } } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
+    0 : 0
+  }
+  !! 2072..2080: type `user.Address` has no member `missing`
+}
+function user.match_class_destructure_unknown_field() -> int throws never {
+  { : 1 | 0
+    match (Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person) : 1 | 0
+      Person { missing: missing } =>
+        1 : 1
+      _ =>
+        0 : 0
+  }
+  !! 2345..2353: type `user.Person` has no member `missing`
+}
+function user.class_destructure_unresolved_class() -> int throws never {
+  { : 0
+    let MissingClass { age: age } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
+    0 : 0
+  }
+  !! 2472..2563: unresolved name: MissingClass
+}
+function user.class_destructure_field_pattern_type_mismatch() -> int throws never {
+  { : 1 | 0
+    match (Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person) : 1 | 0
+      Person { age: string } =>
+        1 : 1
+      _ =>
+        0 : 0
+  }
+  !! 2739..2746: type mismatch: expected int, got string
+}
+function user.class_destructure_invalid_chain_type() -> int throws never {
+  { : int
+    let Person { age: age }: Address = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Address
+    age : int
+  }
+  !! 2835..2858: type mismatch: expected user.Address, got user.Person
+  !! 2835..2867: refutable pattern in let binding; refutable patterns belong in `match`
+}
+function user.generic_class_type_pattern_requires_type_args(boxed: user.Box<int>) -> int throws never {
+  { : 1
+    match (boxed : user.Box<int>) : 1
+      Box =>
+        1 : 1
+  }
+  !! 3090..3091: class `Box` expects 1 type argument(s), got 0
+}
+function user.generic_class_type_pattern_in_chain_requires_type_args(boxed: user.Box<int>) -> int throws never {
+  { : 1
+    match (boxed : user.Box<int>) : 1
+      value: Box =>
+        1 : 1
+  }
+  !! 3237..3238: class `Box` expects 1 type argument(s), got 0
+}
+function user.class_destructure_chain_binding_middle_link_is_invalid(boxed: user.Box<int>) -> int throws never {
+  { : int
+    let Box { value: value }: alias: Box<int> = boxed : user.Box<int>
+    value + alias.value : int
+  }
+  !! 3337..3359: type mismatch: expected never, got user.Box
+}
+class user.OptionalPerson {
+  age: int?
+}
+function user.let_top_level_class_narrows_union_scrutinee_is_refutable(v: user.Person | int) -> int throws never {
+  { : int
+    let Person { age: age } = v : user.Person | int -> user.Person
+    age : int
+  }
+  !! 3724..3747: refutable pattern in let binding; refutable patterns belong in `match`
+}
+function user.for_top_level_class_narrows_union_element_is_refutable() -> int throws never {
+  { : 1
+    for Person { age: age } in [Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }, 2]
+      { : int
+        age : int
+      }
+    1 : 1
+  }
+  !! 3848..3866: refutable pattern in for-let binding; refutable patterns belong in `match`
+}
+function user.let_class_field_type_narrower_than_field_is_refutable() -> int throws never {
+  { : 1
+    let Person { flexible_age: int } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
+    1 : 1
+  }
+  !! 4065..4102: refutable pattern in let binding; refutable patterns belong in `match`
+}
+function user.let_class_field_literal_narrower_than_field_is_refutable() -> int throws never {
+  { : 1
+    let Person { age: 1 } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
+    1 : 1
+  }
+  !! 4283..4309: refutable pattern in let binding; refutable patterns belong in `match`
+}
+function user.nested_class_field_type_narrower_than_field_is_refutable() -> int throws never {
+  { : 1
+    let Person { address: Address { zip: 1 } } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
+    1 : 1
+  }
+  !! 4490..4549: refutable pattern in let binding; refutable patterns belong in `match`
+}
+function user.for_class_field_type_narrower_than_field_is_refutable() -> int throws never {
+  { : 1
+    for Person { flexible_age: int } in [Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }]
+      { : 1
+        1 : 1
+      }
+    1 : 1
+  }
+  !! 4737..4769: refutable pattern in for-let binding; refutable patterns belong in `match`
+}
+function user.let_optional_class_field_narrower_than_field_is_refutable() -> int throws never {
+  { : 1
+    let OptionalPerson { age: int } = OptionalPerson { age: 1 } : user.OptionalPerson
+    1 : 1
+  }
+  !! 4959..4995: refutable pattern in let binding; refutable patterns belong in `match`
+}
+function user.let_generic_class_field_type_narrower_than_substituted_field_is_refutable() -> int throws never {
+  { : 1
+    let boxed: Box<string> = Box { value: "ready" } : user.Box<string>
+    let Box { value: int } = boxed : user.Box<string>
+    1 : 1
+  }
+  !! 5180..5207: refutable pattern in let binding; refutable patterns belong in `match`
+}
+class user.Admin {
+  age: string
+}
+function user.class_destructure_or_pattern_must_bind_same_names(v: user.Person | int) -> int throws never {
+  { : int
+    match (v : user.Person | int) : int
+      Person { age: age } | int =>
+        age : int
+  }
+}
+function user.class_destructure_or_pattern_same_binding_conflicting_types(v: user.Person | user.Admin) -> int throws never {
+  { : 1
+    match (v : user.Person | user.Admin) : 1
+      Person { age: age } | Admin { age: age } =>
+        1 : 1
+  }
+  !! 5717..5731: Or-pattern alternatives bind `age` with conflicting types: `int` vs `string`
+}
+function user.generic_class_destructure_or_pattern_same_binding_conflicting_types(v: user.Box<int> | user.Box<string>) -> int throws never {
+  { : 1
+    match (v : user.Box<int> | user.Box<string>) : 1
+      Box { value: value }: Box<int> | Box { value: value }: Box<string> =>
+        1 : 1
+  }
+  !! 5923..5960: Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
+}
+function user.nested_generic_class_destructure_duplicate_binding_name() -> int throws never {
+  { : 0
+    let boxed: Box<SameNameInner> = Box { value: SameNameInner { field: 1 } } : user.Box<user.SameNameInner>
+    let Box { value: value: SameNameInner { field: value } }: Box<SameNameInner> = boxed : user.Box<user.SameNameInner>
+    0 : 0
+  }
+}
+function user.nested_class_destructure_field_pattern_type_mismatch() -> int throws never {
+  { : 1 | 0
+    match (Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person) : 1 | 0
+      Person { address: Address { zip: string } } =>
+        1 : 1
+      _ =>
+        0 : 0
+  }
+  !! 6453..6460: type mismatch: expected int, got string
+}
+function user.class_destructure_formatter_trivia_preserved() -> int throws never {
+  { : int
+    let input = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
+    let Person { age: years, address: Address { zip: zip } } = input : user.Person
+    years + zip : int
+  }
+}
+function user.class_destructure_formatter_deep_chain_trivia() -> int throws never {
+  { : int
+    let input = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
+    let Person { address: addr_alias: Address { zip: zip_alias }: Address } = input : user.Person
+    zip_alias : int
+  }
+}
+function user.class_destructure_formatter_empty_and_trailing_comma_trivia() -> int throws never {
+  { : int
+    let input = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
+    let Person {  } = input : user.Person
+    match (input : user.Person) : int
+      Person { age: years } =>
+        years : int
+  }
+}
+class user.Address$stream {
+  zip: null | int
+}
+class user.Person$stream {
+  age: null | int
+  flexible_age: null | int | string
+  address: null | user.Address$stream
+}
+class user.SameNameInner$stream {
+  field: null | int
+}
+class user.SameNameOuter$stream {
+  field: null | user.SameNameInner$stream
+  other: null | user.SameNameInner$stream
+}
+class user.Box$stream {
+  value: null | unknown
+}
+class user.OptionalPerson$stream {
+  age: null | int
+}
+class user.Admin$stream {
+  age: null | string
+}

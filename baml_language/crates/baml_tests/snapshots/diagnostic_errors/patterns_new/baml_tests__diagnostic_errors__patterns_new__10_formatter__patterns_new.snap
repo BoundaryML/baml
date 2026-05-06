@@ -75,6 +75,15 @@ function literal_narrow_violates(v: int) -> int {
     }
 }
 
+// The first binding is valid (`1 <: 1 | 2 <: 1 | 2 | 3 <: int`), while the
+// second fails twice (`int` is not a subtype of `1 | 2`, and `1 | 2` is not a
+// subtype of `1`).
+function literal_chain_valid_then_invalid_cases_are_checked() -> int {
+    let ok: 1: 1 | 2: 1 | 2 | 3: int = 1;
+    let bad: int: 1 | 2: 1 = 1;
+    ok + bad
+}
+
 // Binding link in the middle of a chain — only Wildcard/Bind atoms with no
 // concrete narrow can act as "no test" links, and they contribute `never` to
 // the chain rule. So `1: int: let y` requires `int <: never`, which fails.

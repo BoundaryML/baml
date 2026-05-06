@@ -103,25 +103,25 @@ function user.RootThrowEnum(x: int) -> string {
 
 function user.RootUsesAuthConfig(cfg: auth.Config) -> string {
     load_var cfg
-    load_field .0
+    load_field .provider
     return
 }
 
 function user.RootUsesAuthError(e: auth.Error) -> string {
     load_var e
-    load_field .0
+    load_field .realm
     return
 }
 
 function user.RootUsesLlmConfig(cfg: llm.Config) -> string {
     load_var cfg
-    load_field .0
+    load_field .model
     return
 }
 
 function user.RootUsesLlmError(e: llm.Error) -> string {
     load_var e
-    load_field .0
+    load_field .reason
     return
 }
 
@@ -133,13 +133,13 @@ function user.RootUsesLlmStatus() -> llm.Status {
 
 function user.RootUsesNestedClient(c: llm.openai.Client) -> string {
     load_var c
-    load_field .0
+    load_field .api_key
     return
 }
 
 function user.auth.AuthAliasParam(t: auth.Token) -> string {
     load_var t
-    load_field .0
+    load_field .value
     return
 }
 
@@ -268,13 +268,13 @@ function user.auth.AuthMatchesRootStatus(s: Status) -> string {
 
 function user.auth.AuthMixedConfigs(auth_cfg: auth.Config, root_cfg: Config, llm_cfg: llm.Config) -> string {
     load_var auth_cfg
-    load_field .0
+    load_field .provider
     return
 }
 
 function user.auth.AuthMixedErrors(auth_err: auth.Error, root_err: Error, llm_err: llm.Error) -> string {
     load_var auth_err
-    load_field .0
+    load_field .realm
     return
 }
 
@@ -337,13 +337,13 @@ function user.auth.AuthThrowsRootError(x: int) -> string {
 
 function user.auth.AuthUsesLlmConfig(cfg: llm.Config) -> string {
     load_var cfg
-    load_field .0
+    load_field .model
     return
 }
 
 function user.auth.AuthUsesLlmResponse(r: llm.Response) -> string {
     load_var r
-    load_field .0
+    load_field .text
     return
 }
 
@@ -355,7 +355,7 @@ function user.auth.AuthUsesLlmStatus() -> llm.Status {
 
 function user.auth.AuthUsesNestedClient(c: llm.openai.Client) -> string {
     load_var c
-    load_field .0
+    load_field .api_key
     return
 }
 
@@ -373,7 +373,7 @@ function user.auth.AuthUsesRootStatus() -> Status {
 
 function user.llm.LlmAliasParam(cfg: llm.Config) -> string {
     load_var cfg
-    load_field .0
+    load_field .model
     return
 }
 
@@ -461,7 +461,7 @@ function user.llm.LlmMatchesRootStatus(s: Status) -> string {
 
 function user.llm.LlmMixedConfigs(llm_cfg: llm.Config, root_cfg: Config, auth_cfg: auth.Config) -> string {
     load_var llm_cfg
-    load_field .0
+    load_field .model
     return
 }
 
@@ -550,13 +550,13 @@ function user.llm.LlmThrowsRootError(x: int) -> string {
 
 function user.llm.LlmUsesAuthConfig(cfg: auth.Config) -> string {
     load_var cfg
-    load_field .0
+    load_field .provider
     return
 }
 
 function user.llm.LlmUsesAuthError(e: auth.Error) -> string {
     load_var e
-    load_field .0
+    load_field .realm
     return
 }
 
@@ -568,7 +568,7 @@ function user.llm.LlmUsesAuthRole() -> auth.Role {
 
 function user.llm.LlmUsesNestedClient(c: llm.openai.Client) -> string {
     load_var c
-    load_field .0
+    load_field .api_key
     return
 }
 
@@ -742,7 +742,7 @@ function user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
 
 function user.llm.openai.OpenAIMixedErrors(openai_err: llm.openai.Error, root_err: Error, llm_err: llm.Error, auth_err: auth.Error) -> string {
     load_var openai_err
-    load_field .1
+    load_field .body
     return
 }
 
@@ -816,7 +816,7 @@ function user.llm.openai.OpenAIThrowEnum(x: int) -> string {
 
 function user.llm.openai.OpenAIUsesAuthConfig(cfg: auth.Config) -> string {
     load_var cfg
-    load_field .0
+    load_field .provider
     return
 }
 
@@ -828,13 +828,13 @@ function user.llm.openai.OpenAIUsesAuthRole() -> auth.Role {
 
 function user.llm.openai.OpenAIUsesLlmConfig(cfg: llm.Config) -> string {
     load_var cfg
-    load_field .0
+    load_field .model
     return
 }
 
 function user.llm.openai.OpenAIUsesLlmResponse(r: llm.Response) -> string {
     load_var r
-    load_field .0
+    load_field .text
     return
 }
 
