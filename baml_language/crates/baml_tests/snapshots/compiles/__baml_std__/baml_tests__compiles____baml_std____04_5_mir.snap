@@ -129,6 +129,10 @@ fn baml.Int.from_json(j: baml.json.json) -> baml.Int {
     }
 }
 
+fn baml.Int.ilog = builtin(vm)
+
+fn baml.Int.isqrt = builtin(vm)
+
 fn baml.Int.leading_ones = builtin(vm)
 
 fn baml.Int.leading_zeros = builtin(vm)
@@ -164,6 +168,8 @@ fn baml.Int.min_value() -> int {
         return;
     }
 }
+
+fn baml.Int.pow = builtin(vm)
 
 fn baml.Int.to_json = builtin(vm)
 

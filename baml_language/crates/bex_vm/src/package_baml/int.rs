@@ -34,6 +34,67 @@ impl BamlClassInt for PackageBamlImpl {
         std::cmp::max(v, min)
     }
 
+    // ── Math ──────────────────────────────────────────────────────────────────
+
+    fn isqrt(int: i64) -> Result<i64, VmRustFnError> {
+        if int < 0 {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!("int.isqrt: negative input ({int}) has no integer square root"),
+            }
+            .into());
+        }
+        Ok(int.isqrt())
+    }
+
+    fn pow(int: i64, exp: i64) -> i64 {
+        if exp < 0 {
+            return 0;
+        }
+        // -1 to any power is ±1 with parity determined by the exponent. Special-
+        // cased so we use the original (i64) parity, since clamping to u32::MAX
+        // (odd) would otherwise produce -1 for an even exp like 2^32.
+        if int == -1 {
+            return if exp & 1 == 0 { 1 } else { -1 };
+        }
+        // For any other base, exp > ~63 always overflows for |int| >= 2, so
+        // clamping to u32::MAX is safe — checked_pow returns None and we
+        // saturate. For |int| <= 1 it never overflows. checked_pow uses the
+        // mathematical convention 0^0 == 1.
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let exp_u32 = if exp > i64::from(u32::MAX) {
+            u32::MAX
+        } else {
+            exp as u32
+        };
+        // Saturation value if checked_pow overflows: positive if base >= 0,
+        // or if exp is even (i.e. mathematical sign of result).
+        let saturated = if int >= 0 || exp_u32 % 2 == 0 {
+            i64::MAX
+        } else {
+            i64::MIN
+        };
+        int.checked_pow(exp_u32).unwrap_or(saturated)
+    }
+
+    fn ilog(int: i64, base: i64) -> Result<i64, VmRustFnError> {
+        if int <= 0 {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!("int.ilog: undefined for non-positive input (self = {int})"),
+            }
+            .into());
+        }
+        if base < 2 {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!("int.ilog: base must be >= 2, got {base}"),
+            }
+            .into());
+        }
+        // Both invariants hold above, so checked_ilog cannot return None.
+        Ok(i64::from(int.checked_ilog(base).unwrap_or_else(|| {
+            unreachable!("int.ilog: invariants self > 0 && base >= 2 already enforced")
+        })))
+    }
+
     // ── Bit operations ────────────────────────────────────────────────────────
 
     fn leading_zeros(int: i64) -> i64 {

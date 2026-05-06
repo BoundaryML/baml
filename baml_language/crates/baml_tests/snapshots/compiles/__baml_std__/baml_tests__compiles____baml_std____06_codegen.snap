@@ -70,6 +70,12 @@ function baml.Int.from_json(j: baml.json.json) -> baml.Int {
     return
 }
 
+function baml.Int.ilog(self: null, base: int) -> int {
+}
+
+function baml.Int.isqrt(self: null) -> int {
+}
+
 function baml.Int.leading_ones(self: null) -> int {
 }
 
@@ -90,6 +96,9 @@ function baml.Int.min(self: null, other: int) -> int {
 function baml.Int.min_value() -> int {
     load_const -9223372036854775808
     return
+}
+
+function baml.Int.pow(self: null, exp: int) -> int {
 }
 
 function baml.Int.to_json(self: null) -> baml.json.json {

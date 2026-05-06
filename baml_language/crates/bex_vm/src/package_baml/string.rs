@@ -124,10 +124,9 @@ impl BamlClassString for PackageBamlImpl {
             .into());
         }
         // Safe because `index` is < len and on a char boundary.
-        let ch = string[index..]
-            .chars()
-            .next()
-            .expect("char_at: char boundary at index < len must yield a char");
+        let ch = string[index..].chars().next().unwrap_or_else(|| {
+            unreachable!("char_at: char boundary at index < len must yield a char")
+        });
         Ok(ch.to_string())
     }
 
@@ -155,10 +154,9 @@ impl BamlClassString for PackageBamlImpl {
             }
             .into());
         }
-        let ch = string[index..]
-            .chars()
-            .next()
-            .expect("code_point_at: char boundary at index < len must yield a char");
+        let ch = string[index..].chars().next().unwrap_or_else(|| {
+            unreachable!("code_point_at: char boundary at index < len must yield a char")
+        });
         Ok(i64::from(ch as u32))
     }
 

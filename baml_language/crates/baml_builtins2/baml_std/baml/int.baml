@@ -60,6 +60,65 @@ class Int {
     $rust_function
   }
 
+  // ─── Math ─────────────────────────────────────────────────────────────────
+
+  /// Returns the integer square root of `self` — that is, the largest `int`
+  /// `r` such that `r * r <= self`.
+  ///
+  /// Throws `InvalidArgument` if `self` is negative.
+  ///
+  /// # Examples
+  /// ```
+  /// (10).isqrt()   // 3
+  /// (16).isqrt()   // 4
+  /// (0).isqrt()    // 0
+  /// (-1).isqrt()   // throws
+  /// ```
+  function isqrt(self) -> int throws root.errors.InvalidArgument {
+    $rust_function
+  }
+
+  /// Returns `self ** exp`. Saturates on overflow (positive overflow returns
+  /// `int.max_value()`, negative overflow returns `int.min_value()`).
+  ///
+  /// `0 ** 0` returns `1`, by convention.
+  ///
+  /// If `exp` is negative the result is `0`, since the mathematical value
+  /// `self ** -n = 1 / self ** n` is in `(-1, 1)` for `|self| > 1` and rounds
+  /// to zero. (For `self == 1` or `self == -1` the value is `±1` which rounds
+  /// to itself; this implementation still returns `0` for negative exponents
+  /// uniformly.)
+  ///
+  /// # Examples
+  /// ```
+  /// (2).pow(10)      // 1024
+  /// (2).pow(0)       // 1
+  /// (0).pow(0)       // 1   (convention)
+  /// (2).pow(-1)      // 0
+  /// (10).pow(100)    // saturates to int.max_value()
+  /// (-2).pow(3)      // -8
+  /// ```
+  function pow(self, exp: int) -> int {
+    $rust_function
+  }
+
+  /// Returns the integer logarithm of `self` in the given `base`, rounded
+  /// down — i.e. the largest `n` such that `base ** n <= self`.
+  ///
+  /// Throws `InvalidArgument` if `self <= 0` or `base < 2`.
+  ///
+  /// # Examples
+  /// ```
+  /// (1000).ilog(10)   // 3
+  /// (1024).ilog(2)    // 10
+  /// (1).ilog(10)      // 0
+  /// (0).ilog(10)      // throws
+  /// (10).ilog(1)      // throws
+  /// ```
+  function ilog(self, base: int) -> int throws root.errors.InvalidArgument {
+    $rust_function
+  }
+
   // ─── Bit operations ───────────────────────────────────────────────────────
   //
   // All bit operations interpret `int` as a 64-bit two's-complement value
