@@ -45,7 +45,49 @@ function baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
 function baml.Bool.to_json(self: null) -> baml.json.json {
 }
 
+function baml.Float.abs(self: null) -> float {
+}
+
+function baml.Float.acos(self: null) -> float {
+}
+
+function baml.Float.acosh(self: null) -> float {
+}
+
+function baml.Float.asin(self: null) -> float {
+}
+
+function baml.Float.asinh(self: null) -> float {
+}
+
+function baml.Float.atan(self: null) -> float {
+}
+
+function baml.Float.atan2(self: null, other: float) -> float {
+}
+
+function baml.Float.atanh(self: null) -> float {
+}
+
+function baml.Float.ceil(self: null) -> float {
+}
+
+function baml.Float.clamp(self: null, min: float, max: float) -> float {
+}
+
+function baml.Float.cos(self: null) -> float {
+}
+
+function baml.Float.cosh(self: null) -> float {
+}
+
 function baml.Float.e() -> float {
+}
+
+function baml.Float.floor(self: null) -> float {
+}
+
+function baml.Float.fract(self: null) -> float {
 }
 
 function baml.Float.from_json(j: baml.json.json) -> baml.Float {
@@ -56,7 +98,19 @@ function baml.Float.from_json(j: baml.json.json) -> baml.Float {
 function baml.Float.golden_ratio() -> float {
 }
 
+function baml.Float.hypot(self: null, other: float) -> float {
+}
+
+function baml.Float.iceil(self: null) -> int {
+}
+
+function baml.Float.ifloor(self: null) -> int {
+}
+
 function baml.Float.inf() -> float {
+}
+
+function baml.Float.iround(self: null) -> int {
 }
 
 function baml.Float.is_finite(self: null) -> bool {
@@ -79,13 +133,71 @@ function baml.Float.is_infinite(self: null) -> bool {
 function baml.Float.is_nan(self: null) -> bool {
 }
 
+function baml.Float.itrunc(self: null) -> int {
+}
+
+function baml.Float.log(self: null, base: float) -> float {
+}
+
+function baml.Float.max(self: null, other: float) -> float {
+}
+
+function baml.Float.min(self: null, other: float) -> float {
+}
+
 function baml.Float.nan() -> float {
 }
 
 function baml.Float.pi() -> float {
 }
 
+function baml.Float.pow(self: null, exp: float) -> float {
+}
+
+function baml.Float.round(self: null) -> float {
+}
+
+function baml.Float.sin(self: null) -> float {
+}
+
+function baml.Float.sinh(self: null) -> float {
+}
+
+function baml.Float.sqrt(self: null) -> float {
+}
+
+function baml.Float.tan(self: null) -> float {
+}
+
+function baml.Float.tanh(self: null) -> float {
+}
+
+function baml.Float.to_degrees(self: null) -> float {
+    call baml.Float.pi
+    store_var _3
+    load_var self
+    load_const 180.0
+    bin_op *
+    load_var _3
+    bin_op /
+    return
+}
+
 function baml.Float.to_json(self: null) -> baml.json.json {
+}
+
+function baml.Float.to_radians(self: null) -> float {
+    call baml.Float.pi
+    store_var _3
+    load_var self
+    load_var _3
+    bin_op *
+    load_const 180.0
+    bin_op /
+    return
+}
+
+function baml.Float.trunc(self: null) -> float {
 }
 
 function baml.Int.abs(self: null) -> int {

@@ -89,7 +89,35 @@ fn baml.deep_copy = builtin(vm)
 
 fn baml.deep_equals = builtin(vm)
 
+fn baml.Float.abs = builtin(vm)
+
+fn baml.Float.acos = builtin(vm)
+
+fn baml.Float.acosh = builtin(vm)
+
+fn baml.Float.asin = builtin(vm)
+
+fn baml.Float.asinh = builtin(vm)
+
+fn baml.Float.atan = builtin(vm)
+
+fn baml.Float.atan2 = builtin(vm)
+
+fn baml.Float.atanh = builtin(vm)
+
+fn baml.Float.ceil = builtin(vm)
+
+fn baml.Float.clamp = builtin(vm)
+
+fn baml.Float.cos = builtin(vm)
+
+fn baml.Float.cosh = builtin(vm)
+
 fn baml.Float.e = builtin(vm)
+
+fn baml.Float.floor = builtin(vm)
+
+fn baml.Float.fract = builtin(vm)
 
 fn baml.Float.from_json(j: baml.json.json) -> baml.Float {
     // Locals:
@@ -108,7 +136,15 @@ fn baml.Float.from_json(j: baml.json.json) -> baml.Float {
 
 fn baml.Float.golden_ratio = builtin(vm)
 
+fn baml.Float.hypot = builtin(vm)
+
+fn baml.Float.iceil = builtin(vm)
+
+fn baml.Float.ifloor = builtin(vm)
+
 fn baml.Float.inf = builtin(vm)
+
+fn baml.Float.iround = builtin(vm)
 
 fn baml.Float.is_finite(self: baml.Float) -> bool {
     // Locals:
@@ -145,11 +181,79 @@ fn baml.Float.is_infinite = builtin(vm)
 
 fn baml.Float.is_nan = builtin(vm)
 
+fn baml.Float.itrunc = builtin(vm)
+
+fn baml.Float.log = builtin(vm)
+
+fn baml.Float.max = builtin(vm)
+
+fn baml.Float.min = builtin(vm)
+
 fn baml.Float.nan = builtin(vm)
 
 fn baml.Float.pi = builtin(vm)
 
+fn baml.Float.pow = builtin(vm)
+
+fn baml.Float.round = builtin(vm)
+
+fn baml.Float.sin = builtin(vm)
+
+fn baml.Float.sinh = builtin(vm)
+
+fn baml.Float.sqrt = builtin(vm)
+
+fn baml.Float.tan = builtin(vm)
+
+fn baml.Float.tanh = builtin(vm)
+
+fn baml.Float.to_degrees(self: baml.Float) -> float {
+    // Locals:
+    let _0: float // _0 // return
+    let _1: baml.Float // self // param
+    let _2: float
+    let _3: float
+
+    bb0: {
+        _2 = copy _1 * const 180_f64;
+        _3 = call const fn baml.Float.pi() -> [bb1];
+    }
+
+    bb1: {
+        _0 = copy _2 / copy _3;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.Float.to_json = builtin(vm)
+
+fn baml.Float.to_radians(self: baml.Float) -> float {
+    // Locals:
+    let _0: float // _0 // return
+    let _1: baml.Float // self // param
+    let _2: float
+    let _3: float
+
+    bb0: {
+        _3 = call const fn baml.Float.pi() -> [bb1];
+    }
+
+    bb1: {
+        _2 = copy _1 * copy _3;
+        _0 = copy _2 / const 180_f64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.Float.trunc = builtin(vm)
 
 fn baml.Int.abs = builtin(vm)
 

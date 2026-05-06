@@ -40,6 +40,16 @@ function baml.Float.is_finite(self: baml.Float) -> bool throws never {
     Not self.is_nan() && Not self.is_infinite() : bool
   }
 }
+function baml.Float.to_radians(self: baml.Float) -> float throws never {
+  { : float
+    self * float.pi() / 180.0 : float
+  }
+}
+function baml.Float.to_degrees(self: baml.Float) -> float throws never {
+  { : float
+    self * 180.0 / float.pi() : float
+  }
+}
 function baml.Float.from_json(j: baml.json.json) -> baml.Float throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Float {  } : baml.Float
 }
