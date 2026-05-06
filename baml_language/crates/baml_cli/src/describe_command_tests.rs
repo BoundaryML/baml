@@ -523,6 +523,25 @@ fn suggest_unrelated_input_returns_few_or_no_results() {
     );
 }
 
+/// Suggestions are case-insensitive — agents shouldn't have to remember casing.
+#[test]
+fn suggest_is_case_insensitive() {
+    let db = simple_project();
+    // Lowercase input should still find the correctly-cased item.
+    let suggestions = suggest_similar(&db, "extractpoint", 5);
+    assert!(
+        suggestions.iter().any(|s| s == "ExtractPoint"),
+        "expected `ExtractPoint` for lowercase `extractpoint`, got {suggestions:?}",
+    );
+
+    // Uppercase typo should also find the correctly-cased item.
+    let suggestions = suggest_similar(&db, "POINT", 5);
+    assert!(
+        suggestions.iter().any(|s| s == "Point"),
+        "expected `Point` for uppercase `POINT`, got {suggestions:?}",
+    );
+}
+
 /// Suggestions are limited to the requested count.
 #[test]
 fn suggest_respects_limit() {

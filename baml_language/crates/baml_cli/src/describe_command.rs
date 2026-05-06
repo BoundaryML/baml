@@ -79,13 +79,18 @@ pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<St
         }
     }
 
+    // Match case-insensitively: agents shouldn't need to remember casing to
+    // get a useful "did you mean?" hint. `strsim::jaro_winkler` is case-
+    // sensitive, so we lowercase both sides before scoring.
+    let needle_lower = name.to_ascii_lowercase();
     let mut scored: Vec<(f64, String)> = all_paths
         .into_iter()
         .map(|p| {
-            // Jaro-Winkler is good for typos; substring presence is a strong
-            // boost for cases like "Confg" → "Config".
-            let mut score = strsim::jaro_winkler(&p, name);
-            if p.to_ascii_lowercase().contains(&name.to_ascii_lowercase()) {
+            let p_lower = p.to_ascii_lowercase();
+            // Jaro-Winkler on lowercased strings handles typos; substring
+            // presence is an extra boost for cases like "Confg" → "Config".
+            let mut score = strsim::jaro_winkler(&p_lower, &needle_lower);
+            if p_lower.contains(&needle_lower) {
                 score += 0.15;
             }
             (score, p)
