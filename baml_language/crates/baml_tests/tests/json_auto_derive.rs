@@ -684,3 +684,269 @@ async fn generic_class_honors_override_through_typevar_from_json() {
         Ok(BexExternalValue::String("[reset]".to_string()))
     );
 }
+
+// ── Phase 5c: additional coverage ────────────────────────────────────────────
+
+#[tokio::test]
+async fn optional_class_override_honored_from_json_non_null() {
+    // `class A { b: B? }` with B's user `from_json` override returning a
+    // sentinel.  When the input has a non-null `b`, the native dispatcher's
+    // `Optional` arm peels the wrapper and recurses on the inner type, which
+    // `YieldToCall`s B's user from_json — the override must win.
+    let source = r#"
+        class B {
+            y int
+
+            function from_json(j: baml.json.json) -> B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                B { y: 99 }
+            }
+        }
+        class A { b B? }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"b\":{\"y\":7}}");
+            let a: A = A.from_json(j);
+            match (a.b) {
+                null => -1,
+                inner: B => inner.y,
+            }
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+#[tokio::test]
+async fn optional_class_override_honored_from_json_null() {
+    // Same shape as above but the input has `b: null`. The native dispatcher's
+    // `Optional` arm short-circuits to `Value::Null` without calling B's
+    // `from_json`. Without the short-circuit, calling `B.from_json(null)`
+    // would land in B's user override and return `B{y:99}` — so this test
+    // catches a regression where Optional accidentally falls through.
+    let source = r#"
+        class B {
+            y int
+
+            function from_json(j: baml.json.json) -> B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                B { y: 99 }
+            }
+        }
+        class A { b B? }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"b\":null}");
+            let a: A = A.from_json(j);
+            match (a.b) {
+                null => -1,
+                inner: B => inner.y,
+            }
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+}
+
+#[tokio::test]
+async fn optional_primitive_field_from_json() {
+    // `class C { x: int? }`. Auto-derived from_json's per-field call is
+    // `baml.json.from_json<int?>(field(j, "x"))`. Native dispatches Optional →
+    // null pass-through OR structural-decode int. Tests both shapes.
+    let source = r#"
+        class C { x int? }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j1: baml.json.json = baml.json.parse("{\"x\":42}");
+            let c1: C = C.from_json(j1);
+            let j2: baml.json.json = baml.json.parse("{\"x\":null}");
+            let c2: C = C.from_json(j2);
+            let v1: int = match (c1.x) {
+                null => -1,
+                n: int => n,
+            };
+            let v2: int = match (c2.x) {
+                null => -1,
+                n: int => n,
+            };
+            v1 + v2
+        }
+    "#;
+    let output = baml_test!(source);
+    // 42 + (-1) = 41
+    assert_eq!(output.result, Ok(BexExternalValue::Int(41)));
+}
+
+#[tokio::test]
+async fn map_of_primitive_from_json() {
+    // `class C { lookup: map<string, int> }`. Auto-derived from_json's
+    // per-field call is `baml.json.from_json<map<string,int>>(field(j,"lookup"))`.
+    // Native walks the json object; values are primitives so each falls into
+    // the no-yield structural-decode branch (no continuation trampoline
+    // involvement). Tests the "structural map walk" path.
+    let source = r#"
+        class C { lookup map<string, int> }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"lookup\":{\"a\":1,\"b\":2,\"c\":3}}");
+            let c: C = C.from_json(j);
+            c.lookup["a"] + c.lookup["b"] + c.lookup["c"]
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
+}
+
+#[tokio::test]
+async fn top_level_from_json_call_concrete_class() {
+    // Direct `baml.json.from_json<User>(j)` — not via auto-derive synthesis.
+    // The dispatcher looks up `User.from_json` (which IS the auto-derived
+    // body) and YieldToCalls it.  Round-trip with manual call site asserts
+    // the public dispatcher works on its own.
+    let source = r#"
+        class User { name string  age int }
+        function main() -> string throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"name\":\"Ada\",\"age\":30}");
+            let u: User = baml.json.from_json<User>(j);
+            u.name
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Ada".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn top_level_from_json_call_primitive() {
+    // Direct `baml.json.from_json<int>(j)` for a primitive — the dispatcher
+    // structural-decodes via Phase 5a's `ty_serde_to_value`.  Tests that the
+    // public function is callable for non-class types too.
+    let source = r#"
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("42");
+            baml.json.from_json<int>(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+async fn independent_synthesis_only_from_json_defined() {
+    // BEP-038's `to_json` and `from_json` are independent.  `class B` defines
+    // ONLY `from_json`; the synthesizer must still emit `to_json` for B
+    // (otherwise A's auto-derived `to_json` body — `self.b.to_json()` — fails
+    // to compile).
+    //
+    // Asserts the loosened `maybe_synthesize_json_methods` rule from Phase 5c
+    // and verifies that A's `from_json` honors B's user override.
+    let source = r#"
+        class B {
+            y int
+
+            function from_json(j: baml.json.json) -> B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                B { y: 99 }
+            }
+        }
+        class A { b B }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let a_in: A = A { b: B { y: 1 } };
+            // Auto-derived A.to_json must still compile (B has auto-derived to_json).
+            let s: string = baml.json.stringify(a_in.to_json());
+            // A.from_json dispatches B's user override, returning y=99.
+            let parsed: A = A.from_json(baml.json.parse(s));
+            match (parsed.b.y) {
+                99 => "override-honored",
+                _ => "regression"
+            }
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("override-honored".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn independent_synthesis_only_to_json_defined() {
+    // Inverse of the previous test: `class B` defines ONLY `to_json`.  The
+    // synthesizer must still emit `from_json` for B so A's auto-derived
+    // `from_json` body can decode `b: B`.  When B has only user `to_json`,
+    // A's `from_json` falls back to the auto-derived structural decode of B.
+    let source = r#"
+        class B {
+            y int
+
+            function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                "[redacted]"
+            }
+        }
+        class A { b B }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"b\":{\"y\":7}}");
+            let a: A = A.from_json(j);
+            a.b.y
+        }
+    "#;
+    let output = baml_test!(source);
+    // No user override on from_json side — auto-derive structural decode reads y=7.
+    assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
+}
+
+#[tokio::test]
+async fn round_trip_with_overrides_both_directions() {
+    // End-to-end roundtrip with user overrides on BOTH `to_json` and
+    // `from_json`.  Constructed Secret serializes to a fixed string per the
+    // override, then parses back to a fixed `Secret { data: "[reset]" }`.
+    // Asserts the two contracts compose correctly through stringify/parse.
+    let source = r#"
+        class Secret {
+            data string
+
+            function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                "[redacted]"
+            }
+            function from_json(j: baml.json.json) -> Secret throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                Secret { data: "[reset]" }
+            }
+        }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let s: Secret = Secret { data: "hunter2" };
+            let json_val: baml.json.json = s.to_json();
+            let stringified: string = baml.json.stringify(json_val);
+            let parsed_json: baml.json.json = baml.json.parse(stringified);
+            let s2: Secret = Secret.from_json(parsed_json);
+            s2.data
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("[reset]".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn from_json_wrapper_body_fallback() {
+    // Classes with field types unsafe for per-field synthesis (`$rust_type`,
+    // function types, `unknown`) fall back to the wrapper body
+    // `baml.json.from_string<Self>(stringify(j))` (mirrors the to_json side
+    // 5b.5).  Field type `unknown` is the simplest trigger:
+    // `class_is_safe_for_per_field_synthesis` returns false and the
+    // synthesizer emits the wrapper body.
+    //
+    // The decode then goes through Phase 5a's structural-coerce path, which
+    // round-trips concrete shapes regardless of the unknown declared type.
+    let source = r#"
+        class Holder { value unknown }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"value\":42}");
+            let h: Holder = Holder.from_json(j);
+            // `value` is unknown so structural decode keeps it as the parsed
+            // json int.  Match-narrow to extract.
+            match (h.value) {
+                n: int => n,
+                _ => -1
+            }
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
