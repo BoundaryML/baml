@@ -8,6 +8,7 @@
 //! can be constructed directly in tests without parsing.
 
 pub mod ast;
+pub(crate) mod auto_derive_json;
 pub(crate) mod companions;
 pub(crate) mod disambiguate;
 pub mod docstring;

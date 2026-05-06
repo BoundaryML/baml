@@ -267,11 +267,21 @@ pub enum FunctionOrigin {
     Companion,
     Internal,
     Builtin,
+    /// Synthesized by the auto-derive pass (e.g. `to_json` / `from_json`
+    /// methods generated on every user class). Filterable from bytecode
+    /// snapshots via `Function::origin`.
+    AutoDerive,
 }
 
 impl FunctionOrigin {
     pub const fn is_user_callable(self) -> bool {
-        matches!(self, Self::UserDefined | Self::Companion)
+        matches!(self, Self::UserDefined | Self::Companion | Self::AutoDerive)
+    }
+
+    /// True for methods synthesized by the auto-derive pass; used to filter
+    /// them from default bytecode snapshots in tests.
+    pub const fn is_auto_derived(self) -> bool {
+        matches!(self, Self::AutoDerive)
     }
 }
 

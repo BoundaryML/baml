@@ -67,6 +67,7 @@ fn emitted_function_origin(
             baml_compiler2_ast::FunctionOrigin::UserDefined => FunctionOrigin::UserDefined,
             baml_compiler2_ast::FunctionOrigin::Companion => FunctionOrigin::Companion,
             baml_compiler2_ast::FunctionOrigin::Internal => FunctionOrigin::Internal,
+            baml_compiler2_ast::FunctionOrigin::AutoDerive => FunctionOrigin::AutoDerive,
         }
     }
 }
