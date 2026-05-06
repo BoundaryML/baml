@@ -85,6 +85,41 @@ impl BamlClassInt for PackageBamlImpl {
         })
     }
 
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_wrap,
+        clippy::cast_possible_truncation
+    )]
+    fn random(lower: i64, upper: i64) -> Result<i64, VmRustFnError> {
+        if lower >= upper {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!(
+                    "int.random: lower ({lower}) must be less than upper ({upper}); range [{lower}, {upper}) is empty"
+                ),
+            }
+            .into());
+        }
+        // range fits in u128; for valid lower < upper as i64, range ∈ [1, 2^64 - 1].
+        // The i128 difference is provably positive, so the cast to u128 is safe.
+        let range = (i128::from(upper) - i128::from(lower)) as u128;
+        // Rejection sampling for an unbiased result: accept r only if it lies
+        // below the largest multiple of `range` that fits in 2^64. This rejects
+        // the (typically tiny) tail that would otherwise modulo-bias toward
+        // smaller values.
+        let threshold = (1u128 << 64) / range * range;
+        let mut buf = [0u8; 8];
+        loop {
+            getrandom::getrandom(&mut buf).expect("int.random: host entropy source unavailable");
+            let r = u128::from(u64::from_le_bytes(buf));
+            if r < threshold {
+                // r % range < range ≤ 2^64 - 1 < i64 width when added to lower,
+                // and lower + offset reconstructs a value in [lower, upper) ⊂ i64.
+                let offset = (r % range) as i128;
+                return Ok((i128::from(lower) + offset) as i64);
+            }
+        }
+    }
+
     fn ilog(int: i64, base: i64) -> Result<i64, VmRustFnError> {
         if int <= 0 {
             return Err(VmBamlError::InvalidArgument {

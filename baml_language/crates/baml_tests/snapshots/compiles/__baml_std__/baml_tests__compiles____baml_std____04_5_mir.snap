@@ -173,6 +173,8 @@ fn baml.Int.parse = builtin(vm)
 
 fn baml.Int.pow = builtin(vm)
 
+fn baml.Int.random = builtin(vm)
+
 fn baml.Int.to_json = builtin(vm)
 
 fn baml.Int.trailing_ones = builtin(vm)

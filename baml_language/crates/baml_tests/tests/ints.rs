@@ -416,6 +416,175 @@ async fn int_parse_round_trip_via_to_string() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(123)));
 }
 
+// ─── random ───────────────────────────────────────────────────────────────────
+//
+// `int.random(lower, upper)` returns a uniform value in `[lower, upper)`. We
+// can't assert on the exact value, so we sample many times and verify:
+//   - every sample is in range
+//   - over enough samples both endpoints {lower, upper-1} are observed (this
+//     deterministically passes for any reasonable PRNG with N=1000 and a tiny
+//     range; for larger ranges we just check that distinct values are produced).
+
+/// Run a BAML program that returns `int[]` and unwrap the elements as i64s.
+async fn run_int_array(src: &str) -> Vec<i64> {
+    let output = baml_test!(baml: src, entry: "main");
+    match output.result {
+        Ok(BexExternalValue::Array { items, .. }) => items
+            .into_iter()
+            .map(|item| match item {
+                BexExternalValue::Int(n) => n,
+                other => panic!("expected int element, got {other:?}"),
+            })
+            .collect(),
+        other => panic!("expected array, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn int_random_in_range_and_covers_endpoints() {
+    // Sample 1000 values from [0, 10) inside one BAML program — we need a
+    // tight loop here to avoid recompiling per sample. Over 1000 samples in a
+    // range of size 10, the probability of missing either endpoint is
+    // (9/10)^1000 ≈ 1.7e-46 — effectively zero.
+    let samples = run_int_array(
+        r#"
+        function main() -> int[] {
+            let acc: int[] = [];
+            let i = 0;
+            while (i < 1000) {
+                let _ = acc.push(int.random(0, 10));
+                i = i + 1;
+            }
+            acc
+        }
+        "#,
+    )
+    .await;
+    assert_eq!(samples.len(), 1000);
+    let mut min_seen = i64::MAX;
+    let mut max_seen = i64::MIN;
+    for n in &samples {
+        assert!(
+            (0..10).contains(n),
+            "int.random(0, 10) returned {n}, out of [0, 10)"
+        );
+        min_seen = min_seen.min(*n);
+        max_seen = max_seen.max(*n);
+    }
+    assert_eq!(min_seen, 0, "0 should be reachable");
+    assert_eq!(max_seen, 9, "9 should be reachable (upper is exclusive)");
+}
+
+#[tokio::test]
+async fn int_random_negative_range() {
+    let samples = run_int_array(
+        r#"
+        function main() -> int[] {
+            let acc: int[] = [];
+            let i = 0;
+            while (i < 200) {
+                let _ = acc.push(int.random(-5, 5));
+                i = i + 1;
+            }
+            acc
+        }
+        "#,
+    )
+    .await;
+    for n in &samples {
+        assert!(
+            (-5..5).contains(n),
+            "int.random(-5, 5) returned {n}, out of [-5, 5)"
+        );
+    }
+}
+
+#[tokio::test]
+async fn int_random_single_element_range() {
+    let samples = run_int_array(
+        r#"
+        function main() -> int[] {
+            let acc: int[] = [];
+            let i = 0;
+            while (i < 50) {
+                let _ = acc.push(int.random(0, 1));
+                i = i + 1;
+            }
+            acc
+        }
+        "#,
+    )
+    .await;
+    for n in &samples {
+        assert_eq!(
+            *n, 0,
+            "single-element range must always return the lower bound"
+        );
+    }
+}
+
+#[tokio::test]
+async fn int_random_full_range_returns_some_int() {
+    // Spanning the full i64 range exercises the largest `range` (2^64 - 1).
+    // Just verify the call succeeds; distribution is covered by smaller-range tests.
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.random(int.min_value(), int.max_value()) }
+    "#
+    );
+    assert!(matches!(output.result, Ok(BexExternalValue::Int(_))));
+}
+
+#[tokio::test]
+async fn int_random_distinct_values_in_wide_range() {
+    // Over 100 samples in a 1000-wide range, fewer than 50 distinct values
+    // would indicate the RNG is broken (probability negligible).
+    let samples = run_int_array(
+        r#"
+        function main() -> int[] {
+            let acc: int[] = [];
+            let i = 0;
+            while (i < 100) {
+                let _ = acc.push(int.random(0, 1000));
+                i = i + 1;
+            }
+            acc
+        }
+        "#,
+    )
+    .await;
+    let distinct: std::collections::HashSet<_> = samples.iter().copied().collect();
+    assert!(
+        distinct.len() >= 50,
+        "expected at least 50 distinct values out of 100 samples, got {}",
+        distinct.len()
+    );
+}
+
+#[tokio::test]
+async fn int_random_lower_equals_upper_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.random(5, 5) }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn int_random_lower_greater_than_upper_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.random(10, 0) }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
 // ─── isqrt ────────────────────────────────────────────────────────────────────
 
 #[tokio::test]

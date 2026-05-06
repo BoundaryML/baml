@@ -104,6 +104,9 @@ function baml.Int.parse(text: string) -> int {
 function baml.Int.pow(self: null, exp: int) -> int {
 }
 
+function baml.Int.random(lower: int, upper: int) -> int {
+}
+
 function baml.Int.to_json(self: null) -> baml.json.json {
 }
 

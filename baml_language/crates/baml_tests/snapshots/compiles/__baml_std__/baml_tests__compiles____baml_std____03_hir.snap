@@ -78,6 +78,7 @@ function baml.min_value() -> int  [expr] {
 }
 function baml.parse(text: string) -> int  [builtin]
 function baml.pow(self: ?, exp: int) -> int  [builtin]
+function baml.random(lower: int, upper: int) -> int  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.trailing_ones(self: ?) -> int  [builtin]
 function baml.trailing_zeros(self: ?) -> int  [builtin]

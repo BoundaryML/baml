@@ -1677,6 +1677,7 @@ dependencies = [
  "bex_vm_types",
  "codspeed-divan-compat",
  "colored",
+ "getrandom 0.2.17",
  "indexmap 2.13.0",
  "log",
  "serde_json",

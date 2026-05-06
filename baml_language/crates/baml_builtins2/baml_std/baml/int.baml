@@ -224,6 +224,26 @@ class Int {
     $rust_function
   }
 
+  /// Returns a uniformly distributed random integer in the half-open range
+  /// `[lower, upper)`.
+  ///
+  /// Throws `InvalidArgument` if `lower >= upper` (the range would be empty).
+  /// Uses the host's cryptographic entropy source — no user-supplied RNG
+  /// handle. The full `int` range is supported (e.g. `random(int.min_value(),
+  /// int.max_value())`).
+  ///
+  /// # Examples
+  /// ```
+  /// int.random(0, 10)         // some value in {0, 1, ..., 9}
+  /// int.random(-5, 5)         // some value in {-5, -4, ..., 4}
+  /// int.random(0, 1)          // always 0  (single-element range)
+  /// int.random(5, 5)          // throws — empty range
+  /// int.random(10, 0)         // throws — lower > upper
+  /// ```
+  function random(lower: int, upper: int) -> int throws root.errors.InvalidArgument {
+    $rust_function
+  }
+
   // ─── Constants (as zero-arg static methods) ───────────────────────────────
 
   /// Returns the largest representable `int`, equal to `2^63 - 1`
