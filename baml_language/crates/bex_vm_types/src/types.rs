@@ -1,4 +1,22 @@
-use std::{any::Any, collections::HashMap, sync::Arc};
+//! Heap object types and runtime values.
+//!
+//! `Future` uses `AtomicU8` + `UnsafeCell<MaybeUninit<Value>>` to allow
+//! the engine's spawned task and the VM to read/write the heap object
+//! concurrently without a data race. See the `Future` doc for the safety
+//! argument; the unsafe code here is intentional and necessary.
+
+#![allow(unsafe_code)]
+
+use std::{
+    any::Any,
+    cell::UnsafeCell,
+    collections::HashMap,
+    mem::MaybeUninit,
+    sync::{
+        Arc,
+        atomic::{AtomicU8, Ordering},
+    },
+};
 
 use baml_type::Ty;
 use indexmap::IndexMap;
@@ -891,15 +909,15 @@ impl std::fmt::Display for Object {
             Object::RustData(_) => write!(f, "<rust_data>"),
             Object::Collector(_) => write!(f, "<collector>"),
             Object::Type(ty) => write!(f, "<type: {ty}>"),
-            Object::Future(future) => match future {
-                Future::Pending(future) => {
-                    write!(f, "<pending: future #{}>", future.id)
+            Object::Future(future) => match future.read() {
+                FutureRead::Pending(id) => {
+                    write!(f, "<pending: future #{}>", id.id)
                 }
-                Future::Ready(value) => write!(f, "<ready: {value}>"),
-                Future::Error(value) => write!(f, "<error: {value}>"),
-                Future::Cancelled => write!(f, "<cancelled>"),
-                Future::InternalError(future) => {
-                    write!(f, "<internal error: future #{}>", future.id)
+                FutureRead::Ready(value) => write!(f, "<ready: {value}>"),
+                FutureRead::Error(value) => write!(f, "<error: {value}>"),
+                FutureRead::Cancelled => write!(f, "<cancelled>"),
+                FutureRead::InternalError(id) => {
+                    write!(f, "<internal error: future #{}>", id.id)
                 }
             },
             Object::UnscheduledFuture(future) => write!(f, "<unscheduled: {}>", future.operation),
@@ -910,8 +928,66 @@ impl std::fmt::Display for Object {
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum Future {
+/// A future heap object.
+///
+/// Replaces a plain enum with a struct exposing an atomic discriminant
+/// (`AtomicU8`) so that the engine's spawned task and the VM can read/write
+/// it concurrently without a data race. Concretely:
+///
+/// - `state` is loaded with `Acquire` and stored with `Release`. When a
+///   reader observes a terminal-state tag, all preceding payload writes by
+///   the writer are visible to it.
+/// - `future_id` is set at construction and never modified. It is the only
+///   field readers consult for `Pending` and `InternalError` tags.
+/// - `value` is wrapped in [`UnsafeCell<MaybeUninit<Value>>`] and is written
+///   *at most once* (during the unique transition from `Pending` to
+///   `Ready` or `Error`). It is only readable when `state` indicates
+///   `Ready` or `Error`.
+///
+/// # Safety
+///
+/// Writers must hold `future_permit` (the [`FutureManager`]'s
+/// [`SharedHeapPermit`] guard), which the engine uses to enforce a
+/// single-writer invariant. Readers may run on any thread; the
+/// Acquire/Release pairing on `state` provides the necessary happens-before.
+///
+/// [`FutureManager`]: <https://docs.rs/bex_engine>
+/// [`SharedHeapPermit`]: <https://docs.rs/bex_heap>
+#[repr(C)]
+pub struct Future {
+    /// Atomic discriminant (one of [`FutureTag`]). Loaded with `Acquire`,
+    /// stored with `Release`.
+    state: AtomicU8,
+    /// Set at construction; never modified. Valid for `Pending` and
+    /// `InternalError` states.
+    future_id: FutureId,
+    /// Written at most once (preceded by an `Acquire`/`Release` handshake
+    /// on `state`). Valid only when `state` indicates `Ready` or `Error`.
+    value: UnsafeCell<MaybeUninit<Value>>,
+}
+
+// SAFETY: All access to `value` is gated by the Acquire/Release handshake
+// on `state` and the single-writer invariant enforced by the
+// `FutureManager`'s `SharedHeapPermit` guard.
+unsafe impl Send for Future {}
+unsafe impl Sync for Future {}
+
+/// Discriminant byte for [`Future::state`].
+#[repr(u8)]
+enum FutureTag {
+    Pending = 0,
+    Ready = 1,
+    Error = 2,
+    Cancelled = 3,
+    InternalError = 4,
+}
+
+/// Snapshot view of a [`Future`] used for pattern matching at read sites.
+///
+/// Returned by [`Future::read`] after an `Acquire`-load of the discriminant
+/// and (for `Ready`/`Error`) a synchronized read of the payload.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FutureRead {
     /// Pending future.
     ///
     /// In terms of synchronization, this is "pending" from the heap's point of view.
@@ -923,6 +999,10 @@ pub enum Future {
 
     /// A BAML error or panic occurred while executing the future.
     /// If awaited, the error/panic value will be thrown.
+    ///
+    /// Note: not currently produced by the engine. Reserved for future
+    /// user-callable async functions that throw BAML values; the engine
+    /// today routes all sys-op errors through `internal_error_future`.
     Error(Value),
 
     /// The future was cancelled before completion.
@@ -935,6 +1015,145 @@ pub enum Future {
     /// error from the `FutureManager`'s registry. Such entries are leaked from
     /// `FutureManager::active_futures` by design.
     InternalError(FutureId),
+}
+
+impl Future {
+    /// Construct a new [`Future`] in the `Pending` state.
+    pub fn pending(id: FutureId) -> Self {
+        Self {
+            state: AtomicU8::new(FutureTag::Pending as u8),
+            future_id: id,
+            value: UnsafeCell::new(MaybeUninit::uninit()),
+        }
+    }
+
+    /// Read the current state with appropriate atomic ordering.
+    ///
+    /// `Acquire`-loads the discriminant, then dispatches to the right
+    /// payload field. For `Ready`/`Error`, reading `value` is synchronized
+    /// against the writer's `Release`-store so the value is fully visible.
+    pub fn read(&self) -> FutureRead {
+        let tag = self.state.load(Ordering::Acquire);
+        match tag {
+            t if t == FutureTag::Pending as u8 => FutureRead::Pending(self.future_id),
+            t if t == FutureTag::Ready as u8 => {
+                // SAFETY: the Acquire-load above synchronized with the
+                // writer's Release-store of `Ready`, so the preceding
+                // `value` write is visible. `Value: Copy`, so a read here
+                // does not move the underlying data.
+                let v = unsafe { (*self.value.get()).assume_init_read() };
+                FutureRead::Ready(v)
+            }
+            t if t == FutureTag::Error as u8 => {
+                // SAFETY: as for `Ready`. See above.
+                let v = unsafe { (*self.value.get()).assume_init_read() };
+                FutureRead::Error(v)
+            }
+            t if t == FutureTag::Cancelled as u8 => FutureRead::Cancelled,
+            t if t == FutureTag::InternalError as u8 => FutureRead::InternalError(self.future_id),
+            other => unreachable!("invalid Future discriminant byte: {other}"),
+        }
+    }
+
+    /// Mutable access to the embedded `Value` for `Ready`/`Error` states.
+    ///
+    /// Used by the GC's fixup pass to update heap pointers after a move.
+    /// Returns `Some(&mut Value)` only if the current state is `Ready` or
+    /// `Error`. The GC runs with all permits parked, so synchronization is
+    /// not needed — but a `Relaxed` load is used for clarity.
+    ///
+    /// # Safety
+    ///
+    /// The caller must hold exclusive access to the heap (e.g., a parked
+    /// [`HeapGuard`]). Concurrent calls to `set_*` would race.
+    pub unsafe fn value_mut_for_fixup(&mut self) -> Option<&mut Value> {
+        let tag = *self.state.get_mut();
+        if tag == FutureTag::Ready as u8 || tag == FutureTag::Error as u8 {
+            // SAFETY: state indicates `Ready`/`Error`; the value is
+            // initialized. `&mut self` proves no concurrent reader.
+            Some(unsafe { (*self.value.get()).assume_init_mut() })
+        } else {
+            None
+        }
+    }
+
+    /// Transition to `Ready`.
+    ///
+    /// # Safety
+    ///
+    /// Caller must hold `future_permit` (single-writer invariant). The
+    /// future must currently be in `Pending` state — overwriting `value`
+    /// after a previous `set_ready`/`set_error` would race with
+    /// concurrent readers.
+    pub unsafe fn set_ready(&self, value: Value) {
+        // SAFETY: single-writer invariant via `future_permit`.
+        unsafe { (*self.value.get()).write(value) };
+        self.state.store(FutureTag::Ready as u8, Ordering::Release);
+    }
+
+    /// Transition to `Error`. See [`Self::set_ready`] for safety.
+    pub unsafe fn set_error(&self, value: Value) {
+        // SAFETY: single-writer invariant via `future_permit`.
+        unsafe { (*self.value.get()).write(value) };
+        self.state.store(FutureTag::Error as u8, Ordering::Release);
+    }
+
+    /// Transition to `Cancelled`. See [`Self::set_ready`] for safety.
+    pub unsafe fn set_cancelled(&self) {
+        self.state
+            .store(FutureTag::Cancelled as u8, Ordering::Release);
+    }
+
+    /// Transition to `InternalError`. The `FutureId` retained is the one
+    /// from construction. See [`Self::set_ready`] for safety.
+    pub unsafe fn set_internal_error(&self) {
+        self.state
+            .store(FutureTag::InternalError as u8, Ordering::Release);
+    }
+}
+
+impl Clone for Future {
+    fn clone(&self) -> Self {
+        // Snapshot the current state and clone the corresponding payload.
+        // Used by `deep_copy_value_recursive` and any other site that
+        // duplicates the heap object.
+        let read = self.read();
+        let cloned = Self {
+            state: AtomicU8::new(0), // placeholder; rewritten below
+            future_id: self.future_id,
+            value: UnsafeCell::new(MaybeUninit::uninit()),
+        };
+        let tag: u8 = match read {
+            FutureRead::Pending(_) => FutureTag::Pending as u8,
+            FutureRead::Ready(v) => {
+                // SAFETY: we just constructed `cloned` and have exclusive
+                // access; no other observer exists yet.
+                unsafe { (*cloned.value.get()).write(v) };
+                FutureTag::Ready as u8
+            }
+            FutureRead::Error(v) => {
+                // SAFETY: as above.
+                unsafe { (*cloned.value.get()).write(v) };
+                FutureTag::Error as u8
+            }
+            FutureRead::Cancelled => FutureTag::Cancelled as u8,
+            FutureRead::InternalError(_) => FutureTag::InternalError as u8,
+        };
+        cloned.state.store(tag, Ordering::Release);
+        cloned
+    }
+}
+
+impl std::fmt::Debug for Future {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.read() {
+            FutureRead::Pending(id) => f.debug_tuple("Pending").field(&id).finish(),
+            FutureRead::Ready(v) => f.debug_tuple("Ready").field(&v).finish(),
+            FutureRead::Error(v) => f.debug_tuple("Error").field(&v).finish(),
+            FutureRead::Cancelled => f.write_str("Cancelled"),
+            FutureRead::InternalError(id) => f.debug_tuple("InternalError").field(&id).finish(),
+        }
+    }
 }
 
 /// An operation that should be passed to the engine to be scheduled.
@@ -1153,12 +1372,12 @@ pub enum FutureType {
 
 impl FutureType {
     pub fn of(future: &Future) -> Self {
-        match future {
-            Future::Pending(_) => Self::Pending,
-            Future::Ready(_) => Self::Ready,
-            Future::Error(_) => Self::Error,
-            Future::Cancelled => Self::Cancelled,
-            Future::InternalError(_) => Self::InternalError,
+        match future.read() {
+            FutureRead::Pending(_) => Self::Pending,
+            FutureRead::Ready(_) => Self::Ready,
+            FutureRead::Error(_) => Self::Error,
+            FutureRead::Cancelled => Self::Cancelled,
+            FutureRead::InternalError(_) => Self::InternalError,
         }
     }
 }
@@ -1178,13 +1397,7 @@ impl std::fmt::Display for FutureType {
 
 impl From<&Future> for FutureType {
     fn from(value: &Future) -> Self {
-        match value {
-            Future::Pending(_) => Self::Pending,
-            Future::Ready(_) => Self::Ready,
-            Future::Error(_) => Self::Error,
-            Future::Cancelled => Self::Cancelled,
-            Future::InternalError(_) => Self::InternalError,
-        }
+        Self::of(value)
     }
 }
 

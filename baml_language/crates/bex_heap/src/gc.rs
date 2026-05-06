@@ -311,20 +311,17 @@ impl BexHeap {
                 worklist.push(var.enm);
             }
             Object::Future(fut) => {
-                use bex_vm_types::Future;
-                match fut {
-                    Future::Ready(value) => {
-                        if let Value::Object(ptr) = value {
-                            worklist.push(*ptr);
-                        }
+                use bex_vm_types::FutureRead;
+                match fut.read() {
+                    FutureRead::Ready(Value::Object(ptr))
+                    | FutureRead::Error(Value::Object(ptr)) => {
+                        worklist.push(ptr);
                     }
-                    Future::Error(Value::Object(ptr)) => {
-                        worklist.push(*ptr);
-                    }
-                    Future::Pending(_)
-                    | Future::Error(_)
-                    | Future::Cancelled
-                    | Future::InternalError(_) => {}
+                    FutureRead::Pending(_)
+                    | FutureRead::Ready(_)
+                    | FutureRead::Error(_)
+                    | FutureRead::Cancelled
+                    | FutureRead::InternalError(_) => {}
                 }
             }
             Object::UnscheduledFuture(future) => {
@@ -407,12 +404,12 @@ impl BexHeap {
                 }
             }
             Object::Future(fut) => {
-                use bex_vm_types::Future;
-                match fut {
-                    Future::Ready(value) | Future::Error(value) => {
-                        self.fixup_value(value, forwarding);
-                    }
-                    Future::Pending(_) | Future::Cancelled | Future::InternalError(_) => {}
+                // GC runs with all permits parked, so no concurrent access to
+                // the Future's atomic state. `value_mut_for_fixup` returns
+                // `Some(&mut Value)` only for `Ready`/`Error` states.
+                // SAFETY: GC holds exclusive access via the parked HeapGuard.
+                if let Some(value) = unsafe { fut.value_mut_for_fixup() } {
+                    self.fixup_value(value, forwarding);
                 }
             }
             Object::UnscheduledFuture(future) => {
@@ -657,16 +654,19 @@ impl BexHeap {
                 }
             }
             Object::Future(fut) => {
-                use bex_vm_types::Future;
-                match fut {
-                    Future::Ready(value) | Future::Error(value) => {
-                        if let Value::Object(ptr) = value
-                            && self.generation_of(*ptr).is_young()
-                        {
-                            worklist.push(*ptr);
-                        }
+                use bex_vm_types::FutureRead;
+                match fut.read() {
+                    FutureRead::Ready(Value::Object(ptr))
+                    | FutureRead::Error(Value::Object(ptr))
+                        if self.generation_of(ptr).is_young() =>
+                    {
+                        worklist.push(ptr);
                     }
-                    Future::Pending(_) | Future::Cancelled | Future::InternalError(_) => {}
+                    FutureRead::Pending(_)
+                    | FutureRead::Ready(_)
+                    | FutureRead::Error(_)
+                    | FutureRead::Cancelled
+                    | FutureRead::InternalError(_) => {}
                 }
             }
             Object::UnscheduledFuture(future) => {
@@ -1788,20 +1788,25 @@ mod tests {
 
     #[test]
     fn test_gc_traces_future_ready_object() {
-        use bex_vm_types::Future;
+        use bex_vm_types::{Future, FutureRead, types::FutureId};
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let result = tlab.alloc_string("result".to_string());
-        let future_ptr = tlab.alloc(Object::Future(Future::Ready(Value::Object(result))));
+        let future = Future::pending(FutureId::from_usize(0));
+        // SAFETY: single-writer; this Future is local and not yet visible.
+        unsafe { future.set_ready(Value::Object(result)) };
+        let future_ptr = tlab.alloc(Object::Future(future));
 
         let roots = vec![future_ptr];
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&roots) };
 
         assert_eq!(stats.live_count, 2);
-        let Object::Future(Future::Ready(Value::Object(r))) = (unsafe { new_roots[0].get() })
-        else {
+        let Object::Future(fut) = (unsafe { new_roots[0].get() }) else {
+            panic!("not Future")
+        };
+        let FutureRead::Ready(Value::Object(r)) = fut.read() else {
             panic!("not Future::Ready(Object)")
         };
         let Object::String(s) = (unsafe { r.get() }) else {
@@ -1812,12 +1817,15 @@ mod tests {
 
     #[test]
     fn test_gc_traces_future_ready_primitive() {
-        use bex_vm_types::Future;
+        use bex_vm_types::{Future, types::FutureId};
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let future_ptr = tlab.alloc(Object::Future(Future::Ready(Value::Int(99))));
+        let future = Future::pending(FutureId::from_usize(0));
+        // SAFETY: single-writer; this Future is local and not yet visible.
+        unsafe { future.set_ready(Value::Int(99)) };
+        let future_ptr = tlab.alloc(Object::Future(future));
         let roots = vec![future_ptr];
         let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
 

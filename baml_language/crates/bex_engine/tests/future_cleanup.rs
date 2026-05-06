@@ -55,6 +55,45 @@ async fn active_futures_drains_after_awaited_sleep() {
     assert_eq!(engine.active_future_count().await, 0);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn future_state_race_under_multithread_stress() {
+    // Regression test for the data race between the engine's spawned task
+    // (writer of the `Future` heap object) and the VM (reader). Many
+    // fast-resolving sys-ops (`baml.sys.sleep(0)`) on a multi-threaded
+    // tokio runtime exercise the path where the spawned task's write to
+    // `Future::Ready` can land before — or alongside — the VM's first
+    // read in `Await`. The atomic discriminant on `Future` makes this
+    // race-free; without the fix, this test would tear discriminant reads
+    // and (in debug) panic on a non-Pending state.
+    let source = r#"
+        function main() -> int {
+            baml.sys.sleep(0);
+            baml.sys.sleep(0);
+            baml.sys.sleep(0);
+            baml.sys.sleep(0);
+            baml.sys.sleep(0);
+            baml.sys.sleep(0);
+            baml.sys.sleep(0);
+            baml.sys.sleep(0);
+            1
+        }
+    "#;
+
+    let engine = make_engine(source);
+
+    let mut handles = Vec::new();
+    for _ in 0..32 {
+        let engine = Arc::clone(&engine);
+        handles.push(tokio::spawn(async move { call_main(&engine).await }));
+    }
+    for handle in handles {
+        let value = handle.await.expect("task should not panic");
+        assert_eq!(value, BexExternalValue::Int(1));
+    }
+
+    assert_eq!(engine.active_future_count().await, 0);
+}
+
 #[tokio::test]
 async fn active_futures_drains_across_concurrent_calls() {
     // Run several calls concurrently and verify the count is back to zero

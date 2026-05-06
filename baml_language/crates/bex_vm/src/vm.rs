@@ -41,8 +41,8 @@ use ::core::any::TypeId;
 use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool, ObjectType,
-    PanicClass, StackIndex, UnaryOp, Value, Variant, VmGlobals,
+    BinOp, CmpOp, FunctionKind, FutureRead, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
+    ObjectType, PanicClass, StackIndex, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, BlockNotification},
     types::{
         BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, Future, FutureType,
@@ -3584,9 +3584,9 @@ impl BexVm {
                         .into());
                     };
 
-                    match awaiting {
+                    match awaiting.read() {
                         // Can't do nothing, handle control flow back to embedder.
-                        &Future::Pending(future_id) => {
+                        FutureRead::Pending(future_id) => {
                             let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
                                 unreachable!("exec loop frame is always Bytecode");
                             };
@@ -3595,13 +3595,16 @@ impl BexVm {
                         }
 
                         // Return the ready value
-                        Future::Ready(value) => *value,
+                        FutureRead::Ready(value) => value,
 
-                        // An error occurred while executing the future.
-                        Future::Error(value) => return Err(VmError::Thrown(*value)),
+                        // An error occurred while executing the future. (Reserved
+                        // for future user-callable async functions that throw BAML
+                        // values; the engine today routes all sys-op errors through
+                        // `internal_error_future`.)
+                        FutureRead::Error(value) => return Err(VmError::Thrown(value)),
 
                         // The future was cancelled before completion.
-                        Future::Cancelled => {
+                        FutureRead::Cancelled => {
                             return Err(VmError::Thrown(
                                 self.panic_to_exception_value(VmPanic::Cancelled),
                             ));
@@ -3612,7 +3615,7 @@ impl BexVm {
                         // error from the FutureManager's `SetOnce` (the entry is leaked by
                         // design for InternalError, so the engine's `future_ready` will
                         // always find it and propagate the underlying `EngineError`).
-                        &Future::InternalError(future_id) => {
+                        FutureRead::InternalError(future_id) => {
                             let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
                                 unreachable!("exec loop frame is always Bytecode");
                             };
@@ -5751,22 +5754,25 @@ impl BexVm {
                             }
                             .into());
                         };
-                        match awaiting {
-                            &Future::Pending(future_id) => {
+                        match awaiting.read() {
+                            FutureRead::Pending(future_id) => {
                                 // Rewind pc to the Await opcode so the outer loop
                                 // saves a position that re-executes Await once the
                                 // future completes.
                                 *pc -= 1;
                                 return Ok(Some(VmExecState::Await(future_id)));
                             }
-                            Future::Ready(v) => *v,
-                            Future::Error(value) => return Err(VmError::Thrown(*value)),
-                            Future::Cancelled => {
+                            FutureRead::Ready(v) => v,
+                            // Reserved for future user-callable async functions
+                            // that throw BAML values; the engine today routes all
+                            // sys-op errors through `internal_error_future`.
+                            FutureRead::Error(value) => return Err(VmError::Thrown(value)),
+                            FutureRead::Cancelled => {
                                 return Err(VmError::Thrown(
                                     self.panic_to_exception_value(VmPanic::Cancelled),
                                 ));
                             }
-                            &Future::InternalError(future_id) => {
+                            FutureRead::InternalError(future_id) => {
                                 // Yield back to the engine; it will surface the original
                                 // error from the FutureManager's `SetOnce` (the entry is
                                 // leaked by design for InternalError).

@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bex_vm_types::{
-    HeapPtr,
-    types::{Future, Instance, Object, Value},
+    FutureRead, HeapPtr,
+    types::{Instance, Object, Value},
 };
 use indexmap::IndexMap;
 
@@ -206,13 +206,15 @@ fn deep_equals_recursive(
 
                 (Object::Function(_), Object::Function(_)) => a_ptr == b_ptr,
 
-                (Object::Future(a_fut), Object::Future(b_fut)) => match (a_fut, b_fut) {
-                    (Future::Ready(a_val), Future::Ready(b_val)) => {
-                        deep_equals_recursive(vm, *a_val, *b_val, visited)
+                (Object::Future(a_fut), Object::Future(b_fut)) => {
+                    match (a_fut.read(), b_fut.read()) {
+                        (FutureRead::Ready(a_val), FutureRead::Ready(b_val)) => {
+                            deep_equals_recursive(vm, a_val, b_val, visited)
+                        }
+                        (FutureRead::Pending(a_id), FutureRead::Pending(b_id)) => a_id == b_id,
+                        _ => false,
                     }
-                    (Future::Pending(a_id), Future::Pending(b_id)) => a_id == b_id,
-                    _ => false,
-                },
+                }
 
                 (Object::UnscheduledFuture(a_fut), Object::UnscheduledFuture(b_fut)) => {
                     a_fut.operation == b_fut.operation

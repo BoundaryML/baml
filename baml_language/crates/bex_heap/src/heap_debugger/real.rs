@@ -7,7 +7,7 @@ use std::{
 };
 
 use bex_vm_types::{
-    Future, HeapPtr, Object, ObjectIndex, Value,
+    FutureRead, HeapPtr, Object, ObjectIndex, Value,
     types::{ObjectType, SentinelKind},
 };
 
@@ -331,11 +331,11 @@ impl BexHeap {
                     enm.variants.len()
                 );
             }
-            Object::Future(fut) => match fut {
-                Future::Ready(value) | Future::Error(value) => {
-                    self.debug_assert_valid_value(value);
+            Object::Future(fut) => match fut.read() {
+                FutureRead::Ready(value) | FutureRead::Error(value) => {
+                    self.debug_assert_valid_value(&value);
                 }
-                Future::Pending(_) | Future::Cancelled | Future::InternalError(_) => {}
+                FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => {}
             },
             Object::UnscheduledFuture(future) => {
                 for value in &future.args {

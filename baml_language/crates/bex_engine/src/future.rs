@@ -53,7 +53,7 @@ use ::bex_heap::{
     HeapPermit, PermitProof, SharedHeapPermit, SharedHeapPermitGuard, Tlab, TlabHolder,
 };
 use ::bex_vm_types::{
-    HeapPtr, Object, ObjectType, RootHaver, Value,
+    FutureRead, HeapPtr, Object, ObjectType, RootHaver, Value,
     types::{FutureId, FutureType},
 };
 use ::core::sync::atomic::AtomicUsize;
@@ -110,7 +110,7 @@ impl FutureManagerGuard<'_> {
         let ptr = self
             .inner
             .tlab
-            .alloc_future(::bex_vm_types::Future::Pending(id));
+            .alloc_future(::bex_vm_types::Future::pending(id));
 
         let future_state = FutureState {
             future: ptr,
@@ -121,15 +121,25 @@ impl FutureManagerGuard<'_> {
         (id, ptr)
     }
     pub fn fulfill_future(&mut self, id: FutureId, value: Value) -> Result<(), EngineError> {
-        self.complete_pending(id, bex_vm_types::Future::Ready(value), Ok(()))?;
+        self.complete_pending(id, |fut| {
+            // SAFETY: complete_pending guarantees we hold the future_permit
+            // (single-writer invariant) and that `fut` is currently Pending.
+            unsafe { fut.set_ready(value) };
+        })?;
         Ok(())
     }
     pub fn err_future(&mut self, id: FutureId, err: Value) -> Result<(), EngineError> {
-        self.complete_pending(id, bex_vm_types::Future::Error(err), Ok(()))?;
+        self.complete_pending(id, |fut| {
+            // SAFETY: see `fulfill_future`.
+            unsafe { fut.set_error(err) };
+        })?;
         Ok(())
     }
     pub fn cancel_future(&mut self, id: FutureId) -> Result<(), EngineError> {
-        let entry = self.complete_pending(id, bex_vm_types::Future::Cancelled, Ok(()))?;
+        let entry = self.complete_pending(id, |fut| {
+            // SAFETY: see `fulfill_future`.
+            unsafe { fut.set_cancelled() };
+        })?;
         // The token is still cloned by the spawned sys-op task; firing it
         // here unparks that task even though `entry` itself is about to be
         // dropped.
@@ -153,16 +163,20 @@ impl FutureManagerGuard<'_> {
         let entry = self
             .inner
             .active_futures
-            .get_mut(&id)
+            .get(&id)
             .ok_or(EngineError::FutureNotFound { future_id: id })?;
-        // SAFETY: the `FutureManagerGuard` holds an exclusive heap permit.
-        let fut = unsafe { entry.get_mut() }?;
+        // SAFETY: the `FutureManagerGuard` holds the future_permit Mutex,
+        // so we are the unique caller; the heap object is alive because
+        // the entry roots it via `RootHaver::collect_roots`.
+        let fut = unsafe { entry.future_ref() }?;
         debug_assert!(
-            matches!(fut, bex_vm_types::Future::Pending(_)),
-            "internal_error_future called on non-Pending future {id:?}; \
-             invariant violated"
+            matches!(fut.read(), FutureRead::Pending(_)),
+            "internal_error_future called on non-Pending future {id:?} \
+             (actual: {:?}); invariant violated",
+            FutureType::of(fut)
         );
-        *fut = bex_vm_types::Future::InternalError(id);
+        // SAFETY: single-writer via future_permit Mutex.
+        unsafe { fut.set_internal_error() };
         let set = entry.ready.set(Err(err));
         debug_assert!(
             set.is_ok(),
@@ -173,9 +187,12 @@ impl FutureManagerGuard<'_> {
 
     /// Atomically transition a `Pending` future to a terminal state, signal
     /// its [`tokio::sync::SetOnce`] waiter, and remove the entry from
-    /// `active_futures`. The dropped [`FutureState`] is returned so callers
-    /// (e.g. [`Self::cancel_future`]) can perform additional Drop-time work
-    /// like firing a [`CancellationToken`] clone before it is released.
+    /// `active_futures`. The `transition` closure is responsible for the
+    /// actual `set_*` call and is passed an immutable reference to the
+    /// `Future` heap object (which uses interior atomic mutation). The
+    /// dropped [`FutureState`] is returned so callers (e.g.
+    /// [`Self::cancel_future`]) can perform additional Drop-time work like
+    /// firing a [`CancellationToken`] clone before it is released.
     ///
     /// # Invariant
     /// Only `fulfill_future`, `err_future`, and `cancel_future` route through
@@ -188,25 +205,27 @@ impl FutureManagerGuard<'_> {
     fn complete_pending(
         &mut self,
         id: FutureId,
-        new_state: bex_vm_types::Future,
-        result: Result<(), EngineError>,
+        transition: impl FnOnce(&bex_vm_types::Future),
     ) -> Result<FutureState, EngineError> {
-        let mut entry = self
+        let entry = self
             .inner
             .active_futures
             .remove(&id)
             .ok_or(EngineError::FutureNotFound { future_id: id })?;
-        // SAFETY: the `FutureManagerGuard` holds an exclusive heap permit.
-        let fut = unsafe { entry.get_mut() }?;
+        // SAFETY: the `FutureManagerGuard` holds the future_permit Mutex,
+        // so we are the unique caller; the heap object is alive because
+        // we just removed the entry that was rooting it (the entry is
+        // still owned by us locally).
+        let fut = unsafe { entry.future_ref() }?;
         debug_assert!(
-            matches!(fut, bex_vm_types::Future::Pending(_)),
+            matches!(fut.read(), FutureRead::Pending(_)),
             "complete_pending called with non-Pending heap state for {id:?} \
              (actual: {:?}); invariant violated — only fulfill/err/cancel may \
              route through this helper",
             FutureType::of(fut)
         );
-        *fut = new_state;
-        let set = entry.ready.set(result);
+        transition(fut);
+        let set = entry.ready.set(Ok(()));
         debug_assert!(
             set.is_ok(),
             "Should not have been ready if the heap future was pending."
@@ -326,10 +345,21 @@ struct FutureState {
     pub cancel: CancellationToken,
 }
 impl FutureState {
-    /// SAFETY: We must hold a heap permit for the duration of the future object.
-    unsafe fn get_mut(&mut self) -> Result<&mut bex_vm_types::Future, EngineError> {
-        // SAFETY: We hold a permit, so we can access the future object.
-        let obj = unsafe { self.future.get_mut() };
+    /// Returns an immutable reference to the heap-allocated `Future`.
+    ///
+    /// The new [`bex_vm_types::Future`] uses interior mutability via an
+    /// `AtomicU8` discriminant + `UnsafeCell<MaybeUninit<Value>>`, so all
+    /// terminal-state writes go through the `set_*` methods that take
+    /// `&self`. This lets the spawned async task and the VM read/write
+    /// the same heap object concurrently without a data race, as long as
+    /// the writer holds the future_permit Mutex (single-writer invariant).
+    ///
+    /// # Safety
+    /// Caller must hold the future_permit (i.e., a [`FutureManagerGuard`])
+    /// for the duration of any subsequent access to the returned reference.
+    unsafe fn future_ref(&self) -> Result<&bex_vm_types::Future, EngineError> {
+        // SAFETY: caller holds the future_permit; heap object is alive.
+        let obj = unsafe { self.future.get() };
         match obj {
             Object::Future(fut) => Ok(fut),
             other => Err(EngineError::TypeMismatch {
