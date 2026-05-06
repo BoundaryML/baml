@@ -36,6 +36,76 @@ use crate::{
     ty::{Freshness, PrimitiveType, Ty, TyAttr},
 };
 
+// ── Well-known type constructors ──────────────────────────────────────────────
+//
+// These helpers construct `Ty` values for well-known types that appear in
+// synthesized method signatures (e.g., the universal `to_json`/`from_json` on
+// `Ty::TypeVar`). They are free functions so they can be called from both
+// `resolve_member` (mutable context) and `try_resolve_member_on_ty` (shared).
+
+/// Construct `Ty::TypeAlias` for `baml.json.json`.
+fn json_alias_ty() -> Ty {
+    Ty::TypeAlias(
+        crate::ty::QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("json")],
+            Name::new("json"),
+        ),
+        TyAttr::default(),
+    )
+}
+
+/// Construct `Ty::Class` for `baml.json.JsonSerializationError`.
+fn json_serialization_error_ty() -> Ty {
+    Ty::Class(
+        crate::ty::QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("json")],
+            Name::new("JsonSerializationError"),
+        ),
+        vec![],
+        TyAttr::default(),
+    )
+}
+
+/// Construct `Ty::Class` for `baml.json.JsonParseError`.
+fn json_parse_error_ty() -> Ty {
+    Ty::Class(
+        crate::ty::QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("json")],
+            Name::new("JsonParseError"),
+        ),
+        vec![],
+        TyAttr::default(),
+    )
+}
+
+/// Construct the throws type `JsonSerializationError | JsonParseError`.
+///
+/// Used as the conservative throws clause for the universal `to_json` method on
+/// `Ty::TypeVar` — it is a superset of any concrete type's actual throws, so
+/// call-site throw inference stays sound.
+fn json_serialization_or_parse_error_ty() -> Ty {
+    Ty::Union(
+        vec![json_serialization_error_ty(), json_parse_error_ty()],
+        TyAttr::default(),
+    )
+}
+
+/// Construct the throws type `JsonParseError | JsonSerializationError`.
+///
+/// Used as the conservative throws clause for the universal `from_json` method
+/// on `Ty::TypeVar`.
+fn json_parse_or_serialization_error_ty() -> Ty {
+    // Same members, different ordering to match the semantic direction of
+    // each method. Could be the same union; keep separate for clarity.
+    Ty::Union(
+        vec![json_parse_error_ty(), json_serialization_error_ty()],
+        TyAttr::default(),
+    )
+}
+
 /// Format an f64 as a string suitable for a float literal.
 /// Returns `None` for non-finite values (inf, NaN).
 fn format_float(v: f64) -> Option<String> {
@@ -1533,7 +1603,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                     };
 
                     let inner = crate::narrowing::remove_null(&base_ty);
-                    if inner != base_ty && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                    // `Primitive(Null)` is a concrete non-optional type (the null value
+                    // itself) with its own companion class. Treat it like any other
+                    // primitive — do NOT require `?.` chaining for direct method calls.
+                    let is_pure_null = matches!(base_ty, Ty::Primitive(PrimitiveType::Null, _));
+                    if inner != base_ty
+                        && !is_pure_null
+                        && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
                     {
                         if self.in_optional_chain > 0 {
                             // Inside an OptionalChain: auto-unwrap nullable base,
@@ -4480,14 +4556,28 @@ impl<'db> TypeInferenceBuilder<'db> {
             let bound = root_is_value || !is_last_segment;
 
             let inner = crate::narrowing::remove_null(&current_ty);
-            let is_nullable =
-                inner != current_ty && !matches!(current_ty, Ty::Unknown { .. } | Ty::Error { .. });
+            // `Primitive(Null)` is a concrete non-optional type with a companion
+            // class. Calling methods on it directly (e.g. `n.to_json()`) is valid
+            // — do NOT require `?.` chaining.
+            let is_pure_null = matches!(current_ty, Ty::Primitive(PrimitiveType::Null, _));
+            let is_nullable = inner != current_ty
+                && !is_pure_null
+                && !matches!(current_ty, Ty::Unknown { .. } | Ty::Error { .. });
+            // Use `current_ty` for dispatch when the base is Primitive(Null) (or
+            // any non-nullable type): `inner` would be `Never` for Null, which has
+            // no members.
+            let dispatch_ty = if is_nullable { &inner } else { &current_ty };
             let member_ty;
             if is_nullable {
                 if self.in_optional_chain > 0 {
                     // Inside an OptionalChain: resolve and re-wrap the result.
-                    member_ty =
-                        self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx, bound);
+                    member_ty = self.resolve_member_for_path_segment(
+                        dispatch_ty,
+                        seg,
+                        expr_id,
+                        seg_idx,
+                        bound,
+                    );
                     current_ty = Self::make_optional(member_ty.clone());
                 } else {
                     // Outside any chain: null-safety violation — suggest `?.`.
@@ -4510,13 +4600,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                         },
                         expr_id,
                     );
-                    member_ty =
-                        self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx, bound);
+                    member_ty = self.resolve_member_for_path_segment(
+                        dispatch_ty,
+                        seg,
+                        expr_id,
+                        seg_idx,
+                        bound,
+                    );
                     current_ty = Self::make_optional(member_ty.clone());
                 }
             } else {
                 member_ty =
-                    self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx, bound);
+                    self.resolve_member_for_path_segment(dispatch_ty, seg, expr_id, seg_idx, bound);
                 current_ty = member_ty.clone();
             }
 
@@ -5082,7 +5177,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Ty::Primitive(PrimitiveType::String, _)
             | Ty::Literal(baml_base::Literal::String(_), _, _) => {
-                // Bridge: string / "literal" → String class
+                // Bridge: string / string-literal → String class
                 self.resolve_builtin_member(&["String"], &[], member, at)
                     .unwrap_or_else(|| {
                         self.context.report_at_member_simple(
@@ -5097,6 +5192,69 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     })
             }
+            // int literal / int → Int companion class
+            Ty::Primitive(PrimitiveType::Int, _)
+            | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
+                .resolve_builtin_member(&["Int"], &[], member, at)
+                .unwrap_or_else(|| {
+                    self.context.report_at_member_simple(
+                        TirTypeError::UnresolvedMember {
+                            base_type: base_ty.clone(),
+                            member: member.clone(),
+                        },
+                        at,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                }),
+            // float literal / float → Float companion class
+            Ty::Primitive(PrimitiveType::Float, _)
+            | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
+                .resolve_builtin_member(&["Float"], &[], member, at)
+                .unwrap_or_else(|| {
+                    self.context.report_at_member_simple(
+                        TirTypeError::UnresolvedMember {
+                            base_type: base_ty.clone(),
+                            member: member.clone(),
+                        },
+                        at,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                }),
+            // bool literal / bool → Bool companion class
+            Ty::Primitive(PrimitiveType::Bool, _)
+            | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
+                .resolve_builtin_member(&["Bool"], &[], member, at)
+                .unwrap_or_else(|| {
+                    self.context.report_at_member_simple(
+                        TirTypeError::UnresolvedMember {
+                            base_type: base_ty.clone(),
+                            member: member.clone(),
+                        },
+                        at,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                }),
+            // null / Null companion class
+            Ty::Primitive(PrimitiveType::Null, _) => self
+                .resolve_builtin_member(&["Null"], &[], member, at)
+                .unwrap_or_else(|| {
+                    self.context.report_at_member_simple(
+                        TirTypeError::UnresolvedMember {
+                            base_type: base_ty.clone(),
+                            member: member.clone(),
+                        },
+                        at,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                }),
             Ty::Type { .. } => {
                 // Bridge: type → TypeValue companion class (provides `.to_string()`, etc.)
                 self.resolve_builtin_member(&["TypeValue"], &[], member, at)
@@ -5121,7 +5279,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 | PrimitiveType::Pdf),
                 _,
             ) => {
-                // Bridge: primitives with builtin companion classes
+                // Bridge: media / binary primitives with builtin companion classes
                 self.resolve_builtin_member(p.builtin_class_path(), &[], member, at)
                     .unwrap_or_else(|| {
                         self.context.report_at_member_simple(
@@ -5135,6 +5293,35 @@ impl<'db> TypeInferenceBuilder<'db> {
                             attr: TyAttr::default(),
                         }
                     })
+            }
+            // Universal `to_json` / `from_json` on generic type variables.
+            //
+            // After Phase 5b.1, every BAML type has `to_json(self) -> json` and
+            // `from_json(j: json) -> Self`. When the base type is a type-variable
+            // `T` (e.g. inside `class Array<T>`), the compiler cannot look up the
+            // concrete companion class; instead we synthesize the expected method
+            // signature directly. The throws clause is conservatively widened to
+            // `JsonSerializationError | JsonParseError` — the actual throws for any
+            // concrete T is a subset, so call-site throw inference stays sound.
+            Ty::TypeVar(_, _) if member.as_str() == "to_json" => {
+                // Type-check: every BAML type has `to_json(self) -> json` after Phase 5b.1.
+                // No MemberResolution stored — the concrete dispatch is deferred to Phase 5b.4
+                // (native Array/Map impls) and never runs with an unresolved TypeVar at runtime.
+                Ty::Function {
+                    params: vec![],
+                    ret: Box::new(json_alias_ty()),
+                    throws: Box::new(json_serialization_or_parse_error_ty()),
+                    attr: TyAttr::default(),
+                }
+            }
+            Ty::TypeVar(name, _) if member.as_str() == "from_json" => {
+                // Type-check: every BAML type has `from_json(j: json) -> Self` after Phase 5b.1.
+                Ty::Function {
+                    params: vec![(Some(Name::new("j")), json_alias_ty())],
+                    ret: Box::new(Ty::TypeVar(name.clone(), TyAttr::default())),
+                    throws: Box::new(json_parse_or_serialization_error_ty()),
+                    attr: TyAttr::default(),
+                }
             }
             Ty::Union(members, _) => {
                 // For union types, try to resolve the field on each member.
@@ -5366,6 +5553,21 @@ impl<'db> TypeInferenceBuilder<'db> {
             | Ty::Literal(baml_base::Literal::String(_), _, _) => self
                 .resolve_builtin_method(&["String"], &[], member)
                 .map(BuiltinResolution::into_ty),
+            Ty::Primitive(PrimitiveType::Int, _)
+            | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
+                .resolve_builtin_method(&["Int"], &[], member)
+                .map(BuiltinResolution::into_ty),
+            Ty::Primitive(PrimitiveType::Float, _)
+            | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
+                .resolve_builtin_method(&["Float"], &[], member)
+                .map(BuiltinResolution::into_ty),
+            Ty::Primitive(PrimitiveType::Bool, _)
+            | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
+                .resolve_builtin_method(&["Bool"], &[], member)
+                .map(BuiltinResolution::into_ty),
+            Ty::Primitive(PrimitiveType::Null, _) => self
+                .resolve_builtin_method(&["Null"], &[], member)
+                .map(BuiltinResolution::into_ty),
             Ty::Primitive(
                 p @ (PrimitiveType::Uint8Array
                 | PrimitiveType::Image
@@ -5379,6 +5581,20 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Type { .. } => self
                 .resolve_builtin_method(&["TypeValue"], &[], member)
                 .map(BuiltinResolution::into_ty),
+            // Universal `to_json` / `from_json` on generic type variables.
+            // Mirrors the arm in `resolve_member` — no side effects needed here.
+            Ty::TypeVar(_, _) if member.as_str() == "to_json" => Some(Ty::Function {
+                params: vec![],
+                ret: Box::new(json_alias_ty()),
+                throws: Box::new(json_serialization_or_parse_error_ty()),
+                attr: TyAttr::default(),
+            }),
+            Ty::TypeVar(name, _) if member.as_str() == "from_json" => Some(Ty::Function {
+                params: vec![(Some(Name::new("j")), json_alias_ty())],
+                ret: Box::new(Ty::TypeVar(name.clone(), TyAttr::default())),
+                throws: Box::new(json_parse_or_serialization_error_ty()),
+                attr: TyAttr::default(),
+            }),
             Ty::Optional(inner, _) => {
                 // Drill through Optional to resolve the member on the inner type
                 self.try_resolve_member_on_ty(inner, member)
