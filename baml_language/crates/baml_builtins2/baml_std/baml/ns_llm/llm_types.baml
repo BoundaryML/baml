@@ -88,7 +88,7 @@ class Client {
     planner_state: PlannerState,
   ) -> OrchestrationStep[] {
     match (self.retry) {
-      r: RetryPolicy => {
+      let r: RetryPolicy => {
         let result: OrchestrationStep[] = [];
         let current_delay = r.initial_delay_ms + 0.0;
 
@@ -125,7 +125,7 @@ class Client {
     inherited_delay_ms: int,
   ) -> Stream<T, S> {
     match (self.retry) {
-      r: RetryPolicy => {
+      let r: RetryPolicy => {
         let current_delay = r.initial_delay_ms + 0.0
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
@@ -175,16 +175,13 @@ class Client {
       ClientType.Primitive => {
         let primitive = self.to_primitive_client();
         let return_type = get_return_type(context.function_name);
-        let stream_return_type = get_stream_return_type(context.function_name);
 
         let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type);
         let specialized = primitive.specialize_prompt(prompt);
 
         let http_request = primitive.build_request_stream(specialized);
         let sse = root.http.fetch_sse(http_request);
-        let acc = primitive.new_stream_accumulator();
-        let cache = StreamCache.new(return_type, stream_return_type);
-        let stream: Stream<T, S> = Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache };
+        let stream: Stream<T, S> = self.__make_stream(sse, context.function_name);
         return stream;
       }
 
@@ -216,13 +213,23 @@ class Client {
     }
   }
 
+  /// DO NOT CALL FROM USER CODE
+  function __make_stream<T, S>(self, sse: root.http.SseStream, function_name: string) -> Stream<T, S> {
+    let primitive = self.to_primitive_client()
+    let return_type = get_return_type(function_name)
+    let stream_return_type = get_stream_return_type(function_name)
+    let acc = primitive.new_stream_accumulator()
+    let cache: StreamCache<T, S> = StreamCache.new(return_type, stream_return_type)
+    Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
+  }
+
   function execute_oneshot<T>(
     self,
     context: ExecutionContext,
     inherited_delay_ms: int,
   ) -> T {
     match (self.retry) {
-      r: RetryPolicy => {
+      let r: RetryPolicy => {
         let current_delay = r.initial_delay_ms + 0.0
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
@@ -477,7 +484,7 @@ class Stream<T, S> {
         _: null => {
           return root.stream.StreamFinished {};
         }
-        next: string => next,
+        let next: string => next,
       };
       self._acc.add_events(next);
       if (self._acc.is_done()) {
@@ -491,7 +498,7 @@ class Stream<T, S> {
         _: root.stream.StreamNoYield => {
           continue;
         }
-        parsed: S => {
+        let parsed: S => {
           return parsed;
         }
       }
@@ -507,7 +514,7 @@ class Stream<T, S> {
         _: null => {
           break;
         }
-        next: string => next,
+        let next: string => next,
       };
       self._acc.add_events(next);
       if (self._acc.is_done()) {
@@ -519,7 +526,7 @@ class Stream<T, S> {
       null => {
         throw root.errors.LlmClientError { message: "Streaming finished without finish_reason" };
       },
-      reason: string => self._client.validate_finish_reason(reason),
+      let reason: string => self._client.validate_finish_reason(reason),
     }
 
     let content = self._acc.content();

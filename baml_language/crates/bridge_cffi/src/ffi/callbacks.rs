@@ -28,7 +28,7 @@ pub fn send_result_to_callback(id: u32, value: &BexExternalValue) {
         }
     };
 
-    let handle_options = bridge_ctypes::HandleTableOptions::for_in_process();
+    let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
     match external_to_baml_value(value, &handle_options) {
         Ok(baml_value) => {
             let buf = baml_value.encode_to_vec();

@@ -1,0 +1,75 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40036
+---
+=== HIR2 ===
+type user.ExplicitHandler = (value: int) -> string throws never
+type user.HiddenHandler = (value: int) -> string
+type user.ImplicitHandler = (value: int) -> string
+function user.forward_direct(handler: (value: int) -> string, value: int) -> string  [expr] {
+  {  } handler(value)
+}
+function user.forward_optional(handler: (value: int) -> string?, value: int) -> string?  [expr] {
+  {  } handler?.(value)
+}
+function user.return_closure(handler: (value: int) -> string) -> (value: int) -> string  [expr] {
+  { return (value: int) -> string { {  } handler(value) } }
+}
+function user.run_explicit(handler: user.ExplicitHandler, value: int) -> string  [expr] {
+  {  } handler(value)
+}
+function user.run_hidden(handler: user.HiddenHandler, value: int) -> string  [expr] {
+  {  } handler(value)
+}
+function user.run_implicit(handler: user.ImplicitHandler, value: int) -> string  [expr] {
+  {  } handler(value)
+}
+
+--- captures ---
+lambda (value) in return_closure: captures [handler]
+type user.Callback = (int) -> void
+function user.bad_callback_use(cb: user.Callback) -> int  [expr] {
+  { let result = cb(1) } 1
+}
+function user.run_callback(cb: user.Callback, x: int) -> int  [expr] {
+  { cb(x) } x
+}
+function user.test_void_lambda() -> int  [expr] {
+  { let f = () -> void { {  } }; f() } 1
+}
+function user.test_void_lambda_assign() -> int  [expr] {
+  { let f = () -> void { {  } }; let x = f() } 1
+}
+function user.test_void_lambda_stmt() -> int  [expr] {
+  { let f = (x: int) -> void { { x } }; f(42) } 1
+}
+function user.call_void() -> int  [expr] {
+  { do_nothing() } 1
+}
+function user.do_bad_return() -> void  [expr] {
+  { return 42 }
+}
+function user.do_nothing() -> void  [expr] {
+  {  }
+}
+function user.do_return() -> void  [expr] {
+  { return }
+}
+function user.side_effects(x: int) -> void  [expr] {
+  { let y = x Add 1; y }
+}
+function user.use_void() -> int  [expr] {
+  { let x = do_nothing() } 1
+}
+function user.bad_let() -> int  [expr] {
+  { let x: void = 1; let y: void = { let z: int = "string" } z } 1
+}
+function user.bad_list() -> void[]  [expr] {
+  {  } []
+}
+function user.bad_optional() -> void?  [expr] {
+  {  } null
+}
+function user.bad_param(x: void) -> int  [expr] {
+  {  } 1
+}

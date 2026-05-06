@@ -7,12 +7,23 @@ option go_package = "./cffi";
 // Handle types — shared between inbound and outbound
 // -----------------------------------------------------------------------------
 
+// Tag for the host-language side to discriminate opaque handle entries.
+//
+// Stdlib symbols with special host-side decoding rules today:
+//   - baml.media.{Image,Audio,Video,Pdf}     -> ADT_MEDIA_*
+//   - baml.llm.PromptAst                     -> ADT_PROMPT_AST
+//   - baml.llm.Collector                     -> ADT_COLLECTOR
+//
+// Stdlib symbols TODO (decode to bare BamlPyHandle today):
+//   - baml.io.File, baml.net.Socket, baml.http.{Response,SseStream}
+//   - baml.glob.Glob, baml.llm.{StreamAccumulator,StreamCache}
+//
+// To enumerate all candidates: `rg '\$rust_type' baml_language/crates/baml_builtins2/`.
 enum BamlHandleType {
   HANDLE_UNSPECIFIED = 0;
-  HANDLE_UNKNOWN = 1;       // opaque BEX heap handle (no type info)
-  RESOURCE_FILE = 2;
-  RESOURCE_SOCKET = 3;
-  RESOURCE_HTTP_RESPONSE = 4;
+  UNTAGGED_RUST_DATA = 1;   // CffiHandleTableEntry::RustData(_)
+  UNTAGGED_BEX_HEAP = 2;    // CffiHandleTableEntry::BexHeapHandle(_)
+  reserved 3, 4;            // formerly RESOURCE_SOCKET, RESOURCE_HTTP_RESPONSE
   FUNCTION_REF = 5;
   ADT_MEDIA_IMAGE = 6;
   ADT_MEDIA_AUDIO = 7;

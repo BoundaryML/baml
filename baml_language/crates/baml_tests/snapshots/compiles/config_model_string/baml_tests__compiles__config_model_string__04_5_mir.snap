@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.MyAwsClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: baml.llm.PrimitiveClientOptions
+    let _2: baml.llm.BedrockOptions
+    let _3: map<void, void>
+    let _4: map<void, void>
+    let _5: map<void, void>
+
+    bb0: {
+        _2 = baml.llm.BedrockOptions { const null, const null, const null, const null, const null, const null, const null, const 100_i64, const 0.7_f64, const null };
+        _3 = {  };
+        _4 = {  };
+        _5 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "anthropic.claude-3-haiku-20240307-v1:0", const null, const null, const null, const null, const null, const null, const null, const null, const "sk-1234", copy _2, const null, copy _3, copy _4, copy _5 };
+        _0 = baml.llm.PrimitiveClient { const "MyAwsClient", const "aws-bedrock", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

@@ -67,7 +67,7 @@ reason = "Use thiserror for proper error types in library crates."
 [[namespaces]]
 name = "baml"
 approved_prefixes = ["compiler", "builtins", "builtins2", "codegen", "compiler2", "lsp2"]
-test_crate_exceptions = ["baml_tests", "baml_codegen_tests"]
+test_crate_exceptions = ["baml_tests"]
 embed_crates = ["tools_onionskin", "bex_project"]
 
 # baml-specific dependency rules
@@ -125,6 +125,9 @@ reason = "Bridge crates must use bex_project re-exports, not bex internals direc
 [[namespaces]]
 name = "sys"
 link_crates = ["baml_type",  "bex_heap", "bex_vm_types"]
+
+[[namespaces]]
+name = "codegen"
 
 [[namespaces]]
 name = "surface"

@@ -41,7 +41,7 @@
 //! - The argument count != param count (variadic / error cases)
 
 use baml_base::SourceFile;
-use baml_compiler2_ast::{Expr, Pattern, Stmt};
+use baml_compiler2_ast::{Expr, Stmt};
 use baml_compiler2_hir::{body::FunctionBody, loc::FunctionLoc, scope::ScopeKind};
 use baml_compiler2_tir::ty::Ty;
 use text_size::TextSize;
@@ -126,31 +126,31 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
         // ── Type hints for let bindings without annotations ───────────────────
 
         for (stmt_id, stmt) in expr_body.stmts.iter() {
-            let Stmt::Let {
-                pattern,
-                type_annotation,
-                ..
-            } = stmt
-            else {
+            let Stmt::Let { pattern, .. } = stmt else {
                 continue;
             };
 
-            // Skip if the user already wrote a type annotation.
-            if type_annotation.is_some() {
+            // Skip if the pattern itself encodes an annotation (a `Chain`
+            // with at least one `Type` link). Plain `Pattern::Bind` means
+            // the user wrote no annotation — that's where we want hints.
+            //
+            // STUB(patterns/phase2): a more accurate check would walk the
+            // chain looking for Type links. For now we just check if the
+            // outermost pattern is a Chain — any chain is treated as
+            // "has annotation."
+            let pat = &expr_body.patterns[*pattern];
+            if matches!(
+                pat,
+                baml_compiler2_ast::Pattern::Chain(_) | baml_compiler2_ast::Pattern::Type(_)
+            ) {
                 continue;
             }
 
             // Get the binding name to suppress hints for `_`.
-            let pat = &expr_body.patterns[*pattern];
-            let binding_name = match pat {
-                Pattern::Binding(name) => name.as_str(),
-                Pattern::TypedBinding { name, .. } => name.as_str(),
-                _ => continue, // Not a simple binding — skip
+            let Some(binding_name) = pat.binding_name(&expr_body.patterns) else {
+                continue; // Not a simple binding (or `_` wildcard) — skip
             };
-
-            if binding_name == "_" {
-                continue;
-            }
+            let _binding_name = binding_name.as_str();
 
             // Look up the inferred type.
             let Some(ty) = inference.binding_type(*pattern) else {

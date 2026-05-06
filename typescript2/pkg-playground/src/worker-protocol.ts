@@ -6,7 +6,24 @@
  * gives exhaustive switch narrowing.
  */
 
-import type { RuntimeEvent } from '@b/pkg-proto';
+import type { BamlJsValue, PlainHandleDescriptor, SourceLocation, TagEntry } from '@b/pkg-proto';
+
+/** Runtime event with BamlOutboundValue fields deserialized to BamlJsValue. */
+export interface DeserializedRuntimeEvent {
+  spanId: string;
+  parentSpanId?: string;
+  rootSpanId: string;
+  timestampMs: number;
+  callStack: string[];
+  event: DeserializedEventKind | undefined;
+}
+
+export type DeserializedEventKind =
+  | { $case: 'functionStart'; functionStart: { name: string; args: BamlJsValue[] } }
+  | { $case: 'functionEnd'; functionEnd: { name: string; durationMs: number; result: BamlJsValue | null } }
+  | { $case: 'log'; log: { data: BamlJsValue | null; level: string; source?: SourceLocation } }
+  | { $case: 'custom'; custom: { name: string; data: BamlJsValue | null } }
+  | { $case: 'setTags'; setTags: { tags: TagEntry[] } };
 
 // ---------------------------------------------------------------------------
 // Log decoration types (inline log display like ErrorLens)
@@ -71,7 +88,7 @@ export type PlaygroundNotification =
   | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
   | { type: 'cursorContext'; context: CursorContext }
   | { type: 'testCollectionResult'; project: string; generation: number; callId: number; data: number[]; expandError?: { testsetName: string; message: string } }
-  | { type: 'runtimeEvent'; data: number[] };
+  | { type: 'runtimeEvent'; data: number[]; callId?: number };
 
 // ---------------------------------------------------------------------------
 // Control flow graph types (matches Rust serde output from baml_compiler2_visualization)
@@ -156,8 +173,8 @@ export interface RunEntry {
   testName?: string;
   fetchLogs: FetchLogEntry[];
   /** Runtime events (log.info, baml.events.send, etc.) emitted during this run. */
-  runtimeEvents: RuntimeEvent[];
-  result: string | null;
+  runtimeEvents: DeserializedRuntimeEvent[];
+  result: BamlJsValue | null;
   error: string | null;
   status: 'running' | 'success' | 'error' | 'cancelled';
   startTime: number;
@@ -172,11 +189,11 @@ export type WorkerOutMessage =
   | { type: 'ready' }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
-  | { type: 'callFunctionResult'; id: number; result: string }
+  | { type: 'callFunctionResult'; id: number; result: BamlJsValue<PlainHandleDescriptor> }
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
-  | { type: 'runtimeEventNew'; event: RuntimeEvent; callId: number | null }
+  | { type: 'runtimeEventNew'; event: DeserializedRuntimeEvent; callId: number | null }
   | { type: 'runtimeEventError'; error: string }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'inputRequest'; id: number; prompt: string | undefined; callId: number }

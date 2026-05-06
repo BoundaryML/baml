@@ -1,0 +1,161 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+type user.ExplicitHandler = (value: int) -> string throws never
+type user.ImplicitHandler = (value: int) -> string throws never
+type user.HiddenHandler = (value: int) -> string throws never
+function user.run_explicit(handler: user.ExplicitHandler, value: int) -> string throws never {
+  { : string
+    handler(value) : string
+  }
+}
+function user.run_implicit(handler: user.ImplicitHandler, value: int) -> string throws never {
+  { : string
+    handler(value) : string
+  }
+}
+function user.forward_direct(handler: (value: int) -> string throws never, value: int) -> string throws never {
+  { : string
+    handler<__effect_param_0>(value) : string
+  }
+}
+function user.forward_optional(handler: ((value: int) -> string throws never)?, value: int) -> string? throws never {
+  { : string?
+    handler?.(value) : string?
+  }
+}
+function user.run_hidden(handler: user.HiddenHandler, value: int) -> string throws never {
+  { : string
+    handler(value) : string
+  }
+}
+function user.return_closure(handler: (value: int) -> string throws never) -> (value: int) -> string throws never throws never {
+  { : never
+    return : (value: int) -> string throws never
+      (value: int) -> string { ... } : (value: int) -> string throws never
+        {
+          handler(value)
+        }
+  }
+  !! 727..769: this body may throw through callback `handler`, but declared throws is `never`. Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing.
+}
+lambda user.return_closure {
+}
+type user.ExplicitHandler$stream = unknown
+type user.ImplicitHandler$stream = unknown
+type user.HiddenHandler$stream = unknown
+type user.Callback = (int) -> void throws never
+function user.run_callback(cb: user.Callback, x: int) -> int throws never {
+  { : int
+    cb(x) : void
+    x : int
+  }
+}
+function user.bad_callback_use(cb: user.Callback) -> int throws never {
+  { : 1
+    let result = cb(1) : void
+    1 : 1
+  }
+  !! 294..299: cannot use return value of a void function
+}
+type user.Callback$stream = unknown
+function user.test_void_lambda() -> int throws never {
+  { : 1
+    let f = : () -> void throws never
+      () -> void { ... } : () -> void throws never
+        {
+        }
+    f() : void
+    1 : 1
+  }
+}
+lambda user.test_void_lambda {
+}
+function user.test_void_lambda_assign() -> int throws never {
+  { : 1
+    let f = : () -> void throws never
+      () -> void { ... } : () -> void throws never
+        {
+        }
+    let x = f() : void
+    1 : 1
+  }
+  !! 236..239: cannot use return value of a void function
+}
+lambda user.test_void_lambda_assign {
+}
+function user.test_void_lambda_stmt() -> int throws never {
+  { : 1
+    let f = : (x: int) -> void throws never
+      (x: int) -> void { ... } : (x: int) -> void throws never
+        {
+          x
+        }
+    f(42) : void
+    1 : 1
+  }
+}
+lambda user.test_void_lambda_stmt {
+}
+function user.do_nothing() -> void throws never {
+  { : void
+  }
+}
+function user.do_return() -> void throws never {
+  { : never
+    return
+  }
+}
+function user.do_bad_return() -> void throws never {
+  { : never
+    return 42 : 42
+  }
+  !! 240..242: type mismatch: expected void, got 42
+}
+function user.use_void() -> int throws never {
+  { : 1
+    let x = do_nothing() : void
+    1 : 1
+  }
+  !! 327..339: cannot use return value of a void function
+}
+function user.call_void() -> int throws never {
+  { : 1
+    do_nothing() : void
+    1 : 1
+  }
+}
+function user.side_effects(x: int) -> void throws never {
+  { : void
+    let y = x + 1 : int
+    y : int
+  }
+}
+function user.bad_param(x: void) -> int throws never {
+  { : 1
+    1 : 1
+  }
+}
+function user.bad_let() -> int throws never {
+  { : 1
+    let x: void = 1 : 1 -> void
+    let y: void = : int -> void
+      { : int
+        let z: int = "string" : "string" -> int
+        z : int
+      }
+    1 : 1
+  }
+  !! 230..238: type mismatch: expected int, got "string"
+}
+function user.bad_optional() -> void? throws never {
+  { : null
+    null : null
+  }
+}
+function user.bad_list() -> void[] throws never {
+  { : void[]
+    [] : void[]
+  }
+}

@@ -88,12 +88,12 @@ async fn any_value_to_string() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
-        alloc_instance Person
+        alloc_instance user.Person
         load_const "Alice"
         init_field .name
         load_const 25
         init_field .age
-        alloc_instance Point
+        alloc_instance user.Point
         load_const 10
         init_field .x
         load_const 20
@@ -117,10 +117,10 @@ async fn any_value_to_string() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"Person {
+            r#"user.Person {
     name: "Alice"
     age: 25
-    location: Point {
+    location: user.Point {
         x: 10
         y: 20
     }
@@ -132,5 +132,26 @@ async fn any_value_to_string() {
 }"#
             .to_string()
         ))
+    );
+}
+
+#[tokio::test]
+async fn float_to_string_preserves_decimal() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let a = baml.unstable.string(1.0);
+            let b = baml.unstable.string(0.0);
+            let c = baml.unstable.string(-1.0);
+            let d = baml.unstable.string(3.14);
+            let e = baml.unstable.string(2);
+            a + " " + b + " " + c + " " + d + " " + e
+        }
+    "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("1.0 0.0 -1.0 3.14 2".to_string()))
     );
 }

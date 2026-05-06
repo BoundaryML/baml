@@ -103,21 +103,24 @@ export function BepExportAllDialog({ trigger }: BepExportAllDialogProps) {
 
       for (const file of files) {
         // Handle nested paths by creating folders as needed
+        const fileOptions = file.unixPermissions
+          ? { unixPermissions: file.unixPermissions }
+          : undefined;
         const parts = file.path.split("/");
         if (parts.length > 1) {
           const folderPath = parts.slice(0, -1).join("/");
           const fileName = parts[parts.length - 1];
           const nestedFolder = folder.folder(folderPath);
           if (nestedFolder) {
-            nestedFolder.file(fileName, file.content);
+            nestedFolder.file(fileName, file.content, fileOptions);
           }
         } else {
-          folder.file(file.path, file.content);
+          folder.file(file.path, file.content, fileOptions);
         }
       }
 
-      // Generate the ZIP file
-      const content = await zip.generateAsync({ type: "blob" });
+      // Generate the ZIP file with UNIX platform for permissions
+      const content = await zip.generateAsync({ type: "blob", platform: "UNIX" });
 
       // Download with date in filename
       const date = new Date().toISOString().split("T")[0];
@@ -228,13 +231,14 @@ export function BepExportAllDialog({ trigger }: BepExportAllDialogProps) {
               </Label>
               <pre className="mt-2 text-xs font-mono text-muted-foreground whitespace-pre">
 {`all-beps/
-  INDEX.md              # Overview with status-sorted list
+  Claude.md             # Main index with status-sorted list
   NEW-BEP/
     INSTRUCTIONS.md     # How to create & upload a new BEP
-  BEP-001/
+  BEP-001-proposal-slug/
+    meta.json           # Metadata (status, version, pages)
     README.md           # Full proposal content
     pages/              # Additional pages (if any)
-  BEP-002/
+  BEP-002-another-slug/
     ...`}
               </pre>
             </div>

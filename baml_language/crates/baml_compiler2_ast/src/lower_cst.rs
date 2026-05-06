@@ -8,7 +8,7 @@
 //! No LLM function expansion, no attribute validation, no duplicate detection —
 //! all of that moves downstream.
 
-use baml_base::Name;
+use baml_base::{Name, TypePath};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, ast};
 use rowan::ast::AstNode;
 
@@ -373,7 +373,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
 /// use `client_name = None` and keep their existing 2-argument signature.
 ///
 /// All synthetic spans point to `span`.
-pub(crate) fn synthesize_llm_builtin_call(
+pub fn synthesize_llm_builtin_call(
     builtin_name: &str,
     function_name: &str,
     param_names: &[Name],
@@ -432,7 +432,7 @@ pub(crate) fn synthesize_llm_builtin_call(
             let retry = alloc(Expr::Null);
             let counter = alloc(Expr::Literal(Literal::Int(0)));
             alloc(Expr::Object {
-                type_name: Some(Name::new("baml.llm.Client")),
+                type_name: Some(TypePath::from_dotted("baml.llm.Client")),
                 fields: vec![
                     (Name::new("name"), name_lit),
                     (Name::new("client_type"), ct_variant),
@@ -545,12 +545,12 @@ pub(crate) fn synthesize_llm_parse_call(
     (body, source_map)
 }
 
-/// Synthesize a `baml.llm.__make_stream(sse, "FunctionName", CLIENT)` call.
+/// Synthesize a `CLIENT.__make_stream(sse, "FunctionName")` method call.
 ///
 /// Used by the PPIR to generate `$parse_stream` companion function bodies.
 pub fn synthesize_llm_make_stream_call(
     function_name: &str,
-    client_name: Option<&str>,
+    client_name: &str,
     span: text_size::TextRange,
 ) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
     use la_arena::Arena;
@@ -572,48 +572,45 @@ pub fn synthesize_llm_make_stream_call(
     // 2. Function name literal: "FunctionName"
     let fn_name_expr = alloc(Expr::Literal(Literal::String(function_name.to_string())));
 
-    // 3. Callee: baml.llm.__make_stream
-    let callee = alloc(Expr::Path(vec![
-        Name::new("baml"),
-        Name::new("llm"),
-        Name::new("__make_stream"),
-    ]));
-
-    // 4. Client argument (same logic as synthesize_llm_builtin_call)
-    let client_arg = match client_name {
-        Some(name) if name.contains('/') => {
-            let name_lit = alloc(Expr::Literal(Literal::String(name.to_string())));
-            let ct_path = alloc(Expr::Path(vec![
-                Name::new("baml"),
-                Name::new("llm"),
-                Name::new("ClientType"),
-            ]));
-            let ct_variant = alloc(Expr::MemberAccess {
-                base: ct_path,
-                member: Name::new("Primitive"),
-            });
-            let sub = alloc(Expr::Array { elements: vec![] });
-            let retry = alloc(Expr::Null);
-            let counter = alloc(Expr::Literal(Literal::Int(0)));
-            alloc(Expr::Object {
-                type_name: Some(Name::new("baml.llm.Client")),
-                fields: vec![
-                    (Name::new("name"), name_lit),
-                    (Name::new("client_type"), ct_variant),
-                    (Name::new("sub_clients"), sub),
-                    (Name::new("retry"), retry),
-                    (Name::new("counter"), counter),
-                ],
-                spreads: vec![],
-            })
-        }
-        Some(name) => alloc(Expr::Path(vec![Name::new(name)])),
-        None => alloc(Expr::Null),
+    // 3. Client argument (same logic as synthesize_llm_builtin_call)
+    let client_arg = if client_name.contains('/') {
+        let name_lit = alloc(Expr::Literal(Literal::String(client_name.to_string())));
+        let ct_path = alloc(Expr::Path(vec![
+            Name::new("baml"),
+            Name::new("llm"),
+            Name::new("ClientType"),
+        ]));
+        let ct_variant = alloc(Expr::MemberAccess {
+            base: ct_path,
+            member: Name::new("Primitive"),
+        });
+        let sub = alloc(Expr::Array { elements: vec![] });
+        let retry = alloc(Expr::Null);
+        let counter = alloc(Expr::Literal(Literal::Int(0)));
+        alloc(Expr::Object {
+            type_name: Some(TypePath::from_dotted("baml.llm.Client")),
+            fields: vec![
+                (Name::new("name"), name_lit),
+                (Name::new("client_type"), ct_variant),
+                (Name::new("sub_clients"), sub),
+                (Name::new("retry"), retry),
+                (Name::new("counter"), counter),
+            ],
+            spreads: vec![],
+        })
+    } else {
+        alloc(Expr::Path(vec![Name::new(client_name)]))
     };
+
+    // 4. Callee: CLIENT.__make_stream (method call on the client)
+    let callee = alloc(Expr::MemberAccess {
+        base: client_arg,
+        member: Name::new("__make_stream"),
+    });
 
     let call = alloc(Expr::Call {
         callee,
-        args: vec![sse_expr, fn_name_expr, client_arg],
+        args: vec![sse_expr, fn_name_expr],
     });
 
     let body = ExprBody {
@@ -1356,7 +1353,7 @@ fn synthesize_retry_policy_let(
         .collect();
 
     let root = alloc(Expr::Object {
-        type_name: Some(Name::new("RetryPolicy")),
+        type_name: Some(TypePath::bare(Name::new("RetryPolicy"))),
         fields,
         spreads: vec![],
     });
@@ -1591,7 +1588,7 @@ fn synthesize_client_let(
 
     // Client { name, client_type, sub_clients, retry, counter }
     let root = alloc(Expr::Object {
-        type_name: Some(Name::new("Client")),
+        type_name: Some(TypePath::bare(Name::new("Client"))),
         fields: vec![
             (Name::new("name"), name_expr),
             (Name::new("client_type"), client_type_expr),
@@ -1791,7 +1788,7 @@ fn synthesize_client_new_companion(
             .collect();
         if !provider_fields_set.is_empty() {
             alloc(Expr::Object {
-                type_name: Some(Name::new(type_name)),
+                type_name: Some(TypePath::from_dotted(type_name)),
                 fields: prov_fields,
                 spreads: vec![],
             })
@@ -1835,7 +1832,7 @@ fn synthesize_client_new_companion(
     options_fields.push((Name::new("request_body"), request_body));
 
     let options_expr = alloc(Expr::Object {
-        type_name: Some(Name::new("baml.llm.PrimitiveClientOptions")),
+        type_name: Some(TypePath::from_dotted("baml.llm.PrimitiveClientOptions")),
         fields: options_fields,
         spreads: vec![],
     });
@@ -1846,7 +1843,7 @@ fn synthesize_client_new_companion(
         provider.map_or("unknown", |s| s.as_str()).to_string(),
     )));
     let root = alloc(Expr::Object {
-        type_name: Some(Name::new("baml.llm.PrimitiveClient")),
+        type_name: Some(TypePath::from_dotted("baml.llm.PrimitiveClient")),
         fields: vec![
             (Name::new("name"), name_lit),
             (Name::new("provider"), provider_lit),

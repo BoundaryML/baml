@@ -184,13 +184,11 @@ pub use bex_vm_types::Program as ProgramAlias;
 
 /// Build a `TypeName` from a fully-qualified dotted path.
 ///
-/// For user-defined types (package `"user"`), the display name omits the
-/// package prefix so that `class_name` and type signatures in tests/output
-/// show `"Point"` rather than `"user.Point"`.  For builtins (e.g. `"baml.*"`),
-/// the full FQ path is kept.
+/// Emit always fully qualifies — `display_name` keeps the literal package
+/// prefix (`"user.Point"`, `"baml.http.Response"`, `"<vendor>.<…>"`). The
+/// codegen-output Python and the runtime see the same `<pkg>.<…>` form
+/// end-to-end. See `12a-namespace-rules.md §5` for the rationale.
 fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
-    // Strip the "user." prefix from the display name for user-defined types.
-    let display = fq.strip_prefix("user.").unwrap_or(fq);
     let segments: Vec<&str> = fq.split('.').collect();
     let name = baml_base::Name::new(*segments.last().expect("non-empty fq name"));
     let module_path = segments[..segments.len() - 1]
@@ -200,7 +198,7 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
     baml_type::TypeName {
         name,
         module_path,
-        display_name: baml_base::Name::new(display),
+        display_name: baml_base::Name::new(fq),
     }
 }
 
@@ -302,10 +300,20 @@ pub fn generate_project_bytecode_with_opt(
                     .as_ref()
                     .map(|te| {
                         let mut diags = Vec::new();
-                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                        // Use `lower_type_expr_in_ns` so unqualified field types
+                        // (e.g. `addresses Address[]` inside a `lorem.Resume`
+                        // declared under `ns_lorem/`) resolve against the
+                        // defining file's namespace. Plain `lower_type_expr`
+                        // passes `&[]` as ns context, leaving sibling-namespace
+                        // class refs unresolved → `Ty::Unknown` → `Ty::Void`,
+                        // which trips the FFI encoder when the class is later
+                        // returned. Mirrors the same fix in
+                        // `compute_function_metadata_from_item_tree` below.
+                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                             db,
                             &te.expr,
                             pkg_items,
+                            &pkg_info.namespace_path,
                             &[],
                             &mut diags,
                         );
@@ -922,10 +930,18 @@ fn compute_function_metadata_from_item_tree(
 
     let resolve = |te: &TypeExpr| -> baml_type::Ty {
         let mut diags = Vec::new();
-        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+        // Use `lower_type_expr_in_ns` so unqualified references (e.g. `MyLorem`
+        // in a function signature under `ns_lorem/`) resolve against the
+        // defining file's namespace before falling back to the package root.
+        // `lower_type_expr` passes `&[]` as the ns context, which would lose
+        // parameter types to `Ty::Unknown` → `Ty::Void` for any non-root-ns
+        // class — surfacing as "expected instance, got map" in the runtime
+        // because the coercion layer can't see the declared type.
+        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
             te,
             pkg_items,
+            &pkg_info.namespace_path,
             &[],
             &mut diags,
         );

@@ -176,6 +176,13 @@ pub fn type_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<TypeIn
     let name_text = token.text();
     let name = Name::new(name_text);
 
+    // A let/for binding is not visible to expression resolution until after its
+    // declaration statement. Hovers on the declaration token itself still need
+    // to describe that binding.
+    if let Some((site, lookup_offset)) = declaration_site_at(db, file, offset, &name) {
+        return local_type_info(db, file, lookup_offset, &name, site);
+    }
+
     // ── Step 2: resolve the name in scope ─────────────────────────────────────
     let resolved = baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &name);
 
@@ -197,6 +204,29 @@ pub fn type_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<TypeIn
         }
         | baml_compiler2_tir::resolve::ResolvedName::Unknown => None,
     }
+}
+
+fn declaration_site_at(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+    name: &Name,
+) -> Option<(DefinitionSite, TextSize)> {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let scope_id = index.scope_at_offset(offset, None);
+
+    for ancestor_id in index.ancestor_scopes(scope_id) {
+        let bindings = &index.scope_bindings[ancestor_id.index() as usize];
+        for binding in bindings.bindings.iter().rev() {
+            if &binding.name == name
+                && (binding.name_range.contains(offset) || binding.name_range.end() == offset)
+            {
+                return Some((binding.site, binding.name_range.end()));
+            }
+        }
+    }
+
+    None
 }
 
 // ── type_info_for_definition ──────────────────────────────────────────────────
@@ -515,8 +545,13 @@ fn local_type_info(
                 .binding_type(pat_id)
                 .map(utils::display_ty)
                 .unwrap_or_else(|| {
-                    // Try child scopes if the binding is in a nested block.
-                    find_binding_ty_in_scopes(db, index, pat_id)
+                    // Try the use-site's ancestor scope chain — restricts the
+                    // lookup to inferences for bodies that share the
+                    // use-site's pattern arena. Iterating *every* scope in
+                    // the file would, under PatId collisions across nested
+                    // ExprBodies (e.g. two lambdas with the same arena
+                    // index), surface the wrong type for hover/inlay hints.
+                    find_binding_ty_in_scopes(db, index, scope_id, pat_id)
                         .unwrap_or_else(|| "unknown".to_string())
                 });
 
@@ -538,7 +573,7 @@ fn local_type_info(
 
 /// Extract the `PatId` for the binding introduced by `stmt_id`.
 ///
-/// For `Stmt::Let { pattern, .. }` statements, returns the pattern ID.
+/// For local declaration statements, returns the pattern ID.
 /// Returns `None` for other statement kinds.
 fn body_stmt_to_pat_id(
     body: &baml_compiler2_hir::body::FunctionBody,
@@ -551,23 +586,33 @@ fn body_stmt_to_pat_id(
 
     let stmt = &expr_body.stmts[stmt_id];
     match stmt {
-        baml_compiler2_ast::Stmt::Let { pattern, .. } => Some(*pattern),
+        baml_compiler2_ast::Stmt::Let { pattern, .. }
+        | baml_compiler2_ast::Stmt::For {
+            binding: pattern, ..
+        } => Some(*pattern),
         _ => None,
     }
 }
 
-/// Search all scopes in the file for the binding type of `pat_id`.
+/// Search the use-site's ancestor-scope chain for the binding type of
+/// `pat_id`.
 ///
-/// Used as a fallback when the let binding is in a nested block scope (not
-/// directly in the enclosing function scope). Iterates all scope IDs in the
-/// file index.
+/// `PatId`s are arena-local to a function/lambda body, so iterating *all*
+/// scopes in the file can surface a wrong-arena hit if two bodies happen to
+/// allocate the same `PatId` index. Walking ancestors only — Function or
+/// Lambda scopes that enclose `from_scope` — restricts the lookup to
+/// inferences whose binding maps were populated from the use-site's own
+/// arena. Mirrors the structure already used by
+/// `completions.rs::find_binding_ty_for_local`.
 fn find_binding_ty_in_scopes(
     db: &dyn Db,
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+    from_scope: baml_compiler2_hir::scope::FileScopeId,
     pat_id: baml_compiler2_ast::PatId,
 ) -> Option<String> {
-    for scope_id in &index.scope_ids {
-        let inference = baml_compiler2_tir::inference::infer_scope_types(db, *scope_id);
+    for ancestor_id in index.ancestor_scopes(from_scope) {
+        let scope_id = index.scope_ids[ancestor_id.index() as usize];
+        let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
         if let Some(ty) = inference.binding_type(pat_id) {
             return Some(utils::display_ty(ty));
         }

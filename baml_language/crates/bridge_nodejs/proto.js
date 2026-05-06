@@ -96,6 +96,8 @@ function decodeValueHolder(holder) {
         return holder.floatValue;
     if (holder.boolValue != null)
         return holder.boolValue;
+    if (holder.uint8arrayValue != null)
+        return holder.uint8arrayValue;
     if (holder.classValue) {
         const obj = Object.create(null);
         for (const entry of holder.classValue.fields || []) {
@@ -129,12 +131,6 @@ function decodeValueHolder(holder) {
     }
     if (holder.unionVariantValue && holder.unionVariantValue.value) {
         return decodeValueHolder(holder.unionVariantValue.value);
-    }
-    if (holder.checkedValue && holder.checkedValue.value) {
-        return decodeValueHolder(holder.checkedValue.value);
-    }
-    if (holder.streamingStateValue && holder.streamingStateValue.value) {
-        return decodeValueHolder(holder.streamingStateValue.value);
     }
     // handle_value: pass the protobufjs Long directly as the key — BamlHandle's
     // constructor accepts { low, high } which is layout-compatible with Long.

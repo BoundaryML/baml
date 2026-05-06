@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 31800
+---
+=== HIR2 ===
+function user.ArrayCompareThenCall(f: int, x: int) -> int[]  [expr] {
+  {  } [f Lt x, y()]
+}
+function user.ArrayOfComparisons(a: int, b: int, c: int, d: int) -> bool[]  [expr] {
+  {  } [a Lt b, c Gt d]
+}
+function user.ArrayOfComparisonsParenthesized(a: int, b: int, c: int, d: int) -> bool[]  [expr] {
+  {  } [a Lt b, c Gt d]
+}
+function user.y() -> int  [expr] {
+  {  } 0
+}
+function user.GenericCallInArray(k: int, v: string) -> string[]  [expr] {
+  {  } [f(k, v)]
+}
+function user.f(k: user.K, v: user.V) -> user.V  [expr] {
+  {  } v
+}
+function user.literal_arg() -> string  [expr] {
+  {  } f("a", "b")
+}
+function user.paren_union_arg() -> string  [expr] {
+  {  } f(0, "b")
+}

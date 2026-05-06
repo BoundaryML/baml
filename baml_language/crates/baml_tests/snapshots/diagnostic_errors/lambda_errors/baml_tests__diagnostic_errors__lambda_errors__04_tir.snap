@@ -1,0 +1,84 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 33137
+---
+=== TIR2 ===
+function user.test_return_mismatch() -> int throws never {
+  { : 0
+    let bad = : (x: int) -> string throws never
+      (x: int) -> string { ... } : (x: int) -> string throws never
+        {
+          x * 2
+        }
+    0 : 0
+  }
+  !! 95..148: type mismatch: expected string, got int
+}
+lambda user.test_return_mismatch {
+}
+function user.test_no_annotation_no_context() -> int throws never {
+  { : 0
+    let bad = : (x: unknown) -> unknown throws never
+      (x) -> { ... } : (x: unknown) -> unknown throws never
+        {
+          x * 2
+        }
+    0 : 0
+  }
+  !! 277..294: cannot infer type of lambda parameter `x` — add a type annotation or provide context
+}
+lambda user.test_no_annotation_no_context {
+}
+function user.test_arity_mismatch() -> int[] throws never {
+  { : int[]
+    let items: int[] = [1, 2, 3] : int[]
+    items.map<U, E>((x, y) -> { ... }) : int[]
+      (x, y) -> { ... } : (x: int, y: unknown) -> int throws E
+        {
+          x
+        }
+  }
+  !! 464..479: expected 1 argument(s), got 2
+}
+lambda user.test_arity_mismatch {
+}
+function user.test_param_type_mismatch() -> int[] throws never {
+  { : int[]
+    let items: int[] = [1, 2, 3] : int[]
+    items.map<U, E>((x: string) -> { ... }) : int[]
+      (x: string) -> { ... } : (x: string) -> int throws E
+        {
+          x
+        }
+  }
+  !! 621..641: type mismatch: expected int, got string
+  !! 598..599: type mismatch: expected int, got string
+}
+lambda user.test_param_type_mismatch {
+}
+function user.test_unknown_param_type() -> int throws never {
+  { : 0
+    let f = : (x: unknown) -> 0 throws never
+      (x: NonExistentType) -> { ... } : (x: unknown) -> 0 throws never
+        {
+          0
+        }
+    0 : 0
+  }
+  !! 784..800: unresolved type: NonExistentType
+}
+lambda user.test_unknown_param_type {
+}
+function user.test_unknown_return_type() -> int throws never {
+  { : 0
+    let f = : (x: int) -> unknown throws never
+      (x: int) -> NonExistentType { ... } : (x: int) -> unknown throws never
+        {
+          x
+        }
+    0 : 0
+  }
+  !! 942..958: unresolved type: NonExistentType
+}
+lambda user.test_unknown_return_type {
+}

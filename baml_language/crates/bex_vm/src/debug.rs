@@ -28,8 +28,8 @@
 use std::fmt::Write;
 
 use bex_vm_types::{
-    HeapPtr,
-    bytecode::Instruction,
+    ConstValue, HeapPtr,
+    bytecode::{CompactCode, Instruction, OpCode, read_i8, read_i32, read_u32},
     indexable::{GlobalIndex, GlobalPool, ObjectPool},
     types::{Function, Object, Value},
 };
@@ -182,8 +182,8 @@ pub(crate) fn display_instruction(
                 format!("(invalid viz index: {index})")
             }
         }
-        Instruction::JumpTable { table_idx, default } => {
-            format!("(table {table_idx}, default {default:+})")
+        Instruction::JumpTable(table_idx) => {
+            format!("(table {table_idx})")
         }
         Instruction::DenseTag(table_idx) => {
             if let Some(table) = function.bytecode.match_hash_tables.get(*table_idx) {
@@ -196,6 +196,17 @@ pub(crate) fn display_instruction(
         | Instruction::Copy(_)
         | Instruction::BinOp(_)
         | Instruction::CmpOp(_)
+        | Instruction::AddInt
+        | Instruction::SubInt
+        | Instruction::MulInt
+        | Instruction::DivInt
+        | Instruction::ModInt
+        | Instruction::AddFloat
+        | Instruction::SubFloat
+        | Instruction::MulFloat
+        | Instruction::DivFloat
+        | Instruction::CmpIntOp(_)
+        | Instruction::CmpFloatOp(_)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -211,7 +222,7 @@ pub(crate) fn display_instruction(
         | Instruction::IsType(_)
         | Instruction::ThrowIfPanic
         | Instruction::Unreachable
-        | Instruction::MakeClosure(_, _)
+        | Instruction::MakeClosure(_)
         | Instruction::MakeBoundMethod(_)
         | Instruction::MakeCell
         | Instruction::LoadDeref(_)
@@ -221,6 +232,7 @@ pub(crate) fn display_instruction(
         | Instruction::CaptureRef(_)
         | Instruction::Return
         | Instruction::SendEvent => String::new(),
+        Instruction::_Pad(..) => unreachable!(),
     };
 
     (instruction.to_string(), metadata)
@@ -246,7 +258,7 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
     match value {
         bex_vm_types::ConstValue::Null => "null".to_string(),
         bex_vm_types::ConstValue::Int(i) => i.to_string(),
-        bex_vm_types::ConstValue::Float(f) => f.to_string(),
+        bex_vm_types::ConstValue::Float(f) => bex_vm_types::format_float(*f),
         bex_vm_types::ConstValue::Bool(b) => b.to_string(),
         bex_vm_types::ConstValue::Object(idx) => {
             if let Some(objs) = objects {
@@ -324,9 +336,20 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::InitField(_)
         | Instruction::StoreArrayElement
         | Instruction::StoreMapElement => Color::Green,
-        Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
-            Color::BrightBlue
-        }
+        Instruction::BinOp(_)
+        | Instruction::CmpOp(_)
+        | Instruction::AddInt
+        | Instruction::SubInt
+        | Instruction::MulInt
+        | Instruction::DivInt
+        | Instruction::ModInt
+        | Instruction::AddFloat
+        | Instruction::SubFloat
+        | Instruction::MulFloat
+        | Instruction::DivFloat
+        | Instruction::CmpIntOp(_)
+        | Instruction::CmpFloatOp(_)
+        | Instruction::UnaryOp(_) => Color::BrightBlue,
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
         | Instruction::JumpIfFalse(_)
@@ -350,14 +373,15 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::IsType(_)
         | Instruction::ThrowIfPanic => Color::BrightBlue,
         Instruction::Unreachable => Color::BrightRed,
-        Instruction::MakeClosure(_, _)
-        | Instruction::MakeBoundMethod(_)
-        | Instruction::MakeCell => Color::Cyan,
+        Instruction::MakeClosure(_) | Instruction::MakeBoundMethod(_) | Instruction::MakeCell => {
+            Color::Cyan
+        }
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
             Color::Blue
         }
         Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Color::Green,
         Instruction::SendEvent => Color::BrightGreen,
+        Instruction::_Pad(..) => unreachable!(),
     }
 }
 
@@ -564,9 +588,10 @@ fn display_bytecode_textual(function: &Function) -> String {
                 let target = ip.wrapping_add_signed(*offset);
                 jump_targets.insert(target);
             }
-            Instruction::JumpTable { table_idx, default } => {
+            Instruction::JumpTable(table_idx) => {
                 // Default target.
-                let default_target = ip.wrapping_add_signed(*default);
+                let default_target =
+                    ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
                 jump_targets.insert(default_target);
                 // Each entry in the jump table.
                 if let Some(table) = function.bytecode.jump_tables.get(*table_idx) {
@@ -696,8 +721,9 @@ fn display_instruction_textual(
                 .unwrap_or_else(|| format!("?{target}"));
             format!("jump_if_false {label}")
         }
-        Instruction::JumpTable { table_idx, default } => {
-            let default_target = ip.wrapping_add_signed(*default);
+        Instruction::JumpTable(table_idx) => {
+            let default_target =
+                ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
             let default_label = label_map
                 .get(&default_target)
                 .cloned()
@@ -735,6 +761,17 @@ fn display_instruction_textual(
         // --- Operators ---
         Instruction::BinOp(op) => format!("bin_op {op}"),
         Instruction::CmpOp(op) => format!("cmp_op {op}"),
+        Instruction::AddInt => "add_int".to_string(),
+        Instruction::SubInt => "sub_int".to_string(),
+        Instruction::MulInt => "mul_int".to_string(),
+        Instruction::DivInt => "div_int".to_string(),
+        Instruction::ModInt => "mod_int".to_string(),
+        Instruction::AddFloat => "add_float".to_string(),
+        Instruction::SubFloat => "sub_float".to_string(),
+        Instruction::MulFloat => "mul_float".to_string(),
+        Instruction::DivFloat => "div_float".to_string(),
+        Instruction::CmpIntOp(op) => format!("cmp_int_op {op}"),
+        Instruction::CmpFloatOp(op) => format!("cmp_float_op {op}"),
         Instruction::UnaryOp(op) => format!("unary_op {op}"),
 
         // --- Allocation ---
@@ -806,9 +843,9 @@ fn display_instruction_textual(
         Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 
         // --- Closures and cells ---
-        Instruction::MakeClosure(obj_idx, count) => {
+        Instruction::MakeClosure(obj_idx) => {
             let name = meta_str(&obj_idx.raw());
-            format!("make_closure {name}, {count}")
+            format!("make_closure {name}")
         }
         Instruction::MakeBoundMethod(_) => {
             let name = meta_str(&"");
@@ -827,6 +864,7 @@ fn display_instruction_textual(
         Instruction::StoreCapture(idx) => format!("store_capture {idx}"),
         Instruction::CaptureRef(idx) => format!("capture_ref {idx}"),
         Instruction::SendEvent => "send_event".to_string(),
+        Instruction::_Pad(..) => unreachable!(),
     }
 }
 
@@ -1003,8 +1041,9 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         }
 
         // Jump tables: show all target addresses.
-        Instruction::JumpTable { table_idx, default } => {
-            let default_target = ip.wrapping_add_signed(*default);
+        Instruction::JumpTable(table_idx) => {
+            let default_target =
+                ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
             let mut entries = Vec::new();
             if let Some(table) = function.bytecode.jump_tables.get(*table_idx) {
                 for entry in &table.offsets {
@@ -1041,4 +1080,175 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         // All other instructions: no metadata.
         _ => String::new(),
     }
+}
+
+/// Disassemble compact bytecode into human-readable text.
+///
+/// Produces output in the format:
+/// ```text
+/// 0000  LOAD_INT_SMALL          42
+/// 0002  LOAD_VAR                0
+/// 0007  ADD
+/// 0008  RETURN
+/// ```
+///
+/// Jump offsets are shown as both the raw relative offset and the resolved
+/// absolute byte address target in parentheses.
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless
+)]
+pub fn display_compact_bytecode(
+    compact: &CompactCode,
+    constants: &[ConstValue],
+    f: &mut impl std::fmt::Write,
+) -> std::fmt::Result {
+    let code = &compact.code;
+    let mut pc = 0;
+
+    while pc < code.len() {
+        let offset = pc;
+        let op = OpCode::try_from(code[pc]).map_err(|_| std::fmt::Error)?;
+        pc += 1;
+
+        write!(f, "{offset:04}  {op:<24}")?;
+
+        match op {
+            // Unit ops: no operands
+            OpCode::Return
+            | OpCode::Await
+            | OpCode::Throw
+            | OpCode::LoadArrayElement
+            | OpCode::LoadMapElement
+            | OpCode::StoreArrayElement
+            | OpCode::StoreMapElement
+            | OpCode::CallIndirect
+            | OpCode::Discriminant
+            | OpCode::TypeTag
+            | OpCode::ThrowIfPanic
+            | OpCode::Unreachable
+            | OpCode::MakeCell
+            | OpCode::SendEvent
+            | OpCode::Add
+            | OpCode::Sub
+            | OpCode::Mul
+            | OpCode::Div
+            | OpCode::Mod
+            | OpCode::BitAnd
+            | OpCode::BitOr
+            | OpCode::BitXor
+            | OpCode::Shl
+            | OpCode::Shr
+            | OpCode::Eq
+            | OpCode::NotEq
+            | OpCode::Lt
+            | OpCode::LtEq
+            | OpCode::Gt
+            | OpCode::GtEq
+            | OpCode::AddInt
+            | OpCode::SubInt
+            | OpCode::MulInt
+            | OpCode::DivInt
+            | OpCode::ModInt
+            | OpCode::AddFloat
+            | OpCode::SubFloat
+            | OpCode::MulFloat
+            | OpCode::DivFloat
+            | OpCode::CmpIntEq
+            | OpCode::CmpIntNotEq
+            | OpCode::CmpIntLt
+            | OpCode::CmpIntLtEq
+            | OpCode::CmpIntGt
+            | OpCode::CmpIntGtEq
+            | OpCode::CmpFloatEq
+            | OpCode::CmpFloatNotEq
+            | OpCode::CmpFloatLt
+            | OpCode::CmpFloatLtEq
+            | OpCode::CmpFloatGt
+            | OpCode::CmpFloatGtEq
+            | OpCode::Not
+            | OpCode::Neg
+            | OpCode::LoadNull
+            | OpCode::LoadTrue
+            | OpCode::LoadFalse => {
+                writeln!(f)?;
+            }
+
+            OpCode::LoadIntSmall => {
+                let val = read_i8(code, &mut pc);
+                writeln!(f, "{val}")?;
+            }
+
+            // Single u32 operand with constant annotation
+            OpCode::LoadConst => {
+                let idx = read_u32(code, &mut pc);
+                if let Some(c) = constants.get(idx as usize) {
+                    writeln!(f, "{idx}  ; {c:?}")?;
+                } else {
+                    writeln!(f, "{idx}")?;
+                }
+            }
+
+            // Single u32 operand (index/slot)
+            OpCode::LoadVar
+            | OpCode::StoreVar
+            | OpCode::LoadGlobal
+            | OpCode::StoreGlobal
+            | OpCode::LoadField
+            | OpCode::StoreField
+            | OpCode::InitField
+            | OpCode::Pop
+            | OpCode::Copy
+            | OpCode::AllocArray
+            | OpCode::AllocMap
+            | OpCode::AllocInstance
+            | OpCode::AllocVariant
+            | OpCode::DispatchFuture
+            | OpCode::Watch
+            | OpCode::Unwatch
+            | OpCode::Notify
+            | OpCode::Call
+            | OpCode::NotifyBlock
+            | OpCode::VizEnter
+            | OpCode::VizExit
+            | OpCode::IsType
+            | OpCode::DenseTag
+            | OpCode::MakeBoundMethod
+            | OpCode::LoadDeref
+            | OpCode::StoreDeref
+            | OpCode::LoadCapture
+            | OpCode::StoreCapture
+            | OpCode::CaptureRef => {
+                let val = read_u32(code, &mut pc);
+                writeln!(f, "{val}")?;
+            }
+
+            // Jump i32 operand: show relative offset and resolved absolute target
+            OpCode::Jump | OpCode::PopJumpIfFalse | OpCode::JumpIfFalse => {
+                let offset_val = read_i32(code, &mut pc);
+                let target = (pc as i64 + offset_val as i64) as usize;
+                writeln!(f, "{offset_val:+}  (-> {target:04})")?;
+            }
+
+            OpCode::JumpTable => {
+                let table_idx = read_u32(code, &mut pc);
+                let default_offset = read_i32(code, &mut pc);
+                let target = (pc as i64 + default_offset as i64) as usize;
+                writeln!(
+                    f,
+                    "table={table_idx}  default={default_offset:+} (-> {target:04})"
+                )?;
+            }
+
+            OpCode::MakeClosure => {
+                // Compact form has only obj_idx; capture_count is on the stack
+                // (pushed by a preceding LoadConst).
+                let obj_idx = read_u32(code, &mut pc);
+                writeln!(f, "obj={obj_idx}")?;
+            }
+        }
+    }
+    Ok(())
 }

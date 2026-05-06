@@ -8,7 +8,7 @@ enum Status {
 function WildcardBeforeTyped(x: int) -> string {
   match (x) {
     _ => "catch all",
-    n: int => "unreachable"
+    let n: int => "unreachable"
   }
 }
 
@@ -33,11 +33,11 @@ function DuplicateLiteral(x: int) -> string {
 //----
 //- diagnostics
 // Error: unreachable arm
-//     ╭─[ match_match_unreachable_arms.baml:11:15 ]
+//     ╭─[ match_match_unreachable_arms.baml:11:19 ]
 //     │
-//  11 │     n: int => "unreachable"
-//     │               ──────┬──────  
-//     │                     ╰──────── unreachable arm
+//  11 │     let n: int => "unreachable"
+//     │                   ──────┬──────  
+//     │                         ╰──────── unreachable arm
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯

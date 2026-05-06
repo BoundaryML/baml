@@ -246,9 +246,9 @@ fn view_accessor_body(field_name: &str, ty: &BamlType) -> TokenStream {
         BamlType::Int => quote! { self.cls.field(#field_lit)?.as_int() },
         BamlType::Float => quote! { self.cls.field(#field_lit)?.as_float() },
         BamlType::Bool => quote! { self.cls.field(#field_lit)?.as_bool() },
-        BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap) },
-        BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap) },
-        _ => quote! { self.cls.field(#field_lit)?.as_owned_but_very_slow(heap) },
+        BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap, permit) },
+        BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap, permit) },
+        _ => quote! { self.cls.field(#field_lit)?.as_owned_but_very_slow(heap, permit) },
     }
 }
 
@@ -379,19 +379,19 @@ fn into_owned_expr(
         BamlType::Int | BamlType::Float | BamlType::Bool => {
             quote! { self.#field_ident()? }
         }
-        BamlType::String => quote! { self.#field_ident(heap)?.clone() },
-        BamlType::RustType => quote! { self.#field_ident(heap)? },
-        BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
-            let val = quote! { self.#field_ident(heap)? };
+        BamlType::String => quote! { self.#field_ident(heap, permit)?.clone() },
+        BamlType::RustType => quote! { self.#field_ident(heap, permit)? },
+        BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
+            let val = quote! { self.#field_ident(heap, permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
         }
         BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
-            let val = quote! { self.#field_ident(heap)? };
+            let val = quote! { self.#field_ident(heap, permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
         }
-        _ => quote! { self.#field_ident(heap)? },
+        _ => quote! { self.#field_ident(heap, permit)? },
     }
 }
 
@@ -497,7 +497,7 @@ fn glue_extract_expr(
         return quote! { /* receiver extracted below */ };
     }
     match ty {
-        BamlType::String => quote! { #arg_ident.as_string(&__p)?.to_string() },
+        BamlType::String => quote! { #arg_ident.as_string(heap.as_ref(), permit)?.to_string() },
         BamlType::Int => quote! { #arg_ident.as_int()? },
         BamlType::Float => quote! { #arg_ident.as_float()? },
         BamlType::Bool => quote! { #arg_ident.as_bool()? },
@@ -507,22 +507,22 @@ fn glue_extract_expr(
                 let ns_ident = format_ident!("{}", ns);
                 let name_ident = format_ident!("{}", name);
                 quote! {
-                    #arg_ident.as_builtin_class::<#view::#ns_ident::#name_ident>(&__p)?.into_owned(&__p)?
+                    #arg_ident.as_builtin_class::<#view::#ns_ident::#name_ident>(heap.as_ref(), permit)?.into_owned(heap.as_ref(), permit)?
                 }
             } else {
                 match name.as_str() {
-                    "type" => quote! { #arg_ident.as_baml_type_owned(&__p)? },
-                    _ => quote! { #arg_ident.as_owned_but_very_slow(&__p)? },
+                    "type" => quote! { #arg_ident.as_baml_type_owned(heap.as_ref(), permit)? },
+                    _ => quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? },
                 }
             }
         }
-        BamlType::RustType => quote! { #arg_ident.as_rust_data(&__p)? },
+        BamlType::RustType => quote! { #arg_ident.as_rust_data(heap.as_ref(), permit)? },
         BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
-            let val = quote! { #arg_ident.as_owned_but_very_slow(&__p)? };
+            let val = quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
         }
-        _ => quote! { #arg_ident.as_owned_but_very_slow(&__p)? },
+        _ => quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? },
     }
 }
 
@@ -764,7 +764,11 @@ fn emit_view_struct(
 
             if needs_heap {
                 quote! {
-                    pub fn #field_ident(&self, heap: &'a GcProtectedHeap<'a>) -> #ret_type {
+                    pub fn #field_ident(
+                        &self,
+                        heap: &'a BexHeap,
+                        permit: PermitProof<'a>,
+                    ) -> #ret_type {
                         #body
                     }
                 }
@@ -814,7 +818,11 @@ fn emit_view_struct(
         impl<'a> #name_ident<'a> {
             #(#accessors)*
 
-            pub fn into_owned(self, heap: &'a GcProtectedHeap<'a>) -> Result<#owned_path, AccessError> {
+            pub fn into_owned(
+                self,
+                heap: &'a BexHeap,
+                permit: PermitProof<'a>,
+            ) -> Result<#owned_path, AccessError> {
                 Ok(#owned_path {
                     #(#into_owned_fields,)*
                 })
@@ -1124,7 +1132,7 @@ fn emit_one_class_trait(
             let method_name_str = io_method_name(m);
             let glue_ident = format_ident!("__glue_{}", m.fn_name);
             quote! {
-                #method_name_str => Some(self.#glue_ident(heap, args, ctx, call_id))
+                #method_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id))
             }
         })
         .collect();
@@ -1136,11 +1144,12 @@ fn emit_one_class_trait(
 
             #(#glue_methods)*
 
-            fn #dispatch_fn_ident(
+            fn #dispatch_fn_ident<'a>(
                 &self,
                 method: &str,
                 heap: &std::sync::Arc<BexHeap>,
-                args: Vec<BexValue<'_>>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> Option<SysOpResult> {
@@ -1193,8 +1202,8 @@ fn emit_glue_method(
     } else {
         Some(quote! {
             let __receiver = __arg_self
-                .as_builtin_class::<#view::#ns_ident::#class_ident>(&__p)?
-                .into_owned(&__p)?;
+                .as_builtin_class::<#view::#ns_ident::#class_ident>(heap.as_ref(), permit)?
+                .into_owned(heap.as_ref(), permit)?;
         })
     };
 
@@ -1231,10 +1240,11 @@ fn emit_glue_method(
         .collect();
 
     quote! {
-        fn #glue_ident(
+        fn #glue_ident<'a>(
             &self,
             heap: &std::sync::Arc<BexHeap>,
-            args: Vec<BexValue<'_>>,
+            permit: PermitProof<'a>,
+            args: Vec<BexValue<'a>>,
             ctx: &SysOpContext,
             call_id: CallId,
         ) -> SysOpResult {
@@ -1242,11 +1252,11 @@ fn emit_glue_method(
             #arg_self
             #(#arg_lets)*
 
-            let __extraction = heap.with_gc_protection(move |__p| {
+            let __extraction = (|| {
                 #receiver_extraction
                 #(#param_extractions)*
                 Ok::<_, AccessError>((#receiver_ident #(#tuple_idents),*))
-            });
+            })();
 
             match __extraction {
                 Ok((#receiver_ident #(#tuple_idents),*)) => {
@@ -1347,7 +1357,7 @@ fn emit_one_namespace_trait(
             .map(|f| {
                 let fn_name_str = io_method_name(f);
                 let glue_ident = format_ident!("__glue_{}", f.fn_name);
-                quote! { #fn_name_str => Some(self.#glue_ident(heap, args, ctx, call_id)) }
+                quote! { #fn_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id)) }
             })
             .collect();
 
@@ -1365,7 +1375,7 @@ fn emit_one_namespace_trait(
             .map(|cn| {
                 let cn_str = cn.as_str();
                 let dispatch = format_ident!("__dispatch_{}_{}", ns, cn.to_lowercase());
-                quote! { Some((#cn_str, method)) => self.#dispatch(method, heap, args, ctx, call_id) }
+                quote! { Some((#cn_str, method)) => self.#dispatch(method, heap, permit, args, ctx, call_id) }
             })
             .collect();
 
@@ -1375,7 +1385,7 @@ fn emit_one_namespace_trait(
             .map(|f| {
                 let fn_name_str = io_method_name(f);
                 let glue_ident = format_ident!("__glue_{}", f.fn_name);
-                quote! { #fn_name_str => Some(self.#glue_ident(heap, args, ctx, call_id)) }
+                quote! { #fn_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id)) }
             })
             .collect();
 
@@ -1397,17 +1407,56 @@ fn emit_one_namespace_trait(
 
             #(#free_fn_glues)*
 
-            fn #dispatch_fn_ident(
+            fn #dispatch_fn_ident<'a>(
                 &self,
                 rest: &str,
                 heap: &std::sync::Arc<BexHeap>,
-                args: Vec<BexValue<'_>>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> Option<SysOpResult> {
                 #dispatch_body
             }
         }
+    }
+}
+
+/// Generate the `.into_result(...)` call for a given return type.
+///
+/// - Scalar types implementing `AsBexExternalValue` use `.into_result(op)`.
+/// - `List(Named(...))` uses `.into_result_mapped(op, |v| ...)` because
+///   `Vec<ClassName>` does not implement `AsBexExternalValue` (orphan rules
+///   prevent it in the generated crate).
+fn emit_into_result_call(
+    return_type: &BamlType,
+    variant_ident: &syn::Ident,
+    call_expr: &TokenStream,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    if let BamlType::List(inner) = return_type {
+        if let BamlType::Named(name) = inner.as_ref() {
+            if let Some(ns) = class_ns_map.get(name.as_str()) {
+                let owned = &paths.owned;
+                let ns_ident = format_ident!("{}", ns);
+                let name_ident = format_ident!("{}", name);
+                return quote! {
+                    #call_expr
+                        .into_result_mapped(SysOp::#variant_ident, |v| {
+                            BexExternalValue::Array {
+                                element_type: baml_type::Ty::unknown(),
+                                items: v.into_iter()
+                                    .map(|item| <#owned::#ns_ident::#name_ident as AsBexExternalValue>::into_bex_external_value(item))
+                                    .collect(),
+                            }
+                        })
+                };
+            }
+        }
+    }
+    quote! {
+        #call_expr.into_result(SysOp::#variant_ident)
     }
 }
 
@@ -1422,15 +1471,26 @@ fn emit_free_fn_glue(
     let clean_ident = format_ident!("{}", io_method_name(builtin));
 
     if builtin.params.is_empty() {
+        let call_expr = quote! {
+            #ns_trait_ident::#clean_ident(self, heap, call_id, ctx)
+        };
+        let into_result = emit_into_result_call(
+            &builtin.return_type,
+            &variant_ident,
+            &call_expr,
+            class_ns_map,
+            paths,
+        );
         return quote! {
-            fn #glue_ident(
+            fn #glue_ident<'a>(
                 &self,
                 heap: &std::sync::Arc<BexHeap>,
-                args: Vec<BexValue<'_>>,
+                _permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> SysOpResult {
-                #ns_trait_ident::#clean_ident(self, heap, call_id, ctx).into_result(SysOp::#variant_ident)
+                #into_result
             }
         };
     }
@@ -1475,26 +1535,37 @@ fn emit_free_fn_glue(
         quote! { Ok::<_, AccessError>((#(#param_idents),*)) }
     };
 
+    let call_expr = quote! {
+        #ns_trait_ident::#clean_ident(self, heap, call_id, #(#param_idents,)* ctx)
+    };
+    let into_result = emit_into_result_call(
+        &builtin.return_type,
+        &variant_ident,
+        &call_expr,
+        class_ns_map,
+        paths,
+    );
+
     quote! {
-        fn #glue_ident(
+        fn #glue_ident<'a>(
             &self,
             heap: &std::sync::Arc<BexHeap>,
-            args: Vec<BexValue<'_>>,
+            permit: PermitProof<'a>,
+            args: Vec<BexValue<'a>>,
             ctx: &SysOpContext,
             call_id: CallId,
         ) -> SysOpResult {
             let mut __args = args.into_iter();
             #(#arg_lets)*
 
-            let __extraction = heap.with_gc_protection(move |__p| {
+            let __extraction = (|| {
                 #(#param_extractions)*
                 #extraction_return
-            });
+            })();
 
             match __extraction {
                 Ok(#ok_pattern) => {
-                    #ns_trait_ident::#clean_ident(self, heap, call_id, #(#param_idents,)* ctx)
-                        .into_result(SysOp::#variant_ident)
+                    #into_result
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(
                     SysOp::#variant_ident,
@@ -1518,18 +1589,19 @@ fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
             let ns_str = ns.as_str();
             let dispatch_fn_ident = format_ident!("__dispatch_{}", ns);
             quote! {
-                Some((#ns_str, rest)) => self.#dispatch_fn_ident(rest, heap, args, ctx, call_id)
+                Some((#ns_str, rest)) => self.#dispatch_fn_ident(rest, heap, permit, args, ctx, call_id)
             }
         })
         .collect();
 
     quote! {
         pub trait IoPackageBaml: #(#ns_trait_idents)+* {
-            fn get_sys_op_fn(
+            fn get_sys_op_fn<'a>(
                 &self,
                 path: &str,
                 heap: &std::sync::Arc<BexHeap>,
-                args: Vec<BexValue<'_>>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> Option<SysOpResult> {
@@ -1570,8 +1642,8 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
             quote! {
                 #field_ident: {
                     let t = t.clone();
-                    std::sync::Arc::new(move |heap, args, ctx, call_id| {
-                        t.get_sys_op_fn(#path_str, heap, args, ctx, call_id)
+                    std::sync::Arc::new(move |heap, permit, args, ctx, call_id| {
+                        t.get_sys_op_fn(#path_str, heap, permit, args, ctx, call_id)
                             .unwrap_or_else(|| SysOpResult::Ready(Err(OpError::new(
                                 SysOp::#variant_ident,
                                 OpErrorKind::Unsupported,
@@ -1596,7 +1668,7 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
             }
 
             pub fn unsupported(operation: SysOp) -> SysOpFn {
-                std::sync::Arc::new(move |_, _, _, _| {
+                std::sync::Arc::new(move |_, _, _, _, _| {
                     SysOpResult::Ready(Err(OpError::new(
                         operation,
                         OpErrorKind::Unsupported,
@@ -1903,6 +1975,7 @@ fn emit_adapter_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
     quote! {
         pub struct RuntimeIoAdapter {
             heap: Arc<BexHeap>,
+            permit_manager: Arc<HeapPermitManager>,
             ctx: SysOpContext,
             #(#fields,)*
         }
@@ -1958,10 +2031,22 @@ fn emit_adapter_impl(
         let body = quote! {
             let fn_ptr = self.#method_ident.clone();
             let heap = self.heap.clone();
+            let permit_manager = self.permit_manager.clone();
             let ctx = self.ctx.clone();
             #(#ext_bindings)*
             Box::pin(async move {
-                let result = fn_ptr(&heap, vec![#(#arg_exprs),*], &ctx, CallId::next());
+                // Acquire a `()`-backed permit so the SysOpFn has a valid GC-exclusion
+                // proof for arg extraction. RuntimeIoAdapter callers run outside the VM
+                // event loop, so no other permit is in scope here.
+                let permit = permit_manager.new_permit(()).await.acquire().await;
+                let result = fn_ptr(
+                    &heap,
+                    permit.proof(),
+                    vec![#(#arg_exprs),*],
+                    &ctx,
+                    CallId::next(),
+                );
+                drop(permit);
                 let __val = __resolve_sys_op_result(result).await?;
                 #result_conversion
             })
@@ -1984,14 +2069,29 @@ fn emit_adapter_impl(
 }
 
 /// Generate the expression that converts `__val: BexExternalValue` to the method's return type.
+///
+/// Top-level entry: looks up handle classes in `tree` and supports `Null`
+/// (returning unit). Recursive calls into containers pass `tree = None` and
+/// override the error suffix so messages reflect the nesting context.
 fn emit_result_conversion(
     builtin: &NativeBuiltin,
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
     paths: &CodegenPaths,
 ) -> TokenStream {
-    // Check if return type maps to a handle.
-    if let BamlType::Named(name) = &builtin.return_type {
+    emit_result_conversion_for_ty(&builtin.return_type, Some(tree), class_ns_map, paths, "")
+}
+
+fn emit_result_conversion_for_ty(
+    ty: &BamlType,
+    tree: Option<&BTreeMap<String, IoNamespaceNode>>,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+    ctx: &str,
+) -> TokenStream {
+    // Handle-class shortcut: only at the top level (lists/maps of handles
+    // aren't supported).
+    if let (Some(tree), BamlType::Named(name)) = (tree, ty) {
         if let Some(ns) = class_ns_map.get(name.as_str()) {
             if let Some(node) = tree.get(ns) {
                 if node.classes.contains_key(name.as_str()) {
@@ -2002,43 +2102,66 @@ fn emit_result_conversion(
         }
     }
 
-    match &builtin.return_type {
-        BamlType::String => quote! {
-            match __val {
-                BexExternalValue::String(s) => Ok(s),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected string, got {}", other.type_name()),
-                )),
+    match ty {
+        BamlType::String => {
+            let msg = format!("expected string{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::String(s) => Ok(s),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
-        BamlType::Int => quote! {
-            match __val {
-                BexExternalValue::Int(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected int, got {}", other.type_name()),
-                )),
+        }
+        BamlType::Int => {
+            let msg = format!("expected int{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Int(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
-        BamlType::Float => quote! {
-            match __val {
-                BexExternalValue::Float(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected float, got {}", other.type_name()),
-                )),
+        }
+        BamlType::Float => {
+            let msg = format!("expected float{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Float(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
-        BamlType::Bool => quote! {
-            match __val {
-                BexExternalValue::Bool(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected bool, got {}", other.type_name()),
-                )),
+        }
+        BamlType::Bool => {
+            let msg = format!("expected bool{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Bool(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
-        BamlType::Null => quote! { Ok(()) },
+        }
+        BamlType::Uint8Array => {
+            let msg = format!("expected uint8array{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Uint8Array(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
+            }
+        }
+        // `Null` as a return type means unit; only meaningful at the top level.
+        BamlType::Null if tree.is_some() => quote! { Ok(()) },
         BamlType::Optional(inner) => {
-            // Create a temporary builtin with the inner type to recurse.
-            let inner_conv = emit_result_conversion_simple(inner, class_ns_map, paths);
+            let inner_conv = emit_result_conversion_for_ty(inner, None, class_ns_map, paths, ctx);
             quote! {
                 match __val {
                     BexExternalValue::Null => Ok(None),
@@ -2049,28 +2172,56 @@ fn emit_result_conversion(
                 }
             }
         }
-        BamlType::Uint8Array => quote! {
-            match __val {
-                BexExternalValue::Uint8Array(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected uint8array, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Named(name) => match name.as_str() {
-            "type" => quote! {
+        BamlType::List(inner) => {
+            let inner_conv =
+                emit_result_conversion_for_ty(inner, None, class_ns_map, paths, " in list");
+            let msg = format!("expected array{ctx}, got {{}}");
+            quote! {
                 match __val {
-                    BexExternalValue::Adt(
-                        bex_external_types::BexExternalAdt::Type(ty),
-                    ) => Ok(ty),
+                    BexExternalValue::Array { items, .. } => {
+                        items.into_iter()
+                            .map(|__val| { #inner_conv })
+                            .collect::<Result<Vec<_>, _>>()
+                    }
                     other => Err(RuntimeIoError::Other(
-                        format!("expected type, got {}", other.type_name()),
+                        format!(#msg, other.type_name()),
                     )),
                 }
-            },
+            }
+        }
+        BamlType::Map(key, value) if matches!(key.as_ref(), BamlType::String) => {
+            let value_conv =
+                emit_result_conversion_for_ty(value, None, class_ns_map, paths, " in map");
+            let msg = format!("expected map{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Map { entries, .. } => {
+                        entries.into_iter()
+                            .map(|(__key, __val)| Ok((__key, { #value_conv }?)))
+                            .collect::<Result<indexmap::IndexMap<_, _>, _>>()
+                    }
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
+            }
+        }
+        BamlType::Named(name) => match name.as_str() {
+            "type" => {
+                let msg = format!("expected type{ctx}, got {{}}");
+                quote! {
+                    match __val {
+                        BexExternalValue::Adt(
+                            bex_external_types::BexExternalAdt::Type(ty),
+                        ) => Ok(ty),
+                        other => Err(RuntimeIoError::Other(
+                            format!(#msg, other.type_name()),
+                        )),
+                    }
+                }
+            }
             _ => {
-                if class_ns_map.contains_key(name.as_str()) {
-                    let ns = &class_ns_map[name.as_str()];
+                if let Some(ns) = class_ns_map.get(name.as_str()) {
                     let owned = &paths.owned;
                     let ns_ident = format_ident!("{}", ns);
                     let name_ident = format_ident!("{}", name);
@@ -2081,49 +2232,6 @@ fn emit_result_conversion(
                 } else {
                     quote! { Ok(__val) }
                 }
-            }
-        },
-        _ => quote! { Ok(__val) },
-    }
-}
-
-/// Simplified result conversion for inner types (used in Optional).
-fn emit_result_conversion_simple(
-    ty: &BamlType,
-    _class_ns_map: &BTreeMap<String, String>,
-    _paths: &CodegenPaths,
-) -> TokenStream {
-    match ty {
-        BamlType::String => quote! {
-            match __val {
-                BexExternalValue::String(s) => Ok(s),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected string, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Int => quote! {
-            match __val {
-                BexExternalValue::Int(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected int, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Float => quote! {
-            match __val {
-                BexExternalValue::Float(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected float, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Bool => quote! {
-            match __val {
-                BexExternalValue::Bool(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected bool, got {}", other.type_name()),
-                )),
             }
         },
         _ => quote! { Ok(__val) },
@@ -2144,10 +2252,12 @@ fn emit_build_runtime_io(io_builtins: &[NativeBuiltin]) -> TokenStream {
         pub fn build_runtime_io(
             sys_ops: &SysOps,
             heap: &Arc<BexHeap>,
+            permit_manager: &Arc<HeapPermitManager>,
             ctx: &SysOpContext,
         ) -> Arc<dyn RuntimeIo> {
             Arc::new(RuntimeIoAdapter {
                 heap: heap.clone(),
+                permit_manager: permit_manager.clone(),
                 ctx: ctx.clone(),
                 #(#field_inits,)*
             })

@@ -274,7 +274,7 @@ async fn handle_ws_in_message(
             };
 
             tokio::spawn(async move {
-                let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
+                let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
                 let out = match bex
                     .call_function(&name, kwargs.into(), function_call_ctx.build())
                     .await
@@ -340,7 +340,7 @@ async fn handle_ws_in_message(
                     .await
                 {
                     Ok(result) => {
-                        let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
+                        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
                         match bridge_ctypes::external_to_baml_value(&result, &handle_options) {
                             Ok(baml_val) => {
                                 let b64 = base64::engine::general_purpose::STANDARD
@@ -475,6 +475,7 @@ async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
         .unwrap_or("/");
     let target_url = format!("{upstream}{uri_path_and_query}");
 
+    ensure_rustls_crypto_provider();
     let mut fwd = reqwest::Client::new().request(method, &target_url);
     for (name, value) in req.headers() {
         if name == header::HOST {
@@ -516,6 +517,19 @@ async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
     let resp_bytes = upstream_resp.bytes().await.unwrap_or_default();
     builder.body(Body::from(resp_bytes)).unwrap()
 }
+
+#[cfg(feature = "ring-crypto")]
+fn ensure_rustls_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
+#[cfg(all(not(feature = "ring-crypto"), feature = "aws-crypto"))]
+fn ensure_rustls_crypto_provider() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}
+
+#[cfg(all(not(feature = "ring-crypto"), not(feature = "aws-crypto")))]
+fn ensure_rustls_crypto_provider() {}
 
 /// Proxy a WebSocket upgrade request (e.g. Vite HMR) to the upstream dev server.
 async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {

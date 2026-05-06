@@ -1,0 +1,143 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.branch_locals(b: bool) -> int throws never {
+  { : int
+    if (b : bool) : int
+      { : int
+        let a = 1 : 1 -> int
+        a : int
+      }
+    else
+      { : int
+        let a = 2 : 2 -> int
+        a : int
+      }
+  }
+}
+function user.same_scope_shadow() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    let x = 2 : 2 -> int
+    x : int
+  }
+}
+function user.initializer_uses_previous() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    let x = x + 1 : int
+    x : int
+  }
+}
+function user.shadow_param(x: int) -> int throws never {
+  { : int
+    let x = x + 1 : int
+    x : int
+  }
+}
+function user.outer_restored() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    { : void
+      let x = 2 : 2 -> int
+    }
+    x : int
+  }
+}
+function user.declared_type_restored() -> string throws never {
+  { : string
+    let x: string = "outer" : "outer" -> string
+    { : void
+      let x: int = 1 : 1 -> int
+    }
+    x : string
+  }
+}
+function user.for_loop_restores_outer() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    for x in [2, 3]
+      { : void
+        x : int
+      }
+    x : int
+  }
+}
+function user.watch_block_cleanup() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    { : void
+      let x = 2 : 2 -> int
+      x : int
+    }
+    x : int
+  }
+}
+function user.nested_outer_restored() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    { : void
+      let x = 2 : 2 -> int
+      { : void
+        let x = 3 : 3 -> int
+        x : int
+      }
+      x : int
+    }
+    x : int
+  }
+}
+function user.capture_before_after_shadow() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    let g = : () -> int throws never
+      () -> int { ... } : () -> int throws never
+        {
+          x
+        }
+    let x = 2 : 2 -> int
+    let f = : () -> int throws never
+      () -> int { ... } : () -> int throws never
+        {
+          x
+        }
+    g() * 10 + f() : int
+  }
+}
+lambda user.capture_before_after_shadow {
+}
+lambda user.capture_before_after_shadow {
+}
+function user.nested_lambda_capture() -> int throws never {
+  { : int
+    let x = 7 : 7 -> int
+    let outer = : () -> int throws never
+      () -> int { ... } : () -> int throws never
+        {
+          let inner = ...
+            () -> int { ... }
+              {
+                x
+              }
+          inner()
+        }
+    outer() : int
+  }
+}
+lambda user.nested_lambda_capture {
+}
+lambda user.nested_lambda_capture {
+}
+function user.while_body_restores_outer() -> int throws never {
+  { : int
+    let x = 1 : 1 -> int
+    let once = true : true -> bool
+    while once
+      { : void
+        let x = 99 : 99 -> int
+        once = false : false
+      }
+    x : int
+  }
+}

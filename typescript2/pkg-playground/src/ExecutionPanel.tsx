@@ -9,9 +9,10 @@
  * VS Code webview without an embedded Monaco editor).
  */
 
-import type { ChangeEvent, FC, RefObject } from 'react';
+import type { ChangeEvent, FC, ReactNode, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { encodeCallArgs, type BamlOutboundValue } from '@b/pkg-proto';
+import { encodeCallArgs } from '@b/pkg-proto';
+import type { BamlJsValue } from '@b/pkg-proto';
 import { KeyRound, PanelLeft, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -37,88 +38,15 @@ import type {
   RunEntry,
   WorkerOutMessage,
 } from './worker-protocol';
-import { decodeCallResult } from '@b/pkg-proto';
 import type { ResultRendererProps } from './result-renderers';
 import { ResultDisplay } from './ResultDisplay';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
 import { HttpRequestCurlRenderer, isHttpRequest } from './renderers/HttpRequestCurl';
 import { GraphView } from './graph/GraphView';
 import { FunctionSidebar } from './FunctionSidebar';
+import { EventValueDisplay } from './EventValueDisplay';
 
 registerBuiltinResultRenderers();
-// Format a BamlOutboundValue (proto) to a Rust-like debug string
-function formatValueDebug(holder: BamlOutboundValue | null | undefined): string {
-  if (!holder?.value) return 'null';
-
-  switch (holder.value.$case) {
-    case 'nullValue':
-      return 'null';
-    case 'stringValue':
-      return JSON.stringify(holder.value.stringValue);
-    case 'intValue':
-      return String(holder.value.intValue);
-    case 'floatValue':
-      return String(holder.value.floatValue);
-    case 'boolValue':
-      return String(holder.value.boolValue);
-    case 'classValue': {
-      const cls = holder.value.classValue;
-      const name = cls.name?.name ?? 'Class';
-      const fields = cls.fields
-        .map((f) => `${f.key}: ${formatValueDebug(f.value)}`)
-        .join(', ');
-      return `${name} { ${fields} }`;
-    }
-    case 'enumValue':
-      return holder.value.enumValue.value;
-    case 'listValue':
-      return `[${holder.value.listValue.items.map(formatValueDebug).join(', ')}]`;
-    case 'mapValue': {
-      const entries = holder.value.mapValue.entries
-        .map((e) => `${e.key}: ${formatValueDebug(e.value)}`)
-        .join(', ');
-      return `{${entries}}`;
-    }
-    case 'literalValue': {
-      const lit = holder.value.literalValue;
-      if (!lit.literal) return 'null';
-      switch (lit.literal.$case) {
-        case 'stringLiteral':
-          return JSON.stringify(lit.literal.stringLiteral.value);
-        case 'intLiteral':
-          return String(lit.literal.intLiteral.value);
-        case 'boolLiteral':
-          return String(lit.literal.boolLiteral.value);
-        default:
-          return 'null';
-      }
-    }
-    case 'unionVariantValue':
-      return formatValueDebug(holder.value.unionVariantValue.value);
-    case 'checkedValue':
-      return formatValueDebug(holder.value.checkedValue.value);
-    case 'streamingStateValue':
-      return formatValueDebug(holder.value.streamingStateValue.value);
-    case 'handleValue': {
-      const h = holder.value.handleValue;
-      return `<handle #${h.key}>`;
-    }
-    case 'mediaValue': {
-      const m = holder.value.mediaValue;
-      const mt = ['unspecified', 'image', 'audio', 'pdf', 'video', 'other'][m.media] ?? 'media';
-      if (m.value?.$case === 'url') return `<${mt}: ${m.value.url}>`;
-      if (m.value?.$case === 'file') return `<${mt}: file://${m.value.file}>`;
-      if (m.value?.$case === 'base64') return `<${mt}: base64...>`;
-      return `<${mt}>`;
-    }
-    case 'promptAstValue':
-      return '<prompt_ast>';
-    case 'uint8arrayValue':
-      return `<bytes: ${holder.value.uint8arrayValue.length}>`;
-    default:
-      return '?';
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -131,6 +59,10 @@ function tryFormatJson(str: string): string {
     /* not valid JSON */
     return str;
   }
+}
+
+function stringifyResult(value: BamlJsValue): string {
+  return JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2);
 }
 
 function formatBuildTime(epochSecs: number): { absolute: string; relative: string } {
@@ -174,9 +106,10 @@ interface CollectionRunViewProps {
   run: RunEntry;
   expandedLogId: number | null;
   setExpandedLogId: (id: number | null) => void;
+  resultRenderers?: Record<string, FC<ResultRendererProps>>;
 }
 
-const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId }) => {
+const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, setExpandedLogId, resultRenderers }) => {
   const hasError = run.status === 'error';
   const errorMessage = run.error || 'Unknown expansion error';
   return (
@@ -243,6 +176,66 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
             </div>
           );
         })}
+        {/* Runtime events */}
+        {run.runtimeEvents.length > 0 && (
+          <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+            <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
+              Events ({run.runtimeEvents.length})
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {run.runtimeEvents.map((evt, evtIdx) => {
+                const kind = evt.event;
+                if (!kind) return null;
+
+                let label: string;
+                let payload: ReactNode;
+                let colorCls: string;
+
+                switch (kind.$case) {
+                  case 'functionStart':
+                    label = 'START';
+                    payload = kind.functionStart.name;
+                    colorCls = 'text-vsc-green';
+                    break;
+                  case 'functionEnd':
+                    label = 'END';
+                    payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
+                    colorCls = 'text-vsc-text-muted';
+                    break;
+                  case 'log': {
+                    const lvl = kind.log.level;
+                    label = lvl;
+                    payload = <EventValueDisplay value={kind.log.data} customRenderers={resultRenderers} />;
+                    colorCls = lvl === 'error' ? 'text-vsc-red'
+                      : lvl === 'warn' ? 'text-vsc-yellow'
+                      : lvl === 'debug' ? 'text-vsc-text-muted'
+                      : 'text-vsc-blue';
+                    break;
+                  }
+                  case 'custom':
+                    label = 'EVENT';
+                    payload = <><span>{kind.custom.name}: </span><EventValueDisplay value={kind.custom.data} customRenderers={resultRenderers} /></>;
+                    colorCls = 'text-vsc-purple';
+                    break;
+                  case 'setTags':
+                    label = 'TAGS';
+                    payload = kind.setTags.tags.map(t => `${t.key}=${t.value}`).join(', ');
+                    colorCls = 'text-vsc-text-muted';
+                    break;
+                  default:
+                    return null;
+                }
+
+                return (
+                  <div key={evtIdx} className="flex items-start gap-1.5 text-[11px]">
+                    <span className={`${colorCls} font-semibold uppercase shrink-0`}>{label}</span>
+                    <span className="text-vsc-text break-all">{payload}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -258,7 +251,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [testTree, setTestTree] = useState<any>(null);
   const [collectionCallId, setCollectionCallId] = useState<number | null>(null);
   const [generation, setGeneration] = useState<number>(0);
-  const [testRunResults, setTestRunResults] = useState<Map<string, Record<string, unknown>>>(new Map());
+  const [testRunResults, setTestRunResults] = useState<Map<string, unknown>>(new Map());
   const [failedExpands, setFailedExpands] = useState<Set<string>>(new Set());
   // Synthetic RunEntry that accumulates fetch logs from test collection/expansion operations
   const [collectionRun, setCollectionRun] = useState<RunEntry | null>(null);
@@ -288,8 +281,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     functionName: string;
     workflows: string[];
   } | null>(null);
-  const [promptPreviewResult, setPromptPreviewResult] = useState<string | null>(null);
-  const [curlPreviewResult, setCurlPreviewResult] = useState<string | null>(null);
+  const [promptPreviewResult, setPromptPreviewResult] = useState<BamlJsValue | null>(null);
+  const [curlPreviewResult, setCurlPreviewResult] = useState<BamlJsValue | null>(null);
   const [promptPreviewError, setPromptPreviewError] = useState<string | null>(null);
   const [curlPreviewError, setCurlPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -322,7 +315,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   useEffect(() => { controlFlowGraphRef.current = controlFlowGraph; }, [controlFlowGraph]);
 
   const nextCallIdRef = useRef(0);
-  const pendingCallsRef = useRef<Map<number, { resolve: (v: string) => void; reject: (e: Error) => void }>>(new Map());
+  const pendingCallsRef = useRef<Map<number, { resolve: (v: BamlJsValue) => void; reject: (e: Error) => void }>>(new Map());
   // Buffer fetch logs by callId so logs that arrive before testCollectionResult are not lost.
   const pendingLogsRef = useRef<Map<number, FetchLogEntry[]>>(new Map());
 
@@ -570,6 +563,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                   : r
               )
             );
+            // Also route to collection run if this event belongs to it
+            setCollectionRun((prev) => {
+              if (!prev || prev.id !== data.callId) return prev;
+              return { ...prev, runtimeEvents: [...prev.runtimeEvents, eventEntry] };
+            });
           }
           break;
         }
@@ -717,7 +715,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       try {
         const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
         const callId = nextCallIdRef.current++;
-        const resultStr = await new Promise<string>((resolve, reject) => {
+        const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
           pendingCallsRef.current.set(callId, { resolve, reject });
           port.postMessage({
             type: 'callFunction',
@@ -727,7 +725,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             project: selectedProject,
           });
         });
-        setResult(resultStr);
+        setResult(resultValue);
         setError(null);
         setPreviewLoading(false);
       } catch (e) {
@@ -831,7 +829,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       }
       const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
 
-      const resultStr = await new Promise<string>((resolve, reject) => {
+      const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
         pendingCallsRef.current.set(runId, { resolve, reject });
         port.postMessage(
           { type: 'callFunction', id: runId, name: selectedFn, argsProto: new Uint8Array(argsProto), project: selectedProject },
@@ -839,7 +837,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       });
 
       const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultStr, status: 'success', durationMs: dur } : r));
+      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultValue, status: 'success', durationMs: dur } : r));
     } catch (e) {
       const isCancelled = e instanceof Error && (e as any).cancelled === true;
       const errMsg = e instanceof Error ? e.message : String(e);
@@ -880,7 +878,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     setRuns((prev) => [...prev, newRun]);
 
     try {
-      const resultStr = await new Promise<string>((resolve, reject) => {
+      const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
         pendingCallsRef.current.set(runId, { resolve, reject });
         port.postMessage({
           type: 'callTestFunction',
@@ -895,15 +893,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       setRuns((prev) =>
         prev.map((r) =>
           r.id === runId
-            ? { ...r, result: resultStr, status: 'success', durationMs: dur }
+            ? { ...r, result: resultValue, status: 'success', durationMs: dur }
             : r,
         ),
       );
 
-      try {
-        const report = JSON.parse(resultStr);
-        setTestRunResults((prev) => new Map(prev).set(name, report));
-      } catch {}
+      setTestRunResults((prev) => new Map(prev).set(name, resultValue));
     } catch (e: any) {
       const dur = Math.round(performance.now() - newRun.startTime);
       const cancelled = e instanceof Error && (e as any).cancelled === true;
@@ -1219,6 +1214,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               run={collectionRun}
               expandedLogId={expandedLogId}
               setExpandedLogId={setExpandedLogId}
+              resultRenderers={resultRenderers}
             />
           ) : viewingTestRun ? (
             <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
@@ -1310,12 +1306,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                         </div>
                         <div className="flex flex-col gap-0.5">
                           {run.runtimeEvents.map((evt, evtIdx) => {
-                            const kind = evt.event?.kind;
-                            console.log('[DEBUG] Event:', evtIdx, kind?.$case, kind);
+                            const kind = evt.event;
                             if (!kind) return null;
 
                             let label: string;
-                            let payload: string;
+                            let payload: ReactNode;
                             let colorCls: string;
 
                             switch (kind.$case) {
@@ -1332,7 +1327,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                               case 'log': {
                                 const lvl = kind.log.level;
                                 label = lvl;
-                                payload = formatValueDebug(kind.log.data);
+                                payload = <EventValueDisplay value={kind.log.data} customRenderers={resultRenderers} />;
                                 colorCls = lvl === 'error' ? 'text-vsc-red'
                                   : lvl === 'warn' ? 'text-vsc-yellow'
                                   : lvl === 'debug' ? 'text-vsc-text-muted'
@@ -1341,7 +1336,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                               }
                               case 'custom':
                                 label = 'EVENT';
-                                payload = `${kind.custom.name}: ${formatValueDebug(kind.custom.data)}`;
+                                payload = <><span>{kind.custom.name}: </span><EventValueDisplay value={kind.custom.data} customRenderers={resultRenderers} /></>;
                                 colorCls = 'text-vsc-purple';
                                 break;
                               case 'setTags':
@@ -1355,9 +1350,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
                             // Check if cursor is within this event's source span
                             const source = kind.$case === 'log' ? kind.log.source : undefined;
-                            if (kind.$case === 'log') {
-                              console.log('[DEBUG] LogEvent source:', source, 'cursorOffset:', cursorOffset);
-                            }
                             const isCursorMatch = cursorOffset != null && source != null &&
                               cursorOffset > source.startOffset && cursorOffset <= source.endOffset;
 
@@ -1408,7 +1400,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                     {run.result != null && (
                       <div className="py-1.5 pr-2.5 pl-[22px]">
                         <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">Result</div>
-                        <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                        <ResultDisplay result={run.result} customRenderers={resultRenderers} />
                       </div>
                     )}
                   </div>
@@ -1505,7 +1497,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                     )}
                     <div ref={promptContentRef}>
                       {promptPreviewResult != null ? (
-                        <ResultDisplay resultJson={promptPreviewResult} customRenderers={resultRenderers} />
+                        <ResultDisplay result={promptPreviewResult} customRenderers={resultRenderers} />
                       ) : (
                         <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
                           {previewLoading ? 'Loading prompt preview...' : 'Enter args to preview prompt'}
@@ -1513,7 +1505,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                       )}
                     </div>
                   </div>
-                  {promptPreviewResult && <PromptStats text={promptPreviewResult} />}
+                  {promptPreviewResult && <PromptStats text={stringifyResult(promptPreviewResult)} />}
                 </TabsContent>
               )}
 
@@ -1521,7 +1513,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               {canPreviewCurl && (
                 <TabsContent value="curl" className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5 mt-0">
                   {curlPreviewResult != null ? (
-                    <ResultDisplay resultJson={curlPreviewResult} customRenderers={resultRenderers} />
+                    <ResultDisplay result={curlPreviewResult} customRenderers={resultRenderers} />
                   ) : curlPreviewError ? (
                     <div className="flex items-center justify-center text-vsc-error text-xs h-full">
                       {curlPreviewError}
@@ -1649,12 +1641,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                             </div>
                             <div className="flex flex-col gap-0.5">
                               {run.runtimeEvents.map((evt, evtIdx) => {
-                                const kind = evt.event?.kind;
-                                console.log('[DEBUG] Event (history):', evtIdx, kind?.$case, kind);
+                                const kind = evt.event;
                                 if (!kind) return null;
 
                                 let label: string;
-                                let payload: string;
+                                let payload: ReactNode;
                                 let colorCls: string;
 
                                 switch (kind.$case) {
@@ -1671,7 +1662,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                   case 'log': {
                                     const lvl = kind.log.level;
                                     label = lvl;
-                                    payload = formatValueDebug(kind.log.data);
+                                    payload = <EventValueDisplay value={kind.log.data} customRenderers={resultRenderers} />;
                                     colorCls = lvl === 'error' ? 'text-vsc-red'
                                       : lvl === 'warn' ? 'text-vsc-yellow'
                                       : lvl === 'debug' ? 'text-vsc-text-muted'
@@ -1680,7 +1671,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                   }
                                   case 'custom':
                                     label = 'EVENT';
-                                    payload = `${kind.custom.name}: ${formatValueDebug(kind.custom.data)}`;
+                                    payload = <><span>{kind.custom.name}: </span><EventValueDisplay value={kind.custom.data} customRenderers={resultRenderers} /></>;
                                     colorCls = 'text-vsc-purple';
                                     break;
                                   case 'setTags':
@@ -1694,9 +1685,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
                                 // Check if cursor is within this event's source span
                                 const source = kind.$case === 'log' ? kind.log.source : undefined;
-                                if (kind.$case === 'log') {
-                                  console.log('[DEBUG] LogEvent source (history):', source, 'cursorOffset:', cursorOffset);
-                                }
                                 const isCursorMatch = cursorOffset != null && source != null &&
                                   cursorOffset > source.startOffset && cursorOffset <= source.endOffset;
 
@@ -1765,13 +1753,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                   ]}
                                   size="sm"
                                 />
-                                <CopyButton text={run.result} iconSize={11} />
+                                <CopyButton text={stringifyResult(run.result)} iconSize={11} />
                               </div>
                               {(resultModes[run.id] ?? 'parsed') === 'parsed' ? (
-                                <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                                <ResultDisplay result={run.result} customRenderers={resultRenderers} />
                               ) : (
                                 <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[400px] overflow-auto">
-                                  {run.result}
+                                  {stringifyResult(run.result)}
                                 </pre>
                               )}
                             </div>

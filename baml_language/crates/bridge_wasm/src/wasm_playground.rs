@@ -87,6 +87,7 @@ pub enum PlaygroundNotification {
     RuntimeEvent {
         /// Protobuf-encoded `RuntimeEvent` bytes (decode with `RuntimeEvent.decode()`)
         data: Vec<u8>,
+        call_id: u64,
     },
 }
 
@@ -158,8 +159,8 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                 data,
                 expand_error,
             },
-            bex_project::PlaygroundNotification::RuntimeEvent { data } => {
-                PlaygroundNotification::RuntimeEvent { data }
+            bex_project::PlaygroundNotification::RuntimeEvent { data, call_id } => {
+                PlaygroundNotification::RuntimeEvent { data, call_id }
             }
         }
     }
@@ -200,10 +201,11 @@ impl WasmEventSink {
 
 impl bex_events::EventSink for WasmEventSink {
     fn send(&self, event: bex_events::RuntimeEvent) {
-        let options = bridge_ctypes::HandleTableOptions::for_in_process();
+        let call_id = event.call_id.0;
+        let options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
         match bridge_ctypes::runtime_event_to_bytes(&event, &options) {
             Ok(data) => {
-                let notification = PlaygroundNotification::RuntimeEvent { data };
+                let notification = PlaygroundNotification::RuntimeEvent { data, call_id };
                 let callback = self.callback.inner();
                 let _ = callback.call1(&JsValue::NULL, &notification.into());
             }

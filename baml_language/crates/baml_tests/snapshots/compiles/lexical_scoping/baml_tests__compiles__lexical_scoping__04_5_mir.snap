@@ -1,0 +1,355 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.branch_locals(b: bool) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: bool // b // param
+    let _2: int // a
+    let _3: int // a
+
+    bb0: {
+        branch copy _1 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _3 = const 2_i64;
+        _0 = copy _3;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _2 = const 1_i64;
+        _0 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.capture_before_after_shadow() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x [captured]
+    let _2: () -> int throws never // g
+    let _3: int // x [captured]
+    let _4: () -> int throws never // f
+    let _5: int
+    let _6: int
+    let _7: () -> int throws never
+    let _8: int
+    let _9: () -> int throws never
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = make_closure lambda[0](copy _1);
+        _3 = const 2_i64;
+        _4 = make_closure lambda[1](copy _3);
+        _7 = copy _2;
+        _6 = call copy _7() -> [bb1];
+    }
+
+    bb1: {
+        _5 = copy _6 * const 10_i64;
+        _9 = copy _4;
+        _8 = call copy _9() -> [bb2];
+    }
+
+    bb2: {
+        _0 = copy _5 + copy _8;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(capture_before_after_shadow, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = copy capture[0];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[1]
+fn .<lambda(capture_before_after_shadow, 1)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = copy capture[0];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.declared_type_restored() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // x
+
+    bb0: {
+        _1 = const "outer";
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.for_loop_restores_outer() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+    let _2: int[]
+    let _3: int // __for_idx
+    let _4: int
+    let _5: bool
+    let _6: int
+    let _7: int // x
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = [const 2_i64, const 3_i64];
+        _3 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _4 = len(_2);
+        _5 = copy _3 < copy _4;
+        branch copy _5 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _0 = copy _1;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _6 = copy _2[_3];
+        fresh_cell(_7);
+        _7 = copy _6;
+        goto -> bb5;
+    }
+
+    bb5: {
+        _3 = copy _3 + const 1_i64;
+        goto -> bb1;
+    }
+}
+
+fn user.initializer_uses_previous() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+    let _2: int // x
+    let _3: int
+
+    bb0: {
+        _1 = const 1_i64;
+        _3 = copy _1;
+        _2 = copy _3 + const 1_i64;
+        _0 = copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.nested_lambda_capture() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x [captured]
+    let _2: () -> int throws never // outer
+    let _3: () -> int throws never
+
+    bb0: {
+        _1 = const 7_i64;
+        _2 = make_closure lambda[0](copy _1);
+        _3 = copy _2;
+        _0 = call copy _3() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(nested_lambda_capture, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: () -> int throws never // inner
+    let _2: () -> int throws never
+
+    bb0: {
+        _1 = make_closure lambda[0](copy capture[0]);
+        _2 = copy _1;
+        _0 = call copy _2() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(<lambda(nested_lambda_capture, 0)>, 1)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = copy capture[0];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.nested_outer_restored() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+    let _2: int // x
+    let _3: int // x
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const 2_i64;
+        _3 = const 3_i64;
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.outer_restored() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+
+    bb0: {
+        _1 = const 1_i64;
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.same_scope_shadow() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+
+    bb0: {
+        _1 = const 2_i64;
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.shadow_param(x: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x // param
+    let _2: int // x
+
+    bb0: {
+        _2 = copy _1 + const 1_i64;
+        _0 = copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.watch_block_cleanup() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+    let _2: int // x
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const 2_i64;
+        unwatch(_2);
+        _0 = copy _1;
+        unwatch(_1);
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.while_body_restores_outer() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+    let _2: bool // once
+    let _3: bool
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = copy _2;
+        branch copy _3 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _0 = copy _1;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _2 = const false;
+        goto -> bb1;
+    }
+}

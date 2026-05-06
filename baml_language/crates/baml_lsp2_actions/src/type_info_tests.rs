@@ -63,3 +63,22 @@ fn function_hover_shows_explicit_throws_surface() {
         "expected explicit throws surface in hover, got:\n{markdown}"
     );
 }
+
+#[test]
+fn local_var_hover_for_for_loop_binding_uses_iterable_item_type() {
+    let test = CursorTest::new(
+        r#"function sum() -> int {
+  let total = 0
+  for (let <[CURSOR]x in [1, 2]) {
+    total += x
+  }
+  return total
+}"#,
+    );
+
+    let markdown = type_at(&test.db, test.cursor.file, test.cursor.offset)
+        .expect("hover info")
+        .to_hover_markdown();
+
+    assert_eq!(markdown, "```baml\nx: int\n```");
+}

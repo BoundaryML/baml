@@ -10,7 +10,10 @@
 
 use baml_base::SourceFile;
 use baml_compiler_syntax::SyntaxKind;
-use baml_compiler2_hir::contributions::DefinitionKind;
+use baml_compiler2_hir::{
+    contributions::{Definition, DefinitionKind},
+    scope::{FileScopeId, ScopeKind},
+};
 use serde::Serialize;
 use text_size::TextRange;
 
@@ -54,6 +57,12 @@ pub struct SymbolDescription {
     pub dependencies: Vec<DepRef>,
     /// Sites where this symbol is used.
     pub references: Vec<RefSite>,
+    /// Instance methods (first param `self`) for classes.
+    pub instance_methods: Vec<DepRef>,
+    /// Static methods (no `self` param) for classes.
+    pub static_methods: Vec<DepRef>,
+    /// The containing class/enum for members.
+    pub container: Option<DepRef>,
 }
 
 /// A symbol referenced in the signature of another symbol.
@@ -128,6 +137,78 @@ pub fn describe(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolDesc
     describe_locals(db, files, name)
 }
 
+/// Describe a symbol given a known `Definition` (from `PackageItems` lookup).
+///
+/// Bypasses substring search — goes directly from `Definition` to `SymbolDescription`
+/// using the same `describe_top_level()` internals.
+pub fn describe_by_definition(
+    db: &dyn Db,
+    files: &[SourceFile],
+    definition: Definition<'_>,
+) -> Option<SymbolDescription> {
+    let (file, name_span) = crate::utils::definition_span(db, definition)?;
+
+    // Extract the name text from the source.
+    let name = {
+        let text = file.text(db);
+        let start: usize = name_span.start().into();
+        let end: usize = name_span.end().into();
+        text[start..end].to_string()
+    };
+
+    let sym = SymbolInfo {
+        name,
+        kind: definition.kind(),
+        file,
+        name_span,
+        container_name: None,
+    };
+
+    describe_top_level(db, files, &sym)
+}
+
+/// Describe a member (field, variant) within a known parent item.
+///
+/// Searches the parent item's children in the file outline for a member
+/// matching `member_name`, then delegates to `describe_member()`.
+pub fn describe_item_member(
+    db: &dyn Db,
+    files: &[SourceFile],
+    parent_def: Definition<'_>,
+    member_name: &str,
+) -> Option<SymbolDescription> {
+    let (parent_file, parent_name_span) = crate::utils::definition_span(db, parent_def)?;
+
+    // Get the parent's name from the source text.
+    let parent_name = {
+        let text = parent_file.text(db);
+        let start: usize = parent_name_span.start().into();
+        let end: usize = parent_name_span.end().into();
+        text[start..end].to_string()
+    };
+
+    // Search the file outline for the parent's children.
+    let outline = crate::outline::file_outline(db, parent_file);
+    for item in outline {
+        if item.name == parent_name {
+            for child in &item.children {
+                if child.name == member_name {
+                    let sym = SymbolInfo {
+                        name: child.name.clone(),
+                        kind: child.kind,
+                        file: parent_file,
+                        name_span: child.name_span,
+                        container_name: Some(parent_name),
+                    };
+                    return describe_member(db, files, &sym);
+                }
+            }
+        }
+    }
+
+    None
+}
+
 /// Build a full `SymbolDescription` for a single `SymbolInfo`.
 fn describe_symbol(
     db: &dyn Db,
@@ -182,6 +263,9 @@ fn describe_top_level(
         resolved_type,
         dependencies,
         references,
+        instance_methods: Vec::new(),
+        static_methods: Vec::new(),
+        container: None,
     })
 }
 
@@ -237,6 +321,13 @@ fn describe_member(
     // References to this field/variant.
     let references = find_references(db, files, file, sym.name_span);
 
+    // Move the container dependency from dependencies to the container field.
+    let container = if !dependencies.is_empty() {
+        Some(dependencies.remove(0))
+    } else {
+        None
+    };
+
     Some(SymbolDescription {
         name: sym.name.clone(),
         kind: sym.kind,
@@ -248,8 +339,11 @@ fn describe_member(
         full_body,
         docstring,
         resolved_type,
-        dependencies,
+        dependencies: Vec::new(),
         references,
+        instance_methods: Vec::new(),
+        static_methods: Vec::new(),
+        container,
     })
 }
 
@@ -326,6 +420,9 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     resolved_type: Some(type_str),
                     dependencies: vec![make_function_dep(db, file, func_local_id, &func_name)],
                     references: param_refs,
+                    instance_methods: Vec::new(),
+                    static_methods: Vec::new(),
+                    container: None,
                 });
             }
 
@@ -353,15 +450,22 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
             for scope_idx in scope_indices {
                 let bindings = &index.scope_bindings[scope_idx];
 
-                for (binding_name, def_site, binding_span) in &bindings.bindings {
-                    if binding_name.as_str() != name {
+                for binding in &bindings.bindings {
+                    if binding.name.as_str() != name {
                         continue;
                     }
 
-                    // Use the binding's own scope for type inference — this
-                    // handles lambdas that get separate inference, while
-                    // block-scoped lets fall back to the function's inference.
-                    let scope_id = index.scope_ids[scope_idx];
+                    // Use the body-owning scope for type inference and StmtId
+                    // lookup. StmtId/PatId are local to an ExprBody, so
+                    // lambda descendants must resolve against the lambda body,
+                    // while ordinary block descendants resolve against the
+                    // enclosing function body.
+                    let def_site = binding.site;
+                    let binding_span = binding.name_range;
+                    let binding_scope =
+                        FileScopeId::new(u32::try_from(scope_idx).expect("scope id overflow"));
+                    let owner_scope = body_owner_scope(index, binding_scope);
+                    let scope_id = index.scope_ids[owner_scope.index() as usize];
                     let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
 
                     // Parameters are already handled by the sig.params pass above;
@@ -375,28 +479,15 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
 
                     let type_str = match def_site {
                         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
-                            let body = baml_compiler2_hir::body::function_body(db, func_loc);
-                            if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) =
-                                body.as_ref()
-                            {
-                                if let baml_compiler2_ast::Stmt::Let { pattern, .. } =
-                                    &expr_body.stmts[*stmt_id]
-                                {
-                                    inference
-                                        .binding_type(*pattern)
-                                        .map(crate::utils::display_ty)
-                                        .unwrap_or_else(|| "unknown".to_string())
-                                } else {
-                                    "unknown".to_string()
-                                }
-                            } else {
-                                "unknown".to_string()
-                            }
+                            pattern_from_owner_body(db, func_loc, index, owner_scope, stmt_id)
+                                .and_then(|pattern| inference.binding_type(pattern))
+                                .map(crate::utils::display_ty)
+                                .unwrap_or_else(|| "unknown".to_string())
                         }
                         baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(
                             pat_id,
                         ) => inference
-                            .binding_type(*pat_id)
+                            .binding_type(pat_id)
                             .map(crate::utils::display_ty)
                             .unwrap_or_else(|| "unknown".to_string()),
                         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => {
@@ -408,7 +499,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
 
                     let binding_refs = usages_at(db, file, binding_span.start())
                         .into_iter()
-                        .filter(|loc| !(loc.file == file && loc.range == *binding_span))
+                        .filter(|loc| !(loc.file == file && loc.range == binding_span))
                         .map(|loc| {
                             let text = loc.file.text(db);
                             let (line_number, line_text) = line_at_offset(text, loc.range.start());
@@ -433,7 +524,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         kind: DefinitionKind::Binding,
                         file_path: file_path_string(db, file),
                         file,
-                        name_span: *binding_span,
+                        name_span: binding_span,
                         item_range: func.span,
                         shape: format!("let {name}: {type_str}"),
                         full_body: func_body,
@@ -441,6 +532,9 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         resolved_type: Some(type_str),
                         dependencies: vec![make_function_dep(db, file, func_local_id, &func_name)],
                         references: binding_refs,
+                        instance_methods: Vec::new(),
+                        static_methods: Vec::new(),
+                        container: None,
                     });
                 }
             }
@@ -448,6 +542,118 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
     }
 
     results
+}
+
+/// Return the nearest scope whose `ExprBody` owns statement/pattern arena IDs.
+fn body_owner_scope(
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+    mut scope_id: FileScopeId,
+) -> FileScopeId {
+    loop {
+        let scope = &index.scopes[scope_id.index() as usize];
+        if matches!(
+            scope.kind,
+            ScopeKind::Function | ScopeKind::Let | ScopeKind::Lambda
+        ) {
+            return scope_id;
+        }
+
+        let Some(parent) = scope.parent else {
+            return scope_id;
+        };
+        scope_id = parent;
+    }
+}
+
+/// Extract the binding pattern for a statement from the body that owns it.
+///
+/// `StmtId` is arena-local to an `ExprBody`. For ordinary function/block scopes,
+/// that owner is the enclosing function body. For lambda scopes, including block
+/// descendants inside lambdas, the owner is the matched lambda body.
+fn pattern_from_owner_body(
+    db: &dyn Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+    owner_scope: FileScopeId,
+    stmt_id: baml_compiler2_ast::StmtId,
+) -> Option<baml_compiler2_ast::PatId> {
+    let body = baml_compiler2_hir::body::function_body(db, func_loc);
+    let baml_compiler2_hir::body::FunctionBody::Expr(top_body) = body.as_ref() else {
+        return None;
+    };
+
+    match index.scopes[owner_scope.index() as usize].kind {
+        ScopeKind::Lambda => {
+            let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
+            let mut lambda_ranges = Vec::new();
+
+            for ancestor_id in index.ancestor_scopes(owner_scope) {
+                let scope = &index.scopes[ancestor_id.index() as usize];
+                match scope.kind {
+                    ScopeKind::Lambda => lambda_ranges.push(scope.range),
+                    ScopeKind::Function => break,
+                    _ => {}
+                }
+            }
+
+            lambda_ranges.reverse();
+            let owner_body = descend_into_lambdas(top_body, &source_map, &lambda_ranges)?;
+            extract_pat_from_stmt(owner_body, stmt_id)
+        }
+        _ => extract_pat_from_stmt(top_body, stmt_id),
+    }
+}
+
+/// Extract the binding pattern from a let/for statement in a specific body.
+fn extract_pat_from_stmt(
+    expr_body: &baml_compiler2_ast::ExprBody,
+    stmt_id: baml_compiler2_ast::StmtId,
+) -> Option<baml_compiler2_ast::PatId> {
+    let stmt = expr_body
+        .stmts
+        .iter()
+        .find_map(|(id, stmt)| (id == stmt_id).then_some(stmt))?;
+
+    match stmt {
+        baml_compiler2_ast::Stmt::Let { pattern, .. }
+        | baml_compiler2_ast::Stmt::For {
+            binding: pattern, ..
+        } => Some(*pattern),
+        _ => None,
+    }
+}
+
+/// Descend through nested lambda bodies using scope ranges as stable anchors.
+fn descend_into_lambdas<'a>(
+    body: &'a baml_compiler2_ast::ExprBody,
+    source_map: &baml_compiler2_ast::AstSourceMap,
+    lambda_ranges: &[TextRange],
+) -> Option<&'a baml_compiler2_ast::ExprBody> {
+    if lambda_ranges.is_empty() {
+        return Some(body);
+    }
+
+    let target_range = lambda_ranges[0];
+    for (expr_id, expr) in body.exprs.iter() {
+        if let baml_compiler2_ast::Expr::Lambda(func_def) = expr {
+            let expr_span = source_map.expr_span(expr_id);
+            if expr_span == target_range {
+                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
+                    ref nested_body,
+                    ref nested_source_map,
+                )) = func_def.body
+                {
+                    return descend_into_lambdas(
+                        nested_body,
+                        nested_source_map,
+                        &lambda_ranges[1..],
+                    );
+                }
+            }
+        }
+    }
+
+    None
 }
 
 /// Build a `DepRef` pointing to a function.

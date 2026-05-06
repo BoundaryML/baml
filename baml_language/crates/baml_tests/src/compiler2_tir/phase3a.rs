@@ -410,7 +410,7 @@ fn match_catch_all() {
         "test.baml",
         r#"function f(x: int) -> int {
   return match (x) {
-    y => y + 1
+    let y => y + 1
   };
 }"#,
     );

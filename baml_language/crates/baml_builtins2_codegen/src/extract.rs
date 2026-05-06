@@ -950,7 +950,7 @@ mod tests {
             .iter()
             .find(|b| b.path == "baml.String.split")
             .expect("missing String.split");
-        assert_eq!(string_split.vm_usage, VmUsage::MutRef);
+        assert_eq!(string_split.vm_usage, VmUsage::None);
     }
 
     #[test]

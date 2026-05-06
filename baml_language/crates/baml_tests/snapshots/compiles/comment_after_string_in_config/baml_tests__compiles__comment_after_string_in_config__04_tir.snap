@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.OpenRouterMistralSmall3_1_24b$new() -> ? throws never {
+  baml.llm.PrimitiveClient { name: "OpenRouterMistral...", provider: "openai-generic", options: baml.llm.PrimitiveClientOptions { model: "mistralai/mistral...", base_url: "https://openroute...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENROUTER_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "temperature": 0.1 } } } : baml.llm.PrimitiveClient
+}

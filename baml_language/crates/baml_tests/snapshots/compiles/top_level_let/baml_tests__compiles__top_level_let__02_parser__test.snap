@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 22786
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  LET_STMT
+    PATTERN
+      BINDING_PATTERN "let x"
+        KW_LET "let"
+        WORD "x"
+    EQUALS "="
+    INTEGER_LITERAL "1"
+    SEMICOLON ";"
+
+=== ERRORS ===
+None

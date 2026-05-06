@@ -42,6 +42,11 @@ jobs:
           # Share cache across similar Linux jobs for better hit rates
           shared-key: "linux-cargo-32gb"
 
+      - name: "Setup Python 3.10+"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
       - name: "Install cargo insta"
         uses: taiki-e/install-action@v2
         with:
@@ -60,8 +65,26 @@ jobs:
         working-directory: baml_language
 
       - name: "Run snapshot tests with insta"
-        run: cargo insta test --workspace --all-features --unreferenced reject --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended
+        run: cargo insta test --workspace --all-features --unreferenced reject
         working-directory: baml_language
+
+      - name: "Run language test suites"
+        run: |
+          found=0
+          for dir in baml_language/languages/*/; do
+            lang=$(basename "$dir")
+            if [ -f "$dir/test.sh" ]; then
+              echo "==> Running $lang test suite"
+              bash "$dir/test.sh"
+              found=$((found + 1))
+            else
+              echo "::error::languages/$lang/ exists but has no test.sh"
+              exit 1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::warning::No language test suites found in languages/*/"
+          fi
 
       - name: "Check documentation"
         run: cargo doc --all --no-deps
@@ -99,6 +122,11 @@ jobs:
           # Share cache across similar macOS jobs for better hit rates
           shared-key: "macos-cargo"
 
+      - name: "Setup Python 3.10+"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
@@ -112,6 +140,24 @@ jobs:
           cargo nextest run --all-features
           cargo test --all-features --doc
         working-directory: baml_language
+
+      - name: "Run language test suites"
+        run: |
+          found=0
+          for dir in baml_language/languages/*/; do
+            lang=$(basename "$dir")
+            if [ -f "$dir/test.sh" ]; then
+              echo "==> Running $lang test suite"
+              bash "$dir/test.sh"
+              found=$((found + 1))
+            else
+              echo "::error::languages/$lang/ exists but has no test.sh"
+              exit 1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::warning::No language test suites found in languages/*/"
+          fi
 
   cargo-test-windows:
     name: "cargo test (windows)"
@@ -136,6 +182,11 @@ jobs:
           # Share cache across similar Windows jobs for better hit rates
           shared-key: "windows-cargo"
 
+      - name: "Setup Python 3.10+"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
@@ -150,6 +201,24 @@ jobs:
           cargo nextest run --all-features
           cargo test --all-features --doc
         working-directory: baml_language
+
+      - name: "Run language test suites"
+        run: |
+          found=0
+          for dir in baml_language/languages/*/; do
+            lang=$(basename "$dir")
+            if [ -f "$dir/test.sh" ]; then
+              echo "==> Running $lang test suite"
+              bash "$dir/test.sh"
+              found=$((found + 1))
+            else
+              echo "::error::languages/$lang/ exists but has no test.sh"
+              exit 1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::warning::No language test suites found in languages/*/"
+          fi
 
   cargo-test-wasm:
     name: "cargo test (wasm)"
@@ -492,6 +561,12 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 30
+    env:
+      # Disable Python + pipx tools: mise 2025.12.12 downloads a broken
+      # freethreaded Python build that's missing a lib/ directory.
+      # Rig test scripts use system Python via uv (the standalone uv binary
+      # mise installs handles its own Python via `uv run`).
+      MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
       - uses: actions/checkout@v4
         with:
@@ -513,10 +588,17 @@ jobs:
         with:
           tool: cargo-insta
 
+      - name: "Install mise"
+        uses: jdx/mise-action@v2
+        # Pinning to old version because newer versions time out on the npm backend,
+        # see https://github.com/jdx/mise/discussions/7630
+        with:
+          version: 2025.12.12
+
       - name: "Run snapshot tests"
         run: |
-          cargo insta test --workspace --all-features --unreferenced=reject --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended
-          cargo insta test --workspace --all-features --review --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended
+          cargo insta test --workspace --all-features --unreferenced=reject
+          cargo insta test --workspace --all-features --review
         working-directory: baml_language
 
       - name: "Check for snapshot changes"

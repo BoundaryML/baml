@@ -10,7 +10,7 @@ impl BamlClassMap for PackageBamlImpl {
         map.len() as i64
     }
 
-    fn has(vm: &mut BexVm, map: &IndexMap<String, Value>, key: &Value) -> bool {
+    fn has(vm: &BexVm, map: &IndexMap<String, Value>, key: &Value) -> bool {
         if let Ok(k) = vm.as_string(key) {
             map.contains_key(k.as_str())
         } else {
@@ -45,7 +45,7 @@ impl BamlClassMap for PackageBamlImpl {
         panic!("Should be called via __glue_set");
     }
 
-    fn get(vm: &mut BexVm, map: &IndexMap<String, Value>, key: &Value) -> Option<Value> {
+    fn get(vm: &BexVm, map: &IndexMap<String, Value>, key: &Value) -> Option<Value> {
         if let Ok(k) = vm.as_string(key) {
             map.get(k.as_str()).copied()
         } else {

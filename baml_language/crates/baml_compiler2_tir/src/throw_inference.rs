@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, TypeExpr};
+use baml_compiler2_ast::{Expr, ExprBody, Literal};
 use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems, package_dependencies},
@@ -355,25 +355,9 @@ fn throw_fact_from_expr<'db>(
                 attr: TyAttr::default(),
             }),
         Expr::Object {
-            type_name: Some(name),
+            type_name: Some(path),
             ..
-        } => {
-            if let Some(def) = pkg_items.lookup_type(ns_context, name) {
-                match def {
-                    Definition::Class(_) => {
-                        Ty::Class(qualify_def(db, def, name), vec![], TyAttr::default())
-                    }
-                    Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
-                    _ => Ty::Unknown {
-                        attr: TyAttr::default(),
-                    },
-                }
-            } else {
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
-            }
-        }
+        } => resolve_path_to_ty(db, pkg_items, ns_context, path.segments()),
         _ => Ty::Unknown {
             attr: TyAttr::default(),
         },
@@ -435,6 +419,23 @@ fn resolve_path_to_ty<'db>(
     } else {
         pkg_items.lookup_type(seg_ns, name)
     };
+    // Cross-package fallback for qualified paths whose first segment names
+    // either the literal `root` package (own-package alias) or another
+    // package the resolver knows about. Mirrors `lower_type_expr_in_ns` so
+    // throw-set type recovery works for `root.http.Response { ... }` literals
+    // and `baml.errors.DevOther` references inside throw expressions.
+    let def = def.or_else(|| {
+        if segments.len() < 2 {
+            return None;
+        }
+        if segments[0].as_str() == "root" {
+            pkg_items.lookup_type(&segments[1..segments.len() - 1], name)
+        } else {
+            let pkg_id = PackageId::new(db, segments[0].clone());
+            let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+            pkg.lookup_type(&segments[1..segments.len() - 1], name)
+        }
+    });
     if let Some(def) = def {
         return match def {
             Definition::Class(_) => {
@@ -460,11 +461,8 @@ fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
     for (_, expr) in body.exprs.iter() {
         if let Expr::Catch { clauses, .. } = expr {
             for clause in clauses {
-                match &body.patterns[clause.binding] {
-                    Pattern::Binding(name) | Pattern::TypedBinding { name, .. } => {
-                        names.insert(name.as_str());
-                    }
-                    _ => {}
+                if let Some(name) = body.patterns[clause.binding].binding_name(&body.patterns) {
+                    names.insert(name.as_str());
                 }
             }
         }
@@ -533,12 +531,18 @@ fn lookup_dep_throw_set<'a>(
     None
 }
 
-pub fn is_banned_catch_binding_type(ty: &TypeExpr) -> Option<&'static str> {
-    match ty {
-        TypeExpr::BuiltinUnknown { .. } => Some("unknown"),
-        TypeExpr::Path { segments, .. } if segments.len() == 1 && segments[0].as_str() == "any" => {
-            Some("any")
-        }
-        _ => None,
+/// Reject catch-everything binding types — `unknown` and unresolved `any`.
+///
+/// Operates on the resolved `Ty` produced by TIR's `pattern_type`. Both
+/// `unknown` (an explicit `unknown` type) and `any` (an unresolved path that
+/// the user typed expecting it to mean "anything") collapse to
+/// `Ty::BuiltinUnknown` / `Ty::Unknown` after resolution. We can't
+/// distinguish between them at this point, so the diagnostic just says
+/// "unknown".
+pub fn is_banned_catch_binding_type(ty: &Ty) -> Option<&'static str> {
+    if matches!(ty, Ty::BuiltinUnknown { .. } | Ty::Unknown { .. }) {
+        Some("unknown")
+    } else {
+        None
     }
 }

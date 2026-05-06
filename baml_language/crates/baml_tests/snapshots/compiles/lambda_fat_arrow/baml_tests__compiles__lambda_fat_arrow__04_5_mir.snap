@@ -1,0 +1,275 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.test_annotated() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int) -> int throws never // double
+    let _2: (int) -> int throws never
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = copy _1;
+        _0 = call copy _2(const 21_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_annotated, 0)>(x: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1 * const 2_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_generic() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (void) -> void throws never // identity
+    let _2: (void) -> void throws never
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = copy _1;
+        _0 = call copy _2(const 42_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_generic, 0)>(x: void) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void // x // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_in_match(x: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x // param
+    let _2: (int) -> int throws never // inc
+    let _3: (int) -> int throws never
+
+    bb0: {
+        switch copy _1 [0: bb2, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const 0_i64;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _2 = make_closure lambda[0]();
+        _3 = copy _2;
+        _0 = call copy _3(const 10_i64) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_in_match, 0)>(y: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // y // param
+
+    bb0: {
+        _0 = copy _1 + const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_inferred() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int) -> int throws never // double
+    let _2: (int) -> int throws never
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = copy _1;
+        _0 = call copy _2(const 21_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_inferred, 0)>(x: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1 * const 2_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_mixed() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int) -> int throws never // a
+    let _2: (int) -> int throws never // b
+    let _3: int
+    let _4: (int) -> int throws never
+    let _5: int
+    let _6: (int) -> int throws never
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = make_closure lambda[1]();
+        _4 = copy _1;
+        _3 = call copy _4(const 0_i64) -> [bb1];
+    }
+
+    bb1: {
+        _6 = copy _2;
+        _5 = call copy _6(const 0_i64) -> [bb2];
+    }
+
+    bb2: {
+        _0 = copy _3 + copy _5;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_mixed, 0)>(x: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1 + const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[1]
+fn .<lambda(test_mixed, 1)>(x: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1 + const 2_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_multi_param() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int, int) -> int throws never // add
+    let _2: (int, int) -> int throws never
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = copy _1;
+        _0 = call copy _2(const 20_i64, const 22_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_multi_param, 0)>(a: int, b: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // a // param
+    let _2: int // b // param
+
+    bb0: {
+        _0 = copy _1 + copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_zero_param() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: () -> int throws never // constant
+    let _2: () -> int throws never
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = copy _1;
+        _0 = call copy _2() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_zero_param, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

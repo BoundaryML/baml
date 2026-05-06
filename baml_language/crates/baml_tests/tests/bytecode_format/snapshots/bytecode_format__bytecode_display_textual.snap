@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
-assertion_line: 41
 ---
 function assert.contains(haystack: string, needle: string) -> null {
     load_var haystack
@@ -121,7 +120,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
   L3:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L0
 
@@ -131,7 +130,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
 }
 
 function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
-    alloc_instance TestCollector
+    alloc_instance testing.TestCollector
     load_var prefix
     init_field .prefix
     alloc_array 0
@@ -214,7 +213,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
   L7:
     load_var self
     load_field .tests
-    alloc_instance TestRegistration
+    alloc_instance testing.TestRegistration
     load_var final_name
     init_field .name
     load_var body
@@ -249,13 +248,13 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     pop_jump_if_false L11
     load_var count
     load_const 1
-    bin_op +
+    add_int
     store_var count
 
   L11:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L3
 }
@@ -333,7 +332,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
   L7:
     load_var self
     load_field .testsets
-    alloc_instance TestSetRegistration
+    alloc_instance testing.TestSetRegistration
     load_var final_name
     init_field .name
     load_var collector
@@ -368,13 +367,13 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     pop_jump_if_false L11
     load_var count
     load_const 1
-    bin_op +
+    add_int
     store_var count
 
   L11:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L3
 }
@@ -438,7 +437,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
   L5:
     load_var __for_idx_1
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx_1
     jump L2
 
@@ -463,14 +462,14 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
   L8:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L0
 
   L9:
     call baml.sys.now_ms
     store_var start
-    alloc_instance TestCollector
+    alloc_instance testing.TestCollector
     load_var name
     init_field .prefix
     alloc_array 0
@@ -488,7 +487,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     load_var self
     load_field .expansions
     load_var name
-    alloc_instance TestRegistry
+    alloc_instance testing.TestRegistry
     load_var sub_collector
     init_field .collector
     alloc_map 0
@@ -507,7 +506,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
 }
 
 function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
-    alloc_instance TestRegistry
+    alloc_instance testing.TestRegistry
     load_var collector
     init_field .collector
     alloc_map 0
@@ -576,7 +575,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
   L5:
     load_var __for_idx_1
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx_1
     jump L2
 
@@ -601,7 +600,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
   L8:
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L0
 
@@ -676,7 +675,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     cmp_op ==
     pop_jump_if_false L7
     load_var items
-    alloc_instance SerializedTest
+    alloc_instance testing.SerializedTest
     load_const "lazyTestSet"
     init_field .type
     load_var ts
@@ -696,7 +695,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     call testing.TestRegistry.serialize
     store_var _26
     load_var items
-    alloc_instance SerializedTestSet
+    alloc_instance testing.SerializedTestSet
     load_var _25
     init_field .name
     load_var _26
@@ -710,13 +709,13 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
   L7:
     load_var __for_idx_1
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx_1
     jump L2
 
   L8:
     load_var items
-    alloc_instance SerializedTest
+    alloc_instance testing.SerializedTest
     load_const "test"
     init_field .type
     load_var _3
@@ -728,7 +727,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     pop 1
     load_var __for_idx
     load_const 1
-    bin_op +
+    add_int
     store_var __for_idx
     jump L0
 }
@@ -738,7 +737,8 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
     make_cell
     store_var ?1
     load_var body
-    make_closure .<lambda(run_test, 0)>, 1
+    load_const ?
+    make_closure .<lambda(run_test, 0)>
     store_var base_run
     load_var runner
     load_const null
@@ -800,7 +800,7 @@ function user.User.promote(self: null, bonus: int) -> Report {
     load_var bonus
     call user.score
     store_var base
-    alloc_instance Report
+    alloc_instance user.Report
     load_var base
     load_field .score
     load_var bonus
@@ -946,7 +946,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     load_const 2
     bin_op *
     load_var role_mult
-    bin_op +
+    add_int
     store_var base
     load_var base
     load_var role_mult
@@ -966,7 +966,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
   L15:
     load_var capped
     load_var role_mult
-    bin_op +
+    add_int
     store_var total
     load_var total
     load_var threshold
@@ -995,7 +995,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     load_const 0
     load_var total
     store_array_element
-    alloc_instance Report
+    alloc_instance user.Report
     load_var scores
     load_const 0
     load_array_element

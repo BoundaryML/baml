@@ -25,7 +25,7 @@ pub(crate) mod support {
     use std::fmt::Write;
 
     use baml_compiler2_ast::{
-        CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Pattern, Stmt, StmtId, TypeExpr,
+        CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Stmt, StmtId,
     };
     use baml_compiler2_hir::{
         body::FunctionBody, contributions::Definition, loc::FunctionLoc, scope::ScopeKind,
@@ -41,109 +41,36 @@ pub(crate) mod support {
 
     // ── Rendering helpers ────────────────────────────────────────────────────
 
-    fn type_expr_to_string(ty: &TypeExpr) -> String {
-        fn type_expr_needs_postfix_parens(ty: &TypeExpr) -> bool {
-            matches!(ty, TypeExpr::Union { .. } | TypeExpr::Function { .. })
-        }
-
-        fn type_expr_as_postfix_base(ty: &TypeExpr) -> String {
-            let rendered = type_expr_to_string(ty);
-            if type_expr_needs_postfix_parens(ty) {
-                format!("({rendered})")
-            } else {
-                rendered
-            }
-        }
-
-        fn type_expr_as_function_result(ty: &TypeExpr) -> String {
-            let rendered = type_expr_to_string(ty);
-            if matches!(ty, TypeExpr::Function { .. }) {
-                format!("({rendered})")
-            } else {
-                rendered
-            }
-        }
-
-        match ty {
-            TypeExpr::Path { segments, .. } => segments
-                .iter()
-                .map(|n| n.as_str())
-                .collect::<Vec<_>>()
-                .join("."),
-            TypeExpr::Int { .. } => "int".into(),
-            TypeExpr::Float { .. } => "float".into(),
-            TypeExpr::String { .. } => "string".into(),
-            TypeExpr::Bool { .. } => "bool".into(),
-            TypeExpr::Null { .. } => "null".into(),
-            TypeExpr::Never { .. } => "never".into(),
-            TypeExpr::Void { .. } => "void".into(),
-            TypeExpr::Uint8Array { .. } => "uint8array".into(),
-            TypeExpr::Media { kind: k, .. } => format!("{:?}", k).to_lowercase(),
-            TypeExpr::Optional { inner, .. } => format!("{}?", type_expr_as_postfix_base(inner)),
-            TypeExpr::List { inner, .. } => format!("{}[]", type_expr_as_postfix_base(inner)),
-            TypeExpr::Map { key, value, .. } => format!(
-                "map<{}, {}>",
-                type_expr_to_string(key),
-                type_expr_to_string(value)
-            ),
-            TypeExpr::Union {
-                variants: members, ..
-            } => members
-                .iter()
-                .map(type_expr_to_string)
-                .collect::<Vec<_>>()
-                .join(" | "),
-            TypeExpr::Literal { value: lit, .. } => lit.to_string(),
-            TypeExpr::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => {
-                let ps: Vec<String> = params
-                    .iter()
-                    .map(|p| {
-                        p.name
-                            .as_ref()
-                            .map(|n| format!("{}: {}", n.as_str(), type_expr_to_string(&p.ty)))
-                            .unwrap_or_else(|| type_expr_to_string(&p.ty))
-                    })
-                    .collect();
-                let throws = throws
-                    .as_deref()
-                    .map(type_expr_to_string)
-                    .map(|throws| format!(" throws {throws}"))
-                    .unwrap_or_default();
-                format!(
-                    "({}) -> {}{}",
-                    ps.join(", "),
-                    type_expr_as_function_result(ret),
-                    throws
-                )
-            }
-            TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
-            TypeExpr::Type { .. } => "type".into(),
-            TypeExpr::Rust { .. } => "$rust_type".into(),
-            TypeExpr::Error { .. } => "error".into(),
-            TypeExpr::Unknown { .. } => "?".into(),
-        }
-    }
-
     fn pat_desc(pat_id: PatId, body: &ExprBody) -> String {
+        use baml_compiler2_ast::Pattern;
         let pat = &body.patterns[pat_id];
         match pat {
-            Pattern::Binding(n) => n.to_string(),
-            Pattern::TypedBinding { name, ty } => {
-                format!("{name}: {}", type_expr_to_string(ty))
+            Pattern::Wildcard => "_".to_string(),
+            Pattern::Bind { name } => name.to_string(),
+            Pattern::Class { class, fields } => {
+                let class_path = class
+                    .iter()
+                    .map(|n| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(".");
+                let fs = fields
+                    .iter()
+                    .map(|f| format!("{}: {}", f.field, pat_desc(f.pat, body)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{class_path} {{ {fs} }}")
             }
-            Pattern::Literal(lit) => lit.to_string(),
-            Pattern::Null => "null".into(),
-            Pattern::EnumVariant { enum_name, variant } => format!("{enum_name}.{variant}"),
-            Pattern::Union(pats) => pats
+            Pattern::Type(ty) => ty.to_string(),
+            Pattern::Or(pats) => pats
                 .iter()
                 .map(|p| pat_desc(*p, body))
                 .collect::<Vec<_>>()
                 .join(" | "),
+            Pattern::Chain(pats) => pats
+                .iter()
+                .map(|p| pat_desc(*p, body))
+                .collect::<Vec<_>>()
+                .join(": "),
         }
     }
 
@@ -238,7 +165,10 @@ pub(crate) mod support {
             Expr::Object {
                 type_name, fields, ..
             } => {
-                let tn = type_name.as_ref().map(|n| n.as_str()).unwrap_or("_");
+                let tn = type_name
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "_".to_string());
                 let field_strs: Vec<String> = fields
                     .iter()
                     .map(|(name, val)| format!("{name}: {}", expr_desc(*val, body)))
@@ -290,7 +220,7 @@ pub(crate) mod support {
             .iter()
             .map(|p| {
                 if let Some(ref te) = p.type_expr {
-                    format!("{}: {}", p.name, type_expr_to_string(&te.expr))
+                    format!("{}: {}", p.name, te.expr)
                 } else {
                     p.name.to_string()
                 }
@@ -299,12 +229,12 @@ pub(crate) mod support {
         let ret = func_def
             .return_type
             .as_ref()
-            .map(|te| format!(" {}", type_expr_to_string(&te.expr)))
+            .map(|te| format!(" {}", te.expr))
             .unwrap_or_default();
         let throws = func_def
             .throws
             .as_ref()
-            .map(|te| format!(" throws {}", type_expr_to_string(&te.expr)))
+            .map(|te| format!(" throws {}", te.expr))
             .unwrap_or_default();
         let generics = if func_def.generic_params.is_empty() {
             String::new()
@@ -332,7 +262,7 @@ pub(crate) mod support {
         local_type_names: &std::collections::HashSet<&str>,
     ) -> String {
         let qualify = |te: &baml_compiler2_ast::TypeExpr| -> String {
-            let raw = type_expr_to_string(te);
+            let raw = te.to_string();
             if local_type_names.contains(raw.as_str()) {
                 format!("{prefix}{raw}")
             } else {
@@ -737,13 +667,7 @@ pub(crate) mod support {
                 initializer,
                 ..
             } => {
-                let pat_name = match &body.patterns[*pattern] {
-                    Pattern::Binding(n) => n.to_string(),
-                    Pattern::TypedBinding { name, ty } => {
-                        format!("{name}: {}", type_expr_to_string(ty))
-                    }
-                    other => format!("{other:?}"),
-                };
+                let pat_name = pat_desc(*pattern, body);
                 if let Some(init) = initializer {
                     let init_ty = expr_ty(inference, *init);
                     let binding_ty = inference.binding_type(*pattern).map(|t| t.to_string());
@@ -802,11 +726,7 @@ pub(crate) mod support {
                 collection,
                 body: for_body,
             } => {
-                let bind_name = match &body.patterns[*binding] {
-                    Pattern::Binding(n) => n.to_string(),
-                    Pattern::TypedBinding { name, .. } => name.to_string(),
-                    other => format!("{other:?}"),
-                };
+                let bind_name = pat_desc(*binding, body);
                 let coll_desc = expr_desc(*collection, body);
                 writeln!(output, "{pad}for {bind_name} in {coll_desc}").ok();
                 render_expr(*for_body, body, inference, indent + 2, output);
@@ -1126,14 +1046,7 @@ pub(crate) mod support {
             }
 
             // Collect expression types for this scope — skip if none
-            let mut has_expr_types = false;
-            for (_expr_id, owner_scope) in &index.expr_scopes {
-                if owner_scope.index() as usize == i {
-                    has_expr_types = true;
-                    break;
-                }
-            }
-            if !has_expr_types {
+            if inference.iter_expressions().next().is_none() {
                 continue;
             }
 
@@ -1171,7 +1084,7 @@ pub(crate) mod support {
 
     /// Render a file's HIR2 (compiler2 item tree) as readable text.
     pub fn render_hir2(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal, Pattern};
+        use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal};
         use baml_compiler2_hir::{
             file_item_tree,
             file_package::file_package,
@@ -1180,21 +1093,27 @@ pub(crate) mod support {
         };
 
         fn qualify_type_name(
-            name: &baml_base::Name,
+            path: &baml_base::TypePath,
             pkg_prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
-            let s = name.as_str();
-            if s.contains('.') {
-                s.into()
-            } else if local_type_names.contains(s) {
-                format!("{pkg_prefix}{s}")
+            if path.is_qualified() {
+                path.to_string()
             } else {
-                s.into()
+                let leaf = path.leaf().as_str();
+                if local_type_names.contains(leaf) {
+                    format!("{pkg_prefix}{leaf}")
+                } else {
+                    leaf.into()
+                }
             }
         }
 
-        fn type_expr_to_string_hir(ty: &baml_compiler2_ast::TypeExpr, pkg_prefix: &str) -> String {
+        fn type_expr_to_string_hir(
+            ty: &baml_compiler2_ast::TypeExpr,
+            pkg_prefix: &str,
+            local_type_names: &std::collections::HashSet<&str>,
+        ) -> String {
             match ty {
                 baml_compiler2_ast::TypeExpr::Path { segments, .. } => {
                     let path = segments
@@ -1202,7 +1121,8 @@ pub(crate) mod support {
                         .map(|n| n.as_str())
                         .collect::<Vec<_>>()
                         .join(".");
-                    if segments.len() == 1 {
+                    let first = segments.first().map(|n| n.as_str()).unwrap_or("");
+                    if segments.len() == 1 || local_type_names.contains(first) {
                         format!("{pkg_prefix}{path}")
                     } else {
                         path
@@ -1220,21 +1140,27 @@ pub(crate) mod support {
                     format!("{:?}", k).to_lowercase()
                 }
                 baml_compiler2_ast::TypeExpr::Optional { inner, .. } => {
-                    format!("{}?", type_expr_to_string_hir(inner, pkg_prefix))
+                    format!(
+                        "{}?",
+                        type_expr_to_string_hir(inner, pkg_prefix, local_type_names)
+                    )
                 }
                 baml_compiler2_ast::TypeExpr::List { inner, .. } => {
-                    format!("{}[]", type_expr_to_string_hir(inner, pkg_prefix))
+                    format!(
+                        "{}[]",
+                        type_expr_to_string_hir(inner, pkg_prefix, local_type_names)
+                    )
                 }
                 baml_compiler2_ast::TypeExpr::Map { key, value, .. } => format!(
                     "map<{}, {}>",
-                    type_expr_to_string_hir(key, pkg_prefix),
-                    type_expr_to_string_hir(value, pkg_prefix)
+                    type_expr_to_string_hir(key, pkg_prefix, local_type_names),
+                    type_expr_to_string_hir(value, pkg_prefix, local_type_names)
                 ),
                 baml_compiler2_ast::TypeExpr::Union {
                     variants: members, ..
                 } => members
                     .iter()
-                    .map(|m| type_expr_to_string_hir(m, pkg_prefix))
+                    .map(|m| type_expr_to_string_hir(m, pkg_prefix, local_type_names))
                     .collect::<Vec<_>>()
                     .join(" | "),
                 baml_compiler2_ast::TypeExpr::Literal { value: lit, .. } => lit.to_string(),
@@ -1253,21 +1179,27 @@ pub(crate) mod support {
                                     format!(
                                         "{}: {}",
                                         n.as_str(),
-                                        type_expr_to_string_hir(&p.ty, pkg_prefix)
+                                        type_expr_to_string_hir(
+                                            &p.ty,
+                                            pkg_prefix,
+                                            local_type_names
+                                        )
                                     )
                                 })
-                                .unwrap_or_else(|| type_expr_to_string_hir(&p.ty, pkg_prefix))
+                                .unwrap_or_else(|| {
+                                    type_expr_to_string_hir(&p.ty, pkg_prefix, local_type_names)
+                                })
                         })
                         .collect();
                     let throws = throws
                         .as_deref()
-                        .map(|throws| type_expr_to_string_hir(throws, pkg_prefix))
+                        .map(|throws| type_expr_to_string_hir(throws, pkg_prefix, local_type_names))
                         .map(|throws| format!(" throws {throws}"))
                         .unwrap_or_default();
                     format!(
                         "({}) -> {}{}",
                         ps.join(", "),
-                        type_expr_to_string_hir(ret, pkg_prefix),
+                        type_expr_to_string_hir(ret, pkg_prefix, local_type_names),
                         throws
                     )
                 }
@@ -1285,25 +1217,40 @@ pub(crate) mod support {
             prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
+            use baml_compiler2_ast::Pattern;
             let pat = &body.patterns[pat_id];
             match pat {
-                Pattern::Binding(n) => n.to_string(),
-                Pattern::TypedBinding { name, ty } => {
-                    format!("{name}: {}", type_expr_to_string_hir(ty, prefix))
-                }
-                Pattern::Literal(lit) => lit.to_string(),
-                Pattern::Null => "null".into(),
-                Pattern::EnumVariant { enum_name, variant } => {
-                    format!(
-                        "{}.{variant}",
-                        qualify_type_name(enum_name, prefix, local_type_names)
-                    )
-                }
-                Pattern::Union(pats) => pats
+                Pattern::Wildcard => "_".to_string(),
+                Pattern::Bind { name } => name.to_string(),
+                Pattern::Or(pats) => pats
                     .iter()
                     .map(|p| pat_desc_hir(*p, body, prefix, local_type_names))
                     .collect::<Vec<_>>()
                     .join(" | "),
+                Pattern::Chain(pats) => pats
+                    .iter()
+                    .map(|p| pat_desc_hir(*p, body, prefix, local_type_names))
+                    .collect::<Vec<_>>()
+                    .join(": "),
+                Pattern::Type(ty) => type_expr_to_string_hir(ty, prefix, local_type_names),
+                Pattern::Class { class, fields } => {
+                    let class_path = class
+                        .iter()
+                        .map(|n| n.as_str())
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    let field_strs: Vec<_> = fields
+                        .iter()
+                        .map(|f| {
+                            format!(
+                                "{}: {}",
+                                f.field,
+                                pat_desc_hir(f.pat, body, prefix, local_type_names)
+                            )
+                        })
+                        .collect();
+                    format!("{class_path} {{ {} }}", field_strs.join(", "))
+                }
             }
         }
 
@@ -1532,23 +1479,16 @@ pub(crate) mod support {
             match stmt {
                 Stmt::Let {
                     pattern,
-                    type_annotation,
                     initializer,
                     ..
                 } => {
+                    // The annotation is now part of the pattern (a `Chain`
+                    // link), so `pat_desc_hir` already prints it.
                     let pat = pat_desc_hir(*pattern, body, prefix, local_type_names);
-                    let ty_annot = type_annotation
-                        .map(|id| {
-                            format!(
-                                ": {}",
-                                type_expr_to_string_hir(&body.type_annotations[id], prefix)
-                            )
-                        })
-                        .unwrap_or_default();
                     let init = initializer
                         .map(|e| format!(" = {}", expr_desc_hir(e, body, prefix, local_type_names)))
                         .unwrap_or_default();
-                    format!("let {pat}{ty_annot}{init}")
+                    format!("let {pat}{init}")
                 }
                 Stmt::Return(Some(expr_id)) => {
                     format!(
@@ -1641,7 +1581,7 @@ pub(crate) mod support {
                 let ty = field
                     .type_expr
                     .as_ref()
-                    .map(|te| type_expr_to_string_hir(&te.expr, &prefix))
+                    .map(|te| type_expr_to_string_hir(&te.expr, &prefix, &local_type_names))
                     .unwrap_or_else(|| "?".into());
                 writeln!(output, "  {}: {}", field.name, ty).ok();
             }
@@ -1669,7 +1609,7 @@ pub(crate) mod support {
             let ty = ta
                 .type_expr
                 .as_ref()
-                .map(|te| type_expr_to_string_hir(&te.expr, &prefix))
+                .map(|te| type_expr_to_string_hir(&te.expr, &prefix, &local_type_names))
                 .unwrap_or_else(|| "?".into());
             writeln!(output, "type {prefix}{} = {}", ta.name, ty).ok();
         }
@@ -1684,7 +1624,7 @@ pub(crate) mod support {
                     let ty = p
                         .type_expr
                         .as_ref()
-                        .map(|te| type_expr_to_string_hir(&te.expr, &prefix))
+                        .map(|te| type_expr_to_string_hir(&te.expr, &prefix, &local_type_names))
                         .unwrap_or_else(|| "?".into());
                     format!("{}: {}", p.name, ty)
                 })
@@ -1692,7 +1632,7 @@ pub(crate) mod support {
             let ret = func
                 .return_type
                 .as_ref()
-                .map(|te| type_expr_to_string_hir(&te.expr, &prefix))
+                .map(|te| type_expr_to_string_hir(&te.expr, &prefix, &local_type_names))
                 .unwrap_or_else(|| "?".into());
             let body_kind = if func.declarative_meta.is_some() {
                 "llm"

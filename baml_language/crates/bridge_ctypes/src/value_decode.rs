@@ -14,7 +14,7 @@ use crate::{
         InboundValue, inbound_value::Value as InboundValueVariant,
     },
     error::CtypesError,
-    handle_table::HandleTable,
+    handle_table::CffiHandleTable,
 };
 
 /// Decode a protobuf `InboundValue` into a `BexExternalValue` for use by the BEX engine.
@@ -22,7 +22,7 @@ use crate::{
 /// Handles are resolved via `handle_table`; an unknown key returns `InvalidHandleKey`.
 pub fn inbound_to_external(
     value: InboundValue,
-    handle_table: &HandleTable,
+    handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
     match value.value {
         None => Ok(BexExternalValue::Null),
@@ -38,7 +38,7 @@ pub fn inbound_to_external(
             InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
             InboundValueVariant::Handle(handle) => {
                 let value = handle_table
-                    .resolve(handle.key)
+                    .drain(handle.key)
                     .ok_or(CtypesError::InvalidHandleKey(handle.key))?;
                 Ok(BexExternalValue::from((*value).clone()))
             }
@@ -64,7 +64,7 @@ fn default_scalar_union_ty() -> Ty {
 
 fn convert_list(
     list: InboundListValue,
-    handle_table: &HandleTable,
+    handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
     let items: Result<Vec<BexExternalValue>, CtypesError> = list
         .values
@@ -79,7 +79,7 @@ fn convert_list(
 
 fn convert_map(
     map: InboundMapValue,
-    handle_table: &HandleTable,
+    handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
     let mut entries = IndexMap::new();
     for entry in map.entries {
@@ -102,7 +102,7 @@ fn convert_map(
 
 fn convert_class(
     class: InboundClassValue,
-    handle_table: &HandleTable,
+    handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
     let mut fields = IndexMap::new();
     for entry in class.fields {
@@ -141,7 +141,7 @@ fn extract_string_key(entry: &InboundMapEntry) -> Result<String, CtypesError> {
 /// Decode protobuf kwargs into a `HashMap<String, BexExternalValue>` for engine call arguments.
 pub fn kwargs_to_bex_values(
     kwargs: Vec<InboundMapEntry>,
-    handle_table: &HandleTable,
+    handle_table: &CffiHandleTable,
 ) -> Result<HashMap<String, BexExternalValue>, CtypesError> {
     let mut result = HashMap::new();
     for entry in kwargs {
@@ -154,4 +154,44 @@ pub fn kwargs_to_bex_values(
         result.insert(key, value);
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{baml::cffi::BamlHandle, handle_table::CffiHandleTableEntry};
+
+    #[test]
+    fn inbound_handle_drains_table_entry() {
+        let table = CffiHandleTable::new();
+        let key = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 7 });
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key,
+                handle_type: 0,
+            })),
+        };
+        let result = inbound_to_external(inbound, &table).expect("decode succeeds");
+        assert!(matches!(
+            result,
+            BexExternalValue::FunctionRef { global_index: 7 }
+        ));
+        assert!(
+            table.resolve(key).is_none(),
+            "entry must be removed from table after drain"
+        );
+    }
+
+    #[test]
+    fn inbound_handle_missing_key_errors() {
+        let table = CffiHandleTable::new();
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key: 9999,
+                handle_type: 0,
+            })),
+        };
+        let err = inbound_to_external(inbound, &table).expect_err("missing key should error");
+        assert!(matches!(err, CtypesError::InvalidHandleKey(9999)));
+    }
 }

@@ -14,9 +14,31 @@
 
 mod io_impls;
 pub mod registry;
+pub mod shell;
 
 pub use sys_ops::{SysOps, io};
 pub use sys_types::{CallId, CompletionHandle, OpError, SysOp, SysOpContext};
+
+#[cfg(all(feature = "bundle-http", feature = "ring-crypto"))]
+pub(crate) fn ensure_rustls_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
+#[cfg(all(
+    feature = "bundle-http",
+    not(feature = "ring-crypto"),
+    feature = "aws-crypto"
+))]
+pub(crate) fn ensure_rustls_crypto_provider() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}
+
+#[cfg(any(
+    not(feature = "bundle-http"),
+    all(not(feature = "ring-crypto"), not(feature = "aws-crypto"))
+))]
+#[allow(dead_code)]
+pub(crate) fn ensure_rustls_crypto_provider() {}
 
 /// The native Tokio-based `sys_op` provider.
 ///

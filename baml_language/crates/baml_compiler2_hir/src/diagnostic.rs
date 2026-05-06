@@ -56,6 +56,37 @@ pub enum Hir2Diagnostic {
         message: String,
         span: TextRange,
     },
+    /// A pattern introduces the same name more than once (e.g.
+    /// `Foo { a, a }`, `let Foo { x }: let x = ...`). Each binding inside a
+    /// single pattern must use a unique name — otherwise it would shadow
+    /// itself within the same scope.
+    ///
+    /// `sites` lists every binding site for `name` in source order. The
+    /// first site is treated as the original; the rest are reported as
+    /// duplicates.
+    DuplicatePatternBinding { name: Name, sites: Vec<TextRange> },
+    /// An `Or` pattern's alternatives don't all bind the same name set.
+    /// A name introduced in some alternatives but not others would only
+    /// sometimes be in scope in the arm body — semantically incoherent.
+    ///
+    /// Example: `(Foo { a } | Bar { a, b })` — `b` is bound by the `Bar`
+    /// alternative but not by `Foo`.
+    OrPatternBindingMismatch {
+        /// Span of the `Or` pattern itself.
+        or_span: TextRange,
+        /// Names that appear in some alternatives but not all.
+        mismatched_names: Vec<Name>,
+    },
+    /// A `let` statement or `for-let` binding uses a refutable pattern
+    /// (one that can fail to match). These contexts require an
+    /// irrefutable pattern; refutable forms belong in `match`.
+    RefutablePatternInLet {
+        /// Span of the offending pattern.
+        pattern_span: TextRange,
+        /// Where the binding lives — for the diagnostic message
+        /// (`"let"` vs `"for-let"`).
+        context: &'static str,
+    },
 }
 
 impl Hir2Diagnostic {
@@ -173,6 +204,58 @@ impl Hir2Diagnostic {
                     "invalid builtin declaration",
                 )
                 .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::DuplicatePatternBinding { name, sites } => {
+                let first = sites.first().copied().unwrap_or_default();
+                let rest = sites.get(1..).unwrap_or(&[]);
+                let mut diag = Diagnostic::error(
+                    DiagnosticId::DuplicateBinding,
+                    format!("Duplicate binding `{name}` in pattern"),
+                )
+                .with_secondary(
+                    Span { file_id, range: first },
+                    format!("`{name}` first bound here"),
+                );
+                for range in rest {
+                    diag = diag.with_primary(
+                        Span { file_id, range: *range },
+                        format!("`{name}` bound again here"),
+                    );
+                }
+                diag.with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::OrPatternBindingMismatch {
+                or_span,
+                mismatched_names,
+            } => {
+                let names_str = mismatched_names
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Diagnostic::error(
+                    DiagnosticId::DuplicateBinding,
+                    format!(
+                        "Or-pattern alternatives must bind the same names. \
+                         Inconsistent across branches: {names_str}",
+                    ),
+                )
+                .with_primary(
+                    Span { file_id, range: *or_span },
+                    "alternatives bind different names",
+                )
+                .with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::RefutablePatternInLet { pattern_span, context } => Diagnostic::error(
+                DiagnosticId::RefutablePatternInLet,
+                format!(
+                    "refutable pattern in {context} binding; refutable patterns belong in `match`",
+                ),
+            )
+            .with_primary(
+                Span { file_id, range: *pattern_span },
+                "this pattern can fail to match",
+            )
+            .with_phase(DiagnosticPhase::Hir),
         }
     }
 }

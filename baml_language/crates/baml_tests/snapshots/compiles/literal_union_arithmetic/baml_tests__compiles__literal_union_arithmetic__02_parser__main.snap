@@ -1,0 +1,261 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 10955
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ifElseAdd"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR
+          INTEGER_LITERAL "1"
+          PLUS "+"
+          IF_EXPR
+            KW_IF "if"
+            PAREN_EXPR "(true)"
+              L_PAREN "("
+              WORD "true"
+              R_PAREN ")"
+            BLOCK_EXPR "{ 2 }"
+              L_BRACE "{"
+              INTEGER_LITERAL "2"
+              R_BRACE "}"
+            KW_ELSE "else"
+            BLOCK_EXPR "{ 3 }"
+              L_BRACE "{"
+              INTEGER_LITERAL "3"
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "matchAdd"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR
+          MATCH_EXPR
+            KW_MATCH "match"
+            L_PAREN "("
+            WORD "x"
+            R_PAREN ")"
+            L_BRACE "{"
+            MATCH_ARM
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "1"
+                    INTEGER_LITERAL "1"
+              FAT_ARROW "=>"
+              INTEGER_LITERAL "10"
+              COMMA ","
+            MATCH_ARM
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "2"
+                    INTEGER_LITERAL "2"
+              FAT_ARROW "=>"
+              INTEGER_LITERAL "20"
+              COMMA ","
+            MATCH_ARM
+              PATTERN
+                WILDCARD_PATTERN "_"
+                  WORD "_"
+              FAT_ARROW "=>"
+              INTEGER_LITERAL "0"
+            R_BRACE "}"
+          PLUS "+"
+          INTEGER_LITERAL "1"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "bothSidesUnion"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR
+          PAREN_EXPR
+            L_PAREN "("
+            IF_EXPR
+              KW_IF "if"
+              PAREN_EXPR "(true)"
+                L_PAREN "("
+                WORD "true"
+                R_PAREN ")"
+              BLOCK_EXPR "{ 1 }"
+                L_BRACE "{"
+                INTEGER_LITERAL "1"
+                R_BRACE "}"
+              KW_ELSE "else"
+              BLOCK_EXPR "{ 2 }"
+                L_BRACE "{"
+                INTEGER_LITERAL "2"
+                R_BRACE "}"
+            R_PAREN ")"
+          PLUS "+"
+          PAREN_EXPR
+            L_PAREN "("
+            IF_EXPR
+              KW_IF "if"
+              PAREN_EXPR "(false)"
+                L_PAREN "("
+                WORD "false"
+                R_PAREN ")"
+              BLOCK_EXPR "{ 3 }"
+                L_BRACE "{"
+                INTEGER_LITERAL "3"
+                R_BRACE "}"
+              KW_ELSE "else"
+              BLOCK_EXPR "{ 4 }"
+                L_BRACE "{"
+                INTEGER_LITERAL "4"
+                R_BRACE "}"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "subtractUnion"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR
+          INTEGER_LITERAL "100"
+          MINUS "-"
+          IF_EXPR
+            KW_IF "if"
+            PAREN_EXPR "(true)"
+              L_PAREN "("
+              WORD "true"
+              R_PAREN ")"
+            BLOCK_EXPR "{ 7 }"
+              L_BRACE "{"
+              INTEGER_LITERAL "7"
+              R_BRACE "}"
+            KW_ELSE "else"
+            BLOCK_EXPR "{ 3 }"
+              L_BRACE "{"
+              INTEGER_LITERAL "3"
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "loopMatchAccum"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let sum"
+              KW_LET "let"
+              WORD "sum"
+          EQUALS "="
+          INTEGER_LITERAL "0"
+          SEMICOLON ";"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let i"
+              KW_LET "let"
+              WORD "i"
+          EQUALS "="
+          INTEGER_LITERAL "0"
+          SEMICOLON ";"
+        WHILE_STMT
+          KW_WHILE "while"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "i < 3"
+              WORD "i"
+              LESS "<"
+              INTEGER_LITERAL "3"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            BINARY_EXPR
+              WORD "sum"
+              EQUALS "="
+              BINARY_EXPR
+                WORD "sum"
+                PLUS "+"
+                MATCH_EXPR
+                  KW_MATCH "match"
+                  L_PAREN "("
+                  WORD "i"
+                  R_PAREN ")"
+                  L_BRACE "{"
+                  MATCH_ARM
+                    PATTERN
+                      TYPE_PATTERN
+                        TYPE_EXPR "0"
+                          INTEGER_LITERAL "0"
+                    FAT_ARROW "=>"
+                    INTEGER_LITERAL "10"
+                    COMMA ","
+                  MATCH_ARM
+                    PATTERN
+                      TYPE_PATTERN
+                        TYPE_EXPR "1"
+                          INTEGER_LITERAL "1"
+                    FAT_ARROW "=>"
+                    INTEGER_LITERAL "20"
+                    COMMA ","
+                  MATCH_ARM
+                    PATTERN
+                      WILDCARD_PATTERN "_"
+                        WORD "_"
+                    FAT_ARROW "=>"
+                    INTEGER_LITERAL "30"
+                  R_BRACE "}"
+            SEMICOLON ";"
+            BINARY_EXPR
+              WORD "i"
+              EQUALS "="
+              BINARY_EXPR "i + 1"
+                WORD "i"
+                PLUS "+"
+                INTEGER_LITERAL "1"
+            SEMICOLON ";"
+            R_BRACE "}"
+        RETURN_STMT "return sum;"
+          KW_RETURN "return"
+          WORD "sum"
+          SEMICOLON ";"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

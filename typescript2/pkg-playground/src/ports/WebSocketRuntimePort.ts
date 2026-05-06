@@ -12,8 +12,11 @@
  */
 
 import type { RuntimePort } from '../runtime-port';
-import type { WorkerOutMessage, WorkerInMessage, PlaygroundNotification } from '../worker-protocol';
-import { decodeCallResult } from '@b/pkg-proto';
+import type { WorkerOutMessage, WorkerInMessage, PlaygroundNotification, LogLevel, LogDecoration } from '../worker-protocol';
+import { decodeCallResult, RuntimeEvent } from '@b/pkg-proto';
+import { truncateMessage, normalizeLogLevel } from '../shared/log-decorations';
+import { formatValue } from '../shared/format-value';
+import { deserializeRuntimeEvent } from '../shared/deserialize-event';
 
 /** Server → Client message shapes (must match playground_ws.rs WsOutMessage) */
 type WsOutMessage =
@@ -26,7 +29,8 @@ type WsOutMessage =
   | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
   | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string; responseHeaders?: Record<string, string> }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: unknown | null }
-  | { type: 'cursorContext'; context: unknown };
+  | { type: 'cursorContext'; context: unknown }
+  | { type: 'runtimeEvent'; data: string; callId: number };
 
 /** Client → Server message shapes (must match playground_ws.rs WsInMessage) */
 type WsInMessage =
@@ -52,6 +56,8 @@ export class WebSocketRuntimePort implements RuntimePort {
   private disposed = false;
   private reconnectDelay = 500;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private decorationsByLine = new Map<number, { level: LogLevel; message: string; count: number }>();
+  private textEncoder = new TextEncoder();
 
   constructor(url: string) {
     this.url = url;
@@ -164,6 +170,7 @@ export class WebSocketRuntimePort implements RuntimePort {
   private toServer(msg: WorkerInMessage): WsInMessage | null {
     switch (msg.type) {
       case 'callFunction':
+        this.clearLogDecorations();
         return {
           type: 'callFunction',
           id: msg.id,
@@ -206,6 +213,7 @@ export class WebSocketRuntimePort implements RuntimePort {
       case 'requestCollectTests':
         return { type: 'requestCollectTests', project: msg.project };
       case 'callTestFunction':
+        this.clearLogDecorations();
         return {
           type: 'callTestFunction',
           id: msg.id,
@@ -252,10 +260,7 @@ export class WebSocketRuntimePort implements RuntimePort {
           return {
             type: 'callFunctionResult',
             id: raw.id,
-            result: JSON.stringify(decoded, (_, v) =>
-              typeof v === 'bigint' ? v.toString() : v,
-              2,
-            ),
+            result: decoded,
           };
         } catch (e) {
           return {
@@ -312,9 +317,75 @@ export class WebSocketRuntimePort implements RuntimePort {
           type: 'cursorContext',
           context: raw.context as import('../worker-protocol').CursorContext,
         };
+      case 'runtimeEvent': {
+        try {
+          const bytes = base64ToUint8Array(raw.data);
+          const event = RuntimeEvent.decode(bytes);
+          const deserialized = deserializeRuntimeEvent(event);
+          // Forward the decoded event via the buffer-or-dispatch path
+          this.deliver({ type: 'runtimeEventNew', event: deserialized, callId: raw.callId ?? null });
+
+          // Extract log decorations (same logic as baml-lsp-worker.ts)
+          const kind = deserialized.event;
+          if (kind?.$case === 'log' && kind.log.source) {
+            const source = kind.log.source;
+            const line = source.line;
+            const level = normalizeLogLevel(kind.log.level);
+            const message = formatValue(kind.log.data, 'inline-hint');
+            const sourceSpanLength = source.endOffset - source.startOffset;
+            // Compare UTF-8 byte lengths since source offsets are byte offsets from Rust
+            const messageByteLen = this.textEncoder.encode(message).length;
+            const isLikelyVariable = messageByteLen > sourceSpanLength + 5;
+            if (isLikelyVariable) {
+              const existing = this.decorationsByLine.get(line);
+              if (existing) {
+                existing.message = message;
+                existing.level = level;
+                existing.count += 1;
+              } else {
+                this.decorationsByLine.set(line, { level, message, count: 1 });
+              }
+              this.emitLogDecorations();
+            }
+          }
+          return null; // already dispatched via handlers above
+        } catch (e) {
+          return {
+            type: 'runtimeEventError' as const,
+            error: `Failed to decode runtime event: ${e instanceof Error ? e.message : String(e)}`,
+          } as WorkerOutMessage;
+        }
+      }
       default:
         return null;
     }
+  }
+
+  /** Buffer-or-dispatch: if no handlers are registered yet, buffer the message for replay. */
+  private deliver(msg: WorkerOutMessage): void {
+    if (this.handlers.size === 0) {
+      this.inBuffer.push(msg);
+    } else {
+      for (const h of this.handlers) h(msg);
+    }
+  }
+
+  private emitLogDecorations(): void {
+    const decorations: LogDecoration[] = [];
+    for (const [line, entry] of this.decorationsByLine) {
+      decorations.push({
+        line,
+        level: entry.level,
+        message: truncateMessage(entry.message),
+        count: entry.count,
+      });
+    }
+    this.deliver({ type: 'logDecorations', decorations });
+  }
+
+  private clearLogDecorations(): void {
+    this.decorationsByLine.clear();
+    this.deliver({ type: 'clearLogDecorations' });
   }
 }
 

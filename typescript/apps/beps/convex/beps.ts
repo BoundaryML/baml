@@ -69,8 +69,8 @@ export const getByNumber = query({
 
     if (!bep) return null;
 
-    // Get pages, comments, decisions, issues, versions, and shepherds
-    const [pages, comments, decisions, issues, versions, shepherds] =
+    // Get pages, comments, decisions, issues, versions, shepherds, and implementers
+    const [pages, comments, decisions, issues, versions, shepherds, implementers] =
       await Promise.all([
         ctx.db
           .query("bepPages")
@@ -94,6 +94,9 @@ export const getByNumber = query({
           .order("desc")
           .take(10),
         Promise.all(bep.shepherds.map((id) => ctx.db.get(id))),
+        bep.implementedBy
+          ? Promise.all(bep.implementedBy.map((id) => ctx.db.get(id)))
+          : Promise.resolve([]),
       ]);
 
     return {
@@ -104,6 +107,7 @@ export const getByNumber = query({
       issues,
       versions,
       shepherdNames: shepherds.filter((s) => s !== null).map((s) => s!.name),
+      implementedByNames: implementers.filter((i) => i !== null).map((i) => i!.name),
     };
   },
 });
@@ -501,12 +505,20 @@ export const updateStatus = mutation({
   args: {
     id: v.id("beps"),
     status: bepStatus,
+    implementedBy: v.optional(v.array(v.id("users"))),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, {
+    const updates: Record<string, unknown> = {
       status: args.status,
       updatedAt: Date.now(),
-    });
+    };
+
+    // Only set implementedBy when status is 'implemented' and it's provided
+    if (args.status === "implemented" && args.implementedBy !== undefined) {
+      updates.implementedBy = args.implementedBy;
+    }
+
+    await ctx.db.patch(args.id, updates);
 
     // Notify Slack about the status change
     await ctx.scheduler.runAfter(0, internal.slack.notifyStatusChanged, {

@@ -61,11 +61,11 @@ async fn for_loop_sum() {
         load_var xs
         load_var __for_idx
         load_array_element
-        bin_op +
+        add_int
         store_var result
         load_var __for_idx
         load_const 1
-        bin_op +
+        add_int
         store_var __for_idx
         jump L0
     }
@@ -123,11 +123,11 @@ async fn for_loop_with_break() {
       L1:
         load_var result
         load_var x
-        bin_op +
+        add_int
         store_var result
         load_var __for_idx
         load_const 1
-        bin_op +
+        add_int
         store_var __for_idx
         jump L0
 
@@ -206,13 +206,13 @@ async fn for_loop_with_continue() {
       L3:
         load_var result
         load_var x
-        bin_op +
+        add_int
         store_var result
 
       L4:
         load_var __for_idx
         load_const 1
-        bin_op +
+        add_int
         store_var __for_idx
         jump L0
     }
@@ -301,7 +301,7 @@ async fn for_loop_nested() {
       L4:
         load_var __for_idx
         load_const 1
-        bin_op +
+        add_int
         store_var __for_idx
         jump L0
 
@@ -312,11 +312,11 @@ async fn for_loop_nested() {
         load_var __for_idx_1
         load_array_element
         bin_op *
-        bin_op +
+        add_int
         store_var result
         load_var __for_idx_1
         load_const 1
-        bin_op +
+        add_int
         store_var __for_idx_1
         jump L3
     }
@@ -366,11 +366,11 @@ async fn c_for_sum_to_ten() {
       L2:
         load_var s
         load_var i
-        bin_op +
+        add_int
         store_var s
         load_var i
         load_const 1
-        bin_op +
+        add_int
         store_var i
         jump L0
     }
@@ -411,11 +411,11 @@ async fn c_for_with_break_continue() {
       L0:
         load_const 0
         load_var i
-        bin_op +
+        add_int
         pop_jump_if_false L2
         load_var i
         load_const 1
-        bin_op +
+        add_int
         store_var i
         load_var i
         load_const 10
@@ -537,7 +537,7 @@ async fn for_loop_over_let_variable_no_parens() {
             let xs = [10, 20, 30];
             let sum = 0;
 
-            for x in xs {
+            for let x in xs {
                 sum += x;
             }
 

@@ -299,6 +299,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ClassCycle { .. } => DiagnosticId::ClassCycle,
         TirTypeError::NonExhaustiveMatch { .. } => DiagnosticId::NonExhaustiveMatch,
         TirTypeError::UnreachableArm => DiagnosticId::UnreachableArm,
+        TirTypeError::OrPatternBindingTypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
         TirTypeError::ThrowsContractViolation { .. }
         | TirTypeError::CallbackThrowsContractViolation { .. } => {

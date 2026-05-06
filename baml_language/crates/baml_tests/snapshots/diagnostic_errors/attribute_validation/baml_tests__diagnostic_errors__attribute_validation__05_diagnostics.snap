@@ -1,0 +1,32 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 25847
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] Error: Duplicate field `HasDuplicateField.name`
+    ╭─[ test.baml:13:3 ]
+    │
+ 11 │   name string
+    │   ──┬─  
+    │     ╰─── first defined as field here
+    │ 
+ 13 │   name int
+    │   ──┬─  
+    │     ╰─── duplicate field definition
+    │ 
+    │ Note: Error code: E0012
+────╯
+
+  [hir] Error: Duplicate variant `HasDuplicateVariant.RED`
+    ╭─[ test.baml:23:3 ]
+    │
+ 21 │   RED
+    │   ─┬─  
+    │    ╰─── first defined as variant here
+    │ 
+ 23 │   RED
+    │   ─┬─  
+    │    ╰─── duplicate variant definition
+    │ 
+    │ Note: Error code: E0012
+────╯

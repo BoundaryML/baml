@@ -115,7 +115,7 @@ impl FunctionLog {
 
     #[napi(getter)]
     pub fn result(&self) -> Result<Option<Buffer>> {
-        let handle_options = bridge_ctypes::HandleTableOptions::for_in_process();
+        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_in_process();
         self.inner
             .result
             .as_ref()

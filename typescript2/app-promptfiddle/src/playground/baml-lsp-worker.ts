@@ -52,9 +52,14 @@ import type {
   LogLevel,
 } from "@b/pkg-playground";
 
-import { decodeCallResult, RuntimeEvent, type BamlOutboundValue } from "@b/pkg-proto";
+import { decodeCallResult, RuntimeEvent } from "@b/pkg-proto";
+import { truncateMessage, normalizeLogLevel } from "@b/pkg-playground/shared/log-decorations";
+import { formatValue } from "@b/pkg-playground/shared/format-value";
+import { deserializeRuntimeEvent } from "@b/pkg-playground/shared/deserialize-event";
 
 import { BamlVfs } from "./vfs";
+import { Bash, InMemoryFs, MountableFs } from "just-bash/browser";
+import { BamlVfsAdapter } from "./baml-vfs-adapter";
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -127,93 +132,113 @@ function resolveInput(callId: number, prompt: string | undefined): Promise<strin
 }
 
 // ---------------------------------------------------------------------------
+// Shell callbacks (just-bash powered)
+// ---------------------------------------------------------------------------
+
+/** Shared Bash instance, created lazily on first use. */
+let bashInstance: Bash | null = null;
+
+function getOrCreateBash(): Bash {
+  if (!bashInstance) {
+    const base = new InMemoryFs();
+    const mountable = new MountableFs({ base });
+    mountable.mount("/workspace", new BamlVfsAdapter(vfs.wasmVfs));
+    bashInstance = new Bash({ fs: mountable, cwd: "/workspace" });
+  }
+  return bashInstance;
+}
+
+/** Shell result shape expected by the Rust WASM bridge. */
+interface ShellResult {
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+  stdout_bytes: Uint8Array;
+  stderr_bytes: Uint8Array;
+}
+
+/** Options passed from Rust as a JSON string. */
+interface ProcessOptionsJson {
+  cwd?: string;
+  env?: Record<string, string>;
+  timeout_ms?: number;
+  stdin?: string;
+}
+
+async function executeShell(
+  command: string,
+  optionsJson: string | undefined,
+): Promise<ShellResult> {
+  const bash = getOrCreateBash();
+  const options: ProcessOptionsJson | undefined = optionsJson
+    ? (JSON.parse(optionsJson) as ProcessOptionsJson)
+    : undefined;
+
+  const execOptions: Parameters<Bash["exec"]>[1] = {
+    cwd: options?.cwd,
+    env: options?.env,
+    stdin: options?.stdin,
+    ...(options?.env ? { replaceEnv: false } : {}),
+    ...(options?.timeout_ms != null
+      ? { signal: AbortSignal.timeout(options.timeout_ms) }
+      : {}),
+  };
+
+  const result = await bash.exec(command, execOptions);
+  const encoder = new TextEncoder();
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exit_code: result.exitCode,
+    stdout_bytes: encoder.encode(result.stdout),
+    stderr_bytes: encoder.encode(result.stderr),
+  };
+}
+
+async function executeExec(
+  program: string,
+  args: string[] | undefined,
+  optionsJson: string | undefined,
+): Promise<ShellResult> {
+  const bash = getOrCreateBash();
+  const options: ProcessOptionsJson | undefined = optionsJson
+    ? (JSON.parse(optionsJson) as ProcessOptionsJson)
+    : undefined;
+
+  // Build the command line: program + args joined. just-bash executes this
+  // as a shell script so we must quote args to prevent shell splitting.
+  const quotedArgs = (args ?? [])
+    .map((a) => "'" + a.replace(/'/g, "'\\''") + "'")
+    .join(" ");
+  const commandLine = quotedArgs ? `${program} ${quotedArgs}` : program;
+
+  const execOptions: Parameters<Bash["exec"]>[1] = {
+    cwd: options?.cwd,
+    env: options?.env,
+    stdin: options?.stdin,
+    ...(options?.env ? { replaceEnv: false } : {}),
+    ...(options?.timeout_ms != null
+      ? { signal: AbortSignal.timeout(options.timeout_ms) }
+      : {}),
+  };
+
+  const result = await bash.exec(commandLine, execOptions);
+  const encoder = new TextEncoder();
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exit_code: result.exitCode,
+    stdout_bytes: encoder.encode(result.stdout),
+    stderr_bytes: encoder.encode(result.stderr),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Log decorations (inline display like ErrorLens)
 // ---------------------------------------------------------------------------
 
 /** Decorations aggregated by line number. Each entry tracks the latest message and count. */
 const decorationsByLine = new Map<number, { level: LogLevel; message: string; count: number }>();
-
-/** Format a BamlOutboundValue to a short string for inline display. */
-function formatValueShort(holder: BamlOutboundValue | null | undefined): string {
-  if (!holder?.value) return 'null';
-
-  switch (holder.value.$case) {
-    case 'nullValue':
-      return 'null';
-    case 'stringValue':
-      return JSON.stringify(holder.value.stringValue);
-    case 'intValue':
-      return String(holder.value.intValue);
-    case 'floatValue':
-      return String(holder.value.floatValue);
-    case 'boolValue':
-      return String(holder.value.boolValue);
-    case 'classValue': {
-      const cls = holder.value.classValue;
-      const name = cls.name?.name ?? 'Class';
-      const fields = cls.fields
-        .map((f) => `${f.key}: ${formatValueShort(f.value)}`)
-        .join(', ');
-      return `${name} { ${fields} }`;
-    }
-    case 'enumValue':
-      return holder.value.enumValue.value;
-    case 'listValue':
-      return `[${holder.value.listValue.items.map(formatValueShort).join(', ')}]`;
-    case 'mapValue': {
-      const entries = holder.value.mapValue.entries
-        .map((e) => `${e.key}: ${formatValueShort(e.value)}`)
-        .join(', ');
-      return `{${entries}}`;
-    }
-    case 'literalValue': {
-      const lit = holder.value.literalValue;
-      if (!lit.literal) return 'null';
-      switch (lit.literal.$case) {
-        case 'stringLiteral':
-          return JSON.stringify(lit.literal.stringLiteral.value);
-        case 'intLiteral':
-          return String(lit.literal.intLiteral.value);
-        case 'boolLiteral':
-          return String(lit.literal.boolLiteral.value);
-        default:
-          return 'null';
-      }
-    }
-    case 'unionVariantValue':
-      return formatValueShort(holder.value.unionVariantValue.value);
-    case 'checkedValue':
-      return formatValueShort(holder.value.checkedValue.value);
-    case 'streamingStateValue':
-      return formatValueShort(holder.value.streamingStateValue.value);
-    case 'handleValue': {
-      const h = holder.value.handleValue;
-      return `<handle #${h.key}>`;
-    }
-    case 'mediaValue': {
-      const m = holder.value.mediaValue;
-      return `<${m.mimeType ?? 'media'}>`;
-    }
-    default:
-      return '?';
-  }
-}
-
-/** Truncate a message to max length with ellipsis. */
-function truncateMessage(msg: string, maxLen: number = 60): string {
-  if (msg.length <= maxLen) return msg;
-  return msg.slice(0, maxLen - 1) + '…';
-}
-
-/** Map log level string to our LogLevel type. */
-function normalizeLogLevel(level: string): LogLevel {
-  switch (level.toLowerCase()) {
-    case 'error': return 'error';
-    case 'warn': case 'warning': return 'warn';
-    case 'debug': return 'debug';
-    default: return 'info';
-  }
-}
 
 /** Emit current decorations to the main thread. */
 function emitLogDecorations(): void {
@@ -405,23 +430,29 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         // Decode and pass the raw proto through
         const bytes = new Uint8Array(notification.data);
         const event = RuntimeEvent.decode(bytes);
-        const callId = activeCallIds.size === 1 ? [...activeCallIds][0] : null;
-        postOut({ type: "runtimeEventNew", event, callId });
+        let callId = notification.callId ?? null;
+        if (callId == null) {
+          if (activeCallIds.size === 1) {
+            callId = [...activeCallIds][0] ?? null;
+          } else if (activeCallIds.size > 1) {
+            console.warn('[Worker] runtimeEvent missing callId from server with', activeCallIds.size, 'concurrent calls — event will not be associated with a run');
+          }
+        }
+        const deserialized = deserializeRuntimeEvent(event);
+        postOut({ type: "runtimeEventNew", event: deserialized, callId });
 
         // Extract log events and update decorations
-        const kind = event.event?.kind;
-        console.log('[Worker] runtimeEvent kind:', kind?.$case, 'source:', kind?.$case === 'log' ? kind.log.source : null);
+        const kind = deserialized.event;
         if (kind?.$case === 'log' && kind.log.source) {
           const source = kind.log.source;
           const line = source.line;
           const level = normalizeLogLevel(kind.log.level);
-          const message = formatValueShort(kind.log.data);
+          const message = formatValue(kind.log.data, 'inline-hint');
 
           // Heuristic: only show decoration if the formatted output is longer than the source span.
           // This filters out constant literals (where output ≈ source) and shows expanded variables.
           const sourceSpanLength = source.endOffset - source.startOffset;
           const isLikelyVariable = message.length > sourceSpanLength + 5;
-          console.log('[Worker] Log decoration - line:', line, 'level:', level, 'message:', message, 'spanLen:', sourceSpanLength, 'show:', isLikelyVariable);
 
           if (isLikelyVariable) {
             const existing = decorationsByLine.get(line);
@@ -537,6 +568,8 @@ self.onmessage = async (event: MessageEvent) => {
         fetch: loggingFetch,
         env: resolveEnv,
         input: resolveInput,
+        exec: executeExec,
+        shell: executeShell,
         lsp_send_notification: (notification: LspNotification) => {
           notification = mapsToRecordsDeep(notification);
 
@@ -694,7 +727,7 @@ self.onmessage = async (event: MessageEvent) => {
         const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
           const h = new BamlHandle(key.toString(), handleType);
           handles.push(h);
-          return h;
+          return { handle_key: key, handle_type: handleType, type_name: typeName };
         });
         const existing = liveHandles.get(msg.id);
         if (existing) {
@@ -705,8 +738,7 @@ self.onmessage = async (event: MessageEvent) => {
         } else {
           liveHandles.delete(msg.id);
         }
-        const result = JSON.stringify(decoded, null, 2);
-        postOut({ type: "callFunctionResult", id: msg.id, result });
+        postOut({ type: "callFunctionResult", id: msg.id, result: decoded });
       } catch (e) {
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
         let errorMessage: string;
@@ -824,7 +856,7 @@ self.onmessage = async (event: MessageEvent) => {
         const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
           const h = new BamlHandle(key.toString(), handleType);
           handles.push(h);
-          return h;
+          return { handle_key: key, handle_type: handleType, type_name: typeName };
         });
         const existing = liveHandles.get(msg.id);
         if (existing) {
@@ -835,11 +867,7 @@ self.onmessage = async (event: MessageEvent) => {
         } else {
           liveHandles.delete(msg.id);
         }
-        postOut({
-          type: "callFunctionResult",
-          id: msg.id,
-          result: JSON.stringify(decoded, null, 2),
-        });
+        postOut({ type: "callFunctionResult", id: msg.id, result: decoded });
       } catch (e: any) {
         const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
         let errorMessage: string;

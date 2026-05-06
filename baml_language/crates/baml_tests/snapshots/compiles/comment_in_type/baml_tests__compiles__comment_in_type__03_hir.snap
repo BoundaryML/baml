@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.CommentAfterArrow() -> string  [llm] {
+  baml.llm.call_llm_function(TestClient, "CommentAfterArrow", map {  })
+}
+function user.CommentAfterArrow$build_request() -> baml.http.Request  [expr] {
+  baml.llm.build_request(TestClient, "CommentAfterArrow", map {  })
+}
+function user.CommentAfterArrow$build_request_stream() -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(TestClient, "CommentAfterArrow", map {  })
+}
+function user.CommentAfterArrow$parse(json: string) -> string  [expr] {
+  baml.llm.parse("CommentAfterArrow", json)
+}
+function user.CommentAfterArrow$render_prompt() -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(TestClient, "CommentAfterArrow", map {  })
+}
+function user.FunctionWithComments(a: string, b: int) -> string  [llm] {
+  baml.llm.call_llm_function(TestClient, "FunctionWithComments", map { "a": a, "b": b })
+}
+function user.FunctionWithComments$build_request(a: string, b: int) -> baml.http.Request  [expr] {
+  baml.llm.build_request(TestClient, "FunctionWithComments", map { "a": a, "b": b })
+}
+function user.FunctionWithComments$build_request_stream(a: string, b: int) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(TestClient, "FunctionWithComments", map { "a": a, "b": b })
+}
+function user.FunctionWithComments$parse(json: string) -> string  [expr] {
+  baml.llm.parse("FunctionWithComments", json)
+}
+function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(TestClient, "FunctionWithComments", map { "a": a, "b": b })
+}
+function user.TestClient$new() -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+}

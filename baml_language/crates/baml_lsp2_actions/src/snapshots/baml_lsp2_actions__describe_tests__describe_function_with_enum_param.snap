@@ -2,6 +2,6 @@
 source: crates/baml_lsp2_actions/src/describe_tests.rs
 expression: "project.format_description(&descs[0])"
 ---
-── function ── funcs.baml:12
+function UseColor  funcs.baml:12
 shape: function UseColor(c: Color) -> string
 deps: Color

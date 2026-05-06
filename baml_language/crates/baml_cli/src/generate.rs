@@ -1,6 +1,9 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{
@@ -23,20 +26,12 @@ pub struct GenerateArgs {
     pub output: Option<PathBuf>,
 }
 
-/// Whether the default `b` export is sync or async.
-#[derive(Clone, Copy)]
-enum DefaultClientMode {
-    Sync,
-    Async,
-}
-
 /// A parsed generator definition from a BAML source file.
 struct GeneratorDef {
     name: String,
     output_type: String,
     /// Resolved output directory (absolute).
     output_dir: PathBuf,
-    default_client_mode: DefaultClientMode,
 }
 
 impl GenerateArgs {
@@ -90,8 +85,12 @@ impl GenerateArgs {
             return Ok(crate::ExitCode::Other);
         }
 
-        // Build the codegen ObjectPool from the compiler database.
-        let pool = baml_project::build_object_pool(&db);
+        // Build the codegen SymbolPool from the compiler database.
+        let pool = baml_project::build_symbol_pool(&db);
+
+        // Collect user BAML source files keyed by path relative to
+        // `baml_src/` for inlining into `baml_sdk/baml/_inlinedbaml.py`.
+        let user_baml_files = collect_user_baml_files(&db, &source_files, &from);
 
         let mut total_files = 0;
 
@@ -103,7 +102,7 @@ impl GenerateArgs {
 
             let generated = match generator.output_type.as_str() {
                 "python/pydantic" | "python/pydantic/v1" => {
-                    baml_codegen_python::to_source_code(&pool, &from)
+                    codegen_python::to_source_code(&pool, &user_baml_files)
                 }
                 other => {
                     eprintln!(
@@ -130,23 +129,6 @@ impl GenerateArgs {
                 }
                 std::fs::write(&dest, content)
                     .with_context(|| format!("Failed to write {}", dest.display()))?;
-                count += 1;
-            }
-
-            // Write Python-specific bootstrap files.
-            if generator.output_type.starts_with("python") {
-                // inlinedbaml.py — embed all BAML source files.
-                let inlined = generate_inlinedbaml(&db, &source_files, &from);
-                let inlined_path = output_dir.join("inlinedbaml.py");
-                std::fs::write(&inlined_path, &inlined)
-                    .with_context(|| format!("Failed to write {}", inlined_path.display()))?;
-                count += 1;
-
-                // __init__.py — re-export client and modules.
-                let init_py = generate_init_py(generator.default_client_mode);
-                let init_path = output_dir.join("__init__.py");
-                std::fs::write(&init_path, &init_py)
-                    .with_context(|| format!("Failed to write {}", init_path.display()))?;
                 count += 1;
             }
 
@@ -196,31 +178,12 @@ fn discover_generators(db: &ProjectDatabase, baml_src: &std::path::Path) -> Vec<
             // Strip surrounding quotes if present (config values may be quoted strings)
             let raw_output_dir = raw_output_dir.trim_matches('"').trim_matches('\'');
 
-            let output_dir = baml_src.join(raw_output_dir).join("baml_client");
-
-            // default_client_mode: "sync" or "async". Default depends on language.
-            let default_client_mode = match get_config(config, "default_client_mode")
-                .as_deref()
-                .map(|s| s.trim_matches('"').trim_matches('\''))
-            {
-                Some("sync") => DefaultClientMode::Sync,
-                Some("async") => DefaultClientMode::Async,
-                _ => {
-                    // Language-specific defaults: Python defaults to sync (recommended),
-                    // TypeScript to async.
-                    if output_type.starts_with("python") {
-                        DefaultClientMode::Sync
-                    } else {
-                        DefaultClientMode::Async
-                    }
-                }
-            };
+            let output_dir = baml_src.join(raw_output_dir).join("baml_sdk");
 
             generators.push(GeneratorDef {
                 name: generator_item.name.to_string(),
                 output_type,
                 output_dir,
-                default_client_mode,
             });
         }
     }
@@ -236,58 +199,21 @@ fn get_config(items: &[GeneratorConfigItem], key: &str) -> Option<String> {
         .map(|item| item.value.clone())
 }
 
-/// Generate `inlinedbaml.py` — a Python dict mapping relative file paths to BAML source.
-fn generate_inlinedbaml(
+/// Collect user BAML source files as `(rel_path, contents)` pairs.
+/// `rel_path` is relative to `baml_src/` so it matches the keys the
+/// runtime's `initialize_runtime(...)` expects in the inlined `FILES`
+/// dict.
+fn collect_user_baml_files(
     db: &ProjectDatabase,
     source_files: &[baml_db::SourceFile],
-    baml_src: &std::path::Path,
-) -> String {
-    use std::fmt::Write;
-
-    let mut out = String::from(
-        "# This file is generated by baml-cli. Do not edit.\n\n\
-         _file_map = {\n",
-    );
-    for sf in source_files {
-        let path = sf.path(db);
-        // Make key relative to baml_src (e.g. "sub/foo.baml").
-        let rel = path.strip_prefix(baml_src).unwrap_or(&path);
-        let key = rel.to_string_lossy();
-        let text = sf.text(db);
-        let _ = writeln!(out, "    {}: {},", quote_py(&key), quote_py(text));
-    }
-    out.push_str(
-        "}\n\n\
-         def get_baml_files():\n    \
-             return dict(_file_map)\n",
-    );
-    out
-}
-
-/// Quote a string as a Python repr (triple-quoted to handle embedded quotes/newlines).
-fn quote_py(s: &str) -> String {
-    // Use triple-double-quotes; escape any embedded triple-double-quotes.
-    let escaped = s.replace("\\", "\\\\").replace("\"\"\"", "\\\"\\\"\\\"");
-    format!("\"\"\"{}\"\"\"", escaped)
-}
-
-/// Generate a minimal `__init__.py` that re-exports the client and modules.
-fn generate_init_py(mode: DefaultClientMode) -> String {
-    let default_line = match mode {
-        DefaultClientMode::Sync => "b = sync_b",
-        DefaultClientMode::Async => "b = async_b",
-    };
-    format!(
-        r#"# Generated by baml-cli. Do not edit.
-
-from . import types
-from . import stream_types
-from .sync_client import b as sync_b
-from .async_client import b as async_b
-
-{default_line}
-
-__all__ = ["b", "sync_b", "async_b", "types", "stream_types"]
-"#
-    )
+    baml_src: &Path,
+) -> Vec<(PathBuf, String)> {
+    source_files
+        .iter()
+        .map(|sf| {
+            let path = sf.path(db);
+            let rel = path.strip_prefix(baml_src).unwrap_or(&path).to_path_buf();
+            (rel, sf.text(db).to_string())
+        })
+        .collect()
 }

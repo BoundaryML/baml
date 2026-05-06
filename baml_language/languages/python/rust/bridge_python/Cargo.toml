@@ -1,0 +1,48 @@
+[package]
+name = "bridge_python"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "baml_py"
+crate-type = [ "cdylib", "rlib" ]
+# Rust unit/doc tests cannot run — the test binary references Python C API
+# symbols at startup (via #[pyclass]) and there's no libpython to load.
+# All testing is done via `uv run pytest tests/`.
+test = false
+doctest = false
+
+[features]
+default = [ "bundle-http", "aws-crypto" ]
+bundle-http = [ "bridge_cffi/bundle-http" ]
+aws-crypto = [ "bundle-http", "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
+ring-crypto = [ "bundle-http", "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]
+extension-module = [ "pyo3/extension-module" ]
+
+[dependencies]
+bex_events = { workspace = true }
+bex_project = { workspace = true }
+bridge_cffi = { workspace = true }
+bridge_ctypes = { workspace = true }
+sys_native = { workspace = true }
+log = { workspace = true }
+prost = { workspace = true }
+pyo3 = { workspace = true, features = [ "abi3-py310", "indexmap", "multiple-pymethods" ] }
+pyo3-async-runtimes = { workspace = true, features = [ "tokio-runtime" ] }
+pyo3-stub-gen = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
+
+[build-dependencies]
+pyo3-build-config = { workspace = true }
+
+[[bin]]
+name = "stub_gen"
+path = "src/bin/stub_gen.rs"
+doc = false
+test = false
+
+[package.metadata.ci]
+wasm_support = false

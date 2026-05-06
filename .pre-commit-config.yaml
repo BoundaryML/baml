@@ -6,7 +6,8 @@ fail_fast: false
 
 exclude: |
   (?x)^(
-    crates/.*/snapshots/.*
+    crates/.*/snapshots/.*|
+    baml_language/.*\.pyi
   )$
 
 repos:
@@ -37,17 +38,8 @@ repos:
   - repo: local
     hooks:
       # Priority ordering:
-      # 0: Code generation (rig) - must run first to generate files
       # 1: Formatters and validators (fmt, stow, bep-readme) - format/validate generated code
       # 2: Linters (clippy) - final checks on formatted code
-
-      - id: rig
-        name: rig
-        entry: bash -c 'cd baml_language && cargo run -p tools_rig -- --check'
-        language: system
-        pass_filenames: false
-        files: ^baml_language/(rig_tests/|crates/tools_rig/|crates/baml_codegen)
-        priority: 1
 
       - id: cargo-fmt
         name: cargo fmt

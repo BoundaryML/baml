@@ -15,3 +15,8 @@ pub trait RootHaver: Send {
     /// Forward the heap pointers of all roots in this object.
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>);
 }
+
+impl RootHaver for () {
+    fn collect_roots(&self, _roots: &mut Vec<HeapPtr>) {}
+    fn forward_roots(&mut self, _roots: &HashMap<HeapPtr, HeapPtr>) {}
+}

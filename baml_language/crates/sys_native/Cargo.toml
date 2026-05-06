@@ -7,20 +7,24 @@ authors.workspace = true
 license.workspace = true
 
 [features]
-default = [  ]
+default = [ "aws-crypto" ]
+aws-crypto = [ "dep:rustls", "reqwest/rustls", "rustls?/aws_lc_rs", "rustls?/std" ]
+ring-crypto = [ "dep:rustls", "reqwest/rustls-no-provider", "rustls?/ring", "rustls?/std" ]
 native-tls = [ "reqwest/native-tls" ]
-rustls = [ "reqwest/rustls" ]
+rustls = [ "aws-crypto" ]
 bundle-http = [ "dep:reqwest" ]
 
 [dependencies]
 baml_type = { workspace = true }
 bex_heap = { workspace = true }
 bex_resource_types = { workspace = true }
+sys_glob = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
-reqwest = { workspace = true, features = [ "rustls" ], optional = true }
+reqwest = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [
   "sync",
@@ -31,6 +35,7 @@ tokio = { workspace = true, features = [
   "io-std",
   "time",
 ] }
+walkdir = { workspace = true }
 
 [lints]
 workspace = true

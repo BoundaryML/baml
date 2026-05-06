@@ -73,6 +73,12 @@ class Uint8Array {
     $rust_function
   }
 
+  /// Decodes the bytes as a UTF-8 string.
+  /// Invalid UTF-8 sequences are replaced with U+FFFD (replacement character).
+  function to_string(self) -> string {
+    $rust_function
+  }
+
   // function map<E>(self, f: (int) -> int throws E) -> uint8array throws E {
   //   $rust_function
   // }

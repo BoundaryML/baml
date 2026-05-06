@@ -16,6 +16,21 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+/// Branch hint: tells the compiler this condition is almost never true.
+#[allow(clippy::inline_always)]
+#[inline(always)]
+#[cold]
+fn cold() {}
+
+#[allow(clippy::inline_always)]
+#[inline(always)]
+fn unlikely(b: bool) -> bool {
+    if b {
+        cold();
+    }
+    b
+}
+
 use ::bex_vm_types::{EarlyYieldCheck, RootHaver, types::ErrorClass};
 use ::core::any::TypeId;
 #[cfg(not(target_arch = "wasm32"))]
@@ -53,6 +68,12 @@ pub(crate) struct BytecodeFrame {
     pub(crate) instruction_ptr: usize,
     /// Local variables offset in the eval stack.
     pub(crate) locals_offset: StackIndex,
+    /// Byte offset of the most recently dispatched opcode (compact path).
+    /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
+    /// up-to-date before each `step()` call.
+    /// Used by `capture_stack_trace`, `try_unwind_exception`, and event
+    /// source location capture.
+    pub(crate) faulting_pc: usize,
 }
 
 impl RootHaver for BytecodeFrame {
@@ -415,11 +436,22 @@ pub struct BytecodeProgram {
 /// 2. Builds resolved name lookups for functions, classes, and enums
 pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram, VmInternalError> {
     // Convert objects, attaching native functions
-    let objects: Vec<Object> = program
+    let mut objects: Vec<Object> = program
         .objects
         .into_iter()
         .map(crate::package_baml::attach_builtins)
         .collect::<Result<Vec<_>, _>>()?;
+
+    // Lower every Function's bytecode to compact form. exec_compact requires
+    // this — callers that bypass BexEngine (e.g. tests using BexVm::from_program
+    // directly) would otherwise hit Option::unwrap on compact.as_ref().
+    for obj in &mut objects {
+        if let Object::Function(func) = obj {
+            if func.bytecode.compact.is_none() {
+                func.bytecode.compact = Some(func.bytecode.lower_to_compact());
+            }
+        }
+    }
 
     // Build resolved name maps by scanning objects
     let mut resolved_function_names = HashMap::new();
@@ -584,7 +616,7 @@ impl BexVm {
     pub fn get_object_mut(&mut self, ptr: HeapPtr) -> &mut Object {
         // SAFETY: We have &mut self, so no other code can access the VM.
         // The TLAB ensures this VM has exclusive access to its allocated objects.
-        assert!(
+        debug_assert!(
             !self.heap.is_compile_time_ptr(ptr),
             "Cannot mutate compile-time object"
         );
@@ -869,6 +901,7 @@ impl BexVm {
             function,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
+            faulting_pc: 0,
         }));
 
         // Entry functions need the same frame-local pre-allocation as normal
@@ -1112,6 +1145,7 @@ impl BexVm {
             function: function_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(locals_offset),
+            faulting_pc: 0,
         }));
         self.allocate_real_locals_for_frame(function_ptr)?;
 
@@ -1169,7 +1203,7 @@ impl BexVm {
 
     #[inline]
     fn local_slot_stack_index(locals_offset: StackIndex, slot: usize) -> StackIndex {
-        assert!(
+        debug_assert!(
             slot > 0,
             "local slot 0 is reserved and should never be materialized on stack"
         );
@@ -1307,8 +1341,11 @@ impl BexVm {
                 let func = self.get_object(frame.function()).as_callable().ok()?;
                 match frame {
                     Frame::Bytecode(frame) => {
-                        let last_pc = frame.instruction_ptr.saturating_sub(1);
-                        let error_line = func.bytecode.source_line_for_pc(last_pc);
+                        let error_line = if let Some(compact) = &func.bytecode.compact {
+                            compact.source_line_for_pc(frame.faulting_pc)
+                        } else {
+                            func.bytecode.source_line_for_pc(frame.faulting_pc)
+                        };
                         Some(StackFrame {
                             function_name: func.name.clone(),
                             file_path: func.source_file.clone(),
@@ -1374,25 +1411,30 @@ impl BexVm {
                 unreachable!("non-Native frames already handled above");
             };
 
-            // The frame's instruction_ptr already points to the NEXT instruction
-            // (it was incremented before the instruction executed), so the
-            // faulting PC is one less.
-            debug_assert!(
-                frame.instruction_ptr > 0,
-                "instruction_ptr should be > 0 after execution"
-            );
-            let faulting_pc = frame.instruction_ptr - 1;
+            // faulting_pc is kept up-to-date by both exec_inner (legacy) and
+            // exec_compact before dispatching each instruction.
+            let faulting_pc = frame.faulting_pc;
 
             // Load the function for this frame to access its exception table.
             // SAFETY: See `load_function` doc comment.
             let frame_function = unsafe { self.load_function(depth)? };
 
             // Find the first exception table entry covering this PC.
-            if let Some(entry) = frame_function
-                .bytecode
-                .exception_handlers_for_pc(faulting_pc)
-                .next()
-            {
+            // Use compact exception table when available (byte-offset PCs),
+            // otherwise fall back to the legacy instruction-index table.
+            let handler_entry = if let Some(compact) = &frame_function.bytecode.compact {
+                compact
+                    .exception_handlers_for_pc(faulting_pc)
+                    .next()
+                    .cloned()
+            } else {
+                frame_function
+                    .bytecode
+                    .exception_handlers_for_pc(faulting_pc)
+                    .next()
+                    .cloned()
+            };
+            if let Some(entry) = handler_entry {
                 // Found a handler in this frame. Truncate the eval stack back
                 // to just after the frame's locals region (removes stale
                 // temporaries from interrupted expressions).
@@ -1663,6 +1705,7 @@ impl BexVm {
                     function: callee_ptr,
                     instruction_ptr: 0,
                     locals_offset,
+                    faulting_pc: 0,
                 }));
                 self.allocate_real_locals_for_frame(callee_ptr)?;
 
@@ -1893,78 +1936,48 @@ impl BexVm {
         }
     }
 
+    #[allow(clippy::inline_always)] // Measured: 20-40% speedup from inlining the dispatch loop
+    #[inline(always)]
     fn exec_inner(&mut self) -> Result<VmExecState, VmError> {
         if self.frames.is_empty() {
             return Ok(VmExecState::Complete(Value::Null));
         }
 
-        let mut frame_idx = self.frames.len() - 1;
-        let mut function = unsafe { self.load_function(frame_idx)? };
+        // Always use compact bytecode dispatch — all functions are lowered
+        // to compact bytecode at engine load time.
+        return self.exec_compact();
 
-        loop {
-            // ── CPS continuation handler ──────────────────────────────
-            //
-            // When a bytecode callback returns (Return instruction) and
-            // the frame below is Frame::Native, the Return handler just
-            // pops the bytecode frame and leaves the result on the stack.
-            // We detect the Native frame here and drive the continuation.
-            //
-            // This also handles re-entry after exec() yielded a
-            // FunctionExit span for a traced callback.
-            while matches!(self.frames.last(), Some(Frame::Native(_))) {
-                let v = self.stack.ensure_pop()?;
-                let Some(Frame::Native(nf)) = self.frames.pop() else {
-                    unreachable!("just matched Some(Frame::Native(_))");
-                };
-                let native_fn_ptr = nf.function;
+        // Legacy instruction-array dispatch (kept for reference, never reached).
+        #[allow(unreachable_code)]
+        {
+            let mut frame_idx = self.frames.len() - 1;
+            let mut function = unsafe { self.load_function(frame_idx)? };
 
-                match nf.continuation.call(self, v) {
-                    NativeCallResult::Done(val) => {
-                        self.stack.push(val);
-                        // Continue the while loop — there may be stacked
-                        // Native frames below (e.g. nested continuations).
-                    }
-                    NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
-                        VmError::Thrown(exception_value) => {
-                            self.try_unwind_exception(
-                                &mut frame_idx,
-                                &mut function,
-                                exception_value,
-                            )?;
-                            break;
+            loop {
+                // ── CPS continuation handler ──────────────────────────────
+                //
+                // When a bytecode callback returns (Return instruction) and
+                // the frame below is Frame::Native, the Return handler just
+                // pops the bytecode frame and leaves the result on the stack.
+                // We detect the Native frame here and drive the continuation.
+                //
+                // This also handles re-entry after exec() yielded a
+                // FunctionExit span for a traced callback.
+                while matches!(self.frames.last(), Some(Frame::Native(_))) {
+                    let v = self.stack.ensure_pop();
+                    let Some(Frame::Native(nf)) = self.frames.pop() else {
+                        unreachable!("just matched Some(Frame::Native(_))");
+                    };
+                    let native_fn_ptr = nf.function;
+
+                    match nf.continuation.call(self, v) {
+                        NativeCallResult::Done(val) => {
+                            self.stack.push(val);
+                            // Continue the while loop — there may be stacked
+                            // Native frames below (e.g. nested continuations).
                         }
-                        other => return Err(other),
-                    },
-                    NativeCallResult::YieldToCall {
-                        callee,
-                        args: mut callback_args,
-                        continuation,
-                    } => {
-                        // The continuation wants to call another function.
-                        // Push the new Native frame, then dispatch the
-                        // callback through ECFLO.
-                        self.frames.push(Frame::Native(NativeFrame {
-                            function: native_fn_ptr,
-                            continuation,
-                        }));
-
-                        // If callee is a BoundMethod, insert receiver into args.
-                        let real_callee =
-                            self.resolve_bound_method_callee(callee, &mut callback_args);
-
-                        let arg_count = callback_args.len();
-                        let cb_locals = StackIndex::from_raw(self.stack.len());
-                        self.stack.extend(callback_args);
-
-                        let ecflo_result = match self.execute_call_from_locals_offset(
-                            real_callee,
-                            cb_locals,
-                            arg_count,
-                            &mut frame_idx,
-                            &mut function,
-                        ) {
-                            Ok(result) => result,
-                            Err(VmError::Thrown(exception_value)) => {
+                        NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
+                            VmError::Thrown(exception_value) => {
                                 self.try_unwind_exception(
                                     &mut frame_idx,
                                     &mut function,
@@ -1972,77 +1985,114 @@ impl BexVm {
                                 )?;
                                 break;
                             }
-                            Err(other) => return Err(other),
-                        };
+                            other => return Err(other),
+                        },
+                        NativeCallResult::YieldToCall {
+                            callee,
+                            args: mut callback_args,
+                            continuation,
+                        } => {
+                            // The continuation wants to call another function.
+                            // Push the new Native frame, then dispatch the
+                            // callback through ECFLO.
+                            self.frames.push(Frame::Native(NativeFrame {
+                                function: native_fn_ptr,
+                                continuation,
+                            }));
 
-                        if let Some(state) = ecflo_result {
-                            return Ok(state);
+                            // If callee is a BoundMethod, insert receiver into args.
+                            let real_callee =
+                                self.resolve_bound_method_callee(callee, &mut callback_args);
+
+                            let arg_count = callback_args.len();
+                            let cb_locals = StackIndex::from_raw(self.stack.len());
+                            self.stack.extend(callback_args);
+
+                            let ecflo_result = match self.execute_call_from_locals_offset(
+                                real_callee,
+                                cb_locals,
+                                arg_count,
+                                &mut frame_idx,
+                                &mut function,
+                            ) {
+                                Ok(result) => result,
+                                Err(VmError::Thrown(exception_value)) => {
+                                    self.try_unwind_exception(
+                                        &mut frame_idx,
+                                        &mut function,
+                                        exception_value,
+                                    )?;
+                                    break;
+                                }
+                                Err(other) => return Err(other),
+                            };
+
+                            if let Some(state) = ecflo_result {
+                                return Ok(state);
+                            }
+                            // If ECFLO returned None: either a bytecode frame
+                            // was pushed (top is Bytecode, while exits) or a
+                            // native callback completed inline (top is Native,
+                            // while continues).
                         }
-                        // If ECFLO returned None: either a bytecode frame
-                        // was pushed (top is Bytecode, while exits) or a
-                        // native callback completed inline (top is Native,
-                        // while continues).
                     }
                 }
-            }
 
-            if self.frames.is_empty() {
-                return self
-                    .stack
-                    .ensure_pop()
-                    .map_err(VmError::InternalError)
-                    .map(VmExecState::Complete);
-            }
-
-            // Sync frame state — may have changed due to continuation
-            // handling above or the previous step()'s Return.
-            frame_idx = self.frames.len() - 1;
-            function = unsafe { self.load_function(frame_idx)? };
-
-            // ── Instruction execution ─────────────────────────────────
-
-            let Frame::Bytecode(bf) = &mut self.frames[frame_idx] else {
-                unreachable!("exec loop frame is always Bytecode after continuation handler");
-            };
-            let instruction_ptr = bf.instruction_ptr;
-            bf.instruction_ptr += 1;
-
-            #[cfg(debug_assertions)]
-            #[allow(clippy::print_stderr)] // intentional debug output
-            if std::env::var("BEX_VM_DEBUG").is_ok() {
-                let stack = self
-                    .stack
-                    .iter()
-                    .map(crate::debug::display_value)
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                let (instruction, metadata) = crate::debug::display_instruction(
-                    instruction_ptr,
-                    function,
-                    &self.globals,
-                    None,
-                    None,
-                );
-
-                eprintln!("[{stack}]");
-                eprintln!("{instruction} {metadata}");
-            }
-
-            let step_result = self.step(&mut frame_idx, &mut function, instruction_ptr);
-
-            match step_result {
-                Ok(Some(state)) => return Ok(state),
-                Ok(None) => {}
-                Err(VmError::InternalError(err)) => return Err(VmError::InternalError(err)),
-                Err(VmError::Thrown(exception_value)) => {
-                    self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)?;
+                if self.frames.is_empty() {
+                    return Ok(VmExecState::Complete(self.stack.ensure_pop()));
                 }
-                Err(
-                    e @ (VmError::ThrownUnhandled { .. } | VmError::TracedInternalError { .. }),
-                ) => return Err(e),
+
+                // Sync frame state — may have changed due to continuation
+                // handling above or the previous step()'s Return.
+                frame_idx = self.frames.len() - 1;
+                function = unsafe { self.load_function(frame_idx)? };
+
+                // ── Instruction execution ─────────────────────────────────
+
+                let Frame::Bytecode(bf) = &mut self.frames[frame_idx] else {
+                    unreachable!("exec loop frame is always Bytecode after continuation handler");
+                };
+                let instruction_ptr = bf.instruction_ptr;
+                bf.instruction_ptr += 1;
+                bf.faulting_pc = instruction_ptr;
+
+                #[cfg(debug_assertions)]
+                #[allow(clippy::print_stderr)] // intentional debug output
+                if std::env::var("BEX_VM_DEBUG").is_ok() {
+                    let stack = self
+                        .stack
+                        .iter()
+                        .map(crate::debug::display_value)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
+                    let (instruction, metadata) = crate::debug::display_instruction(
+                        instruction_ptr,
+                        function,
+                        &self.globals,
+                        None,
+                        None,
+                    );
+
+                    eprintln!("[{stack}]");
+                    eprintln!("{instruction} {metadata}");
+                }
+
+                let step_result = self.step(&mut frame_idx, &mut function, instruction_ptr);
+
+                match step_result {
+                    Ok(Some(state)) => return Ok(state),
+                    Ok(None) => {}
+                    Err(VmError::InternalError(err)) => return Err(VmError::InternalError(err)),
+                    Err(VmError::Thrown(exception_value)) => {
+                        self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)?;
+                    }
+                    Err(
+                        e @ (VmError::ThrownUnhandled { .. } | VmError::TracedInternalError { .. }),
+                    ) => return Err(e),
+                }
             }
-        }
+        } // end #[allow(unreachable_code)]
     }
 
     /// Execute a single instruction.
@@ -2059,13 +2109,23 @@ impl BexVm {
     /// ```
     /// at the end to allow early yielding in the event of a long-running
     /// operation.
+    #[allow(clippy::inline_always)] // Measured: 20-40% speedup from inlining the dispatch loop
+    #[inline(always)]
     fn step(
         &mut self,
         frame_idx: &mut usize,
         function: &mut &'static Function,
         instruction_ptr: usize,
     ) -> Result<Option<VmExecState>, VmError> {
-        match function.bytecode.instructions[instruction_ptr] {
+        // SAFETY: The bytecode compiler guarantees every code path ends with
+        // a Return instruction, so instruction_ptr is always in bounds.
+        // Skipping the bounds check removes a cmp+branch from every dispatch.
+        match unsafe {
+            *function
+                .bytecode
+                .instructions
+                .get_unchecked(instruction_ptr)
+        } {
             Instruction::NotifyBlock(block_index) => {
                 // Get the notification from the function's storage
                 let notification = &function.block_notifications[block_index];
@@ -2085,7 +2145,12 @@ impl BexVm {
             }
 
             Instruction::VizEnter(index) | Instruction::VizExit(index) => {
-                let instruction = &function.bytecode.instructions[instruction_ptr];
+                let instruction = unsafe {
+                    function
+                        .bytecode
+                        .instructions
+                        .get_unchecked(instruction_ptr)
+                };
                 let delta = match instruction {
                     Instruction::VizEnter(_) => bytecode::VizExecDelta::Enter,
                     Instruction::VizExit(_) => bytecode::VizExecDelta::Exit,
@@ -2121,8 +2186,11 @@ impl BexVm {
             }
 
             Instruction::LoadVar(index) => {
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let slot = Self::local_slot_stack_index(bf.locals_offset, index);
                 let value = self.stack[slot];
@@ -2130,14 +2198,17 @@ impl BexVm {
             }
 
             Instruction::StoreVar(index) => {
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 // Absolute index of the local variable.
                 let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
 
                 // New value.
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
 
                 // Old value being replaced.
                 let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
@@ -2162,7 +2233,9 @@ impl BexVm {
                 // 3. `process_notifications` walks all roots reaching this
                 //    node (just itself, since it IS a root) and applies
                 //    the watch filter to decide whether to notify.
-                if self.watched_vars.contains_key(&local_var_index) {
+                if unlikely(!self.watched_vars.is_empty())
+                    && self.watched_vars.contains_key(&local_var_index)
+                {
                     let watched_node = NodeId::LocalVar(local_var_index);
 
                     self.update_watched_node(watched_node, watch::Path::Binding, old_value, value);
@@ -2188,14 +2261,14 @@ impl BexVm {
 
             Instruction::StoreGlobal(index) => {
                 // Consume the value. Read impl of Instruction::StoreVar.
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
 
                 // No write barrier: globals is a VM-owned root structure, not a heap object.
                 self.globals[index] = value;
             }
 
             Instruction::LoadField(index) => {
-                let top = self.stack.ensure_pop()?;
+                let top = self.stack.ensure_pop();
 
                 let reference = self.as_object_ptr(&top, ObjectType::Instance)?;
 
@@ -2217,10 +2290,10 @@ impl BexVm {
 
             Instruction::StoreField(index) => {
                 // Consume the new value to be set from the stack.
-                let new_value = self.stack.ensure_pop()?;
+                let new_value = self.stack.ensure_pop();
 
                 // Consume the instance value from the stack.
-                let instance_value = self.stack.ensure_pop()?;
+                let instance_value = self.stack.ensure_pop();
                 let instance_index = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
 
                 // Read old value (and typecheck).
@@ -2265,10 +2338,10 @@ impl BexVm {
 
             Instruction::InitField(index) => {
                 // Consume the new value to be set from the stack.
-                let new_value = self.stack.ensure_pop()?;
+                let new_value = self.stack.ensure_pop();
 
                 // Peek — do NOT pop the instance; it stays on the stack for the next field.
-                let instance_slot = self.stack.ensure_slot_from_top(0)?;
+                let instance_slot = self.stack.ensure_slot_from_top(0);
                 let instance_value = self.stack[instance_slot];
                 let instance_index = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
 
@@ -2319,7 +2392,7 @@ impl BexVm {
             }
 
             Instruction::Copy(offset) => {
-                let index = self.stack.ensure_slot_from_top(offset)?;
+                let index = self.stack.ensure_slot_from_top(offset);
                 let value = self.stack[index];
                 self.stack.push(value);
             }
@@ -2330,8 +2403,11 @@ impl BexVm {
                 // becomes a bottleneck on hot loops, it can be replaced with
                 // wrapping_add_signed — the array bounds check on the next
                 // iteration will catch invalid pointers anyway.
-                let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked_mut(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 bf.instruction_ptr = instruction_ptr
                     .checked_add_signed(offset)
@@ -2343,7 +2419,7 @@ impl BexVm {
 
             Instruction::PopJumpIfFalse(offset) => {
                 // Pop the condition from the stack (don't leave it there).
-                let condition = self.stack.ensure_pop()?;
+                let condition = self.stack.ensure_pop();
 
                 match condition {
                     // Reassign only if the condition is false.
@@ -2374,11 +2450,14 @@ impl BexVm {
             }
 
             Instruction::JumpIfFalse(offset) => {
-                let top = self.stack.ensure_stack_top()?;
+                let top = self.stack.ensure_stack_top();
                 let condition = self.stack[top];
 
-                let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked_mut(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
 
                 match condition {
@@ -2403,7 +2482,7 @@ impl BexVm {
             }
 
             Instruction::Throw => {
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
                 self.try_unwind_exception(frame_idx, function, value)?;
                 if self.early_yield.should_early_yield() {
                     return Ok(Some(VmExecState::EarlyYield));
@@ -2411,8 +2490,8 @@ impl BexVm {
             }
 
             Instruction::BinOp(op) => {
-                let right = self.stack.ensure_pop()?;
-                let left = self.stack.ensure_pop()?;
+                let right = self.stack.ensure_pop();
+                let left = self.stack.ensure_pop();
 
                 let result = match (left, right) {
                     (Value::Int(left), Value::Int(right)) => Value::Int(match op {
@@ -2564,8 +2643,8 @@ impl BexVm {
             }
 
             Instruction::CmpOp(op) => {
-                let right = self.stack.ensure_pop()?;
-                let left = self.stack.ensure_pop()?;
+                let right = self.stack.ensure_pop();
+                let left = self.stack.ensure_pop();
 
                 let result = match (left, right) {
                     (Value::Int(left), Value::Int(right)) => Value::Bool(match op {
@@ -2702,8 +2781,146 @@ impl BexVm {
                 self.stack.push(result);
             }
 
+            // ── Specialized integer arithmetic ───────────────────────
+            Instruction::AddInt => {
+                let Value::Int(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Int(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Int(l + r));
+            }
+            Instruction::SubInt => {
+                let Value::Int(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Int(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Int(l - r));
+            }
+            Instruction::MulInt => {
+                let Value::Int(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Int(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Int(l * r));
+            }
+            Instruction::DivInt => {
+                let Value::Int(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Int(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                if r == 0 {
+                    return Err(VmError::Thrown(self.panic_to_exception_value(
+                        VmPanic::DivisionByZero {
+                            left: Value::Int(l),
+                            right: Value::Int(r),
+                        },
+                    )));
+                }
+                self.stack.push(Value::Int(l / r));
+            }
+            Instruction::ModInt => {
+                let Value::Int(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Int(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Int(l % r));
+            }
+
+            // ── Specialized float arithmetic ─────────────────────────
+            Instruction::AddFloat => {
+                let Value::Float(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Float(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Float(l + r));
+            }
+            Instruction::SubFloat => {
+                let Value::Float(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Float(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Float(l - r));
+            }
+            Instruction::MulFloat => {
+                let Value::Float(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Float(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Float(l * r));
+            }
+            Instruction::DivFloat => {
+                let Value::Float(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Float(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                if r == 0.0 {
+                    return Err(VmError::Thrown(self.panic_to_exception_value(
+                        VmPanic::DivisionByZero {
+                            left: Value::Float(l),
+                            right: Value::Float(r),
+                        },
+                    )));
+                }
+                self.stack.push(Value::Float(l / r));
+            }
+
+            // ── Specialized integer comparison ───────────────────────
+            Instruction::CmpIntOp(op) => {
+                let Value::Int(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Int(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Bool(match op {
+                    CmpOp::Eq => l == r,
+                    CmpOp::NotEq => l != r,
+                    CmpOp::Lt => l < r,
+                    CmpOp::LtEq => l <= r,
+                    CmpOp::Gt => l > r,
+                    CmpOp::GtEq => l >= r,
+                }));
+            }
+
+            // ── Specialized float comparison ─────────────────────────
+            #[allow(clippy::float_cmp)]
+            Instruction::CmpFloatOp(op) => {
+                let Value::Float(r) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Float(l) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                self.stack.push(Value::Bool(match op {
+                    CmpOp::Eq => l == r,
+                    CmpOp::NotEq => l != r,
+                    CmpOp::Lt => l < r,
+                    CmpOp::LtEq => l <= r,
+                    CmpOp::Gt => l > r,
+                    CmpOp::GtEq => l >= r,
+                }));
+            }
+
             Instruction::UnaryOp(op) => {
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
 
                 let result = match (op, value) {
                     (UnaryOp::Not, Value::Bool(value)) => Value::Bool(!value),
@@ -2736,8 +2953,8 @@ impl BexVm {
             Instruction::LoadArrayElement => {
                 // Stack should contain [array, index]
                 // Pop the index first, then the array
-                let index_value = self.stack.ensure_pop()?;
-                let array_value = self.stack.ensure_pop()?;
+                let index_value = self.stack.ensure_pop();
+                let array_value = self.stack.ensure_pop();
 
                 let array_obj_index = self.as_object_ptr(&array_value, ObjectType::Array)?;
 
@@ -2836,8 +3053,8 @@ impl BexVm {
                 //    - Return a runtime error NoSuchKeyInMap if key not found
                 // 7. Push the found value onto the stack
 
-                let key_value = self.stack.ensure_pop()?;
-                let map_value = self.stack.ensure_pop()?;
+                let key_value = self.stack.ensure_pop();
+                let map_value = self.stack.ensure_pop();
 
                 let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
 
@@ -2864,9 +3081,9 @@ impl BexVm {
 
             Instruction::StoreArrayElement => {
                 // Instruction args.
-                let new_value = self.stack.ensure_pop()?;
-                let index_value = self.stack.ensure_pop()?;
-                let array_value = self.stack.ensure_pop()?;
+                let new_value = self.stack.ensure_pop();
+                let index_value = self.stack.ensure_pop();
+                let array_value = self.stack.ensure_pop();
                 let array_object_index = self.as_object_ptr(&array_value, ObjectType::Array)?;
 
                 // Get the array length for bounds checking.
@@ -2986,9 +3203,9 @@ impl BexVm {
 
             Instruction::StoreMapElement => {
                 // Instruction args.
-                let new_value = self.stack.ensure_pop()?;
-                let key_value = self.stack.ensure_pop()?;
-                let map_value = self.stack.ensure_pop()?;
+                let new_value = self.stack.ensure_pop();
+                let key_value = self.stack.ensure_pop();
+                let map_value = self.stack.ensure_pop();
 
                 // Get the string key from the objects pool.
                 let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
@@ -3081,7 +3298,7 @@ impl BexVm {
                     enm.variants.len()
                 };
 
-                let variant = self.stack.ensure_pop()?;
+                let variant = self.stack.ensure_pop();
 
                 let Value::Int(variant_index) = variant else {
                     return Err(VmInternalError::TypeError {
@@ -3169,7 +3386,7 @@ impl BexVm {
             }
 
             Instruction::Await => {
-                let value = self.stack.ensure_stack_top()?;
+                let value = self.stack.ensure_stack_top();
 
                 let wanted_type = FutureType::Any;
 
@@ -3208,7 +3425,7 @@ impl BexVm {
                 // Stack contains: [channel, filter]
 
                 // Consume filter.
-                let filter = match self.stack.ensure_pop()? {
+                let filter = match self.stack.ensure_pop() {
                     Value::Null => WatchFilter::Default,
                     Value::Object(object_index) => match self.get_object(object_index) {
                         Object::Function(_) => WatchFilter::Function(object_index),
@@ -3224,11 +3441,14 @@ impl BexVm {
                 };
 
                 // Consume channel.
-                let channel_value = self.stack.ensure_pop()?;
+                let channel_value = self.stack.ensure_pop();
                 let channel = self.as_string(&channel_value)?.to_owned();
 
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
                 let value = self.stack[local_var_index];
@@ -3270,8 +3490,11 @@ impl BexVm {
             }
 
             Instruction::Unwatch(index) => {
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
 
@@ -3297,8 +3520,11 @@ impl BexVm {
             }
 
             Instruction::Notify(index) => {
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
                 let var_node = NodeId::LocalVar(local_var_index);
@@ -3335,7 +3561,7 @@ impl BexVm {
 
             Instruction::CallIndirect => {
                 // Stack layout: [arg1, arg2, ..., argN, callee]
-                let callee_slot = self.stack.ensure_stack_top()?;
+                let callee_slot = self.stack.ensure_stack_top();
                 let callee_value = self.stack[callee_slot];
                 let callee_ptr =
                     self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
@@ -3368,7 +3594,7 @@ impl BexVm {
                     let fn_ptr = bm.function;
 
                     // Pop the callee (bound_method) off the top.
-                    let _popped = self.stack.ensure_pop()?;
+                    let _popped = self.stack.ensure_pop();
 
                     // Stack: [arg1, ..., argN] where N = visible_arity.
                     let args_offset = self
@@ -3400,7 +3626,7 @@ impl BexVm {
                         .len()
                         .checked_sub(arg_count + 1)
                         .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count + 1))?;
-                    let _popped_callee = self.stack.ensure_pop()?;
+                    let _popped_callee = self.stack.ensure_pop();
                     let locals_offset = StackIndex::from_raw(args_offset);
 
                     if let Some(state) = self.execute_call_from_locals_offset(
@@ -3420,7 +3646,7 @@ impl BexVm {
 
             Instruction::Return => {
                 // Pop the result from the eval stack.
-                let result = self.stack.ensure_pop()?;
+                let result = self.stack.ensure_pop();
 
                 // Check if this frame was traced.
                 // Capture function name before popping the frame.
@@ -3438,8 +3664,11 @@ impl BexVm {
 
                 // Restore the eval stack to the state before the function
                 // was called and leave the result on top.
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 self.stack.drain(bf.locals_offset..);
                 self.stack.push(result);
@@ -3450,22 +3679,12 @@ impl BexVm {
                 // Return from interrupt.
                 if Some(self.frames.len()) == self.interrupt_frame {
                     self.interrupt_frame = None;
-                    return self
-                        .stack
-                        .ensure_pop()
-                        .map_err(VmError::InternalError)
-                        .map(VmExecState::Complete)
-                        .map(Some);
+                    return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
                 }
 
                 // If there are no more frames, we're done.
                 if self.frames.is_empty() {
-                    return self
-                        .stack
-                        .ensure_pop()
-                        .map_err(VmError::InternalError)
-                        .map(VmExecState::Complete)
-                        .map(Some);
+                    return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
                 }
 
                 // Yield FunctionExit for traced frames (with result value).
@@ -3488,9 +3707,9 @@ impl BexVm {
 
             Instruction::AllocMap(n) => {
                 let map = if n > 0 {
-                    let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1)?;
-                    let end_of_keys = self.stack.ensure_slot_from_top(n - 1)?;
-                    let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1)?;
+                    let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
+                    let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
+                    let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1);
 
                     // We can safely copy the objects that act as values so there's no problem
                     // with not draining them.
@@ -3530,9 +3749,9 @@ impl BexVm {
             // ============================================================
             // Jump Table Instructions
             // ============================================================
-            Instruction::JumpTable { table_idx, default } => {
+            Instruction::JumpTable(table_idx) => {
                 // Pop discriminant from stack
-                let discriminant = self.stack.ensure_pop()?;
+                let discriminant = self.stack.ensure_pop();
 
                 // Must be an integer
                 let Value::Int(value) = discriminant else {
@@ -3545,11 +3764,14 @@ impl BexVm {
 
                 // Lookup in jump table
                 let table = &function.bytecode.jump_tables[table_idx];
-                let offset = table.lookup(value).unwrap_or(default);
+                let offset = table.lookup(value).unwrap_or(table.default);
 
                 // Jump
-                let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked_mut(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 bf.instruction_ptr = instruction_ptr
                     .checked_add_signed(offset)
@@ -3562,7 +3784,7 @@ impl BexVm {
 
             Instruction::Discriminant => {
                 // Pop value from stack
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
 
                 // Must be an object (variants are heap-allocated)
                 let Value::Object(object_idx) = value else {
@@ -3591,13 +3813,13 @@ impl BexVm {
             }
 
             Instruction::TypeTag => {
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
                 let tag = value_type_tag(&value);
                 self.stack.push(Value::Int(tag));
             }
 
             Instruction::IsType(const_idx) => {
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
                 let expected = &function.bytecode.resolved_constants[const_idx];
                 let result = match expected {
                     Value::Object(class_ptr) => {
@@ -3625,7 +3847,7 @@ impl BexVm {
                 clippy::cast_possible_truncation
             )]
             Instruction::DenseTag(table_idx) => {
-                let tag = match self.stack.ensure_pop()? {
+                let tag = match self.stack.ensure_pop() {
                     Value::Int(t) => t,
                     other => {
                         // TypeTag always pushes Int, so this shouldn't happen.
@@ -3649,7 +3871,7 @@ impl BexVm {
             }
 
             Instruction::ThrowIfPanic => {
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
                 let is_panic = match value {
                     Value::Object(ptr) => match self.get_object(ptr) {
                         Object::Instance(instance) => {
@@ -3676,16 +3898,24 @@ impl BexVm {
             }
 
             Instruction::MakeCell => {
-                let value = self.stack.ensure_pop()?;
+                let value = self.stack.ensure_pop();
                 let cell = Object::Cell(Cell { value });
                 let ptr = self.tlab.alloc(cell);
                 self.stack.push(Value::Object(ptr));
             }
 
-            Instruction::MakeClosure(obj_idx, capture_count) => {
+            Instruction::MakeClosure(obj_idx) => {
+                // Capture count was pushed onto the stack by a preceding LoadConst.
+                let Value::Int(capture_count) = self.stack.ensure_pop() else {
+                    unreachable!("MakeClosure: capture count must be Int");
+                };
+                // Safety: capture_count is always a small non-negative integer
+                // emitted by the compiler as a LoadConst.
+                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                let capture_count = capture_count as usize;
                 let mut captures = Vec::with_capacity(capture_count);
                 for _ in 0..capture_count {
-                    captures.push(self.stack.ensure_pop()?);
+                    captures.push(self.stack.ensure_pop());
                 }
                 // Captures were pushed left-to-right, popped right-to-left.
                 captures.reverse();
@@ -3699,7 +3929,7 @@ impl BexVm {
             }
 
             Instruction::MakeBoundMethod(global_idx) => {
-                let receiver = self.stack.ensure_pop()?;
+                let receiver = self.stack.ensure_pop();
                 let callee_value = self.globals[global_idx];
                 let function_ptr =
                     self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
@@ -3717,8 +3947,11 @@ impl BexVm {
             }
 
             Instruction::LoadDeref(slot) => {
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let cell_value = self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)];
                 let Value::Object(cell_ptr) = cell_value else {
@@ -3741,9 +3974,12 @@ impl BexVm {
             }
 
             Instruction::StoreDeref(slot) => {
-                let value = self.stack.ensure_pop()?;
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let value = self.stack.ensure_pop();
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let cell_value = self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)];
                 let Value::Object(cell_ptr) = cell_value else {
@@ -3768,8 +4004,11 @@ impl BexVm {
             }
 
             Instruction::LoadCapture(idx) => {
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let closure_ptr = bf.function;
                 // SAFETY: closure_ptr is the frame's function, valid for
@@ -3803,9 +4042,12 @@ impl BexVm {
             }
 
             Instruction::StoreCapture(idx) => {
-                let value = self.stack.ensure_pop()?;
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let value = self.stack.ensure_pop();
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let closure_ptr = bf.function;
                 // SAFETY: closure_ptr is the frame's function, valid for
@@ -3847,8 +4089,11 @@ impl BexVm {
                 // Push the raw cell pointer from captures[idx] without
                 // reading through the cell.  Used by nested closures to
                 // forward a shared cell to an inner closure.
-                let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                    unreachable!("exec loop frame is always Bytecode");
+                let bf = unsafe {
+                    match self.frames.get_unchecked(*frame_idx) {
+                        Frame::Bytecode(bf) => bf,
+                        Frame::Native(_) => std::hint::unreachable_unchecked(),
+                    }
                 };
                 let closure_ptr = bf.function;
                 // SAFETY: closure_ptr is the frame's function, valid for
@@ -3867,19 +4112,24 @@ impl BexVm {
             Instruction::SendEvent => {
                 // Stack layout (top-to-bottom): [data, event_name]
                 // Pop data first (it's on top), then event_name.
-                let data = self.stack.ensure_pop()?;
-                let name_value = self.stack.ensure_pop()?;
+                let data = self.stack.ensure_pop();
+                let name_value = self.stack.ensure_pop();
 
                 // Extract the event name string from the heap.
                 let event_name = self.as_string(&name_value)?.clone();
 
                 // Capture source location from the current frame's line table.
                 let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
-                    let pc = bf.instruction_ptr.saturating_sub(1);
-                    self.get_object(bf.function)
-                        .as_callable()
-                        .ok()
-                        .and_then(|func| func.bytecode.line_entry_for_pc(pc))
+                    let pc = bf.faulting_pc;
+                    let func_obj = self.get_object(bf.function).as_callable().ok();
+                    func_obj
+                        .and_then(|func| {
+                            if let Some(compact) = &func.bytecode.compact {
+                                compact.line_entry_for_pc(pc)
+                            } else {
+                                func.bytecode.line_entry_for_pc(pc)
+                            }
+                        })
                         .map(|entry| {
                             (
                                 entry.span.file_id.as_u32(),
@@ -3899,7 +4149,2008 @@ impl BexVm {
                     source_location,
                 }));
             }
+
+            Instruction::_Pad(..) => unsafe { std::hint::unreachable_unchecked() },
         }
+
+        Ok(None)
+    }
+
+    // ── Shared helpers for compact dispatch ──────────────────────────────────
+
+    /// Execute a comparison operation. Pops two values, pushes a Bool.
+    /// Shared between the legacy `step()` `CmpOp` arm and the expanded compact opcodes.
+    fn exec_cmpop(&mut self, op: CmpOp) -> Result<(), VmError> {
+        let right = self.stack.ensure_pop();
+        let left = self.stack.ensure_pop();
+
+        let result = match (left, right) {
+            (Value::Int(l), Value::Int(r)) => Value::Bool(match op {
+                CmpOp::Eq => l == r,
+                CmpOp::NotEq => l != r,
+                CmpOp::Lt => l < r,
+                CmpOp::LtEq => l <= r,
+                CmpOp::Gt => l > r,
+                CmpOp::GtEq => l >= r,
+            }),
+
+            #[allow(clippy::float_cmp)]
+            (Value::Float(l), Value::Float(r)) => Value::Bool(match op {
+                CmpOp::Eq => l == r,
+                CmpOp::NotEq => l != r,
+                CmpOp::Lt => l < r,
+                CmpOp::LtEq => l <= r,
+                CmpOp::Gt => l > r,
+                CmpOp::GtEq => l >= r,
+            }),
+
+            #[allow(clippy::cast_precision_loss, clippy::float_cmp)]
+            (Value::Int(l), Value::Float(r)) => {
+                let l = l as f64;
+                Value::Bool(match op {
+                    CmpOp::Eq => l == r,
+                    CmpOp::NotEq => l != r,
+                    CmpOp::Lt => l < r,
+                    CmpOp::LtEq => l <= r,
+                    CmpOp::Gt => l > r,
+                    CmpOp::GtEq => l >= r,
+                })
+            }
+
+            #[allow(clippy::cast_precision_loss, clippy::float_cmp)]
+            (Value::Float(l), Value::Int(r)) => {
+                let r = r as f64;
+                Value::Bool(match op {
+                    CmpOp::Eq => l == r,
+                    CmpOp::NotEq => l != r,
+                    CmpOp::Lt => l < r,
+                    CmpOp::LtEq => l <= r,
+                    CmpOp::Gt => l > r,
+                    CmpOp::GtEq => l >= r,
+                })
+            }
+
+            (Value::Object(li), Value::Object(ri))
+                if matches!(self.get_object(li), Object::String(_))
+                    && matches!(self.get_object(ri), Object::String(_)) =>
+            {
+                let ls = self.as_string(&left)?;
+                let rs = self.as_string(&right)?;
+                Value::Bool(match op {
+                    CmpOp::Eq => ls == rs,
+                    CmpOp::NotEq => ls != rs,
+                    CmpOp::Lt => ls < rs,
+                    CmpOp::LtEq => ls <= rs,
+                    CmpOp::Gt => ls > rs,
+                    CmpOp::GtEq => ls >= rs,
+                })
+            }
+
+            (Value::Object(li), Value::Object(ri))
+                if matches!(self.get_object(li), Object::Uint8Array(_))
+                    && matches!(self.get_object(ri), Object::Uint8Array(_)) =>
+            {
+                let la = self.as_uint8array(&left)?;
+                let ra = self.as_uint8array(&right)?;
+                Value::Bool(match op {
+                    CmpOp::Eq => la == ra,
+                    CmpOp::NotEq => la != ra,
+                    _ => {
+                        return Err(VmInternalError::CannotApplyCmpOp {
+                            left: bex_vm_types::types::Type::Object(ObjectType::Uint8Array),
+                            right: bex_vm_types::types::Type::Object(ObjectType::Uint8Array),
+                            op,
+                        }
+                        .into());
+                    }
+                })
+            }
+
+            (Value::Object(li), Value::Object(ri))
+                if matches!(self.get_object(li), Object::Variant(_))
+                    && matches!(self.get_object(ri), Object::Variant(_)) =>
+            {
+                let Object::Variant(lv) = self.get_object(li) else {
+                    unreachable!()
+                };
+                let Object::Variant(rv) = self.get_object(ri) else {
+                    unreachable!()
+                };
+                Value::Bool(match op {
+                    CmpOp::Eq => lv.enm == rv.enm && lv.index == rv.index,
+                    CmpOp::NotEq => lv.enm != rv.enm || lv.index != rv.index,
+                    _ => {
+                        return Err(VmInternalError::CannotApplyCmpOp {
+                            left: bex_vm_types::types::Type::Object(ObjectType::Variant),
+                            right: bex_vm_types::types::Type::Object(ObjectType::Variant),
+                            op,
+                        }
+                        .into());
+                    }
+                })
+            }
+
+            _ => Value::Bool(match op {
+                CmpOp::Eq => left == right,
+                CmpOp::NotEq => left != right,
+                _ => {
+                    return Err(VmInternalError::CannotApplyCmpOp {
+                        left: self.type_of(&left),
+                        right: self.type_of(&right),
+                        op,
+                    }
+                    .into());
+                }
+            }),
+        };
+
+        self.stack.push(result);
+        Ok(())
+    }
+
+    /// Execute a binary arithmetic operation. Pops two values, pushes the result.
+    /// Shared between the legacy `step()` `BinOp` arm and the compact `Add` opcode
+    /// (which needs string concatenation in addition to numeric dispatch).
+    fn exec_binop(&mut self, op: BinOp) -> Result<(), VmError> {
+        let right = self.stack.ensure_pop();
+        let left = self.stack.ensure_pop();
+
+        let result = match (left, right) {
+            (Value::Int(l), Value::Int(r)) => Value::Int(match op {
+                BinOp::Div if r == 0 => {
+                    return Err(VmError::Thrown(self.panic_to_exception_value(
+                        VmPanic::DivisionByZero {
+                            left: Value::Int(l),
+                            right: Value::Int(r),
+                        },
+                    )));
+                }
+                BinOp::Add => l + r,
+                BinOp::Sub => l - r,
+                BinOp::Mul => l * r,
+                BinOp::Div => l / r,
+                BinOp::Mod => l % r,
+                BinOp::BitAnd => l & r,
+                BinOp::BitOr => l | r,
+                BinOp::BitXor => l ^ r,
+                BinOp::Shl => l << r,
+                BinOp::Shr => l >> r,
+            }),
+
+            (Value::Float(l), Value::Float(r)) => Value::Float(match op {
+                BinOp::Div if r == 0.0 => {
+                    return Err(VmError::Thrown(self.panic_to_exception_value(
+                        VmPanic::DivisionByZero {
+                            left: Value::Float(l),
+                            right: Value::Float(r),
+                        },
+                    )));
+                }
+                BinOp::Add => l + r,
+                BinOp::Sub => l - r,
+                BinOp::Mul => l * r,
+                BinOp::Div => l / r,
+                BinOp::Mod => l % r,
+                BinOp::BitAnd | BinOp::BitOr | BinOp::BitXor | BinOp::Shl | BinOp::Shr => {
+                    return Err(VmInternalError::CannotApplyBinOp {
+                        left: bex_vm_types::types::Type::Float,
+                        right: bex_vm_types::types::Type::Float,
+                        op,
+                    }
+                    .into());
+                }
+            }),
+
+            #[allow(clippy::cast_precision_loss)]
+            (Value::Int(l), Value::Float(r)) => {
+                let l = l as f64;
+                Value::Float(match op {
+                    BinOp::Div if r == 0.0 => {
+                        return Err(VmError::Thrown(self.panic_to_exception_value(
+                            VmPanic::DivisionByZero {
+                                left: Value::Float(l),
+                                right: Value::Float(r),
+                            },
+                        )));
+                    }
+                    BinOp::Add => l + r,
+                    BinOp::Sub => l - r,
+                    BinOp::Mul => l * r,
+                    BinOp::Div => l / r,
+                    BinOp::Mod => l % r,
+                    BinOp::BitAnd | BinOp::BitOr | BinOp::BitXor | BinOp::Shl | BinOp::Shr => {
+                        return Err(VmInternalError::CannotApplyBinOp {
+                            left: bex_vm_types::types::Type::Int,
+                            right: bex_vm_types::types::Type::Float,
+                            op,
+                        }
+                        .into());
+                    }
+                })
+            }
+
+            #[allow(clippy::cast_precision_loss)]
+            (Value::Float(l), Value::Int(r)) => {
+                let r = r as f64;
+                Value::Float(match op {
+                    BinOp::Div if r == 0.0 => {
+                        return Err(VmError::Thrown(self.panic_to_exception_value(
+                            VmPanic::DivisionByZero {
+                                left: Value::Float(l),
+                                right: Value::Float(r),
+                            },
+                        )));
+                    }
+                    BinOp::Add => l + r,
+                    BinOp::Sub => l - r,
+                    BinOp::Mul => l * r,
+                    BinOp::Div => l / r,
+                    BinOp::Mod => l % r,
+                    BinOp::BitAnd | BinOp::BitOr | BinOp::BitXor | BinOp::Shl | BinOp::Shr => {
+                        return Err(VmInternalError::CannotApplyBinOp {
+                            left: bex_vm_types::types::Type::Float,
+                            right: bex_vm_types::types::Type::Int,
+                            op,
+                        }
+                        .into());
+                    }
+                })
+            }
+
+            (Value::Object(_), Value::Object(_)) if op == BinOp::Add => {
+                let ls = self.as_string(&left)?;
+                let rs = self.as_string(&right)?;
+                let mut concat = ls.clone();
+                concat.push_str(rs);
+                self.alloc_string(concat)
+            }
+
+            _ => {
+                return Err(VmInternalError::CannotApplyBinOp {
+                    left: self.type_of(&left),
+                    right: self.type_of(&right),
+                    op,
+                }
+                .into());
+            }
+        };
+
+        self.stack.push(result);
+        Ok(())
+    }
+
+    /// Compact bytecode dispatch loop.
+    ///
+    /// Reads opcodes from `CompactCode.code` instead of indexing `Vec<Instruction>`.
+    /// `instruction_ptr` is a byte offset into the code array.
+    ///
+    /// Key optimization: `pc` and `code` are kept as local variables in the hot
+    /// loop, avoiding frame access on every instruction. They are only saved back
+    /// to the frame when control flow changes (calls, returns, exceptions, yields).
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn exec_compact(&mut self) -> Result<VmExecState, VmError> {
+        if self.frames.is_empty() {
+            return Ok(VmExecState::Complete(Value::Null));
+        }
+
+        let mut frame_idx = self.frames.len() - 1;
+        let mut function = unsafe { self.load_function(frame_idx)? };
+
+        // Outer loop handles CPS continuations and frame transitions.
+        loop {
+            // ── CPS continuation handler (identical to exec_inner) ────────
+            while matches!(self.frames.last(), Some(Frame::Native(_))) {
+                let v = self.stack.ensure_pop();
+                let Some(Frame::Native(nf)) = self.frames.pop() else {
+                    unreachable!("just matched Some(Frame::Native(_))");
+                };
+                let native_fn_ptr = nf.function;
+
+                match nf.continuation.call(self, v) {
+                    NativeCallResult::Done(val) => {
+                        self.stack.push(val);
+                    }
+                    NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
+                        VmError::Thrown(exception_value) => {
+                            self.try_unwind_exception(
+                                &mut frame_idx,
+                                &mut function,
+                                exception_value,
+                            )?;
+                            break;
+                        }
+                        other => return Err(other),
+                    },
+                    NativeCallResult::YieldToCall {
+                        callee,
+                        args: mut callback_args,
+                        continuation,
+                    } => {
+                        self.frames.push(Frame::Native(NativeFrame {
+                            function: native_fn_ptr,
+                            continuation,
+                        }));
+
+                        let real_callee =
+                            self.resolve_bound_method_callee(callee, &mut callback_args);
+                        let arg_count = callback_args.len();
+                        let cb_locals = StackIndex::from_raw(self.stack.len());
+                        self.stack.extend(callback_args);
+
+                        let ecflo_result = match self.execute_call_from_locals_offset(
+                            real_callee,
+                            cb_locals,
+                            arg_count,
+                            &mut frame_idx,
+                            &mut function,
+                        ) {
+                            Ok(result) => result,
+                            Err(VmError::Thrown(exception_value)) => {
+                                self.try_unwind_exception(
+                                    &mut frame_idx,
+                                    &mut function,
+                                    exception_value,
+                                )?;
+                                break;
+                            }
+                            Err(other) => return Err(other),
+                        };
+
+                        if let Some(state) = ecflo_result {
+                            return Ok(state);
+                        }
+                    }
+                }
+            }
+
+            if self.frames.is_empty() {
+                return Ok(VmExecState::Complete(self.stack.ensure_pop()));
+            }
+
+            frame_idx = self.frames.len() - 1;
+            function = unsafe { self.load_function(frame_idx)? };
+
+            // ── Extract locals for the tight inner dispatch loop ──────────
+            // SAFETY: code is &'static because Function is &'static.
+            let code: &'static [u8] = &function.bytecode.compact.as_ref().unwrap().code;
+            let Frame::Bytecode(bf) = &mut self.frames[frame_idx] else {
+                unreachable!(
+                    "exec_compact loop frame is always Bytecode after continuation handler"
+                );
+            };
+            let mut pc = bf.instruction_ptr;
+
+            // ── Tight inner dispatch loop ─────────────────────────────────
+            // pc/code/function/frame_idx are kept as locals across many
+            // instructions — we only break out (re-extracting from the frame)
+            // on actual control-flow changes (Call, Return, Throw).
+            //
+            // Critical perf: simple ops (arithmetic, load/store, jumps within
+            // the same function) never touch the frame's instruction_ptr.
+            loop {
+                let orig_frame_idx = frame_idx;
+                let step_result = self.step_compact(&mut pc, &mut frame_idx, &mut function, code);
+
+                match step_result {
+                    Ok(None) if frame_idx == orig_frame_idx => {
+                        // Simple op, frame unchanged. pc is already advanced
+                        // as a local — no frame write needed. Continue tight loop.
+                        continue;
+                    }
+                    Ok(None) => {
+                        // Frame changed (Call/Return) — Call saved pc before the
+                        // call. Re-extract code/function for the new frame.
+                        break;
+                    }
+                    Ok(Some(state)) => {
+                        // Yielding — save pc to current frame so we can resume.
+                        if frame_idx == orig_frame_idx {
+                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(frame_idx) {
+                                bf.instruction_ptr = pc;
+                            }
+                        }
+                        return Ok(state);
+                    }
+                    Err(VmError::InternalError(err)) => {
+                        return Err(VmError::InternalError(err));
+                    }
+                    Err(VmError::Thrown(exception_value)) => {
+                        // Throw saves pc inside its handler before unwinding.
+                        self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)?;
+                        break; // re-extract code/function after unwind
+                    }
+                    Err(
+                        e @ (VmError::ThrownUnhandled { .. } | VmError::TracedInternalError { .. }),
+                    ) => return Err(e),
+                }
+            }
+        }
+    }
+
+    /// Execute a single compact-encoded instruction.
+    ///
+    /// `pc` is a local from the caller's tight loop — operand reads advance it
+    /// directly without going through frame indirection. The caller saves `pc`
+    /// back to the frame after this returns.
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_lossless,
+        clippy::useless_conversion,
+        clippy::inline_always
+    )]
+    #[inline(always)]
+    fn step_compact(
+        &mut self,
+        pc: &mut usize,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+        code: &'static [u8],
+    ) -> Result<Option<VmExecState>, VmError> {
+        use bex_vm_types::bytecode::OpCode;
+
+        // Unchecked byte-stream readers. SAFETY: the compact bytecode is produced
+        // by our own encoder which guarantees correct sizes (verified by
+        // debug_assert_eq!(code.len(), byte_offset) in lower_to_compact pass 2).
+        // The PC always stays in bounds during well-formed execution.
+        #[inline(always)]
+        unsafe fn read_u32_unchecked(code: &[u8], pc: &mut usize) -> u32 {
+            unsafe {
+                let p = *pc;
+                let bytes = [
+                    *code.get_unchecked(p),
+                    *code.get_unchecked(p + 1),
+                    *code.get_unchecked(p + 2),
+                    *code.get_unchecked(p + 3),
+                ];
+                *pc = p + 4;
+                u32::from_le_bytes(bytes)
+            }
+        }
+
+        #[inline(always)]
+        unsafe fn read_i32_unchecked(code: &[u8], pc: &mut usize) -> i32 {
+            unsafe {
+                let p = *pc;
+                let bytes = [
+                    *code.get_unchecked(p),
+                    *code.get_unchecked(p + 1),
+                    *code.get_unchecked(p + 2),
+                    *code.get_unchecked(p + 3),
+                ];
+                *pc = p + 4;
+                i32::from_le_bytes(bytes)
+            }
+        }
+
+        #[inline(always)]
+        unsafe fn read_i8_unchecked(code: &[u8], pc: &mut usize) -> i8 {
+            unsafe {
+                let val = *code.get_unchecked(*pc) as i8;
+                *pc += 1;
+                val
+            }
+        }
+
+        // Read opcode byte and advance PC past it.
+        // SAFETY: PC is always in bounds (bytecode invariant).
+        #[allow(unsafe_code)]
+        let op_byte = unsafe { *code.get_unchecked(*pc) };
+        *pc += 1;
+
+        // Save faulting PC for error reporting (points to the opcode byte).
+        let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+            unsafe { std::hint::unreachable_unchecked() }
+        };
+        bf.faulting_pc = *pc - 1;
+
+        // SAFETY: OpCode is #[repr(u8)] and the compact bytecode is produced by our
+        // own encoder which only emits valid opcode bytes.
+        #[allow(unsafe_code)]
+        let op: OpCode = unsafe { std::mem::transmute(op_byte) };
+
+        // SAFETY: see above — bytecode invariants guarantee all reads are in bounds.
+        #[allow(unused_unsafe)]
+        unsafe {
+            match op {
+                // ── Common constants ──────────────────────────────────────────
+                OpCode::LoadNull => {
+                    self.stack.push(Value::Null);
+                }
+                OpCode::LoadTrue => {
+                    self.stack.push(Value::Bool(true));
+                }
+                OpCode::LoadFalse => {
+                    self.stack.push(Value::Bool(false));
+                }
+                OpCode::LoadIntSmall => {
+                    let val = { read_i8_unchecked(code, pc) };
+                    self.stack.push(Value::Int(i64::from(val)));
+                }
+
+                // ── LoadConst ─────────────────────────────────────────────────
+                OpCode::LoadConst => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    let val = function.bytecode.resolved_constants[idx];
+                    self.stack.push(val);
+                }
+
+                // ── LoadVar / StoreVar ────────────────────────────────────────
+                OpCode::LoadVar => {
+                    let slot = { read_u32_unchecked(code, pc) as usize };
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let stack_slot = Self::local_slot_stack_index(bf.locals_offset, slot);
+                    let value = self.stack[stack_slot];
+                    self.stack.push(value);
+                }
+
+                OpCode::StoreVar => {
+                    let slot = { read_u32_unchecked(code, pc) as usize };
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
+                    let value = self.stack.ensure_pop();
+                    let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
+
+                    if self.watched_vars.contains_key(&local_var_index) {
+                        let watched_node = NodeId::LocalVar(local_var_index);
+                        self.update_watched_node(
+                            watched_node,
+                            watch::Path::Binding,
+                            old_value,
+                            value,
+                        );
+                        if let Some(state) = self.watch.root_state_mut(watched_node) {
+                            state.value = value;
+                        }
+                        let notifications = self.process_notifications(watched_node)?;
+                        if !notifications.is_empty() {
+                            return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
+                                notifications,
+                            ))));
+                        }
+                    }
+                }
+
+                // ── LoadGlobal / StoreGlobal ──────────────────────────────────
+                OpCode::LoadGlobal => {
+                    let raw = { read_u32_unchecked(code, pc) };
+                    let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                    let value = self.globals[global_idx];
+                    self.stack.push(value);
+                }
+
+                OpCode::StoreGlobal => {
+                    let raw = { read_u32_unchecked(code, pc) };
+                    let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                    let value = self.stack.ensure_pop();
+                    self.globals[global_idx] = value;
+                }
+
+                // ── LoadField / StoreField / InitField ────────────────────────
+                OpCode::LoadField => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    let top = self.stack.ensure_pop();
+                    let obj_ptr = self.as_object_ptr(&top, ObjectType::Instance)?;
+                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Instance.into(),
+                            got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                        }
+                        .into());
+                    };
+                    let value = instance.fields[idx];
+                    self.stack.push(value);
+                }
+
+                OpCode::StoreField => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    let new_value = self.stack.ensure_pop();
+                    let instance_value = self.stack.ensure_pop();
+                    let obj_ptr = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
+
+                    let old_value = {
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Instance.into(),
+                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                            }
+                            .into());
+                        };
+                        instance.fields[idx]
+                    };
+
+                    let watched_node = NodeId::HeapObject(obj_ptr);
+                    self.update_watched_node(
+                        watched_node,
+                        watch::Path::InstanceField(idx),
+                        old_value,
+                        new_value,
+                    );
+                    self.write_barrier(obj_ptr, new_value);
+                    let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
+                        unreachable!("already type-checked above");
+                    };
+                    instance.fields[idx] = new_value;
+
+                    let notifications = self.process_notifications(watched_node)?;
+                    if !notifications.is_empty() {
+                        return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
+                            notifications,
+                        ))));
+                    }
+                }
+
+                OpCode::InitField => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    let new_value = self.stack.ensure_pop();
+                    let instance_value = self.stack.ensure_pop();
+                    let obj_ptr = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
+                    self.write_barrier(obj_ptr, new_value);
+                    let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Instance.into(),
+                            got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                        }
+                        .into());
+                    };
+                    instance.fields[idx] = new_value;
+                    self.stack.push(instance_value);
+                }
+
+                // ── Pop / Copy ────────────────────────────────────────────────
+                OpCode::Pop => {
+                    let n = { read_u32_unchecked(code, pc) as usize };
+                    let drain_start = self.stack.len() - n;
+                    let drain_range = StackIndex::from_raw(drain_start)..;
+                    self.stack.drain(drain_range);
+                }
+
+                OpCode::Copy => {
+                    let offset = { read_u32_unchecked(code, pc) as usize };
+                    let index = self.stack.ensure_slot_from_top(offset);
+                    let value = self.stack[index];
+                    self.stack.push(value);
+                }
+
+                // ── Allocation opcodes ────────────────────────────────────────
+                OpCode::AllocArray => {
+                    let size = { read_u32_unchecked(code, pc) as usize };
+                    let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
+                    let array = self.stack.drain(drain_range).collect();
+                    let array_index = self.tlab.alloc(Object::Array(array));
+                    self.stack.push(Value::Object(array_index));
+                }
+
+                OpCode::AllocMap => {
+                    let n = { read_u32_unchecked(code, pc) as usize };
+                    let map = if n > 0 {
+                        let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
+                        let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
+                        let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1);
+                        let values = self.stack[end_of_values..end_of_keys].iter().copied();
+                        let keys = self.stack[idx_of_last_key..].iter().map(|k| {
+                            let obj_index = self.as_object_ptr(k, ObjectType::String)?;
+                            self.get_object(obj_index).as_string().cloned()
+                        });
+                        let pairs = values
+                            .zip(keys)
+                            .map(|(val, key_res)| key_res.map(|k| (k, val)));
+                        let map = pairs.collect::<Result<IndexMap<_, _>, _>>()?;
+                        self.stack.drain(end_of_values..);
+                        map
+                    } else {
+                        IndexMap::new()
+                    };
+                    let obj_index = self.tlab.alloc(Object::Map(map));
+                    self.stack.push(Value::Object(obj_index));
+                }
+
+                OpCode::AllocInstance => {
+                    let raw = { read_u32_unchecked(code, pc) };
+                    let class_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
+                    let Object::Class(class) = self.get_object(class_ptr) else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Class.into(),
+                            got: ObjectType::of(self.get_object(class_ptr)).into(),
+                        }
+                        .into());
+                    };
+                    let mut fields = Vec::with_capacity(class.fields.len());
+                    fields.resize(class.fields.len(), Value::Null);
+                    let instance_ptr =
+                        self.tlab
+                            .alloc(Object::Instance(bex_vm_types::types::Instance {
+                                class: class_ptr,
+                                fields,
+                            }));
+                    self.stack.push(Value::Object(instance_ptr));
+                }
+
+                OpCode::AllocVariant => {
+                    let raw = { read_u32_unchecked(code, pc) };
+                    let enum_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
+                    let variant_count = {
+                        let Object::Enum(enm) = self.get_object(enum_ptr) else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Enum.into(),
+                                got: ObjectType::of(self.get_object(enum_ptr)).into(),
+                            }
+                            .into());
+                        };
+                        enm.variants.len()
+                    };
+                    let variant = self.stack.ensure_pop();
+                    let Value::Int(variant_index) = variant else {
+                        return Err(VmInternalError::TypeError {
+                            expected: bex_vm_types::types::Type::Int,
+                            got: self.type_of(&variant),
+                        }
+                        .into());
+                    };
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    if variant_index < 0 || variant_index as usize >= variant_count {
+                        return Err(VmError::Thrown(self.panic_to_exception_value(
+                            VmPanic::IndexOutOfBounds {
+                                index: variant_index,
+                                length: variant_count,
+                            },
+                        )));
+                    }
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    let variant_usize = variant_index as usize;
+                    let variant_ptr = self.tlab.alloc(Object::Variant(Variant {
+                        enm: enum_ptr,
+                        index: variant_usize,
+                    }));
+                    self.stack.push(Value::Object(variant_ptr));
+                }
+
+                // ── DispatchFuture ────────────────────────────────────────────
+                OpCode::DispatchFuture => {
+                    let raw = { read_u32_unchecked(code, pc) };
+                    let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                    let callee_value = self.globals[callee];
+                    let expected_type = FunctionType::SysOp;
+                    let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
+                    let Object::Function(callable_future) = self.get_object(callee_ptr) else {
+                        return Err(VmInternalError::TypeError {
+                            expected: expected_type.into(),
+                            got: ObjectType::of(self.get_object(callee_ptr)).into(),
+                        }
+                        .into());
+                    };
+                    let FunctionKind::SysOp(sys_op) = callable_future.kind else {
+                        return Err(VmInternalError::TypeError {
+                            expected: FunctionType::SysOp.into(),
+                            got: FunctionType::from(&callable_future.kind).into(),
+                        }
+                        .into());
+                    };
+                    let args_offset = self.stack.len().checked_sub(callable_future.arity).ok_or(
+                        VmInternalError::NotEnoughItemsOnStack(callable_future.arity),
+                    )?;
+                    let args_offset = StackIndex::from_raw(args_offset);
+                    let future_args: Vec<Value> = self.stack.drain(args_offset..).collect();
+                    let pending_future = bex_vm_types::types::PendingFuture {
+                        operation: sys_op,
+                        args: future_args,
+                    };
+                    let future_value =
+                        self.alloc_future(bex_vm_types::types::Future::Pending(pending_future));
+                    let Value::Object(object_index) = future_value else {
+                        unreachable!("alloc_future returns Value::Object")
+                    };
+                    self.stack.push(future_value);
+                    return Ok(Some(VmExecState::ScheduleFuture(object_index)));
+                }
+
+                // ── Watch / Unwatch / Notify / NotifyBlock ────────────────────
+                OpCode::Watch => {
+                    let index = { read_u32_unchecked(code, pc) as usize };
+                    let filter = match self.stack.ensure_pop() {
+                        Value::Null => WatchFilter::Default,
+                        Value::Object(object_index) => match self.get_object(object_index) {
+                            Object::Function(_) => WatchFilter::Function(object_index),
+                            Object::String(mode) if mode == "manual" => WatchFilter::Manual,
+                            Object::String(mode) if mode == "never" => WatchFilter::Paused,
+                            _ => return Err(VmInternalError::InvalidFilter.into()),
+                        },
+                        _ => return Err(VmInternalError::InvalidFilter.into()),
+                    };
+                    let channel_value = self.stack.ensure_pop();
+                    let channel = self.as_string(&channel_value)?.to_owned();
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
+                    let value = self.stack[local_var_index];
+                    let var_node = NodeId::LocalVar(local_var_index);
+                    self.watch.register_root(
+                        var_node,
+                        RootState {
+                            channel,
+                            value,
+                            filter,
+                            last_notified: None,
+                            last_assigned: None,
+                        },
+                    );
+                    let watched_var_name = &function.local_names[index];
+                    self.watched_vars.insert(
+                        local_var_index,
+                        (watched_var_name.clone(), function.name.clone()),
+                    );
+                    if let Value::Object(object_index) = value {
+                        watch::track_watch_dependencies(
+                            &mut self.watch,
+                            var_node,
+                            watch::Path::Binding,
+                            object_index,
+                        );
+                    }
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+
+                OpCode::Unwatch => {
+                    let index = { read_u32_unchecked(code, pc) as usize };
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
+                    if self.watched_vars.remove(&local_var_index).is_some() {
+                        let var_node = NodeId::LocalVar(local_var_index);
+                        self.watch.unregister_root(var_node);
+                        let value = self.stack[local_var_index];
+                        if let Value::Object(object_index) = value {
+                            self.watch.unlink_edge(
+                                var_node,
+                                watch::Path::Binding,
+                                NodeId::HeapObject(object_index),
+                            );
+                        }
+                    }
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+
+                OpCode::Notify => {
+                    let index = { read_u32_unchecked(code, pc) as usize };
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
+                    let var_node = NodeId::LocalVar(local_var_index);
+                    let notifications = self.watch.copy_roots_reaching(var_node);
+                    if notifications.len() != 1 && notifications.first() != Some(&var_node) {
+                        return Err(VmInternalError::InvalidManualNotify.into());
+                    }
+                    return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
+                        notifications,
+                    ))));
+                }
+
+                OpCode::NotifyBlock => {
+                    let block_index = { read_u32_unchecked(code, pc) as usize };
+                    let notification = &function.block_notifications[block_index];
+                    let full_notification = bytecode::BlockNotification {
+                        function_name: function.name.clone(),
+                        block_name: notification.block_name.clone(),
+                        level: notification.level,
+                        block_type: notification.block_type,
+                        is_enter: notification.is_enter,
+                    };
+                    return Ok(Some(VmExecState::Notify(WatchNotification::Block(
+                        full_notification,
+                    ))));
+                }
+
+                // ── VizEnter / VizExit ────────────────────────────────────────
+                OpCode::VizEnter | OpCode::VizExit => {
+                    let index = { read_u32_unchecked(code, pc) as usize };
+                    let delta = if op == OpCode::VizEnter {
+                        bytecode::VizExecDelta::Enter
+                    } else {
+                        bytecode::VizExecDelta::Exit
+                    };
+                    #[allow(clippy::cast_possible_wrap)]
+                    let node = function.viz_nodes.get(index).ok_or({
+                        VmError::Thrown(self.panic_to_exception_value(VmPanic::IndexOutOfBounds {
+                            index: index as i64,
+                            length: function.viz_nodes.len(),
+                        }))
+                    })?;
+                    let event = bytecode::VizExecEvent {
+                        delta,
+                        node_id: node.node_id,
+                        node_type: node.node_type,
+                        label: node.label.clone(),
+                        header_level: node.header_level,
+                    };
+                    return Ok(Some(VmExecState::Notify(WatchNotification::Viz {
+                        function_name: function.name.clone(),
+                        event,
+                    })));
+                }
+
+                // ── Call ──────────────────────────────────────────────────────
+                OpCode::Call => {
+                    let raw = read_u32_unchecked(code, pc);
+                    let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                    let callee_value = self.globals[callee_global];
+                    let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                    let args_offset = self
+                        .stack
+                        .len()
+                        .checked_sub(arg_count)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?;
+                    let locals_offset = StackIndex::from_raw(args_offset);
+                    // Save pc as return address before pushing new frame.
+                    let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                        unsafe { std::hint::unreachable_unchecked() }
+                    };
+                    bf.instruction_ptr = *pc;
+                    return self.execute_call_from_locals_offset(
+                        callee_ptr,
+                        locals_offset,
+                        arg_count,
+                        frame_idx,
+                        function,
+                    );
+                }
+
+                // ── CallIndirect ──────────────────────────────────────────────
+                OpCode::CallIndirect => {
+                    // Save pc as return address before any call.
+                    let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                        unsafe { std::hint::unreachable_unchecked() }
+                    };
+                    bf.instruction_ptr = *pc;
+
+                    let callee_slot = self.stack.ensure_stack_top();
+                    let callee_value = self.stack[callee_slot];
+                    let callee_ptr =
+                        self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+                    let obj = self.get_object(callee_ptr);
+
+                    if let Object::BoundMethod(bm) = obj {
+                        let func_obj = unsafe { bm.function.get() };
+                        let full_arity = match func_obj {
+                            Object::Function(f) => f.arity,
+                            _ => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: FunctionType::Callable.into(),
+                                    got: ObjectType::of(func_obj).into(),
+                                }
+                                .into());
+                            }
+                        };
+                        debug_assert!(
+                            full_arity >= 1,
+                            "BoundMethod's inner function must have self parameter"
+                        );
+                        let visible_arity = full_arity.saturating_sub(1);
+                        let receiver = bm.receiver;
+                        let fn_ptr = bm.function;
+                        let _popped = self.stack.ensure_pop();
+                        let args_offset = self
+                            .stack
+                            .len()
+                            .checked_sub(visible_arity)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(visible_arity))?;
+                        self.stack.insert(args_offset, receiver);
+                        let locals_offset = StackIndex::from_raw(args_offset);
+                        if let Some(state) = self.execute_call_from_locals_offset(
+                            fn_ptr,
+                            locals_offset,
+                            full_arity,
+                            frame_idx,
+                            function,
+                        )? {
+                            return Ok(Some(state));
+                        }
+                    } else {
+                        let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                        let args_offset = self
+                            .stack
+                            .len()
+                            .checked_sub(arg_count + 1)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count + 1))?;
+                        let _popped_callee = self.stack.ensure_pop();
+                        let locals_offset = StackIndex::from_raw(args_offset);
+                        if let Some(state) = self.execute_call_from_locals_offset(
+                            callee_ptr,
+                            locals_offset,
+                            arg_count,
+                            frame_idx,
+                            function,
+                        )? {
+                            return Ok(Some(state));
+                        }
+                    }
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+
+                // ── Return ────────────────────────────────────────────────────
+                OpCode::Return => {
+                    let result = self.stack.ensure_pop();
+                    let span_exit = if self.traced_frames.last() == Some(frame_idx) {
+                        let func_name = self
+                            .get_object(self.frames[*frame_idx].function())
+                            .as_callable()
+                            .map(|f| f.name.clone())
+                            .ok();
+                        self.traced_frames.pop();
+                        func_name
+                    } else {
+                        None
+                    };
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    self.stack.drain(bf.locals_offset..);
+                    self.stack.push(result);
+                    self.frames.pop();
+                    // Update frame_idx so the outer loop detects the frame change
+                    // and re-extracts code/pc/function for the parent frame.
+                    if !self.frames.is_empty() {
+                        *frame_idx = self.frames.len() - 1;
+                    }
+                    if Some(self.frames.len()) == self.interrupt_frame {
+                        self.interrupt_frame = None;
+                        return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
+                    }
+                    if self.frames.is_empty() {
+                        return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
+                    }
+                    if let Some(name) = span_exit {
+                        return Ok(Some(VmExecState::SpanNotify(
+                            SpanNotification::FunctionExit {
+                                function_name: name,
+                                result,
+                            },
+                        )));
+                    }
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+
+                // ── Await ─────────────────────────────────────────────────────
+                OpCode::Await => {
+                    let value = self.stack.ensure_stack_top();
+                    let wanted_type = bex_vm_types::types::FutureType::Any;
+                    let index = self.as_object_ptr(&self.stack[value], wanted_type.into())?;
+                    let ready_value = {
+                        let Object::Future(awaiting) = self.get_object(index) else {
+                            return Err(VmInternalError::TypeError {
+                                expected: wanted_type.into(),
+                                got: ObjectType::of(self.get_object(index)).into(),
+                            }
+                            .into());
+                        };
+                        match awaiting {
+                            bex_vm_types::types::Future::Pending(_) => {
+                                return Ok(Some(VmExecState::Await(index)));
+                            }
+                            bex_vm_types::types::Future::Ready(v) => *v,
+                        }
+                    };
+                    self.stack.pop();
+                    self.stack.push(ready_value);
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+
+                // ── Throw ─────────────────────────────────────────────────────
+                OpCode::Throw => {
+                    let value = self.stack.ensure_pop();
+                    // Save pc before unwinding (handler lookup needs it).
+                    if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+                        bf.instruction_ptr = *pc;
+                    }
+                    self.try_unwind_exception(frame_idx, function, value)?;
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+
+                // ── Jump opcodes ──────────────────────────────────────────────
+                OpCode::Jump => {
+                    let offset = read_i32_unchecked(code, pc);
+                    // offset is relative to instruction end (current pc)
+                    *pc = (*pc as i64 + offset as i64) as usize;
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+
+                OpCode::PopJumpIfFalse => {
+                    let offset = read_i32_unchecked(code, pc);
+                    let cond = self.stack.ensure_pop();
+                    if cond == Value::Bool(false) {
+                        *pc = (*pc as i64 + offset as i64) as usize;
+                    }
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+
+                OpCode::JumpIfFalse => {
+                    let offset = read_i32_unchecked(code, pc);
+                    let top_slot = self.stack.ensure_stack_top();
+                    let cond = self.stack[top_slot];
+                    if cond == Value::Bool(false) {
+                        *pc = (*pc as i64 + offset as i64) as usize;
+                    }
+                }
+
+                // ── JumpTable ─────────────────────────────────────────────────
+                OpCode::JumpTable => {
+                    let table_idx = read_u32_unchecked(code, pc) as usize;
+                    let default_offset = read_i32_unchecked(code, pc);
+                    let discriminant = self.stack.ensure_pop();
+                    let Value::Int(value) = discriminant else {
+                        return Err(VmInternalError::TypeError {
+                            expected: bex_vm_types::types::Type::Int,
+                            got: self.type_of(&discriminant),
+                        }
+                        .into());
+                    };
+                    // Use pre-translated compact jump table (byte-offset-relative).
+                    let compact = function.bytecode.compact.as_ref().unwrap();
+                    let compact_table = &compact.jump_tables[table_idx];
+                    let offset = compact_table.lookup(value).unwrap_or(default_offset);
+                    *pc = (*pc as i64 + offset as i64) as usize;
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+
+                // ── Discriminant ──────────────────────────────────────────────
+                OpCode::Discriminant => {
+                    let value = self.stack.ensure_pop();
+                    let Value::Object(object_idx) = value else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Variant.into(),
+                            got: self.type_of(&value),
+                        }
+                        .into());
+                    };
+                    let variant_index = {
+                        let Object::Variant(variant) = self.get_object(object_idx) else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Variant.into(),
+                                got: ObjectType::of(self.get_object(object_idx)).into(),
+                            }
+                            .into());
+                        };
+                        variant.index
+                    };
+                    #[allow(clippy::cast_possible_wrap)]
+                    self.stack.push(Value::Int(variant_index as i64));
+                }
+
+                // ── TypeTag ───────────────────────────────────────────────────
+                OpCode::TypeTag => {
+                    let value = self.stack.ensure_pop();
+                    let tag = value_type_tag(&value);
+                    self.stack.push(Value::Int(tag));
+                }
+
+                // ── IsType ────────────────────────────────────────────────────
+                OpCode::IsType => {
+                    let const_idx = { read_u32_unchecked(code, pc) as usize };
+                    let value = self.stack.ensure_pop();
+                    let expected = &function.bytecode.resolved_constants[const_idx];
+                    let result = match expected {
+                        Value::Object(class_ptr) => match value {
+                            Value::Object(val_ptr) => match self.get_object(val_ptr) {
+                                Object::Instance(instance) => instance.class == *class_ptr,
+                                _ => false,
+                            },
+                            _ => false,
+                        },
+                        Value::Int(tag) => value_type_tag(&value) == *tag,
+                        _ => false,
+                    };
+                    self.stack.push(Value::Bool(result));
+                }
+
+                // ── DenseTag ──────────────────────────────────────────────────
+                #[allow(
+                    clippy::cast_sign_loss,
+                    clippy::cast_lossless,
+                    clippy::cast_possible_truncation
+                )]
+                OpCode::DenseTag => {
+                    let table_idx = { read_u32_unchecked(code, pc) as usize };
+                    let tag = match self.stack.ensure_pop() {
+                        Value::Int(t) => t,
+                        other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&other),
+                            }
+                            .into());
+                        }
+                    };
+                    let table = &function.bytecode.match_hash_tables[table_idx];
+                    let h = ((tag as u64).wrapping_mul(table.multiply) >> table.shift)
+                        & table.mask as u64;
+                    let entry = &table.entries[h as usize];
+                    if entry.expected_tag == tag {
+                        self.stack.push(Value::Int(i64::from(entry.dense_index)));
+                    } else {
+                        self.stack.push(Value::Int(-1));
+                    }
+                }
+
+                // ── ThrowIfPanic ──────────────────────────────────────────────
+                OpCode::ThrowIfPanic => {
+                    let value = self.stack.ensure_pop();
+                    let is_panic = match value {
+                        Value::Object(ptr) => match self.get_object(ptr) {
+                            Object::Instance(instance) => {
+                                self.panic_class_ptrs.contains(&instance.class)
+                            }
+                            _ => false,
+                        },
+                        _ => false,
+                    };
+                    if is_panic {
+                        // Save pc before unwinding (handler lookup needs it).
+                        if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+                            bf.instruction_ptr = *pc;
+                        }
+                        self.try_unwind_exception(frame_idx, function, value)?;
+                    }
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+
+                // ── Unreachable ───────────────────────────────────────────────
+                OpCode::Unreachable => {
+                    return Err(VmError::Thrown(
+                        self.panic_to_exception_value(VmPanic::Unreachable),
+                    ));
+                }
+
+                // ── MakeCell ──────────────────────────────────────────────────
+                OpCode::MakeCell => {
+                    let value = self.stack.ensure_pop();
+                    let cell = Object::Cell(bex_vm_types::types::Cell { value });
+                    let ptr = self.tlab.alloc(cell);
+                    self.stack.push(Value::Object(ptr));
+                }
+
+                // ── MakeClosure ───────────────────────────────────────────────
+                OpCode::MakeClosure => {
+                    let obj_idx_raw = { read_u32_unchecked(code, pc) as usize };
+                    // Capture count is on the stack (pushed by preceding LoadConst).
+                    let Value::Int(capture_count) = self.stack.ensure_pop() else {
+                        unreachable!("MakeClosure: capture count must be Int");
+                    };
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    let capture_count = capture_count as usize;
+                    let mut captures = Vec::with_capacity(capture_count);
+                    for _ in 0..capture_count {
+                        captures.push(self.stack.ensure_pop());
+                    }
+                    captures.reverse();
+                    let function_ptr = self.idx_to_ptr(ObjectIndex::from_raw(obj_idx_raw));
+                    let closure = Object::Closure(Closure {
+                        function: function_ptr,
+                        captures,
+                    });
+                    let ptr = self.tlab.alloc(closure);
+                    self.stack.push(Value::Object(ptr));
+                }
+
+                // ── MakeBoundMethod ───────────────────────────────────────────
+                OpCode::MakeBoundMethod => {
+                    let raw = { read_u32_unchecked(code, pc) };
+                    let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                    let receiver = self.stack.ensure_pop();
+                    let callee_value = self.globals[global_idx];
+                    let function_ptr =
+                        self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
+                    let bound = Object::BoundMethod(BoundMethod {
+                        function: function_ptr,
+                        receiver,
+                    });
+                    let ptr = self.tlab.alloc(bound);
+                    self.stack.push(Value::Object(ptr));
+                }
+
+                // ── LoadDeref / StoreDeref ────────────────────────────────────
+                OpCode::LoadDeref => {
+                    let slot = { read_u32_unchecked(code, pc) as usize };
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let cell_value =
+                        self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)];
+                    let Value::Object(cell_ptr) = cell_value else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Cell.into(),
+                            got: self.type_of(&cell_value),
+                        }
+                        .into());
+                    };
+                    let obj = unsafe { cell_ptr.get() };
+                    let Object::Cell(cell) = obj else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Cell.into(),
+                            got: ObjectType::of(obj).into(),
+                        }
+                        .into());
+                    };
+                    self.stack.push(cell.value);
+                }
+
+                OpCode::StoreDeref => {
+                    let slot = { read_u32_unchecked(code, pc) as usize };
+                    let value = self.stack.ensure_pop();
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let cell_value =
+                        self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)];
+                    let Value::Object(cell_ptr) = cell_value else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Cell.into(),
+                            got: self.type_of(&cell_value),
+                        }
+                        .into());
+                    };
+                    self.write_barrier(cell_ptr, value);
+                    let obj = unsafe { cell_ptr.get_mut() };
+                    let Object::Cell(cell) = obj else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Cell.into(),
+                            got: ObjectType::of(obj).into(),
+                        }
+                        .into());
+                    };
+                    cell.value = value;
+                }
+
+                // ── LoadCapture / StoreCapture / CaptureRef ───────────────────
+                OpCode::LoadCapture => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let closure_ptr = bf.function;
+                    let obj = unsafe { closure_ptr.get() };
+                    let Object::Closure(closure) = obj else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Closure.into(),
+                            got: ObjectType::of(obj).into(),
+                        }
+                        .into());
+                    };
+                    let cell_value = closure.captures[idx];
+                    let Value::Object(cell_ptr) = cell_value else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Cell.into(),
+                            got: self.type_of(&cell_value),
+                        }
+                        .into());
+                    };
+                    let cell_obj = unsafe { cell_ptr.get() };
+                    let Object::Cell(cell) = cell_obj else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Cell.into(),
+                            got: ObjectType::of(cell_obj).into(),
+                        }
+                        .into());
+                    };
+                    self.stack.push(cell.value);
+                }
+
+                OpCode::StoreCapture => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    let value = self.stack.ensure_pop();
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let closure_ptr = bf.function;
+                    let obj = unsafe { closure_ptr.get() };
+                    let Object::Closure(closure) = obj else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Closure.into(),
+                            got: ObjectType::of(obj).into(),
+                        }
+                        .into());
+                    };
+                    let cell_value = closure.captures[idx];
+                    let Value::Object(cell_ptr) = cell_value else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Cell.into(),
+                            got: self.type_of(&cell_value),
+                        }
+                        .into());
+                    };
+                    self.write_barrier(cell_ptr, value);
+                    let cell_obj = unsafe { cell_ptr.get_mut() };
+                    let Object::Cell(cell) = cell_obj else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Cell.into(),
+                            got: ObjectType::of(cell_obj).into(),
+                        }
+                        .into());
+                    };
+                    cell.value = value;
+                }
+
+                OpCode::CaptureRef => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let closure_ptr = bf.function;
+                    let obj = unsafe { closure_ptr.get() };
+                    let Object::Closure(closure) = obj else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Closure.into(),
+                            got: ObjectType::of(obj).into(),
+                        }
+                        .into());
+                    };
+                    self.stack.push(closure.captures[idx]);
+                }
+
+                // ── Array / Map element ops ───────────────────────────────────
+                OpCode::LoadArrayElement => {
+                    let index_value = self.stack.ensure_pop();
+                    let array_value = self.stack.ensure_pop();
+                    let array_obj_index = self.as_object_ptr(&array_value, ObjectType::Array)?;
+                    let array_len = match self.get_object(array_obj_index) {
+                        Object::Array(arr) => arr.len(),
+                        Object::Uint8Array(bytes) => bytes.len(),
+                        other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Array.into(),
+                                got: ObjectType::of(other).into(),
+                            }
+                            .into());
+                        }
+                    };
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    let index = match index_value {
+                        Value::Int(i) => {
+                            if i < 0 || i as usize >= array_len {
+                                return Err(VmError::Thrown(self.panic_to_exception_value(
+                                    VmPanic::IndexOutOfBounds {
+                                        index: i,
+                                        length: array_len,
+                                    },
+                                )));
+                            }
+                            i as usize
+                        }
+                        _ => {
+                            return Err(VmInternalError::TypeError {
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&index_value),
+                            }
+                            .into());
+                        }
+                    };
+                    #[allow(clippy::cast_possible_wrap)]
+                    let element = match self.get_object(array_obj_index) {
+                        Object::Array(array) => {
+                            if index >= array.len() {
+                                return Err(VmError::Thrown(self.panic_to_exception_value(
+                                    VmPanic::IndexOutOfBounds {
+                                        index: index as i64,
+                                        length: array.len(),
+                                    },
+                                )));
+                            }
+                            array[index]
+                        }
+                        Object::Uint8Array(bytes) => {
+                            if index >= bytes.len() {
+                                return Err(VmError::Thrown(self.panic_to_exception_value(
+                                    VmPanic::IndexOutOfBounds {
+                                        index: index as i64,
+                                        length: bytes.len(),
+                                    },
+                                )));
+                            }
+                            Value::Int(i64::from(bytes[index]))
+                        }
+                        _ => {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Array.into(),
+                                got: ObjectType::of(self.get_object(array_obj_index)).into(),
+                            }
+                            .into());
+                        }
+                    };
+                    self.stack.push(element);
+                }
+
+                OpCode::LoadMapElement => {
+                    let key_value = self.stack.ensure_pop();
+                    let map_value = self.stack.ensure_pop();
+                    let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
+                    let Object::Map(map) = self.get_object(map_index) else {
+                        return Err(VmInternalError::TypeError {
+                            expected: ObjectType::Map.into(),
+                            got: ObjectType::of(self.get_object(map_index)).into(),
+                        }
+                        .into());
+                    };
+                    let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
+                    let key = self.get_object(key_index).as_string()?;
+                    let value = map.get(key).copied().ok_or(VmError::Thrown(
+                        self.panic_to_exception_value(VmPanic::MapKeyNotFound),
+                    ))?;
+                    self.stack.push(value);
+                }
+
+                OpCode::StoreArrayElement => {
+                    let new_value = self.stack.ensure_pop();
+                    let index_value = self.stack.ensure_pop();
+                    let array_value = self.stack.ensure_pop();
+                    let array_object_index = self.as_object_ptr(&array_value, ObjectType::Array)?;
+                    let array_len = match self.get_object(array_object_index) {
+                        Object::Array(arr) => arr.len(),
+                        Object::Uint8Array(bytes) => bytes.len(),
+                        other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Array.into(),
+                                got: ObjectType::of(other).into(),
+                            }
+                            .into());
+                        }
+                    };
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    let index = match index_value {
+                        Value::Int(i) => {
+                            if i < 0 || i as usize >= array_len {
+                                return Err(VmError::Thrown(self.panic_to_exception_value(
+                                    VmPanic::IndexOutOfBounds {
+                                        index: i,
+                                        length: array_len,
+                                    },
+                                )));
+                            }
+                            i as usize
+                        }
+                        other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&other),
+                            }
+                            .into());
+                        }
+                    };
+                    #[allow(clippy::cast_possible_wrap)]
+                    let old_value = match self.get_object(array_object_index) {
+                        Object::Array(array) => {
+                            if index >= array.len() {
+                                return Err(VmError::Thrown(self.panic_to_exception_value(
+                                    VmPanic::IndexOutOfBounds {
+                                        index: index as i64,
+                                        length: array.len(),
+                                    },
+                                )));
+                            }
+                            array[index]
+                        }
+                        Object::Uint8Array(bytes) => {
+                            if index >= bytes.len() {
+                                return Err(VmError::Thrown(self.panic_to_exception_value(
+                                    VmPanic::IndexOutOfBounds {
+                                        index: index as i64,
+                                        length: bytes.len(),
+                                    },
+                                )));
+                            }
+                            Value::Int(i64::from(bytes[index]))
+                        }
+                        other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Array.into(),
+                                got: ObjectType::of(other).into(),
+                            }
+                            .into());
+                        }
+                    };
+                    let watched_node = NodeId::HeapObject(array_object_index);
+                    self.update_watched_node(
+                        watched_node,
+                        watch::Path::ArrayIndex(index),
+                        old_value,
+                        new_value,
+                    );
+                    self.write_barrier(array_object_index, new_value);
+                    match self.get_object_mut(array_object_index) {
+                        Object::Array(array) => {
+                            array[index] = new_value;
+                        }
+                        Object::Uint8Array(bytes) => {
+                            let Value::Int(i) = new_value else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: bex_vm_types::types::Type::Int,
+                                    got: self.type_of(&new_value),
+                                }
+                                .into());
+                            };
+                            bytes[index] = (i.cast_unsigned() & 0xFF) as u8;
+                        }
+                        _ => unreachable!("already typechecked"),
+                    }
+                    let notifications = self.process_notifications(watched_node)?;
+                    if !notifications.is_empty() {
+                        return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
+                            notifications,
+                        ))));
+                    }
+                }
+
+                OpCode::StoreMapElement => {
+                    let new_value = self.stack.ensure_pop();
+                    let key_value = self.stack.ensure_pop();
+                    let map_value = self.stack.ensure_pop();
+                    let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
+                    let key = self.get_object(key_index).as_string()?.clone();
+                    let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
+                    let old_value = match self.get_object(map_index) {
+                        Object::Map(map) => map.get(&key).copied().unwrap_or(Value::Null),
+                        other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Map.into(),
+                                got: ObjectType::of(other).into(),
+                            }
+                            .into());
+                        }
+                    };
+                    let watched_node = NodeId::HeapObject(map_index);
+                    self.update_watched_node(
+                        watched_node,
+                        watch::Path::MapKey(key.clone()),
+                        old_value,
+                        new_value,
+                    );
+                    self.write_barrier(map_index, new_value);
+                    if let Object::Map(map) = self.get_object_mut(map_index) {
+                        map.insert(key, new_value);
+                    }
+                    let notifications = self.process_notifications(watched_node)?;
+                    if !notifications.is_empty() {
+                        return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
+                            notifications,
+                        ))));
+                    }
+                }
+
+                // ── Expanded arithmetic ───────────────────────────────────────
+                OpCode::Add => self.exec_binop(BinOp::Add)?,
+                OpCode::Sub => self.exec_binop(BinOp::Sub)?,
+                OpCode::Mul => self.exec_binop(BinOp::Mul)?,
+                OpCode::Div => self.exec_binop(BinOp::Div)?,
+                OpCode::Mod => self.exec_binop(BinOp::Mod)?,
+                OpCode::BitAnd => self.exec_binop(BinOp::BitAnd)?,
+                OpCode::BitOr => self.exec_binop(BinOp::BitOr)?,
+                OpCode::BitXor => self.exec_binop(BinOp::BitXor)?,
+                OpCode::Shl => self.exec_binop(BinOp::Shl)?,
+                OpCode::Shr => self.exec_binop(BinOp::Shr)?,
+
+                // ── Expanded comparison ───────────────────────────────────────
+                OpCode::Eq => self.exec_cmpop(CmpOp::Eq)?,
+                OpCode::NotEq => self.exec_cmpop(CmpOp::NotEq)?,
+                OpCode::Lt => self.exec_cmpop(CmpOp::Lt)?,
+                OpCode::LtEq => self.exec_cmpop(CmpOp::LtEq)?,
+                OpCode::Gt => self.exec_cmpop(CmpOp::Gt)?,
+                OpCode::GtEq => self.exec_cmpop(CmpOp::GtEq)?,
+
+                // ── Specialized int arithmetic (skip type dispatch) ───────────
+                OpCode::AddInt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Int(l + r));
+                }
+                OpCode::SubInt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Int(l - r));
+                }
+                OpCode::MulInt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Int(l * r));
+                }
+                OpCode::DivInt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    if r == 0 {
+                        return Err(VmError::Thrown(self.panic_to_exception_value(
+                            VmPanic::DivisionByZero {
+                                left: Value::Int(l),
+                                right: Value::Int(r),
+                            },
+                        )));
+                    }
+                    self.stack.push(Value::Int(l / r));
+                }
+                OpCode::ModInt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    if r == 0 {
+                        return Err(VmError::Thrown(self.panic_to_exception_value(
+                            VmPanic::DivisionByZero {
+                                left: Value::Int(l),
+                                right: Value::Int(r),
+                            },
+                        )));
+                    }
+                    self.stack.push(Value::Int(l % r));
+                }
+
+                // ── Specialized float arithmetic (skip type dispatch) ─────────
+                OpCode::AddFloat => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Float(l + r));
+                }
+                OpCode::SubFloat => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Float(l - r));
+                }
+                OpCode::MulFloat => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Float(l * r));
+                }
+                OpCode::DivFloat => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    if r == 0.0 {
+                        return Err(VmError::Thrown(self.panic_to_exception_value(
+                            VmPanic::DivisionByZero {
+                                left: Value::Float(l),
+                                right: Value::Float(r),
+                            },
+                        )));
+                    }
+                    self.stack.push(Value::Float(l / r));
+                }
+
+                // ── Specialized int comparison (skip type dispatch) ───────────
+                OpCode::CmpIntEq => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l == r));
+                }
+                OpCode::CmpIntNotEq => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l != r));
+                }
+                OpCode::CmpIntLt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l < r));
+                }
+                OpCode::CmpIntLtEq => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l <= r));
+                }
+                OpCode::CmpIntGt => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l > r));
+                }
+                OpCode::CmpIntGtEq => {
+                    let Value::Int(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Int(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l >= r));
+                }
+
+                // ── Specialized float comparison (skip type dispatch) ─────────
+                #[allow(clippy::float_cmp)]
+                OpCode::CmpFloatEq => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l == r));
+                }
+                #[allow(clippy::float_cmp)]
+                OpCode::CmpFloatNotEq => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l != r));
+                }
+                OpCode::CmpFloatLt => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l < r));
+                }
+                OpCode::CmpFloatLtEq => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l <= r));
+                }
+                OpCode::CmpFloatGt => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l > r));
+                }
+                OpCode::CmpFloatGtEq => {
+                    let Value::Float(r) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Float(l) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    self.stack.push(Value::Bool(l >= r));
+                }
+
+                // ── Expanded unary ────────────────────────────────────────────
+                OpCode::Not => {
+                    let val = self.stack.ensure_pop();
+                    match val {
+                        Value::Bool(b) => self.stack.push(Value::Bool(!b)),
+                        _ => {
+                            return Err(VmInternalError::CannotApplyUnaryOp {
+                                op: UnaryOp::Not,
+                                value: self.type_of(&val),
+                            }
+                            .into());
+                        }
+                    }
+                }
+                OpCode::Neg => {
+                    let val = self.stack.ensure_pop();
+                    match val {
+                        Value::Int(n) => self.stack.push(Value::Int(-n)),
+                        Value::Float(n) => self.stack.push(Value::Float(-n)),
+                        _ => {
+                            return Err(VmInternalError::CannotApplyUnaryOp {
+                                op: UnaryOp::Neg,
+                                value: self.type_of(&val),
+                            }
+                            .into());
+                        }
+                    }
+                }
+
+                // ── SendEvent ─────────────────────────────────────────────────
+                OpCode::SendEvent => {
+                    let data = self.stack.ensure_pop();
+                    let name_value = self.stack.ensure_pop();
+                    let event_name = self.as_string(&name_value)?.clone();
+                    let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                        let pc = bf.faulting_pc;
+                        let func_obj = self.get_object(bf.function).as_callable().ok();
+                        func_obj
+                            .and_then(|func| {
+                                if let Some(compact) = &func.bytecode.compact {
+                                    compact.line_entry_for_pc(pc)
+                                } else {
+                                    func.bytecode.line_entry_for_pc(pc)
+                                }
+                            })
+                            .map(|entry| {
+                                (
+                                    entry.span.file_id.as_u32(),
+                                    u32::try_from(entry.line).unwrap_or(u32::MAX),
+                                    entry.span.range.start().into(),
+                                    u32::from(entry.span.range.start()),
+                                    u32::from(entry.span.range.end()),
+                                )
+                            })
+                    } else {
+                        None
+                    };
+                    return Ok(Some(VmExecState::Event {
+                        event_name,
+                        data,
+                        source_location,
+                    }));
+                }
+            }
+        } // end unsafe block
 
         Ok(None)
     }

@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use bex_external_types::BexExternalValue;
+use sys_types::CallId;
 use web_time::SystemTime;
 
 use crate::{SpanContext, SpanId};
@@ -8,6 +9,7 @@ use crate::{SpanContext, SpanId};
 /// A single runtime event emitted during BAML execution.
 #[derive(Clone, Debug)]
 pub struct RuntimeEvent {
+    pub call_id: CallId,
     pub ctx: SpanContext,
     /// Full ancestor chain from root to current span, populated at emission time.
     pub call_stack: Vec<SpanId>,

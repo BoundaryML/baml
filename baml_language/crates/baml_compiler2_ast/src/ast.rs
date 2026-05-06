@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use baml_base::Name;
+use baml_base::{Name, TypePath};
 use la_arena::{Arena, Idx};
 use text_size::TextRange;
 
@@ -184,6 +184,113 @@ impl TypeExpr {
             | Self::Rust { attrs }
             | Self::Error { attrs }
             | Self::Unknown { attrs } => attrs,
+        }
+    }
+}
+
+impl std::fmt::Display for TypeExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn needs_parens(ty: &TypeExpr) -> bool {
+            matches!(ty, TypeExpr::Union { .. } | TypeExpr::Function { .. })
+        }
+
+        fn write_postfix_base(f: &mut std::fmt::Formatter<'_>, ty: &TypeExpr) -> std::fmt::Result {
+            if needs_parens(ty) {
+                write!(f, "({ty})")
+            } else {
+                write!(f, "{ty}")
+            }
+        }
+
+        match self {
+            TypeExpr::Path {
+                segments,
+                generic_args,
+                ..
+            } => {
+                let path = segments
+                    .iter()
+                    .map(smol_str::SmolStr::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                write!(f, "{path}")?;
+                if !generic_args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, arg) in generic_args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{arg}")?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+            TypeExpr::Int { .. } => write!(f, "int"),
+            TypeExpr::Float { .. } => write!(f, "float"),
+            TypeExpr::String { .. } => write!(f, "string"),
+            TypeExpr::Bool { .. } => write!(f, "bool"),
+            TypeExpr::Null { .. } => write!(f, "null"),
+            TypeExpr::Never { .. } => write!(f, "never"),
+            TypeExpr::Void { .. } => write!(f, "void"),
+            TypeExpr::Uint8Array { .. } => write!(f, "uint8array"),
+            TypeExpr::Media { kind, .. } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
+            TypeExpr::Optional { inner, .. } => {
+                write_postfix_base(f, inner)?;
+                write!(f, "?")
+            }
+            TypeExpr::List { inner, .. } => {
+                write_postfix_base(f, inner)?;
+                write!(f, "[]")
+            }
+            TypeExpr::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
+            TypeExpr::Union { variants, .. } => {
+                for (i, v) in variants.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " | ")?;
+                    }
+                    if matches!(v, TypeExpr::Function { .. }) {
+                        write!(f, "({v})")?;
+                    } else {
+                        write!(f, "{v}")?;
+                    }
+                }
+                Ok(())
+            }
+            TypeExpr::Literal { value, .. } => write!(f, "{value}"),
+            TypeExpr::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                write!(f, "(")?;
+                for (i, p) in params.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    if let Some(name) = &p.name {
+                        write!(f, "{}: {}", name.as_str(), p.ty)?;
+                    } else {
+                        write!(f, "{}", p.ty)?;
+                    }
+                }
+                write!(f, ") -> ")?;
+                if matches!(**ret, TypeExpr::Function { .. }) {
+                    write!(f, "({ret})")?;
+                } else {
+                    write!(f, "{ret}")?;
+                }
+                if let Some(throws) = throws {
+                    write!(f, " throws {throws}")?;
+                }
+                Ok(())
+            }
+            TypeExpr::BuiltinUnknown { .. } => write!(f, "unknown"),
+            TypeExpr::Type { .. } => write!(f, "type"),
+            TypeExpr::Rust { .. } => write!(f, "$rust_type"),
+            TypeExpr::Error { .. } => write!(f, "error"),
+            TypeExpr::Unknown { .. } => write!(f, "?"),
         }
     }
 }
@@ -467,7 +574,7 @@ pub enum Expr {
         args: Vec<ExprId>,
     },
     Object {
-        type_name: Option<Name>,
+        type_name: Option<TypePath>,
         fields: Vec<(Name, ExprId)>,
         spreads: Vec<SpreadField>,
     },
@@ -525,8 +632,10 @@ pub enum Expr {
 pub enum Stmt {
     Expr(ExprId),
     Let {
+        /// The binding pattern. A `: T` annotation lives inside the pattern
+        /// as a `Chain` link, not as a separate field on `Stmt::Let` — see
+        /// [`Pattern::Chain`].
         pattern: PatId,
-        type_annotation: Option<TypeAnnotId>,
         initializer: Option<ExprId>,
         is_watched: bool,
         origin: LetOrigin,
@@ -575,15 +684,147 @@ pub enum Stmt {
     },
 }
 
-/// Patterns — modeled after `Pattern` in `body.rs`.
+/// A pattern in the AST.
+///
+/// One flat enum. Atoms (`Wildcard`, `Bind`, `Class`, `Type`) describe a
+/// single shape; combinators (`Or`, `Chain`) combine other patterns.
+///
+/// Lowering invariants:
+/// - `_` always lowers to [`Pattern::Wildcard`] — never `Bind { name: "_" }`.
+/// - 1-element `Or` / `Chain` are NOT allocated; they collapse to the inner
+///   pattern. So if you see `Or(parts)` or `Chain(parts)`, `parts.len() >= 2`.
+/// - The `: T` annotation in `let x: T` lives as a [`Pattern::Chain`] link.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pattern {
-    Binding(Name),
-    TypedBinding { name: Name, ty: TypeExpr },
-    Literal(Literal),
-    Null,
-    EnumVariant { enum_name: Name, variant: Name },
-    Union(Vec<PatId>),
+    // ── Atoms (single-shape patterns) ────────────────────────────────────
+    /// `_` — wildcard. Always irrefutable. Binds nothing.
+    Wildcard,
+    /// `let x` — name binding. The `let` keyword is required at the syntax
+    /// level but doesn't appear here; the AST just carries the name.
+    Bind { name: Name },
+    /// `pkg.Foo { a, b: <pat>, ... }` — class destructure. `class` is the
+    /// dotted path as segments (single-element vec for unqualified names).
+    Class {
+        class: Vec<Name>,
+        fields: Vec<FieldPat>,
+    },
+    /// Bare type expression in pattern position. Subsumes literal patterns
+    /// (`42`, `"hi"`, `true`), `null`, enum variants (`Status.Active`),
+    /// path types, generics, function types, etc. — anything in `TypeExpr`.
+    /// Refutability is decided by TIR using the scrutinee type; `Type(int)`
+    /// is irrefutable against scrutinee `int` but refutable against `int|str`.
+    Type(TypeExpr),
+
+    // ── Combinators (combine other patterns) ─────────────────────────────
+    /// `p1 | p2 | ...` — alternation. Length always `>= 2`. Every alternative
+    /// must bind the same names (TIR enforces).
+    Or(Vec<PatId>),
+    /// `p1 : p2 : ...` — pairwise subtype chain. Length always `>= 2`. Only
+    /// the leftmost link may bind names; every link's natural type must be a
+    /// subtype of the next (TIR enforces).
+    Chain(Vec<PatId>),
+}
+
+/// Single field inside a class destructure pattern.
+///
+/// Shorthand `{ f }` lowers to `FieldPat { field: f, pat: <Bind { name: f }> }`,
+/// so consumers never see the missing-pattern shape.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldPat {
+    pub field: Name,
+    pub pat: PatId,
+}
+
+impl Pattern {
+    /// First name introduced by this pattern, if any. Convenience wrapper
+    /// around [`Pattern::bound_names`] for callers that just need a single
+    /// representative — e.g. inlay-hint anchors, debug names, "does this
+    /// pattern introduce *some* binding?" checks.
+    ///
+    /// For patterns with multiple bindings (like `let x: let y = 1` or
+    /// destructures), use [`Pattern::bound_names`] instead.
+    pub fn binding_name<'a>(&'a self, patterns: &'a la_arena::Arena<Pattern>) -> Option<&'a Name> {
+        self.bound_names(patterns).into_iter().next()
+    }
+
+    /// Collect every name this pattern introduces into scope, in declaration
+    /// order. Walks down through chains, fields, and Or-branches recursively.
+    ///
+    /// Used by HIR to:
+    ///   - register bindings into the surrounding scope, and
+    ///   - check that every alternative of an `Or` introduces the same name
+    ///     set (otherwise the body would see a name that's only sometimes in
+    ///     scope).
+    ///
+    /// All links of a `Chain` can bind. `let x: let y: let z = 1` is a valid
+    /// pattern (pairwise `never <: never`), so all three names land in scope.
+    ///
+    /// For an `Or` pattern, this returns the names of the *first* alternative.
+    /// HIR's uniformity check compares sibling alternatives' name lists; pick
+    /// any branch as the reference and diff the rest.
+    pub fn bound_names<'a>(&'a self, patterns: &'a la_arena::Arena<Pattern>) -> Vec<&'a Name> {
+        let mut out = Vec::new();
+        self.collect_bound_names(patterns, &mut out);
+        out
+    }
+
+    fn collect_bound_names<'a>(
+        &'a self,
+        patterns: &'a la_arena::Arena<Pattern>,
+        out: &mut Vec<&'a Name>,
+    ) {
+        match self {
+            Pattern::Wildcard | Pattern::Type(_) => {}
+            Pattern::Bind { name } => out.push(name),
+            Pattern::Class { fields, .. } => {
+                for f in fields {
+                    patterns[f.pat].collect_bound_names(patterns, out);
+                }
+            }
+            Pattern::Chain(parts) => {
+                for id in parts {
+                    patterns[*id].collect_bound_names(patterns, out);
+                }
+            }
+            // Pick any one alternative to report — the uniformity check is
+            // the caller's job.
+            Pattern::Or(parts) => {
+                if let Some(first) = parts.first() {
+                    patterns[*first].collect_bound_names(patterns, out);
+                }
+            }
+        }
+    }
+
+    /// True iff this pattern is structurally guaranteed to match every value
+    /// at its position. **Pure structural check** — does not consider the
+    /// scrutinee's static type. TIR is responsible for verifying `Type` /
+    /// `Class` / chain assertions against the scrutinee type.
+    ///
+    /// Used by the let-stmt validator to reject patterns that can fail at
+    /// runtime; refutable patterns belong in `match` / `if let` / `let-else`.
+    pub fn is_irrefutable(&self, patterns: &la_arena::Arena<Pattern>) -> bool {
+        match self {
+            Pattern::Wildcard | Pattern::Bind { .. } => true,
+            Pattern::Class { fields, .. } => fields
+                .iter()
+                .all(|f| patterns[f.pat].is_irrefutable(patterns)),
+            // `Type(T)` is structurally fine; whether the value actually is a
+            // `T` is a typing concern, not a pattern concern.
+            Pattern::Type(_) => true,
+            // A chain is structurally as irrefutable as every link. The
+            // pairwise subtype check is a TIR concern.
+            Pattern::Chain(parts) => parts
+                .iter()
+                .all(|id| patterns[*id].is_irrefutable(patterns)),
+            // Or-of-patterns is irrefutable iff EVERY alternative is. That
+            // makes `_ | _` valid in a `let` while keeping refutable cases
+            // (e.g. `1 | 2`) properly rejected.
+            Pattern::Or(parts) => parts
+                .iter()
+                .all(|id| patterns[*id].is_irrefutable(patterns)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

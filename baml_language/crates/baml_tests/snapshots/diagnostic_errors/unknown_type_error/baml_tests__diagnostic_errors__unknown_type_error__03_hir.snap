@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+enum user.Status {Active, Inactive}
+function user.Bar(x: user.unknown_param_type) -> int  [expr] {
+  {  } 1
+}
+function user.Baz() -> user.unknown_optional?  [expr] {
+  {  } null
+}
+function user.Foo() -> user.blah  [expr] {
+  {  } 1
+}
+function user.StatusTypoInTypePosition(s: user.Status.Typo) -> int  [expr] {
+  {  } 1
+}

@@ -104,7 +104,7 @@ class TestRegistry {
     for (let ts in self.collector.testsets) {
       let expanded = self.expansions.get(ts.name)
       match (expanded) {
-        sub: TestRegistry => {
+        let sub: TestRegistry => {
           items.push(SerializedTestSet {
             name: ts.name,
             items: sub.serialize(),
@@ -187,7 +187,7 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
   }
   match (runner) {
     null => base_run(),
-    r: TestRunner => {
+    let r: TestRunner => {
       let wrapped: TestReportThunk = r(base_run)
       wrapped()
     }
@@ -198,7 +198,7 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
 function run_testset(run_children: TestSetReportThunk, runner: TestSetRunner?) -> TestSetReport {
   match (runner) {
     null => run_children(),
-    r: TestSetRunner => {
+    let r: TestSetRunner => {
       let wrapped: TestSetReportThunk = r(run_children)
       wrapped()
     }

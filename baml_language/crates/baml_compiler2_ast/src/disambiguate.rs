@@ -8,8 +8,7 @@
 //!   type annotations inside expression bodies (let, watch-let, patterns, lambdas)
 
 use crate::ast::{
-    ClassDef, Expr, ExprBody, FunctionBodyDef, FunctionDef, Item, LetDef, Pattern, TypeAliasDef,
-    TypeExpr,
+    ClassDef, Expr, ExprBody, FunctionBodyDef, FunctionDef, Item, LetDef, TypeAliasDef, TypeExpr,
 };
 
 /// The canonical set of field attribute names.
@@ -90,9 +89,11 @@ fn validate_expr_body(body: &ExprBody, diagnostics: &mut Vec<(String, text_size:
         validate_type_expr_tree(ty, diagnostics);
     }
 
-    // Check typed patterns (e.g. `let x: string @alias("n") = ...`).
+    // Check typed patterns (e.g. `let x: string @alias("n") = ...`). Type
+    // information lives in `Pattern::Type` atoms, including those that appear
+    // as later links of a `Chain`. The arena iteration covers all of them.
     for (_, pat) in body.patterns.iter() {
-        if let Pattern::TypedBinding { ty, .. } = pat {
+        if let crate::ast::Pattern::Type(ty) = pat {
             validate_type_expr_tree(ty, diagnostics);
         }
     }

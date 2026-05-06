@@ -182,14 +182,18 @@ impl StructuralTy {
                 inner.is_subtype_of(opt_inner, assumptions)
             }
 
+            // Union<T1, T2> <: U iff all Ti <: U.
+            // (Order matters: this must come before the `T <: Union` rule
+            // below — otherwise `Union(int, string) <: Union(int, string,
+            // float)` matches `T <: Union` with T=Union, and asks whether
+            // the LHS is one of the RHS members, which it isn't.)
+            (StructuralTy::Union(types), other) => {
+                types.iter().all(|t| t.is_subtype_of(other, assumptions))
+            }
+
             // T <: T | U
             (inner, StructuralTy::Union(types)) => {
                 types.iter().any(|t| inner.is_subtype_of(t, assumptions))
-            }
-
-            // Union<T1, T2> <: U iff all Ti <: U
-            (StructuralTy::Union(types), other) => {
-                types.iter().all(|t| t.is_subtype_of(other, assumptions))
             }
 
             // List covariance

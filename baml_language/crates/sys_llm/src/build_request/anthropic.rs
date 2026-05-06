@@ -65,6 +65,14 @@ struct RequestBody {
     extra: serde_json::Map<String, serde_json::Value>,
 }
 
+/// Default `max_tokens` when the user does not specify one.
+///
+/// The Anthropic API requires `max_tokens` and has no server-side default.
+/// 8 192 is a safe middle ground: large enough for most structured outputs,
+/// small enough to avoid non-streaming timeout errors from the Anthropic SDK
+/// (which rejects requests estimated to take >10 minutes).
+pub(super) const DEFAULT_MAX_TOKENS: i64 = 8_192;
+
 // ============================================================================
 // Request builder
 // ============================================================================
@@ -78,11 +86,12 @@ pub(crate) fn build_request(
     headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert("anthropic-version".to_string(), "2023-06-01".to_string());
 
-    // Body
+    // Body — use the user-provided max_tokens, or fall back to a safe default.
     let max_tokens = match &client.provider_options {
         Some(crate::baml_std::ProviderOptions::Anthropic(opts)) => opts.max_tokens,
         _ => None,
     };
+    let max_tokens = Some(max_tokens.unwrap_or(DEFAULT_MAX_TOKENS));
     let body_str = build_anthropic_body_str(&client.model, prompt, max_tokens, &client.extra_body)?;
 
     Ok(crate::baml_std::HttpRequest {
@@ -729,6 +738,48 @@ mod tests {
                 ]
             })
         );
+    }
+
+    // ========================================================================
+    // default max_tokens tests
+    // ========================================================================
+
+    fn make_client_without_max_tokens(model: &str) -> crate::baml_std::PrimitiveClient {
+        crate::baml_std::PrimitiveClient::new(
+            "test".to_string(),
+            "anthropic".to_string(),
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some(model.to_string()),
+                request_body: IndexMap::new(),
+                base_url: Some("https://api.anthropic.com".to_string()),
+                provider_options: crate::baml_std::AnthropicOptions { max_tokens: None }
+                    .into_bex_external_value(),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn anthropic_default_max_tokens_when_not_specified() {
+        let client = make_client_without_max_tokens("claude-sonnet-4-6-20260101");
+        let prompt = msg("user", "Hello");
+        let result = build_request(&client, &prompt).unwrap();
+        let body: serde_json::Value = serde_json::from_str(&result.body).unwrap();
+        assert_eq!(body["max_tokens"], serde_json::json!(8192));
+    }
+
+    #[test]
+    fn anthropic_explicit_max_tokens_not_overridden() {
+        let client = make_client(vec![(
+            "model",
+            BexExternalValue::String("claude-sonnet-4-6-20260101".into()),
+        )]);
+        let prompt = msg("user", "Hello");
+        let result = build_request(&client, &prompt).unwrap();
+        let body: serde_json::Value = serde_json::from_str(&result.body).unwrap();
+        // make_client sets max_tokens: Some(4096), so it should stay 4096
+        assert_eq!(body["max_tokens"], serde_json::json!(4096));
     }
 
     #[test]

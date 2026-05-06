@@ -16,6 +16,7 @@ bex_events = { workspace = true }
 bex_heap = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
+sys_glob = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
@@ -29,6 +30,7 @@ lsp-server = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
+serde-wasm-bindgen = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tsify = { workspace = true }
@@ -42,7 +44,9 @@ web-time = { workspace = true }
 wasm-bindgen-test = { workspace = true }
 
 [features]
-default = [ "console_error_panic" ]
+default = [ "console_error_panic", "aws-crypto" ]
+aws-crypto = [  ]
+ring-crypto = [  ]
 console_error_panic = [ "console_error_panic_hook" ]
 
 [lints]

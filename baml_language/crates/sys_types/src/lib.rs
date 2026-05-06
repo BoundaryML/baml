@@ -32,7 +32,7 @@ pub mod sse;
 pub mod generated {
 
     pub use bex_external_types::{AsBexExternalValue, BexExternalValue};
-    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
+    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
     pub use bex_vm_types::SysOp;
 
     pub use crate::{
@@ -170,6 +170,9 @@ pub enum OpErrorKind {
     #[error("Access error: {0}")]
     AccessError(#[from] bex_heap::AccessError),
 
+    #[error("IO error: {message}")]
+    Io { message: String },
+
     #[error("Operation cancelled")]
     Cancelled,
 
@@ -198,6 +201,7 @@ impl OpErrorKind {
             Self::Unsupported => SysOpErrorCategory::Unsupported,
             Self::RenderPrompt(_) => SysOpErrorCategory::RenderPrompt,
             Self::AccessError(_) => SysOpErrorCategory::AccessError,
+            Self::Io { .. } => SysOpErrorCategory::Io,
             Self::Cancelled => SysOpErrorCategory::Io,
             Self::Timeout { .. } => SysOpErrorCategory::Timeout,
             Self::NotImplemented { .. } => SysOpErrorCategory::NotImplemented,
@@ -334,6 +338,26 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
     }
 }
 
+impl<T: Send + 'static> SysOpOutput<T> {
+    /// Convert to [`SysOpResult`] using a custom value mapping function.
+    ///
+    /// Used by generated glue code for return types that don't implement
+    /// [`AsBexExternalValue`] directly (e.g. `Vec<ClassName>`).
+    pub fn into_result_mapped(
+        self,
+        op: SysOp,
+        f: impl Fn(T) -> BexExternalValue + Send + 'static,
+    ) -> SysOpResult {
+        match self {
+            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(f(v))),
+            Self::Ready(Err(kind)) => SysOpResult::Ready(Err(OpError::new(op, kind))),
+            Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
+                fut.await.map(f).map_err(|kind| OpError::new(op, kind))
+            })),
+        }
+    }
+}
+
 // ============================================================================
 // System Operations Table
 // ============================================================================
@@ -343,7 +367,8 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
 /// Each operation takes a heap reference, arguments, and a context reference,
 /// returning a `SysOpResult` which is either an immediate result or a future to await.
 ///
-/// The heap reference allows ops to access instance fields via `with_gc_protection`.
+/// The heap reference plus a [`PermitProof`](bex_heap::PermitProof) (proving GC-exclusion) lets ops
+/// safely access instance fields via the heap accessor APIs.
 /// Arguments are `BexValue` which can be either:
 /// - `BexValue::External(...)` for primitives/strings copied from VM
 /// - `BexValue::Opaque(Handle)` for heap objects (instances, arrays, maps)
@@ -351,7 +376,13 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
 /// The context reference provides engine-level information (e.g., function metadata)
 /// that some `sys_ops` need. Ops that don't need it simply ignore the parameter.
 pub type SysOpFn = Arc<
-    dyn for<'a> Fn(&Arc<BexHeap>, Vec<bex_heap::BexValue<'a>>, &SysOpContext, CallId) -> SysOpResult
+    dyn for<'a> Fn(
+            &Arc<BexHeap>,
+            bex_heap::PermitProof<'a>,
+            Vec<bex_heap::BexValue<'a>>,
+            &SysOpContext,
+            CallId,
+        ) -> SysOpResult
         + Send
         + Sync,
 >;
@@ -769,6 +800,9 @@ mod tests {
             OpErrorKind::ResourceTypeMismatch { expected: "File" },
             OpErrorKind::Unsupported,
             OpErrorKind::RenderPrompt("err".into()),
+            OpErrorKind::Io {
+                message: "io error".into(),
+            },
             OpErrorKind::Cancelled,
             OpErrorKind::Timeout {
                 message: "t".into(),

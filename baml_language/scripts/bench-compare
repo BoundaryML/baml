@@ -1,0 +1,242 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# BEX VM performance comparison tool.
+#
+# Usage:
+#   ./scripts/bench-compare run              # profile current branch, save results
+#   ./scripts/bench-compare compare A.json B.json  # compare two result files
+#   ./scripts/bench-compare flamegraph [workload]   # record a samply flame graph
+#
+# The 'run' command builds with the bench profile (lto=fat), runs cache_profile
+# with sudo, and saves JSON to /tmp/bex-perf-<commit>.json.
+#
+# The 'compare' command reads two JSON files and prints a side-by-side table
+# showing deltas for instructions, cycles, IPC, cache misses, and branches.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BENCH_BIN_NAME="cache_profile"
+
+# Use caller's cwd if it has a Cargo.toml, otherwise fall back to script's repo
+if [[ -f "Cargo.toml" ]]; then
+    REPO_ROOT="$(pwd)"
+else
+    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
+
+cd "$REPO_ROOT"
+
+usage() {
+    echo "Usage:"
+    echo "  $0 run [--output path.json]      Profile current branch"
+    echo "  $0 stability                     Check counter determinism (5 full runs)"
+    echo "  $0 compare <base.json> <new.json>  Compare two results"
+    echo "  $0 flamegraph [workload.baml]    Record samply flame graph"
+    echo "  $0 divan                         Run divan wall-clock benchmarks"
+    exit 1
+}
+
+cmd_stability() {
+    cmd_run --stability
+}
+
+# ---- run: build & profile ----
+cmd_run() {
+    # Don't run this script itself under sudo — it handles sudo internally.
+    if [[ "$EUID" -eq 0 ]]; then
+        echo "ERROR: don't run the whole script under sudo."
+        echo "Usage: ./scripts/bench-compare run"
+        echo "The script will prompt for sudo when needed."
+        exit 1
+    fi
+
+    echo "==> Building cache_profile (profiling profile)..."
+    cargo build --bench "$BENCH_BIN_NAME" --profile profiling -p baml_tests 2>&1 | tail -3
+
+    # Find the binary (executable Mach-O in deps/, not .o/.d/.rmeta files)
+    local bin
+    bin=$(find target/profiling/deps -name "${BENCH_BIN_NAME}-*" -type f \
+        ! -name "*.o" ! -name "*.d" ! -name "*.rmeta" ! -name "*.rlib" \
+        -perm +111 2>/dev/null \
+        | sort -t- -k2 | tail -1)
+
+    if [[ -z "$bin" ]]; then
+        echo "ERROR: could not find ${BENCH_BIN_NAME} binary in target/profiling/deps/"
+        exit 1
+    fi
+
+    cp "$bin" "target/profiling/$BENCH_BIN_NAME"
+
+    # Capture git info now (before sudo changes context)
+    local commit branch
+    commit=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    echo "==> Binary: target/profiling/$BENCH_BIN_NAME"
+    echo "==> Git: $commit ($branch)"
+    echo "==> Running with sudo (kperf requires root)..."
+    echo ""
+
+    # Pass git info via env vars so the binary doesn't need to run git as root
+    sudo BEX_GIT_COMMIT="$commit" BEX_GIT_BRANCH="$branch" \
+        "target/profiling/$BENCH_BIN_NAME" "$@"
+}
+
+# ---- compare: diff two JSON result files ----
+cmd_compare() {
+    local base="$1"
+    local new="$2"
+
+    if [[ ! -f "$base" ]] || [[ ! -f "$new" ]]; then
+        echo "ERROR: both files must exist"
+        echo "  base: $base"
+        echo "  new:  $new"
+        exit 1
+    fi
+
+    python3 - "$base" "$new" <<'PYTHON'
+import json, sys
+
+base_path, new_path = sys.argv[1], sys.argv[2]
+with open(base_path) as f: base = json.load(f)
+with open(new_path) as f: new = json.load(f)
+
+print(f"\n{'='*80}")
+print(f"  BASE: {base['commit']} ({base['branch']})")
+print(f"  NEW:  {new['commit']} ({new['branch']})")
+print(f"{'='*80}")
+
+# Key metrics to compare
+metrics = [
+    ("instructions",   "Instructions",     True),
+    ("cycles",         "Cycles",           True),
+    ("ipc",            "IPC",              False),
+    ("l1i_miss",       "L1I misses",       True),
+    ("l1d_miss_total", "L1D misses",       True),
+    ("branches",       "Branches",         True),
+    ("branch_mispred", "Branch mispred",   True),
+]
+
+all_workloads = sorted(set(base["workloads"].keys()) | set(new["workloads"].keys()))
+
+for workload in all_workloads:
+    if workload not in base["workloads"] or workload not in new["workloads"]:
+        print(f"\n  {workload}: MISSING in {'base' if workload not in base['workloads'] else 'new'}")
+        continue
+
+    b = base["workloads"][workload]
+    n = new["workloads"][workload]
+
+    print(f"\n  {workload}")
+    print(f"  {'Metric':<20s} {'Base':>16s} {'New':>16s} {'Delta':>10s} {'%':>8s}")
+    print(f"  {'-'*20} {'-'*16} {'-'*16} {'-'*10} {'-'*8}")
+
+    for key, label, is_int in metrics:
+        bv = b.get(key, 0)
+        nv = n.get(key, 0)
+
+        if is_int:
+            bv, nv = int(bv), int(nv)
+            delta = nv - bv
+            pct = (delta / bv * 100) if bv != 0 else 0
+            sign = "+" if delta > 0 else ""
+
+            # Color: green if fewer (negative delta), red if more
+            if abs(pct) < 1:
+                indicator = " "
+            elif delta < 0:
+                indicator = " \033[32m▼\033[0m"  # green = better (fewer instructions/misses)
+            else:
+                indicator = " \033[31m▲\033[0m"  # red = worse
+
+            print(f"  {label:<20s} {bv:>16,d} {nv:>16,d} {sign}{delta:>+9,d} {sign}{pct:>+7.1f}%{indicator}")
+        else:
+            delta = nv - bv
+            pct = (delta / bv * 100) if bv != 0 else 0
+            sign = "+" if delta > 0 else ""
+            if abs(delta) < 0.01:
+                indicator = " "
+            elif delta > 0:
+                indicator = " \033[32m▲\033[0m"  # green = better IPC
+            else:
+                indicator = " \033[31m▼\033[0m"  # red = worse IPC
+            print(f"  {label:<20s} {bv:>16.3f} {nv:>16.3f} {sign}{delta:>+9.3f} {sign}{pct:>+7.1f}%{indicator}" if bv != 0 else f"  {label:<20s} {bv:>16.3f} {nv:>16.3f}")
+
+# Summary
+print(f"\n{'='*80}")
+print("  Summary: instruction count delta per workload")
+print(f"{'='*80}")
+
+for workload in all_workloads:
+    if workload not in base["workloads"] or workload not in new["workloads"]:
+        continue
+    bi = base["workloads"][workload]["instructions"]
+    ni = new["workloads"][workload]["instructions"]
+    pct = (ni - bi) / bi * 100 if bi else 0
+    bar_len = int(min(abs(pct), 50))
+    if pct < -1:
+        bar = f"\033[32m{'█' * bar_len}\033[0m"
+        arrow = "▼"
+    elif pct > 1:
+        bar = f"\033[31m{'█' * bar_len}\033[0m"
+        arrow = "▲"
+    else:
+        bar = ""
+        arrow = "="
+    print(f"  {workload:<25s} {pct:>+7.1f}% {arrow} {bar}")
+
+print()
+PYTHON
+}
+
+# ---- flamegraph: samply record ----
+cmd_flamegraph() {
+    local workload_file="${1:-}"
+    local project_dir="/tmp/bex_flamegraph_project"
+
+    if [[ -z "$workload_file" ]]; then
+        # Default: use fib(35) workload
+        workload_file="/tmp/bex_flamegraph_workload.baml"
+        cat > "$workload_file" <<'BAML'
+function fib(n: int) -> int {
+  if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
+}
+function main() -> int { fib(35) }
+BAML
+    fi
+
+    # Set up a temp project with the workload file
+    mkdir -p "$project_dir/baml_src"
+    cp "$workload_file" "$project_dir/baml_src/workload.baml"
+    echo '[project]' > "$project_dir/baml.toml"
+    echo 'name = "flamegraph"' >> "$project_dir/baml.toml"
+
+    echo "==> Building baml-cli (profiling profile)..."
+    cargo build --profile profiling --bin baml-cli 2>&1 | tail -3
+
+    local commit
+    commit=$(git rev-parse --short HEAD)
+    local output="/tmp/bex-flamegraph-${commit}.json"
+
+    echo "==> Recording with samply..."
+    samply record --save-only --rate 10000 -o "$output" \
+        ./target/profiling/baml-cli run --function main --from "$project_dir"
+
+    echo ""
+    echo "==> Profile saved to $output"
+    echo "    View with: samply load $output"
+}
+
+# ---- divan: wall-clock benchmarks ----
+cmd_divan() {
+    cargo bench --bench runtime_benchmark -- vm_ "$@"
+}
+
+# ---- dispatch ----
+case "${1:-}" in
+    run)        shift; cmd_run "$@" ;;
+    stability)  shift; cmd_stability "$@" ;;
+    compare)    shift; cmd_compare "$@" ;;
+    flamegraph) shift; cmd_flamegraph "$@" ;;
+    divan)      shift; cmd_divan "$@" ;;
+    *)          usage ;;
+esac

@@ -24,9 +24,13 @@ function getMediaSrc(m: BamlJsMedia): string | null {
   return null;
 }
 
-export const MediaRenderer: FC<ResultRendererProps> = ({ value }) => {
+export const MediaRenderer: FC<ResultRendererProps> = ({ value, displayMode }) => {
   if (!isMedia(value)) {
     return <CodeBlock>{JSON.stringify(value, null, 2)}</CodeBlock>;
+  }
+
+  if (displayMode === 'inline') {
+    return <span className="font-vsc-mono text-xs text-vsc-text-faint">&lt;{value.media_type}&gt;</span>;
   }
 
   const src = getMediaSrc(value);

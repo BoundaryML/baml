@@ -98,9 +98,9 @@ async fn cross_block_field_mutation() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        alloc_instance Box
+        alloc_instance user.Box
         load_const 1
         init_field .v
         store_var b

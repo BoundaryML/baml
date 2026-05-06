@@ -10,6 +10,7 @@ use bex_events::{
     EventKind, FunctionEvent, FunctionStart, RuntimeEvent, SpanContext, SpanId, TraceTags,
     event_store,
 };
+use sys_types::CallId;
 
 /// One entry on the host-language span stack.
 #[derive(Clone, Debug)]
@@ -79,6 +80,7 @@ impl HostSpanManager {
             .collect();
 
         let event = RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id,
@@ -126,6 +128,7 @@ impl HostSpanManager {
             let trace_tags: TraceTags = tags.into_iter().collect();
 
             let event = RuntimeEvent {
+                call_id: CallId(0),
                 ctx: SpanContext {
                     span_id: entry.span_id.clone(),
                     parent_span_id: self.stack.iter().rev().nth(1).map(|e| e.span_id.clone()),
@@ -171,6 +174,7 @@ impl HostSpanManager {
         call_stack.push(entry.span_id.clone());
 
         let event = RuntimeEvent {
+            call_id: CallId(0),
             ctx: SpanContext {
                 span_id: entry.span_id,
                 parent_span_id: self.stack.last().map(|e| e.span_id.clone()),

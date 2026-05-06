@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.binding_in_middle_of_chain() -> int  [expr] {
+  { let x: 1: int: y = 1 } 1
+}
+function user.chain_violates_subtype(v: int) -> int  [expr] {
+  {  } match (v) { n: int: string => 1 }
+}
+function user.literal_narrow_violates(v: int) -> int  [expr] {
+  {  } match (v) { n: "hello": int => 1 }
+}
+function user.or_different_names_three(v: int) -> int  [expr] {
+  {  } match (v) { x | y | z => 1 }
+}
+function user.or_different_names_two(v: int) -> int  [expr] {
+  {  } match (v) { x | y => 1 }
+}
+function user.or_mixed_names_in_chain(v: int | string) -> int  [expr] {
+  {  } match (v) { x: int | y: string => 1 }
+}
+function user.or_multiple_binds_diff_narrows(v: int | string) -> int  [expr] {
+  {  } match (v) { a: b: int | a: b: string => 1 }
+}
+function user.or_one_binds_one_doesnt(v: int) -> int  [expr] {
+  {  } match (v) { x | _ => 1 }
+}
+function user.or_same_name_distinct_narrows(v: int | string) -> int  [expr] {
+  {  } match (v) { x: int | x: string => 1 }
+}

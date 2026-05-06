@@ -154,7 +154,7 @@ async fn catch_literal_int_match() {
         jump L2
         load_var e
         load_const 42
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -510,7 +510,7 @@ async fn named_binding_string_access_value() {
 
         function main() -> string {
             fails(0) catch (e) {
-                msg: string => msg,
+                let msg: string => msg,
                 _: int => "was int"
             }
         }
@@ -581,7 +581,7 @@ async fn named_binding_int_access_value() {
         function main() -> int {
             fails(1) catch (e) {
                 _: string => -1,
-                code: int => code
+                let code: int => code
             }
         }
     "#
@@ -660,7 +660,7 @@ async fn catch_user_class_single_arm() {
     );
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> int {
-        alloc_instance NetworkError
+        alloc_instance user.NetworkError
         load_const "http://example.com"
         init_field .url
         throw
@@ -717,13 +717,13 @@ async fn catch_two_user_classes_dispatch_first() {
         jump L1
 
       L0:
-        alloc_instance ParseError
+        alloc_instance user.ParseError
         load_const "bad json"
         init_field .message
         throw
 
       L1:
-        alloc_instance NetworkError
+        alloc_instance user.NetworkError
         load_const "http://x"
         init_field .url
         throw
@@ -818,7 +818,7 @@ async fn catch_user_class_plus_wildcard() {
         throw
 
       L1:
-        alloc_instance NetworkError
+        alloc_instance user.NetworkError
         load_const "http://x"
         init_field .url
         throw
@@ -901,19 +901,19 @@ async fn catch_three_user_classes_plus_wildcard() {
         throw
 
       L3:
-        alloc_instance RateLimit
+        alloc_instance user.RateLimit
         load_const 30
         init_field .retryAfter
         throw
 
       L4:
-        alloc_instance NotFound
+        alloc_instance user.NotFound
         load_const "/users"
         init_field .path
         throw
 
       L5:
-        alloc_instance AuthError
+        alloc_instance user.AuthError
         load_const "expired"
         init_field .reason
         throw
@@ -980,14 +980,14 @@ async fn named_class_binding_access_field() {
 
         function main() -> string {
             fails() catch (e) {
-                err: NetworkError => err.url
+                let err: NetworkError => err.url
             }
         }
     "#
     );
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> string {
-        alloc_instance NetworkError
+        alloc_instance user.NetworkError
         load_const "http://example.com"
         init_field .url
         throw
@@ -1033,8 +1033,8 @@ async fn named_class_binding_dispatch_access_fields() {
 
         function main() -> string {
             fails(1) catch (e) {
-                net: NetworkError => net.url,
-                parse: ParseError => parse.message
+                let net: NetworkError => net.url,
+                let parse: ParseError => parse.message
             }
         }
     "#
@@ -1048,13 +1048,13 @@ async fn named_class_binding_dispatch_access_fields() {
         jump L1
 
       L0:
-        alloc_instance ParseError
+        alloc_instance user.ParseError
         load_const "bad json"
         init_field .message
         throw
 
       L1:
-        alloc_instance NetworkError
+        alloc_instance user.NetworkError
         load_const "http://x"
         init_field .url
         throw
@@ -1121,7 +1121,7 @@ async fn bare_class_single_arm() {
     );
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> int {
-        alloc_instance NetworkError
+        alloc_instance user.NetworkError
         load_const "http://example.com"
         init_field .url
         throw
@@ -1178,13 +1178,13 @@ async fn bare_class_dispatch_first() {
         jump L1
 
       L0:
-        alloc_instance ParseError
+        alloc_instance user.ParseError
         load_const "bad"
         init_field .message
         throw
 
       L1:
-        alloc_instance NetworkError
+        alloc_instance user.NetworkError
         load_const "http://x"
         init_field .url
         throw
@@ -1279,7 +1279,7 @@ async fn bare_class_plus_wildcard() {
         throw
 
       L1:
-        alloc_instance NetworkError
+        alloc_instance user.NetworkError
         load_const "http://x"
         init_field .url
         throw
@@ -1573,7 +1573,7 @@ async fn named_panic_binding_division_by_zero_field() {
 
         function main() -> int {
             divides() catch (e) {
-                err: baml.panics.DivisionByZero => err.dividend
+                let err: baml.panics.DivisionByZero => err.dividend
             }
         }
     "#
@@ -1617,7 +1617,7 @@ async fn named_panic_binding_index_out_of_bounds_fields() {
 
         function main() -> int {
             oob() catch (e) {
-                err: baml.panics.IndexOutOfBounds => err.index
+                let err: baml.panics.IndexOutOfBounds => err.index
             }
         }
     "#
@@ -1664,7 +1664,7 @@ async fn named_panic_binding_index_out_of_bounds_length() {
 
         function main() -> int {
             oob() catch (e) {
-                err: baml.panics.IndexOutOfBounds => err.length
+                let err: baml.panics.IndexOutOfBounds => err.length
             }
         }
     "#
@@ -1711,7 +1711,7 @@ async fn named_panic_binding_map_key_not_found_field() {
 
         function main() -> string {
             bad() catch (e) {
-                err: baml.panics.MapKeyNotFound => err.key
+                let err: baml.panics.MapKeyNotFound => err.key
             }
         }
     "#
@@ -2085,7 +2085,7 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
         throw
 
       L2:
-        alloc_instance AppError
+        alloc_instance user.AppError
         load_const 500
         init_field .code
         throw
@@ -2180,7 +2180,7 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
         return
 
       L3:
-        alloc_instance AppError
+        alloc_instance user.AppError
         load_const 500
         init_field .code
         throw
@@ -2644,7 +2644,7 @@ async fn four_arms_division_by_zero_fires() {
         throw
 
       L3:
-        alloc_instance AppError
+        alloc_instance user.AppError
         load_const 404
         init_field .code
         throw
@@ -2871,7 +2871,7 @@ async fn four_arms_no_error() {
         throw
 
       L5:
-        alloc_instance AppError
+        alloc_instance user.AppError
         load_const 404
         init_field .code
         throw
@@ -3308,7 +3308,7 @@ async fn sequential_catches_both_recover() {
       L1:
         load_var a
         load_var b
-        bin_op +
+        add_int
         return
     }
     "#);
@@ -3356,7 +3356,7 @@ async fn throw_in_match_arm_propagates() {
     function main() -> string {
         load_const 2
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -3456,7 +3456,7 @@ async fn catch_four_typed_arms_jump_table() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 2
         call user.risky
@@ -3510,25 +3510,25 @@ async fn catch_four_typed_arms_jump_table() {
         jump L3
 
       L2:
-        alloc_instance ErrD
+        alloc_instance user.ErrD
         load_const 4
         init_field .x
         throw
 
       L3:
-        alloc_instance ErrC
+        alloc_instance user.ErrC
         load_const 3
         init_field .x
         throw
 
       L4:
-        alloc_instance ErrB
+        alloc_instance user.ErrB
         load_const 2
         init_field .x
         throw
 
       L5:
-        alloc_instance ErrA
+        alloc_instance user.ErrA
         load_const 1
         init_field .x
         throw
@@ -3634,25 +3634,25 @@ async fn catch_four_typed_arms_plus_wildcard_jump_table() {
         throw
 
       L4:
-        alloc_instance ErrD
+        alloc_instance user.ErrD
         load_const 4
         init_field .x
         throw
 
       L5:
-        alloc_instance ErrC
+        alloc_instance user.ErrC
         load_const 3
         init_field .x
         throw
 
       L6:
-        alloc_instance ErrB
+        alloc_instance user.ErrB
         load_const 2
         init_field .x
         throw
 
       L7:
-        alloc_instance ErrA
+        alloc_instance user.ErrA
         load_const 1
         init_field .x
         throw
@@ -3692,13 +3692,13 @@ async fn catch_two_typed_arms_sequential_chain() {
         jump L1
 
       L0:
-        alloc_instance ParseError
+        alloc_instance user.ParseError
         load_const "bad"
         init_field .msg
         throw
 
       L1:
-        alloc_instance NetworkError
+        alloc_instance user.NetworkError
         load_const "http://x"
         init_field .url
         throw
@@ -3768,7 +3768,7 @@ async fn catch_mixed_literal_and_typed_no_switch() {
         jump L1
 
       L0:
-        alloc_instance AppError
+        alloc_instance user.AppError
         load_const 404
         init_field .code
         throw
@@ -3878,6 +3878,62 @@ async fn catch_four_primitive_type_arms() {
     }
     "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+/// 4+ typed catch arms with a final plain binding should still guard panics.
+#[tokio::test]
+async fn catch_four_typed_arms_plus_bind_jump_table_rethrows_panic() {
+    let output = baml_test_optimized!(
+        r#"
+        class ErrA { x int }
+        class ErrB { x int }
+        class ErrC { x int }
+        class ErrD { x int }
+
+        function risky() -> int {
+            1 / 0
+        }
+
+        function main() -> int {
+            risky() catch (e) {
+                _: ErrA => 10,
+                _: ErrB => 20,
+                _: ErrC => 30,
+                _: ErrD => 40,
+                let other => 99
+            }
+        }
+    "#
+    );
+    assert_uncaught_panic(&output.result, "baml.panics.DivisionByZero");
+}
+
+/// A final bind-only chain is also a catch-all and must still guard panics.
+#[tokio::test]
+async fn catch_four_typed_arms_plus_bind_chain_rethrows_panic() {
+    let output = baml_test_optimized!(
+        r#"
+        class ErrA { x int }
+        class ErrB { x int }
+        class ErrC { x int }
+        class ErrD { x int }
+
+        function risky() -> int {
+            1 / 0
+        }
+
+        function main() -> int {
+            risky() catch (e) {
+                _: ErrA => 10,
+                _: ErrB => 20,
+                _: ErrC => 30,
+                _: ErrD => 40,
+                let other: let alias => 99
+            }
+        }
+    "#
+    );
+    assert_uncaught_panic(&output.result, "baml.panics.DivisionByZero");
 }
 
 #[tokio::test]
@@ -4076,25 +4132,25 @@ async fn catch_four_user_classes_instanceof_chain() {
         throw
 
       L4:
-        alloc_instance Timeout
+        alloc_instance user.Timeout
         load_const 5000
         init_field .ms
         throw
 
       L5:
-        alloc_instance RateLimit
+        alloc_instance user.RateLimit
         load_const 30
         init_field .retryAfter
         throw
 
       L6:
-        alloc_instance NotFound
+        alloc_instance user.NotFound
         load_const "/users"
         init_field .path
         throw
 
       L7:
-        alloc_instance AuthError
+        alloc_instance user.AuthError
         load_const "expired"
         init_field .reason
         throw
@@ -4275,9 +4331,9 @@ async fn catch_mixed_named_and_anonymous_bindings() {
 
         function main() -> string {
             fails() catch (e) {
-                err: NetworkError => err.url,
-                err: AuthError => err.reason,
-                err: NotFound => err.path,
+                let err: NetworkError => err.url,
+                let err: AuthError => err.reason,
+                let err: NotFound => err.path,
                 _: RateLimit => "rate limited",
                 _ => "unknown"
             }
@@ -4287,7 +4343,7 @@ async fn catch_mixed_named_and_anonymous_bindings() {
 
     insta::assert_snapshot!(output.bytecode, @r#"
     function fails() -> string {
-        alloc_instance NetworkError
+        alloc_instance user.NetworkError
         load_const "http://example.com"
         init_field .url
         throw
@@ -4457,7 +4513,7 @@ function divider() -> int {
 
 function main() -> int | string {
   divider() catch (e, st) {
-    DivisionByZero => { st.to_string() }
+    baml.panics.DivisionByZero => { st.to_string() }
   }
 }
 "#
