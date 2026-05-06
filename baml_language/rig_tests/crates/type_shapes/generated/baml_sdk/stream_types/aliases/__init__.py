@@ -21,22 +21,24 @@
 from __future__ import annotations
 
 import typing
+import typing_extensions
 import pydantic
+
+
+RecList = typing_extensions.TypeAliasType("RecList", typing.Union[int, typing.List["RecList"]])
 
 
 class AliasContainer(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     list_field: typing.List[str]
-
-
-RecList: typing.TypeAlias = 'typing.Union[int, typing.List[RecList]]'
+    rec_field: typing.Union[int, typing.List[RecList], None]
 
 
 StringList: typing.TypeAlias = typing.List[str]
 
 
 __all__ = [
-    "AliasContainer",
     "RecList",
+    "AliasContainer",
     "StringList",
 ]

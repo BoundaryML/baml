@@ -21,7 +21,14 @@
 from __future__ import annotations
 
 import typing
+import typing_extensions
 import pydantic
+
+
+RecList = typing_extensions.TypeAliasType("RecList", typing.Union[int, typing.List["RecList"]])
+
+
+RecListWithOther = typing_extensions.TypeAliasType("RecListWithOther", typing.Union[int, "Other", typing.List["RecListWithOther"]])
 
 
 class GNode(pydantic.BaseModel):
@@ -36,16 +43,10 @@ class Other(pydantic.BaseModel):
     v: typing.Union[int, None]
 
 
-RecList: typing.TypeAlias = 'typing.Union[int, typing.List[RecList]]'
-
-
-RecListWithOther: typing.TypeAlias = 'typing.Union[int, Other, typing.List[RecListWithOther]]'
-
-
 __all__ = [
+    "RecList",
+    "RecListWithOther",
     "GNode",
     "Node",
     "Other",
-    "RecList",
-    "RecListWithOther",
 ]

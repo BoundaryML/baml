@@ -79,6 +79,10 @@ class RetryPolicy(pydantic.BaseModel):
 
 
 class Client(pydantic.BaseModel):
+    """
+    An LLM client (primitive, fallback, or round-robin).
+    Compiled as a global variable from `client<llm>` declarations.
+    """
     model_config = pydantic.ConfigDict(extra="forbid")
     name: str
     client_type: ClientType
@@ -191,6 +195,12 @@ class StreamAccumulator(pydantic.BaseModel):
 
 
 class StreamCache(pydantic.BaseModel, typing.Generic[T, S]):
+    """
+    DO NOT USE FROM USER CODE
+    Cached data for a stream. Contains type information, assert check cache, etc.
+    
+    Intended for use in `baml.llm.Stream`
+    """
     model_config = pydantic.ConfigDict(extra="forbid")
     _data: _BamlPyHandle
     new       = staticmethod(_define_static_method("baml.llm.StreamCache.new", "sync",  ["target", "streaming"]))
@@ -198,6 +208,15 @@ class StreamCache(pydantic.BaseModel, typing.Generic[T, S]):
 
 
 class Stream(pydantic.BaseModel, typing.Generic[T, S]):
+    """
+    `Stream` provides a streaming interface for LLM calls.
+    
+    It is a pull-based interface: the sse stream is only flushed into the accumulator
+    and the value is only parsed when `next()` or `final()` is called.
+    
+    Created by `<LLM function>$stream` companion functions,
+    internally using `baml.llm.stream_llm_function`.
+    """
     model_config = pydantic.ConfigDict(extra="forbid")
     _client: PrimitiveClient
     _acc: StreamAccumulator

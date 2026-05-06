@@ -13,12 +13,13 @@ type RecList = int | RecList[]
 
 class AliasContainer {
   list_field StringList
-  // rec_field RecList — DISABLED. Pydantic 2.13 hits a recursion error
-  // when a class references a recursive `typing.TypeAlias` that is
-  // emitted *before* the class. Codegen emits in BAML source order, and
-  // declaring the type alias first happens to put pydantic into the
-  // failing path. See 18b §"Recursive alias before class triggers
-  // pydantic recursion".
+  // 18b §4 → 18c: this field used to break pydantic's schema build
+  // because the recursive `typing.TypeAlias` was emitted before the
+  // class and pydantic recursed forever resolving the alias. The
+  // codegen now emits recursive aliases via
+  // `typing_extensions.TypeAliasType`, which pydantic resolves through
+  // its definitions / `$ref` machinery instead of inlining.
+  rec_field RecList
 }
 
 function PassStringList(s: StringList) -> StringList {

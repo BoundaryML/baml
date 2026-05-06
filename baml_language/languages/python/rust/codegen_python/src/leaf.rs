@@ -17,7 +17,7 @@ use crate::{
     },
     py_string,
     routing::{LeafPath, route_class_ref},
-    translate_ty::{TranslateCtx, translate_ty},
+    translate_ty::{SelfRef, TranslateCtx, translate_ty},
 };
 
 /// All symbols that land in one leaf's body, in final render order.
@@ -59,7 +59,23 @@ impl LeafBody {
         {
             out.push("typing");
         }
+        // Recursive aliases (18c) render via
+        // `typing_extensions.TypeAliasType`.
+        if self.has_recursive_alias() {
+            out.push("typing_extensions");
+        }
         out
+    }
+
+    /// True when any type alias in this leaf is flagged recursive.
+    /// Drives the `import typing_extensions` line for both `.py` and
+    /// `.pyi` since recursive aliases render via
+    /// `typing_extensions.TypeAliasType` (18c).
+    pub(crate) fn has_recursive_alias(&self) -> bool {
+        self.symbols.iter().any(|(s, _)| match s {
+            EmittedSymbol::TypeAlias(a) => a.recursive,
+            _ => false,
+        })
     }
 
     pub(crate) fn needs_pydantic(&self) -> bool {
@@ -300,11 +316,25 @@ pub(crate) fn group_and_sort(
     // span 0), emit type aliases last — the alias's RHS may reference
     // stream classes in the same leaf, and the class must be defined
     // before the alias's RHS evaluates.
+    //
+    // Then, with a second stable pass, hoist recursive aliases to the
+    // very front of the leaf. Pyright recognizes a
+    // `Name = typing_extensions.TypeAliasType("Name", …)` assignment
+    // as a type alias only after the assignment line; consuming
+    // classes whose field annotations name the alias must come *after*
+    // the assignment or pyright reports
+    // `reportInvalidTypeForm` on the alias's own self-reference (18c).
     let mut out: BTreeMap<LeafPath, LeafBody> = BTreeMap::new();
     for (leaf, mut pairs) in buckets {
         pairs.sort_by(|a, b| {
             a.1.cmp(&b.1)
                 .then_with(|| symbol_kind_ord(&a.0).cmp(&symbol_kind_ord(&b.0)))
+        });
+        // Stable hoist: recursive aliases first, everything else in
+        // the order produced by the previous sort.
+        pairs.sort_by_key(|(sym, _)| match sym {
+            EmittedSymbol::TypeAlias(a) if a.recursive => 0u8,
+            _ => 1,
         });
         out.insert(
             leaf.clone(),
@@ -463,6 +493,21 @@ struct TypeAliasPy {
     rhs: String,
 }
 
+/// Recursive aliases (18c): `Name = typing_extensions.TypeAliasType("Name", <RHS>)`.
+/// `<RHS>` is the structural Python expression with self-references
+/// emitted as `"Name"` forward-refs so the alias's home-module globals
+/// resolve them at schema-build time.
+#[derive(askama::Template)]
+#[template(
+    source = "{{ py_name }} = typing_extensions.TypeAliasType(\"{{ py_name }}\", {{ rhs }})",
+    ext = "py.j2",
+    escape = "none"
+)]
+struct TypeAliasTypePy {
+    py_name: String,
+    rhs: String,
+}
+
 /// `tight_to_prev` is true when this method shares its
 /// `source_method_root` with the previous one (sync/async/companion
 /// fan-out). The first method also gets `true` — the template emits
@@ -491,6 +536,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
         self_ref: None,
+        quote_same_leaf_refs: false,
     };
 
     match s {
@@ -564,20 +610,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
             out
         }
         EmittedSymbol::TypeAlias(a) => {
-            let rhs = translate_ty(&a.resolves_to, &ctx);
-            let rhs = if a.recursive {
-                // Wrap the entire RHS in single quotes so Pydantic
-                // defers resolution to `model_rebuild` time.
-                format!("'{rhs}'")
-            } else {
-                rhs
-            };
-            let mut out = TypeAliasPy {
-                py_name: a.py_name.clone(),
-                rhs,
-            }
-            .render()
-            .expect("type_alias template should always render");
+            let mut out = render_type_alias(a, leaf);
             out.push('\n');
             out
         }
@@ -586,6 +619,49 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
             out.push('\n');
             out
         }
+    }
+}
+
+/// Render a type alias to its source line. Shared between `.py` and
+/// `.pyi`; the body is identical (12d §3.3).
+///
+/// Non-recursive aliases render as `Name: typing.TypeAlias = <RHS>`.
+/// Recursive aliases (18c) render via `typing_extensions.TypeAliasType`
+/// with inner self-references quoted, so Pydantic resolves them
+/// through its JSON-schema definitions machinery instead of recursing.
+fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) -> String {
+    use askama::Template;
+    let ctx = TranslateCtx {
+        current_leaf: leaf.clone(),
+        self_ref: if a.recursive {
+            Some(SelfRef {
+                routed_leaf: leaf.clone(),
+                bare_name: a.source.bare_name().to_string(),
+            })
+        } else {
+            None
+        },
+        // 18c: in a recursive alias body every same-leaf name ref is
+        // emitted as a forward-ref string, so the hoisted alias can
+        // reference classes/aliases/enums declared later in the leaf
+        // without breaking line-eval-time name resolution.
+        quote_same_leaf_refs: a.recursive,
+    };
+    let rhs = translate_ty(&a.resolves_to, &ctx);
+    if a.recursive {
+        TypeAliasTypePy {
+            py_name: a.py_name.clone(),
+            rhs,
+        }
+        .render()
+        .expect("type_alias_type template should always render")
+    } else {
+        TypeAliasPy {
+            py_name: a.py_name.clone(),
+            rhs,
+        }
+        .render()
+        .expect("type_alias template should always render")
     }
 }
 
@@ -939,6 +1015,7 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
         self_ref: None,
+        quote_same_leaf_refs: false,
     };
 
     match s {
@@ -994,14 +1071,7 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
         }
         EmittedSymbol::TypeAlias(a) => {
             // Type alias is identical between `.py` and `.pyi`.
-            let rhs = translate_ty(&a.resolves_to, &ctx);
-            let rhs = if a.recursive { format!("'{rhs}'") } else { rhs };
-            let mut out = TypeAliasPy {
-                py_name: a.py_name.clone(),
-                rhs,
-            }
-            .render()
-            .expect("type_alias template should always render");
+            let mut out = render_type_alias(a, leaf);
             out.push('\n');
             out
         }
@@ -1086,8 +1156,9 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     // The cross-leaf block uses `typing.TYPE_CHECKING`, so `typing`
     // must be in scope even if no signature would pull it in.
     let needs_typing = body.needs_typing_pyi() || !cross_leaf_segments.is_empty();
+    let needs_typing_extensions = body.has_recursive_alias();
     let needs_pydantic = body.needs_pydantic();
-    let has_stdlib_block = needs_enum || needs_typing || needs_pydantic;
+    let has_stdlib_block = needs_enum || needs_typing || needs_typing_extensions || needs_pydantic;
     if has_stdlib_block {
         out.push('\n');
         if needs_enum {
@@ -1095,6 +1166,9 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         }
         if needs_typing {
             out.push_str("import typing\n");
+        }
+        if needs_typing_extensions {
+            out.push_str("import typing_extensions\n");
         }
         if needs_pydantic {
             out.push_str("import pydantic\n");

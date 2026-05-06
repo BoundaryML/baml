@@ -49,8 +49,12 @@ class Response(pydantic.BaseModel):
 class SseStream(pydantic.BaseModel):
     url: str
     _handle: _BamlPyHandle
-    def next(self) -> typing.Union[str, None]: ...
-    async def next_async(self) -> typing.Union[str, None]: ...
+    def next(self) -> typing.Union[str, None]:
+        """Only returns `null` if the stream is done/closed.
+        Otherwise, waits until a new event is available."""
+    async def next_async(self) -> typing.Union[str, None]:
+        """Only returns `null` if the stream is done/closed.
+        Otherwise, waits until a new event is available."""
     def close(self) -> None: ...
     async def close_async(self) -> None: ...
 

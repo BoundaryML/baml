@@ -17,6 +17,14 @@ use crate::{
 pub(crate) struct TranslateCtx {
     pub(crate) current_leaf: LeafPath,
     pub(crate) self_ref: Option<SelfRef>,
+    /// 18c: set when emitting the body of a recursive
+    /// `typing_extensions.TypeAliasType` alias. Recursive aliases are
+    /// hoisted to the top of the leaf so pyright recognizes them as
+    /// type aliases before any consuming class is parsed; the hoist
+    /// can move the alias *above* classes/aliases/enums it references,
+    /// so every same-leaf name in the body is emitted as a string
+    /// forward-ref to break the ordering chicken-and-egg.
+    pub(crate) quote_same_leaf_refs: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,7 +59,14 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
             render_name_ref_or_self_ref(name, ctx, &arg_strs.join(", "))
         }
         Ty::TypeAlias(name) => render_name_ref_or_self_ref(name, ctx, ""),
-        Ty::Enum(name) => render_name_ref(name, ctx),
+        Ty::Enum(name) => {
+            let head = render_name_ref(name, ctx);
+            if should_quote_same_leaf(name, ctx) {
+                py_string(&head)
+            } else {
+                head
+            }
+        }
         Ty::TypeVar(name) => name.as_str().to_string(),
         Ty::Optional(inner) => format!("typing.Optional[{}]", translate_ty(inner, ctx)),
         Ty::List(inner) => format!("typing.List[{}]", translate_ty(inner, ctx)),
@@ -100,7 +115,7 @@ fn render_name_ref_or_self_ref(name: &Name, ctx: &TranslateCtx, generic_args: &s
     } else {
         format!("{head}[{generic_args}]")
     };
-    if should_quote_self_ref(name, ctx) {
+    if should_quote_self_ref(name, ctx) || should_quote_same_leaf(name, ctx) {
         py_string(&full)
     } else {
         full
@@ -114,6 +129,18 @@ fn should_quote_self_ref(name: &Name, ctx: &TranslateCtx) -> bool {
         }
         None => false,
     }
+}
+
+/// 18c: in a recursive-alias body, every same-leaf name reference is
+/// emitted as a string forward-ref. The recursive alias is hoisted to
+/// the top of the leaf, which can place it above the class/alias/enum
+/// it references — at line-eval time the bare name wouldn't resolve.
+fn should_quote_same_leaf(name: &Name, ctx: &TranslateCtx) -> bool {
+    if !ctx.quote_same_leaf_refs {
+        return false;
+    }
+    let routed = route_class_ref(name);
+    routed == ctx.current_leaf || routed.segments.is_empty()
 }
 
 fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> String {
@@ -148,6 +175,7 @@ mod tests {
         TranslateCtx {
             current_leaf: leaf(segments),
             self_ref: None,
+            quote_same_leaf_refs: false,
         }
     }
 
@@ -158,6 +186,7 @@ mod tests {
     ) -> TranslateCtx {
         TranslateCtx {
             current_leaf: leaf(current_segments),
+            quote_same_leaf_refs: false,
             self_ref: Some(SelfRef {
                 routed_leaf: leaf(self_segments),
                 bare_name: bare_name.to_string(),

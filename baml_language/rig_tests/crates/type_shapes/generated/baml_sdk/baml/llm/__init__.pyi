@@ -92,8 +92,10 @@ class Client(pydantic.BaseModel):
     async def execute_stream_async(self, context: ExecutionContext, inherited_delay_ms: int) -> Stream[T, S]: ...
     def execute_once_stream(self, context: ExecutionContext, active_delay_ms: int) -> Stream[T, S]: ...
     async def execute_once_stream_async(self, context: ExecutionContext, active_delay_ms: int) -> Stream[T, S]: ...
-    def __make_stream(self, sse: baml.http.SseStream, function_name: str) -> Stream[T, S]: ...
-    async def __make_stream_async(self, sse: baml.http.SseStream, function_name: str) -> Stream[T, S]: ...
+    def __make_stream(self, sse: baml.http.SseStream, function_name: str) -> Stream[T, S]:
+        """DO NOT CALL FROM USER CODE"""
+    async def __make_stream_async(self, sse: baml.http.SseStream, function_name: str) -> Stream[T, S]:
+        """DO NOT CALL FROM USER CODE"""
     def execute_oneshot(self, context: ExecutionContext, inherited_delay_ms: int) -> T: ...
     async def execute_oneshot_async(self, context: ExecutionContext, inherited_delay_ms: int) -> T: ...
     def execute_once_oneshot(self, context: ExecutionContext, active_delay_ms: int) -> T: ...
@@ -177,9 +179,11 @@ class StreamAccumulator(pydantic.BaseModel):
 class StreamCache(pydantic.BaseModel, typing.Generic[T, S]):
     _data: _BamlPyHandle
     @staticmethod
-    def new(target: None, streaming: None) -> StreamCache[T, S]: ...
+    def new(target: None, streaming: None) -> StreamCache[T, S]:
+        """DO NOT CALL FROM USER CODE"""
     @staticmethod
-    async def new_async(target: None, streaming: None) -> StreamCache[T, S]: ...
+    async def new_async(target: None, streaming: None) -> StreamCache[T, S]:
+        """DO NOT CALL FROM USER CODE"""
 
 
 class Stream(pydantic.BaseModel, typing.Generic[T, S]):
@@ -187,10 +191,22 @@ class Stream(pydantic.BaseModel, typing.Generic[T, S]):
     _acc: StreamAccumulator
     _sse: baml.http.SseStream
     _cache: StreamCache[T, S]
-    def next(self) -> typing.Union[S, baml.stream.StreamFinished]: ...
-    async def next_async(self) -> typing.Union[S, baml.stream.StreamFinished]: ...
-    def final(self) -> T: ...
-    async def final_async(self) -> T: ...
+    def next(self) -> typing.Union[S, baml.stream.StreamFinished]:
+        """Return the next partial value, or a `StreamFinished` value if the stream is done.
+        Will only return partial values: if the stream is done, use `final()` to get the final value.
+        Blocks until a partial value is available."""
+    async def next_async(self) -> typing.Union[S, baml.stream.StreamFinished]:
+        """Return the next partial value, or a `StreamFinished` value if the stream is done.
+        Will only return partial values: if the stream is done, use `final()` to get the final value.
+        Blocks until a partial value is available."""
+    def final(self) -> T:
+        """Return the final value of the stream.
+        If the final value is not yet available, this will block until the stream is done.
+        Calling this twice will return the same value."""
+    async def final_async(self) -> T:
+        """Return the final value of the stream.
+        If the final value is not yet available, this will block until the stream is done.
+        Calling this twice will return the same value."""
 
 
 class PrimitiveClient(pydantic.BaseModel):
@@ -209,8 +225,12 @@ class PrimitiveClient(pydantic.BaseModel):
     async def new_stream_accumulator_async(self) -> StreamAccumulator: ...
     def validate_finish_reason(self, finish_reason: str) -> None: ...
     async def validate_finish_reason_async(self, finish_reason: str) -> None: ...
-    def parse(self, http_response_body: str, type_def: None) -> T: ...
-    async def parse_async(self, http_response_body: str, type_def: None) -> T: ...
+    def parse(self, http_response_body: str, type_def: None) -> T:
+        """DO NOT CALL FROM USER CODE
+        Requires the response to be done (no partials)."""
+    async def parse_async(self, http_response_body: str, type_def: None) -> T:
+        """DO NOT CALL FROM USER CODE
+        Requires the response to be done (no partials)."""
 
 
 __all__ = [

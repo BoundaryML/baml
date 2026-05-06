@@ -77,6 +77,10 @@ class BedrockOptions(pydantic.BaseModel):
 
 
 class Client(pydantic.BaseModel):
+    """
+    An LLM client (primitive, fallback, or round-robin).
+    Compiled as a global variable from `client<llm>` declarations.
+    """
     model_config = pydantic.ConfigDict(extra="forbid")
     name: typing.Union[str, None]
     client_type: typing.Union[baml.llm.ClientType, None]
@@ -133,6 +137,15 @@ class RetryPolicy(pydantic.BaseModel):
 
 
 class Stream(pydantic.BaseModel):
+    """
+    `Stream` provides a streaming interface for LLM calls.
+    
+    It is a pull-based interface: the sse stream is only flushed into the accumulator
+    and the value is only parsed when `next()` or `final()` is called.
+    
+    Created by `<LLM function>$stream` companion functions,
+    internally using `baml.llm.stream_llm_function`.
+    """
     model_config = pydantic.ConfigDict(extra="forbid")
     _client: typing.Union[PrimitiveClient, None]
     _acc: typing.Union[StreamAccumulator, None]
@@ -146,6 +159,12 @@ class StreamAccumulator(pydantic.BaseModel):
 
 
 class StreamCache(pydantic.BaseModel):
+    """
+    DO NOT USE FROM USER CODE
+    Cached data for a stream. Contains type information, assert check cache, etc.
+    
+    Intended for use in `baml.llm.Stream`
+    """
     model_config = pydantic.ConfigDict(extra="forbid")
     _data: _BamlPyHandle
 

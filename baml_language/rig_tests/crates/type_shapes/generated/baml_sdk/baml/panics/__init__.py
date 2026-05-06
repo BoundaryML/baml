@@ -56,11 +56,17 @@ class Unreachable(pydantic.BaseModel):
 
 
 class UserPanic(pydantic.BaseModel):
+    """A user-caused panic from `baml.sys.panic`."""
     model_config = pydantic.ConfigDict(extra="forbid")
     message: str
 
 
 class AllocFailure(pydantic.BaseModel):
+    """
+    Memory allocation failure. This happens when an operation would have caused an unrecoverable
+    Out-Of-Memory error so we panic instead. Note that not all memory allocation failures are
+    guaranteed to panic; some may cause a hard failure.
+    """
     model_config = pydantic.ConfigDict(extra="forbid")
     message: str
 

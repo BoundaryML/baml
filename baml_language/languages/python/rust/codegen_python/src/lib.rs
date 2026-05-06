@@ -1334,8 +1334,13 @@ mod tests {
     }
 
     #[test]
-    fn recursive_type_alias_single_quotes_rhs() {
-        // type JsonValue = int | str | List<JsonValue>  (recursive)
+    fn recursive_type_alias_emits_type_alias_type() {
+        // type JsonValue = int | str | List<JsonValue>  (recursive).
+        // Per 18c, recursive aliases render via
+        // `typing_extensions.TypeAliasType` with self-references quoted
+        // as forward-refs, so a `BaseModel` field annotated with
+        // `JsonValue` no longer infinite-recurses during Pydantic
+        // schema build.
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["tree"], "JsonValue");
         let rhs = Ty::Union(vec![
@@ -1346,8 +1351,9 @@ mod tests {
         pool.insert(n.clone(), alias_full(n, rhs, true, "tree.baml", 0));
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("tree/__init__.py")];
+        assert!(leaf.contains("import typing_extensions\n"));
         assert!(leaf.contains(
-            "JsonValue: typing.TypeAlias = 'typing.Union[int, str, typing.List[JsonValue]]'\n"
+            "JsonValue = typing_extensions.TypeAliasType(\"JsonValue\", typing.Union[int, str, typing.List[\"JsonValue\"]])\n"
         ));
     }
 
@@ -2137,7 +2143,9 @@ mod tests {
     }
 
     #[test]
-    fn pyi_recursive_type_alias_keeps_single_quoting() {
+    fn pyi_recursive_type_alias_emits_type_alias_type() {
+        // `.pyi` mirrors `.py`: recursive aliases render via
+        // `typing_extensions.TypeAliasType` (18c).
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["tree"], "JsonValue");
         let rhs = Ty::Union(vec![
@@ -2149,8 +2157,9 @@ mod tests {
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("tree/__init__.pyi")];
+        assert!(leaf.contains("import typing_extensions\n"));
         assert!(leaf.contains(
-            "JsonValue: typing.TypeAlias = 'typing.Union[int, str, typing.List[JsonValue]]'\n"
+            "JsonValue = typing_extensions.TypeAliasType(\"JsonValue\", typing.Union[int, str, typing.List[\"JsonValue\"]])\n"
         ));
     }
 
