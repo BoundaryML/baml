@@ -8,9 +8,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use baml_codegen_python::UserBamlFile;
 use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
+use codegen_python::UserBamlFile;
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -66,7 +66,7 @@ fn main() {
         .collect();
 
     // 4. Codegen.
-    let output = baml_codegen_python::to_source_code(&pool, &user_baml_files);
+    let output = codegen_python::to_source_code(&pool, &user_baml_files);
     for (path, content) in output {
         let file_path = baml_sdk_dir.join(&path);
         if let Some(parent) = file_path.parent() {
@@ -120,13 +120,14 @@ fn main() {
     let pyproject_toml = r#"[project]
 name = "baml-test-llm-functions"
 version = "0.1.0"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
+    "baml",
     "pydantic>=2",
     "typing-extensions",
     "pytest>=7",
     "ruff",
-    "maturin>=1.0,<2.0",
+    "pyright>=1.1",
 ]
 
 [dependency-groups]
@@ -134,6 +135,9 @@ dev = []
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+baml = { path = "../../../../languages/python", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["."]
@@ -159,19 +163,13 @@ if ! command -v uv &> /dev/null; then
     echo "Error: uv is not installed"
     exit 1
 fi
-BRIDGE_PYTHON_DIR="$(cd ../../../../crates/bridge_python && pwd)"
-echo "==> uv sync"
+echo "==> uv sync (installs baml + deps, builds Rust extension if needed)"
 uv sync
-echo "==> maturin develop (builds bridge_python's PyO3 extension into .venv)"
-uv run maturin develop --manifest-path "$BRIDGE_PYTHON_DIR/Cargo.toml"
-echo "==> Running Python syntax check..."
-python_files=$(find . -name "*.py" -o -name "*.pyi")
-if [ -n "$python_files" ]; then
-    echo "$python_files" | xargs uv run python -m py_compile
-fi
-echo "==> Running ruff lint..."
+echo "==> ruff check"
 uv run ruff check --config pyproject.toml baml_sdk
-echo "==> Running pytest..."
+echo "==> pyright"
+uv run pyright baml_sdk
+echo "==> pytest"
 uv run pytest -v
 echo "==> All checks passed!"
 "#;
@@ -193,7 +191,7 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Error "Error: uv is not installed"
     exit 1
 }
-$BridgePythonDir = (Resolve-Path "../../../../crates/bridge_python").Path
+$BridgePythonDir = (Resolve-Path "../../../../languages/python/rust/bridge_python").Path
 Write-Host "==> uv sync"
 uv sync
 Write-Host "==> maturin develop (builds bridge_python's PyO3 extension into .venv)"

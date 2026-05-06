@@ -42,6 +42,11 @@ jobs:
           # Share cache across similar Linux jobs for better hit rates
           shared-key: "linux-cargo-32gb"
 
+      - name: "Setup Python 3.10+"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
       - name: "Install cargo insta"
         uses: taiki-e/install-action@v2
         with:
@@ -62,6 +67,24 @@ jobs:
       - name: "Run snapshot tests with insta"
         run: cargo insta test --workspace --all-features --unreferenced reject
         working-directory: baml_language
+
+      - name: "Run language test suites"
+        run: |
+          found=0
+          for dir in baml_language/languages/*/; do
+            lang=$(basename "$dir")
+            if [ -f "$dir/test.sh" ]; then
+              echo "==> Running $lang test suite"
+              bash "$dir/test.sh"
+              found=$((found + 1))
+            else
+              echo "::error::languages/$lang/ exists but has no test.sh"
+              exit 1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::warning::No language test suites found in languages/*/"
+          fi
 
       - name: "Check documentation"
         run: cargo doc --all --no-deps
@@ -99,6 +122,11 @@ jobs:
           # Share cache across similar macOS jobs for better hit rates
           shared-key: "macos-cargo"
 
+      - name: "Setup Python 3.10+"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
@@ -112,6 +140,24 @@ jobs:
           cargo nextest run --all-features
           cargo test --all-features --doc
         working-directory: baml_language
+
+      - name: "Run language test suites"
+        run: |
+          found=0
+          for dir in baml_language/languages/*/; do
+            lang=$(basename "$dir")
+            if [ -f "$dir/test.sh" ]; then
+              echo "==> Running $lang test suite"
+              bash "$dir/test.sh"
+              found=$((found + 1))
+            else
+              echo "::error::languages/$lang/ exists but has no test.sh"
+              exit 1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::warning::No language test suites found in languages/*/"
+          fi
 
   cargo-test-windows:
     name: "cargo test (windows)"
@@ -136,6 +182,11 @@ jobs:
           # Share cache across similar Windows jobs for better hit rates
           shared-key: "windows-cargo"
 
+      - name: "Setup Python 3.10+"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
@@ -150,6 +201,24 @@ jobs:
           cargo nextest run --all-features
           cargo test --all-features --doc
         working-directory: baml_language
+
+      - name: "Run language test suites"
+        run: |
+          found=0
+          for dir in baml_language/languages/*/; do
+            lang=$(basename "$dir")
+            if [ -f "$dir/test.sh" ]; then
+              echo "==> Running $lang test suite"
+              bash "$dir/test.sh"
+              found=$((found + 1))
+            else
+              echo "::error::languages/$lang/ exists but has no test.sh"
+              exit 1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::warning::No language test suites found in languages/*/"
+          fi
 
   cargo-test-wasm:
     name: "cargo test (wasm)"

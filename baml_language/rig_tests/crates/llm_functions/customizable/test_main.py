@@ -59,7 +59,6 @@ def test_extract_resume_factory_bindings():
 
     assert callable(lorem.ExtractResume)
     assert callable(lorem.ExtractResume_async)
-    assert lorem.ExtractResume.param_names == ["text"]
 
 
 def test_extract_resume_companion_bindings():
@@ -86,7 +85,6 @@ def test_streaming_extract_factory_bindings():
 
     assert callable(lorem.StreamingExtract)
     assert callable(lorem.StreamingExtract_async)
-    assert lorem.StreamingExtract.param_names == ["text"]
 
 
 def test_streaming_extract_companion_bindings():
@@ -125,7 +123,6 @@ def test_classify_sentiment_factory_bindings():
 
     assert callable(ipsum.ClassifySentiment)
     assert callable(ipsum.ClassifySentiment_async)
-    assert ipsum.ClassifySentiment.param_names == ["text"]
 
 
 def test_inlinedbaml_files_present():

@@ -2,7 +2,7 @@
 //!
 //! Walks the HIR item trees for user-defined files, resolves types via TIR,
 //! and populates a codegen-ready `SymbolPool` suitable for language-specific
-//! code generators (e.g. `baml_codegen_python`).
+//! code generators (e.g. `codegen_python`).
 
 use std::collections::HashMap;
 
