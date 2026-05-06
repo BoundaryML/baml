@@ -2,7 +2,7 @@
 source: crates/baml_lsp2_actions/src/grep_tests.rs
 expression: output
 ---
-── enum ── types.baml:7
+enum Color  types.baml:7
 shape: enum Color {
     Red
     Green

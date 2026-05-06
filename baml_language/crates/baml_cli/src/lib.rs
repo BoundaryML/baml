@@ -11,6 +11,8 @@
 
 pub(crate) mod commands;
 pub(crate) mod describe_command;
+#[cfg(test)]
+mod describe_command_tests;
 pub(crate) mod format;
 pub(crate) mod generate;
 pub(crate) mod grep_command;

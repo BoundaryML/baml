@@ -1,7 +1,6 @@
 ---
 source: crates/baml_lsp2_actions/src/describe_tests.rs
-assertion_line: 106
 expression: "project.format_description(&descs[0])"
 ---
-── class ── string.baml:1
+class String  string.baml:1
 shape: class String {}
