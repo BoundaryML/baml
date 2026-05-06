@@ -103,6 +103,7 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
         declarative_meta: None,
         origin: crate::ast::FunctionOrigin::Companion,
         attributes: vec![],
+        docstring: parent.docstring.clone(),
         span: parent.span,
         name_span: parent.name_span,
     })
@@ -145,6 +146,7 @@ fn make_llm_companion(
         declarative_meta: None,
         origin: crate::ast::FunctionOrigin::Companion,
         attributes: vec![],
+        docstring: parent.docstring.clone(),
         span: parent.span,
         name_span: parent.name_span,
     }

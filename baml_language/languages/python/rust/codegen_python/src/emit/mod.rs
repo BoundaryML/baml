@@ -78,6 +78,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                     .map(|p| PyClassProperty {
                         name: p.name.as_str().to_string(),
                         ty: p.ty.clone(),
+                        docstring: p.docstring.clone(),
                     })
                     .collect();
                 // The class's pool key Display form is already the
@@ -100,6 +101,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                         py_name: bare,
                         source: key.clone(),
                         generic_params,
+                        docstring: c.docstring.clone(),
                         properties,
                         static_methods,
                         instance_methods,
@@ -115,6 +117,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                     .map(|v| PyEnumVariant {
                         ident: v.name.as_str().to_string(),
                         value: v.value.clone(),
+                        docstring: v.docstring.clone(),
                     })
                     .collect();
                 out.push((
@@ -123,6 +126,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                         py_name: bare,
                         source: key.clone(),
                         variants,
+                        docstring: e.docstring.clone(),
                     }),
                     sort_key,
                 ));
@@ -173,6 +177,7 @@ fn expand_function(
         .iter()
         .map(|n| n.as_str().to_string())
         .collect();
+    let func_docstring = f.docstring.clone();
     expand_callable(
         &bare,
         &fqn_root,
@@ -189,6 +194,7 @@ fn expand_function(
                     arg_tys,
                     return_ty,
                     generic_params: func_generic_params.clone(),
+                    docstring: func_docstring.clone(),
                 }),
                 sort_key.clone(),
             ));
@@ -219,6 +225,7 @@ fn expand_methods(
             .iter()
             .map(|n| n.as_str().to_string())
             .collect();
+        let method_docstring = m.docstring.clone();
         expand_callable(
             &bare,
             &fqn_root,
@@ -243,6 +250,7 @@ fn expand_methods(
                     arg_tys,
                     return_ty,
                     generic_params: method_generic_params.clone(),
+                    docstring: method_docstring.clone(),
                 });
             },
         );

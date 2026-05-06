@@ -998,6 +998,8 @@ pub struct FunctionDef {
     pub declarative_meta: Option<DeclarativeMeta>,
     pub origin: FunctionOrigin,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1059,6 +1061,8 @@ pub struct ClassDef {
     pub fields: Vec<FieldDef>,
     pub methods: Vec<FunctionDef>,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1068,6 +1072,8 @@ pub struct FieldDef {
     pub name: Name,
     pub type_expr: Option<SpannedTypeExpr>,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1077,6 +1083,8 @@ pub struct EnumDef {
     pub name: Name,
     pub variants: Vec<VariantDef>,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1085,6 +1093,8 @@ pub struct EnumDef {
 pub struct VariantDef {
     pub name: Name,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }

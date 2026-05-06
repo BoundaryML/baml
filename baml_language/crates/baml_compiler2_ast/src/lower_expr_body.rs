@@ -2196,6 +2196,7 @@ impl LoweringContext {
             declarative_meta: None,
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: Vec::new(),
+            docstring: None,
             span: node.text_range(),
             name_span: node.text_range(), // synthetic: use the lambda span
         };
@@ -2645,6 +2646,7 @@ impl LoweringContext {
             declarative_meta: None,
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: vec![],
+            docstring: None,
             span,
             name_span: span,
         };
@@ -2731,6 +2733,7 @@ impl LoweringContext {
             declarative_meta: None,
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: vec![],
+            docstring: None,
             span,
             name_span: span,
         };

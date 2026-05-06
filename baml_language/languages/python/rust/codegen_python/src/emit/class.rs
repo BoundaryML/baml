@@ -24,6 +24,12 @@ pub(crate) struct PyClass {
     /// `typing.Generic[T, …]` second base and the leaf-level `TypeVar`
     /// declarations include each name.
     pub(crate) generic_params: Vec<String>,
+    /// Joined `///` doc-comment lines from the BAML class declaration.
+    /// Combined with `PyClassProperty.docstring` from each entry in
+    /// `properties` to produce the `"""…"""` Python class docstring;
+    /// `Class.__doc__` carries the summary plus an `Attributes:`
+    /// section (see `crate::utils::format_class_docstring`).
+    pub(crate) docstring: Option<String>,
     /// Class fields, in IR declaration order. Field names are emitted
     /// verbatim per 09b §5 ("agent-friendly" naming).
     pub(crate) properties: Vec<PyClassProperty>,
@@ -39,4 +45,10 @@ pub(crate) struct PyClass {
 pub(crate) struct PyClassProperty {
     pub(crate) name: String,
     pub(crate) ty: Ty,
+    /// Joined `///` doc-comment lines preceding the field. Folded into
+    /// the parent `PyClass`'s `"""…"""` docstring under an
+    /// `Attributes:` section — never rendered as an inline `# …`
+    /// comment next to the field declaration. The visibility rule
+    /// for the section lives in `crate::utils::format_class_docstring`.
+    pub(crate) docstring: Option<String>,
 }

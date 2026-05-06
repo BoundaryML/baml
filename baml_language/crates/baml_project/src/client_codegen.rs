@@ -137,7 +137,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     )?;
                     Some(cg::ClassProperty {
                         name: field.name.clone(),
-                        docstring: None,
+                        docstring: field.docstring.clone(),
                         ty,
                     })
                 })
@@ -206,7 +206,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 let cg_method = cg::Function {
                     name: method.name.clone(),
                     generic_params: method.generic_params.clone(),
-                    docstring: None,
+                    docstring: method.docstring.clone(),
                     arguments,
                     return_type,
                     watchers: Vec::new(),
@@ -228,7 +228,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 cg::Symbol::Class(cg::Class {
                     name: cg_name,
                     generic_params: class_generic_params,
-                    docstring: None,
+                    docstring: class.docstring.clone(),
                     properties,
                     static_methods: Vec::new(),
                     instance_methods: Vec::new(),
@@ -252,7 +252,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 .iter()
                 .map(|v| cg::EnumVariant {
                     name: v.name.clone(),
-                    docstring: None,
+                    docstring: v.docstring.clone(),
                     value: v.name.to_string(),
                 })
                 .collect();
@@ -260,7 +260,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 cg_name.clone(),
                 cg::Symbol::Enum(cg::Enum {
                     name: cg_name,
-                    docstring: None,
+                    docstring: enum_def.docstring.clone(),
                     variants,
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
@@ -370,7 +370,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             let cg_func = cg::Function {
                 name: func.name.clone(),
                 generic_params: func_generic_params,
-                docstring: None,
+                docstring: func.docstring.clone(),
                 arguments,
                 return_type,
                 watchers: Vec::new(),
@@ -734,6 +734,69 @@ mod tests {
                 "{expected} must be a Function symbol",
             );
         }
+    }
+
+    /// Smoke test: `///` on classes / fields / enums / variants must reach the
+    /// `SymbolPool`. Pre-existing failure mode here was that the symbol pool
+    /// was built but every `docstring` was `None` despite the AST carrying
+    /// it — hence the codegen produced bodies with no `"""…"""`.
+    #[test]
+    fn test_doc_comments_reach_symbol_pool() {
+        let root = Path::new("/tmp/docstrings_repro");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            "/// A document with a title.\nclass Doc {\n  /// Title shown in lists.\n  title string\n}\n\n/// Sentiment labels.\nenum Sentiment {\n  /// Smiling face.\n  HAPPY\n  SAD\n}\n",
+        );
+
+        let pool = build_symbol_pool(&db);
+
+        let doc_key = pool
+            .keys()
+            .find(|k| k.name.as_str() == "Doc")
+            .expect("Doc class missing from pool");
+        let cg::Symbol::Class(doc) = &pool[doc_key] else {
+            panic!("Doc must be a Class");
+        };
+        assert_eq!(
+            doc.docstring.as_deref(),
+            Some("A document with a title."),
+            "class /// must reach pool",
+        );
+        let title = doc
+            .properties
+            .iter()
+            .find(|p| p.name.as_str() == "title")
+            .expect("title field missing");
+        assert_eq!(
+            title.docstring.as_deref(),
+            Some("Title shown in lists."),
+            "field /// must reach pool",
+        );
+
+        let enum_key = pool
+            .keys()
+            .find(|k| k.name.as_str() == "Sentiment")
+            .expect("Sentiment enum missing");
+        let cg::Symbol::Enum(en) = &pool[enum_key] else {
+            panic!("Sentiment must be an Enum");
+        };
+        assert_eq!(
+            en.docstring.as_deref(),
+            Some("Sentiment labels."),
+            "enum /// must reach pool",
+        );
+        let happy = en
+            .variants
+            .iter()
+            .find(|v| v.name.as_str() == "HAPPY")
+            .expect("HAPPY variant missing");
+        assert_eq!(
+            happy.docstring.as_deref(),
+            Some("Smiling face."),
+            "variant /// must reach pool",
+        );
     }
 
     /// Verifies that user-package classes with static and instance methods
