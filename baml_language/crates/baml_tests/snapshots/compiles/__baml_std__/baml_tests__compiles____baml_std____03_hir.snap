@@ -57,10 +57,26 @@ function baml.to_json(self: ?) -> baml.json.json  [builtin]
 --- <builtin>/baml/int.baml ---
 class baml.Int {
 }
+function baml.abs(self: ?) -> int  [builtin]
+function baml.clamp(self: ?, min: int, max: int) -> int  [builtin]
+function baml.count_ones(self: ?) -> int  [builtin]
+function baml.count_zeros(self: ?) -> int  [builtin]
 function baml.from_json(j: baml.json.json) -> baml.Int  [expr] {
   baml.Int {  }
 }
+function baml.leading_ones(self: ?) -> int  [builtin]
+function baml.leading_zeros(self: ?) -> int  [builtin]
+function baml.max(self: ?, other: int) -> int  [builtin]
+function baml.max_value() -> int  [expr] {
+  {  } 9223372036854775807
+}
+function baml.min(self: ?, other: int) -> int  [builtin]
+function baml.min_value() -> int  [expr] {
+  {  } Neg 9223372036854775807 Sub 1
+}
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
+function baml.trailing_ones(self: ?) -> int  [builtin]
+function baml.trailing_zeros(self: ?) -> int  [builtin]
 
 --- <builtin>/baml/ns_env/env.baml ---
 function baml.env.get(key: string) -> string?  [builtin]

@@ -1166,6 +1166,11 @@ fn receiver_immut_extraction_expr(val: &str, recv: &Receiver, needs_owned: bool)
                 format!("vm.as_uint8array({val})?")
             }
         }
+        // Primitive value receivers: extract the underlying scalar. `int` is
+        // backed by `i64`, which is `Copy`, so `needs_owned` is irrelevant.
+        "Int" => format!(
+            "match {val} {{ Value::Int(i) => *i, other => return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}.into()) }}"
+        ),
         name if is_media_class(name) => {
             let kind = media_kind_expr(&recv.class_name);
             if needs_owned {
@@ -1500,6 +1505,9 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
                 "&[u8]".to_string()
             }
         }
+        // Primitive value receivers: pass by value, since the underlying type
+        // (`i64` / `f64` / `bool`) is `Copy` and that's the natural Rust idiom.
+        "Int" => "i64".to_string(),
         name if is_media_class(name) => {
             // For `//baml:mut_vm` methods the view struct cannot coexist with
             // `&mut BexVm` (split-borrow).  Use the raw `Value` instead so the
@@ -1530,6 +1538,7 @@ fn receiver_baml_type(recv: &Receiver) -> BamlType {
         ),
         "String" => BamlType::String,
         "Uint8Array" => BamlType::Uint8Array,
+        "Int" => BamlType::Int,
         "Pdf" | "Audio" | "Video" | "Image" => BamlType::Named(recv.class_name.clone()),
         _ => BamlType::Named(recv.class_name.clone()),
     }

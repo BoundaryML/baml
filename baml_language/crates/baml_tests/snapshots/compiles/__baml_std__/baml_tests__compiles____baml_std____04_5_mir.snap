@@ -106,6 +106,14 @@ fn baml.Float.from_json(j: baml.json.json) -> baml.Float {
 
 fn baml.Float.to_json = builtin(vm)
 
+fn baml.Int.abs = builtin(vm)
+
+fn baml.Int.clamp = builtin(vm)
+
+fn baml.Int.count_ones = builtin(vm)
+
+fn baml.Int.count_zeros = builtin(vm)
+
 fn baml.Int.from_json(j: baml.json.json) -> baml.Int {
     // Locals:
     let _0: baml.Int // _0 // return
@@ -121,7 +129,47 @@ fn baml.Int.from_json(j: baml.json.json) -> baml.Int {
     }
 }
 
+fn baml.Int.leading_ones = builtin(vm)
+
+fn baml.Int.leading_zeros = builtin(vm)
+
+fn baml.Int.max = builtin(vm)
+
+fn baml.Int.max_value() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 9223372036854775807_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.Int.min = builtin(vm)
+
+fn baml.Int.min_value() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const -9223372036854775808_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.Int.to_json = builtin(vm)
+
+fn baml.Int.trailing_ones = builtin(vm)
+
+fn baml.Int.trailing_zeros = builtin(vm)
 
 fn baml.env.get = builtin(io)
 

@@ -44,6 +44,16 @@ class baml.Float$stream {
 --- <builtin>/baml/int.baml ---
 class baml.Int {
 }
+function baml.Int.max_value() -> int throws never {
+  { : 9223372036854775807
+    9223372036854775807 : 9223372036854775807
+  }
+}
+function baml.Int.min_value() -> int throws never {
+  { : -9223372036854775808
+    Neg 9223372036854775807 - 1 : -9223372036854775808
+  }
+}
 function baml.Int.from_json(j: baml.json.json) -> baml.Int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Int {  } : baml.Int
 }

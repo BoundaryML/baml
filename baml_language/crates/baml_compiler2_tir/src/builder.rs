@@ -4687,6 +4687,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         "video" => &["media", "Video"],
                         "pdf" => &["media", "Pdf"],
                         "string" => &["String"],
+                        "int" => &["Int"],
                         _ => &[],
                     };
                     if !class_path.is_empty() {
@@ -6196,6 +6197,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             "video" => &["media", "Video"],
             "pdf" => &["media", "Pdf"],
             "string" => &["String"],
+            "int" => &["Int"],
             _ => return None,
         };
 

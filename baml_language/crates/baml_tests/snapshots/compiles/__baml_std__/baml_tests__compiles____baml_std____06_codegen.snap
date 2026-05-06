@@ -53,12 +53,52 @@ function baml.Float.from_json(j: baml.json.json) -> baml.Float {
 function baml.Float.to_json(self: null) -> baml.json.json {
 }
 
+function baml.Int.abs(self: null) -> int {
+}
+
+function baml.Int.clamp(self: null, min: int, max: int) -> int {
+}
+
+function baml.Int.count_ones(self: null) -> int {
+}
+
+function baml.Int.count_zeros(self: null) -> int {
+}
+
 function baml.Int.from_json(j: baml.json.json) -> baml.Int {
     alloc_instance baml.Int
     return
 }
 
+function baml.Int.leading_ones(self: null) -> int {
+}
+
+function baml.Int.leading_zeros(self: null) -> int {
+}
+
+function baml.Int.max(self: null, other: int) -> int {
+}
+
+function baml.Int.max_value() -> int {
+    load_const 9223372036854775807
+    return
+}
+
+function baml.Int.min(self: null, other: int) -> int {
+}
+
+function baml.Int.min_value() -> int {
+    load_const -9223372036854775808
+    return
+}
+
 function baml.Int.to_json(self: null) -> baml.json.json {
+}
+
+function baml.Int.trailing_ones(self: null) -> int {
+}
+
+function baml.Int.trailing_zeros(self: null) -> int {
 }
 
 function baml.Map.from_json(j: baml.json.json) -> baml.Map<void, void> {
