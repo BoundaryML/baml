@@ -2,6 +2,12 @@ class InvalidArgument {
   message string
 }
 
+/// Thrown when text cannot be parsed into the requested type — e.g.
+/// `int.parse("abc")` or `float.parse("")`.
+class ParseError {
+  message string
+}
+
 class Io {
   message string
 }

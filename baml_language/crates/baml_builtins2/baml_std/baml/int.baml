@@ -199,6 +199,31 @@ class Int {
     $rust_function
   }
 
+  // ─── Parsing ──────────────────────────────────────────────────────────────
+
+  /// Parses `text` as a base-ten signed integer.
+  ///
+  /// Accepts an optional leading `+` or `-` sign followed by one or more
+  /// ASCII digits. No surrounding whitespace, no underscores, no other
+  /// numeric formats. The result must fit in an `int` (`i64`).
+  ///
+  /// Throws `ParseError` if `text` is empty, contains a non-digit character,
+  /// or represents a value outside the `int` range.
+  ///
+  /// # Examples
+  /// ```
+  /// int.parse("42")       // 42
+  /// int.parse("-7")       // -7
+  /// int.parse("+0")       // 0
+  /// int.parse("")         // throws — empty
+  /// int.parse("12a")      // throws — non-digit
+  /// int.parse(" 5 ")      // throws — whitespace not allowed; trim first
+  /// int.parse("99999999999999999999")  // throws — out of range
+  /// ```
+  function parse(text: string) -> int throws root.errors.ParseError {
+    $rust_function
+  }
+
   // ─── Constants (as zero-arg static methods) ───────────────────────────────
 
   /// Returns the largest representable `int`, equal to `2^63 - 1`

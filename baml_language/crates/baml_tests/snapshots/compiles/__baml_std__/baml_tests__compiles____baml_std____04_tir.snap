@@ -77,6 +77,15 @@ function baml.errors.InvalidArgument.to_json(self: baml.errors.InvalidArgument) 
 function baml.errors.InvalidArgument.from_json(j: baml.json.json) -> baml.errors.InvalidArgument throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   InvalidArgument { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.errors.InvalidArgument
 }
+class baml.errors.ParseError {
+  message: string
+}
+function baml.errors.ParseError.to_json(self: baml.errors.ParseError) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "message": self.message.to_json() } : map<string, baml.json.json>
+}
+function baml.errors.ParseError.from_json(j: baml.json.json) -> baml.errors.ParseError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  ParseError { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.errors.ParseError
+}
 class baml.errors.Io {
   message: string
 }
@@ -160,6 +169,9 @@ function baml.errors.HostPanic.from_json(j: baml.json.json) -> baml.errors.HostP
   HostPanic { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.errors.HostPanic
 }
 class baml.errors.InvalidArgument$stream {
+  message: null | string
+}
+class baml.errors.ParseError$stream {
   message: null | string
 }
 class baml.errors.Io$stream {

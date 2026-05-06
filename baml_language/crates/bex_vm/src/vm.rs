@@ -1235,6 +1235,9 @@ impl BexVm {
                 ErrorClass::InvalidArgument,
                 vec![self.alloc_string(message)],
             ),
+            VmBamlError::ParseError { message } => {
+                (ErrorClass::ParseError, vec![self.alloc_string(message)])
+            }
             VmBamlError::Io { message } => (ErrorClass::Io, vec![self.alloc_string(message)]),
             VmBamlError::Timeout {
                 message,

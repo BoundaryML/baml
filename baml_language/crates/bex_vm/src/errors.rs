@@ -44,6 +44,9 @@ pub enum VmBamlError {
     #[error("invalid argument: {message}")]
     InvalidArgument { message: String },
 
+    #[error("parse error: {message}")]
+    ParseError { message: String },
+
     #[error("I/O error: {message}")]
     Io { message: String },
 

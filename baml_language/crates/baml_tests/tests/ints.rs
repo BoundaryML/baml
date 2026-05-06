@@ -228,6 +228,194 @@ async fn int_max_min_inverse() {
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
+// ─── parse ────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn int_parse_basic() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("42") }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+async fn int_parse_zero() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("0") }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
+}
+
+#[tokio::test]
+async fn int_parse_negative() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("-7") }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-7)));
+}
+
+#[tokio::test]
+async fn int_parse_explicit_plus_sign() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("+42") }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+async fn int_parse_max_value() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("9223372036854775807") }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Int(9_223_372_036_854_775_807))
+    );
+}
+
+#[tokio::test]
+async fn int_parse_min_value() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("-9223372036854775808") }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Int(-9_223_372_036_854_775_808))
+    );
+}
+
+#[tokio::test]
+async fn int_parse_leading_zeros_ok() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("007") }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
+}
+
+#[tokio::test]
+async fn int_parse_empty_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("") }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn int_parse_non_digit_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("12a") }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn int_parse_alpha_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("hello") }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn int_parse_whitespace_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse(" 5 ") }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn int_parse_overflow_throws() {
+    // i64::MAX + 1 = 9223372036854775808
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("9223372036854775808") }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn int_parse_underflow_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("-9223372036854775809") }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn int_parse_just_sign_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("-") }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn int_parse_underscore_throws() {
+    // Rust's i64::from_str does NOT accept digit separators — verify.
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("1_000") }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn int_parse_round_trip_via_to_string() {
+    // Once int has stringification this would be fully round-trippable.
+    // For now just verify parse → arithmetic works.
+    let output = baml_test!(
+        r#"
+        function main() -> int { int.parse("100") + int.parse("23") }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(123)));
+}
+
 // ─── isqrt ────────────────────────────────────────────────────────────────────
 
 #[tokio::test]

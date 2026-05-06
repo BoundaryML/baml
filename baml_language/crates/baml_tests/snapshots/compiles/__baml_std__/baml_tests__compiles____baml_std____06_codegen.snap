@@ -98,6 +98,9 @@ function baml.Int.min_value() -> int {
     return
 }
 
+function baml.Int.parse(text: string) -> int {
+}
+
 function baml.Int.pow(self: null, exp: int) -> int {
 }
 
@@ -534,6 +537,30 @@ function baml.errors.NotImplemented.from_json(j: baml.json.json) -> baml.errors.
 }
 
 function baml.errors.NotImplemented.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    load_const "message"
+    alloc_map 1
+    return
+}
+
+function baml.errors.ParseError.from_json(j: baml.json.json) -> baml.errors.ParseError {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    alloc_instance baml.errors.ParseError
+    load_var _2
+    init_field .message
+    return
+}
+
+function baml.errors.ParseError.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .message
     call baml.String.to_json
