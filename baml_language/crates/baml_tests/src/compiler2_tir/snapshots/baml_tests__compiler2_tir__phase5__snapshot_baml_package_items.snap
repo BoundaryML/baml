@@ -9,7 +9,7 @@ namespace baml:
   class Int { methods: [to_json, from_json] }
   class Map<K, V> { methods: [length, has, keys, values, set, get, to_json, from_json] }
   class Null { methods: [to_json, from_json] }
-  class String { methods: [to_json, length, to_lower_case, to_upper_case, trim, includes, starts_with, ends_with, split, substring, replace, index_of, char_at, matches, replace_all, to_bytes, from_json] }
+  class String { methods: [to_json, length, char_count, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, lines, substring, replace, index_of, char_at, code_point_at, matches, replace_all, to_utf8, from_utf8, from_code_points, from_json] }
   class TypeValue { methods: [to_string, to_json, from_json] }
   class Uint8Array { methods: [to_json, length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, to_string, sort, from_json] }
   function deep_copy<T>

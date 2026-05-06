@@ -19,6 +19,11 @@ impl BamlClassString for PackageBamlImpl {
         string.len() as i64
     }
 
+    #[allow(clippy::cast_possible_wrap)]
+    fn char_count(string: &str) -> i64 {
+        string.chars().count() as i64
+    }
+
     fn to_lower_case(string: &str) -> String {
         string.to_lowercase()
     }
@@ -29,6 +34,14 @@ impl BamlClassString for PackageBamlImpl {
 
     fn trim(string: &str) -> String {
         string.trim().to_string()
+    }
+
+    fn trim_start(string: &str) -> String {
+        string.trim_start().to_string()
+    }
+
+    fn trim_end(string: &str) -> String {
+        string.trim_end().to_string()
     }
 
     fn includes(string: &str, search: &str) -> bool {
@@ -45,6 +58,10 @@ impl BamlClassString for PackageBamlImpl {
 
     fn split(string: &str, delimiter: &str) -> Vec<String> {
         string.split(delimiter).map(str::to_string).collect()
+    }
+
+    fn lines(string: &str) -> Vec<String> {
+        string.lines().map(str::to_string).collect()
     }
 
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
@@ -83,7 +100,6 @@ impl BamlClassString for PackageBamlImpl {
         string.find(search).map(|i| i as i64).unwrap_or(-1)
     }
 
-    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     fn char_at(string: &str, index: i64) -> Result<String, VmRustFnError> {
         let len = string.len();
         let Ok(index) = usize::try_from(index) else {
@@ -115,6 +131,37 @@ impl BamlClassString for PackageBamlImpl {
         Ok(ch.to_string())
     }
 
+    fn code_point_at(string: &str, index: i64) -> Result<i64, VmRustFnError> {
+        let len = string.len();
+        let Ok(index) = usize::try_from(index) else {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!("code_point_at: byte offset {index} is negative"),
+            }
+            .into());
+        };
+        if index >= len {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!(
+                    "code_point_at: byte offset {index} is beyond the last code point (length {len})"
+                ),
+            }
+            .into());
+        }
+        if !string.is_char_boundary(index) {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!(
+                    "code_point_at: byte offset {index} is not a UTF-8 character boundary"
+                ),
+            }
+            .into());
+        }
+        let ch = string[index..]
+            .chars()
+            .next()
+            .expect("code_point_at: char boundary at index < len must yield a char");
+        Ok(i64::from(ch as u32))
+    }
+
     fn matches(string: &str, pattern: &str) -> bool {
         string.contains(pattern)
     }
@@ -123,7 +170,42 @@ impl BamlClassString for PackageBamlImpl {
         string.replace(search, replacement)
     }
 
-    fn to_bytes(string: &str) -> Vec<u8> {
+    fn to_utf8(string: &str) -> Vec<u8> {
         string.as_bytes().to_vec()
+    }
+
+    fn from_utf8(utf8: &[u8]) -> Result<String, VmRustFnError> {
+        std::str::from_utf8(utf8).map(str::to_string).map_err(|e| {
+            VmBamlError::InvalidArgument {
+                message: format!(
+                    "string.from_utf8: invalid UTF-8 at byte {}: {e}",
+                    e.valid_up_to()
+                ),
+            }
+            .into()
+        })
+    }
+
+    fn from_code_points(unicode: &[Value]) -> Result<String, VmRustFnError> {
+        let mut result = String::with_capacity(unicode.len());
+        for (i, val) in unicode.iter().enumerate() {
+            let Value::Int(n) = val else {
+                return Err(VmBamlError::InvalidArgument {
+                    message: format!(
+                        "string.from_code_points: element at index {i} is not an `int`"
+                    ),
+                }
+                .into());
+            };
+            let cp = u32::try_from(*n).ok().and_then(char::from_u32).ok_or_else(|| {
+                VmBamlError::InvalidArgument {
+                    message: format!(
+                        "string.from_code_points: value {n} at index {i} is not a valid Unicode code point (must be in [0, 0x10FFFF] and not a surrogate)"
+                    ),
+                }
+            })?;
+            result.push(cp);
+        }
+        Ok(result)
     }
 }

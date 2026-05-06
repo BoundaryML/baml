@@ -620,6 +620,508 @@ async fn string_index_of_returns_byte_offset() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
+// ─── char_count ───────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn string_char_count_ascii() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "hello".char_count()
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(5)));
+}
+
+#[tokio::test]
+async fn string_char_count_multibyte() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "héllo".char_count()
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(5)));
+}
+
+#[tokio::test]
+async fn string_char_count_emoji() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "🐑🐑".char_count()
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+#[tokio::test]
+async fn string_char_count_empty() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "".char_count()
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
+}
+
+// ─── trim_start / trim_end ────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn string_trim_start_removes_leading_only() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "  hi  ".trim_start()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hi  ".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn string_trim_end_removes_trailing_only() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "  hi  ".trim_end()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("  hi".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn string_trim_start_handles_newlines_and_tabs() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "\n\t hi".trim_start()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hi".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn string_trim_end_no_whitespace_unchanged() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "hi".trim_end()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hi".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn string_trim_start_empty() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "".trim_start()
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("".to_string())));
+}
+
+// ─── lines ────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn string_lines_lf() {
+    let output = baml_test!(
+        r#"
+        function main() -> string[] {
+            "a\nb\nc".lines()
+        }
+    "#
+    );
+    let BexExternalValue::Array { items, .. } = output.result.unwrap() else {
+        panic!("expected array");
+    };
+    assert_eq!(
+        items,
+        vec![
+            BexExternalValue::String("a".to_string()),
+            BexExternalValue::String("b".to_string()),
+            BexExternalValue::String("c".to_string()),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn string_lines_crlf() {
+    let output = baml_test!(
+        r#"
+        function main() -> string[] {
+            "a\r\nb\r\nc".lines()
+        }
+    "#
+    );
+    let BexExternalValue::Array { items, .. } = output.result.unwrap() else {
+        panic!("expected array");
+    };
+    assert_eq!(
+        items,
+        vec![
+            BexExternalValue::String("a".to_string()),
+            BexExternalValue::String("b".to_string()),
+            BexExternalValue::String("c".to_string()),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn string_lines_trailing_newline_no_empty() {
+    let output = baml_test!(
+        r#"
+        function main() -> string[] {
+            "a\nb\n".lines()
+        }
+    "#
+    );
+    let BexExternalValue::Array { items, .. } = output.result.unwrap() else {
+        panic!("expected array");
+    };
+    assert_eq!(
+        items,
+        vec![
+            BexExternalValue::String("a".to_string()),
+            BexExternalValue::String("b".to_string()),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn string_lines_empty_string() {
+    let output = baml_test!(
+        r#"
+        function main() -> string[] {
+            "".lines()
+        }
+    "#
+    );
+    let BexExternalValue::Array { items, .. } = output.result.unwrap() else {
+        panic!("expected array");
+    };
+    assert!(items.is_empty());
+}
+
+#[tokio::test]
+async fn string_lines_just_newline() {
+    let output = baml_test!(
+        r#"
+        function main() -> string[] {
+            "\n".lines()
+        }
+    "#
+    );
+    let BexExternalValue::Array { items, .. } = output.result.unwrap() else {
+        panic!("expected array");
+    };
+    assert_eq!(items, vec![BexExternalValue::String("".to_string())]);
+}
+
+// ─── code_point_at ────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn string_code_point_at_ascii() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "hi".code_point_at(0)
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(104)));
+}
+
+#[tokio::test]
+async fn string_code_point_at_multibyte() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "héllo".code_point_at(1)
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0xE9)));
+}
+
+#[tokio::test]
+async fn string_code_point_at_emoji() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "🐑".code_point_at(0)
+        }
+    "#
+    );
+    // Sheep emoji is U+1F411 = 128017.
+    assert_eq!(output.result, Ok(BexExternalValue::Int(128017)));
+}
+
+#[tokio::test]
+async fn string_code_point_at_mid_codepoint_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "héllo".code_point_at(2)
+        }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn string_code_point_at_at_end_throws() {
+    // Unlike char_at which returns "" at length(), code_point_at must throw
+    // because there is no code point at that position.
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "hi".code_point_at(2)
+        }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn string_code_point_at_negative_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "hi".code_point_at(-1)
+        }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+// ─── to_utf8 / from_utf8 ──────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn string_to_utf8_ascii() {
+    let output = baml_test!(
+        r#"
+        function main() -> uint8array {
+            "hi".to_utf8()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Uint8Array(vec![0x68, 0x69]))
+    );
+}
+
+#[tokio::test]
+async fn string_to_utf8_multibyte() {
+    let output = baml_test!(
+        r#"
+        function main() -> uint8array {
+            "é".to_utf8()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Uint8Array(vec![0xC3, 0xA9]))
+    );
+}
+
+#[tokio::test]
+async fn string_to_utf8_empty() {
+    let output = baml_test!(
+        r#"
+        function main() -> uint8array {
+            "".to_utf8()
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Uint8Array(vec![])));
+}
+
+#[tokio::test]
+async fn string_from_utf8_ascii_round_trip() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            string.from_utf8(b"\x68\x69")
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hi".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn string_from_utf8_multibyte_round_trip() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            string.from_utf8(b"\xC3\xA9")
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("é".to_string())));
+}
+
+#[tokio::test]
+async fn string_from_utf8_invalid_throws() {
+    // 0xFF is never a valid UTF-8 byte.
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            string.from_utf8(b"\xFF")
+        }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn string_from_utf8_empty() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            string.from_utf8(b"")
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("".to_string())));
+}
+
+// ─── from_code_points ─────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn string_from_code_points_ascii() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            string.from_code_points([104, 105])
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hi".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn string_from_code_points_multibyte() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            string.from_code_points([233])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("é".to_string())));
+}
+
+#[tokio::test]
+async fn string_from_code_points_emoji() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            string.from_code_points([128017])
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("🐑".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn string_from_code_points_empty() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            string.from_code_points([])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("".to_string())));
+}
+
+#[tokio::test]
+async fn string_from_code_points_negative_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            string.from_code_points([-1])
+        }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn string_from_code_points_surrogate_throws() {
+    // U+D800 (55296) is the start of the high-surrogate range; not a valid scalar.
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            string.from_code_points([55296])
+        }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn string_from_code_points_too_large_throws() {
+    // U+110000 (1114112) is one past the maximum Unicode code point.
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            string.from_code_points([1114112])
+        }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
 #[tokio::test]
 async fn string_replace() {
     let output = baml_test!(

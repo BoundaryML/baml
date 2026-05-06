@@ -859,24 +859,31 @@ function baml.to_json(self: ?) -> baml.json.json  [builtin]
 class baml.String {
 }
 function baml.char_at(self: ?, index: int) -> string  [builtin]
+function baml.char_count(self: ?) -> int  [builtin]
+function baml.code_point_at(self: ?, index: int) -> int  [builtin]
 function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
+function baml.from_code_points(unicode: int[]) -> string  [builtin]
 function baml.from_json(j: baml.json.json) -> baml.String  [expr] {
   baml.String {  }
 }
+function baml.from_utf8(utf8: uint8array) -> string  [builtin]
 function baml.includes(self: ?, search: string) -> bool  [builtin]
 function baml.index_of(self: ?, search: string) -> int  [builtin]
 function baml.length(self: ?) -> int  [builtin]
+function baml.lines(self: ?) -> string[]  [builtin]
 function baml.matches(self: ?, pattern: string) -> bool  [builtin]
 function baml.replace(self: ?, search: string, replacement: string) -> string  [builtin]
 function baml.replace_all(self: ?, search: string, replacement: string) -> string  [builtin]
 function baml.split(self: ?, delimiter: string) -> string[]  [builtin]
 function baml.starts_with(self: ?, prefix: string) -> bool  [builtin]
 function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
-function baml.to_bytes(self: ?) -> uint8array  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.to_lower_case(self: ?) -> string  [builtin]
 function baml.to_upper_case(self: ?) -> string  [builtin]
+function baml.to_utf8(self: ?) -> uint8array  [builtin]
 function baml.trim(self: ?) -> string  [builtin]
+function baml.trim_end(self: ?) -> string  [builtin]
+function baml.trim_start(self: ?) -> string  [builtin]
 
 --- <builtin>/baml/type_class.baml ---
 class baml.TypeValue {

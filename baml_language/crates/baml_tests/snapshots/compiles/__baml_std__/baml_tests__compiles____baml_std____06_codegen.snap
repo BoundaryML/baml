@@ -100,12 +100,24 @@ function baml.Null.to_json(self: null) -> baml.json.json {
 function baml.String.char_at(self: null, index: int) -> string {
 }
 
+function baml.String.char_count(self: null) -> int {
+}
+
+function baml.String.code_point_at(self: null, index: int) -> int {
+}
+
 function baml.String.ends_with(self: null, suffix: string) -> bool {
+}
+
+function baml.String.from_code_points(unicode: int[]) -> string {
 }
 
 function baml.String.from_json(j: baml.json.json) -> baml.String {
     alloc_instance baml.String
     return
+}
+
+function baml.String.from_utf8(utf8: uint8array) -> string {
 }
 
 function baml.String.includes(self: null, search: string) -> bool {
@@ -115,6 +127,9 @@ function baml.String.index_of(self: null, search: string) -> int {
 }
 
 function baml.String.length(self: null) -> int {
+}
+
+function baml.String.lines(self: null) -> string[] {
 }
 
 function baml.String.matches(self: null, pattern: string) -> bool {
@@ -135,9 +150,6 @@ function baml.String.starts_with(self: null, prefix: string) -> bool {
 function baml.String.substring(self: null, start: int, end: int) -> string {
 }
 
-function baml.String.to_bytes(self: null) -> uint8array {
-}
-
 function baml.String.to_json(self: null) -> baml.json.json {
 }
 
@@ -147,7 +159,16 @@ function baml.String.to_lower_case(self: null) -> string {
 function baml.String.to_upper_case(self: null) -> string {
 }
 
+function baml.String.to_utf8(self: null) -> uint8array {
+}
+
 function baml.String.trim(self: null) -> string {
+}
+
+function baml.String.trim_end(self: null) -> string {
+}
+
+function baml.String.trim_start(self: null) -> string {
 }
 
 function baml.TypeValue.from_json(j: baml.json.json) -> baml.TypeValue {
