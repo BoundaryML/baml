@@ -2,6 +2,7 @@ import { FooterSection } from '@/components/footer-section';
 import { VariantHome } from '@/components/landing/variant-home';
 import { IncrementalAdoption } from '@/components/landing/incremental-adoption';
 import { LanguageFanout } from '@/components/landing/language-fanout';
+import { PerspectiveSlider } from '@/components/landing/perspective-slider';
 import { StoryTimeline } from '@/components/landing/story-timeline';
 import { WhyALanguage } from '@/components/landing/why-a-language';
 import { BuiltForTheFuture } from '@/components/landing/built-for-the-future';
@@ -32,6 +33,9 @@ export default async function Page() {
 
       {/* Incremental adoption — sticky scroll explainer */}
       <IncrementalAdoption />
+
+      {/* What you see vs what your agent sees — drag-to-reveal slider */}
+      <PerspectiveSlider />
 
       {/* One file → every language fanout */}
       <LanguageFanout />
