@@ -170,6 +170,90 @@ impl BamlClassString for PackageBamlImpl {
         string.replace(search, replacement)
     }
 
+    // ── Unicode-aware predicates ──────────────────────────────────────────────
+    //
+    // All predicates use `chars().all(...)`, which returns true on the empty
+    // string per the universal-quantifier convention.
+
+    fn is_numeric(string: &str) -> bool {
+        string.chars().all(char::is_numeric)
+    }
+
+    fn is_alphabetic(string: &str) -> bool {
+        string.chars().all(char::is_alphabetic)
+    }
+
+    fn is_alphanumeric(string: &str) -> bool {
+        string.chars().all(char::is_alphanumeric)
+    }
+
+    fn is_uppercase(string: &str) -> bool {
+        string.chars().all(char::is_uppercase)
+    }
+
+    fn is_lowercase(string: &str) -> bool {
+        string.chars().all(char::is_lowercase)
+    }
+
+    fn is_whitespace(string: &str) -> bool {
+        string.chars().all(char::is_whitespace)
+    }
+
+    fn is_control(string: &str) -> bool {
+        string.chars().all(char::is_control)
+    }
+
+    /// "Graphic" = visible / printing character: not control, not whitespace.
+    /// Note this is a convenience definition — Unicode does not have a single
+    /// `Graphic` property. We exclude `Cc` (control) and `White_Space`.
+    fn is_graphic(string: &str) -> bool {
+        string
+            .chars()
+            .all(|c| !c.is_control() && !c.is_whitespace())
+    }
+
+    // ── ASCII-only predicates ─────────────────────────────────────────────────
+
+    fn is_ascii(string: &str) -> bool {
+        string.is_ascii()
+    }
+
+    fn is_ascii_numeric(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_digit())
+    }
+
+    fn is_ascii_alphabetic(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_alphabetic())
+    }
+
+    fn is_ascii_alphanumeric(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_alphanumeric())
+    }
+
+    fn is_ascii_uppercase(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_uppercase())
+    }
+
+    fn is_ascii_lowercase(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_lowercase())
+    }
+
+    fn is_ascii_whitespace(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_whitespace())
+    }
+
+    fn is_ascii_control(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_control())
+    }
+
+    fn is_ascii_graphic(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_graphic())
+    }
+
+    fn is_ascii_hex(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_hexdigit())
+    }
+
     fn to_utf8(string: &str) -> Vec<u8> {
         string.as_bytes().to_vec()
     }

@@ -6776,6 +6776,42 @@ fn baml.String.includes = builtin(vm)
 
 fn baml.String.index_of = builtin(vm)
 
+fn baml.String.is_alphabetic = builtin(vm)
+
+fn baml.String.is_alphanumeric = builtin(vm)
+
+fn baml.String.is_ascii = builtin(vm)
+
+fn baml.String.is_ascii_alphabetic = builtin(vm)
+
+fn baml.String.is_ascii_alphanumeric = builtin(vm)
+
+fn baml.String.is_ascii_control = builtin(vm)
+
+fn baml.String.is_ascii_graphic = builtin(vm)
+
+fn baml.String.is_ascii_hex = builtin(vm)
+
+fn baml.String.is_ascii_lowercase = builtin(vm)
+
+fn baml.String.is_ascii_numeric = builtin(vm)
+
+fn baml.String.is_ascii_uppercase = builtin(vm)
+
+fn baml.String.is_ascii_whitespace = builtin(vm)
+
+fn baml.String.is_control = builtin(vm)
+
+fn baml.String.is_graphic = builtin(vm)
+
+fn baml.String.is_lowercase = builtin(vm)
+
+fn baml.String.is_numeric = builtin(vm)
+
+fn baml.String.is_uppercase = builtin(vm)
+
+fn baml.String.is_whitespace = builtin(vm)
+
 fn baml.String.length = builtin(vm)
 
 fn baml.String.lines = builtin(vm)

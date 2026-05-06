@@ -126,6 +126,60 @@ function baml.String.includes(self: null, search: string) -> bool {
 function baml.String.index_of(self: null, search: string) -> int {
 }
 
+function baml.String.is_alphabetic(self: null) -> bool {
+}
+
+function baml.String.is_alphanumeric(self: null) -> bool {
+}
+
+function baml.String.is_ascii(self: null) -> bool {
+}
+
+function baml.String.is_ascii_alphabetic(self: null) -> bool {
+}
+
+function baml.String.is_ascii_alphanumeric(self: null) -> bool {
+}
+
+function baml.String.is_ascii_control(self: null) -> bool {
+}
+
+function baml.String.is_ascii_graphic(self: null) -> bool {
+}
+
+function baml.String.is_ascii_hex(self: null) -> bool {
+}
+
+function baml.String.is_ascii_lowercase(self: null) -> bool {
+}
+
+function baml.String.is_ascii_numeric(self: null) -> bool {
+}
+
+function baml.String.is_ascii_uppercase(self: null) -> bool {
+}
+
+function baml.String.is_ascii_whitespace(self: null) -> bool {
+}
+
+function baml.String.is_control(self: null) -> bool {
+}
+
+function baml.String.is_graphic(self: null) -> bool {
+}
+
+function baml.String.is_lowercase(self: null) -> bool {
+}
+
+function baml.String.is_numeric(self: null) -> bool {
+}
+
+function baml.String.is_uppercase(self: null) -> bool {
+}
+
+function baml.String.is_whitespace(self: null) -> bool {
+}
+
 function baml.String.length(self: null) -> int {
 }
 

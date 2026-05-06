@@ -18,7 +18,7 @@ class String {
   ///
   /// To count Unicode code points (`O(n)`), use `char_count()`.
   ///
-  ... skipped 236 lines ...
+  ... skipped 443 lines ...
   ///
   /// # Examples
   /// ```

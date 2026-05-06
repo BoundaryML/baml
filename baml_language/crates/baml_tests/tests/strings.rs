@@ -1122,6 +1122,401 @@ async fn string_from_code_points_too_large_throws() {
     };
 }
 
+// ─── Character-class predicates (BEP-043) ─────────────────────────────────────
+//
+// Tests are dense because the surface is large (8 Unicode + 10 ASCII predicates,
+// each with positive, negative, and empty-string cases). The `assert_pred!`
+// helper runs `<literal>.<method>()` through the VM and asserts the expected
+// boolean. Every method gets at least one true/false pair plus an empty-string
+// check (the universal-quantifier convention: empty ⇒ true).
+
+macro_rules! assert_pred {
+    ($method:literal, $input:literal, $expected:expr) => {{
+        let src = format!(
+            "function main() -> bool {{ \"{}\".{}() }}",
+            $input, $method
+        );
+        let output = baml_tests::baml_test!(baml: &src, entry: "main");
+        assert_eq!(
+            output.result,
+            Ok(BexExternalValue::Bool($expected)),
+            "{:?}.{}() expected {}",
+            $input,
+            $method,
+            $expected
+        );
+    }};
+}
+
+// ── is_numeric (Unicode) ──
+#[tokio::test]
+async fn string_is_numeric_ascii_digits() {
+    assert_pred!("is_numeric", "12345", true);
+}
+#[tokio::test]
+async fn string_is_numeric_unicode_roman() {
+    // U+2167 ROMAN NUMERAL EIGHT — Unicode general category Nl.
+    assert_pred!("is_numeric", "\u{2167}", true);
+}
+#[tokio::test]
+async fn string_is_numeric_mixed_false() {
+    assert_pred!("is_numeric", "12a", false);
+}
+#[tokio::test]
+async fn string_is_numeric_letters_false() {
+    assert_pred!("is_numeric", "abc", false);
+}
+#[tokio::test]
+async fn string_is_numeric_empty_true() {
+    assert_pred!("is_numeric", "", true);
+}
+
+// ── is_alphabetic (Unicode) ──
+#[tokio::test]
+async fn string_is_alphabetic_ascii() {
+    assert_pred!("is_alphabetic", "hello", true);
+}
+#[tokio::test]
+async fn string_is_alphabetic_accented() {
+    assert_pred!("is_alphabetic", "héllo", true);
+}
+#[tokio::test]
+async fn string_is_alphabetic_cjk() {
+    // 漢字 — common CJK letters.
+    assert_pred!("is_alphabetic", "\u{6F22}\u{5B57}", true);
+}
+#[tokio::test]
+async fn string_is_alphabetic_with_digit_false() {
+    assert_pred!("is_alphabetic", "abc1", false);
+}
+#[tokio::test]
+async fn string_is_alphabetic_with_space_false() {
+    assert_pred!("is_alphabetic", "a b", false);
+}
+#[tokio::test]
+async fn string_is_alphabetic_empty_true() {
+    assert_pred!("is_alphabetic", "", true);
+}
+
+// ── is_alphanumeric (Unicode) ──
+#[tokio::test]
+async fn string_is_alphanumeric_letters_and_digits() {
+    assert_pred!("is_alphanumeric", "abc123", true);
+}
+#[tokio::test]
+async fn string_is_alphanumeric_accented_with_digit() {
+    assert_pred!("is_alphanumeric", "héllo7", true);
+}
+#[tokio::test]
+async fn string_is_alphanumeric_with_space_false() {
+    assert_pred!("is_alphanumeric", "a b", false);
+}
+#[tokio::test]
+async fn string_is_alphanumeric_with_punct_false() {
+    assert_pred!("is_alphanumeric", "a!b", false);
+}
+#[tokio::test]
+async fn string_is_alphanumeric_empty_true() {
+    assert_pred!("is_alphanumeric", "", true);
+}
+
+// ── is_uppercase / is_lowercase (Unicode) ──
+#[tokio::test]
+async fn string_is_uppercase_all_upper() {
+    assert_pred!("is_uppercase", "HELLO", true);
+}
+#[tokio::test]
+async fn string_is_uppercase_mixed_false() {
+    assert_pred!("is_uppercase", "Hello", false);
+}
+#[tokio::test]
+async fn string_is_uppercase_digit_false() {
+    // Digits are not uppercase.
+    assert_pred!("is_uppercase", "1", false);
+}
+#[tokio::test]
+async fn string_is_uppercase_empty_true() {
+    assert_pred!("is_uppercase", "", true);
+}
+#[tokio::test]
+async fn string_is_lowercase_all_lower() {
+    assert_pred!("is_lowercase", "hello", true);
+}
+#[tokio::test]
+async fn string_is_lowercase_mixed_false() {
+    assert_pred!("is_lowercase", "Hello", false);
+}
+#[tokio::test]
+async fn string_is_lowercase_accented_lower() {
+    assert_pred!("is_lowercase", "héllo", true);
+}
+#[tokio::test]
+async fn string_is_lowercase_empty_true() {
+    assert_pred!("is_lowercase", "", true);
+}
+
+// ── is_whitespace (Unicode) ──
+#[tokio::test]
+async fn string_is_whitespace_spaces() {
+    assert_pred!("is_whitespace", "   ", true);
+}
+#[tokio::test]
+async fn string_is_whitespace_mixed_ws() {
+    assert_pred!("is_whitespace", " \t\n\r", true);
+}
+#[tokio::test]
+async fn string_is_whitespace_unicode_nbsp() {
+    // U+00A0 NO-BREAK SPACE — Unicode whitespace.
+    assert_pred!("is_whitespace", "\u{00A0}", true);
+}
+#[tokio::test]
+async fn string_is_whitespace_with_letter_false() {
+    assert_pred!("is_whitespace", "a b", false);
+}
+#[tokio::test]
+async fn string_is_whitespace_empty_true() {
+    assert_pred!("is_whitespace", "", true);
+}
+
+// ── is_control / is_graphic ──
+#[tokio::test]
+async fn string_is_control_newline_tab() {
+    assert_pred!("is_control", "\n\t", true);
+}
+#[tokio::test]
+async fn string_is_control_letter_false() {
+    assert_pred!("is_control", "a", false);
+}
+#[tokio::test]
+async fn string_is_control_empty_true() {
+    assert_pred!("is_control", "", true);
+}
+#[tokio::test]
+async fn string_is_graphic_letters() {
+    assert_pred!("is_graphic", "abc", true);
+}
+#[tokio::test]
+async fn string_is_graphic_accented() {
+    assert_pred!("is_graphic", "héllo", true);
+}
+#[tokio::test]
+async fn string_is_graphic_with_space_false() {
+    assert_pred!("is_graphic", "a b", false);
+}
+#[tokio::test]
+async fn string_is_graphic_with_newline_false() {
+    assert_pred!("is_graphic", "a\n", false);
+}
+#[tokio::test]
+async fn string_is_graphic_empty_true() {
+    assert_pred!("is_graphic", "", true);
+}
+
+// ── is_ascii (covers the boundary between ASCII / non-ASCII) ──
+#[tokio::test]
+async fn string_is_ascii_pure_ascii() {
+    assert_pred!("is_ascii", "hello world!", true);
+}
+#[tokio::test]
+async fn string_is_ascii_with_accent_false() {
+    assert_pred!("is_ascii", "héllo", false);
+}
+#[tokio::test]
+async fn string_is_ascii_with_emoji_false() {
+    assert_pred!("is_ascii", "🐑", false);
+}
+#[tokio::test]
+async fn string_is_ascii_control_chars() {
+    assert_pred!("is_ascii", "\x00\x7f", true);
+}
+#[tokio::test]
+async fn string_is_ascii_empty_true() {
+    assert_pred!("is_ascii", "", true);
+}
+
+// ── is_ascii_numeric ──
+#[tokio::test]
+async fn string_is_ascii_numeric_digits() {
+    assert_pred!("is_ascii_numeric", "01234", true);
+}
+#[tokio::test]
+async fn string_is_ascii_numeric_unicode_numeral_false() {
+    // Unicode is_numeric matches this; ASCII variant must reject.
+    assert_pred!("is_ascii_numeric", "\u{2167}", false);
+}
+#[tokio::test]
+async fn string_is_ascii_numeric_letter_false() {
+    assert_pred!("is_ascii_numeric", "1a", false);
+}
+#[tokio::test]
+async fn string_is_ascii_numeric_empty_true() {
+    assert_pred!("is_ascii_numeric", "", true);
+}
+
+// ── is_ascii_alphabetic / is_ascii_alphanumeric ──
+#[tokio::test]
+async fn string_is_ascii_alphabetic_letters() {
+    assert_pred!("is_ascii_alphabetic", "Hello", true);
+}
+#[tokio::test]
+async fn string_is_ascii_alphabetic_accented_false() {
+    assert_pred!("is_ascii_alphabetic", "héllo", false);
+}
+#[tokio::test]
+async fn string_is_ascii_alphabetic_with_digit_false() {
+    assert_pred!("is_ascii_alphabetic", "abc1", false);
+}
+#[tokio::test]
+async fn string_is_ascii_alphabetic_empty_true() {
+    assert_pred!("is_ascii_alphabetic", "", true);
+}
+#[tokio::test]
+async fn string_is_ascii_alphanumeric_basic() {
+    assert_pred!("is_ascii_alphanumeric", "abc123", true);
+}
+#[tokio::test]
+async fn string_is_ascii_alphanumeric_accented_false() {
+    assert_pred!("is_ascii_alphanumeric", "héllo1", false);
+}
+#[tokio::test]
+async fn string_is_ascii_alphanumeric_with_space_false() {
+    assert_pred!("is_ascii_alphanumeric", "a 1", false);
+}
+#[tokio::test]
+async fn string_is_ascii_alphanumeric_empty_true() {
+    assert_pred!("is_ascii_alphanumeric", "", true);
+}
+
+// ── is_ascii_uppercase / is_ascii_lowercase ──
+#[tokio::test]
+async fn string_is_ascii_uppercase_pure_upper() {
+    assert_pred!("is_ascii_uppercase", "ABC", true);
+}
+#[tokio::test]
+async fn string_is_ascii_uppercase_mixed_false() {
+    assert_pred!("is_ascii_uppercase", "Abc", false);
+}
+#[tokio::test]
+async fn string_is_ascii_uppercase_with_accent_false() {
+    // É (U+00C9) is upper but not ASCII.
+    assert_pred!("is_ascii_uppercase", "\u{00C9}", false);
+}
+#[tokio::test]
+async fn string_is_ascii_uppercase_empty_true() {
+    assert_pred!("is_ascii_uppercase", "", true);
+}
+#[tokio::test]
+async fn string_is_ascii_lowercase_pure_lower() {
+    assert_pred!("is_ascii_lowercase", "abc", true);
+}
+#[tokio::test]
+async fn string_is_ascii_lowercase_mixed_false() {
+    assert_pred!("is_ascii_lowercase", "aBc", false);
+}
+#[tokio::test]
+async fn string_is_ascii_lowercase_with_accent_false() {
+    // é is lower but not ASCII.
+    assert_pred!("is_ascii_lowercase", "héllo", false);
+}
+#[tokio::test]
+async fn string_is_ascii_lowercase_empty_true() {
+    assert_pred!("is_ascii_lowercase", "", true);
+}
+
+// ── is_ascii_whitespace ──
+#[tokio::test]
+async fn string_is_ascii_whitespace_basic() {
+    assert_pred!("is_ascii_whitespace", " \t\n\r", true);
+}
+#[tokio::test]
+async fn string_is_ascii_whitespace_form_feed() {
+    assert_pred!("is_ascii_whitespace", "\x0C", true);
+}
+#[tokio::test]
+async fn string_is_ascii_whitespace_nbsp_false() {
+    // NBSP is whitespace per Unicode but not per ASCII.
+    assert_pred!("is_ascii_whitespace", "\u{00A0}", false);
+}
+#[tokio::test]
+async fn string_is_ascii_whitespace_letter_false() {
+    assert_pred!("is_ascii_whitespace", "a", false);
+}
+#[tokio::test]
+async fn string_is_ascii_whitespace_empty_true() {
+    assert_pred!("is_ascii_whitespace", "", true);
+}
+
+// ── is_ascii_control ──
+#[tokio::test]
+async fn string_is_ascii_control_low_range() {
+    assert_pred!("is_ascii_control", "\x00\x01\x1F", true);
+}
+#[tokio::test]
+async fn string_is_ascii_control_del() {
+    assert_pred!("is_ascii_control", "\x7F", true);
+}
+#[tokio::test]
+async fn string_is_ascii_control_letter_false() {
+    assert_pred!("is_ascii_control", "a", false);
+}
+#[tokio::test]
+async fn string_is_ascii_control_empty_true() {
+    assert_pred!("is_ascii_control", "", true);
+}
+
+// ── is_ascii_graphic ──
+#[tokio::test]
+async fn string_is_ascii_graphic_letters() {
+    assert_pred!("is_ascii_graphic", "abc", true);
+}
+#[tokio::test]
+async fn string_is_ascii_graphic_punctuation() {
+    assert_pred!("is_ascii_graphic", "!@#~", true);
+}
+#[tokio::test]
+async fn string_is_ascii_graphic_space_false() {
+    // ASCII space is NOT graphic.
+    assert_pred!("is_ascii_graphic", " ", false);
+}
+#[tokio::test]
+async fn string_is_ascii_graphic_control_false() {
+    assert_pred!("is_ascii_graphic", "\n", false);
+}
+#[tokio::test]
+async fn string_is_ascii_graphic_accented_false() {
+    assert_pred!("is_ascii_graphic", "é", false);
+}
+#[tokio::test]
+async fn string_is_ascii_graphic_empty_true() {
+    assert_pred!("is_ascii_graphic", "", true);
+}
+
+// ── is_ascii_hex ──
+#[tokio::test]
+async fn string_is_ascii_hex_lower() {
+    assert_pred!("is_ascii_hex", "deadbeef", true);
+}
+#[tokio::test]
+async fn string_is_ascii_hex_upper() {
+    assert_pred!("is_ascii_hex", "DEADBEEF", true);
+}
+#[tokio::test]
+async fn string_is_ascii_hex_mixed_case_with_digits() {
+    assert_pred!("is_ascii_hex", "00aF99", true);
+}
+#[tokio::test]
+async fn string_is_ascii_hex_g_false() {
+    assert_pred!("is_ascii_hex", "0g", false);
+}
+#[tokio::test]
+async fn string_is_ascii_hex_x_prefix_false() {
+    assert_pred!("is_ascii_hex", "0x123", false);
+}
+#[tokio::test]
+async fn string_is_ascii_hex_empty_true() {
+    assert_pred!("is_ascii_hex", "", true);
+}
+
 #[tokio::test]
 async fn string_replace() {
     let output = baml_test!(

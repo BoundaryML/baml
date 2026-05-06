@@ -211,6 +211,213 @@ class String {
     $rust_function
   }
 
+  // ─── Unicode-aware character-class predicates ─────────────────────────────
+  //
+  // Every `is_*` predicate below tests that **all** characters in the string
+  // satisfy the predicate. The empty string returns `true` (the universal
+  // quantifier over an empty set is vacuously true). For single-character
+  // strings these behave like character-class checks.
+
+  /// Returns true if every character is numeric per Unicode (general categories
+  /// `Nd`, `Nl`, `No` — decimal digits, letter-numbers, and other-numbers).
+  /// Empty string returns true.
+  ///
+  /// # Examples
+  /// ```
+  /// "12345".is_numeric()  // true
+  /// "Ⅷ".is_numeric()      // true (Roman numeral, Nl)
+  /// "12a".is_numeric()    // false
+  /// "".is_numeric()       // true (vacuous)
+  /// ```
+  function is_numeric(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is a Unicode letter (general category `L`).
+  /// Empty string returns true.
+  ///
+  /// # Examples
+  /// ```
+  /// "héllo".is_alphabetic()  // true
+  /// "漢字".is_alphabetic()    // true
+  /// "abc1".is_alphabetic()   // false
+  /// ```
+  function is_alphabetic(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is alphabetic OR numeric per Unicode.
+  /// Empty string returns true. Equivalent to checking each char passes
+  /// `is_alphabetic` or `is_numeric`.
+  ///
+  /// # Examples
+  /// ```
+  /// "abc123".is_alphanumeric()  // true
+  /// "héllo7".is_alphanumeric()  // true
+  /// "a b".is_alphanumeric()     // false (space is not)
+  /// ```
+  function is_alphanumeric(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is uppercase per Unicode (general
+  /// category `Lu`, plus other chars with the `Uppercase` property).
+  /// Empty string returns true. Note: digits and most symbols are neither
+  /// upper- nor lowercase.
+  ///
+  /// # Examples
+  /// ```
+  /// "HELLO".is_uppercase()  // true
+  /// "Hello".is_uppercase()  // false
+  /// "123".is_uppercase()    // false (digits aren't uppercase)
+  /// ```
+  function is_uppercase(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is lowercase per Unicode (general
+  /// category `Ll`, plus other chars with the `Lowercase` property).
+  /// Empty string returns true.
+  ///
+  /// # Examples
+  /// ```
+  /// "hello".is_lowercase()  // true
+  /// "Hello".is_lowercase()  // false
+  /// ```
+  function is_lowercase(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is whitespace per Unicode (`White_Space`
+  /// property — includes space, tab, newline, NBSP, and other Unicode
+  /// whitespace). Empty string returns true.
+  ///
+  /// # Examples
+  /// ```
+  /// "   ".is_whitespace()      // true
+  /// " \t\n".is_whitespace()    // true
+  /// "a b".is_whitespace()      // false
+  /// ```
+  function is_whitespace(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is a control character per Unicode
+  /// (general category `Cc`). Empty string returns true.
+  ///
+  /// # Examples
+  /// ```
+  /// "\n\t".is_control()  // true
+  /// "a".is_control()     // false
+  /// ```
+  function is_control(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is a "graphic" character — that is,
+  /// not a control character and not whitespace. Empty string returns true.
+  ///
+  /// This is a convenience predicate for "visible/printing" characters. It
+  /// uses the Unicode definition of control and whitespace.
+  ///
+  /// # Examples
+  /// ```
+  /// "abc".is_graphic()      // true
+  /// "héllo".is_graphic()    // true
+  /// "a b".is_graphic()      // false (space is not graphic)
+  /// "a\n".is_graphic()      // false (newline is control)
+  /// ```
+  function is_graphic(self) -> bool {
+    $rust_function
+  }
+
+  // ─── ASCII-only predicates ────────────────────────────────────────────────
+  //
+  // Each `is_ascii_*` returns false on any non-ASCII character (≥ U+0080).
+  // Empty string returns true.
+
+  /// Returns true if every character is ASCII (i.e. has a code point in
+  /// `[0x00, 0x7F]`). Empty string returns true.
+  ///
+  /// # Examples
+  /// ```
+  /// "hello".is_ascii()    // true
+  /// "héllo".is_ascii()    // false (`é` is U+00E9)
+  /// ```
+  function is_ascii(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is an ASCII decimal digit (`0`..=`9`).
+  /// Empty string returns true. Stricter than `is_numeric`, which accepts
+  /// non-ASCII numerals.
+  ///
+  /// # Examples
+  /// ```
+  /// "12345".is_ascii_numeric()  // true
+  /// "Ⅷ".is_ascii_numeric()      // false (Roman numeral)
+  /// ```
+  function is_ascii_numeric(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is an ASCII letter (`A`..=`Z` or
+  /// `a`..=`z`). Empty string returns true.
+  function is_ascii_alphabetic(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is an ASCII letter or digit. Empty
+  /// string returns true.
+  function is_ascii_alphanumeric(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is an ASCII uppercase letter
+  /// (`A`..=`Z`). Empty string returns true.
+  function is_ascii_uppercase(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is an ASCII lowercase letter
+  /// (`a`..=`z`). Empty string returns true.
+  function is_ascii_lowercase(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is ASCII whitespace: space (`\x20`),
+  /// horizontal tab (`\t`), line feed (`\n`), form feed (`\x0C`), or
+  /// carriage return (`\r`). Note this is narrower than `is_whitespace`,
+  /// which accepts Unicode whitespace like NBSP.
+  function is_ascii_whitespace(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is an ASCII control character — code
+  /// points `[0x00, 0x1F]` plus DEL (`0x7F`). Empty string returns true.
+  function is_ascii_control(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is an ASCII "graphic" character —
+  /// printable, non-space, non-control: code points `[0x21, 0x7E]`. Note
+  /// the ASCII space is *not* graphic. Empty string returns true.
+  function is_ascii_graphic(self) -> bool {
+    $rust_function
+  }
+
+  /// Returns true if every character is an ASCII hexadecimal digit:
+  /// `0`..=`9`, `a`..=`f`, or `A`..=`F`. Empty string returns true.
+  ///
+  /// # Examples
+  /// ```
+  /// "deadBEEF".is_ascii_hex()  // true
+  /// "0x123".is_ascii_hex()     // false (`x` is not a hex digit)
+  /// ```
+  function is_ascii_hex(self) -> bool {
+    $rust_function
+  }
+
   /// Returns the string encoded as a `uint8array` of UTF-8 bytes.
   ///
   /// The resulting byte array has length `self.length()`. Inverse of the
