@@ -875,6 +875,20 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    /// Emit an unconditional jump to a target, even when the target is the
+    /// next emitted MIR block.
+    ///
+    /// Switch sub-emitters generate multiple bytecode branches inside a single
+    /// MIR terminator before the next MIR block is emitted. In that context,
+    /// `next_block` fall-through is not valid for an arm body because later
+    /// in-terminator comparison/default code sits between the current PC and
+    /// the next MIR block.
+    fn emit_jump_always(&mut self, target: BlockId) {
+        let target = self.resolve_pending_target(target);
+        let jump_idx = self.emit(Instruction::Jump(0));
+        self.pending_jumps.push((jump_idx, target));
+    }
+
     /// Resolve a MIR block target into an emitted patch target.
     fn resolve_pending_target(&self, target: BlockId) -> PendingJumpTarget {
         let resolved = self.analysis.resolve_jump_target(target);
@@ -1722,7 +1736,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.set_operand(inst, OperandMeta::Const(label));
             self.emit(Instruction::CmpIntOp(CmpOp::Eq));
             let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
-            self.emit_jump_unless_fallthrough(*target);
+            self.emit_jump_always(*target);
             let skip_to = self.current_pc();
             self.patch_jump_to(jump_idx, skip_to);
         }
@@ -1978,7 +1992,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.emit(Instruction::CmpIntOp(CmpOp::Eq));
         let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
         self.emit(Instruction::Pop(1));
-        self.emit_jump_unless_fallthrough(target);
+        self.emit_jump_always(target);
         let skip_to = self.current_pc();
         self.patch_jump_to(jump_idx, skip_to);
     }
