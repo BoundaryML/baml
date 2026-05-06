@@ -42,6 +42,26 @@ function to_string<T>(v: T) -> string throws JsonSerializationError {
   $rust_function
 }
 
+/// Serialize any BAML value to its `json` representation by dispatching on
+/// the value's runtime type.
+///
+/// Equivalent to `v.to_json()` when `T` is concrete, but works through generic
+/// boundaries: a synthesized `to_json` body on `class Box<T> { value T }` can
+/// call `baml.json.to_json(self.value)` to get override-honoring dispatch
+/// without knowing `T` at synthesis time. The auto-derive synthesizer
+/// (`baml_compiler2_ast::auto_derive_json`) uses this for `TypeVar`-typed
+/// fields where direct method dispatch would fail at runtime (the receiver's
+/// concrete `to_json` only exists on the runtime value, not the static type).
+///
+/// Behaviour matches the per-type `to_json`: dispatches to `Int.to_json`,
+/// `String.to_json`, user-class `to_json` (including overrides),
+/// `Array<T>.to_json`, etc.
+//baml:mut_vm
+//baml:may_yield
+function to_json<T>(v: T) -> json throws JsonSerializationError | JsonParseError {
+  $rust_function
+}
+
 /// Parse a JSON string and coerce it to a BAML value of type `T`.
 ///
 /// The type argument `T` is delivered to the native handler at runtime via

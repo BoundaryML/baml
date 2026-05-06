@@ -209,8 +209,10 @@ fn type_expr_is_nullable(ty: &TypeExpr) -> bool {
 /// - `unknown` / `error` / `builtin unknown` — unresolved types
 ///
 /// Container types (`T?`, `T[]`, `map<K,V>`) are safe if their inner types
-/// are safe, since `Array<T>.to_json()` and `Map<K,V>.to_json()` are
-/// available from `baml_builtins2`.
+/// are safe. `TypeVar` references (`T` where `T` is a class generic parameter)
+/// are handled at the per-field level by routing through the
+/// `baml.json.to_json(v)` runtime-dispatch helper, so they don't disqualify a
+/// class from per-field synthesis.
 fn type_expr_is_safe_for_per_field(ty: &TypeExpr) -> bool {
     match ty {
         // Types that have no `to_json` method — fall back to wrapper body
@@ -227,7 +229,7 @@ fn type_expr_is_safe_for_per_field(ty: &TypeExpr) -> bool {
             type_expr_is_safe_for_per_field(key) && type_expr_is_safe_for_per_field(value)
         }
         TypeExpr::Union { variants, .. } => variants.iter().all(type_expr_is_safe_for_per_field),
-        // All other types (primitives, paths, literals, media, etc.) are safe
+        // All other types (primitives, concrete paths, literals, media, TypeVars) are safe
         _ => true,
     }
 }
@@ -241,6 +243,28 @@ fn class_is_safe_for_per_field_synthesis(class: &ClassDef) -> bool {
             .map(|st| type_expr_is_safe_for_per_field(&st.expr))
             .unwrap_or(false) // fields with missing type annotations are not safe
     })
+}
+
+/// Returns `true` if `ty` is a bare reference to one of the class's generic
+/// parameters (e.g., `T` in `class Box<T> { value T }`).
+///
+/// At MIR lowering, `Tir2Ty::TypeVar` is erased to `Ty::Void`, so MIR cannot
+/// route a `MemberAccess` on a `TypeVar`-typed receiver to a concrete `to_json`
+/// method — it falls through to a generic map-element load that panics at
+/// runtime. The auto-derive synthesizer detects this case at AST time and
+/// emits `baml.json.to_json(self.<f>)` instead, which dispatches via the
+/// runtime value's actual type (`make_to_json_callee` in `bex_vm`).
+fn type_expr_is_typevar_reference(
+    ty: &TypeExpr,
+    generic_params: &std::collections::HashSet<&str>,
+) -> bool {
+    matches!(
+        ty,
+        TypeExpr::Path { segments, generic_args, .. }
+            if segments.len() == 1
+                && generic_args.is_empty()
+                && generic_params.contains(segments[0].as_str())
+    )
 }
 
 /// Build the fallback AST for `baml.json.parse(baml.json.to_string<Self>(self))`.
@@ -343,6 +367,12 @@ fn build_to_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSource
         id
     };
 
+    let generic_params: std::collections::HashSet<&str> = class
+        .generic_params
+        .iter()
+        .map(smol_str::SmolStr::as_str)
+        .collect();
+
     let mut entries: Vec<(ExprId, ExprId)> = Vec::with_capacity(class.fields.len());
     for field in &class.fields {
         // Key: the field name as a string literal — `"field_name"`.
@@ -359,6 +389,22 @@ fn build_to_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSource
             .map(|st| type_expr_is_nullable(&st.expr))
             .unwrap_or(false);
 
+        // Detect whether the field type is a bare reference to a class generic
+        // parameter (e.g., `T` in `class Box<T> { value T }`). MIR's
+        // `lower_member_access` cannot dispatch a method through a TypeVar
+        // receiver (the receiver type is erased to `Ty::Void` before reaching
+        // MIR, so `field_idx` is `None` and the lowering falls through to a
+        // dynamic-map load that panics on primitive/instance values).  Route
+        // these fields through `baml.json.to_json(self.<f>)` instead — the
+        // free function dispatches on the runtime value's actual type via
+        // `make_to_json_callee`, preserving user `to_json` overrides through
+        // the generic boundary.
+        let is_typevar = field
+            .type_expr
+            .as_ref()
+            .map(|st| type_expr_is_typevar_reference(&st.expr, &generic_params))
+            .unwrap_or(false);
+
         //   1. `self`
         let self_path = alloc(Expr::Path(vec![Name::new("self")]));
         //   2. `self.<field>`
@@ -367,7 +413,22 @@ fn build_to_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSource
             member: field.name.clone(),
         });
 
-        let value = if is_nullable {
+        let value = if is_typevar {
+            // TypeVar-typed field: `baml.json.to_json(self.<field>)`.  The
+            // free function performs runtime dispatch on the value's actual
+            // type, so this works whether `T` is a primitive, a class with a
+            // user `to_json` override, an array, or a map.
+            let to_json_path = alloc(Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("json"),
+                Name::new("to_json"),
+            ]));
+            alloc(Expr::Call {
+                callee: to_json_path,
+                type_args: vec![],
+                args: vec![field_access],
+            })
+        } else if is_nullable {
             // Nullable field: `self.<field>?.to_json()`
             //
             // The `?.` short-circuits to `null` when the field is null.  Since

@@ -15,7 +15,7 @@ class user.Container {
   item: T
 }
 function user.Container.to_json(self: user.Container) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "item": self.item.to_json() } : map<string, baml.json.json>
+  map { "item": baml.json.to_json(self.item) } : map<string, baml.json.json>
 }
 function user.Container.from_json(j: baml.json.json) -> user.Container<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Container<T>

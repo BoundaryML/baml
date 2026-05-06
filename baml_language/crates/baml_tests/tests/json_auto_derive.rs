@@ -278,3 +278,216 @@ async fn typevar_to_json_compiles_in_generic_class() {
     let output = baml_test!(source);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
+
+// ── Phase 5b.6: per-field auto-derive, override-honoring, recursive, generic ──
+
+#[tokio::test]
+async fn primitive_field_to_json() {
+    // `class C { x: int }; C{x:42}.to_json()` must produce `{"x":42}`.
+    // This exercises the per-field synthesizer body (5b.5): each field maps
+    // to `"field_name": self.<field>.to_json()`.
+    let source = r#"
+        class C { x int }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let c: C = C { x: 42 };
+            let j: baml.json.json = c.to_json();
+            baml.json.stringify(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(r#"{"x":42}"#.to_string()))
+    );
+}
+
+#[tokio::test]
+async fn array_of_primitive_to_json() {
+    // `class C { xs: int[] }; C{xs:[1,2,3]}.to_json()` must produce `{"xs":[1,2,3]}`.
+    // Exercises the per-field synthesizer when the field type is `int[]`.
+    // The auto-derived body calls `self.xs.to_json()` which routes through
+    // `Array<int>.to_json` (5b.4), itself calling `Int.to_json` per element.
+    let source = r#"
+        class C { xs int[] }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let c: C = C { xs: [1, 2, 3] };
+            let j: baml.json.json = c.to_json();
+            baml.json.stringify(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(r#"{"xs":[1,2,3]}"#.to_string()))
+    );
+}
+
+#[tokio::test]
+async fn nested_class_override_honored_direct() {
+    // `class A { b: B }`, `class B { ... function to_json(self) -> json { "[secret]" } }`:
+    // `A{b: B{y:7}}.to_json()` must produce `{"b":"[secret]"}` — the auto-derived
+    // `A.to_json` body calls `self.b.to_json()` which dispatches to B's user override.
+    let source = r#"
+        class B {
+            y int
+
+            function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                "[secret]"
+            }
+        }
+        class A { b B }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let a: A = A { b: B { y: 7 } };
+            let j: baml.json.json = a.to_json();
+            baml.json.stringify(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(r#"{"b":"[secret]"}"#.to_string()))
+    );
+}
+
+#[tokio::test]
+async fn nested_class_override_honored_in_array() {
+    // `class A { items: B[] }`, B has `to_json` override returning 0:
+    // `A{items:[B{y:1},B{y:2}]}.to_json()` must produce `{"items":[0,0]}`.
+    // The chain: auto-derived A.to_json → self.items.to_json() (Array<B>.to_json)
+    // → B.to_json() per element → user override returns 0.
+    let source = r#"
+        class B {
+            y int
+
+            function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                0
+            }
+        }
+        class A { items B[] }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let a: A = A { items: [B { y: 1 }, B { y: 2 }] };
+            let j: baml.json.json = a.to_json();
+            baml.json.stringify(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(r#"{"items":[0,0]}"#.to_string()))
+    );
+}
+
+#[tokio::test]
+async fn nested_class_override_honored_in_map() {
+    // `class A { lookup: map<string, B> }`, B has `to_json` override returning `"B"`:
+    // The override must be applied per map value.
+    // Chain: auto-derived A.to_json → self.lookup.to_json() (Map<string,B>.to_json)
+    // → B.to_json() per value via YieldToCall trampoline (5b.4.2).
+    let source = r#"
+        class B {
+            v int
+
+            function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                "B"
+            }
+        }
+        class A { lookup map<string, B> }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let a: A = A { lookup: {"k1": B { v: 1 }, "k2": B { v: 2 }} };
+            let j: baml.json.json = a.to_json();
+            baml.json.stringify(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    // Map key order is insertion order (IndexMap). Verify both keys map to "B".
+    match &output.result {
+        Ok(BexExternalValue::String(s)) => {
+            assert!(
+                s.contains(r#""k1":"B""#) && s.contains(r#""k2":"B""#),
+                "expected both map values to be \"B\" via override, got {s}"
+            );
+        }
+        other => panic!(r#"expected Ok(String(...)), got {other:?}"#),
+    }
+}
+
+#[tokio::test]
+async fn recursive_class_to_json() {
+    // `class Tree { value: int  children: Tree[] }` — the auto-derive synthesizer
+    // must not loop infinitely at synthesis time, and one-level-deep recursion
+    // must serialize correctly.
+    //
+    // Tree{value:1, children:[Tree{value:2, children:[]}]}.to_json()
+    //   → {"value":1,"children":[{"value":2,"children":[]}]}
+    let source = r#"
+        class Tree {
+            value int
+            children Tree[]
+        }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let leaf: Tree = Tree { value: 2, children: [] };
+            let root: Tree = Tree { value: 1, children: [leaf] };
+            let j: baml.json.json = root.to_json();
+            baml.json.stringify(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            r#"{"value":1,"children":[{"value":2,"children":[]}]}"#.to_string()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn generic_class_to_json_concrete() {
+    // `class Box<T> { value: T }; Box<int>{value:42}.to_json()` must produce
+    // `{"value":42}`.  The synthesizer emits `baml.json.to_json(self.value)`
+    // (the TypeVar branch of per-field synthesis), which dispatches at
+    // runtime via `make_to_json_callee` to `Int.to_json`.
+    let source = r#"
+        class Box<T> { value T }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let b: Box<int> = Box<int> { value: 42 };
+            let j: baml.json.json = b.to_json();
+            baml.json.stringify(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(r#"{"value":42}"#.to_string()))
+    );
+}
+
+#[tokio::test]
+async fn generic_class_honors_override_through_typevar() {
+    // `class Box<T> { value: T }` instantiated as `Box<Secret>` where Secret
+    // has a user `to_json` override returning `"[redacted]"` — the override
+    // must be honored through the generic boundary.  This is the BEP-038
+    // contract for generic classes: `baml.json.to_json(self.value)` dispatches
+    // on the runtime value's actual type, so Secret's user `to_json` wins.
+    let source = r#"
+        class Secret {
+            data string
+
+            function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                "[redacted]"
+            }
+        }
+        class Box<T> { value T }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let b: Box<Secret> = Box<Secret> { value: Secret { data: "hunter2" } };
+            let j: baml.json.json = b.to_json();
+            baml.json.stringify(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            r#"{"value":"[redacted]"}"#.to_string()
+        ))
+    );
+}

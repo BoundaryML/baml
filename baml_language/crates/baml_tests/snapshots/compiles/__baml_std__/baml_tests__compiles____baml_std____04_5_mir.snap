@@ -1429,6 +1429,8 @@ fn baml.json.JsonParseError.to_json(self: baml.json.JsonParseError) -> baml.json
     }
 }
 
+fn baml.json.to_json = builtin(vm)
+
 fn baml.json.JsonSerializationError.to_json(self: baml.json.JsonSerializationError) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return

@@ -119,13 +119,13 @@ function user.swap(self: ?) -> user.Pair  [expr] {
   {  } user.Pair { first: self.second, second: self.first }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": self.data.to_json() }
+  map { "data": baml.json.to_json(self.data) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": self.value.to_json() }
+  map { "value": baml.json.to_json(self.value) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": self.data.to_json() }
+  map { "data": baml.json.to_json(self.data) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "data": self.data.to_json() }
@@ -137,10 +137,10 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "items": self.items.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": self.value.to_json() }
+  map { "value": baml.json.to_json(self.value) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": self.data.to_json() }
+  map { "data": baml.json.to_json(self.data) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": self.name.to_json() }
@@ -149,10 +149,10 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "value": self.value?.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "first": self.first.to_json(), "second": self.second.to_json() }
+  map { "first": baml.json.to_json(self.first), "second": baml.json.to_json(self.second) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": self.value.to_json() }
+  map { "value": baml.json.to_json(self.value) }
 }
 function user.unwrap(self: ?) -> user.T  [expr] {
   {  } self.inner.get()

@@ -98,7 +98,7 @@ function user.Box.unwrap(self: user.Box) -> unknown throws never {
   }
 }
 function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json() } : map<string, baml.json.json>
+  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
 function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Box<T>

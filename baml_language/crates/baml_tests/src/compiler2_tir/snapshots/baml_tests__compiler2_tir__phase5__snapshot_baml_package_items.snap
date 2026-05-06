@@ -67,6 +67,7 @@ namespace baml.json:
   function parse
   function stringify
   function stringify_pretty
+  function to_json<T>
   function to_string<T>
 namespace baml.llm:
   class AnthropicOptions { methods: [to_json, from_json] }

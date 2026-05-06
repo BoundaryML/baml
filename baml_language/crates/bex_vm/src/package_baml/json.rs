@@ -48,14 +48,38 @@ fn class_lookup_key(qtn: &TypeName) -> String {
         buf
     }
 }
-use bex_vm_types::types::{Instance, Object, Value};
+use std::collections::HashMap;
+
+use bex_vm_types::{
+    HeapPtr,
+    types::{Instance, Object, Value},
+};
 use indexmap::IndexMap;
 
-use super::{BamlNamespaceJson, PackageBamlImpl};
+use super::{
+    BamlNamespaceJson, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee,
+};
 use crate::{
     BexVm,
     errors::{VmInternalError, VmRustFnError},
 };
+
+/// Pass-through continuation for `baml.json.to_json(v)`. The dynamically
+/// dispatched `to_json` produces the json value directly, so we just hand it
+/// back to the caller.
+struct ToJsonDynContinuation;
+
+impl Continuation for ToJsonDynContinuation {
+    fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
+        NativeCallResult::Done(value)
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        Vec::new()
+    }
+
+    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -104,6 +128,18 @@ impl BamlNamespaceJson for PackageBamlImpl {
                 })
             })?;
         json_from_string_typed(vm, s, &ty)
+    }
+
+    fn to_json(vm: &mut BexVm, v: &Value) -> NativeCallResult {
+        let v = *v;
+        match make_to_json_callee(vm, v) {
+            Ok(callee) => NativeCallResult::YieldToCall {
+                callee,
+                args: vec![],
+                continuation: Box::new(ToJsonDynContinuation),
+            },
+            Err(e) => NativeCallResult::Error(e),
+        }
     }
 }
 

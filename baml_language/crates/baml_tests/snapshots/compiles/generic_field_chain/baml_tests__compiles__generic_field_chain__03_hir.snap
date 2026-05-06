@@ -29,7 +29,7 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": self.name.to_json(), "age": self.age.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": self.value.to_json() }
+  map { "value": baml.json.to_json(self.value) }
 }
 
 --- captures ---

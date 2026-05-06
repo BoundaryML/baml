@@ -988,6 +988,9 @@ function baml.json.stringify(j: baml.json.json) -> string {
 function baml.json.stringify_pretty(j: baml.json.json) -> string {
 }
 
+function baml.json.to_json(v: void) -> baml.json.json {
+}
+
 function baml.json.to_string(v: void) -> string {
 }
 

@@ -18,7 +18,7 @@ function user.from_json(j: baml.json.json) -> user.Container  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "item": self.item.to_json() }
+  map { "item": baml.json.to_json(self.item) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": self.name.to_json() }
