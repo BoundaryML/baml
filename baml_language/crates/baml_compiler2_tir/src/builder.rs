@@ -3149,13 +3149,57 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn class_pattern_type_for_flow(class_ty: Ty, flow_ty: &Ty) -> Ty {
-        match (&class_ty, flow_ty) {
-            (Ty::Class(pattern_qn, pattern_args, _), Ty::Class(flow_qn, flow_args, _))
-                if pattern_qn == flow_qn && pattern_args.is_empty() && !flow_args.is_empty() =>
-            {
-                flow_ty.clone()
+        let Ty::Class(pattern_qn, pattern_args, _) = &class_ty else {
+            return class_ty;
+        };
+        if !pattern_args.is_empty() {
+            return class_ty;
+        }
+
+        let Some(flow_class_ty) = Self::unique_matching_class_instantiation(pattern_qn, flow_ty)
+        else {
+            return class_ty;
+        };
+        if matches!(flow_class_ty, Ty::Class(_, flow_args, _) if !flow_args.is_empty()) {
+            flow_class_ty.clone()
+        } else {
+            class_ty
+        }
+    }
+
+    fn unique_matching_class_instantiation<'a>(
+        pattern_qn: &crate::ty::QualifiedTypeName,
+        flow_ty: &'a Ty,
+    ) -> Option<&'a Ty> {
+        fn visit<'a>(
+            pattern_qn: &crate::ty::QualifiedTypeName,
+            ty: &'a Ty,
+            matches: &mut Vec<&'a Ty>,
+        ) {
+            match ty {
+                Ty::Class(flow_qn, _, _) if pattern_qn == flow_qn => {
+                    if !matches.contains(&ty) {
+                        matches.push(ty);
+                    }
+                }
+                Ty::Optional(inner, _) | Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+                    visit(pattern_qn, inner, matches);
+                }
+                Ty::Union(members, _) => {
+                    for member in members {
+                        visit(pattern_qn, member, matches);
+                    }
+                }
+                _ => {}
             }
-            _ => class_ty,
+        }
+
+        let mut matches = Vec::new();
+        visit(pattern_qn, flow_ty, &mut matches);
+        if matches.len() == 1 {
+            matches.into_iter().next()
+        } else {
+            None
         }
     }
 
@@ -3239,11 +3283,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 base_type: class_ty.clone(),
                                 member: f.field.clone(),
                             };
-                            if let Some(sm) = self.body_source_map.as_ref() {
-                                self.context.report_at_span(err, sm.pattern_span(f.pat));
-                            } else {
-                                self.context.report_simple(err, at_expr);
-                            }
+                            self.context.report_at_span(err, f.field_span);
                         }
                         continue;
                     };
@@ -6625,7 +6665,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         use baml_compiler2_ast::FunctionBodyDef;
 
         // Get the lambda's ExprBody
-        let Some(FunctionBodyDef::Expr(lambda_body, _source_map)) = &func_def.body else {
+        let Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)) = &func_def.body else {
             return (
                 Ty::Unknown {
                     attr: TyAttr::default(),
@@ -6665,6 +6705,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_path_root_types = std::mem::take(&mut self.path_root_types);
         let saved_path_member_resolutions = std::mem::take(&mut self.path_member_resolutions);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
+        let saved_body_source_map = self.body_source_map.clone();
+        self.body_source_map = Some(lambda_source_map.clone());
 
         // Extend generic params with the lambda's own generic params
         let mut new_generic_params = self.generic_params.clone();
@@ -6766,6 +6808,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.scoped_local_assignments = saved_scoped_local_assignments;
         self.declared_return_ty = saved_return_ty;
         self.generic_params = saved_generic_params;
+        self.body_source_map = saved_body_source_map;
 
         (
             ret_ty,

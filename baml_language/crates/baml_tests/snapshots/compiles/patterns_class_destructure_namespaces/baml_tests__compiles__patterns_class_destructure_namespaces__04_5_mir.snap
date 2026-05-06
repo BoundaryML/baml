@@ -9,7 +9,7 @@ fn user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
     let _2: llm.openai.Box
     let _3: llm.openai.Outer
     let _4: llm.openai.Box
-    let _5: void
+    let _5: string
     let _6: string // value
 
     bb0: {
@@ -34,7 +34,7 @@ fn user.DeepGenericDestructureQualifiedLet() -> int {
     let _2: llm.openai.Box
     let _3: llm.openai.Outer
     let _4: llm.openai.Box
-    let _5: void
+    let _5: int
     let _6: int // value
 
     bb0: {
@@ -220,7 +220,7 @@ fn user.GenericDestructureNamespaceQualifiedLet() -> int {
     let _0: int // _0 // return
     let _1: llm.openai.Box // boxed
     let _2: llm.openai.Box
-    let _3: void
+    let _3: string
     let _4: string // value
 
     bb0: {
@@ -241,7 +241,7 @@ fn user.GenericDestructureQualifiedLet() -> int {
     let _0: int // _0 // return
     let _1: llm.openai.Box // boxed
     let _2: llm.openai.Box
-    let _3: void
+    let _3: int
     let _4: int // value
 
     bb0: {

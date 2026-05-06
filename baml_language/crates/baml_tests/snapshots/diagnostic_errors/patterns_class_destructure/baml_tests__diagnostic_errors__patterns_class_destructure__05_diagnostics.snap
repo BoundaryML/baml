@@ -3,10 +3,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type `user.Person` has no member `missing`
-    ╭─[ patterns_class_destructure.baml:31:17 ]
+    ╭─[ patterns_class_destructure.baml:31:18 ]
     │
  31 │     let Person { missing } = Person {
-    │                 ────┬───  
+    │                  ───┬───  
     │                     ╰───── type `user.Person` has no member `missing`
     │ 
     │ Note: Error code: E0007
@@ -77,20 +77,20 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] Error: type `user.Address` has no member `missing`
-    ╭─[ patterns_class_destructure.baml:92:27 ]
+    ╭─[ patterns_class_destructure.baml:92:28 ]
     │
  92 │         address: Address { missing }
-    │                           ────┬───  
+    │                            ───┬───  
     │                               ╰───── type `user.Address` has no member `missing`
     │ 
     │ Note: Error code: E0007
 ────╯
 
   [type] Error: type `user.Person` has no member `missing`
-     ╭─[ patterns_class_destructure.baml:103:17 ]
+     ╭─[ patterns_class_destructure.baml:103:18 ]
      │
  103 │         Person { missing } => 1,
-     │                 ────┬───  
+     │                  ───┬───  
      │                     ╰───── type `user.Person` has no member `missing`
      │ 
      │ Note: Error code: E0007
@@ -307,6 +307,57 @@ source: crates/baml_tests/src/generated_tests.rs
  260 │         Person { address: Address { zip: string } } => 1,
      │                                         ───┬───  
      │                                            ╰───── type mismatch: expected int, got string
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: type `user.Person` has no member `missing`
+     ╭─[ patterns_class_destructure.baml:267:9 ]
+     │
+ 267 │         missing: let renamed
+     │         ───┬───  
+     │            ╰───── type `user.Person` has no member `missing`
+     │ 
+     │ Note: Error code: E0007
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:277:50 ]
+     │
+ 277 │ ╭─▶     let f: (Person) -> int = (p: Person) -> int {
+ 278 │ ├─▶         let Person { age: string } = p;
+     │ │                                             
+     │ ╰───────────────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [type] Error: type mismatch: expected int, got string
+     ╭─[ patterns_class_destructure.baml:278:26 ]
+     │
+ 278 │         let Person { age: string } = p;
+     │                          ───┬───  
+     │                             ╰───── type mismatch: expected int, got string
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_class_destructure.baml:278:38 ]
+     │
+ 278 │         let Person { age: string } = p;
+     │                                      ┬  
+     │                                      ╰── refutable pattern in let binding; refutable patterns belong in `match`
+     │ 
+     │ Note: Error code: E0111
+─────╯
+
+  [type] Error: type mismatch: expected int, got string
+     ╭─[ patterns_class_destructure.baml:278:38 ]
+     │
+ 278 │         let Person { age: string } = p;
+     │                                      ┬  
+     │                                      ╰── type mismatch: expected int, got string
      │ 
      │ Note: Error code: E0001
 ─────╯

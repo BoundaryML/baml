@@ -62,6 +62,9 @@ function user.class_destructure_or_pattern_same_binding_conflicting_types(v: use
 function user.class_destructure_unknown_field_in_let() -> int  [expr] {
   { let Person { missing: missing } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } 0
 }
+function user.class_destructure_unknown_renamed_field_span() -> int  [expr] {
+  { let Person { missing: renamed } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } renamed
+}
 function user.class_destructure_unresolved_class() -> int  [expr] {
   { let MissingClass { age: age } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } 0
 }
@@ -79,6 +82,9 @@ function user.generic_class_type_pattern_in_chain_requires_type_args(boxed: user
 }
 function user.generic_class_type_pattern_requires_type_args(boxed: user.Box) -> int  [expr] {
   {  } match (boxed) { user.Box => 1 }
+}
+function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int  [expr] {
+  { let f: (user.Person) -> int = (p: user.Person) -> int { { let Person { age: string } = p } 1 } } f(user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } })
 }
 function user.let_class_field_literal_narrower_than_field_is_refutable() -> int  [expr] {
   { let Person { age: 1 } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } 1

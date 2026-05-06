@@ -44,7 +44,7 @@ function user.namespaced_class_destructure_unknown_field(response: user.llm.open
       _ =>
         0 : 0
   }
-  !! 885..893: type `user.llm.openai.Response` has no member `missing`
+  !! 886..893: type `user.llm.openai.Response` has no member `missing`
 }
 class user.llm.openai.Box {
   value: T

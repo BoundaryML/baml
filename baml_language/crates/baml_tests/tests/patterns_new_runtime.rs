@@ -509,6 +509,45 @@ async fn match_generic_class_destructure_union_tests_substituted_field_type() {
 }
 
 #[tokio::test]
+async fn generic_class_destructure_backfills_through_wrapped_flow_types() {
+    let output = baml_test!(
+        r#"
+        class Box<T> {
+            value T
+        }
+
+        function from_optional(box: Box<int>?) -> int {
+            match (box) {
+                (Box { value: let value: int }: Box<int>?) => value,
+                null => 0
+            }
+        }
+
+        function from_union(box: Box<int> | null) -> int {
+            match (box) {
+                (Box { value: let value: int }: Box<int> | null) => value,
+                null => 0
+            }
+        }
+
+        function from_array(boxes: Box<int>[]) -> int {
+            let total = 0;
+            for (let Box { value: let value: int }: Box<int> in boxes) {
+                total += value;
+            }
+            total
+        }
+
+        function main() -> int {
+            let boxed: Box<int> = Box { value: 40 };
+            from_optional(boxed) + from_union(boxed) + from_array([boxed])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(120)));
+}
+
+#[tokio::test]
 async fn empty_generic_class_destructure_covers_union_of_same_class_instantiations() {
     let output = baml_test!(
         r#"

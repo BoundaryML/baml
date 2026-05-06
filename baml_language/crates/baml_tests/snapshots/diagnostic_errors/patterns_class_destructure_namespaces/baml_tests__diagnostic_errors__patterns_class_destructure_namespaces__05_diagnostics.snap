@@ -43,10 +43,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] Error: type `user.llm.openai.Response` has no member `missing`
-    ╭─[ main.baml:28:35 ]
+    ╭─[ main.baml:28:36 ]
     │
  28 │         root.llm.openai.Response { missing } => 1,
-    │                                   ────┬───  
+    │                                    ───┬───  
     │                                       ╰───── type `user.llm.openai.Response` has no member `missing`
     │ 
     │ Note: Error code: E0007

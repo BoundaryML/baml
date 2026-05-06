@@ -1165,6 +1165,10 @@ impl<'db> LoweringContext<'db> {
             })
     }
 
+    fn is_pattern_type_recovery(ty: &Ty) -> bool {
+        matches!(ty, Ty::Void { .. } | Ty::BuiltinUnknown { .. })
+    }
+
     /// Get the TIR-inferred root segment type for a multi-segment Path expression.
     /// Returns `None` if no root type was recorded (e.g. single-segment paths).
     fn path_root_ty(&self, expr_id: AstExprId) -> Option<Ty> {
@@ -5277,6 +5281,17 @@ impl LoweringContext<'_> {
         }
     }
 
+    fn class_pattern_field_ty(&self, pat_id: AstPatId, field: &Name) -> Option<Ty> {
+        let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
+        let Tir2Ty::Class(qtn, type_args, _) = tir_ty else {
+            return None;
+        };
+        let fields = self.lookup_tir_class_fields(qtn, type_args);
+        fields
+            .get(field)
+            .map(|field_ty| self.resolved_aliases.convert(field_ty))
+    }
+
     fn project_class_pattern_field(
         &mut self,
         scrutinee: Local,
@@ -5290,12 +5305,16 @@ impl LoweringContext<'_> {
             .get(&class_tn)?
             .get(field.as_str())
             .copied()?;
-        let field_ty = self
+        let inferred_pat_ty = self.pat_ty(field_pat_id);
+        let source_field_ty = self.class_pattern_field_ty(class_pat_id, field);
+        let cached_field_ty = self
             .class_field_types
             .get(&class_tn)
             .and_then(|fields| fields.get(field.as_str()))
-            .cloned()
-            .unwrap_or_else(|| self.pat_ty(field_pat_id));
+            .cloned();
+        let field_ty = source_field_ty
+            .or_else(|| cached_field_ty.filter(|ty| !Self::is_pattern_type_recovery(ty)))
+            .unwrap_or(inferred_pat_ty);
         let field_local = self.builder.temp(field_ty);
         self.builder.assign(
             Place::local(field_local),

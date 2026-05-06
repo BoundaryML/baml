@@ -207,6 +207,19 @@ function nested_class_destructure_field_pattern_type_mismatch() -> int {
     }
 }
 
+function class_destructure_unknown_renamed_field_span() -> int {
+    let Person { missing: let renamed } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    renamed
+}
+
+function lambda_class_destructure_field_pattern_type_mismatch_span() -> int {
+    let f: (Person) -> int = (p: Person) -> int {
+        let Person { age: string } = p;
+        1
+    };
+    f(Person { age: 1, flexible_age: 2, address: Address { zip: 3 } })
+}
+
 // ============================================================================
 // Formatter trivia
 // ============================================================================

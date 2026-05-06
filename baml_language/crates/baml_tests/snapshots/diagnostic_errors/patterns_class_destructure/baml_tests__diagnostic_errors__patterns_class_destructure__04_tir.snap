@@ -25,7 +25,7 @@ function user.class_destructure_unknown_field_in_let() -> int throws never {
     let Person { missing: missing } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     0 : 0
   }
-  !! 552..560: type `user.Person` has no member `missing`
+  !! 553..560: type `user.Person` has no member `missing`
 }
 function user.class_destructure_duplicate_field_key_in_let() -> int throws never {
   { : int
@@ -63,7 +63,7 @@ function user.nested_class_destructure_unknown_field_in_let() -> int throws neve
     let Person { address: Address { missing: missing } } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     0 : 0
   }
-  !! 2072..2080: type `user.Address` has no member `missing`
+  !! 2073..2080: type `user.Address` has no member `missing`
 }
 function user.match_class_destructure_unknown_field() -> int throws never {
   { : 1 | 0
@@ -73,7 +73,7 @@ function user.match_class_destructure_unknown_field() -> int throws never {
       _ =>
         0 : 0
   }
-  !! 2345..2353: type `user.Person` has no member `missing`
+  !! 2346..2353: type `user.Person` has no member `missing`
 }
 function user.class_destructure_unresolved_class() -> int throws never {
   { : 0
@@ -231,6 +231,30 @@ function user.nested_class_destructure_field_pattern_type_mismatch() -> int thro
         0 : 0
   }
   !! 6453..6460: type mismatch: expected int, got string
+}
+function user.class_destructure_unknown_renamed_field_span() -> int throws never {
+  { : unknown
+    let Person { missing: renamed } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
+    renamed : unknown
+  }
+  !! 6585..6592: type `user.Person` has no member `missing`
+}
+function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int throws never {
+  { : int
+    let f: (Person) -> int = : (p: user.Person) -> int throws never -> (user.Person) -> int throws never
+      (p: Person) -> int { ... } : (p: user.Person) -> int throws never
+        {
+          let Person { age: string } = p
+          1
+        }
+    f(Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) : int
+  }
+  !! 6875..6882: type mismatch: expected int, got string
+  !! 6849..6884: refutable pattern in let binding; refutable patterns belong in `match`
+}
+lambda user.lambda_class_destructure_field_pattern_type_mismatch_span {
+  !! 6887..6888: type mismatch: expected int, got string
+  !! 6887..6888: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.class_destructure_formatter_trivia_preserved() -> int throws never {
   { : int
