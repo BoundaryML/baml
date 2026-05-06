@@ -6,7 +6,8 @@ fail_fast: false
 
 exclude: |
   (?x)^(
-    crates/.*/snapshots/.*
+    crates/.*/snapshots/.*|
+    baml_language/.*\.pyi
   )$
 
 repos:
