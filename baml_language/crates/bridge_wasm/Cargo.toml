@@ -44,7 +44,9 @@ web-time = { workspace = true }
 wasm-bindgen-test = { workspace = true }
 
 [features]
-default = [ "console_error_panic" ]
+default = [ "console_error_panic", "aws-crypto" ]
+aws-crypto = [  ]
+ring-crypto = [  ]
 console_error_panic = [ "console_error_panic_hook" ]
 
 [lints]

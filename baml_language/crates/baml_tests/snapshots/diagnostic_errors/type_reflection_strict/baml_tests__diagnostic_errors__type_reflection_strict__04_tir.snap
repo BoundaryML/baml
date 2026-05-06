@@ -7,11 +7,10 @@ class user.User {
 }
 function user.reflect_type_to_int() -> int throws never {
   { : never
-    let x = reflect.type_of() : type
-    return x : type
+    let x: int = reflect.type_of() : type -> int
+    return x : int
   }
   !! 503..527: type mismatch: expected int, got type
-  !! 540..541: type mismatch: expected int, got type
 }
 function user.unknown_type_in_reflect() -> type throws never {
   { : type
@@ -30,11 +29,10 @@ class user.User$stream {
 }
 function user.assign_type_to_int(function_name: string) -> int throws never {
   { : never
-    let x = baml.llm.get_return_type(function_name) : type
-    return x : type
+    let x: int = baml.llm.get_return_type(function_name) : type -> int
+    return x : int
   }
   !! 432..472: type mismatch: expected int, got type
-  !! 485..486: type mismatch: expected int, got type
 }
 function user.pass_type_as_string(function_name: string) -> string throws never {
   { : never
@@ -45,7 +43,7 @@ function user.pass_type_as_string(function_name: string) -> string throws never 
 }
 function user.type_to_type(function_name: string) -> type throws never {
   { : never
-    let t = baml.llm.get_return_type(function_name) : type
+    let t: type = baml.llm.get_return_type(function_name) : type
     return t : type
   }
 }

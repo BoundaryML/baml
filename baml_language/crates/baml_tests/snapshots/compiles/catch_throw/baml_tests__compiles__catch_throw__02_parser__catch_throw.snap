@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 5279
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -27,8 +28,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -39,8 +42,9 @@ SOURCE_FILE
                 QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """
@@ -72,8 +76,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -84,16 +90,19 @@ SOURCE_FILE
                 QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "1"
-              INTEGER_LITERAL "1"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "1"
+                  INTEGER_LITERAL "1"
             FAT_ARROW "=>"
             THROW_EXPR "throw 1"
               KW_THROW "throw"
               INTEGER_LITERAL "1"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """
@@ -125,8 +134,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -137,8 +148,9 @@ SOURCE_FILE
                 QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "also ok"
               QUOTE """
@@ -174,13 +186,14 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN "_"
-                WORD "_"
+              PATTERN
+                WILDCARD_PATTERN "_"
+                  WORD "_"
               FAT_ARROW "=>"
               STRING_LITERAL "caught"
                 QUOTE """
@@ -215,16 +228,19 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN
-                WORD "_"
-                COLON ":"
-                TYPE_EXPR "string"
-                  WORD "string"
+              PATTERN
+                CHAIN_PATTERN
+                  WILDCARD_PATTERN "_"
+                    WORD "_"
+                  COLON ":"
+                  TYPE_PATTERN
+                    TYPE_EXPR "string"
+                      WORD "string"
               FAT_ARROW "=>"
               STRING_LITERAL "caught string"
                 QUOTE """
@@ -260,16 +276,19 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN
-                WORD "_"
-                COLON ":"
-                TYPE_EXPR "string"
-                  WORD "string"
+              PATTERN
+                CHAIN_PATTERN
+                  WILDCARD_PATTERN "_"
+                    WORD "_"
+                  COLON ":"
+                  TYPE_PATTERN
+                    TYPE_EXPR "string"
+                      WORD "string"
               FAT_ARROW "=>"
               STRING_LITERAL "caught string"
                 QUOTE """
@@ -280,16 +299,19 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e2"
+            CATCH_BINDING "e2"
               WORD "e2"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN
-                WORD "_"
-                COLON ":"
-                TYPE_EXPR "int"
-                  WORD "int"
+              PATTERN
+                CHAIN_PATTERN
+                  WILDCARD_PATTERN "_"
+                    WORD "_"
+                  COLON ":"
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
               FAT_ARROW "=>"
               STRING_LITERAL "caught int fallback"
                 QUOTE """
@@ -326,16 +348,19 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN
-                WORD "_"
-                COLON ":"
-                TYPE_EXPR "string"
-                  WORD "string"
+              PATTERN
+                CHAIN_PATTERN
+                  WILDCARD_PATTERN "_"
+                    WORD "_"
+                  COLON ":"
+                  TYPE_PATTERN
+                    TYPE_EXPR "string"
+                      WORD "string"
               FAT_ARROW "=>"
               STRING_LITERAL "caught string"
                 QUOTE """
@@ -371,16 +396,19 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN
-                WORD "_"
-                COLON ":"
-                TYPE_EXPR "string"
-                  WORD "string"
+              PATTERN
+                CHAIN_PATTERN
+                  WILDCARD_PATTERN "_"
+                    WORD "_"
+                  COLON ":"
+                  TYPE_PATTERN
+                    TYPE_EXPR "string"
+                      WORD "string"
               FAT_ARROW "=>"
               STRING_LITERAL "caught string"
                 QUOTE """
@@ -389,11 +417,14 @@ SOURCE_FILE
                 QUOTE """
               COMMA ","
             CATCH_ARM
-              CATCH_PATTERN
-                WORD "_"
-                COLON ":"
-                TYPE_EXPR "int"
-                  WORD "int"
+              PATTERN
+                CHAIN_PATTERN
+                  WILDCARD_PATTERN "_"
+                    WORD "_"
+                  COLON ":"
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
               FAT_ARROW "=>"
               STRING_LITERAL "caught int"
                 QUOTE """
@@ -420,8 +451,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "inner"
+          PATTERN
+            BINDING_PATTERN "let inner"
+              KW_LET "let"
+              WORD "inner"
           EQUALS "="
           CATCH_EXPR
             CALL_EXPR
@@ -433,13 +466,14 @@ SOURCE_FILE
             CATCH_CLAUSE
               KW_CATCH "catch"
               L_PAREN "("
-              CATCH_PATTERN "e"
+              CATCH_BINDING "e"
                 WORD "e"
               R_PAREN ")"
               L_BRACE "{"
               CATCH_ARM
-                CATCH_PATTERN "_"
-                  WORD "_"
+                PATTERN
+                  WILDCARD_PATTERN "_"
+                    WORD "_"
                 FAT_ARROW "=>"
                 STRING_LITERAL "inner caught"
                   QUOTE """
@@ -458,13 +492,14 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN "_"
-                WORD "_"
+              PATTERN
+                WILDCARD_PATTERN "_"
+                  WORD "_"
               FAT_ARROW "=>"
               WORD "inner"
             R_BRACE "}"
@@ -496,13 +531,14 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN "_"
-                WORD "_"
+              PATTERN
+                WILDCARD_PATTERN "_"
+                  WORD "_"
               FAT_ARROW "=>"
               THROW_EXPR "throw e"
                 KW_THROW "throw"
@@ -565,16 +601,19 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN
-                WORD "_"
-                COLON ":"
-                TYPE_EXPR "string"
-                  WORD "string"
+              PATTERN
+                CHAIN_PATTERN
+                  WILDCARD_PATTERN "_"
+                    WORD "_"
+                  COLON ":"
+                  TYPE_PATTERN
+                    TYPE_EXPR "string"
+                      WORD "string"
               FAT_ARROW "=>"
               STRING_LITERAL "first handler"
                 QUOTE """
@@ -585,16 +624,19 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e2"
+            CATCH_BINDING "e2"
               WORD "e2"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN
-                WORD "_"
-                COLON ":"
-                TYPE_EXPR "int"
-                  WORD "int"
+              PATTERN
+                CHAIN_PATTERN
+                  WILDCARD_PATTERN "_"
+                    WORD "_"
+                  COLON ":"
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
               FAT_ARROW "=>"
               STRING_LITERAL "second handler"
                 QUOTE """

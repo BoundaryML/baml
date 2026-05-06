@@ -208,8 +208,9 @@ function user.bare_in_union_param(f: user.Foo<int> | user.Foo) -> string throws 
       _: Foo =>
         "bare" : "bare"
   }
-  !! 5670..5685: class `Foo` expects 1 type argument(s), got 0
-  !! 5773..5779: class `Foo` expects 1 type argument(s), got 0
+  !! 5674..5689: class `Foo` expects 1 type argument(s), got 0
+  !! 5777..5783: class `Foo` expects 1 type argument(s), got 0
+  !! 5777..5783: class `Foo` expects 1 type argument(s), got 0
 }
 class user.Box$stream {
   value: null | unknown

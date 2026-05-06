@@ -101,7 +101,7 @@ fn .<lambda(capture_before_after_shadow, 1)>() -> null {
 fn user.declared_type_restored() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: "outer" // x
+    let _1: string // x
 
     bb0: {
         _1 = const "outer";

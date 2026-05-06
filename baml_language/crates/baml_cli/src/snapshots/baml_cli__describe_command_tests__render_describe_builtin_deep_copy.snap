@@ -1,0 +1,12 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+function deep_copy  <builtin>/baml/core.baml:2
+
+//baml:mut_vm
+function deep_copy<T>(value: T) -> T {
+  $rust_function
+}
+
+references (0):

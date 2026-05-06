@@ -14,7 +14,7 @@ function RethrowError(x: int) -> string {
 function ConditionalRethrow(x: int) -> string {
   MayFail(x) catch (e) {
     _: string => "handled string",
-    other => throw other
+    let other => throw other
   }
 }
 
@@ -46,11 +46,11 @@ function ThrowNewInCatch(x: int) -> string {
 //     │ Note: Error code: E0063
 // ────╯
 // Warning: unreachable arm
-//     ╭─[ throw_throw_in_catch.baml:17:13 ]
+//     ╭─[ throw_throw_in_catch.baml:17:17 ]
 //     │
-//  17 │     other => throw other
-//     │             ──────┬─────  
-//     │                   ╰─────── unreachable arm
+//  17 │     let other => throw other
+//     │                 ──────┬─────  
+//     │                       ╰─────── unreachable arm
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯

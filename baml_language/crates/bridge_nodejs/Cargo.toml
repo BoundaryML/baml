@@ -9,6 +9,12 @@ license.workspace = true
 name = "baml_node"
 crate-type = [ "cdylib" ]
 
+[features]
+default = [ "bundle-http", "aws-crypto" ]
+bundle-http = [ "bridge_cffi/bundle-http" ]
+aws-crypto = [ "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
+ring-crypto = [ "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]
+
 [dependencies]
 bex_events = { workspace = true }
 bex_project = { workspace = true }

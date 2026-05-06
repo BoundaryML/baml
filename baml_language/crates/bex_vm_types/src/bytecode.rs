@@ -611,6 +611,477 @@ pub enum Instruction {
     SendEvent,
 }
 
+/// Compact bytecode opcodes.
+///
+/// Each variant maps to a 1-byte opcode in the `CompactCode.code` stream.
+/// The operand format is determined by the opcode — see `OpCode::encoded_size()`.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OpCode {
+    // ── Unit ops (no operands, 1 byte) ─────────────────────────
+    Return = 0,
+    Await,
+    Throw,
+    LoadArrayElement,
+    LoadMapElement,
+    StoreArrayElement,
+    StoreMapElement,
+    CallIndirect,
+    Discriminant,
+    TypeTag,
+    ThrowIfPanic,
+    Unreachable,
+    MakeCell,
+    SendEvent,
+
+    // ── Expanded arithmetic (no operands, 1 byte) ──────────────
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
+
+    // ── Expanded comparison (no operands, 1 byte) ──────────────
+    Eq,
+    NotEq,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+
+    // ── Specialized arithmetic (no operands, 1 byte) ────────────
+    // These skip type checks using unreachable_unchecked — the compiler
+    // guarantees operand types at emit time.
+    AddInt,
+    SubInt,
+    MulInt,
+    DivInt,
+    ModInt,
+    AddFloat,
+    SubFloat,
+    MulFloat,
+    DivFloat,
+
+    // ── Specialized comparison (no operands, 1 byte) ───────────
+    CmpIntEq,
+    CmpIntNotEq,
+    CmpIntLt,
+    CmpIntLtEq,
+    CmpIntGt,
+    CmpIntGtEq,
+    CmpFloatEq,
+    CmpFloatNotEq,
+    CmpFloatLt,
+    CmpFloatLtEq,
+    CmpFloatGt,
+    CmpFloatGtEq,
+
+    // ── Expanded unary (no operands, 1 byte) ───────────────────
+    Not,
+    Neg,
+
+    // ── Common constants (1-2 bytes) ───────────────────────────
+    LoadNull,     // 1 byte
+    LoadTrue,     // 1 byte
+    LoadFalse,    // 1 byte
+    LoadIntSmall, // 2 bytes: opcode + i8
+
+    // ── Single u32 operand (5 bytes) ───────────────────────────
+    LoadConst,
+    LoadVar,
+    StoreVar,
+    LoadGlobal,
+    StoreGlobal,
+    LoadField,
+    StoreField,
+    InitField,
+    Pop,
+    Copy,
+    AllocArray,
+    AllocMap,
+    AllocInstance,
+    AllocVariant,
+    DispatchFuture,
+    Watch,
+    Unwatch,
+    Notify,
+    Call,
+    NotifyBlock,
+    VizEnter,
+    VizExit,
+    IsType,
+    DenseTag,
+    LoadType,
+    MakeBoundMethod,
+    LoadDeref,
+    StoreDeref,
+    LoadCapture,
+    StoreCapture,
+    CaptureRef,
+
+    // ── Jump i32 operand (5 bytes) ─────────────────────────────
+    Jump,
+    PopJumpIfFalse,
+    JumpIfFalse,
+
+    // ── Two operands (9 bytes) ─────────────────────────────────
+    JumpTable,   // u32 table_idx + i32 default_offset
+    MakeClosure, // u32 object_idx (capture_count is popped from the stack)
+}
+
+impl OpCode {
+    /// Total encoded size in bytes (opcode + operands).
+    pub const fn encoded_size(self) -> usize {
+        match self {
+            // Unit ops + expanded arith/cmp/unary + LoadNull/LoadTrue/LoadFalse
+            Self::Return
+            | Self::Await
+            | Self::Throw
+            | Self::LoadArrayElement
+            | Self::LoadMapElement
+            | Self::StoreArrayElement
+            | Self::StoreMapElement
+            | Self::CallIndirect
+            | Self::Discriminant
+            | Self::TypeTag
+            | Self::ThrowIfPanic
+            | Self::Unreachable
+            | Self::MakeCell
+            | Self::SendEvent
+            | Self::Add
+            | Self::Sub
+            | Self::Mul
+            | Self::Div
+            | Self::Mod
+            | Self::BitAnd
+            | Self::BitOr
+            | Self::BitXor
+            | Self::Shl
+            | Self::Shr
+            | Self::Eq
+            | Self::NotEq
+            | Self::Lt
+            | Self::LtEq
+            | Self::Gt
+            | Self::GtEq
+            | Self::AddInt
+            | Self::SubInt
+            | Self::MulInt
+            | Self::DivInt
+            | Self::ModInt
+            | Self::AddFloat
+            | Self::SubFloat
+            | Self::MulFloat
+            | Self::DivFloat
+            | Self::CmpIntEq
+            | Self::CmpIntNotEq
+            | Self::CmpIntLt
+            | Self::CmpIntLtEq
+            | Self::CmpIntGt
+            | Self::CmpIntGtEq
+            | Self::CmpFloatEq
+            | Self::CmpFloatNotEq
+            | Self::CmpFloatLt
+            | Self::CmpFloatLtEq
+            | Self::CmpFloatGt
+            | Self::CmpFloatGtEq
+            | Self::Not
+            | Self::Neg
+            | Self::LoadNull
+            | Self::LoadTrue
+            | Self::LoadFalse => 1,
+
+            // 2-byte: opcode + i8
+            Self::LoadIntSmall => 2,
+
+            // 5-byte: opcode + u32/i32
+            Self::LoadConst
+            | Self::LoadVar
+            | Self::StoreVar
+            | Self::LoadGlobal
+            | Self::StoreGlobal
+            | Self::LoadField
+            | Self::StoreField
+            | Self::InitField
+            | Self::Pop
+            | Self::Copy
+            | Self::AllocArray
+            | Self::AllocMap
+            | Self::AllocVariant
+            | Self::DispatchFuture
+            | Self::Watch
+            | Self::Unwatch
+            | Self::Notify
+            | Self::NotifyBlock
+            | Self::VizEnter
+            | Self::VizExit
+            | Self::IsType
+            | Self::DenseTag
+            | Self::LoadType
+            | Self::MakeBoundMethod
+            | Self::LoadDeref
+            | Self::StoreDeref
+            | Self::LoadCapture
+            | Self::StoreCapture
+            | Self::CaptureRef
+            | Self::Jump
+            | Self::PopJumpIfFalse
+            | Self::JumpIfFalse => 5,
+
+            // 7-byte: opcode + u32 + u16 (type-arg threading)
+            Self::AllocInstance | Self::Call => 7,
+
+            // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
+            Self::MakeClosure => 9,
+
+            // 9-byte: opcode + u32 + i32
+            Self::JumpTable => 9,
+        }
+    }
+}
+
+impl TryFrom<u8> for OpCode {
+    type Error = u8;
+    #[allow(clippy::too_many_lines)]
+    fn try_from(byte: u8) -> Result<Self, u8> {
+        match byte {
+            x if x == Self::Return as u8 => Ok(Self::Return),
+            x if x == Self::Await as u8 => Ok(Self::Await),
+            x if x == Self::Throw as u8 => Ok(Self::Throw),
+            x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
+            x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
+            x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
+            x if x == Self::StoreMapElement as u8 => Ok(Self::StoreMapElement),
+            x if x == Self::CallIndirect as u8 => Ok(Self::CallIndirect),
+            x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
+            x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
+            x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
+            x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
+            x if x == Self::MakeCell as u8 => Ok(Self::MakeCell),
+            x if x == Self::SendEvent as u8 => Ok(Self::SendEvent),
+            x if x == Self::Add as u8 => Ok(Self::Add),
+            x if x == Self::Sub as u8 => Ok(Self::Sub),
+            x if x == Self::Mul as u8 => Ok(Self::Mul),
+            x if x == Self::Div as u8 => Ok(Self::Div),
+            x if x == Self::Mod as u8 => Ok(Self::Mod),
+            x if x == Self::BitAnd as u8 => Ok(Self::BitAnd),
+            x if x == Self::BitOr as u8 => Ok(Self::BitOr),
+            x if x == Self::BitXor as u8 => Ok(Self::BitXor),
+            x if x == Self::Shl as u8 => Ok(Self::Shl),
+            x if x == Self::Shr as u8 => Ok(Self::Shr),
+            x if x == Self::Eq as u8 => Ok(Self::Eq),
+            x if x == Self::NotEq as u8 => Ok(Self::NotEq),
+            x if x == Self::Lt as u8 => Ok(Self::Lt),
+            x if x == Self::LtEq as u8 => Ok(Self::LtEq),
+            x if x == Self::Gt as u8 => Ok(Self::Gt),
+            x if x == Self::GtEq as u8 => Ok(Self::GtEq),
+            x if x == Self::AddInt as u8 => Ok(Self::AddInt),
+            x if x == Self::SubInt as u8 => Ok(Self::SubInt),
+            x if x == Self::MulInt as u8 => Ok(Self::MulInt),
+            x if x == Self::DivInt as u8 => Ok(Self::DivInt),
+            x if x == Self::ModInt as u8 => Ok(Self::ModInt),
+            x if x == Self::AddFloat as u8 => Ok(Self::AddFloat),
+            x if x == Self::SubFloat as u8 => Ok(Self::SubFloat),
+            x if x == Self::MulFloat as u8 => Ok(Self::MulFloat),
+            x if x == Self::DivFloat as u8 => Ok(Self::DivFloat),
+            x if x == Self::CmpIntEq as u8 => Ok(Self::CmpIntEq),
+            x if x == Self::CmpIntNotEq as u8 => Ok(Self::CmpIntNotEq),
+            x if x == Self::CmpIntLt as u8 => Ok(Self::CmpIntLt),
+            x if x == Self::CmpIntLtEq as u8 => Ok(Self::CmpIntLtEq),
+            x if x == Self::CmpIntGt as u8 => Ok(Self::CmpIntGt),
+            x if x == Self::CmpIntGtEq as u8 => Ok(Self::CmpIntGtEq),
+            x if x == Self::CmpFloatEq as u8 => Ok(Self::CmpFloatEq),
+            x if x == Self::CmpFloatNotEq as u8 => Ok(Self::CmpFloatNotEq),
+            x if x == Self::CmpFloatLt as u8 => Ok(Self::CmpFloatLt),
+            x if x == Self::CmpFloatLtEq as u8 => Ok(Self::CmpFloatLtEq),
+            x if x == Self::CmpFloatGt as u8 => Ok(Self::CmpFloatGt),
+            x if x == Self::CmpFloatGtEq as u8 => Ok(Self::CmpFloatGtEq),
+            x if x == Self::Not as u8 => Ok(Self::Not),
+            x if x == Self::Neg as u8 => Ok(Self::Neg),
+            x if x == Self::LoadNull as u8 => Ok(Self::LoadNull),
+            x if x == Self::LoadTrue as u8 => Ok(Self::LoadTrue),
+            x if x == Self::LoadFalse as u8 => Ok(Self::LoadFalse),
+            x if x == Self::LoadIntSmall as u8 => Ok(Self::LoadIntSmall),
+            x if x == Self::LoadConst as u8 => Ok(Self::LoadConst),
+            x if x == Self::LoadVar as u8 => Ok(Self::LoadVar),
+            x if x == Self::StoreVar as u8 => Ok(Self::StoreVar),
+            x if x == Self::LoadGlobal as u8 => Ok(Self::LoadGlobal),
+            x if x == Self::StoreGlobal as u8 => Ok(Self::StoreGlobal),
+            x if x == Self::LoadField as u8 => Ok(Self::LoadField),
+            x if x == Self::StoreField as u8 => Ok(Self::StoreField),
+            x if x == Self::InitField as u8 => Ok(Self::InitField),
+            x if x == Self::Pop as u8 => Ok(Self::Pop),
+            x if x == Self::Copy as u8 => Ok(Self::Copy),
+            x if x == Self::AllocArray as u8 => Ok(Self::AllocArray),
+            x if x == Self::AllocMap as u8 => Ok(Self::AllocMap),
+            x if x == Self::AllocInstance as u8 => Ok(Self::AllocInstance),
+            x if x == Self::AllocVariant as u8 => Ok(Self::AllocVariant),
+            x if x == Self::DispatchFuture as u8 => Ok(Self::DispatchFuture),
+            x if x == Self::Watch as u8 => Ok(Self::Watch),
+            x if x == Self::Unwatch as u8 => Ok(Self::Unwatch),
+            x if x == Self::Notify as u8 => Ok(Self::Notify),
+            x if x == Self::Call as u8 => Ok(Self::Call),
+            x if x == Self::NotifyBlock as u8 => Ok(Self::NotifyBlock),
+            x if x == Self::VizEnter as u8 => Ok(Self::VizEnter),
+            x if x == Self::VizExit as u8 => Ok(Self::VizExit),
+            x if x == Self::IsType as u8 => Ok(Self::IsType),
+            x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
+            x if x == Self::LoadType as u8 => Ok(Self::LoadType),
+            x if x == Self::MakeBoundMethod as u8 => Ok(Self::MakeBoundMethod),
+            x if x == Self::LoadDeref as u8 => Ok(Self::LoadDeref),
+            x if x == Self::StoreDeref as u8 => Ok(Self::StoreDeref),
+            x if x == Self::LoadCapture as u8 => Ok(Self::LoadCapture),
+            x if x == Self::StoreCapture as u8 => Ok(Self::StoreCapture),
+            x if x == Self::CaptureRef as u8 => Ok(Self::CaptureRef),
+            x if x == Self::Jump as u8 => Ok(Self::Jump),
+            x if x == Self::PopJumpIfFalse as u8 => Ok(Self::PopJumpIfFalse),
+            x if x == Self::JumpIfFalse as u8 => Ok(Self::JumpIfFalse),
+            x if x == Self::JumpTable as u8 => Ok(Self::JumpTable),
+            x if x == Self::MakeClosure as u8 => Ok(Self::MakeClosure),
+            _ => Err(byte),
+        }
+    }
+}
+
+impl std::fmt::Display for OpCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Self::Return => "RETURN",
+            Self::Await => "AWAIT",
+            Self::Throw => "THROW",
+            Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
+            Self::LoadMapElement => "LOAD_MAP_ELEMENT",
+            Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
+            Self::StoreMapElement => "STORE_MAP_ELEMENT",
+            Self::CallIndirect => "CALL_INDIRECT",
+            Self::Discriminant => "DISCRIMINANT",
+            Self::TypeTag => "TYPE_TAG",
+            Self::ThrowIfPanic => "THROW_IF_PANIC",
+            Self::Unreachable => "UNREACHABLE",
+            Self::MakeCell => "MAKE_CELL",
+            Self::SendEvent => "SEND_EVENT",
+            Self::Add => "ADD",
+            Self::Sub => "SUB",
+            Self::Mul => "MUL",
+            Self::Div => "DIV",
+            Self::Mod => "MOD",
+            Self::BitAnd => "BIT_AND",
+            Self::BitOr => "BIT_OR",
+            Self::BitXor => "BIT_XOR",
+            Self::Shl => "SHL",
+            Self::Shr => "SHR",
+            Self::Eq => "EQ",
+            Self::NotEq => "NOT_EQ",
+            Self::Lt => "LT",
+            Self::LtEq => "LT_EQ",
+            Self::Gt => "GT",
+            Self::GtEq => "GT_EQ",
+            Self::AddInt => "ADD_INT",
+            Self::SubInt => "SUB_INT",
+            Self::MulInt => "MUL_INT",
+            Self::DivInt => "DIV_INT",
+            Self::ModInt => "MOD_INT",
+            Self::AddFloat => "ADD_FLOAT",
+            Self::SubFloat => "SUB_FLOAT",
+            Self::MulFloat => "MUL_FLOAT",
+            Self::DivFloat => "DIV_FLOAT",
+            Self::CmpIntEq => "CMP_INT_EQ",
+            Self::CmpIntNotEq => "CMP_INT_NOT_EQ",
+            Self::CmpIntLt => "CMP_INT_LT",
+            Self::CmpIntLtEq => "CMP_INT_LT_EQ",
+            Self::CmpIntGt => "CMP_INT_GT",
+            Self::CmpIntGtEq => "CMP_INT_GT_EQ",
+            Self::CmpFloatEq => "CMP_FLOAT_EQ",
+            Self::CmpFloatNotEq => "CMP_FLOAT_NOT_EQ",
+            Self::CmpFloatLt => "CMP_FLOAT_LT",
+            Self::CmpFloatLtEq => "CMP_FLOAT_LT_EQ",
+            Self::CmpFloatGt => "CMP_FLOAT_GT",
+            Self::CmpFloatGtEq => "CMP_FLOAT_GT_EQ",
+            Self::Not => "NOT",
+            Self::Neg => "NEG",
+            Self::LoadNull => "LOAD_NULL",
+            Self::LoadTrue => "LOAD_TRUE",
+            Self::LoadFalse => "LOAD_FALSE",
+            Self::LoadIntSmall => "LOAD_INT_SMALL",
+            Self::LoadConst => "LOAD_CONST",
+            Self::LoadVar => "LOAD_VAR",
+            Self::StoreVar => "STORE_VAR",
+            Self::LoadGlobal => "LOAD_GLOBAL",
+            Self::StoreGlobal => "STORE_GLOBAL",
+            Self::LoadField => "LOAD_FIELD",
+            Self::StoreField => "STORE_FIELD",
+            Self::InitField => "INIT_FIELD",
+            Self::Pop => "POP",
+            Self::Copy => "COPY",
+            Self::AllocArray => "ALLOC_ARRAY",
+            Self::AllocMap => "ALLOC_MAP",
+            Self::AllocInstance => "ALLOC_INSTANCE",
+            Self::AllocVariant => "ALLOC_VARIANT",
+            Self::DispatchFuture => "DISPATCH_FUTURE",
+            Self::Watch => "WATCH",
+            Self::Unwatch => "UNWATCH",
+            Self::Notify => "NOTIFY",
+            Self::Call => "CALL",
+            Self::NotifyBlock => "NOTIFY_BLOCK",
+            Self::VizEnter => "VIZ_ENTER",
+            Self::VizExit => "VIZ_EXIT",
+            Self::IsType => "IS_TYPE",
+            Self::DenseTag => "DENSE_TAG",
+            Self::LoadType => "LOAD_TYPE",
+            Self::MakeBoundMethod => "MAKE_BOUND_METHOD",
+            Self::LoadDeref => "LOAD_DEREF",
+            Self::StoreDeref => "STORE_DEREF",
+            Self::LoadCapture => "LOAD_CAPTURE",
+            Self::StoreCapture => "STORE_CAPTURE",
+            Self::CaptureRef => "CAPTURE_REF",
+            Self::Jump => "JUMP",
+            Self::PopJumpIfFalse => "POP_JUMP_IF_FALSE",
+            Self::JumpIfFalse => "JUMP_IF_FALSE",
+            Self::JumpTable => "JUMP_TABLE",
+            Self::MakeClosure => "MAKE_CLOSURE",
+        };
+        f.write_str(name)
+    }
+}
+
+/// Read a little-endian u32 from `code[*pc..*pc+4]` and advance `*pc` by 4.
+#[inline]
+pub fn read_u32(code: &[u8], pc: &mut usize) -> u32 {
+    let val = u32::from_le_bytes(code[*pc..*pc + 4].try_into().unwrap());
+    *pc += 4;
+    val
+}
+
+/// Read a little-endian u16 from `code[*pc..*pc+2]` and advance `*pc` by 2.
+#[inline]
+pub fn read_u16(code: &[u8], pc: &mut usize) -> u16 {
+    let val = u16::from_le_bytes(code[*pc..*pc + 2].try_into().unwrap());
+    *pc += 2;
+    val
+}
+
+/// Read a little-endian i32 from `code[*pc..*pc+4]` and advance `*pc` by 4.
+#[inline]
+pub fn read_i32(code: &[u8], pc: &mut usize) -> i32 {
+    let val = i32::from_le_bytes(code[*pc..*pc + 4].try_into().unwrap());
+    *pc += 4;
+    val
+}
+
+/// Read a signed byte from `code[*pc]` and advance `*pc` by 1.
+#[inline]
+#[allow(clippy::cast_possible_wrap)]
+pub fn read_i8(code: &[u8], pc: &mut usize) -> i8 {
+    let val = code[*pc] as i8;
+    *pc += 1;
+    val
+}
+
 /// Block notification metadata stored in the Function struct.
 /// The `function_name` field is populated at runtime from the Function containing this notification.
 
@@ -969,6 +1440,75 @@ impl ExceptionTableEntry {
     }
 }
 
+/// Compact jump table: maps discriminant values to i32 byte offsets
+/// (relative to the end of the `JumpTable` instruction in the compact stream).
+/// Parallel to `Bytecode::jump_tables` but with translated offsets.
+#[derive(Clone, Debug)]
+pub struct CompactJumpTable {
+    /// Minimum discriminant value (maps to index 0), same as `JumpTableData::min`.
+    pub min: i64,
+    /// Byte offsets (relative to instruction end) for each value from min to min+len-1.
+    /// None means "hole" — should use the default offset encoded in the instruction.
+    pub offsets: Vec<Option<i32>>,
+}
+
+impl CompactJumpTable {
+    /// Lookup the byte offset for a discriminant value.
+    /// Returns `None` if value is out of range or is a hole (use default).
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn lookup(&self, value: i64) -> Option<i32> {
+        if value < self.min {
+            return None;
+        }
+        let index = (value - self.min) as usize;
+        self.offsets.get(index).copied().flatten()
+    }
+}
+
+/// Compact bytecode encoding.
+///
+/// A re-encoding of `Vec<Instruction>` as `Vec<u8>` with 1-byte opcodes and
+/// fixed u32 operands. Produced by `Bytecode::lower_to_compact()` at engine
+/// load time. The line table and exception table are translated to byte-offset PCs.
+#[derive(Clone, Debug)]
+pub struct CompactCode {
+    /// The encoded instruction stream.
+    pub code: Vec<u8>,
+    /// Line table with PCs translated to byte offsets.
+    pub line_table: Vec<LineTableEntry>,
+    /// Exception table with PCs translated to byte offsets.
+    pub exception_table: Vec<ExceptionTableEntry>,
+    /// Jump tables with offsets translated to byte offsets.
+    /// Parallel to `Bytecode::jump_tables`.
+    pub jump_tables: Vec<CompactJumpTable>,
+}
+
+impl CompactCode {
+    /// Get the source mapping entry for a byte-offset PC.
+    pub fn line_entry_for_pc(&self, pc: usize) -> Option<&LineTableEntry> {
+        if self.line_table.is_empty() {
+            return None;
+        }
+        let idx = self.line_table.partition_point(|entry| entry.pc <= pc);
+        (idx > 0).then(|| &self.line_table[idx - 1])
+    }
+
+    /// Get the 1-indexed source line for a byte-offset PC.
+    pub fn source_line_for_pc(&self, pc: usize) -> usize {
+        self.line_entry_for_pc(pc).map_or(0, |entry| entry.line)
+    }
+
+    /// Iterate exception table entries whose byte-offset PC range covers `pc`.
+    pub fn exception_handlers_for_pc(
+        &self,
+        pc: usize,
+    ) -> impl Iterator<Item = &ExceptionTableEntry> {
+        self.exception_table
+            .iter()
+            .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
+    }
+}
+
 /// Executable bytecode.
 ///
 /// Contains the instructions to run and all the associated constants.
@@ -1007,6 +1547,10 @@ pub struct Bytecode {
     /// Sorted by `start_pc`. The VM searches this table when an error occurs
     /// to find a handler covering the faulting instruction.
     pub exception_table: Vec<ExceptionTableEntry>,
+
+    /// Compact bytecode encoding. Populated at engine load time by
+    /// `lower_to_compact()`. `None` until lowering runs.
+    pub compact: Option<CompactCode>,
 }
 
 impl Default for Bytecode {
@@ -1026,6 +1570,7 @@ impl Bytecode {
             line_table: Vec::new(),
             meta: Vec::new(),
             exception_table: Vec::new(),
+            compact: None,
         }
     }
 
@@ -1078,6 +1623,445 @@ impl Bytecode {
             })
             .collect();
     }
+
+    /// Encode `self.instructions` into a compact `Vec<u8>` byte stream.
+    ///
+    /// Two-pass algorithm:
+    /// 1. Walk instructions, determine compact opcode per instruction, compute
+    ///    byte offsets via `encoded_size()`. Build `index_to_offset` map.
+    /// 2. Walk again, emit opcode + operand bytes. Translate jump offsets
+    ///    from instruction-index-relative to byte-offset-relative.
+    ///
+    /// Also translates `line_table` and `exception_table` PCs to byte offsets.
+    #[allow(
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_lossless
+    )]
+    pub fn lower_to_compact(&self) -> CompactCode {
+        let n = self.instructions.len();
+        // index_to_offset[i] = byte offset of instruction i
+        // index_to_offset[n] = total byte count (sentinel for end-of-code)
+        let mut index_to_offset: Vec<usize> = Vec::with_capacity(n + 1);
+        // Per-instruction compact opcode (determined in pass 1, used in pass 2)
+        let mut opcodes: Vec<OpCode> = Vec::with_capacity(n);
+        let mut byte_offset: usize = 0;
+
+        // ── Pass 1: determine opcodes and build offset map ───────────
+        for instr in &self.instructions {
+            index_to_offset.push(byte_offset);
+            let op = self.instruction_to_opcode(instr);
+            byte_offset += op.encoded_size();
+            opcodes.push(op);
+        }
+        index_to_offset.push(byte_offset); // sentinel
+
+        // ── Pass 2: emit bytes ───────────────────────────────────────
+        let mut code: Vec<u8> = Vec::with_capacity(byte_offset);
+
+        for (i, instr) in self.instructions.iter().enumerate() {
+            let op = opcodes[i];
+            code.push(op as u8);
+
+            match instr {
+                // ── Unit ops: no operands ────────────────────────────
+                Instruction::Return
+                | Instruction::Await
+                | Instruction::Throw
+                | Instruction::LoadArrayElement
+                | Instruction::LoadMapElement
+                | Instruction::StoreArrayElement
+                | Instruction::StoreMapElement
+                | Instruction::CallIndirect
+                | Instruction::Discriminant
+                | Instruction::TypeTag
+                | Instruction::ThrowIfPanic
+                | Instruction::Unreachable
+                | Instruction::MakeCell
+                | Instruction::SendEvent => {}
+
+                // ── Expanded sub-enum ops: no operands ──────────────
+                Instruction::BinOp(_)
+                | Instruction::CmpOp(_)
+                | Instruction::UnaryOp(_)
+                | Instruction::AddInt
+                | Instruction::SubInt
+                | Instruction::MulInt
+                | Instruction::DivInt
+                | Instruction::ModInt
+                | Instruction::AddFloat
+                | Instruction::SubFloat
+                | Instruction::MulFloat
+                | Instruction::DivFloat
+                | Instruction::CmpIntOp(_)
+                | Instruction::CmpFloatOp(_) => {}
+
+                // ── Constant specialization ──────────────────────────
+                Instruction::LoadConst(idx) => {
+                    match op {
+                        OpCode::LoadNull | OpCode::LoadTrue | OpCode::LoadFalse => {
+                            // opcode already emitted, no operands
+                        }
+                        OpCode::LoadIntSmall => {
+                            // Constant is Int(n) where n fits in i8
+                            let ConstValue::Int(n) = self.constants[*idx] else {
+                                unreachable!("pass 1 chose LoadIntSmall");
+                            };
+                            code.push(n as i8 as u8);
+                        }
+                        OpCode::LoadConst => {
+                            // Generic LoadConst with u32 index
+                            code.extend_from_slice(
+                                &u32::try_from(*idx)
+                                    .expect("constant index fits u32")
+                                    .to_le_bytes(),
+                            );
+                        }
+                        _ => unreachable!("pass 1 opcode mismatch for LoadConst"),
+                    }
+                }
+
+                // ── Single usize operand → u32 ─────────────────────
+                Instruction::LoadVar(v)
+                | Instruction::StoreVar(v)
+                | Instruction::LoadField(v)
+                | Instruction::StoreField(v)
+                | Instruction::InitField(v)
+                | Instruction::Pop(v)
+                | Instruction::Copy(v)
+                | Instruction::AllocArray(v)
+                | Instruction::AllocMap(v)
+                | Instruction::Watch(v)
+                | Instruction::Unwatch(v)
+                | Instruction::Notify(v)
+                | Instruction::NotifyBlock(v)
+                | Instruction::VizEnter(v)
+                | Instruction::VizExit(v)
+                | Instruction::IsType(v)
+                | Instruction::DenseTag(v)
+                | Instruction::LoadType(v)
+                | Instruction::LoadDeref(v)
+                | Instruction::StoreDeref(v)
+                | Instruction::LoadCapture(v)
+                | Instruction::StoreCapture(v)
+                | Instruction::CaptureRef(v) => {
+                    code.extend_from_slice(
+                        &u32::try_from(*v).expect("operand fits u32").to_le_bytes(),
+                    );
+                }
+
+                // ── GlobalIndex operand → u32 ───────────────────────
+                Instruction::LoadGlobal(g)
+                | Instruction::StoreGlobal(g)
+                | Instruction::DispatchFuture(g)
+                | Instruction::MakeBoundMethod(g) => {
+                    code.extend_from_slice(
+                        &u32::try_from(g.into_raw())
+                            .expect("global index fits u32")
+                            .to_le_bytes(),
+                    );
+                }
+
+                // ── Call: u32 callee + u16 ntypeargs ─────────────────
+                Instruction::Call { callee, ntypeargs } => {
+                    code.extend_from_slice(
+                        &u32::try_from(callee.into_raw())
+                            .expect("global index fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(&ntypeargs.to_le_bytes());
+                }
+
+                // ── ObjectIndex operand → u32 ───────────────────────
+                Instruction::AllocVariant(o) => {
+                    code.extend_from_slice(
+                        &u32::try_from(o.into_raw())
+                            .expect("object index fits u32")
+                            .to_le_bytes(),
+                    );
+                }
+
+                // ── AllocInstance: u32 class_obj + u16 ntypeargs ────
+                Instruction::AllocInstance {
+                    class_obj,
+                    ntypeargs,
+                } => {
+                    code.extend_from_slice(
+                        &u32::try_from(class_obj.into_raw())
+                            .expect("object index fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(&ntypeargs.to_le_bytes());
+                }
+
+                // ── Jump operands: translate to byte offsets ────────
+                Instruction::Jump(offset)
+                | Instruction::PopJumpIfFalse(offset)
+                | Instruction::JumpIfFalse(offset) => {
+                    // In the old VM, offset is relative to the instruction
+                    // itself (IP was pre-incremented before step() ran, and
+                    // the jump uses instruction_ptr.checked_add_signed(offset)
+                    // where instruction_ptr is the pre-increment value).
+                    // So target = i + offset.
+                    let target_instr = (i as isize + offset) as usize;
+                    let target_byte = index_to_offset[target_instr];
+                    // In compact bytecode, offset is relative to the end of
+                    // this instruction (after all operand bytes are read).
+                    let instr_end = index_to_offset[i] + op.encoded_size();
+                    let byte_delta = target_byte as i64 - instr_end as i64;
+                    code.extend_from_slice(&(byte_delta as i32).to_le_bytes());
+                }
+
+                // ── JumpTable: u32 table_idx + i32 default_offset ───
+                Instruction::JumpTable(table_idx) => {
+                    code.extend_from_slice(
+                        &u32::try_from(*table_idx)
+                            .expect("table index fits u32")
+                            .to_le_bytes(),
+                    );
+                    // default offset: stored in jump_tables[table_idx].default
+                    let default = self.jump_tables[*table_idx].default;
+                    let target_instr = (i as isize + default) as usize;
+                    let target_byte = index_to_offset[target_instr];
+                    let instr_end = index_to_offset[i] + op.encoded_size();
+                    let byte_delta = target_byte as i64 - instr_end as i64;
+                    code.extend_from_slice(&(byte_delta as i32).to_le_bytes());
+                }
+
+                // ── MakeClosure: u32 obj_idx + u16 capture_count + u16 ntypeargs ─
+                Instruction::MakeClosure {
+                    obj_idx,
+                    capture_count,
+                    ntypeargs,
+                } => {
+                    code.extend_from_slice(
+                        &u32::try_from(obj_idx.into_raw())
+                            .expect("object index fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u16::try_from(*capture_count)
+                            .expect("capture_count fits u16")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u16::try_from(*ntypeargs)
+                            .expect("ntypeargs fits u16")
+                            .to_le_bytes(),
+                    );
+                }
+            }
+        }
+
+        debug_assert_eq!(code.len(), byte_offset, "pass 2 size mismatch");
+
+        // ── Translate tables ─────────────────────────────────────────
+        let line_table = self
+            .line_table
+            .iter()
+            .map(|entry| LineTableEntry {
+                pc: index_to_offset[entry.pc],
+                span: entry.span,
+                line: entry.line,
+                sequence_point: entry.sequence_point,
+                discriminator: entry.discriminator,
+            })
+            .collect();
+
+        let exception_table = self
+            .exception_table
+            .iter()
+            .map(|entry| ExceptionTableEntry {
+                start_pc: index_to_offset[entry.start_pc],
+                end_pc: index_to_offset[entry.end_pc],
+                handler_pc: index_to_offset[entry.handler_pc],
+                error_slot: entry.error_slot,
+                stack_trace_slot: entry.stack_trace_slot,
+            })
+            .collect();
+
+        // ── Translate jump tables ────────────────────────────────────────
+        // For each JumpTableData instruction at index `i`, the JumpTable opcode
+        // is at byte offset `index_to_offset[i]` and its encoded size is 9.
+        // The instruction end (after reading both u32+i32 operands) is at
+        // `index_to_offset[i] + 9`. The default offset in the compact code is
+        // already computed as `target_byte - instr_end` in pass 2 above.
+        // For per-entry offsets, we need: byte_target - instr_end.
+        //
+        // We iterate the instructions to find JumpTable instructions and their
+        // original index, then translate each entry's isize offset.
+        let jump_tables: Vec<CompactJumpTable> = self
+            .jump_tables
+            .iter()
+            .enumerate()
+            .map(|(table_idx, jtd)| {
+                // Find the instruction index of the JumpTable using this table.
+                // We need the byte offset of the instruction end to compute relative offsets.
+                // Find the instruction that uses this table_idx.
+                let instr_idx = self
+                    .instructions
+                    .iter()
+                    .position(|instr| matches!(instr, Instruction::JumpTable(t) if *t == table_idx))
+                    .expect("JumpTable instruction must exist for each jump_tables entry");
+                let instr_end_byte = index_to_offset[instr_idx] + OpCode::JumpTable.encoded_size();
+
+                let offsets: Vec<Option<i32>> = jtd
+                    .offsets
+                    .iter()
+                    .map(|offset_opt| {
+                        offset_opt.map(|isize_offset| {
+                            // target instruction index = instr_idx + isize_offset
+                            // (same formula as the old VM: target = i + offset)
+                            let target_instr = (instr_idx as isize + isize_offset) as usize;
+                            let target_byte = index_to_offset[target_instr];
+                            let byte_offset = target_byte as i64 - instr_end_byte as i64;
+                            byte_offset as i32
+                        })
+                    })
+                    .collect();
+
+                CompactJumpTable {
+                    min: jtd.min,
+                    offsets,
+                }
+            })
+            .collect();
+
+        CompactCode {
+            code,
+            line_table,
+            exception_table,
+            jump_tables,
+        }
+    }
+
+    /// Determine the compact opcode for an instruction.
+    ///
+    /// `LoadConst` is specialized to `LoadNull`/`LoadTrue`/`LoadFalse`/`LoadIntSmall`
+    /// when the constant value matches. `BinOp`/`CmpOp`/`UnaryOp` are expanded
+    /// to individual opcodes.
+    fn instruction_to_opcode(&self, instr: &Instruction) -> OpCode {
+        match instr {
+            Instruction::Return => OpCode::Return,
+            Instruction::Await => OpCode::Await,
+            Instruction::Throw => OpCode::Throw,
+            Instruction::LoadArrayElement => OpCode::LoadArrayElement,
+            Instruction::LoadMapElement => OpCode::LoadMapElement,
+            Instruction::StoreArrayElement => OpCode::StoreArrayElement,
+            Instruction::StoreMapElement => OpCode::StoreMapElement,
+            Instruction::CallIndirect => OpCode::CallIndirect,
+            Instruction::Discriminant => OpCode::Discriminant,
+            Instruction::TypeTag => OpCode::TypeTag,
+            Instruction::ThrowIfPanic => OpCode::ThrowIfPanic,
+            Instruction::Unreachable => OpCode::Unreachable,
+            Instruction::MakeCell => OpCode::MakeCell,
+            Instruction::SendEvent => OpCode::SendEvent,
+
+            // Expanded sub-enum variants
+            Instruction::BinOp(op) => match op {
+                BinOp::Add => OpCode::Add,
+                BinOp::Sub => OpCode::Sub,
+                BinOp::Mul => OpCode::Mul,
+                BinOp::Div => OpCode::Div,
+                BinOp::Mod => OpCode::Mod,
+                BinOp::BitAnd => OpCode::BitAnd,
+                BinOp::BitOr => OpCode::BitOr,
+                BinOp::BitXor => OpCode::BitXor,
+                BinOp::Shl => OpCode::Shl,
+                BinOp::Shr => OpCode::Shr,
+            },
+            Instruction::CmpOp(op) => match op {
+                CmpOp::Eq => OpCode::Eq,
+                CmpOp::NotEq => OpCode::NotEq,
+                CmpOp::Lt => OpCode::Lt,
+                CmpOp::LtEq => OpCode::LtEq,
+                CmpOp::Gt => OpCode::Gt,
+                CmpOp::GtEq => OpCode::GtEq,
+            },
+            Instruction::UnaryOp(op) => match op {
+                UnaryOp::Not => OpCode::Not,
+                UnaryOp::Neg => OpCode::Neg,
+            },
+
+            // Constant specialization
+            Instruction::LoadConst(idx) => match &self.constants[*idx] {
+                ConstValue::Null => OpCode::LoadNull,
+                ConstValue::Bool(true) => OpCode::LoadTrue,
+                ConstValue::Bool(false) => OpCode::LoadFalse,
+                ConstValue::Int(n) if i8::try_from(*n).is_ok() => OpCode::LoadIntSmall,
+                _ => OpCode::LoadConst,
+            },
+
+            // Single-operand variants
+            Instruction::LoadVar(_) => OpCode::LoadVar,
+            Instruction::StoreVar(_) => OpCode::StoreVar,
+            Instruction::LoadGlobal(_) => OpCode::LoadGlobal,
+            Instruction::StoreGlobal(_) => OpCode::StoreGlobal,
+            Instruction::LoadField(_) => OpCode::LoadField,
+            Instruction::StoreField(_) => OpCode::StoreField,
+            Instruction::InitField(_) => OpCode::InitField,
+            Instruction::Pop(_) => OpCode::Pop,
+            Instruction::Copy(_) => OpCode::Copy,
+            Instruction::AllocArray(_) => OpCode::AllocArray,
+            Instruction::AllocMap(_) => OpCode::AllocMap,
+            Instruction::AllocInstance { .. } => OpCode::AllocInstance,
+            Instruction::AllocVariant(_) => OpCode::AllocVariant,
+            Instruction::DispatchFuture(_) => OpCode::DispatchFuture,
+            Instruction::Watch(_) => OpCode::Watch,
+            Instruction::Unwatch(_) => OpCode::Unwatch,
+            Instruction::Notify(_) => OpCode::Notify,
+            Instruction::Call { .. } => OpCode::Call,
+            Instruction::NotifyBlock(_) => OpCode::NotifyBlock,
+            Instruction::VizEnter(_) => OpCode::VizEnter,
+            Instruction::VizExit(_) => OpCode::VizExit,
+            Instruction::IsType(_) => OpCode::IsType,
+            Instruction::DenseTag(_) => OpCode::DenseTag,
+            Instruction::LoadType(_) => OpCode::LoadType,
+            Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,
+            Instruction::LoadDeref(_) => OpCode::LoadDeref,
+            Instruction::StoreDeref(_) => OpCode::StoreDeref,
+            Instruction::LoadCapture(_) => OpCode::LoadCapture,
+            Instruction::StoreCapture(_) => OpCode::StoreCapture,
+            Instruction::CaptureRef(_) => OpCode::CaptureRef,
+
+            // Specialized arithmetic (dedicated opcodes, skip type dispatch)
+            Instruction::AddInt => OpCode::AddInt,
+            Instruction::SubInt => OpCode::SubInt,
+            Instruction::MulInt => OpCode::MulInt,
+            Instruction::DivInt => OpCode::DivInt,
+            Instruction::ModInt => OpCode::ModInt,
+            Instruction::AddFloat => OpCode::AddFloat,
+            Instruction::SubFloat => OpCode::SubFloat,
+            Instruction::MulFloat => OpCode::MulFloat,
+            Instruction::DivFloat => OpCode::DivFloat,
+            Instruction::CmpIntOp(op) => match op {
+                CmpOp::Eq => OpCode::CmpIntEq,
+                CmpOp::NotEq => OpCode::CmpIntNotEq,
+                CmpOp::Lt => OpCode::CmpIntLt,
+                CmpOp::LtEq => OpCode::CmpIntLtEq,
+                CmpOp::Gt => OpCode::CmpIntGt,
+                CmpOp::GtEq => OpCode::CmpIntGtEq,
+            },
+            Instruction::CmpFloatOp(op) => match op {
+                CmpOp::Eq => OpCode::CmpFloatEq,
+                CmpOp::NotEq => OpCode::CmpFloatNotEq,
+                CmpOp::Lt => OpCode::CmpFloatLt,
+                CmpOp::LtEq => OpCode::CmpFloatLtEq,
+                CmpOp::Gt => OpCode::CmpFloatGt,
+                CmpOp::GtEq => OpCode::CmpFloatGtEq,
+            },
+
+            // Jump variants
+            Instruction::Jump(_) => OpCode::Jump,
+            Instruction::PopJumpIfFalse(_) => OpCode::PopJumpIfFalse,
+            Instruction::JumpIfFalse(_) => OpCode::JumpIfFalse,
+
+            // Two-operand variants
+            Instruction::JumpTable(_) => OpCode::JumpTable,
+            Instruction::MakeClosure { .. } => OpCode::MakeClosure,
+        }
+    }
 }
 
 impl std::fmt::Display for Bytecode {
@@ -1087,5 +2071,209 @@ impl std::fmt::Display for Bytecode {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod compact_tests {
+    use super::*;
+    use crate::types::ConstValue;
+
+    /// Helper to build a minimal Bytecode with given instructions and constants.
+    fn make_bytecode(instructions: Vec<Instruction>, constants: Vec<ConstValue>) -> Bytecode {
+        let meta = vec![InstructionMeta { operand: None }; instructions.len()];
+        Bytecode {
+            instructions,
+            constants,
+            resolved_constants: Vec::new(),
+            jump_tables: Vec::new(),
+            match_hash_tables: Vec::new(),
+            line_table: Vec::new(),
+            meta,
+            exception_table: Vec::new(),
+            compact: None,
+        }
+    }
+
+    #[test]
+    fn encode_load_int_small_and_return() {
+        let bc = make_bytecode(
+            vec![Instruction::LoadConst(0), Instruction::Return],
+            vec![ConstValue::Int(42)],
+        );
+        let compact = bc.lower_to_compact();
+        // LoadIntSmall(42) = 2 bytes, Return = 1 byte
+        assert_eq!(compact.code.len(), 3);
+        assert_eq!(compact.code[0], OpCode::LoadIntSmall as u8);
+        assert_eq!(compact.code[1], 42u8);
+        assert_eq!(compact.code[2], OpCode::Return as u8);
+    }
+
+    #[test]
+    fn encode_load_null_true_false() {
+        let bc = make_bytecode(
+            vec![
+                Instruction::LoadConst(0), // Null
+                Instruction::LoadConst(1), // Bool(true)
+                Instruction::LoadConst(2), // Bool(false)
+            ],
+            vec![
+                ConstValue::Null,
+                ConstValue::Bool(true),
+                ConstValue::Bool(false),
+            ],
+        );
+        let compact = bc.lower_to_compact();
+        assert_eq!(compact.code.len(), 3);
+        assert_eq!(compact.code[0], OpCode::LoadNull as u8);
+        assert_eq!(compact.code[1], OpCode::LoadTrue as u8);
+        assert_eq!(compact.code[2], OpCode::LoadFalse as u8);
+    }
+
+    #[test]
+    fn encode_large_const_not_specialized() {
+        let bc = make_bytecode(
+            vec![Instruction::LoadConst(0)],
+            vec![ConstValue::Int(1000)], // > i8::MAX
+        );
+        let compact = bc.lower_to_compact();
+        // LoadConst + u32 = 5 bytes
+        assert_eq!(compact.code.len(), 5);
+        assert_eq!(compact.code[0], OpCode::LoadConst as u8);
+        let idx = u32::from_le_bytes([
+            compact.code[1],
+            compact.code[2],
+            compact.code[3],
+            compact.code[4],
+        ]);
+        assert_eq!(idx, 0);
+    }
+
+    #[test]
+    fn encode_expanded_binop() {
+        let bc = make_bytecode(vec![Instruction::BinOp(BinOp::Add)], vec![]);
+        let compact = bc.lower_to_compact();
+        assert_eq!(compact.code.len(), 1);
+        assert_eq!(compact.code[0], OpCode::Add as u8);
+    }
+
+    #[test]
+    fn encode_jump_forward() {
+        // Jump(+2) from instruction 0 should skip instruction 1 and land on instruction 2.
+        // Layout: [Jump(+2), Return, Return, Return]
+        // Instruction 0 = Jump, target = instruction 0+2 = instruction 2
+        let bc = make_bytecode(
+            vec![
+                Instruction::Jump(2), // i=0, byte offset 0..5, targets i=2
+                Instruction::Return,  // i=1, byte offset 5
+                Instruction::Return,  // i=2, byte offset 6 (target)
+                Instruction::Return,  // i=3, byte offset 7
+            ],
+            vec![],
+        );
+        let compact = bc.lower_to_compact();
+        // Jump = 5 bytes (0..5). Return bytes at 5, 6, 7.
+        // Target byte offset = index_to_offset[2] = 6
+        // Instruction end = 0 + 5 = 5
+        // Encoded offset = 6 - 5 = 1
+        assert_eq!(compact.code[0], OpCode::Jump as u8);
+        let encoded_offset = i32::from_le_bytes([
+            compact.code[1],
+            compact.code[2],
+            compact.code[3],
+            compact.code[4],
+        ]);
+        assert_eq!(encoded_offset, 1); // skip 1 byte (the Return at i=1)
+    }
+
+    #[test]
+    fn encode_jump_backward() {
+        // Layout: [Return, Jump(-1)]
+        // Instruction 1 = Jump, target = instruction 1+(-1) = instruction 0
+        let bc = make_bytecode(
+            vec![
+                Instruction::Return,   // i=0, byte offset 0
+                Instruction::Jump(-1), // i=1, byte offset 1..6
+            ],
+            vec![],
+        );
+        let compact = bc.lower_to_compact();
+        // Return = 1 byte at offset 0. Jump = 5 bytes at offset 1..6.
+        // Target byte offset = index_to_offset[0] = 0
+        // Instruction end = 1 + 5 = 6
+        // Encoded offset = 0 - 6 = -6
+        let encoded_offset = i32::from_le_bytes([
+            compact.code[2],
+            compact.code[3],
+            compact.code[4],
+            compact.code[5],
+        ]);
+        assert_eq!(encoded_offset, -6);
+    }
+
+    #[test]
+    fn line_table_translated() {
+        let bc = Bytecode {
+            instructions: vec![
+                Instruction::LoadConst(0), // i=0: will be LoadIntSmall = 2 bytes
+                Instruction::Return,       // i=1: 1 byte
+            ],
+            constants: vec![ConstValue::Int(1)],
+            resolved_constants: Vec::new(),
+            jump_tables: Vec::new(),
+            match_hash_tables: Vec::new(),
+            line_table: vec![
+                LineTableEntry {
+                    pc: 0,
+                    span: Span::default(),
+                    line: 1,
+                    sequence_point: true,
+                    discriminator: 0,
+                },
+                LineTableEntry {
+                    pc: 1,
+                    span: Span::default(),
+                    line: 2,
+                    sequence_point: true,
+                    discriminator: 0,
+                },
+            ],
+            meta: vec![InstructionMeta { operand: None }; 2],
+            exception_table: Vec::new(),
+            compact: None,
+        };
+        let compact = bc.lower_to_compact();
+        assert_eq!(compact.line_table[0].pc, 0); // instruction 0 → byte 0
+        assert_eq!(compact.line_table[1].pc, 2); // instruction 1 → byte 2 (after 2-byte LoadIntSmall)
+    }
+
+    #[test]
+    fn exception_table_translated() {
+        let bc = Bytecode {
+            instructions: vec![
+                Instruction::LoadConst(0), // i=0: LoadIntSmall = 2 bytes
+                Instruction::Return,       // i=1: 1 byte
+                Instruction::Return,       // i=2: 1 byte (handler)
+            ],
+            constants: vec![ConstValue::Int(0)],
+            resolved_constants: Vec::new(),
+            jump_tables: Vec::new(),
+            match_hash_tables: Vec::new(),
+            line_table: Vec::new(),
+            meta: vec![InstructionMeta { operand: None }; 3],
+            exception_table: vec![ExceptionTableEntry {
+                start_pc: 0,
+                end_pc: 2,
+                handler_pc: 2,
+                error_slot: 0,
+                stack_trace_slot: ExceptionTableEntry::NO_STACK_TRACE,
+            }],
+            compact: None,
+        };
+        let compact = bc.lower_to_compact();
+        let entry = &compact.exception_table[0];
+        assert_eq!(entry.start_pc, 0); // instruction 0 → byte 0
+        assert_eq!(entry.end_pc, 3); // instruction 2 → byte 3 (2-byte LoadIntSmall + 1-byte Return)
+        assert_eq!(entry.handler_pc, 3); // instruction 2 → byte 3
     }
 }

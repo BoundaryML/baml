@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 28483
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: expected 1 argument(s), got 2

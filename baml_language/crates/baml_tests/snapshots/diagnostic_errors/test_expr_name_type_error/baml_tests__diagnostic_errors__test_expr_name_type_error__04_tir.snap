@@ -33,7 +33,7 @@ lambda user.$init_test_27 {
 lambda user.$init_test_27 {
 }
 lambda user.$init_test_27 {
-  !! 177..182: type mismatch: expected string, got int
+  !! 181..186: type mismatch: expected string, got int
 }
 lambda user.$init_test_27 {
 }

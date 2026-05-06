@@ -3,7 +3,8 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use baml_lsp2_actions::{SymbolDescription, describe};
+use baml_db::baml_compiler2_hir;
+use baml_lsp2_actions::{ResolvedTarget, SymbolDescription, describe};
 use baml_project::ProjectDatabase;
 use clap::Args;
 
@@ -18,10 +19,6 @@ pub struct DescribeArgs {
     #[arg(long)]
     pub symbols: bool,
 
-    /// Filter by symbol kind (repeatable): class, enum, function, test, etc.
-    #[arg(long, value_delimiter = ',')]
-    pub kind: Vec<String>,
-
     /// Project root directory
     #[arg(long, default_value = ".")]
     pub from: PathBuf,
@@ -30,17 +27,131 @@ pub struct DescribeArgs {
     #[arg(long, default_value_t = 30)]
     pub budget: usize,
 
-    /// Already-seen symbol names to skip (comma-separated)
-    #[arg(long, value_delimiter = ',')]
-    pub history: Vec<String>,
-
-    /// Suppress "see also" hints
-    #[arg(long)]
-    pub no_hints: bool,
-
     /// Output results as JSON
     #[arg(long)]
     pub json: bool,
+}
+
+/// Find FQNs across the user and builtin packages that are fuzzy-similar to `name`.
+///
+/// Used to power "did you mean?" hints when a path doesn't resolve. Returns up
+/// to `limit` candidates sorted by Jaro-Winkler similarity (descending).
+pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<String> {
+    use baml_compiler2_hir::package::{PackageId, package_items};
+
+    let mut all_paths: Vec<String> = Vec::new();
+
+    // User package: items + namespace dotted paths.
+    let user_pkg = PackageId::new(db, baml_db::Name::new("user"));
+    for entry in baml_lsp2_actions::list_package_items(db, user_pkg) {
+        all_paths.push(entry.fqn());
+    }
+    let user_pkg_items = package_items(db, user_pkg);
+    for ns_path in user_pkg_items.namespaces.keys() {
+        if !ns_path.is_empty() {
+            all_paths.push(
+                ns_path
+                    .iter()
+                    .map(baml_db::Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join("."),
+            );
+        }
+    }
+
+    // Builtin packages: bare package name + items + namespaces (prefixed).
+    for pkg_name in baml_lsp2_actions::non_user_package_names(db) {
+        all_paths.push(pkg_name.clone());
+        let pkg = PackageId::new(db, baml_db::Name::new(&pkg_name));
+        for entry in baml_lsp2_actions::list_package_items(db, pkg) {
+            all_paths.push(format!("{}.{}", pkg_name, entry.fqn()));
+        }
+        let pkg_info = package_items(db, pkg);
+        for ns_path in pkg_info.namespaces.keys() {
+            if !ns_path.is_empty() {
+                let dotted = ns_path
+                    .iter()
+                    .map(baml_db::Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                all_paths.push(format!("{pkg_name}.{dotted}"));
+            }
+        }
+    }
+
+    // Match case-insensitively: agents shouldn't need to remember casing to
+    // get a useful "did you mean?" hint. `strsim::jaro_winkler` is case-
+    // sensitive, so we lowercase both sides before scoring.
+    let needle_lower = name.to_ascii_lowercase();
+    let mut scored: Vec<(f64, String)> = all_paths
+        .into_iter()
+        .map(|p| {
+            let p_lower = p.to_ascii_lowercase();
+            // Jaro-Winkler on lowercased strings handles typos; substring
+            // presence is an extra boost for cases like "Confg" → "Config".
+            let mut score = strsim::jaro_winkler(&p_lower, &needle_lower);
+            if p_lower.contains(&needle_lower) {
+                score += 0.15;
+            }
+            (score, p)
+        })
+        .filter(|(s, _)| *s > 0.7)
+        .collect();
+
+    // Sort by score desc, then alphabetically for stability.
+    scored.sort_by(|a, b| {
+        b.0.partial_cmp(&a.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.1.cmp(&b.1))
+    });
+    // Dedup adjacent duplicates after sort.
+    scored.dedup_by(|a, b| a.1 == b.1);
+    scored.into_iter().take(limit).map(|(_, p)| p).collect()
+}
+
+/// Print a "Did you mean?" hint for `name` to stderr if any similar paths exist.
+fn print_did_you_mean(db: &ProjectDatabase, name: &str) {
+    let suggestions = suggest_similar(db, name, 5);
+    if !suggestions.is_empty() {
+        eprintln!();
+        eprintln!("Did you mean:");
+        for s in suggestions {
+            eprintln!("  {s}");
+        }
+    }
+}
+
+/// Dispatch a name string to a `ResolvedTarget`.
+///
+/// Handles the package-name prefix routing (user vs. builtin packages) and
+/// delegates within-package path resolution to `baml_lsp2_actions::resolve_target`.
+///
+/// - Empty string → `Package(user)`
+/// - `"baml"` → `Package(baml)`
+/// - `"baml.env"` → `resolve_target(baml_pkg, "env")` → `Namespace`
+/// - `"foo.bar.Baz"` → `resolve_target(user_pkg, "foo.bar.Baz")` → `Item`
+pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTarget<'db>> {
+    if name.is_empty() {
+        let user_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("user"));
+        return Some(ResolvedTarget::Package(user_pkg));
+    }
+
+    let (first, rest) = name.split_once('.').unwrap_or((name, ""));
+
+    // Builtin package shadows user namespace with same name.
+    let builtin_packages = baml_lsp2_actions::non_user_package_names(db);
+    if builtin_packages.contains(first) {
+        let pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new(first));
+        return if rest.is_empty() {
+            Some(ResolvedTarget::Package(pkg))
+        } else {
+            baml_lsp2_actions::resolve_target(db, pkg, rest)
+        };
+    }
+
+    // User package.
+    let user_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("user"));
+    baml_lsp2_actions::resolve_target(db, user_pkg, name)
 }
 
 impl DescribeArgs {
@@ -51,72 +162,148 @@ impl DescribeArgs {
             return Ok(crate::ExitCode::Other);
         }
 
-        let user_source_files = db.get_source_files();
-
-        // ── --symbols mode ──────────────────────────────────────────────────
+        // ── --symbols deprecation ───────────────────────────────────────────
         if self.symbols {
-            let kind_filter = crate::grep_command::parse_kind_filter(&self.kind)?;
-            let symbols = baml_lsp2_actions::list_symbols(&db, &user_source_files, &kind_filter);
-            if symbols.is_empty() {
-                eprintln!("No symbols found.");
-                return Ok(crate::ExitCode::Other);
-            }
-            for sym in &symbols {
-                let rel = relative_path(&sym.file.path(&db), &from);
-                let line = line_number_at_offset(sym.file.text(&db), sym.name_span.start().into());
-                println!(
-                    "{:<16} {:<10} {}:{}",
-                    sym.name,
-                    sym.kind.as_str(),
-                    rel.display(),
-                    line,
-                );
-            }
-            return Ok(crate::ExitCode::Success);
-        }
-
-        let name = match &self.name {
-            Some(n) => n.as_str(),
-            None => {
-                eprintln!("No symbol name provided. Use --symbols to list all symbols.");
-                return Ok(crate::ExitCode::InvalidArgs);
-            }
-        };
-
-        let describe_files = baml_db::baml_compiler2_hir::compiler2_all_files(&db);
-        let descriptions = describe(&db, &describe_files, name);
-
-        if descriptions.is_empty() {
-            eprintln!("No symbol found: {name}");
-            return Ok(crate::ExitCode::Other);
-        }
-
-        if self.json {
-            let budget = self.budget;
-            let json_output: Vec<serde_json::Value> = descriptions
-                .iter()
-                .map(|d| crate::grep_command::description_to_json(&db, d, budget, &from))
-                .collect();
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&json_output)
-                    .context("Failed to serialize output as JSON")?
+            eprintln!(
+                "Warning: --symbols is deprecated. Use `baml describe` with no arguments instead."
             );
-            return Ok(crate::ExitCode::Success);
         }
 
-        let history: std::collections::HashSet<&str> =
-            self.history.iter().map(|s| s.as_str()).collect();
+        let name = self.name.as_deref().unwrap_or("");
+        let target = dispatch(&db, name);
 
-        for (i, desc) in descriptions.iter().enumerate() {
-            if i > 0 {
-                println!();
-                println!();
+        match target {
+            Some(ResolvedTarget::Package(pkg)) => {
+                let entries = baml_lsp2_actions::list_package_items(&db, pkg);
+                if entries.is_empty() {
+                    eprintln!("No symbols found.");
+                    return Ok(crate::ExitCode::Other);
+                }
+                if self.json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&listing_to_json(&db, &entries, &from))
+                            .context("Failed to serialize output as JSON")?
+                    );
+                } else {
+                    render_listing(&entries, &from);
+                }
+                Ok(crate::ExitCode::Success)
             }
-            render_description(&db, desc, self.budget, &history, self.no_hints, &from);
-        }
+            Some(ResolvedTarget::Namespace { package, ns_path }) => {
+                let entries = baml_lsp2_actions::list_namespace_items(&db, package, &ns_path)
+                    .unwrap_or_default();
+                if entries.is_empty() {
+                    eprintln!("No symbols found in namespace.");
+                    return Ok(crate::ExitCode::Other);
+                }
+                if self.json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&listing_to_json(&db, &entries, &from))
+                            .context("Failed to serialize output as JSON")?
+                    );
+                } else {
+                    render_listing(&entries, &from);
+                }
+                Ok(crate::ExitCode::Success)
+            }
+            Some(ResolvedTarget::Item(def)) => {
+                let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
+                if let Some(desc) =
+                    baml_lsp2_actions::describe_by_definition(&db, &describe_files, def)
+                {
+                    if self.json {
+                        let json = crate::grep_command::description_to_json(
+                            &db,
+                            &desc,
+                            self.budget,
+                            &from,
+                        );
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&[json])
+                                .context("Failed to serialize output as JSON")?
+                        );
+                    } else {
+                        render_description(&db, &desc, self.budget, &from);
+                    }
+                    Ok(crate::ExitCode::Success)
+                } else {
+                    eprintln!("No symbol found: {name}");
+                    print_did_you_mean(&db, name);
+                    Ok(crate::ExitCode::Other)
+                }
+            }
+            Some(ResolvedTarget::Member {
+                parent,
+                member_name,
+            }) => {
+                let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
+                if let Some(desc) = baml_lsp2_actions::describe_item_member(
+                    &db,
+                    &describe_files,
+                    parent,
+                    member_name.as_str(),
+                ) {
+                    if self.json {
+                        let json = crate::grep_command::description_to_json(
+                            &db,
+                            &desc,
+                            self.budget,
+                            &from,
+                        );
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&[json])
+                                .context("Failed to serialize output as JSON")?
+                        );
+                    } else {
+                        render_description(&db, &desc, self.budget, &from);
+                    }
+                    Ok(crate::ExitCode::Success)
+                } else {
+                    eprintln!("No symbol found: {name}");
+                    print_did_you_mean(&db, name);
+                    Ok(crate::ExitCode::Other)
+                }
+            }
+            None => {
+                // Substring fallback (existing behavior for unresolved names).
+                let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
+                let descriptions = describe(&db, &describe_files, name);
 
-        Ok(crate::ExitCode::Success)
+                if descriptions.is_empty() {
+                    eprintln!("No symbol found: {name}");
+                    print_did_you_mean(&db, name);
+                    return Ok(crate::ExitCode::Other);
+                }
+
+                if self.json {
+                    let budget = self.budget;
+                    let json_output: Vec<serde_json::Value> = descriptions
+                        .iter()
+                        .map(|d| crate::grep_command::description_to_json(&db, d, budget, &from))
+                        .collect();
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&json_output)
+                            .context("Failed to serialize output as JSON")?
+                    );
+                    return Ok(crate::ExitCode::Success);
+                }
+
+                for (i, desc) in descriptions.iter().enumerate() {
+                    if i > 0 {
+                        println!();
+                        println!();
+                    }
+                    render_description(&db, desc, self.budget, &from);
+                }
+
+                Ok(crate::ExitCode::Success)
+            }
+        }
     }
 }
 
@@ -125,200 +312,207 @@ pub fn render_description(
     db: &ProjectDatabase,
     desc: &SymbolDescription,
     budget: usize,
-    history: &std::collections::HashSet<&str>,
-    no_hints: bool,
     project_root: &std::path::Path,
 ) {
+    let _ = write_description(&mut std::io::stdout(), db, desc, budget, project_root);
+}
+
+/// Render a SymbolDescription to a writer with budget-based output.
+pub fn write_description(
+    w: &mut impl std::io::Write,
+    db: &ProjectDatabase,
+    desc: &SymbolDescription,
+    budget: usize,
+    project_root: &std::path::Path,
+) -> std::io::Result<()> {
     let file_path = desc.file.path(db);
     let file_text = desc.file.text(db);
-
-    // Line number of the definition.
     let line_num = line_number_at_offset(file_text, desc.name_span.start().into());
 
-    // ── Header ───────────────────────────────────────────────────────────────
+    // ── Header: kind name  file:line ────────────────────────────────────────
     let kind_str = desc.kind.as_str();
     let rel_path = relative_path(&file_path, project_root);
     let path_display = rel_path.display();
+
+    writeln!(
+        w,
+        "{kind_str} {name}  {path_display}:{line_num}",
+        name = desc.name
+    )?;
+
+    let mut lines_used = 1;
+
+    // ── Docstring ────────────────────────────────────────────────────────────
+    if let Some(ref doc) = desc.docstring {
+        writeln!(w)?;
+        for line in doc.lines() {
+            writeln!(w, "/// {line}")?;
+            lines_used += 1;
+        }
+    }
+
+    // ── Body ─────────────────────────────────────────────────────────────────
     let is_local = matches!(
         desc.kind,
         baml_lsp2_actions::DefinitionKind::Parameter | baml_lsp2_actions::DefinitionKind::Binding
     );
-    if desc.kind.is_member() || is_local {
-        let container = desc
-            .dependencies
-            .first()
-            .map(|d| format!("{}.", d.name))
-            .unwrap_or_default();
-        if is_local {
-            // For params/bindings, put the type in the header — no separate
-            // type line or body needed.
-            let ty = desc.resolved_type.as_deref().unwrap_or("unknown");
-            println!(
-                "── {kind_str}: {container}{} : {ty} ──── {path_display}:{line_num}",
-                desc.name
-            );
-        } else {
-            println!(
-                "── {kind_str}: {container}{} ──── {path_display}:{line_num}",
-                desc.name
-            );
-        }
-    } else {
-        println!("── {kind_str} ──────────────────────────────── {path_display}:{line_num}");
-    }
-
-    let mut lines_used = 1; // header
-
-    // ── Resolved type ────────────────────────────────────────────────────────
-    // Skip for params/bindings (type in header) and classes/enums (body shows fields).
-    let skip_type = is_local
-        || matches!(
-            desc.kind,
-            baml_lsp2_actions::DefinitionKind::Class
-                | baml_lsp2_actions::DefinitionKind::Enum
-                | baml_lsp2_actions::DefinitionKind::Function
-                | baml_lsp2_actions::DefinitionKind::Test
-                | baml_lsp2_actions::DefinitionKind::TypeAlias
-        );
-    if !skip_type {
-        if let Some(ref ty) = desc.resolved_type {
-            println!("  type: {ty}");
-            lines_used += 1;
-        }
-    }
-
-    // ── Docstring ────────────────────────────────────────────────────────────
-    if let Some(ref doc) = desc.docstring {
-        for line in doc.lines() {
-            println!("/// {line}");
-            lines_used += 1;
-        }
-    }
-
-    // ── Shape or full body (depending on budget) ─────────────────────────────
     let body_lines: Vec<&str> = desc.full_body.lines().collect();
 
-    if is_local {
-        // For locals, show function body with context around the variable.
-        // Find which line within the body contains the variable.
-        let var_line_in_body = find_line_in_body(&desc.full_body, desc.item_range, desc.name_span);
-        lines_used += render_body_with_context(
-            &body_lines,
-            var_line_in_body,
-            budget.saturating_sub(lines_used),
-        );
-    } else {
+    if !is_local {
+        writeln!(w)?;
         let available_for_body = budget.saturating_sub(lines_used);
-
         if body_lines.len() <= available_for_body {
-            // Full body fits — show it all.
             for line in &body_lines {
-                println!("{line}");
+                writeln!(w, "{line}")?;
             }
             lines_used += body_lines.len();
         } else if available_for_body >= 5 {
-            // Enough room for truncated body (at least header + some content + skip marker).
             let truncated = truncate_body(&body_lines, available_for_body);
             for line in &truncated {
-                println!("{line}");
+                writeln!(w, "{line}")?;
             }
             lines_used += truncated.len();
         } else {
-            // Not enough room for truncation — show shape with `{ ... }` elision.
             let elided = shape_with_elision(&desc.shape, &desc.full_body);
             for line in elided.lines() {
-                println!("{line}");
+                writeln!(w, "{line}")?;
             }
             lines_used += elided.lines().count();
         }
     }
 
-    // ── Dependency shapes ────────────────────────────────────────────────────
-    for dep in &desc.dependencies {
-        if history.contains(dep.name.as_str()) {
-            continue;
+    // ── Instance methods ─────────────────────────────────────────────────────
+    if !desc.instance_methods.is_empty() {
+        writeln!(w)?;
+        writeln!(w, "instance_methods:")?;
+        for m in &desc.instance_methods {
+            let m_path = relative_path(&m.file.path(db), project_root);
+            let m_line = line_number_at_offset(m.file.text(db), m.name_span.start().into());
+            writeln!(
+                w,
+                "  {:<16} {:<32} {}:{}",
+                m.kind.as_str(),
+                m.name,
+                m_path.display(),
+                m_line
+            )?;
         }
-        if lines_used >= budget {
-            break;
-        }
+    }
 
-        let dep_path = relative_path(&dep.file.path(db), project_root);
-        let dep_line = line_number_at_offset(dep.file.text(db), dep.name_span.start().into());
-        println!();
-        println!(
-            "── dep: {} ({}) ──── {}:{dep_line}",
-            dep.name,
-            dep.kind.as_str(),
-            dep_path.display()
-        );
-        lines_used += 2;
+    // ── Static methods ───────────────────────────────────────────────────────
+    if !desc.static_methods.is_empty() {
+        writeln!(w)?;
+        writeln!(w, "static_methods:")?;
+        for m in &desc.static_methods {
+            let m_path = relative_path(&m.file.path(db), project_root);
+            let m_line = line_number_at_offset(m.file.text(db), m.name_span.start().into());
+            writeln!(
+                w,
+                "  {:<16} {:<32} {}:{}",
+                m.kind.as_str(),
+                m.name,
+                m_path.display(),
+                m_line
+            )?;
+        }
+    }
+
+    // ── Container ────────────────────────────────────────────────────────────
+    if let Some(ref c) = desc.container {
+        writeln!(w)?;
+        writeln!(w, "container:")?;
+        let c_path = relative_path(&c.file.path(db), project_root);
+        let c_line = line_number_at_offset(c.file.text(db), c.name_span.start().into());
+        writeln!(
+            w,
+            "  {:<16} {:<32} {}:{}",
+            c.kind.as_str(),
+            c.name,
+            c_path.display(),
+            c_line
+        )?;
+    }
+
+    // ── Dependencies ─────────────────────────────────────────────────────────
+    if !desc.dependencies.is_empty() {
+        writeln!(w)?;
+        writeln!(w, "dependencies:")?;
+        for dep in &desc.dependencies {
+            let dep_path = relative_path(&dep.file.path(db), project_root);
+            let dep_line = line_number_at_offset(dep.file.text(db), dep.name_span.start().into());
+            writeln!(
+                w,
+                "  {:<16} {:<32} {}:{}",
+                dep.kind.as_str(),
+                dep.name,
+                dep_path.display(),
+                dep_line,
+            )?;
+        }
     }
 
     // ── References ───────────────────────────────────────────────────────────
-    if !desc.references.is_empty() && lines_used < budget {
-        println!();
-        println!(
-            "── references ({}) ─────────────────────────",
-            desc.references.len()
-        );
-        lines_used += 2;
-
-        for (refs_printed, r) in desc.references.iter().enumerate() {
-            if lines_used >= budget {
-                let remaining = desc.references.len() - refs_printed;
-                if remaining > 0 {
-                    println!("  ... and {remaining} more");
-                }
-                break;
-            }
-            let ref_path = relative_path(&r.file.path(db), project_root);
-            println!(
-                "  {}:{}  {}",
-                ref_path.display(),
-                r.line_number,
-                r.line_text.trim()
-            );
-            lines_used += 1;
-        }
+    writeln!(w)?;
+    writeln!(w, "references ({}):", desc.references.len())?;
+    for r in &desc.references {
+        let ref_path = relative_path(&r.file.path(db), project_root);
+        writeln!(
+            w,
+            "  {}:{}  {}",
+            ref_path.display(),
+            r.line_number,
+            r.line_text.trim()
+        )?;
     }
 
-    // ── See also hints ───────────────────────────────────────────────────────
-    if !no_hints && !desc.dependencies.is_empty() {
-        let mut shown_names: Vec<&str> = vec![&desc.name];
-        for dep in &desc.dependencies {
-            shown_names.push(&dep.name);
-        }
-        for h in history {
-            if !shown_names.contains(h) {
-                shown_names.push(h);
-            }
-        }
+    let _ = lines_used; // budget tracking removed with new format
+    Ok(())
+}
 
-        let unseen_deps: Vec<&baml_lsp2_actions::DepRef> = desc
-            .dependencies
-            .iter()
-            .filter(|d| !history.contains(d.name.as_str()))
-            .collect();
+/// Render a flat listing of entries to stdout.
+fn render_listing(entries: &[baml_lsp2_actions::ListingEntry], project_root: &std::path::Path) {
+    let _ = write_listing(&mut std::io::stdout(), entries, project_root);
+}
 
-        if !unseen_deps.is_empty() {
-            println!();
-            println!("── see also ───────────────────────────────");
-            for dep in &unseen_deps {
-                let dep_path = relative_path(&dep.file.path(db), project_root);
-                let dep_line =
-                    line_number_at_offset(dep.file.text(db), dep.name_span.start().into());
-                let history_str = shown_names.join(",");
-                println!(
-                    "  {:<16} {:<10} {}:{}  → baml describe {} --history {history_str}",
-                    dep.name,
-                    dep.kind.as_str(),
-                    dep_path.display(),
-                    dep_line,
-                    dep.name,
-                );
-            }
-        }
+/// Render a flat listing of entries to a writer.
+pub fn write_listing(
+    w: &mut impl std::io::Write,
+    entries: &[baml_lsp2_actions::ListingEntry],
+    project_root: &std::path::Path,
+) -> std::io::Result<()> {
+    for entry in entries {
+        let rel = relative_path(std::path::Path::new(&entry.file_path), project_root);
+        writeln!(
+            w,
+            "{:<16} {:<32} {}:{}",
+            entry.kind.as_str(),
+            entry.fqn(),
+            rel.display(),
+            entry.line,
+        )?;
     }
+    Ok(())
+}
+
+/// Convert listing entries to JSON array.
+fn listing_to_json(
+    db: &ProjectDatabase,
+    entries: &[baml_lsp2_actions::ListingEntry],
+    project_root: &std::path::Path,
+) -> Vec<serde_json::Value> {
+    let _ = db; // db not needed for listing JSON, but kept for consistency
+    entries
+        .iter()
+        .map(|entry| {
+            let rel = relative_path(std::path::Path::new(&entry.file_path), project_root);
+            serde_json::json!({
+                "kind": entry.kind.as_str(),
+                "name": entry.fqn(),
+                "file": rel.to_string_lossy(),
+                "line": entry.line,
+            })
+        })
+        .collect()
 }
 
 /// Compute 1-based line number from byte offset.

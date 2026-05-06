@@ -48,10 +48,8 @@ $root.baml = (function() {
              * @name baml.cffi.v1.BamlHandleType
              * @enum {number}
              * @property {number} HANDLE_UNSPECIFIED=0 HANDLE_UNSPECIFIED value
-             * @property {number} HANDLE_UNKNOWN=1 HANDLE_UNKNOWN value
-             * @property {number} RESOURCE_FILE=2 RESOURCE_FILE value
-             * @property {number} RESOURCE_SOCKET=3 RESOURCE_SOCKET value
-             * @property {number} RESOURCE_HTTP_RESPONSE=4 RESOURCE_HTTP_RESPONSE value
+             * @property {number} UNTAGGED_RUST_DATA=1 UNTAGGED_RUST_DATA value
+             * @property {number} UNTAGGED_BEX_HEAP=2 UNTAGGED_BEX_HEAP value
              * @property {number} FUNCTION_REF=5 FUNCTION_REF value
              * @property {number} ADT_MEDIA_IMAGE=6 ADT_MEDIA_IMAGE value
              * @property {number} ADT_MEDIA_AUDIO=7 ADT_MEDIA_AUDIO value
@@ -65,10 +63,8 @@ $root.baml = (function() {
             v1.BamlHandleType = (function() {
                 var valuesById = {}, values = Object.create(valuesById);
                 values[valuesById[0] = "HANDLE_UNSPECIFIED"] = 0;
-                values[valuesById[1] = "HANDLE_UNKNOWN"] = 1;
-                values[valuesById[2] = "RESOURCE_FILE"] = 2;
-                values[valuesById[3] = "RESOURCE_SOCKET"] = 3;
-                values[valuesById[4] = "RESOURCE_HTTP_RESPONSE"] = 4;
+                values[valuesById[1] = "UNTAGGED_RUST_DATA"] = 1;
+                values[valuesById[2] = "UNTAGGED_BEX_HEAP"] = 2;
                 values[valuesById[5] = "FUNCTION_REF"] = 5;
                 values[valuesById[6] = "ADT_MEDIA_IMAGE"] = 6;
                 values[valuesById[7] = "ADT_MEDIA_AUDIO"] = 7;
@@ -239,8 +235,6 @@ $root.baml = (function() {
                         case 0:
                         case 1:
                         case 2:
-                        case 3:
-                        case 4:
                         case 5:
                         case 6:
                         case 7:
@@ -287,21 +281,13 @@ $root.baml = (function() {
                     case 0:
                         message.handleType = 0;
                         break;
-                    case "HANDLE_UNKNOWN":
+                    case "UNTAGGED_RUST_DATA":
                     case 1:
                         message.handleType = 1;
                         break;
-                    case "RESOURCE_FILE":
+                    case "UNTAGGED_BEX_HEAP":
                     case 2:
                         message.handleType = 2;
-                        break;
-                    case "RESOURCE_SOCKET":
-                    case 3:
-                        message.handleType = 3;
-                        break;
-                    case "RESOURCE_HTTP_RESPONSE":
-                    case 4:
-                        message.handleType = 4;
                         break;
                     case "FUNCTION_REF":
                     case 5:

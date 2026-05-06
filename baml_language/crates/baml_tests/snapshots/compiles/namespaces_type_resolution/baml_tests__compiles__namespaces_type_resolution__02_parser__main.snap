@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13711
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -142,10 +143,12 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "Status.Ok"
-              WORD "Status"
-              DOT "."
-              WORD "Ok"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "Status.Ok"
+                  WORD "Status"
+                  DOT "."
+                  WORD "Ok"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """
@@ -153,10 +156,12 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "Status.Failed"
-              WORD "Status"
-              DOT "."
-              WORD "Failed"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "Status.Failed"
+                  WORD "Status"
+                  DOT "."
+                  WORD "Failed"
             FAT_ARROW "=>"
             STRING_LITERAL "failed"
               QUOTE """
@@ -164,10 +169,12 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "Status.Pending"
-              WORD "Status"
-              DOT "."
-              WORD "Pending"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "Status.Pending"
+                  WORD "Status"
+                  DOT "."
+                  WORD "Pending"
             FAT_ARROW "=>"
             STRING_LITERAL "pending"
               QUOTE """
@@ -221,8 +228,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -245,8 +254,9 @@ SOURCE_FILE
                 R_BRACE "}"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """
@@ -278,8 +288,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -289,8 +301,9 @@ SOURCE_FILE
                 WORD "Failed"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
             FAT_ARROW "=>"
             STRING_LITERAL "ok"
               QUOTE """

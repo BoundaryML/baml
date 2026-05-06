@@ -440,9 +440,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Warning: unreachable code: 1 statement(s) after diverging statement
-     ╭─[ loop_stmts.baml:406:39 ]
+     ╭─[ loop_stmts.baml:406:43 ]
      │
- 406 │ ╭─▶                 n: int if n > 100 => {
+ 406 │ ╭─▶                 let n: int if n > 100 => {
  407 │ ├─▶                     continue;
      │ │                                   
      │ ╰─────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
@@ -518,6 +518,18 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                                                                  ╰──── operator `Mul` cannot be applied to `bool` and `int`
      │ 
      │ Note: Error code: E0004
+─────╯
+
+  [type] Error: type mismatch: expected string, got 0
+     ╭─[ match_exprs.baml:446:6 ]
+     │
+ 446 │ ╭─▶     }
+     ┆ ┆   
+ 451 │ ├─▶     }
+     │ │           
+     │ ╰─────────── type mismatch: expected string, got 0
+     │     
+     │     Note: Error code: E0001
 ─────╯
 
   [validation] Error: Name `ManyParams` defined 2 times as: function, template_string

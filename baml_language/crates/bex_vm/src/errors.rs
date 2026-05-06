@@ -129,6 +129,9 @@ pub enum VmInternalError {
 
     #[error("unexpected constant kind: expected a TyTemplate constant at this index")]
     UnexpectedConstantKind,
+
+    #[error("invalid compact opcode byte: {0}")]
+    InvalidOpcode(u8),
 }
 
 /// Any kind of virtual machine error.

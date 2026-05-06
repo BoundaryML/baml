@@ -46,12 +46,12 @@ function user.outer_restored() -> int throws never {
   }
 }
 function user.declared_type_restored() -> string throws never {
-  { : "outer"
-    let x = "outer" : "outer"
+  { : string
+    let x: string = "outer" : "outer" -> string
     { : void
-      let x = 1 : 1
+      let x: int = 1 : 1 -> int
     }
-    x : "outer"
+    x : string
   }
 }
 function user.for_loop_restores_outer() -> int throws never {

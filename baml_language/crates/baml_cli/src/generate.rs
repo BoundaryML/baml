@@ -102,7 +102,7 @@ impl GenerateArgs {
 
             let generated = match generator.output_type.as_str() {
                 "python/pydantic" | "python/pydantic/v1" => {
-                    baml_codegen_python::to_source_code(&pool, &user_baml_files)
+                    codegen_python::to_source_code(&pool, &user_baml_files)
                 }
                 other => {
                     eprintln!(

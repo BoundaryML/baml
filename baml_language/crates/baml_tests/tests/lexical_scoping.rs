@@ -209,7 +209,7 @@ async fn lambdas_capture_match_and_catch_pattern_bindings() {
 
         function capture_match_arm() -> string {
             match ("matched") {
-                s: string => {
+                let s: string => {
                     let f = () -> string { s }
                     f()
                 }
@@ -227,7 +227,7 @@ async fn lambdas_capture_match_and_catch_pattern_bindings() {
 
         function capture_catch_arm_binding() -> string {
             throw_string() catch (e) {
-                s: string => {
+                let s: string => {
                     let f = () -> string { s }
                     f()
                 }
@@ -259,7 +259,7 @@ async fn match_and_catch_pattern_bindings_restore_outer_locals() {
         function match_post_match_restores_outer() -> int {
             let x = 10
             let _matched = match (1) {
-                x: int => x
+                let x: int => x
             }
             x
         }
@@ -267,7 +267,7 @@ async fn match_and_catch_pattern_bindings_restore_outer_locals() {
         function match_later_arm_uses_outer() -> int {
             let x = 20
             match ("value") {
-                x: int => 0,
+                let x: int => 0,
                 _: string => x
             }
         }

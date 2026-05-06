@@ -98,6 +98,14 @@ pub enum TirTypeError {
     },
     /// A `match`/`catch` arm can never execute because previous arms are exhaustive.
     UnreachableArm,
+    /// Or-pattern alternatives bind the same name with conflicting narrow
+    /// types. HIR already ensures the *names* line up across branches; this
+    /// is the type-level counterpart.
+    OrPatternBindingTypeMismatch {
+        name: Name,
+        first_type: Ty,
+        other_type: Ty,
+    },
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
@@ -283,6 +291,17 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::UnreachableArm => write!(f, "unreachable arm"),
+            TirTypeError::OrPatternBindingTypeMismatch {
+                name,
+                first_type,
+                other_type,
+            } => write!(
+                f,
+                "Or-pattern alternatives bind `{}` with conflicting types: `{}` vs `{}`",
+                name,
+                humanize_ty(first_type),
+                humanize_ty(other_type)
+            ),
             TirTypeError::InvalidCatchBindingType { type_name } => write!(
                 f,
                 "invalid catch binding type `{type_name}`; use a concrete type instead"

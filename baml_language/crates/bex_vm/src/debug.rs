@@ -28,8 +28,8 @@
 use std::fmt::Write;
 
 use bex_vm_types::{
-    HeapPtr,
-    bytecode::Instruction,
+    ConstValue, HeapPtr,
+    bytecode::{CompactCode, Instruction, OpCode, read_i8, read_i32, read_u16, read_u32},
     indexable::{GlobalIndex, GlobalPool, ObjectPool},
     types::{Function, Object, Value},
 };
@@ -1114,4 +1114,189 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         // All other instructions: no metadata.
         _ => String::new(),
     }
+}
+
+/// Disassemble compact bytecode into human-readable text.
+///
+/// Produces output in the format:
+/// ```text
+/// 0000  LOAD_INT_SMALL          42
+/// 0002  LOAD_VAR                0
+/// 0007  ADD
+/// 0008  RETURN
+/// ```
+///
+/// Jump offsets are shown as both the raw relative offset and the resolved
+/// absolute byte address target in parentheses.
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless
+)]
+pub fn display_compact_bytecode(
+    compact: &CompactCode,
+    constants: &[ConstValue],
+    f: &mut impl std::fmt::Write,
+) -> std::fmt::Result {
+    let code = &compact.code;
+    let mut pc = 0;
+
+    while pc < code.len() {
+        let offset = pc;
+        let op = OpCode::try_from(code[pc]).map_err(|_| std::fmt::Error)?;
+        pc += 1;
+
+        write!(f, "{offset:04}  {op:<24}")?;
+
+        match op {
+            // Unit ops: no operands
+            OpCode::Return
+            | OpCode::Await
+            | OpCode::Throw
+            | OpCode::LoadArrayElement
+            | OpCode::LoadMapElement
+            | OpCode::StoreArrayElement
+            | OpCode::StoreMapElement
+            | OpCode::CallIndirect
+            | OpCode::Discriminant
+            | OpCode::TypeTag
+            | OpCode::ThrowIfPanic
+            | OpCode::Unreachable
+            | OpCode::MakeCell
+            | OpCode::SendEvent
+            | OpCode::Add
+            | OpCode::Sub
+            | OpCode::Mul
+            | OpCode::Div
+            | OpCode::Mod
+            | OpCode::BitAnd
+            | OpCode::BitOr
+            | OpCode::BitXor
+            | OpCode::Shl
+            | OpCode::Shr
+            | OpCode::Eq
+            | OpCode::NotEq
+            | OpCode::Lt
+            | OpCode::LtEq
+            | OpCode::Gt
+            | OpCode::GtEq
+            | OpCode::AddInt
+            | OpCode::SubInt
+            | OpCode::MulInt
+            | OpCode::DivInt
+            | OpCode::ModInt
+            | OpCode::AddFloat
+            | OpCode::SubFloat
+            | OpCode::MulFloat
+            | OpCode::DivFloat
+            | OpCode::CmpIntEq
+            | OpCode::CmpIntNotEq
+            | OpCode::CmpIntLt
+            | OpCode::CmpIntLtEq
+            | OpCode::CmpIntGt
+            | OpCode::CmpIntGtEq
+            | OpCode::CmpFloatEq
+            | OpCode::CmpFloatNotEq
+            | OpCode::CmpFloatLt
+            | OpCode::CmpFloatLtEq
+            | OpCode::CmpFloatGt
+            | OpCode::CmpFloatGtEq
+            | OpCode::Not
+            | OpCode::Neg
+            | OpCode::LoadNull
+            | OpCode::LoadTrue
+            | OpCode::LoadFalse => {
+                writeln!(f)?;
+            }
+
+            OpCode::LoadIntSmall => {
+                let val = read_i8(code, &mut pc);
+                writeln!(f, "{val}")?;
+            }
+
+            // Single u32 operand with constant annotation
+            OpCode::LoadConst => {
+                let idx = read_u32(code, &mut pc);
+                if let Some(c) = constants.get(idx as usize) {
+                    writeln!(f, "{idx}  ; {c:?}")?;
+                } else {
+                    writeln!(f, "{idx}")?;
+                }
+            }
+
+            // Single u32 operand (index/slot)
+            OpCode::LoadVar
+            | OpCode::StoreVar
+            | OpCode::LoadGlobal
+            | OpCode::StoreGlobal
+            | OpCode::LoadField
+            | OpCode::StoreField
+            | OpCode::InitField
+            | OpCode::Pop
+            | OpCode::Copy
+            | OpCode::AllocArray
+            | OpCode::AllocMap
+            | OpCode::AllocVariant
+            | OpCode::DispatchFuture
+            | OpCode::Watch
+            | OpCode::Unwatch
+            | OpCode::Notify
+            | OpCode::NotifyBlock
+            | OpCode::VizEnter
+            | OpCode::VizExit
+            | OpCode::IsType
+            | OpCode::DenseTag
+            | OpCode::LoadType
+            | OpCode::MakeBoundMethod
+            | OpCode::LoadDeref
+            | OpCode::StoreDeref
+            | OpCode::LoadCapture
+            | OpCode::StoreCapture
+            | OpCode::CaptureRef => {
+                let val = read_u32(code, &mut pc);
+                writeln!(f, "{val}")?;
+            }
+
+            // Jump i32 operand: show relative offset and resolved absolute target
+            OpCode::Jump | OpCode::PopJumpIfFalse | OpCode::JumpIfFalse => {
+                let offset_val = read_i32(code, &mut pc);
+                let target = (pc as i64 + offset_val as i64) as usize;
+                writeln!(f, "{offset_val:+}  (-> {target:04})")?;
+            }
+
+            OpCode::JumpTable => {
+                let table_idx = read_u32(code, &mut pc);
+                let default_offset = read_i32(code, &mut pc);
+                let target = (pc as i64 + default_offset as i64) as usize;
+                writeln!(
+                    f,
+                    "table={table_idx}  default={default_offset:+} (-> {target:04})"
+                )?;
+            }
+
+            OpCode::Call => {
+                let callee = read_u32(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "callee={callee}  ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::AllocInstance => {
+                let class_obj = read_u32(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "class={class_obj}  ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::MakeClosure => {
+                let obj_idx = read_u32(code, &mut pc);
+                let capture_count = read_u16(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(
+                    f,
+                    "obj={obj_idx}  captures={capture_count}  ntypeargs={ntypeargs}"
+                )?;
+            }
+        }
+    }
+    Ok(())
 }

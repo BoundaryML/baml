@@ -11,7 +11,7 @@
 use baml_base::SourceFile;
 use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_hir::{
-    contributions::DefinitionKind,
+    contributions::{Definition, DefinitionKind},
     scope::{FileScopeId, ScopeKind},
 };
 use serde::Serialize;
@@ -57,6 +57,12 @@ pub struct SymbolDescription {
     pub dependencies: Vec<DepRef>,
     /// Sites where this symbol is used.
     pub references: Vec<RefSite>,
+    /// Instance methods (first param `self`) for classes.
+    pub instance_methods: Vec<DepRef>,
+    /// Static methods (no `self` param) for classes.
+    pub static_methods: Vec<DepRef>,
+    /// The containing class/enum for members.
+    pub container: Option<DepRef>,
 }
 
 /// A symbol referenced in the signature of another symbol.
@@ -131,6 +137,78 @@ pub fn describe(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolDesc
     describe_locals(db, files, name)
 }
 
+/// Describe a symbol given a known `Definition` (from `PackageItems` lookup).
+///
+/// Bypasses substring search — goes directly from `Definition` to `SymbolDescription`
+/// using the same `describe_top_level()` internals.
+pub fn describe_by_definition(
+    db: &dyn Db,
+    files: &[SourceFile],
+    definition: Definition<'_>,
+) -> Option<SymbolDescription> {
+    let (file, name_span) = crate::utils::definition_span(db, definition)?;
+
+    // Extract the name text from the source.
+    let name = {
+        let text = file.text(db);
+        let start: usize = name_span.start().into();
+        let end: usize = name_span.end().into();
+        text[start..end].to_string()
+    };
+
+    let sym = SymbolInfo {
+        name,
+        kind: definition.kind(),
+        file,
+        name_span,
+        container_name: None,
+    };
+
+    describe_top_level(db, files, &sym)
+}
+
+/// Describe a member (field, variant) within a known parent item.
+///
+/// Searches the parent item's children in the file outline for a member
+/// matching `member_name`, then delegates to `describe_member()`.
+pub fn describe_item_member(
+    db: &dyn Db,
+    files: &[SourceFile],
+    parent_def: Definition<'_>,
+    member_name: &str,
+) -> Option<SymbolDescription> {
+    let (parent_file, parent_name_span) = crate::utils::definition_span(db, parent_def)?;
+
+    // Get the parent's name from the source text.
+    let parent_name = {
+        let text = parent_file.text(db);
+        let start: usize = parent_name_span.start().into();
+        let end: usize = parent_name_span.end().into();
+        text[start..end].to_string()
+    };
+
+    // Search the file outline for the parent's children.
+    let outline = crate::outline::file_outline(db, parent_file);
+    for item in outline {
+        if item.name == parent_name {
+            for child in &item.children {
+                if child.name == member_name {
+                    let sym = SymbolInfo {
+                        name: child.name.clone(),
+                        kind: child.kind,
+                        file: parent_file,
+                        name_span: child.name_span,
+                        container_name: Some(parent_name),
+                    };
+                    return describe_member(db, files, &sym);
+                }
+            }
+        }
+    }
+
+    None
+}
+
 /// Build a full `SymbolDescription` for a single `SymbolInfo`.
 fn describe_symbol(
     db: &dyn Db,
@@ -185,6 +263,9 @@ fn describe_top_level(
         resolved_type,
         dependencies,
         references,
+        instance_methods: Vec::new(),
+        static_methods: Vec::new(),
+        container: None,
     })
 }
 
@@ -240,6 +321,13 @@ fn describe_member(
     // References to this field/variant.
     let references = find_references(db, files, file, sym.name_span);
 
+    // Move the container dependency from dependencies to the container field.
+    let container = if !dependencies.is_empty() {
+        Some(dependencies.remove(0))
+    } else {
+        None
+    };
+
     Some(SymbolDescription {
         name: sym.name.clone(),
         kind: sym.kind,
@@ -251,8 +339,11 @@ fn describe_member(
         full_body,
         docstring,
         resolved_type,
-        dependencies,
+        dependencies: Vec::new(),
         references,
+        instance_methods: Vec::new(),
+        static_methods: Vec::new(),
+        container,
     })
 }
 
@@ -329,6 +420,9 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     resolved_type: Some(type_str),
                     dependencies: vec![make_function_dep(db, file, func_local_id, &func_name)],
                     references: param_refs,
+                    instance_methods: Vec::new(),
+                    static_methods: Vec::new(),
+                    container: None,
                 });
             }
 
@@ -438,6 +532,9 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         resolved_type: Some(type_str),
                         dependencies: vec![make_function_dep(db, file, func_local_id, &func_name)],
                         references: binding_refs,
+                        instance_methods: Vec::new(),
+                        static_methods: Vec::new(),
+                        container: None,
                     });
                 }
             }

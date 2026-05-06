@@ -1,0 +1,81 @@
+// Pattern error cases: malformed Or-bindings, name mismatches, etc.
+
+// ============================================================================
+// Or-pattern alternatives must bind the same name set
+// ============================================================================
+
+// Single binding name differs across branches.
+function or_different_names_two(v: int) -> int {
+    match (v) {
+        (let x) | (let y) => 1
+    }
+}
+
+// Three branches, all different names.
+function or_different_names_three(v: int) -> int {
+    match (v) {
+        let x | let y | let z => 1
+    }
+}
+
+// One branch binds a name, the other does not.
+function or_one_binds_one_doesnt(v: int) -> int {
+    match (v) {
+        (let x) | _ => 1
+    }
+}
+
+// Binding name + sibling branch with a different binding name in a chain.
+function or_mixed_names_in_chain(v: int | string) -> int {
+    match (v) {
+        (let x: int) | (let y: string) => 1
+    }
+}
+
+// ============================================================================
+// Same name across branches but with conflicting narrows — should not compile.
+// ============================================================================
+
+function or_same_name_distinct_narrows(v: int | string) -> int {
+    match (v) {
+        (let x: int) | (let x: string) => 1
+    }
+}
+
+// Two bindings per Or branch with conflicting narrows on the SECOND name —
+// chain has [Bind(a), Bind(b), Type] so both `a` and `b` get the same
+// effective type per branch. With only `first_names.first()` checked, we'd
+// miss the mismatch when only the first name happens to agree across
+// branches. The current check picks `a` and compares branch types, which
+// catches the mismatch when both names share the chain's effective type.
+function or_multiple_binds_diff_narrows(v: int | string) -> int {
+    match (v) {
+        (let a: let b: int) | (let a: let b: string) => 1
+    }
+}
+
+// ============================================================================
+// Chain rule violations: each link must be a subtype of the next
+// ============================================================================
+
+// `int` is not a subtype of `string`.
+function chain_violates_subtype(v: int) -> int {
+    match (v) {
+        let n: int: string => 1
+    }
+}
+
+// Literal narrow not a subtype of the wider concrete type.
+function literal_narrow_violates(v: int) -> int {
+    match (v) {
+        let n: "hello": int => 1
+    }
+}
+
+// Binding link in the middle of a chain — only Wildcard/Bind atoms with no
+// concrete narrow can act as "no test" links, and they contribute `never` to
+// the chain rule. So `1: int: let y` requires `int <: never`, which fails.
+function binding_in_middle_of_chain() -> int {
+    let x: 1: int: let y = 1;
+    1
+}

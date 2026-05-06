@@ -12,16 +12,6 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected int, got type
-    ╭─[ reflect_intrinsic_errors.baml:13:12 ]
-    │
- 13 │     return x;
-    │            ┬  
-    │            ╰── type mismatch: expected int, got type
-    │ 
-    │ Note: Error code: E0001
-────╯
-
   [type] Error: unresolved type: NonExistent
     ╭─[ reflect_intrinsic_errors.baml:17:45 ]
     │
@@ -50,16 +40,6 @@ source: crates/baml_tests/src/generated_tests.rs
  8 │     let x: int = baml.llm.get_return_type(function_name);
    │                 ────────────────────┬───────────────────  
    │                                     ╰───────────────────── type mismatch: expected int, got type
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected int, got type
-   ╭─[ strict_normalization.baml:9:12 ]
-   │
- 9 │     return x;
-   │            ┬  
-   │            ╰── type mismatch: expected int, got type
    │ 
    │ Note: Error code: E0001
 ───╯

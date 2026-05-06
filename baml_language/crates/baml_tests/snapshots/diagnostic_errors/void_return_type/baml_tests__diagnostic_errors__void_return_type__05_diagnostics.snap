@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40180
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: this body may throw through callback `handler`, but declared throws is `never`. Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing.

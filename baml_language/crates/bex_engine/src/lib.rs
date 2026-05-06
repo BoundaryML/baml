@@ -415,6 +415,19 @@ impl BexEngine {
         // Extract compile-time objects for the heap
         let compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
+        // Encode compact bytecode for all functions before the heap freezes them.
+        // This must happen before BexHeap::new() because objects become immutable
+        // behind an Arc after that point.
+        let compile_time_objects: Vec<Object> = compile_time_objects
+            .into_iter()
+            .map(|mut obj| {
+                if let Object::Function(ref mut func) = obj {
+                    func.bytecode.compact = Some(func.bytecode.lower_to_compact());
+                }
+                obj
+            })
+            .collect();
+
         // Pre-compute class and enum indices before moving objects to heap.
         // This is used for allocating instances/variants from sys-op results.
         let class_indices: Vec<(String, usize)> = compile_time_objects

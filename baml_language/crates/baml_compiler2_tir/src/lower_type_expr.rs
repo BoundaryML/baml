@@ -172,6 +172,54 @@ pub fn lower_type_expr_in_ns(
                         return Ty::TypeVar(segments[0].clone(), TyAttr::default());
                     }
                 }
+                // Enum-variant fallback: a path like `Status.Active` (or
+                // `pkg.ns.Status.Active`) won't resolve as a type — `Active`
+                // isn't a type, it's a variant. Try interpreting the last
+                // segment as the variant and the rest as the enum's path.
+                if segments.len() >= 2 {
+                    let (variant, enum_path) = segments.split_last().unwrap();
+                    let enum_short = enum_path.last().unwrap();
+                    let enum_seg_ns = &enum_path[..enum_path.len() - 1];
+                    let enum_resolved = if !ns_context.is_empty() {
+                        let ns: Vec<baml_base::Name> = ns_context
+                            .iter()
+                            .chain(enum_seg_ns.iter())
+                            .cloned()
+                            .collect();
+                        package_items.lookup_type(&ns, enum_short)
+                    } else {
+                        package_items.lookup_type(enum_seg_ns, enum_short)
+                    };
+                    let enum_resolved = enum_resolved.or_else(|| {
+                        if enum_path.len() >= 2 {
+                            if enum_path[0].as_str() == "root" {
+                                package_items
+                                    .lookup_type(&enum_path[1..enum_path.len() - 1], enum_short)
+                            } else {
+                                let pkg_id = PackageId::new(db, enum_path[0].clone());
+                                let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+                                pkg.lookup_type(&enum_path[1..enum_path.len() - 1], enum_short)
+                            }
+                        } else {
+                            None
+                        }
+                    });
+                    if let Some(def @ Definition::Enum(enum_loc)) = enum_resolved {
+                        // Verify the variant actually exists on the enum;
+                        // otherwise `Status.Typo` would silently produce a
+                        // bogus `Ty::EnumVariant` and downstream code would
+                        // never see `UnresolvedType`.
+                        let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
+                        let enum_data = &item_tree[enum_loc.id(db)];
+                        if enum_data.variants.iter().any(|v| v.name == *variant) {
+                            return Ty::EnumVariant(
+                                qualify_def(db, def, enum_short),
+                                variant.clone(),
+                                TyAttr::default(),
+                            );
+                        }
+                    }
+                }
                 let name_str = segments
                     .iter()
                     .map(smol_str::SmolStr::as_str)
