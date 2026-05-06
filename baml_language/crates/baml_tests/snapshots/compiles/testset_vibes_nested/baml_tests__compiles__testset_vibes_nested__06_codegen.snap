@@ -28,6 +28,7 @@ function user.$init_test_27(registry: testing.TestCollector) -> null {
 }
 
 function user.ClassifySentiment(text: string) -> Sentiment {
+    load_type Sentiment
     load_global user.GPT4o
     load_const "ClassifySentiment"
     load_var text
@@ -93,6 +94,7 @@ function user.ClassifySentiment$stream(text: string) -> baml.llm.Stream<Sentimen
 }
 
 function user.ClassifySentiment2(text: string) -> string {
+    load_type string
     load_global user.GPT4o
     load_const "ClassifySentiment2"
     load_var text
@@ -231,6 +233,7 @@ function user.GPT4o$new() -> null {
 }
 
 function user.GenerateTests(count: int, topic: string) -> string[] {
+    load_type string[]
     load_global user.GPT4o
     load_const "GenerateTests"
     load_var count

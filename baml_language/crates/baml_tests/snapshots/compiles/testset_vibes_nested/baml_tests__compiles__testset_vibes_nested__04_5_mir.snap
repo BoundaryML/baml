@@ -336,10 +336,12 @@ fn user.ClassifySentiment(text: string) -> Sentiment {
     let _0: Sentiment // _0 // return
     let _1: string // text // param
     let _2: map<string, unknown>
+    let _3: type
 
     bb0: {
         _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const fn user.GPT4o, const "ClassifySentiment", copy _2) -> [bb1];
+        _3 = load_type(Sentiment);
+        _0 = call const fn baml.llm.call_llm_function<copy _3>(const fn user.GPT4o, const "ClassifySentiment", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -414,10 +416,12 @@ fn user.ClassifySentiment2(text: string) -> string {
     let _0: string // _0 // return
     let _1: string // text // param
     let _2: map<string, unknown>
+    let _3: type
 
     bb0: {
         _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const fn user.GPT4o, const "ClassifySentiment2", copy _2) -> [bb1];
+        _3 = load_type(string);
+        _0 = call const fn baml.llm.call_llm_function<copy _3>(const fn user.GPT4o, const "ClassifySentiment2", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -566,10 +570,12 @@ fn user.GenerateTests(count: int, topic: string) -> string[] {
     let _1: int // count // param
     let _2: string // topic // param
     let _3: map<string, unknown>
+    let _4: type
 
     bb0: {
         _3 = { const "count": copy _1, const "topic": copy _2 };
-        _0 = call const fn baml.llm.call_llm_function(const fn user.GPT4o, const "GenerateTests", copy _3) -> [bb1];
+        _4 = load_type(string[]);
+        _0 = call const fn baml.llm.call_llm_function<copy _4>(const fn user.GPT4o, const "GenerateTests", copy _3) -> [bb1];
     }
 
     bb1: {

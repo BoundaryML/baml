@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.Fn() -> string {
+    load_type string
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o"
     init_field .name

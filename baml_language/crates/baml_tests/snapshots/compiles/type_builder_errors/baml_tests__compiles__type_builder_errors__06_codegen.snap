@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.TypeBuilderFn(from_text: string) -> Resume {
+    load_type Resume
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o-mini"
     init_field .name

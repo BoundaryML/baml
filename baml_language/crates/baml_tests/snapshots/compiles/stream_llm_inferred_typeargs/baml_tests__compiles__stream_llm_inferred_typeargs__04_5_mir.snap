@@ -29,10 +29,12 @@ fn user.TestFunc(input: string) -> string {
     let _0: string // _0 // return
     let _1: string // input // param
     let _2: map<string, unknown>
+    let _3: type
 
     bb0: {
         _2 = { const "input": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const fn user.TestClient, const "TestFunc", copy _2) -> [bb1];
+        _3 = load_type(string);
+        _0 = call const fn baml.llm.call_llm_function<copy _3>(const fn user.TestClient, const "TestFunc", copy _2) -> [bb1];
     }
 
     bb1: {

@@ -9,6 +9,7 @@ function $init() -> null {
 }
 
 function user.CommentAfterArrow() -> string {
+    load_type string
     load_global user.TestClient
     load_const "CommentAfterArrow"
     alloc_map 0
@@ -64,6 +65,7 @@ function user.CommentAfterArrow$stream() -> baml.llm.Stream<string, null | strin
 }
 
 function user.FunctionWithComments(a: string, b: int) -> string {
+    load_type string
     load_global user.TestClient
     load_const "FunctionWithComments"
     load_var a

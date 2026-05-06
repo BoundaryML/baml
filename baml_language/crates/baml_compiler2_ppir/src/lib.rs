@@ -402,6 +402,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         func.name.as_str(),
                         &param_names,
                         client_name.as_deref(),
+                        Vec::new(),
                         span,
                     );
                     let companion = ast::FunctionDef {

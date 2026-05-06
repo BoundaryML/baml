@@ -50,6 +50,7 @@ function user.TestClient$new() -> null {
 }
 
 function user.TestFunc(input: string) -> string {
+    load_type string
     load_global user.TestClient
     load_const "TestFunc"
     load_var input

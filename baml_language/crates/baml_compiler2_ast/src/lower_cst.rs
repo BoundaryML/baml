@@ -219,11 +219,22 @@ fn lower_function(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Opt
         let llm_body_def = lower_llm_body(&llm);
         let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
         let client_name = llm_body_def.client.as_ref().map(|n| n.as_str().to_string());
+        // Pass the LLM function's declared return type as the explicit `<T>`
+        // type argument to `baml.llm.call_llm_function<T>`. This is required
+        // for the runtime type-arg threading: without it, `T` falls back to
+        // inferred-only and resolves to BuiltinUnknown inside the stdlib's
+        // `primitive.parse<T>(body)` call, surfacing as a "Non-parsable type:
+        // BuiltinUnknown" error from the LLM client.
+        let call_type_args: Vec<crate::ast::TypeExpr> = return_type
+            .as_ref()
+            .map(|rt| vec![rt.expr.clone()])
+            .unwrap_or_default();
         let (expr_body, source_map) = synthesize_llm_builtin_call(
             "call_llm_function",
             name.as_str(),
             &param_names,
             client_name.as_deref(),
+            call_type_args,
             llm_body_def.span,
         );
         (
@@ -378,6 +389,7 @@ pub fn synthesize_llm_builtin_call(
     function_name: &str,
     param_names: &[Name],
     client_name: Option<&str>,
+    type_args: Vec<crate::ast::TypeExpr>,
     span: text_size::TextRange,
 ) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
     use la_arena::Arena;
@@ -455,7 +467,7 @@ pub fn synthesize_llm_builtin_call(
     };
     let call = alloc(Expr::Call {
         callee,
-        type_args: vec![],
+        type_args,
         args: vec![client_arg, fn_name_expr, args_map],
     });
 

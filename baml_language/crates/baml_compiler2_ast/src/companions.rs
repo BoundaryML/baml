@@ -133,6 +133,7 @@ fn make_llm_companion(
         parent.name.as_str(),
         &param_names,
         client_name.as_deref(),
+        Vec::new(),
         parent.span,
     );
     FunctionDef {
