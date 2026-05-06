@@ -11,3 +11,15 @@ class user.User {
 function user.decode_container(s: string) -> user.Container  [expr] {
   {  } baml.json.from_string(s)
 }
+function user.from_json(j: baml.json.json) -> user.User  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.Container  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}

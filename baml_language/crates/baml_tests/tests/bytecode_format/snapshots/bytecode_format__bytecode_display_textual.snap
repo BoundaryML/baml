@@ -84,6 +84,60 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> void th
     return
 }
 
+function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type testing.RunReport
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function testing.RunReport.to_json(self: null) -> baml.json.json {
+    load_type testing.RunReport
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type testing.SerializedTest
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function testing.SerializedTest.to_json(self: null) -> baml.json.json {
+    load_type testing.SerializedTest
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type testing.SerializedTestSet
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function testing.SerializedTestSet.to_json(self: null) -> baml.json.json {
+    load_type testing.SerializedTestSet
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function testing.TestCollector.find_testset(self: null, name: string) -> testing.TestSetRegistration {
     load_var self
     load_field .testsets
@@ -126,6 +180,16 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
 
   L4:
     load_var ts
+    return
+}
+
+function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type testing.TestCollector
+    load_var _2
+    call baml.json.from_string
     return
 }
 
@@ -378,6 +442,32 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     jump L3
 }
 
+function testing.TestCollector.to_json(self: null) -> baml.json.json {
+    load_type testing.TestCollector
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type testing.TestRegistration
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function testing.TestRegistration.to_json(self: null) -> baml.json.json {
+    load_type testing.TestRegistration
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
     load_var self
     load_field .collector
@@ -502,6 +592,16 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     call testing.TestRegistry.serialize
 
   L10:
+    return
+}
+
+function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type testing.TestRegistry
+    load_var _2
+    call baml.json.from_string
     return
 }
 
@@ -732,6 +832,68 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     jump L0
 }
 
+function testing.TestRegistry.to_json(self: null) -> baml.json.json {
+    load_type testing.TestRegistry
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type testing.TestReport
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function testing.TestReport.to_json(self: null) -> baml.json.json {
+    load_type testing.TestReport
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type testing.TestSetRegistration
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function testing.TestSetRegistration.to_json(self: null) -> baml.json.json {
+    load_type testing.TestSetRegistration
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type testing.TestSetReport
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function testing.TestSetReport.to_json(self: null) -> baml.json.json {
+    load_type testing.TestSetReport
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
     load_var ?1
     make_cell
@@ -788,6 +950,52 @@ function testing.run_testset(run_children: () -> testing.TestSetReport throws ne
     return
 }
 
+function user.ErrorInfo.from_json(j: baml.json.json) -> ErrorInfo {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type ErrorInfo
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.ErrorInfo.to_json(self: null) -> baml.json.json {
+    load_type ErrorInfo
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function user.Report.from_json(j: baml.json.json) -> Report {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Report
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.Report.to_json(self: null) -> baml.json.json {
+    load_type Report
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function user.User.from_json(j: baml.json.json) -> User {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type User
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
 function user.User.promote(self: null, bonus: int) -> Report {
     load_var self
     load_var self
@@ -811,6 +1019,14 @@ function user.User.promote(self: null, bonus: int) -> Report {
     load_var base
     load_field .breakdown
     init_field .breakdown
+    return
+}
+
+function user.User.to_json(self: null) -> baml.json.json {
+    load_type User
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
     return
 }
 

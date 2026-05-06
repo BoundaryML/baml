@@ -122,3 +122,21 @@ function user.Fn$stream() -> baml.llm.Stream<string, null | string> {
     call baml.llm.stream_llm_function
     return
 }
+
+function user.TopLevelClass.from_json(j: baml.json.json) -> TopLevelClass {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type TopLevelClass
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.TopLevelClass.to_json(self: null) -> baml.json.json {
+    load_type TopLevelClass
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}

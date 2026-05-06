@@ -5,9 +5,21 @@ expression: "render_tir(&db, file)"
 class user.Inner {
   value: string
 }
+function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Inner>(self)) : baml.json.json
+}
+function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Inner
+}
 class user.WithMaps {
   simple: map<string, int>
   complex: map<string, user.Inner>
+}
+function user.WithMaps.to_json(self: user.WithMaps) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithMaps>(self)) : baml.json.json
+}
+function user.WithMaps.from_json(j: baml.json.json) -> user.WithMaps throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithMaps
 }
 class user.Inner$stream {
   value: null | string

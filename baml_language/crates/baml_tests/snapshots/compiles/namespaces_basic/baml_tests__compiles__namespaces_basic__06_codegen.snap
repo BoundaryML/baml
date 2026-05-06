@@ -1,6 +1,24 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.Config.from_json(j: baml.json.json) -> Config {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Config
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.Config.to_json(self: null) -> baml.json.json {
+    load_type Config
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function user.GetResponse(cfg: Config) -> llm.Response {
     alloc_instance user.llm.Response
     load_const "hello"
@@ -18,5 +36,23 @@ function user.llm.MakeResponse(cfg: Config) -> llm.Response {
     load_var cfg
     load_field .model
     init_field .model
+    return
+}
+
+function user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type llm.Response
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.llm.Response.to_json(self: null) -> baml.json.json {
+    load_type llm.Response
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
     return
 }

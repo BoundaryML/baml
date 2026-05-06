@@ -17,6 +17,24 @@ function user.Baz.Greeting(self: null) -> string {
     return
 }
 
+function user.Baz.from_json(j: baml.json.json) -> Baz {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Baz
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.Baz.to_json(self: null) -> baml.json.json {
+    load_type Baz
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function user.Foo(x: int) -> int {
     load_var x
     load_const 1

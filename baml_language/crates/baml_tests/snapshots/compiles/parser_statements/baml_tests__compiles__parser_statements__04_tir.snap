@@ -93,6 +93,12 @@ function user.edge_call_then_index(foo: () -> int[] throws never) -> int throws 
 class user.EdgeFoo {
   x: int
 }
+function user.EdgeFoo.to_json(self: user.EdgeFoo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<EdgeFoo>(self)) : baml.json.json
+}
+function user.EdgeFoo.from_json(j: baml.json.json) -> user.EdgeFoo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.EdgeFoo
+}
 function user.edge_type_then_object() -> int throws never {
   { : int
     EdgeFoo { x: 1 }.x : int
@@ -262,6 +268,12 @@ function user.let_statements() -> int throws never {
 class user.Point {
   x: int
   y: int
+}
+function user.Point.to_json(self: user.Point) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Point>(self)) : baml.json.json
+}
+function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Point
 }
 class user.Point$stream {
   x: null | int

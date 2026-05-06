@@ -18,6 +18,27 @@ fn user.deserialize_user(s: string) -> User {
     }
 }
 
+fn user.User.from_json(j: baml.json.json) -> User {
+    // Locals:
+    let _0: User // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(User);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.serialize_user(u: User) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -30,6 +51,27 @@ fn user.serialize_user(u: User) -> string {
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn user.User.to_json(self: User) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: User // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(User);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
         return;
     }
 }

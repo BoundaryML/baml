@@ -6,9 +6,21 @@ class user.NotNullEducation {
   school: string
   year: int
 }
+function user.NotNullEducation.to_json(self: user.NotNullEducation) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<NotNullEducation>(self)) : baml.json.json
+}
+function user.NotNullEducation.from_json(j: baml.json.json) -> user.NotNullEducation throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.NotNullEducation
+}
 class user.References {
   education: user.NotNullEducation
   educations: user.NotNullEducation[]
+}
+function user.References.to_json(self: user.References) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<References>(self)) : baml.json.json
+}
+function user.References.from_json(j: baml.json.json) -> user.References throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.References
 }
 class user.NotNullEducation$stream {
   school: null | string

@@ -309,3 +309,45 @@ function user.WrongLiteralTypeBoolWithInt(b: bool) -> string  [expr] {
 function user.WrongLiteralTypeIntWithString(x: int) -> string  [expr] {
   {  } match (x) { "hello" => "wrong type" }
 }
+function user.from_json(j: baml.json.json) -> user.Cat  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.Pending  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.Dog  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.Failure  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.Success  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.Fish  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.Bird  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}

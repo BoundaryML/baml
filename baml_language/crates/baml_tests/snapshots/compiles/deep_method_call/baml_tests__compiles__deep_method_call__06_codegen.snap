@@ -1,9 +1,45 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.A.from_json(j: baml.json.json) -> A {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type A
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.A.to_json(self: null) -> baml.json.json {
+    load_type A
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function user.B.from_json(j: baml.json.json) -> B {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type B
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
 function user.B.greet(self: null) -> string {
     load_var self
     load_field .label
+    return
+}
+
+function user.B.to_json(self: null) -> baml.json.json {
+    load_type B
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
     return
 }
 

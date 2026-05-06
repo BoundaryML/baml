@@ -7,6 +7,12 @@ class user.WithLiterals {
   version: 1
   enabled: true
 }
+function user.WithLiterals.to_json(self: user.WithLiterals) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithLiterals>(self)) : baml.json.json
+}
+function user.WithLiterals.from_json(j: baml.json.json) -> user.WithLiterals throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithLiterals
+}
 class user.WithLiterals$stream {
   type: "resume"
   version: 1

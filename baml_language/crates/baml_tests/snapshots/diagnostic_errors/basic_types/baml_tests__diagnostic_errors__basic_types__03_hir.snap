@@ -15,6 +15,18 @@ class user.FieldAttributes {
   state: string
   multiple: string?
 }
+function user.from_json(j: baml.json.json) -> user.FieldAttributes  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.ClassAttributes  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
 function user.GetMixedList() -> int | string[]  [llm] {
   baml.llm.call_llm_function(GPT4, "GetMixedList", map {  })
 }
@@ -91,3 +103,9 @@ type user.ReallyLongMapType = map<string, "fieopwaiwjepfoiwajpoweijf" | int | st
 type user.Role = "user" | "assistant" | "system"
 type user.RoleList = "reader"[]
 type user.UnionOfArrays = int[] | string[]
+function user.from_json(j: baml.json.json) -> user.User  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}

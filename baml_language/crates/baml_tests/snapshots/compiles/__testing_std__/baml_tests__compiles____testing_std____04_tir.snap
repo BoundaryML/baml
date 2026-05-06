@@ -11,10 +11,22 @@ class testing.TestRegistration {
   body: testing.TestBody
   runner: testing.TestRunner?
 }
+function testing.TestRegistration.to_json(self: testing.TestRegistration) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TestRegistration>(self)) : baml.json.json
+}
+function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : testing.TestRegistration
+}
 class testing.TestSetRegistration {
   name: string
   collector: testing.TestSetBody
   runner: testing.TestSetRunner?
+}
+function testing.TestSetRegistration.to_json(self: testing.TestSetRegistration) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TestSetRegistration>(self)) : baml.json.json
+}
+function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : testing.TestSetRegistration
 }
 class testing.TestCollector {
   prefix: string
@@ -110,6 +122,12 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     throw "TestSet not found: " + name : string
   }
 }
+function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TestCollector>(self)) : baml.json.json
+}
+function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : testing.TestCollector
+}
 function testing.$invoke_collector(collector: testing.TestSetBody, c: testing.TestCollector) -> void throws never {
   { : void
     collector(c) : void
@@ -119,10 +137,22 @@ class testing.SerializedTest {
   type: string
   name: string
 }
+function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<SerializedTest>(self)) : baml.json.json
+}
+function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : testing.SerializedTest
+}
 class testing.SerializedTestSet {
   name: string
   items: testing.SerializedTestDef[]
   loadingTimeMs: int
+}
+function testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<SerializedTestSet>(self)) : baml.json.json
+}
+function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : testing.SerializedTestSet
 }
 type testing.SerializedTestDef = testing.SerializedTest | testing.SerializedTestSet
 class testing.TestRegistry {
@@ -204,6 +234,12 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     throw "TestSet not found..." + name : string
   }
 }
+function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TestRegistry>(self)) : baml.json.json
+}
+function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : testing.TestRegistry
+}
 function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -> testing.TestReport throws never {
   { : testing.TestReport
     let base_run: TestReportThunk = : () -> testing.TestReport throws never -> testing.TestReportThunk
@@ -275,9 +311,21 @@ class testing.RunReport {
   outcome: testing.Outcome
   duration_ms: int
 }
+function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<RunReport>(self)) : baml.json.json
+}
+function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : testing.RunReport
+}
 class testing.TestReport {
   outcome: testing.Outcome
   runs: testing.RunReport[]
+}
+function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TestReport>(self)) : baml.json.json
+}
+function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : testing.TestReport
 }
 class testing.TestSetReport {
   outcome: testing.Outcome
@@ -285,6 +333,12 @@ class testing.TestSetReport {
   failed: int
   total: int
   results: testing.ChildReport[]
+}
+function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TestSetReport>(self)) : baml.json.json
+}
+function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : testing.TestSetReport
 }
 type testing.ChildReport = testing.TestReport | testing.TestSetReport
 type testing.TestBody = () -> void throws unknown

@@ -1,4 +1,38 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.Education.from_json(j: baml.json.json) -> Education {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Education
+    load_var _2
+    call baml.json.from_string
+    return
+}
 
+function user.Education.to_json(self: null) -> baml.json.json {
+    load_type Education
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function user.Resume.from_json(j: baml.json.json) -> Resume {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Resume
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.Resume.to_json(self: null) -> baml.json.json {
+    load_type Resume
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}

@@ -105,6 +105,12 @@ fn class_field_self_reference() {
       next: user.Node
     }
       !! 0..24: class cycle: user.Node
+    function user.Node.to_json(self: user.Node) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<Node>(self)) : baml.json.json
+    }
+    function user.Node.from_json(j: baml.json.json) -> user.Node throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.Node
+    }
     class user.Node$stream {
       next: null | user.Node$stream
     }
@@ -125,10 +131,22 @@ fn class_field_mutual_reference() {
       wife: user.Wife
     }
       !! 0..27: class cycle: user.Husband -> user.Wife -> user.Husband
+    function user.Husband.to_json(self: user.Husband) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<Husband>(self)) : baml.json.json
+    }
+    function user.Husband.from_json(j: baml.json.json) -> user.Husband throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.Husband
+    }
     class user.Wife {
       husband: user.Husband
     }
       !! 27..58: class cycle: user.Husband -> user.Wife -> user.Husband
+    function user.Wife.to_json(self: user.Wife) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<Wife>(self)) : baml.json.json
+    }
+    function user.Wife.from_json(j: baml.json.json) -> user.Wife throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.Wife
+    }
     class user.Husband$stream {
       wife: null | user.Wife$stream
     }
@@ -258,10 +276,22 @@ fn class_required_field_mutual_cycle() {
       b: user.B
     }
       !! 0..15: class cycle: user.A -> user.B -> user.A
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     class user.B {
       a: user.A
     }
       !! 15..31: class cycle: user.A -> user.B -> user.A
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
+    }
     class user.A$stream {
       b: null | user.B$stream
     }
@@ -282,6 +312,12 @@ fn class_required_field_self_cycle() {
       self_ref: user.A
     }
       !! 0..22: class cycle: user.A
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     class user.A$stream {
       self_ref: null | user.A$stream
     }
@@ -301,14 +337,32 @@ fn class_required_field_three_way_cycle() {
       b: user.B
     }
       !! 0..15: class cycle: user.A -> user.B -> user.C -> user.A
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     class user.B {
       c: user.C
     }
       !! 15..31: class cycle: user.A -> user.B -> user.C -> user.A
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
+    }
     class user.C {
       a: user.A
     }
       !! 31..47: class cycle: user.A -> user.B -> user.C -> user.A
+    function user.C.to_json(self: user.C) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<C>(self)) : baml.json.json
+    }
+    function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.C
+    }
     class user.A$stream {
       b: null | user.B$stream
     }
@@ -332,8 +386,20 @@ fn class_optional_field_breaks_cycle() {
     class user.A {
       b: user.B?
     }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     class user.B {
       a: user.A
+    }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
     }
     class user.A$stream {
       b: null | user.B$stream
@@ -355,8 +421,20 @@ fn class_list_field_breaks_cycle() {
     class user.A {
       bs: user.B[]
     }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     class user.B {
       a: user.A
+    }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
     }
     class user.A$stream {
       bs: user.B$stream[]
@@ -381,8 +459,20 @@ fn class_map_field_breaks_cycle() {
     class user.A {
       bm: map<string, user.B>
     }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     class user.B {
       a: user.A
+    }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
     }
     class user.A$stream {
       bm: map<string, user.B$stream>
@@ -407,11 +497,23 @@ fn class_cycle_through_type_alias() {
       b: user.AliasB
     }
       !! 0..20: class cycle: user.A -> user.B -> user.A
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     type user.AliasB = user.B
     class user.B {
       a: user.A
     }
       !! 36..52: class cycle: user.A -> user.B -> user.A
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
+    }
     class user.A$stream {
       b: null | user.B$stream
     }
@@ -435,9 +537,21 @@ fn class_cycle_broken_by_alias_to_optional() {
     class user.A {
       b: user.AliasB
     }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     type user.AliasB = user.B?
     class user.B {
       a: user.A
+    }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
     }
     class user.A$stream {
       b: null | user.B$stream
@@ -460,10 +574,22 @@ fn class_union_field_all_variants_same_class() {
       b: user.B | user.B
     }
       !! 0..19: class cycle: user.A -> user.B -> user.A
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     class user.B {
       a: user.A
     }
       !! 19..35: class cycle: user.A -> user.B -> user.A
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
+    }
     class user.A$stream {
       b: null | user.B$stream | user.B$stream
     }
@@ -484,8 +610,20 @@ fn class_union_field_different_variants_breaks_cycle() {
     class user.A {
       b: user.B | string
     }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     class user.B {
       a: user.A
+    }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
     }
     class user.A$stream {
       b: null | user.B$stream | string

@@ -5,11 +5,23 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.foo {
   x: int
 }
+function user.foo.to_json(self: user.foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<foo>(self)) : baml.json.json
+}
+function user.foo.from_json(j: baml.json.json) -> user.foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.foo
+}
 class user.foo$stream {
   x: null | int
 }
 class user.foo.Bar {
   y: string
+}
+function user.foo.Bar.to_json(self: user.foo.Bar) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Bar>(self)) : baml.json.json
+}
+function user.foo.Bar.from_json(j: baml.json.json) -> user.foo.Bar throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.foo.Bar
 }
 class user.foo.Bar$stream {
   y: null | string

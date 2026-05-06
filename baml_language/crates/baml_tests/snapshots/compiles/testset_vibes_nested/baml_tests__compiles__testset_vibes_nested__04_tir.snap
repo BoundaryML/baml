@@ -10,6 +10,12 @@ class user.Sentiment {
   confidence: float
   reasoning: string
 }
+function user.Sentiment.to_json(self: user.Sentiment) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Sentiment>(self)) : baml.json.json
+}
+function user.Sentiment.from_json(j: baml.json.json) -> user.Sentiment throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Sentiment
+}
 function user.ClassifySentiment(text: string) -> user.Sentiment throws never {
   baml.llm.call_llm_function<T>(GPT4o, "ClassifySentiment", map { "text": text }) : user.Sentiment
 }
@@ -69,7 +75,7 @@ function user.ClassifySentiment2$build_request_stream(text: string) -> baml.http
 function user.ClassifySentiment2$parse(json: string) -> string throws never {
   baml.llm.parse<T>("ClassifySentiment2", json) : string
 }
-function user.$init_test_28(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_32(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test_set("test", (testset: testing.TestCollector) -> void { ... }, null) : void
       (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws unknown
@@ -85,17 +91,17 @@ function user.$init_test_28(registry: testing.TestCollector) -> ? throws never {
     null : null
   }
 }
-lambda user.$init_test_28 {
+lambda user.$init_test_32 {
 }
-lambda user.$init_test_28 {
+lambda user.$init_test_32 {
 }
-lambda user.$init_test_28 {
+lambda user.$init_test_32 {
 }
-lambda user.$init_test_28 {
+lambda user.$init_test_32 {
 }
-lambda user.$init_test_28 {
+lambda user.$init_test_32 {
 }
-lambda user.$init_test_28 {
+lambda user.$init_test_32 {
 }
 class user.Sentiment$stream {
   feeling: null | string

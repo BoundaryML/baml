@@ -11,13 +11,31 @@ class user.GPoint {
   x: float
   y: float
 }
+function user.GPoint.to_json(self: user.GPoint) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<GPoint>(self)) : baml.json.json
+}
+function user.GPoint.from_json(j: baml.json.json) -> user.GPoint throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.GPoint
+}
 class user.GCoord {
   lat: float
   lng: float
 }
+function user.GCoord.to_json(self: user.GCoord) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<GCoord>(self)) : baml.json.json
+}
+function user.GCoord.from_json(j: baml.json.json) -> user.GCoord throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.GCoord
+}
 class user.GConfig {
   key: string
   value: string
+}
+function user.GConfig.to_json(self: user.GConfig) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<GConfig>(self)) : baml.json.json
+}
+function user.GConfig.from_json(j: baml.json.json) -> user.GConfig throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.GConfig
 }
 class user.GProfile {
   status: user.GStatus
@@ -26,11 +44,23 @@ class user.GProfile {
   location: user.GPoint
   fallback: user.GCoord
 }
+function user.GProfile.to_json(self: user.GProfile) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<GProfile>(self)) : baml.json.json
+}
+function user.GProfile.from_json(j: baml.json.json) -> user.GProfile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.GProfile
+}
 class user.GAliased {
   status: user.GStatus @alias("s")
   role: user.GRole @alias("r")
   point: user.GPoint @alias("p")
   coord: user.GCoord @alias("c")
+}
+function user.GAliased.to_json(self: user.GAliased) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<GAliased>(self)) : baml.json.json
+}
+function user.GAliased.from_json(j: baml.json.json) -> user.GAliased throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.GAliased
 }
 class user.GComplex {
   statuses: user.GStatus[]
@@ -40,11 +70,23 @@ class user.GComplex {
   maybe_point: user.GPoint?
   config_map: map<string, user.GConfig>
 }
+function user.GComplex.to_json(self: user.GComplex) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<GComplex>(self)) : baml.json.json
+}
+function user.GComplex.from_json(j: baml.json.json) -> user.GComplex throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.GComplex
+}
 class user.GIncident {
   severity: user.GSeverity
   priority: user.GPriority
   title: string
   config: user.GConfig
+}
+function user.GIncident.to_json(self: user.GIncident) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<GIncident>(self)) : baml.json.json
+}
+function user.GIncident.from_json(j: baml.json.json) -> user.GIncident throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.GIncident
 }
 class user.GPoint$stream {
   x: null | float
@@ -89,6 +131,12 @@ enum user.GroupF
 class user.MFoo {
   x: int
 }
+function user.MFoo.to_json(self: user.MFoo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<MFoo>(self)) : baml.json.json
+}
+function user.MFoo.from_json(j: baml.json.json) -> user.MFoo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.MFoo
+}
 class user.OrderingModifiers {
   c1: user.MFoo?
   c2: user.MFoo? @alias("c2_alias")
@@ -96,6 +144,12 @@ class user.OrderingModifiers {
   c4: user.MFoo[] @alias("c4_alias")
   c5: user.MFoo[]? @alias("c5_alias")
   c6: map<string, user.MFoo> @alias("c6_alias")
+}
+function user.OrderingModifiers.to_json(self: user.OrderingModifiers) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<OrderingModifiers>(self)) : baml.json.json
+}
+function user.OrderingModifiers.from_json(j: baml.json.json) -> user.OrderingModifiers throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.OrderingModifiers
 }
 class user.MFoo$stream {
   x: null | int
@@ -111,8 +165,20 @@ class user.OrderingModifiers$stream {
 class user.NFoo {
   x: int
 }
+function user.NFoo.to_json(self: user.NFoo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<NFoo>(self)) : baml.json.json
+}
+function user.NFoo.from_json(j: baml.json.json) -> user.NFoo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.NFoo
+}
 class user.NBar {
   x: int
+}
+function user.NBar.to_json(self: user.NBar) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<NBar>(self)) : baml.json.json
+}
+function user.NBar.from_json(j: baml.json.json) -> user.NBar throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.NBar
 }
 class user.AliasInNestedTypes {
   d1: user.NFoo[] @alias("d1_alias")
@@ -125,6 +191,12 @@ class user.AliasInNestedTypes {
   d8: user.NFoo[]
   d9: user.NFoo @alias("d9_outer")
   d10: map<string, map<user.NFoo, user.NBar>>
+}
+function user.AliasInNestedTypes.to_json(self: user.AliasInNestedTypes) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<AliasInNestedTypes>(self)) : baml.json.json
+}
+function user.AliasInNestedTypes.from_json(j: baml.json.json) -> user.AliasInNestedTypes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.AliasInNestedTypes
 }
 class user.NFoo$stream {
   x: null | int
@@ -147,14 +219,38 @@ class user.AliasInNestedTypes$stream {
 class user.EFoo {
   x: int
 }
+function user.EFoo.to_json(self: user.EFoo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<EFoo>(self)) : baml.json.json
+}
+function user.EFoo.from_json(j: baml.json.json) -> user.EFoo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.EFoo
+}
 class user.EA {
   x: int
+}
+function user.EA.to_json(self: user.EA) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<EA>(self)) : baml.json.json
+}
+function user.EA.from_json(j: baml.json.json) -> user.EA throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.EA
 }
 class user.EB {
   x: int
 }
+function user.EB.to_json(self: user.EB) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<EB>(self)) : baml.json.json
+}
+function user.EB.from_json(j: baml.json.json) -> user.EB throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.EB
+}
 class user.EC {
   x: int
+}
+function user.EC.to_json(self: user.EC) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<EC>(self)) : baml.json.json
+}
+function user.EC.from_json(j: baml.json.json) -> user.EC throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.EC
 }
 type user.E1 = user.EFoo
 type user.E2 = user.EFoo
@@ -199,6 +295,12 @@ type user.E4$stream = user.EA$stream | user.EB$stream | user.EC$stream
 class user.Fizz {
   x: int
 }
+function user.Fizz.to_json(self: user.Fizz) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Fizz>(self)) : baml.json.json
+}
+function user.Fizz.from_json(j: baml.json.json) -> user.Fizz throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Fizz
+}
 class user.OrderingSimple {
   a1: user.Fizz
   a2: user.Fizz @alias("a2_alias")
@@ -209,6 +311,12 @@ class user.OrderingSimple {
   a7: user.Fizz
   a8: user.Fizz @alias("a8_alias") @description("a8 desc")
   a9: user.Fizz @alias("a9_alias")
+}
+function user.OrderingSimple.to_json(self: user.OrderingSimple) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<OrderingSimple>(self)) : baml.json.json
+}
+function user.OrderingSimple.from_json(j: baml.json.json) -> user.OrderingSimple throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.OrderingSimple
 }
 class user.Fizz$stream {
   x: null | int
@@ -227,11 +335,29 @@ class user.OrderingSimple$stream {
 class user.UA {
   x: int
 }
+function user.UA.to_json(self: user.UA) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<UA>(self)) : baml.json.json
+}
+function user.UA.from_json(j: baml.json.json) -> user.UA throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.UA
+}
 class user.UB {
   x: int
 }
+function user.UB.to_json(self: user.UB) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<UB>(self)) : baml.json.json
+}
+function user.UB.from_json(j: baml.json.json) -> user.UB throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.UB
+}
 class user.UC {
   x: int
+}
+function user.UC.to_json(self: user.UC) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<UC>(self)) : baml.json.json
+}
+function user.UC.from_json(j: baml.json.json) -> user.UC throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.UC
 }
 class user.OrderingUnions {
   b1: user.UA | user.UB | user.UC
@@ -248,6 +374,12 @@ class user.OrderingUnions {
   b12: user.UA | user.UB @alias("b12_alias")
   b13: user.UA | user.UB
   b14: user.UA | user.UB
+}
+function user.OrderingUnions.to_json(self: user.OrderingUnions) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<OrderingUnions>(self)) : baml.json.json
+}
+function user.OrderingUnions.from_json(j: baml.json.json) -> user.OrderingUnions throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.OrderingUnions
 }
 class user.UA$stream {
   x: null | int

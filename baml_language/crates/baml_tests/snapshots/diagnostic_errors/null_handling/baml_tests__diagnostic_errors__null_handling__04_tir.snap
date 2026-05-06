@@ -7,21 +7,45 @@ class user.Address {
   street: string
   zip: string?
 }
+function user.Address.to_json(self: user.Address) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Address>(self)) : baml.json.json
+}
+function user.Address.from_json(j: baml.json.json) -> user.Address throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Address
+}
 class user.Profile {
   name: string
   address: user.Address?
   scores: int[]?
   settings: map<string, string>?
 }
+function user.Profile.to_json(self: user.Profile) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Profile>(self)) : baml.json.json
+}
+function user.Profile.from_json(j: baml.json.json) -> user.Profile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Profile
+}
 class user.User {
   id: int
   profile: user.Profile?
+}
+function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<User>(self)) : baml.json.json
+}
+function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.User
 }
 class user.Node {
   value: int
   next: user.Node?
   children: user.Node[]?
   labels: map<string, user.Node>?
+}
+function user.Node.to_json(self: user.Node) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Node>(self)) : baml.json.json
+}
+function user.Node.from_json(j: baml.json.json) -> user.Node throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Node
 }
 function user.OptionalChaining(user: user.User?, nonNullUser: user.User, node: user.Node?) -> string throws never {
   { : never

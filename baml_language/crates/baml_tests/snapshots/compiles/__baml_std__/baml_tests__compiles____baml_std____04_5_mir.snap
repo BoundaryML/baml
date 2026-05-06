@@ -4,9 +4,53 @@ source: crates/baml_tests/src/generated_tests.rs
 === MIR2 ===
 
 === MIR2 (package baml) ===
+fn baml.Bool.to_json = builtin(vm)
+
 fn baml.Array.at = builtin(vm)
 
 fn baml.Array.concat = builtin(vm)
+
+fn baml.Array.from_json(j: baml.json.json) -> baml.Array<void> {
+    // Locals:
+    let _0: baml.Array<void> // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.Array<#0>);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.Map.from_json(j: baml.json.json) -> baml.Map<void, void> {
+    // Locals:
+    let _0: baml.Map<void, void> // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.Map<#0, #1>);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.Map.get = builtin(vm)
 
@@ -32,11 +76,57 @@ fn baml.Map.set = builtin(vm)
 
 fn baml.Array.slice = builtin(vm)
 
+fn baml.Array.to_json(self: baml.Array) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.Array // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.Array<#0>);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.Map.to_json(self: baml.Map) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.Map // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.Map<#0, #1>);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.Map.values = builtin(vm)
 
 fn baml.deep_copy = builtin(vm)
 
 fn baml.deep_equals = builtin(vm)
+
+fn baml.Float.to_json = builtin(vm)
+
+fn baml.Int.to_json = builtin(vm)
 
 fn baml.env.get = builtin(io)
 
@@ -73,6 +163,510 @@ fn baml.env.get_or_panic(key: string) -> string {
     }
 }
 
+fn baml.errors.InvalidArgument.from_json(j: baml.json.json) -> baml.errors.InvalidArgument {
+    // Locals:
+    let _0: baml.errors.InvalidArgument // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.errors.InvalidArgument);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.Unsupported.from_json(j: baml.json.json) -> baml.errors.Unsupported {
+    // Locals:
+    let _0: baml.errors.Unsupported // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.errors.Unsupported);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.NotImplemented.from_json(j: baml.json.json) -> baml.errors.NotImplemented {
+    // Locals:
+    let _0: baml.errors.NotImplemented // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.errors.NotImplemented);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.HostPanic.from_json(j: baml.json.json) -> baml.errors.HostPanic {
+    // Locals:
+    let _0: baml.errors.HostPanic // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.errors.HostPanic);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.Io.from_json(j: baml.json.json) -> baml.errors.Io {
+    // Locals:
+    let _0: baml.errors.Io // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.errors.Io);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.AccessError.from_json(j: baml.json.json) -> baml.errors.AccessError {
+    // Locals:
+    let _0: baml.errors.AccessError // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.errors.AccessError);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.LlmClient.from_json(j: baml.json.json) -> baml.errors.LlmClient {
+    // Locals:
+    let _0: baml.errors.LlmClient // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.errors.LlmClient);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.Timeout.from_json(j: baml.json.json) -> baml.errors.Timeout {
+    // Locals:
+    let _0: baml.errors.Timeout // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.errors.Timeout);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.RenderPrompt.from_json(j: baml.json.json) -> baml.errors.RenderPrompt {
+    // Locals:
+    let _0: baml.errors.RenderPrompt // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.errors.RenderPrompt);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.DevOther.from_json(j: baml.json.json) -> baml.errors.DevOther {
+    // Locals:
+    let _0: baml.errors.DevOther // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.errors.DevOther);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.DevOther.to_json(self: baml.errors.DevOther) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.DevOther // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.errors.DevOther);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.InvalidArgument.to_json(self: baml.errors.InvalidArgument) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.InvalidArgument // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.errors.InvalidArgument);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.Unsupported.to_json(self: baml.errors.Unsupported) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.Unsupported // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.errors.Unsupported);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.NotImplemented.to_json(self: baml.errors.NotImplemented) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.NotImplemented // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.errors.NotImplemented);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.HostPanic.to_json(self: baml.errors.HostPanic) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.HostPanic // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.errors.HostPanic);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.Io.to_json(self: baml.errors.Io) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.Io // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.errors.Io);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.AccessError.to_json(self: baml.errors.AccessError) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.AccessError // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.errors.AccessError);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.LlmClient.to_json(self: baml.errors.LlmClient) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.LlmClient // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.errors.LlmClient);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.Timeout.to_json(self: baml.errors.Timeout) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.Timeout // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.errors.Timeout);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.RenderPrompt.to_json(self: baml.errors.RenderPrompt) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.RenderPrompt // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.errors.RenderPrompt);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.StackFrame.from_json(j: baml.json.json) -> baml.errors.StackFrame {
+    // Locals:
+    let _0: baml.errors.StackFrame // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.errors.StackFrame);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.StackTrace.from_json(j: baml.json.json) -> baml.errors.StackTrace {
+    // Locals:
+    let _0: baml.errors.StackTrace // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.errors.StackTrace);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.StackTrace.to_json(self: baml.errors.StackTrace) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.StackTrace // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.errors.StackTrace);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.errors.StackFrame.to_json(self: baml.errors.StackFrame) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.errors.StackFrame // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.errors.StackFrame);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.errors.StackTrace.to_string = builtin(vm)
 
 fn baml.events.send = builtin(intrinsic)
@@ -82,6 +676,69 @@ fn baml.fs.File.bytes = builtin(io)
 fn baml.fs.File.close = builtin(io)
 
 fn baml.fs.exists = builtin(io)
+
+fn baml.fs.File.from_json(j: baml.json.json) -> baml.fs.File {
+    // Locals:
+    let _0: baml.fs.File // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.fs.File);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.fs.DirEntry.from_json(j: baml.json.json) -> baml.fs.DirEntry {
+    // Locals:
+    let _0: baml.fs.DirEntry // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.fs.DirEntry);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.fs.MkdirOptions.from_json(j: baml.json.json) -> baml.fs.MkdirOptions {
+    // Locals:
+    let _0: baml.fs.MkdirOptions // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.fs.MkdirOptions);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.fs.mkdir = builtin(io)
 
@@ -103,6 +760,69 @@ fn baml.fs.size = builtin(io)
 
 fn baml.fs.File.text = builtin(io)
 
+fn baml.fs.File.to_json(self: baml.fs.File) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.fs.File // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.fs.File);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.fs.DirEntry.to_json(self: baml.fs.DirEntry) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.fs.DirEntry // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.fs.DirEntry);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.fs.MkdirOptions.to_json(self: baml.fs.MkdirOptions) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.fs.MkdirOptions // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.fs.MkdirOptions);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.fs.File.write = builtin(io)
 
 fn baml.fs.write = builtin(io)
@@ -111,11 +831,95 @@ fn baml.fs.File.write_bytes = builtin(io)
 
 fn baml.fs.write_bytes = builtin(io)
 
+fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
+    // Locals:
+    let _0: baml.glob.ScanOptions // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.glob.ScanOptions);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.glob.Glob.from_json(j: baml.json.json) -> baml.glob.Glob {
+    // Locals:
+    let _0: baml.glob.Glob // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.glob.Glob);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.glob.Glob.matches = builtin(io)
 
 fn baml.glob.new = builtin(io)
 
 fn baml.glob.Glob.scan = builtin(io)
+
+fn baml.glob.Glob.to_json(self: baml.glob.Glob) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.glob.Glob // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.glob.Glob);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.glob.ScanOptions.to_json(self: baml.glob.ScanOptions) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.glob.ScanOptions // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.glob.ScanOptions);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.http.Response.bytes = builtin(io)
 
@@ -124,6 +928,69 @@ fn baml.http.SseStream.close = builtin(io)
 fn baml.http.fetch = builtin(io)
 
 fn baml.http.fetch_sse = builtin(io)
+
+fn baml.http.Request.from_json(j: baml.json.json) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.http.Request);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.http.SseStream.from_json(j: baml.json.json) -> baml.http.SseStream {
+    // Locals:
+    let _0: baml.http.SseStream // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.http.SseStream);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.http.Response.from_json(j: baml.json.json) -> baml.http.Response {
+    // Locals:
+    let _0: baml.http.Response // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.http.Response);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.http.SseStream.next = builtin(io)
 
@@ -156,7 +1023,133 @@ fn baml.http.send = builtin(io)
 
 fn baml.http.Response.text = builtin(io)
 
+fn baml.http.Response.to_json(self: baml.http.Response) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.http.Response // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.http.Response);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.http.Request.to_json(self: baml.http.Request) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.http.Request // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.http.Request);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.http.SseStream.to_json(self: baml.http.SseStream) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.http.SseStream // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.http.SseStream);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.io.input = builtin(io)
+
+fn baml.json.JsonParseError.from_json(j: baml.json.json) -> baml.json.JsonParseError {
+    // Locals:
+    let _0: baml.json.JsonParseError // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.json.JsonParseError);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.json.JsonSerializationError.from_json(j: baml.json.json) -> baml.json.JsonSerializationError {
+    // Locals:
+    let _0: baml.json.JsonSerializationError // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.json.JsonSerializationError);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.json.JsonDecodeError.from_json(j: baml.json.json) -> baml.json.JsonDecodeError {
+    // Locals:
+    let _0: baml.json.JsonDecodeError // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.json.JsonDecodeError);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.json.from_string = builtin(vm)
 
@@ -165,6 +1158,69 @@ fn baml.json.parse = builtin(vm)
 fn baml.json.stringify = builtin(vm)
 
 fn baml.json.stringify_pretty = builtin(vm)
+
+fn baml.json.JsonDecodeError.to_json(self: baml.json.JsonDecodeError) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.json.JsonDecodeError // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.json.JsonDecodeError);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.json.JsonParseError.to_json(self: baml.json.JsonParseError) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.json.JsonParseError // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.json.JsonParseError);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.json.JsonSerializationError.to_json(self: baml.json.JsonSerializationError) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.json.JsonSerializationError // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.json.JsonSerializationError);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.json.to_string = builtin(vm)
 
@@ -270,6 +1326,69 @@ fn baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, ar
     }
 
     bb4: {
+        return;
+    }
+}
+
+fn baml.llm.OrchestrationStep.from_json(j: baml.json.json) -> baml.llm.OrchestrationStep {
+    // Locals:
+    let _0: baml.llm.OrchestrationStep // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.OrchestrationStep);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.PlannerState.from_json(j: baml.json.json) -> baml.llm.PlannerState {
+    // Locals:
+    let _0: baml.llm.PlannerState // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.PlannerState);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.ExecutionContext.from_json(j: baml.json.json) -> baml.llm.ExecutionContext {
+    // Locals:
+    let _0: baml.llm.ExecutionContext // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.ExecutionContext);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
         return;
     }
 }
@@ -525,6 +1644,69 @@ fn baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, 
     }
 
     bb4: {
+        return;
+    }
+}
+
+fn baml.llm.ExecutionContext.to_json(self: baml.llm.ExecutionContext) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.ExecutionContext // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.ExecutionContext);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.OrchestrationStep.to_json(self: baml.llm.OrchestrationStep) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.OrchestrationStep // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.OrchestrationStep);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.PlannerState.to_json(self: baml.llm.PlannerState) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.PlannerState // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.PlannerState);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
         return;
     }
 }
@@ -1928,6 +3110,279 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
 
 fn baml.llm.StreamAccumulator.finish_reason = builtin(io)
 
+fn baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<void, void> {
+    // Locals:
+    let _0: baml.llm.Stream<void, void> // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.Stream<#0, #1>);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.PrimitiveClientOptions.from_json(j: baml.json.json) -> baml.llm.PrimitiveClientOptions {
+    // Locals:
+    let _0: baml.llm.PrimitiveClientOptions // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.PrimitiveClientOptions);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.StreamCache.from_json(j: baml.json.json) -> baml.llm.StreamCache<void, void> {
+    // Locals:
+    let _0: baml.llm.StreamCache<void, void> // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.StreamCache<#0, #1>);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.MediaUrlHandler {
+    // Locals:
+    let _0: baml.llm.MediaUrlHandler // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.MediaUrlHandler);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.StreamAccumulator.from_json(j: baml.json.json) -> baml.llm.StreamAccumulator {
+    // Locals:
+    let _0: baml.llm.StreamAccumulator // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.StreamAccumulator);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
+    // Locals:
+    let _0: baml.llm.Client // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.Client);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptions {
+    // Locals:
+    let _0: baml.llm.BedrockOptions // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.BedrockOptions);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.RetryPolicy.from_json(j: baml.json.json) -> baml.llm.RetryPolicy {
+    // Locals:
+    let _0: baml.llm.RetryPolicy // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.RetryPolicy);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.VertexAiOptions {
+    // Locals:
+    let _0: baml.llm.VertexAiOptions // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.VertexAiOptions);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.PromptAst.from_json(j: baml.json.json) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.PromptAst);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.AnthropicOptions.from_json(j: baml.json.json) -> baml.llm.AnthropicOptions {
+    // Locals:
+    let _0: baml.llm.AnthropicOptions // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.AnthropicOptions);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.PrimitiveClient.from_json(j: baml.json.json) -> baml.llm.PrimitiveClient {
+    // Locals:
+    let _0: baml.llm.PrimitiveClient // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.PrimitiveClient);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.AzureOpenAiOptions {
+    // Locals:
+    let _0: baml.llm.AzureOpenAiOptions // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.llm.AzureOpenAiOptions);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.llm.from_shorthand = builtin(io)
 
 fn baml.llm.Client.get_constructor = builtin(io)
@@ -2111,6 +3566,279 @@ fn baml.llm.PrimitiveClient.render_prompt = builtin(io)
 
 fn baml.llm.PrimitiveClient.specialize_prompt = builtin(io)
 
+fn baml.llm.Stream.to_json(self: baml.llm.Stream) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.Stream // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.Stream<#0, #1>);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.PrimitiveClientOptions.to_json(self: baml.llm.PrimitiveClientOptions) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.PrimitiveClientOptions // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.PrimitiveClientOptions);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.StreamCache.to_json(self: baml.llm.StreamCache) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.StreamCache // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.StreamCache<#0, #1>);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.MediaUrlHandler.to_json(self: baml.llm.MediaUrlHandler) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.MediaUrlHandler // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.MediaUrlHandler);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.StreamAccumulator.to_json(self: baml.llm.StreamAccumulator) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.StreamAccumulator // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.StreamAccumulator);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.Client.to_json(self: baml.llm.Client) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.Client // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.Client);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.BedrockOptions.to_json(self: baml.llm.BedrockOptions) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.BedrockOptions // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.BedrockOptions);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.RetryPolicy.to_json(self: baml.llm.RetryPolicy) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.RetryPolicy // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.RetryPolicy);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.VertexAiOptions.to_json(self: baml.llm.VertexAiOptions) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.VertexAiOptions // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.VertexAiOptions);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.PromptAst.to_json(self: baml.llm.PromptAst) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.PromptAst // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.PromptAst);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.AnthropicOptions.to_json(self: baml.llm.AnthropicOptions) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.AnthropicOptions // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.AnthropicOptions);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.PrimitiveClient.to_json(self: baml.llm.PrimitiveClient) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.PrimitiveClient // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.PrimitiveClient);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.llm.AzureOpenAiOptions.to_json(self: baml.llm.AzureOpenAiOptions) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.llm.AzureOpenAiOptions // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.llm.AzureOpenAiOptions);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient {
     // Locals:
     let _0: baml.llm.PrimitiveClient // _0 // return
@@ -2163,69 +3891,581 @@ fn baml.math.trunc = builtin(vm)
 
 fn baml.media.Video.base64 = builtin(vm)
 
+fn baml.media.Audio.base64 = builtin(vm)
+
 fn baml.media.Pdf.base64 = builtin(vm)
 
 fn baml.media.Image.base64 = builtin(vm)
 
-fn baml.media.Audio.base64 = builtin(vm)
+fn baml.media.Audio.file = builtin(vm)
 
 fn baml.media.Pdf.file = builtin(vm)
 
 fn baml.media.Image.file = builtin(vm)
 
-fn baml.media.Audio.file = builtin(vm)
-
 fn baml.media.Video.file = builtin(vm)
-
-fn baml.media.Video.from_base64 = builtin(vm)
 
 fn baml.media.Pdf.from_base64 = builtin(vm)
 
 fn baml.media.Image.from_base64 = builtin(vm)
 
-fn baml.media.Audio.from_base64 = builtin(vm)
+fn baml.media.Video.from_base64 = builtin(vm)
 
-fn baml.media.Video.from_file = builtin(vm)
+fn baml.media.Audio.from_base64 = builtin(vm)
 
 fn baml.media.Pdf.from_file = builtin(vm)
 
 fn baml.media.Image.from_file = builtin(vm)
 
+fn baml.media.Video.from_file = builtin(vm)
+
 fn baml.media.Audio.from_file = builtin(vm)
 
 fn baml.media.Video.from_url = builtin(vm)
+
+fn baml.media.Audio.from_url = builtin(vm)
 
 fn baml.media.Pdf.from_url = builtin(vm)
 
 fn baml.media.Image.from_url = builtin(vm)
 
-fn baml.media.Audio.from_url = builtin(vm)
-
 fn baml.media.Pdf.mime_type = builtin(vm)
 
 fn baml.media.Image.mime_type = builtin(vm)
 
+fn baml.media.Video.mime_type = builtin(vm)
+
 fn baml.media.Audio.mime_type = builtin(vm)
 
-fn baml.media.Video.mime_type = builtin(vm)
+fn baml.media.Audio.to_json = builtin(vm)
+
+fn baml.media.Pdf.to_json = builtin(vm)
+
+fn baml.media.Image.to_json = builtin(vm)
+
+fn baml.media.Video.to_json = builtin(vm)
 
 fn baml.media.Pdf.url = builtin(vm)
 
 fn baml.media.Image.url = builtin(vm)
 
-fn baml.media.Audio.url = builtin(vm)
-
 fn baml.media.Video.url = builtin(vm)
+
+fn baml.media.Audio.url = builtin(vm)
 
 fn baml.net.Socket.close = builtin(io)
 
 fn baml.net.connect = builtin(io)
 
+fn baml.net.Socket.from_json(j: baml.json.json) -> baml.net.Socket {
+    // Locals:
+    let _0: baml.net.Socket // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.net.Socket);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.net.Socket.read = builtin(io)
+
+fn baml.net.Socket.to_json(self: baml.net.Socket) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.net.Socket // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.net.Socket);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.DivisionByZero.from_json(j: baml.json.json) -> baml.panics.DivisionByZero {
+    // Locals:
+    let _0: baml.panics.DivisionByZero // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.panics.DivisionByZero);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.StackOverflow.from_json(j: baml.json.json) -> baml.panics.StackOverflow {
+    // Locals:
+    let _0: baml.panics.StackOverflow // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.panics.StackOverflow);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.UserPanic.from_json(j: baml.json.json) -> baml.panics.UserPanic {
+    // Locals:
+    let _0: baml.panics.UserPanic // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.panics.UserPanic);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.IndexOutOfBounds.from_json(j: baml.json.json) -> baml.panics.IndexOutOfBounds {
+    // Locals:
+    let _0: baml.panics.IndexOutOfBounds // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.panics.IndexOutOfBounds);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.AssertionFailed.from_json(j: baml.json.json) -> baml.panics.AssertionFailed {
+    // Locals:
+    let _0: baml.panics.AssertionFailed // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.panics.AssertionFailed);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFailure {
+    // Locals:
+    let _0: baml.panics.AllocFailure // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.panics.AllocFailure);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.MapKeyNotFound.from_json(j: baml.json.json) -> baml.panics.MapKeyNotFound {
+    // Locals:
+    let _0: baml.panics.MapKeyNotFound // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.panics.MapKeyNotFound);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.Unreachable.from_json(j: baml.json.json) -> baml.panics.Unreachable {
+    // Locals:
+    let _0: baml.panics.Unreachable // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.panics.Unreachable);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.DivisionByZero.to_json(self: baml.panics.DivisionByZero) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.DivisionByZero // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.panics.DivisionByZero);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.StackOverflow.to_json(self: baml.panics.StackOverflow) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.StackOverflow // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.panics.StackOverflow);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.UserPanic.to_json(self: baml.panics.UserPanic) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.UserPanic // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.panics.UserPanic);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.IndexOutOfBounds.to_json(self: baml.panics.IndexOutOfBounds) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.IndexOutOfBounds // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.panics.IndexOutOfBounds);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.AssertionFailed.to_json(self: baml.panics.AssertionFailed) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.AssertionFailed // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.panics.AssertionFailed);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.AllocFailure.to_json(self: baml.panics.AllocFailure) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.AllocFailure // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.panics.AllocFailure);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.MapKeyNotFound.to_json(self: baml.panics.MapKeyNotFound) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.MapKeyNotFound // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.panics.MapKeyNotFound);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.Unreachable.to_json(self: baml.panics.Unreachable) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.Unreachable // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.panics.Unreachable);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.stream.StreamFinished.from_json(j: baml.json.json) -> baml.stream.StreamFinished {
+    // Locals:
+    let _0: baml.stream.StreamFinished // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.stream.StreamFinished);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.stream.StreamNoYield.from_json(j: baml.json.json) -> baml.stream.StreamNoYield {
+    // Locals:
+    let _0: baml.stream.StreamNoYield // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.stream.StreamNoYield);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.stream.StreamNoYield.to_json(self: baml.stream.StreamNoYield) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.stream.StreamNoYield // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.stream.StreamNoYield);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.stream.StreamFinished.to_json(self: baml.stream.StreamFinished) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.stream.StreamFinished // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.stream.StreamFinished);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.sys.argv = builtin(vm)
 
 fn baml.sys.exec = builtin(io)
+
+fn baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptions {
+    // Locals:
+    let _0: baml.sys.ProcessOptions // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.sys.ProcessOptions);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.sys.ShellOutput.from_json(j: baml.json.json) -> baml.sys.ShellOutput {
+    // Locals:
+    let _0: baml.sys.ShellOutput // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.sys.ShellOutput);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.sys.now_ms = builtin(vm)
 
@@ -2252,7 +4492,51 @@ fn baml.sys.shell = builtin(io)
 
 fn baml.sys.sleep = builtin(io)
 
+fn baml.sys.ShellOutput.to_json(self: baml.sys.ShellOutput) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.sys.ShellOutput // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.sys.ShellOutput);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.sys.ProcessOptions.to_json(self: baml.sys.ProcessOptions) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.sys.ProcessOptions // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.sys.ProcessOptions);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.unstable.string = builtin(vm)
+
+fn baml.Null.to_json = builtin(vm)
 
 fn baml.String.charAt = builtin(vm)
 
@@ -2282,7 +4566,51 @@ fn baml.String.toUpperCase = builtin(vm)
 
 fn baml.String.to_bytes = builtin(vm)
 
+fn baml.String.to_json = builtin(vm)
+
 fn baml.String.trim = builtin(vm)
+
+fn baml.TypeValue.from_json(j: baml.json.json) -> baml.TypeValue {
+    // Locals:
+    let _0: baml.TypeValue // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.TypeValue);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.TypeValue.to_json(self: baml.TypeValue) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.TypeValue // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.TypeValue);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.TypeValue.to_string = builtin(vm)
 
@@ -2315,6 +4643,8 @@ fn baml.Uint8Array.to_array = builtin(vm)
 fn baml.Uint8Array.to_base64 = builtin(vm)
 
 fn baml.Uint8Array.to_hex = builtin(vm)
+
+fn baml.Uint8Array.to_json = builtin(vm)
 
 fn baml.Uint8Array.to_string = builtin(vm)
 

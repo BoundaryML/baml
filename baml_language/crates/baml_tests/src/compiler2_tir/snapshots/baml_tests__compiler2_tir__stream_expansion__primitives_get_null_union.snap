@@ -8,6 +8,12 @@ class user.Primitives {
   flag: bool
   score: float
 }
+function user.Primitives.to_json(self: user.Primitives) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Primitives>(self)) : baml.json.json
+}
+function user.Primitives.from_json(j: baml.json.json) -> user.Primitives throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Primitives
+}
 class user.Primitives$stream {
   name: null | string
   count: null | int

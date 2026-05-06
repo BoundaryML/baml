@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.$init_test_28(registry: testing.TestCollector) -> null {
+fn user.$init_test_32(registry: testing.TestCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestCollector // registry // param
@@ -25,7 +25,7 @@ fn user.$init_test_28(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_28, 0)>() -> null {
+fn .<lambda($init_test_32, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: HasWith // h
@@ -42,6 +42,48 @@ fn .<lambda($init_test_28, 0)>() -> null {
     }
 }
 
+fn user.Foo.from_json(j: baml.json.json) -> Foo {
+    // Locals:
+    let _0: Foo // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(Foo);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.HasWith.from_json(j: baml.json.json) -> HasWith {
+    // Locals:
+    let _0: HasWith // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(HasWith);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.make_foo() -> Foo {
     // Locals:
     let _0: Foo // _0 // return
@@ -52,6 +94,48 @@ fn user.make_foo() -> Foo {
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn user.HasWith.to_json(self: HasWith) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: HasWith // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(HasWith);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Foo.to_json(self: Foo) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: Foo // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(Foo);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
         return;
     }
 }

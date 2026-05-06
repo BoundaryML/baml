@@ -6,6 +6,12 @@ class user.WithDone {
   name: string
   age: int
 }
+function user.WithDone.to_json(self: user.WithDone) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithDone>(self)) : baml.json.json
+}
+function user.WithDone.from_json(j: baml.json.json) -> user.WithDone throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithDone
+}
 class user.WithDone$stream {
   name: string
   age: null | int

@@ -20,3 +20,9 @@ function user.TypeBuilderFn$parse(json: string) -> user.Resume  [expr] {
 function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "TypeBuilderFn", map { "from_text": from_text })
 }
+function user.from_json(j: baml.json.json) -> user.Resume  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}

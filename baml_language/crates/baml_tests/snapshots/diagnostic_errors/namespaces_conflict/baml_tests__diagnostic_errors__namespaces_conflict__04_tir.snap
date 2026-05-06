@@ -5,12 +5,24 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.llm.Response {
   text: string
 }
+function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Response>(self)) : baml.json.json
+}
+function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.llm.Response
+}
 class user.llm.Response$stream {
   text: null | string
 }
 class user.llm.Response {
   body: string
   status: int
+}
+function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Response>(self)) : baml.json.json
+}
+function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.llm.Response
 }
 class user.llm.Response$stream {
   body: null | string

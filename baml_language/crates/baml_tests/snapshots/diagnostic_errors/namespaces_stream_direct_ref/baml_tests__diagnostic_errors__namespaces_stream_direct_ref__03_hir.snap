@@ -19,6 +19,24 @@ function user.RootUsesLlmStream(r: root.llm.Response$stream) -> string  [expr] {
 function user.RootUsesOwnStream(c: user.Config$stream) -> string  [expr] {
   {  } c.key
 }
+function user.from_json(j: baml.json.json) -> user.Config  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.RootWithStreamFields  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.Response  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
 class user.llm.Config {
   model: string
 }
@@ -34,4 +52,22 @@ function user.llm.LlmUsesOwnStream(r: user.llm.Response$stream) -> string  [expr
 }
 function user.llm.LlmUsesRootStream(c: root.Config$stream) -> string  [expr] {
   {  } c.key
+}
+function user.llm.from_json(j: baml.json.json) -> user.llm.Config  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.llm.from_json(j: baml.json.json) -> user.llm.LlmWithStreamFields  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
 }

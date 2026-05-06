@@ -1,4 +1,38 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.foo.Bar.from_json(j: baml.json.json) -> foo.Bar {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type foo.Bar
+    load_var _2
+    call baml.json.from_string
+    return
+}
 
+function user.foo.Bar.to_json(self: null) -> baml.json.json {
+    load_type foo.Bar
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function user.foo.from_json(j: baml.json.json) -> foo {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type foo
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.foo.to_json(self: null) -> baml.json.json {
+    load_type foo
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}

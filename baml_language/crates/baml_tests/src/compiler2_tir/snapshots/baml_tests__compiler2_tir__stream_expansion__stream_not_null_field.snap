@@ -6,6 +6,12 @@ class user.WithNotNull {
   gpa: float
   name: string
 }
+function user.WithNotNull.to_json(self: user.WithNotNull) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithNotNull>(self)) : baml.json.json
+}
+function user.WithNotNull.from_json(j: baml.json.json) -> user.WithNotNull throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithNotNull
+}
 class user.WithNotNull$stream {
   gpa: null | float
   name: null | string

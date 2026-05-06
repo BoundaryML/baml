@@ -1,6 +1,24 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.Box.from_json(j: baml.json.json) -> Box<void> {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Box<#0>
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.Box.to_json(self: null) -> baml.json.json {
+    load_type Box<#0>
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function user.Box.unwrap(self: null) -> void {
     load_var self
     load_field .value
@@ -30,6 +48,52 @@ function user.Calculator.compute(self: null, a: int, b: int) -> int {
     return
 }
 
+function user.Calculator.from_json(j: baml.json.json) -> Calculator {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Calculator
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.Calculator.to_json(self: null) -> baml.json.json {
+    load_type Calculator
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function user.Config.from_json(j: baml.json.json) -> Config {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Config
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.Config.to_json(self: null) -> baml.json.json {
+    load_type Config
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function user.Counter.from_json(j: baml.json.json) -> Counter {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Counter
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
 function user.Counter.increment(self: null) -> int {
     load_var self
     load_var self
@@ -39,6 +103,24 @@ function user.Counter.increment(self: null) -> int {
     store_field .value
     load_var self
     load_field .value
+    return
+}
+
+function user.Counter.to_json(self: null) -> baml.json.json {
+    load_type Counter
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function user.Employee.from_json(j: baml.json.json) -> Employee {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Employee
+    load_var _2
+    call baml.json.from_string
     return
 }
 
@@ -63,6 +145,14 @@ function user.Employee.greet(self: null, greeting: string) -> string {
     return
 }
 
+function user.Employee.to_json(self: null) -> baml.json.json {
+    load_type Employee
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function user.Encoder.encode(self: null, data: string) -> string {
     load_const "["
     load_var self
@@ -75,11 +165,57 @@ function user.Encoder.encode(self: null, data: string) -> string {
     return
 }
 
+function user.Encoder.from_json(j: baml.json.json) -> Encoder {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Encoder
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.Encoder.to_json(self: null) -> baml.json.json {
+    load_type Encoder
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function user.Formatter.format(self: null, text: string) -> string {
     load_var self
     load_field .prefix
     load_var text
     bin_op +
+    return
+}
+
+function user.Formatter.from_json(j: baml.json.json) -> Formatter {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Formatter
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.Formatter.to_json(self: null) -> baml.json.json {
+    load_type Formatter
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function user.RangeCheck.from_json(j: baml.json.json) -> RangeCheck {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type RangeCheck
+    load_var _2
+    call baml.json.from_string
     return
 }
 
@@ -96,6 +232,14 @@ function user.RangeCheck.is_valid(self: null, n: int) -> bool {
     cmp_int_op <=
 
   L0:
+    return
+}
+
+function user.RangeCheck.to_json(self: null) -> baml.json.json {
+    load_type RangeCheck
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
     return
 }
 

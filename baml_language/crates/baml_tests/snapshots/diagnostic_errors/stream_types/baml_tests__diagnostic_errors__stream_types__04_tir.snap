@@ -7,12 +7,30 @@ class user.Config {
   name: string
   data: user.AttrFoo
 }
+function user.Config.to_json(self: user.Config) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Config>(self)) : baml.json.json
+}
+function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Config
+}
 class user.AttrFoo {
   x: int
+}
+function user.AttrFoo.to_json(self: user.AttrFoo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<AttrFoo>(self)) : baml.json.json
+}
+function user.AttrFoo.from_json(j: baml.json.json) -> user.AttrFoo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.AttrFoo
 }
 class user.WithBlockAttrs {
   a: int
   b: string
+}
+function user.WithBlockAttrs.to_json(self: user.WithBlockAttrs) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithBlockAttrs>(self)) : baml.json.json
+}
+function user.WithBlockAttrs.from_json(j: baml.json.json) -> user.WithBlockAttrs throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithBlockAttrs
 }
 class user.Config$stream {
   id: int
@@ -32,12 +50,24 @@ class user.Foo {
   c: float
   d: bool
 }
+function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Foo>(self)) : baml.json.json
+}
+function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Foo
+}
 class user.Bar {
   ref: user.Foo
   items: int[]
   nested: user.Foo[]
   mapping: map<string, int>
   opt: int?
+}
+function user.Bar.to_json(self: user.Bar) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Bar>(self)) : baml.json.json
+}
+function user.Bar.from_json(j: baml.json.json) -> user.Bar throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Bar
 }
 class user.Foo$stream {
   a: null | int
@@ -56,9 +86,21 @@ class user.ApiCall {
   request: baml.http.Request
   label: string
 }
+function user.ApiCall.to_json(self: user.ApiCall) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<ApiCall>(self)) : baml.json.json
+}
+function user.ApiCall.from_json(j: baml.json.json) -> user.ApiCall throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.ApiCall
+}
 class user.WithResponse {
   response: baml.http.Response
   status: string
+}
+function user.WithResponse.to_json(self: user.WithResponse) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithResponse>(self)) : baml.json.json
+}
+function user.WithResponse.from_json(j: baml.json.json) -> user.WithResponse throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithResponse
 }
 class user.MixedBuiltin {
   requests: baml.http.Request[]
@@ -66,8 +108,20 @@ class user.MixedBuiltin {
   maybe_request: baml.http.Request?
   union_request: baml.http.Request | string
 }
+function user.MixedBuiltin.to_json(self: user.MixedBuiltin) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<MixedBuiltin>(self)) : baml.json.json
+}
+function user.MixedBuiltin.from_json(j: baml.json.json) -> user.MixedBuiltin throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.MixedBuiltin
+}
 class user.WithStreamRef {
   partial: baml.http.Request$stream
+}
+function user.WithStreamRef.to_json(self: user.WithStreamRef) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithStreamRef>(self)) : baml.json.json
+}
+function user.WithStreamRef.from_json(j: baml.json.json) -> user.WithStreamRef throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithStreamRef
 }
 class user.ApiCall$stream {
   request: null | baml.http.Request$stream
@@ -90,6 +144,12 @@ enum user.Color
 class user.Inner {
   value: int
 }
+function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Inner>(self)) : baml.json.json
+}
+function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Inner
+}
 type user.StringAlias = string
 class user.Complex {
   color: user.Color
@@ -100,6 +160,12 @@ class user.Complex {
   nested_list: user.Inner[][]
   optional_class: user.Inner?
   union_with_null: int | null | string
+}
+function user.Complex.to_json(self: user.Complex) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Complex>(self)) : baml.json.json
+}
+function user.Complex.from_json(j: baml.json.json) -> user.Complex throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Complex
 }
 type user.AliasToClass = user.Inner
 class user.Inner$stream {
@@ -121,29 +187,71 @@ class user.SelfRef {
   name: string
   children: user.SelfRef[]
 }
+function user.SelfRef.to_json(self: user.SelfRef) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<SelfRef>(self)) : baml.json.json
+}
+function user.SelfRef.from_json(j: baml.json.json) -> user.SelfRef throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.SelfRef
+}
 class user.AllMustExist {
   a: int
   b: string
   c: float
+}
+function user.AllMustExist.to_json(self: user.AllMustExist) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<AllMustExist>(self)) : baml.json.json
+}
+function user.AllMustExist.from_json(j: baml.json.json) -> user.AllMustExist throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.AllMustExist
 }
 class user.AllDone {
   a: int
   b: string
   c: user.EdgeFoo
 }
+function user.AllDone.to_json(self: user.AllDone) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<AllDone>(self)) : baml.json.json
+}
+function user.AllDone.from_json(j: baml.json.json) -> user.AllDone throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.AllDone
+}
 class user.EdgeFoo {
   x: int
+}
+function user.EdgeFoo.to_json(self: user.EdgeFoo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<EdgeFoo>(self)) : baml.json.json
+}
+function user.EdgeFoo.from_json(j: baml.json.json) -> user.EdgeFoo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.EdgeFoo
 }
 class user.NeverFields {
   lit_int: 42
   lit_str: "fixed"
   lit_bool: true
 }
+function user.NeverFields.to_json(self: user.NeverFields) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<NeverFields>(self)) : baml.json.json
+}
+function user.NeverFields.from_json(j: baml.json.json) -> user.NeverFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.NeverFields
+}
 class user.MustExistClass {
   v: int
 }
+function user.MustExistClass.to_json(self: user.MustExistClass) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<MustExistClass>(self)) : baml.json.json
+}
+function user.MustExistClass.from_json(j: baml.json.json) -> user.MustExistClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.MustExistClass
+}
 class user.UnionWithMustExist {
   mixed: user.MustExistClass | 5
+}
+function user.UnionWithMustExist.to_json(self: user.UnionWithMustExist) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<UnionWithMustExist>(self)) : baml.json.json
+}
+function user.UnionWithMustExist.from_json(j: baml.json.json) -> user.UnionWithMustExist throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.UnionWithMustExist
 }
 class user.SelfRef$stream {
   name: null | string
@@ -179,29 +287,71 @@ class user.Primitives {
   flag: bool
   score: float
 }
+function user.Primitives.to_json(self: user.Primitives) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Primitives>(self)) : baml.json.json
+}
+function user.Primitives.from_json(j: baml.json.json) -> user.Primitives throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Primitives
+}
 enum user.Status
 class user.WithEnum {
   status: user.Status
+}
+function user.WithEnum.to_json(self: user.WithEnum) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithEnum>(self)) : baml.json.json
+}
+function user.WithEnum.from_json(j: baml.json.json) -> user.WithEnum throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithEnum
 }
 class user.WithLiterals {
   type: "resume"
   version: 1
   enabled: true
 }
+function user.WithLiterals.to_json(self: user.WithLiterals) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithLiterals>(self)) : baml.json.json
+}
+function user.WithLiterals.from_json(j: baml.json.json) -> user.WithLiterals throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithLiterals
+}
 class user.Inner {
   value: string
 }
+function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Inner>(self)) : baml.json.json
+}
+function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Inner
+}
 class user.Outer {
   inner: user.Inner
+}
+function user.Outer.to_json(self: user.Outer) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Outer>(self)) : baml.json.json
+}
+function user.Outer.from_json(j: baml.json.json) -> user.Outer throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Outer
 }
 class user.WithLists {
   strings: string[]
   ints: int[]
   classes: user.Inner[]
 }
+function user.WithLists.to_json(self: user.WithLists) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithLists>(self)) : baml.json.json
+}
+function user.WithLists.from_json(j: baml.json.json) -> user.WithLists throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithLists
+}
 class user.WithMaps {
   simple: map<string, int>
   complex: map<string, user.Inner>
+}
+function user.WithMaps.to_json(self: user.WithMaps) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithMaps>(self)) : baml.json.json
+}
+function user.WithMaps.from_json(j: baml.json.json) -> user.WithMaps throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithMaps
 }
 class user.WithNested {
   matrix: int[][]
@@ -209,15 +359,33 @@ class user.WithNested {
   nested_map: map<string, int[]>
   class_nested_map: map<string, user.Inner[]>
 }
+function user.WithNested.to_json(self: user.WithNested) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithNested>(self)) : baml.json.json
+}
+function user.WithNested.from_json(j: baml.json.json) -> user.WithNested throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithNested
+}
 class user.WithUnions {
   simple: int | string
   with_class: user.Inner | user.Primitives
   mixed: int | user.Inner
 }
+function user.WithUnions.to_json(self: user.WithUnions) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithUnions>(self)) : baml.json.json
+}
+function user.WithUnions.from_json(j: baml.json.json) -> user.WithUnions throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithUnions
+}
 class user.WithOptionals {
   name: string?
   inner: user.Inner?
   items: int[]?
+}
+function user.WithOptionals.to_json(self: user.WithOptionals) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithOptionals>(self)) : baml.json.json
+}
+function user.WithOptionals.from_json(j: baml.json.json) -> user.WithOptionals throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithOptionals
 }
 type user.SimpleAlias = string
 type user.ClassAlias = user.Inner
@@ -226,9 +394,21 @@ type user.OptionalAlias = user.Inner?
 class user.DynamicClass {
   name: string
 }
+function user.DynamicClass.to_json(self: user.DynamicClass) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<DynamicClass>(self)) : baml.json.json
+}
+function user.DynamicClass.from_json(j: baml.json.json) -> user.DynamicClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.DynamicClass
+}
 class user.Education {
   school: string
   year: int
+}
+function user.Education.to_json(self: user.Education) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Education>(self)) : baml.json.json
+}
+function user.Education.from_json(j: baml.json.json) -> user.Education throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Education
 }
 type user.AliasedType = string | int
 class user.AllDefaults {
@@ -249,6 +429,12 @@ class user.AllDefaults {
   maybe: string?
   maybe_list: int[]?
 }
+function user.AllDefaults.to_json(self: user.AllDefaults) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<AllDefaults>(self)) : baml.json.json
+}
+function user.AllDefaults.from_json(j: baml.json.json) -> user.AllDefaults throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.AllDefaults
+}
 class user.Resume {
   name: string
   age: int
@@ -258,15 +444,33 @@ class user.Resume {
   scores: int[]
   metadata: map<string, string>
 }
+function user.Resume.to_json(self: user.Resume) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Resume>(self)) : baml.json.json
+}
+function user.Resume.from_json(j: baml.json.json) -> user.Resume throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Resume
+}
 type user.MixedType = int | user.Education
 class user.TreeNode {
   value: string
   children: user.TreeNode[]
 }
+function user.TreeNode.to_json(self: user.TreeNode) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TreeNode>(self)) : baml.json.json
+}
+function user.TreeNode.from_json(j: baml.json.json) -> user.TreeNode throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.TreeNode
+}
 class user.Container {
   matrix: int[][]
   grid: user.TreeNode[][]
   groups: map<string, user.TreeNode[]>
+}
+function user.Container.to_json(self: user.Container) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Container>(self)) : baml.json.json
+}
+function user.Container.from_json(j: baml.json.json) -> user.Container throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Container
 }
 type user.Foo = int | string
 type user.Bar = user.Foo | bool
@@ -369,6 +573,12 @@ type user.Bar$stream = user.Foo$stream | bool
 class user.foo.NsClass {
   value: string
 }
+function user.foo.NsClass.to_json(self: user.foo.NsClass) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<NsClass>(self)) : baml.json.json
+}
+function user.foo.NsClass.from_json(j: baml.json.json) -> user.foo.NsClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.foo.NsClass
+}
 enum user.foo.NsEnum
 type user.foo.NsAlias = string | int
 class user.foo.NsRefToTop {
@@ -376,6 +586,12 @@ class user.foo.NsRefToTop {
   status: user.Status
   items: user.Inner[]
   alias_ref: user.ClassAlias
+}
+function user.foo.NsRefToTop.to_json(self: user.foo.NsRefToTop) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<NsRefToTop>(self)) : baml.json.json
+}
+function user.foo.NsRefToTop.from_json(j: baml.json.json) -> user.foo.NsRefToTop throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.foo.NsRefToTop
 }
 class user.foo.NsClass$stream {
   value: null | string
@@ -393,6 +609,12 @@ class user.TopRefToNs {
   ns_items: user.foo.NsClass[]
   ns_map: map<string, user.foo.NsClass>
   ns_alias: user.foo.NsAlias
+}
+function user.TopRefToNs.to_json(self: user.TopRefToNs) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TopRefToNs>(self)) : baml.json.json
+}
+function user.TopRefToNs.from_json(j: baml.json.json) -> user.TopRefToNs throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.TopRefToNs
 }
 class user.TopRefToNs$stream {
   ns_class: null | user.foo.NsClass$stream

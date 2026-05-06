@@ -8,11 +8,23 @@ class user.Foo {
 class user.HasWith {
   with: int
 }
-function user.$init_test_28(registry: testing.TestCollector) -> ?  [expr] {
+function user.$init_test_32(registry: testing.TestCollector) -> ?  [expr] {
   { registry.register_test("with as field", () -> void { { let h = user.HasWith { with: 1 } } assert.equal(h.with, 1) }, null) } null
+}
+function user.from_json(j: baml.json.json) -> user.Foo  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.HasWith  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
 }
 function user.make_foo() -> user.Foo  [expr] {
   {  } user.Foo { x: 1 }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
 }
 function user.use_with_as_var() -> int  [expr] {
   { let with = 42 } with

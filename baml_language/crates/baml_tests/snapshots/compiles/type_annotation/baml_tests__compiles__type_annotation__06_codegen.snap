@@ -1,6 +1,42 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.MetaField.from_json(j: baml.json.json) -> MetaField {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type MetaField
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.MetaField.to_json(self: null) -> baml.json.json {
+    load_type MetaField
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function user.RiskFactor.from_json(j: baml.json.json) -> RiskFactor {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type RiskFactor
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.RiskFactor.to_json(self: null) -> baml.json.json {
+    load_type RiskFactor
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function user.test_let_binding(function_name: string) -> string {
     load_var function_name
     dispatch_future baml.llm.get_return_type

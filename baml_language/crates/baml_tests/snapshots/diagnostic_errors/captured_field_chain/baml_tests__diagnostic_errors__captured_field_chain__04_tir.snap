@@ -5,9 +5,21 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Inner {
   value: int
 }
+function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Inner>(self)) : baml.json.json
+}
+function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Inner
+}
 class user.Outer {
   inner: user.Inner
   name: string
+}
+function user.Outer.to_json(self: user.Outer) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Outer>(self)) : baml.json.json
+}
+function user.Outer.from_json(j: baml.json.json) -> user.Outer throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Outer
 }
 function user.test_captured_chain(outer: user.Outer) -> int throws never {
   { : int

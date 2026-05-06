@@ -97,3 +97,45 @@ fn user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst {
         return;
     }
 }
+
+fn user.Resume.from_json(j: baml.json.json) -> Resume {
+    // Locals:
+    let _0: Resume // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(Resume);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Resume.to_json(self: Resume) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: Resume // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(Resume);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}

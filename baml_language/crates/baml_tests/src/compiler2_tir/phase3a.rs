@@ -187,6 +187,12 @@ fn calling_class_as_function() {
     class user.Foo {
       name: string
     }
+    function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<Foo>(self)) : baml.json.json
+    }
+    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.Foo
+    }
     function user.f() -> int throws never {
       { : never
         return Foo(1) : unknown
@@ -444,9 +450,21 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
       name: string
       legs: int
     }
+    function user.Cat.to_json(self: user.Cat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<Cat>(self)) : baml.json.json
+    }
+    function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.Cat
+    }
     class user.Dog {
       name: string
       legs: int
+    }
+    function user.Dog.to_json(self: user.Dog) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<Dog>(self)) : baml.json.json
+    }
+    function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.Dog
     }
     function user.f(x: user.Cat | user.Dog) -> string throws never {
       { : never
@@ -480,9 +498,21 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       name: string
       whiskers: int
     }
+    function user.Cat.to_json(self: user.Cat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<Cat>(self)) : baml.json.json
+    }
+    function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.Cat
+    }
     class user.Dog {
       name: string
       tail: bool
+    }
+    function user.Dog.to_json(self: user.Dog) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<Dog>(self)) : baml.json.json
+    }
+    function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.Dog
     }
     function user.f(x: user.Cat | user.Dog) -> int throws never {
       { : never
@@ -516,11 +546,29 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     class user.A {
       name: string
     }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     class user.B {
       name: string
     }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
+    }
     class user.C {
       age: int
+    }
+    function user.C.to_json(self: user.C) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<C>(self)) : baml.json.json
+    }
+    function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.C
     }
     function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
@@ -555,11 +603,29 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     class user.A {
       name: string
     }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     class user.B {
       age: string
     }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
+    }
     class user.C {
       age: int
+    }
+    function user.C.to_json(self: user.C) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<C>(self)) : baml.json.json
+    }
+    function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.C
     }
     function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
@@ -594,8 +660,20 @@ function f(x: A | B) -> string { return x.value; }"#,
     class user.A {
       value: int
     }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     class user.B {
       value: string
+    }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
     }
     function user.f(x: user.A | user.B) -> string throws never {
       { : never
@@ -626,8 +704,20 @@ function f(x: A | B | null) -> string { return x.name; }"#,
     class user.A {
       name: string
     }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<A>(self)) : baml.json.json
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+    }
     class user.B {
       name: string
+    }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      baml.json.parse(baml.json.to_string<B>(self)) : baml.json.json
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      baml.json.from_string<T>(baml.json.stringify(j)) : user.B
     }
     function user.f(x: user.A | user.B | null) -> string throws never {
       { : never

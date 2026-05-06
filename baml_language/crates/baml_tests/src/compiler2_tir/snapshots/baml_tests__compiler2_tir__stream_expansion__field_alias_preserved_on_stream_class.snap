@@ -6,6 +6,12 @@ class user.WithAlias {
   bar: string @alias("baz")
   count: int @alias("cnt")
 }
+function user.WithAlias.to_json(self: user.WithAlias) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<WithAlias>(self)) : baml.json.json
+}
+function user.WithAlias.from_json(j: baml.json.json) -> user.WithAlias throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithAlias
+}
 class user.WithAlias$stream {
   bar: null | string @alias("baz")
   count: null | int @alias("cnt")

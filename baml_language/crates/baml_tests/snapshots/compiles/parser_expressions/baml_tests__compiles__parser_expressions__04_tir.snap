@@ -25,12 +25,30 @@ class user.User {
   profile: user.Profile
   tags: string[]
 }
+function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<User>(self)) : baml.json.json
+}
+function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.User
+}
 class user.Profile {
   bio: string
   settings: user.Settings
 }
+function user.Profile.to_json(self: user.Profile) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Profile>(self)) : baml.json.json
+}
+function user.Profile.from_json(j: baml.json.json) -> user.Profile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Profile
+}
 class user.Settings {
   theme: string
+}
+function user.Settings.to_json(self: user.Settings) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Settings>(self)) : baml.json.json
+}
+function user.Settings.from_json(j: baml.json.json) -> user.Settings throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Settings
 }
 class user.User$stream {
   name: null | string
@@ -48,6 +66,12 @@ class user.IndexUser {
   name: string
   age: int
   tags: string[]
+}
+function user.IndexUser.to_json(self: user.IndexUser) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<IndexUser>(self)) : baml.json.json
+}
+function user.IndexUser.from_json(j: baml.json.json) -> user.IndexUser throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.IndexUser
 }
 function user.IndexAccess(users: user.IndexUser[]) -> string throws never {
   { : never

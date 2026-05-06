@@ -6,6 +6,12 @@ class user.AtomicPoint {
   x: float
   y: float
 }
+function user.AtomicPoint.to_json(self: user.AtomicPoint) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<AtomicPoint>(self)) : baml.json.json
+}
+function user.AtomicPoint.from_json(j: baml.json.json) -> user.AtomicPoint throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.AtomicPoint
+}
 class user.AtomicPoint$stream {
   x: null | float
   y: null | float

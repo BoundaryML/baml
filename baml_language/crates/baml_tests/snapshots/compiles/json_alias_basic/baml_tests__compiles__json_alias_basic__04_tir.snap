@@ -5,6 +5,12 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Wrapper {
   data: baml.json.json
 }
+function user.Wrapper.to_json(self: user.Wrapper) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Wrapper>(self)) : baml.json.json
+}
+function user.Wrapper.from_json(j: baml.json.json) -> user.Wrapper throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Wrapper
+}
 function user.MakeWrapper() -> user.Wrapper throws never {
   { : user.Wrapper
     Wrapper { data: null } : user.Wrapper

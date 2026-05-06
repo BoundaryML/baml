@@ -20,6 +20,12 @@ function user.TypeBuilderFn$parse(json: string) -> user.Resume throws never {
 class user.Resume {
   name: string
 }
+function user.Resume.to_json(self: user.Resume) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Resume>(self)) : baml.json.json
+}
+function user.Resume.from_json(j: baml.json.json) -> user.Resume throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Resume
+}
 function user.TypeBuilderFn$stream(from_text: string) -> baml.llm.Stream<user.Resume, null | user.Resume$stream> throws never {
   baml.llm.stream_llm_function(baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "TypeBuilderFn", map { "from_text": from_text }) : baml.llm.Stream<user.Resume, null | user.Resume$stream>
 }

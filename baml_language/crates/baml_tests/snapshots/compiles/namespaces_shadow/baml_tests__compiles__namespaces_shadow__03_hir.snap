@@ -5,6 +5,18 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.foo {
   x: int
 }
+function user.from_json(j: baml.json.json) -> user.foo  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
 class user.foo.Bar {
   y: string
+}
+function user.foo.from_json(j: baml.json.json) -> user.foo.Bar  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.foo.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
 }

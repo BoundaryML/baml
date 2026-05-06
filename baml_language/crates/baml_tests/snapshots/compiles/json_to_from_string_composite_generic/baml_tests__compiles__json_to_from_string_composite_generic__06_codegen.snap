@@ -1,6 +1,42 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.Container.from_json(j: baml.json.json) -> Container<void> {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type Container<#0>
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.Container.to_json(self: null) -> baml.json.json {
+    load_type Container<#0>
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function user.User.from_json(j: baml.json.json) -> User {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type User
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.User.to_json(self: null) -> baml.json.json {
+    load_type User
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function user.decode_container(s: string) -> Container<User> {
     load_type Container<User>
     load_var s

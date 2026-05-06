@@ -20,6 +20,12 @@ function user.Fn$parse(json: string) -> string throws never {
 class user.TopLevelClass {
   a: string
 }
+function user.TopLevelClass.to_json(self: user.TopLevelClass) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TopLevelClass>(self)) : baml.json.json
+}
+function user.TopLevelClass.from_json(j: baml.json.json) -> user.TopLevelClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.TopLevelClass
+}
 enum user.TopLevelEnum
 function user.Fn$stream() -> baml.llm.Stream<string, null | string> throws never {
   baml.llm.stream_llm_function(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "Fn", map {  }) : baml.llm.Stream<string, null | string>

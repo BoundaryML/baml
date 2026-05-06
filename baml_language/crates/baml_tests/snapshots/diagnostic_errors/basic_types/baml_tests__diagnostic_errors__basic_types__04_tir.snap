@@ -11,8 +11,20 @@ class user.FieldAttributes {
   state: string
   multiple: string? @description("Multiple attributes") @alias("multiple_alias")
 }
+function user.FieldAttributes.to_json(self: user.FieldAttributes) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<FieldAttributes>(self)) : baml.json.json
+}
+function user.FieldAttributes.from_json(j: baml.json.json) -> user.FieldAttributes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.FieldAttributes
+}
 class user.ClassAttributes {
   name: string
+}
+function user.ClassAttributes.to_json(self: user.ClassAttributes) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<ClassAttributes>(self)) : baml.json.json
+}
+function user.ClassAttributes.from_json(j: baml.json.json) -> user.ClassAttributes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.ClassAttributes
 }
 class user.FieldAttributes$stream {
   money: null | int @description("In USD")
@@ -132,6 +144,12 @@ class user.User {
   id: int
   name: string
   email: string
+}
+function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<User>(self)) : baml.json.json
+}
+function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.User
 }
 enum user.Status
 type user.Role = "user" | "assistant" | "system"

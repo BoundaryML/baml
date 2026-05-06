@@ -5,8 +5,20 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Cat {
   name: string
 }
+function user.Cat.to_json(self: user.Cat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Cat>(self)) : baml.json.json
+}
+function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Cat
+}
 class user.Dog {
   breed: string
+}
+function user.Dog.to_json(self: user.Dog) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Dog>(self)) : baml.json.json
+}
+function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Dog
 }
 function user.check_instanceof(x: user.Cat | user.Dog) -> bool throws never {
   { : unknown

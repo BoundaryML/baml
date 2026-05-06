@@ -1,6 +1,24 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.User.from_json(j: baml.json.json) -> User {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type User
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function user.User.to_json(self: null) -> baml.json.json {
+    load_type User
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function user.emit_custom_event(name: string) -> void {
     load_const "user_action"
     load_var name

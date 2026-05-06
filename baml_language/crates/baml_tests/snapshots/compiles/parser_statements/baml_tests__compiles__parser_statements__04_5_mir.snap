@@ -188,6 +188,27 @@ fn user.edge_type_then_object() -> int {
     }
 }
 
+fn user.EdgeFoo.from_json(j: baml.json.json) -> EdgeFoo {
+    // Locals:
+    let _0: EdgeFoo // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(EdgeFoo);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.let_mixed_semicolons() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -315,6 +336,27 @@ fn user.sub_assign() -> int {
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn user.EdgeFoo.to_json(self: EdgeFoo) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: EdgeFoo // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(EdgeFoo);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
         return;
     }
 }
@@ -711,6 +753,27 @@ fn user.ConditionalLogic(age: int) -> string {
     }
 }
 
+fn user.Point.from_json(j: baml.json.json) -> Point {
+    // Locals:
+    let _0: Point // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(Point);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.let_statements() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -727,6 +790,27 @@ fn user.let_statements() -> int {
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn user.Point.to_json(self: Point) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: Point // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(Point);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
         return;
     }
 }

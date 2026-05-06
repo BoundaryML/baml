@@ -5,8 +5,20 @@ expression: "render_tir(&db, file)"
 class user.Address {
   street: string
 }
+function user.Address.to_json(self: user.Address) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Address>(self)) : baml.json.json
+}
+function user.Address.from_json(j: baml.json.json) -> user.Address throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Address
+}
 class user.User {
   address: user.Address?
+}
+function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<User>(self)) : baml.json.json
+}
+function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.User
 }
 function user.f(u: user.User?) -> string? throws never {
   { : string?
