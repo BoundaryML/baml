@@ -463,3 +463,75 @@ fn control_describe_shallow_namespace_item_works() {
     let output = describe_via_dispatch(&db, "llm.Config");
     insta::assert_snapshot!(output);
 }
+
+// ── "Did you mean?" suggestion tests ────────────────────────────────────────
+
+use crate::describe_command::suggest_similar;
+
+/// Typo in an item name should suggest the correct spelling.
+#[test]
+fn suggest_typo_in_item_name() {
+    let db = multi_ns_project();
+    let suggestions = suggest_similar(&db, "Confg", 5);
+    assert!(
+        suggestions.iter().any(|s| s == "llm.Config"),
+        "expected `llm.Config` suggestion for typo `Confg`, got {suggestions:?}",
+    );
+}
+
+/// Typo in a namespace segment should suggest the correct namespace.
+#[test]
+fn suggest_typo_in_namespace() {
+    let db = multi_ns_project();
+    let suggestions = suggest_similar(&db, "llmm", 5);
+    assert!(
+        suggestions.iter().any(|s| s == "llm"),
+        "expected `llm` suggestion for typo `llmm`, got {suggestions:?}",
+    );
+}
+
+/// Substring of a real symbol should rank as a strong suggestion.
+#[test]
+fn suggest_substring_of_symbol() {
+    let db = simple_project();
+    let suggestions = suggest_similar(&db, "Extract", 5);
+    assert!(
+        suggestions.iter().any(|s| s == "ExtractPoint"),
+        "expected `ExtractPoint` suggestion for substring `Extract`, got {suggestions:?}",
+    );
+}
+
+/// Typo in a builtin namespace should suggest the right one.
+#[test]
+fn suggest_typo_in_builtin_namespace() {
+    let db = simple_project();
+    let suggestions = suggest_similar(&db, "baml.evn", 5);
+    assert!(
+        suggestions.iter().any(|s| s == "baml.env"),
+        "expected `baml.env` suggestion for typo `baml.evn`, got {suggestions:?}",
+    );
+}
+
+/// Garbage input should produce no suggestions (or very few).
+#[test]
+fn suggest_unrelated_input_returns_few_or_no_results() {
+    let db = simple_project();
+    let suggestions = suggest_similar(&db, "qzqzqzqzqz", 5);
+    assert!(
+        suggestions.is_empty(),
+        "expected no suggestions for garbage input, got {suggestions:?}",
+    );
+}
+
+/// Suggestions are limited to the requested count.
+#[test]
+fn suggest_respects_limit() {
+    let db = multi_ns_project();
+    // A common substring like "n" should match many things.
+    let suggestions = suggest_similar(&db, "n", 3);
+    assert!(
+        suggestions.len() <= 3,
+        "got {} suggestions, expected ≤ 3",
+        suggestions.len()
+    );
+}

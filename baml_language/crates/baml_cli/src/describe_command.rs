@@ -32,6 +32,90 @@ pub struct DescribeArgs {
     pub json: bool,
 }
 
+/// Find FQNs across the user and builtin packages that are fuzzy-similar to `name`.
+///
+/// Used to power "did you mean?" hints when a path doesn't resolve. Returns up
+/// to `limit` candidates sorted by Jaro-Winkler similarity (descending).
+pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<String> {
+    use baml_compiler2_hir::package::{PackageId, package_items};
+
+    let mut all_paths: Vec<String> = Vec::new();
+
+    // User package: items + namespace dotted paths.
+    let user_pkg = PackageId::new(db, baml_db::Name::new("user"));
+    for entry in baml_lsp2_actions::list_package_items(db, user_pkg) {
+        all_paths.push(entry.fqn());
+    }
+    let user_pkg_items = package_items(db, user_pkg);
+    for ns_path in user_pkg_items.namespaces.keys() {
+        if !ns_path.is_empty() {
+            all_paths.push(
+                ns_path
+                    .iter()
+                    .map(baml_db::Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join("."),
+            );
+        }
+    }
+
+    // Builtin packages: bare package name + items + namespaces (prefixed).
+    for pkg_name in baml_lsp2_actions::non_user_package_names(db) {
+        all_paths.push(pkg_name.clone());
+        let pkg = PackageId::new(db, baml_db::Name::new(&pkg_name));
+        for entry in baml_lsp2_actions::list_package_items(db, pkg) {
+            all_paths.push(format!("{}.{}", pkg_name, entry.fqn()));
+        }
+        let pkg_info = package_items(db, pkg);
+        for ns_path in pkg_info.namespaces.keys() {
+            if !ns_path.is_empty() {
+                let dotted = ns_path
+                    .iter()
+                    .map(baml_db::Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                all_paths.push(format!("{pkg_name}.{dotted}"));
+            }
+        }
+    }
+
+    let mut scored: Vec<(f64, String)> = all_paths
+        .into_iter()
+        .map(|p| {
+            // Jaro-Winkler is good for typos; substring presence is a strong
+            // boost for cases like "Confg" → "Config".
+            let mut score = strsim::jaro_winkler(&p, name);
+            if p.to_ascii_lowercase().contains(&name.to_ascii_lowercase()) {
+                score += 0.15;
+            }
+            (score, p)
+        })
+        .filter(|(s, _)| *s > 0.7)
+        .collect();
+
+    // Sort by score desc, then alphabetically for stability.
+    scored.sort_by(|a, b| {
+        b.0.partial_cmp(&a.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.1.cmp(&b.1))
+    });
+    // Dedup adjacent duplicates after sort.
+    scored.dedup_by(|a, b| a.1 == b.1);
+    scored.into_iter().take(limit).map(|(_, p)| p).collect()
+}
+
+/// Print a "Did you mean?" hint for `name` to stderr if any similar paths exist.
+fn print_did_you_mean(db: &ProjectDatabase, name: &str) {
+    let suggestions = suggest_similar(db, name, 5);
+    if !suggestions.is_empty() {
+        eprintln!();
+        eprintln!("Did you mean:");
+        for s in suggestions {
+            eprintln!("  {s}");
+        }
+    }
+}
+
 /// Dispatch a name string to a `ResolvedTarget`.
 ///
 /// Handles the package-name prefix routing (user vs. builtin packages) and
@@ -142,6 +226,7 @@ impl DescribeArgs {
                     Ok(crate::ExitCode::Success)
                 } else {
                     eprintln!("No symbol found: {name}");
+                    print_did_you_mean(&db, name);
                     Ok(crate::ExitCode::Other)
                 }
             }
@@ -174,6 +259,7 @@ impl DescribeArgs {
                     Ok(crate::ExitCode::Success)
                 } else {
                     eprintln!("No symbol found: {name}");
+                    print_did_you_mean(&db, name);
                     Ok(crate::ExitCode::Other)
                 }
             }
@@ -184,6 +270,7 @@ impl DescribeArgs {
 
                 if descriptions.is_empty() {
                     eprintln!("No symbol found: {name}");
+                    print_did_you_mean(&db, name);
                     return Ok(crate::ExitCode::Other);
                 }
 
