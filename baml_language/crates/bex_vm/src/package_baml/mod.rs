@@ -3,6 +3,7 @@
 //! Each sub-module implements one or more generated traits:
 //!
 //! - `array` — `BamlClassArray` (length, push, at, concat, ...)
+//! - `float` — `BamlClassFloat` (predicates, rounding, math, trig, ...)
 //! - `int` — `BamlClassInt` (abs, min, max, clamp, bit ops, ...)
 //! - `string` — `BamlClassString` (length, trim, split, ...)
 //! - `map` — `BamlClassMap` (length, has, keys, values, ...)
@@ -17,6 +18,7 @@
 //! 2. Implement the method in the appropriate sub-module's `impl` block
 
 mod array;
+mod float;
 mod int;
 pub mod json;
 mod map;

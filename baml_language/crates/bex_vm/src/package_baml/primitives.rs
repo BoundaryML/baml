@@ -8,13 +8,7 @@
 
 use bex_vm_types::types::Value;
 
-use super::{BamlClassBool, BamlClassFloat, BamlClassNull, PackageBamlImpl};
-
-impl BamlClassFloat for PackageBamlImpl {
-    fn to_json(float: &Value) -> Value {
-        *float
-    }
-}
+use super::{BamlClassBool, BamlClassNull, PackageBamlImpl};
 
 impl BamlClassBool for PackageBamlImpl {
     fn to_json(bool: &Value) -> Value {

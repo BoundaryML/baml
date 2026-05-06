@@ -45,9 +45,44 @@ function baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
 function baml.Bool.to_json(self: null) -> baml.json.json {
 }
 
+function baml.Float.e() -> float {
+}
+
 function baml.Float.from_json(j: baml.json.json) -> baml.Float {
     alloc_instance baml.Float
     return
+}
+
+function baml.Float.golden_ratio() -> float {
+}
+
+function baml.Float.inf() -> float {
+}
+
+function baml.Float.is_finite(self: null) -> bool {
+    load_var self
+    call baml.Float.is_nan
+    unary_op !
+    jump_if_false L0
+    pop 1
+    load_var self
+    call baml.Float.is_infinite
+    unary_op !
+
+  L0:
+    return
+}
+
+function baml.Float.is_infinite(self: null) -> bool {
+}
+
+function baml.Float.is_nan(self: null) -> bool {
+}
+
+function baml.Float.nan() -> float {
+}
+
+function baml.Float.pi() -> float {
 }
 
 function baml.Float.to_json(self: null) -> baml.json.json {

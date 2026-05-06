@@ -49,9 +49,19 @@ function baml.deep_equals(a: baml.T, b: baml.T) -> bool  [builtin]
 --- <builtin>/baml/float.baml ---
 class baml.Float {
 }
+function baml.e() -> float  [builtin]
 function baml.from_json(j: baml.json.json) -> baml.Float  [expr] {
   baml.Float {  }
 }
+function baml.golden_ratio() -> float  [builtin]
+function baml.inf() -> float  [builtin]
+function baml.is_finite(self: ?) -> bool  [expr] {
+  {  } Not self.is_nan() And Not self.is_infinite()
+}
+function baml.is_infinite(self: ?) -> bool  [builtin]
+function baml.is_nan(self: ?) -> bool  [builtin]
+function baml.nan() -> float  [builtin]
+function baml.pi() -> float  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 
 --- <builtin>/baml/int.baml ---

@@ -4688,6 +4688,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         "pdf" => &["media", "Pdf"],
                         "string" => &["String"],
                         "int" => &["Int"],
+                        "float" => &["Float"],
                         _ => &[],
                     };
                     if !class_path.is_empty() {
@@ -6198,6 +6199,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             "pdf" => &["media", "Pdf"],
             "string" => &["String"],
             "int" => &["Int"],
+            "float" => &["Float"],
             _ => return None,
         };
 

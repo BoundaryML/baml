@@ -35,6 +35,11 @@ class baml.Map$stream {
 --- <builtin>/baml/float.baml ---
 class baml.Float {
 }
+function baml.Float.is_finite(self: baml.Float) -> bool throws never {
+  { : bool
+    Not self.is_nan() && Not self.is_infinite() : bool
+  }
+}
 function baml.Float.from_json(j: baml.json.json) -> baml.Float throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Float {  } : baml.Float
 }
