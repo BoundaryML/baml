@@ -420,7 +420,7 @@ async fn string_substring_bounds() {
         r#"
         function main() -> string {
             let s = "hello";
-            s.substring(2, 10)  // Should clamp to string length
+            s.substring(2, 10)  // end byte offset clamped to length
         }
     "#
     );
@@ -439,6 +439,185 @@ async fn string_substring_bounds() {
         output.result,
         Ok(BexExternalValue::String("llo".to_string()))
     );
+}
+
+// ─── byte-indexed semantics (BEP-043) ─────────────────────────────────────────
+
+#[tokio::test]
+async fn string_length_is_bytes_for_non_ascii() {
+    // `é` is U+00E9, encoded as two bytes in UTF-8 (0xC3 0xA9).
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "héllo".length()
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
+}
+
+#[tokio::test]
+async fn string_length_is_bytes_for_emoji() {
+    // 🐈 (U+1F408) takes 4 bytes in UTF-8.
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "🐈".length()
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(4)));
+}
+
+#[tokio::test]
+async fn string_substring_byte_indexed_keeps_multibyte_char() {
+    // Bytes 0..3 of "héllo" are the H plus the two bytes of `é`.
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "héllo".substring(0, 3)
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hé".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn string_substring_mid_codepoint_throws() {
+    // Byte 2 of "héllo" lands inside the `é` (which occupies bytes 1..3).
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "héllo".substring(0, 2)
+        }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn string_substring_negative_clamps_to_zero() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "hello".substring(-3, 4)
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hell".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn string_substring_empty_when_start_past_end() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "hello".substring(4, 2)
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("".to_string())));
+}
+
+#[tokio::test]
+async fn string_char_at_byte_indexed_returns_multibyte_char() {
+    // `é` starts at byte 1 of "héllo".
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "héllo".char_at(1)
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("é".to_string())));
+}
+
+#[tokio::test]
+async fn string_char_at_byte_indexed_after_multibyte() {
+    // `l` after `é` lives at byte 3.
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "héllo".char_at(3)
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("l".to_string())));
+}
+
+#[tokio::test]
+async fn string_char_at_mid_codepoint_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "héllo".char_at(2)
+        }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn string_char_at_end_returns_empty() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "hi".char_at(2)
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("".to_string())));
+}
+
+#[tokio::test]
+async fn string_char_at_past_end_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "hi".char_at(99)
+        }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn string_char_at_negative_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            "hi".char_at(-1)
+        }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn string_index_of_returns_byte_offset() {
+    // The first `l` in "héllo" lives at byte 3 (after the 2-byte `é`).
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            "héllo".index_of("l")
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
 #[tokio::test]

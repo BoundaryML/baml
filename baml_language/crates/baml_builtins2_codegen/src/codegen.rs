@@ -19,21 +19,19 @@ use crate::types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage};
 // Fallibility
 // ============================================================================
 
-/// Returns `true` if the clean trait method for this path should return
+/// Returns `true` if the clean trait method for this builtin should return
 /// `Result<T, VmError>` instead of plain `T`.
-fn is_fallible(path: &str) -> bool {
-    path.starts_with("baml.unstable.")
+///
+/// A builtin is fallible if it declares a `throws` clause in its `.baml` source,
+/// or if its path is in the implicit allowlist below (for builtins that fail
+/// without a declared throws clause — e.g. `baml.sys.panic` always throws,
+/// `baml.unstable.string` can fail at runtime on certain values).
+fn is_fallible(b: &NativeBuiltin) -> bool {
+    !b.throws.is_empty()
+        || b.path.starts_with("baml.unstable.")
         || matches!(
-            path,
+            b.path.as_str(),
             "baml.sys.panic"
-                | "baml.Uint8Array.zeroes"
-                | "baml.Uint8Array.from_array"
-                | "baml.Uint8Array.from_hex"
-                | "baml.Uint8Array.from_base64"
-                | "baml.Uint8Array.to_json"
-                | "baml.json.parse"
-                | "baml.json.to_string"
-                | "baml.json.from_string"
                 | "baml.media.Pdf.to_json"
                 | "baml.media.Audio.to_json"
                 | "baml.media.Video.to_json"
@@ -908,7 +906,7 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
         return;
     }
 
-    let fallible = is_fallible(&b.path);
+    let fallible = is_fallible(b);
 
     // Use a closure returning NativeFunctionResult so `?` operators work inside.
     out.push_str("        let __result: NativeFunctionResult = (|| {\n");
@@ -981,14 +979,14 @@ fn clean_return_type(b: &NativeBuiltin) -> String {
         if let Some(class_name) = constructor_media_class(b) {
             let ns = constructor_media_namespace(b);
             let inner = format!("copy::{ns}::{class_name}");
-            if is_fallible(&b.path) {
+            if is_fallible(b) {
                 return format!("Result<{inner}, VmRustFnError>");
             }
             return inner;
         }
     }
     let inner = baml_type_to_output(&b.return_type);
-    if is_fallible(&b.path) {
+    if is_fallible(b) {
         format!("Result<{inner}, VmRustFnError>")
     } else {
         inner

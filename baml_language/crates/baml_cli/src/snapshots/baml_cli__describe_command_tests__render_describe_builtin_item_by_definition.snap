@@ -10,15 +10,15 @@ class String {
     $rust_function
   }
 
-  function length(self) -> int {
-    $rust_function
-  }
-
-  function to_lower_case(self) -> string {
-    $rust_function
-  }
-
-  ... skipped 40 lines ...
+  /// Returns the length of the string in **UTF-8 bytes**.
+  ///
+  /// This is `O(1)`. For ASCII text the byte length equals the character
+  /// count, but for any string containing multi-byte characters the two
+  /// differ — e.g. `"héllo".length() == 6` because `é` is two bytes.
+  ///
+  /// # Examples
+  /// ```
+  ... skipped 96 lines ...
   function matches(self, pattern: string) -> bool {
     $rust_function
   }

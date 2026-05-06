@@ -1,7 +1,10 @@
 use bex_vm_types::types::Value;
 
 use super::{BamlClassString, PackageBamlImpl};
-use crate::BexVm;
+use crate::{
+    BexVm,
+    errors::{VmBamlError, VmRustFnError},
+};
 
 impl BamlClassString for PackageBamlImpl {
     fn to_json(vm: &mut BexVm, string: &str) -> Value {
@@ -13,7 +16,7 @@ impl BamlClassString for PackageBamlImpl {
 
     #[allow(clippy::cast_possible_wrap)]
     fn length(string: &str) -> i64 {
-        string.chars().count() as i64
+        string.len() as i64
     }
 
     fn to_lower_case(string: &str) -> String {
@@ -45,11 +48,30 @@ impl BamlClassString for PackageBamlImpl {
     }
 
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    fn substring(string: &str, start: i64, end: i64) -> String {
+    fn substring(string: &str, start: i64, end: i64) -> Result<String, VmRustFnError> {
         let len = string.len();
-        let start = (start as usize).min(len);
-        let end = (end as usize).min(len).max(start);
-        string[start..end].to_string()
+        // Clamp negatives to 0; out-of-range to len.
+        let start = start.max(0) as usize;
+        let end = end.max(0) as usize;
+        let start = start.min(len);
+        let end = end.min(len).max(start);
+        if !string.is_char_boundary(start) {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!(
+                    "substring: start byte offset {start} is not a UTF-8 character boundary"
+                ),
+            }
+            .into());
+        }
+        if !string.is_char_boundary(end) {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!(
+                    "substring: end byte offset {end} is not a UTF-8 character boundary"
+                ),
+            }
+            .into());
+        }
+        Ok(string[start..end].to_string())
     }
 
     fn replace(string: &str, search: &str, replacement: &str) -> String {
@@ -62,12 +84,35 @@ impl BamlClassString for PackageBamlImpl {
     }
 
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    fn char_at(string: &str, index: i64) -> String {
-        string
+    fn char_at(string: &str, index: i64) -> Result<String, VmRustFnError> {
+        let len = string.len();
+        let Ok(index) = usize::try_from(index) else {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!("char_at: byte offset {index} is negative"),
+            }
+            .into());
+        };
+        if index == len {
+            return Ok(String::new());
+        }
+        if index > len {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!("char_at: byte offset {index} is beyond the string length {len}"),
+            }
+            .into());
+        }
+        if !string.is_char_boundary(index) {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!("char_at: byte offset {index} is not a UTF-8 character boundary"),
+            }
+            .into());
+        }
+        // Safe because `index` is < len and on a char boundary.
+        let ch = string[index..]
             .chars()
-            .nth(index as usize)
-            .map(|c| c.to_string())
-            .unwrap_or_default()
+            .next()
+            .expect("char_at: char boundary at index < len must yield a char");
+        Ok(ch.to_string())
     }
 
     fn matches(string: &str, pattern: &str) -> bool {

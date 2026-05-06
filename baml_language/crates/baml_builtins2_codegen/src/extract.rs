@@ -243,11 +243,7 @@ fn extract_from_class(
             VmUsage::None
         };
 
-        let throws = if pipeline == BuiltinPipeline::Io {
-            extract_throws(method)
-        } else {
-            vec![]
-        };
+        let throws = extract_throws(method);
 
         // Always set receiver for class methods — even static methods (no `self`)
         // need it for dispatch routing. The runtime path is
@@ -407,11 +403,7 @@ fn extract_from_free_function(
         VmUsage::None
     };
 
-    let throws = if pipeline == BuiltinPipeline::Io {
-        extract_throws(func_def)
-    } else {
-        vec![]
-    };
+    let throws = extract_throws(func_def);
 
     let params: Vec<Param> = func_def
         .params
@@ -886,10 +878,12 @@ mod tests {
             vm_builtins.len()
         );
 
-        // All VM builtins should have pipeline == Vm
+        // All VM builtins should have pipeline == Vm. They MAY declare a `throws`
+        // clause (e.g. `Array.map<U, E>(... throws E)` carries `E` through, and
+        // `Uint8Array.from_hex` throws `InvalidArgument`). Codegen consumes the
+        // declared throws to decide whether the trait method returns a `Result`.
         for b in &vm_builtins {
             assert_eq!(b.pipeline, BuiltinPipeline::Vm, "{} should be Vm", b.path);
-            assert!(b.throws.is_empty(), "{} should have no throws", b.path);
         }
 
         let array_length = vm_builtins
