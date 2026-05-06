@@ -148,10 +148,16 @@ function baml.Float.min(self: null, other: float) -> float {
 function baml.Float.nan() -> float {
 }
 
+function baml.Float.parse(text: string) -> float {
+}
+
 function baml.Float.pi() -> float {
 }
 
 function baml.Float.pow(self: null, exp: float) -> float {
+}
+
+function baml.Float.random() -> float {
 }
 
 function baml.Float.round(self: null) -> float {

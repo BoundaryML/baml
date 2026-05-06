@@ -191,9 +191,13 @@ fn baml.Float.min = builtin(vm)
 
 fn baml.Float.nan = builtin(vm)
 
+fn baml.Float.parse = builtin(vm)
+
 fn baml.Float.pi = builtin(vm)
 
 fn baml.Float.pow = builtin(vm)
+
+fn baml.Float.random = builtin(vm)
 
 fn baml.Float.round = builtin(vm)
 

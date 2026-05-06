@@ -354,6 +354,51 @@ class Float {
     self * 180.0 / float.pi()
   }
 
+  // ─── Parsing / randomness ─────────────────────────────────────────────────
+
+  /// Parses `text` as a floating-point number.
+  ///
+  /// Accepts decimal notation (`1.5`, `-0.25`), scientific notation
+  /// (`1e3`, `-1.5E-3`), and the special tokens `inf` / `infinity` / `nan`
+  /// (case-insensitive). An optional leading `+` or `-` sign is allowed.
+  /// No surrounding whitespace, no underscore separators.
+  ///
+  /// Throws `ParseError` if `text` cannot be parsed. Note that successfully
+  /// parsing `"nan"` gives a NaN value — use `result.is_nan()` to detect it
+  /// rather than equality.
+  ///
+  /// # Examples
+  /// ```
+  /// float.parse("1.5")        // 1.5
+  /// float.parse("-0.25")      // -0.25
+  /// float.parse("1e3")        // 1000.0
+  /// float.parse("inf")        // +infinity
+  /// float.parse("NaN")        // NaN
+  /// float.parse("")           // throws — empty
+  /// float.parse("hello")      // throws — non-numeric
+  /// float.parse(" 1.0 ")      // throws — whitespace not allowed; trim first
+  /// ```
+  function parse(text: string) -> float throws root.errors.ParseError {
+    $rust_function
+  }
+
+  /// Returns a uniformly distributed random float in the half-open range
+  /// `[0.0, 1.0)`.
+  ///
+  /// Uses the host's cryptographic entropy source. Each call returns a fresh
+  /// value drawn from 53 random bits (matching f64 mantissa precision), so
+  /// `random() * range + offset` produces a uniform sample in any
+  /// `[offset, offset + range)` interval whose endpoints are representable.
+  ///
+  /// # Examples
+  /// ```
+  /// float.random()              // some x with 0 <= x < 1
+  /// float.random() * 100.0      // some x with 0 <= x < 100
+  /// ```
+  function random() -> float {
+    $rust_function
+  }
+
   // ─── Constants (as zero-arg static methods) ───────────────────────────────
 
   /// Returns π, the ratio of a circle's circumference to its diameter,

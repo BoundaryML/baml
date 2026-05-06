@@ -811,3 +811,232 @@ async fn float_to_radians_round_trip() {
         1e-12,
     );
 }
+
+// ─── parse ────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn float_parse_decimal() {
+    approx(
+        run_float(r#"function main() -> float { float.parse("1.5") }"#).await,
+        1.5,
+        1e-12,
+    );
+}
+
+#[tokio::test]
+async fn float_parse_negative() {
+    approx(
+        run_float(r#"function main() -> float { float.parse("-0.25") }"#).await,
+        -0.25,
+        1e-12,
+    );
+}
+
+#[tokio::test]
+async fn float_parse_explicit_plus() {
+    approx(
+        run_float(r#"function main() -> float { float.parse("+0.5") }"#).await,
+        0.5,
+        1e-12,
+    );
+}
+
+#[tokio::test]
+async fn float_parse_integer() {
+    approx(
+        run_float(r#"function main() -> float { float.parse("42") }"#).await,
+        42.0,
+        1e-12,
+    );
+}
+
+#[tokio::test]
+async fn float_parse_zero() {
+    approx(
+        run_float(r#"function main() -> float { float.parse("0") }"#).await,
+        0.0,
+        1e-12,
+    );
+}
+
+#[tokio::test]
+async fn float_parse_scientific_lowercase() {
+    approx(
+        run_float(r#"function main() -> float { float.parse("1e3") }"#).await,
+        1000.0,
+        1e-9,
+    );
+}
+
+#[tokio::test]
+async fn float_parse_scientific_uppercase_negative_exp() {
+    approx(
+        run_float(r#"function main() -> float { float.parse("-1.5E-3") }"#).await,
+        -0.0015,
+        1e-12,
+    );
+}
+
+#[tokio::test]
+async fn float_parse_inf() {
+    let n = run_float(r#"function main() -> float { float.parse("inf") }"#).await;
+    assert!(n.is_infinite() && n > 0.0);
+}
+
+#[tokio::test]
+async fn float_parse_infinity_word() {
+    let n = run_float(r#"function main() -> float { float.parse("infinity") }"#).await;
+    assert!(n.is_infinite() && n > 0.0);
+}
+
+#[tokio::test]
+async fn float_parse_negative_inf() {
+    let n = run_float(r#"function main() -> float { float.parse("-inf") }"#).await;
+    assert!(n.is_infinite() && n < 0.0);
+}
+
+#[tokio::test]
+async fn float_parse_nan_lowercase() {
+    let n = run_float(r#"function main() -> float { float.parse("nan") }"#).await;
+    assert!(n.is_nan());
+}
+
+#[tokio::test]
+async fn float_parse_nan_mixed_case() {
+    let n = run_float(r#"function main() -> float { float.parse("NaN") }"#).await;
+    assert!(n.is_nan());
+}
+
+#[tokio::test]
+async fn float_parse_empty_throws() {
+    expect_throw(r#"function main() -> float { float.parse("") }"#).await;
+}
+
+#[tokio::test]
+async fn float_parse_alpha_throws() {
+    expect_throw(r#"function main() -> float { float.parse("hello") }"#).await;
+}
+
+#[tokio::test]
+async fn float_parse_trailing_garbage_throws() {
+    expect_throw(r#"function main() -> float { float.parse("1.5abc") }"#).await;
+}
+
+#[tokio::test]
+async fn float_parse_whitespace_throws() {
+    expect_throw(r#"function main() -> float { float.parse(" 1.0 ") }"#).await;
+}
+
+#[tokio::test]
+async fn float_parse_just_sign_throws() {
+    expect_throw(r#"function main() -> float { float.parse("-") }"#).await;
+}
+
+#[tokio::test]
+async fn float_parse_round_trip_in_arithmetic() {
+    approx(
+        run_float(r#"function main() -> float { float.parse("0.5") + float.parse("0.25") }"#).await,
+        0.75,
+        1e-12,
+    );
+}
+
+// ─── random ───────────────────────────────────────────────────────────────────
+//
+// We can't assert exact values, so we sample many times and verify:
+//   - every sample is in [0.0, 1.0)
+//   - over enough samples we cover the unit interval well (mean ≈ 0.5, both
+//     halves are reached)
+
+async fn run_float_array(src: &str) -> Vec<f64> {
+    let output = baml_test!(baml: src, entry: "main");
+    match output.result {
+        Ok(BexExternalValue::Array { items, .. }) => items
+            .into_iter()
+            .map(|item| match item {
+                BexExternalValue::Float(f) => f,
+                other => panic!("expected float element, got {other:?}"),
+            })
+            .collect(),
+        other => panic!("expected array, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn float_random_in_unit_interval_and_covers_both_halves() {
+    let samples = run_float_array(
+        r#"
+        function main() -> float[] {
+            let acc: float[] = [];
+            let i = 0;
+            while (i < 1000) {
+                let _ = acc.push(float.random());
+                i = i + 1;
+            }
+            acc
+        }
+        "#,
+    )
+    .await;
+    assert_eq!(samples.len(), 1000);
+    let mut min_seen = f64::INFINITY;
+    let mut max_seen = f64::NEG_INFINITY;
+    let mut below_half = 0;
+    let mut above_half = 0;
+    for &x in &samples {
+        assert!(
+            (0.0..1.0).contains(&x),
+            "float.random() returned {x}, out of [0.0, 1.0)"
+        );
+        min_seen = min_seen.min(x);
+        max_seen = max_seen.max(x);
+        if x < 0.5 {
+            below_half += 1;
+        } else {
+            above_half += 1;
+        }
+    }
+    // Both halves should each get about 500 samples; tolerate ±150.
+    assert!(
+        below_half >= 350,
+        "expected ≥350 samples below 0.5, got {below_half}"
+    );
+    assert!(
+        above_half >= 350,
+        "expected ≥350 samples ≥ 0.5, got {above_half}"
+    );
+    assert!(max_seen < 1.0, "upper bound is exclusive — saw {max_seen}");
+    assert!(min_seen >= 0.0, "lower bound is inclusive — saw {min_seen}");
+}
+
+#[tokio::test]
+async fn float_random_distinct_values() {
+    // Across 100 samples drawn from f64's continuous range, observing fewer
+    // than 90 distinct values would indicate the RNG is broken.
+    let samples = run_float_array(
+        r#"
+        function main() -> float[] {
+            let acc: float[] = [];
+            let i = 0;
+            while (i < 100) {
+                let _ = acc.push(float.random());
+                i = i + 1;
+            }
+            acc
+        }
+        "#,
+    )
+    .await;
+    let distinct: std::collections::HashSet<u64> = samples.iter().map(|f| f.to_bits()).collect();
+    assert!(
+        distinct.len() >= 90,
+        "expected ≥90 distinct values out of 100 samples, got {}",
+        distinct.len()
+    );
+}
+
+#[tokio::test]
+async fn float_random_returns_a_float() {
+    let n = run_float("function main() -> float { float.random() }").await;
+    assert!((0.0..1.0).contains(&n));
+}

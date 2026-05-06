@@ -184,6 +184,29 @@ impl BamlClassFloat for PackageBamlImpl {
     // Note: `to_radians` and `to_degrees` are implemented directly in
     // `float.baml` — no Rust trampoline needed.
 
+    // ── Parsing / randomness ──────────────────────────────────────────────────
+
+    fn parse(text: &str) -> Result<f64, VmRustFnError> {
+        text.parse::<f64>().map_err(|e| {
+            VmBamlError::ParseError {
+                message: format!("float.parse: cannot parse {text:?} as float: {e}"),
+            }
+            .into()
+        })
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn random() -> f64 {
+        // Uniform draw on [0, 1) using 53 mantissa bits. Standard construction:
+        // take a u64, drop the top 11 bits, multiply by 2^-53.
+        let mut buf = [0u8; 8];
+        getrandom::getrandom(&mut buf).expect("float.random: host entropy source unavailable");
+        let bits = u64::from_le_bytes(buf) >> 11; // 53-bit value, ≤ 2^53 - 1
+        // 2^-53 = 1.0 / (1u64 << 53). The cast `bits as f64` is lossless
+        // because bits ≤ 2^53 - 1 fits in f64's 53-bit mantissa.
+        bits as f64 * (1.0 / (1u64 << 53) as f64)
+    }
+
     // ── Constants ─────────────────────────────────────────────────────────────
 
     fn pi() -> f64 {
