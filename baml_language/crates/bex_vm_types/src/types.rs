@@ -954,6 +954,10 @@ impl FutureId {
     pub unsafe fn from_usize(id: usize) -> Self {
         Self { id }
     }
+
+    pub fn as_usize(self) -> usize {
+        self.id
+    }
 }
 
 /// Types of values.

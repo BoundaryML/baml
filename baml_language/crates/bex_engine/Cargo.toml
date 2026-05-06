@@ -52,8 +52,8 @@ workspace = true
 
 [features]
 default = [ "aws-crypto" ]
-aws-crypto = [ "sys_ops/aws-crypto" ]
-ring-crypto = [ "sys_ops/ring-crypto" ]
+aws-crypto = [ "sys_ops/aws-crypto", "sys_native/aws-crypto" ]
+ring-crypto = [ "sys_ops/ring-crypto", "sys_native/ring-crypto" ]
 heap_debug = [
   "bex_vm/heap_debug",
   "bex_heap/heap_debug",

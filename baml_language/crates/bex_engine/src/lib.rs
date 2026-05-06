@@ -727,6 +727,13 @@ impl BexEngine {
         &self.heap_permit_manager
     }
 
+    /// Number of currently `Pending` futures tracked by the engine. Useful
+    /// for telemetry and tests that verify the future manager cleans up
+    /// completed futures.
+    pub async fn active_future_count(&self) -> usize {
+        self.futures.active_future_count().await
+    }
+
     /// Resolve a [`bex_external_types::Handle`] to its current [`HeapPtr`].
     ///
     /// The permit parameter proves GC cannot run while the caller is using the
