@@ -7,8 +7,8 @@ structural mismatches surface as `CallAck.error` → `BamlError`.
 
 Outbound (09e): `baml_outbound.proto` → Python value. Decoding is driven
 by the FQN metadata embedded on `BamlValueClass` / `BamlValueEnum` and
-the host-derived `handle_type()` of `BamlPyHandle`; the caller's declared
-Python return type plays no runtime role.
+the wire `BamlHandle.handle_type` tag (read by `_decode_handle`); the
+caller's declared Python return type plays no runtime role.
 """
 
 from __future__ import annotations
@@ -188,8 +188,13 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
         from .baml_py import put_pyhandle_into_table
         key, ht = put_pyhandle_into_table(value)
         inbound_value.handle.key = key
-        # Wire field stays populated for cross-bridge compat.
-        inbound_value.handle.handle_type = baml_inbound_pb2.BamlHandleType(ht)
+        # Wire field stays populated for cross-bridge compat. The proto
+        # field is typed as the enum class, but `BamlHandleType` is an
+        # `int` subclass so the runtime accepts a bare int — cast for
+        # the static checker.
+        inbound_value.handle.handle_type = typing.cast(
+            baml_inbound_pb2.BamlHandleType, ht
+        )
         return
 
     # Media PyO3 types — wrap into an `InboundClassValue` per 15b. The
@@ -433,15 +438,17 @@ def _decode_enum(enum_value) -> Any:
 
 
 def _decode_handle(handle) -> Any:
-    """Drain `HANDLE_TABLE[handle.key]`, wrap in `BamlPyHandle`, dispatch
-    on its host-derived `handle_type()`. The wire `handle.handle_type`
-    field is not consulted — `BamlPyHandle.handle_type()` is the source
-    of truth.
+    """Wrap `HANDLE_TABLE[handle.key]` in a `BamlPyHandle` and dispatch
+    on the wire `handle.handle_type` field. The `BamlPyHandle` itself
+    holds the `handle_type` tag (set at construction from the wire) so
+    it round-trips on inbound encode without needing to consult the
+    table; we read directly from the wire here to avoid a redundant
+    field access.
     """
     from .baml_py import take_pyhandle_from_table
-    pyhandle = take_pyhandle_from_table(handle.key)
     HT = baml_inbound_pb2.BamlHandleType
-    ht = pyhandle.handle_type()
+    ht = handle.handle_type
+    pyhandle = take_pyhandle_from_table(handle.key, int(ht))
 
     if ht == HT.ADT_MEDIA_IMAGE:
         return BamlImage._from_pyhandle(pyhandle)

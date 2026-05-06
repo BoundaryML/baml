@@ -1,7 +1,7 @@
 //! PyO3 types for BAML media (`baml.media.{Image,Video,Audio,Pdf}`).
 //!
 //! Per 15b: each Python media class is a re-export of a Rust PyO3 type
-//! that wraps a `BamlPyHandle` whose entry is a
+//! that wraps a `BamlPyHandle` whose backing `HANDLE_TABLE` row is a
 //! `CffiHandleTableEntry::Adt(BexExternalAdt::Media(arc))`. Static and
 //! instance methods dispatch natively here instead of round-tripping
 //! through the BAML engine.
@@ -14,7 +14,7 @@
 use std::sync::Arc;
 
 use bex_project::{BexExternalAdt, MediaKind, MediaValue};
-use bridge_ctypes::CffiHandleTableEntry;
+use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, baml::cffi::BamlHandleType};
 use pyo3::{
     Bound, Py, PyAny, PyResult, Python,
     exceptions::{PyRuntimeError, PyTypeError},
@@ -45,7 +45,7 @@ fn pydantic_is_instance_schema<'py>(
 // ---------------------------------------------------------------------------
 
 macro_rules! define_media_pyclass {
-    ($name:ident, $kind:expr) => {
+    ($name:ident, $kind:expr, $expected_ht:expr) => {
         #[gen_stub_pyclass]
         #[pyclass]
         pub struct $name {
@@ -60,8 +60,9 @@ macro_rules! define_media_pyclass {
             fn from_url(py: Python<'_>, url: String, mime_type: Option<String>) -> PyResult<Self> {
                 let inner = MediaValue::from_url($kind, &url, mime_type.as_deref());
                 let entry = CffiHandleTableEntry::Adt(BexExternalAdt::Media(inner));
+                let key = HANDLE_TABLE.insert(entry);
                 Ok(Self {
-                    handle: Py::new(py, BamlPyHandle::new(entry))?,
+                    handle: Py::new(py, BamlPyHandle::new(key, $expected_ht))?,
                 })
             }
 
@@ -74,8 +75,9 @@ macro_rules! define_media_pyclass {
             ) -> PyResult<Self> {
                 let inner = MediaValue::from_file($kind, &file, mime_type.as_deref());
                 let entry = CffiHandleTableEntry::Adt(BexExternalAdt::Media(inner));
+                let key = HANDLE_TABLE.insert(entry);
                 Ok(Self {
-                    handle: Py::new(py, BamlPyHandle::new(entry))?,
+                    handle: Py::new(py, BamlPyHandle::new(key, $expected_ht))?,
                 })
             }
 
@@ -88,8 +90,9 @@ macro_rules! define_media_pyclass {
             ) -> PyResult<Self> {
                 let inner = MediaValue::from_base64($kind, &base64, mime_type.as_deref());
                 let entry = CffiHandleTableEntry::Adt(BexExternalAdt::Media(inner));
+                let key = HANDLE_TABLE.insert(entry);
                 Ok(Self {
-                    handle: Py::new(py, BamlPyHandle::new(entry))?,
+                    handle: Py::new(py, BamlPyHandle::new(key, $expected_ht))?,
                 })
             }
 
@@ -110,8 +113,8 @@ macro_rules! define_media_pyclass {
             }
 
             /// Internal: build a `$name` from a `BamlPyHandle`. Used by
-            /// `_decode_handle`. Validates the entry is a media of the
-            /// right kind.
+            /// `_decode_handle`. Validates the handle's `handle_type`
+            /// tag matches the expected media kind.
             #[classmethod]
             fn _from_pyhandle(
                 _cls: &Bound<'_, pyo3::types::PyType>,
@@ -119,23 +122,16 @@ macro_rules! define_media_pyclass {
             ) -> PyResult<Self> {
                 Python::attach(|py| {
                     let pyh = pyhandle.borrow(py);
-                    match &pyh.entry {
-                        CffiHandleTableEntry::Adt(BexExternalAdt::Media(arc))
-                            if arc.kind == $kind =>
-                        {
-                            drop(pyh);
-                            Ok(Self { handle: pyhandle })
-                        }
-                        CffiHandleTableEntry::Adt(BexExternalAdt::Media(arc)) => {
-                            Err(PyTypeError::new_err(format!(
-                                "media handle kind mismatch: expected {:?}, got {:?}",
-                                $kind, arc.kind
-                            )))
-                        }
-                        _ => Err(PyTypeError::new_err(
-                            "BamlPyHandle does not point to a media value",
-                        )),
+                    if pyh.handle_type != $expected_ht {
+                        return Err(PyTypeError::new_err(format!(
+                            "BamlPyHandle.handle_type is {}, expected {} for {}",
+                            pyh.handle_type,
+                            $expected_ht,
+                            stringify!($name),
+                        )));
                     }
+                    drop(pyh);
+                    Ok(Self { handle: pyhandle })
                 })
             }
 
@@ -159,10 +155,18 @@ macro_rules! define_media_pyclass {
         impl $name {
             fn media_arc(&self, py: Python<'_>) -> PyResult<Arc<MediaValue>> {
                 let pyh = self.handle.borrow(py);
-                match &pyh.entry {
-                    CffiHandleTableEntry::Adt(BexExternalAdt::Media(arc)) => Ok(Arc::clone(arc)),
+                let entry = HANDLE_TABLE.resolve(pyh.handle_key).ok_or_else(|| {
+                    PyRuntimeError::new_err(format!(
+                        "media handle key {} no longer in HANDLE_TABLE",
+                        pyh.handle_key
+                    ))
+                })?;
+                match &*entry {
+                    CffiHandleTableEntry::Adt(BexExternalAdt::Media(arc)) if arc.kind == $kind => {
+                        Ok(Arc::clone(arc))
+                    }
                     _ => Err(PyRuntimeError::new_err(
-                        "media handle no longer points to a media value",
+                        "media handle no longer points to a media value of the expected kind",
                     )),
                 }
             }
@@ -170,10 +174,22 @@ macro_rules! define_media_pyclass {
     };
 }
 
-define_media_pyclass!(BamlImage, MediaKind::Image);
-define_media_pyclass!(BamlAudio, MediaKind::Audio);
-define_media_pyclass!(BamlVideo, MediaKind::Video);
-define_media_pyclass!(BamlPdf, MediaKind::Pdf);
+define_media_pyclass!(
+    BamlImage,
+    MediaKind::Image,
+    BamlHandleType::AdtMediaImage as u64
+);
+define_media_pyclass!(
+    BamlAudio,
+    MediaKind::Audio,
+    BamlHandleType::AdtMediaAudio as u64
+);
+define_media_pyclass!(
+    BamlVideo,
+    MediaKind::Video,
+    BamlHandleType::AdtMediaVideo as u64
+);
+define_media_pyclass!(BamlPdf, MediaKind::Pdf, BamlHandleType::AdtMediaPdf as u64);
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     use pyo3::types::PyModuleMethods;

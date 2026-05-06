@@ -33,7 +33,7 @@ __all__ = [
 class AbortController:
     r"""
     An abort controller for cancelling BAML function calls.
-
+    
     Usage from Python:
     ```python
     controller = AbortController()
@@ -52,7 +52,7 @@ class AbortController:
     def abort(self) -> None:
         r"""
         Cancel the associated function call.
-
+        
         If the function is still running, it will be interrupted at the next
         cancellation check point (before HTTP calls, between retries, etc.).
         Calling `abort()` multiple times is harmless.
@@ -74,8 +74,8 @@ class BamlAudio:
     def _from_pyhandle(cls, pyhandle: BamlPyHandle) -> BamlAudio:
         r"""
         Internal: build a `$name` from a `BamlPyHandle`. Used by
-        `_decode_handle`. Validates the entry is a media of the
-        right kind.
+        `_decode_handle`. Validates the handle's `handle_type`
+        tag matches the expected media kind.
         """
     def _to_pyhandle(self) -> BamlPyHandle:
         r"""
@@ -110,8 +110,8 @@ class BamlImage:
     def _from_pyhandle(cls, pyhandle: BamlPyHandle) -> BamlImage:
         r"""
         Internal: build a `$name` from a `BamlPyHandle`. Used by
-        `_decode_handle`. Validates the entry is a media of the
-        right kind.
+        `_decode_handle`. Validates the handle's `handle_type`
+        tag matches the expected media kind.
         """
     def _to_pyhandle(self) -> BamlPyHandle:
         r"""
@@ -139,8 +139,8 @@ class BamlPdf:
     def _from_pyhandle(cls, pyhandle: BamlPyHandle) -> BamlPdf:
         r"""
         Internal: build a `$name` from a `BamlPyHandle`. Used by
-        `_decode_handle`. Validates the entry is a media of the
-        right kind.
+        `_decode_handle`. Validates the handle's `handle_type`
+        tag matches the expected media kind.
         """
     def _to_pyhandle(self) -> BamlPyHandle:
         r"""
@@ -151,12 +151,6 @@ class BamlPdf:
 
 @typing.final
 class BamlPyHandle:
-    def handle_type(self) -> builtins.int:
-        r"""
-        Derived host-side `BamlHandleType` tag, as i32. Source of truth
-        for opaque-handle dispatch on the Python side; the wire field of
-        the same name is redundant and ignored after decode.
-        """
     def __copy__(self) -> BamlPyHandle: ...
     def __deepcopy__(self, _memo: typing.Any) -> BamlPyHandle: ...
 
@@ -171,11 +165,11 @@ class BamlRuntime:
     def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str], *, sdk_root: builtins.str) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
-
+        
         Mirrors `bridge_cffi::engine::initialize_runtime`: the same
         single-slot singleton is used, so a second call replaces the prior
         runtime.
-
+        
         # Arguments
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
@@ -209,8 +203,8 @@ class BamlVideo:
     def _from_pyhandle(cls, pyhandle: BamlPyHandle) -> BamlVideo:
         r"""
         Internal: build a `$name` from a `BamlPyHandle`. Used by
-        `_decode_handle`. Validates the entry is a media of the
-        right kind.
+        `_decode_handle`. Validates the handle's `handle_type`
+        tag matches the expected media kind.
         """
     def _to_pyhandle(self) -> BamlPyHandle:
         r"""
@@ -222,7 +216,7 @@ class BamlVideo:
 class Collector:
     r"""
     Python-facing Collector that tracks BAML function call logs.
-
+    
     Usage:
     ```python
     from baml_py import Collector
@@ -310,7 +304,7 @@ class FunctionLog:
 class FunctionResult:
     r"""
     Result of a BAML function call.
-
+    
     Contains the parsed Python object returned by the function.
     """
     def __new__(cls, value: typing.Any) -> FunctionResult:
@@ -328,7 +322,7 @@ class FunctionResult:
 class HostSpanManager:
     r"""
     Manages host-side span tracking for `@trace` in Python.
-
+    
     This is a thin PyO3 wrapper around `bridge_cffi::host_spans::HostSpanManager`.
     All core logic (span stack, event emission) lives in bridge_cffi.
     """
@@ -424,14 +418,14 @@ class Usage:
         """
     def __repr__(self) -> builtins.str: ...
 
-def _seed_function_ref_handle(global_index: builtins.int) -> builtins.int:
+def _seed_function_ref_handle(global_index: builtins.int) -> tuple[builtins.int, builtins.int]:
     r"""
-    Test-only: seed a `FunctionRef` entry directly into `HANDLE_TABLE`.
-    Used by pytest fixtures that need to exercise decoder paths for
-    handle kinds that no Python-facing API constructs.
+    Test-only: seed a `FunctionRef` entry directly into `HANDLE_TABLE`,
+    returning `(key, handle_type)` so test code can construct a
+    `BamlPyHandle` or stage a wire `BamlHandle`.
     """
 
-def _seed_generic_media_handle() -> builtins.int:
+def _seed_generic_media_handle() -> tuple[builtins.int, builtins.int]:
     r"""
     Test-only: seed an `Adt(Media(generic))` entry directly into `HANDLE_TABLE`.
     """
@@ -445,7 +439,7 @@ def get_runtime() -> BamlRuntime:
     r"""
     Return the process-global `BamlRuntime`, or raise `BamlError` if
     `BamlRuntime.initialize_runtime(...)` has not been called yet.
-
+    
     Used by the pure-Python factories in `baml.baml_core` so generated
     leaves don't have to thread a runtime reference through every call
     site.
@@ -455,16 +449,18 @@ def get_version() -> builtins.str: ...
 
 def put_pyhandle_into_table(pyhandle: BamlPyHandle) -> tuple[builtins.int, builtins.int]:
     r"""
-    Insert a clone of `pyhandle.entry` into `HANDLE_TABLE`, return
-    `(key, handle_type as i32)`. The original `BamlPyHandle` stays
-    usable — Python may pass the same handle to multiple calls.
+    Allocate a fresh `HANDLE_TABLE` row sharing the same `Arc` as
+    `pyhandle.handle_key`, return `(new_key, handle_type)`. The original
+    `BamlPyHandle` keeps its key and stays usable — Python may pass the
+    same handle to multiple calls.
     """
 
-def take_pyhandle_from_table(key: builtins.int) -> BamlPyHandle:
+def take_pyhandle_from_table(key: builtins.int, handle_type: builtins.int) -> BamlPyHandle:
     r"""
-    Drain `HANDLE_TABLE[key]` into a fresh `BamlPyHandle`. Used by
-    `proto.py::_decode_handle`. Raises `RuntimeError` if the key is
-    absent (which would mean the encoder failed to insert, or the same
-    key was decoded twice).
+    Wrap a `HANDLE_TABLE` key as a `BamlPyHandle`. Used by
+    `proto.py::_decode_handle`. Does **not** drain — the entry stays in
+    the table and is owned by the returned `BamlPyHandle`. Validates the
+    key exists so a malformed wire payload errors here rather than on
+    later use.
     """
 
