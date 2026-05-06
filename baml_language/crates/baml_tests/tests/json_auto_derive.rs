@@ -491,3 +491,196 @@ async fn generic_class_honors_override_through_typevar() {
         ))
     );
 }
+
+// ── Phase 5c: per-field auto-derive `from_json` with override-honoring ────────
+
+#[tokio::test]
+async fn primitive_field_from_json() {
+    // `class C { x: int }; C.from_json(parse("{\"x\":42}"))` must produce `C{x:42}`.
+    // Exercises the per-field synthesizer body for from_json: each field maps
+    // to `baml.json.from_json<F>(baml.json.field(j, "<name>"))`.
+    let source = r#"
+        class C { x int }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"x\":42}");
+            let c: C = C.from_json(j);
+            c.x
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+async fn array_of_primitive_from_json() {
+    // `class C { xs: int[] }; C.from_json(parse("{\"xs\":[1,2,3]}"))` must
+    // produce `C{xs:[1,2,3]}`.  The auto-derived body calls
+    // `baml.json.from_json<int[]>(field(j, "xs"))` which structurally walks the
+    // json array per element.
+    let source = r#"
+        class C { xs int[] }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"xs\":[1,2,3]}");
+            let c: C = C.from_json(j);
+            c.xs[0] + c.xs[1] + c.xs[2]
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
+}
+
+#[tokio::test]
+async fn nested_class_override_honored_direct_from_json() {
+    // `class A { b: B }`, `class B { ... function from_json(j) -> B { B{y: 99} } }`:
+    // `A.from_json(parse("{\"b\":{\"y\":7}}"))` must produce `A{b: B{y:99}}` —
+    // the auto-derived A.from_json calls `baml.json.from_json<B>(field(j, "b"))`
+    // which dispatches through B's user override (returning the constant).
+    //
+    // Without the override-dispatch path this would fall through to structural
+    // decode and return `B{y:7}`; the assertion below catches that regression.
+    let source = r#"
+        class B {
+            y int
+
+            function from_json(j: baml.json.json) -> B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                B { y: 99 }
+            }
+        }
+        class A { b B }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"b\":{\"y\":7}}");
+            let a: A = A.from_json(j);
+            a.b.y
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+#[tokio::test]
+async fn nested_class_override_honored_in_array_from_json() {
+    // `class A { items: B[] }`, B has `from_json` override that always
+    // returns `B{y:0}`.  `A.from_json(parse("{\"items\":[{\"y\":1},{\"y\":2}]}"))`
+    // must call B's override per element via the List trampoline, producing
+    // `[B{y:0}, B{y:0}]`. Sum = 0.  Without override-honoring through arrays,
+    // sum would be 1+2=3.
+    let source = r#"
+        class B {
+            y int
+
+            function from_json(j: baml.json.json) -> B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                B { y: 0 }
+            }
+        }
+        class A { items B[] }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"items\":[{\"y\":1},{\"y\":2}]}");
+            let a: A = A.from_json(j);
+            a.items[0].y + a.items[1].y
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
+}
+
+#[tokio::test]
+async fn nested_class_override_honored_in_map_from_json() {
+    // `class A { lookup: map<string, B> }`, B has `from_json` override that
+    // always returns `B{v:0}`.  Override must apply per map value via the
+    // Map trampoline (the from_json-side analog of 5b.4.2's Map.to_json).
+    let source = r#"
+        class B {
+            v int
+
+            function from_json(j: baml.json.json) -> B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                B { v: 0 }
+            }
+        }
+        class A { lookup map<string, B> }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"lookup\":{\"k1\":{\"v\":7},\"k2\":{\"v\":9}}}");
+            let a: A = A.from_json(j);
+            a.lookup["k1"].v + a.lookup["k2"].v
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
+}
+
+#[tokio::test]
+async fn recursive_class_from_json() {
+    // `class Tree { value: int  children: Tree[] }`. Auto-derive must not
+    // loop at synthesis time (just like to_json), and decode must round-trip.
+    //
+    // Tree{value:1, children:[Tree{value:2, children:[]}]}.to_json() round-trips:
+    //   parse(stringify) → from_json reconstructs the same shape.
+    let source = r#"
+        class Tree {
+            value int
+            children Tree[]
+        }
+        function main() -> int throws baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let leaf: Tree = Tree { value: 2, children: [] };
+            let root: Tree = Tree { value: 1, children: [leaf] };
+            let s: string = baml.json.stringify(root.to_json());
+            let j: baml.json.json = baml.json.parse(s);
+            let parsed: Tree = Tree.from_json(j);
+            parsed.value + parsed.children[0].value
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+}
+
+#[tokio::test]
+async fn generic_class_from_json_concrete() {
+    // `class Box<T> { value: T }; Box<int>.from_json(parse("{\"value\":42}"))`
+    // must produce `Box<int>{value:42}`.  The synthesizer emits
+    // `baml.json.from_json<T>(field(j, "value"))` where T is substituted with
+    // int from the call site's type-args; the native then structural-decodes
+    // an int.
+    let source = r#"
+        class Box<T> { value T }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"value\":42}");
+            let b: Box<int> = Box<int>.from_json(j);
+            b.value
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+async fn generic_class_honors_override_through_typevar_from_json() {
+    // BEP-038 contract for generics on the from_json side: `Box<Secret>` where
+    // Secret has a user `from_json` override returning a constant must call
+    // Secret.from_json through the TypeVar boundary.
+    //
+    // The lower-pass extension to `find_callee_generic_args` treats the
+    // receiver-type `<Secret>` of `Box<Secret>.from_json(j)` as a call-site
+    // type-arg, so the BEP-039 channel seeds `Box.from_json`'s frame with
+    // `T = Secret`.  Inside the auto-derived body, `baml.json.from_json<T>`
+    // substitutes `T` to `Secret` and dispatches `Secret.from_json` (the user
+    // override).
+    let source = r#"
+        class Secret {
+            data string
+
+            function from_json(j: baml.json.json) -> Secret throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                Secret { data: "[reset]" }
+            }
+        }
+        class Box<T> { value T }
+        function main() -> string throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"value\":{\"data\":\"hunter2\"}}");
+            let b: Box<Secret> = Box<Secret>.from_json(j);
+            b.value.data
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("[reset]".to_string()))
+    );
+}

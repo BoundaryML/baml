@@ -9,10 +9,10 @@ class user.B {
   label: string
 }
 function user.from_json(j: baml.json.json) -> user.B  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.B { label: baml.json.from_json(baml.json.field(j, "label")) }
 }
 function user.from_json(j: baml.json.json) -> user.A  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.A { b: baml.json.from_json(baml.json.field(j, "b")) }
 }
 function user.greet(self: ?) -> string  [expr] {
   {  } self.label

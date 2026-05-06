@@ -14,7 +14,7 @@ function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSer
   map { "label": self.label.to_json() } : map<string, baml.json.json>
 }
 function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.B
+  B { label: baml.json.from_json<string>(baml.json.field(j, "label")) } : user.B
 }
 class user.A {
   b: user.B
@@ -23,7 +23,7 @@ function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSer
   map { "b": self.b.to_json() } : map<string, baml.json.json>
 }
 function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.A
+  A { b: baml.json.from_json<B>(baml.json.field(j, "b")) } : user.A
 }
 function user.test_deep_method(a: user.A) -> string throws never {
   { : string

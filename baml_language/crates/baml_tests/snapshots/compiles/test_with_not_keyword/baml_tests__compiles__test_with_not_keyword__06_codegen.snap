@@ -22,11 +22,16 @@ function user.$init_test_32(registry: testing.TestCollector) -> null {
 
 function user.Foo.from_json(j: baml.json.json) -> Foo {
     load_var j
-    call baml.json.stringify
+    load_const "x"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type Foo
+    alloc_instance user.Foo
     load_var _2
-    call baml.json.from_string
+    init_field .x
     return
 }
 
@@ -41,11 +46,16 @@ function user.Foo.to_json(self: null) -> baml.json.json {
 
 function user.HasWith.from_json(j: baml.json.json) -> HasWith {
     load_var j
-    call baml.json.stringify
+    load_const "with"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type HasWith
+    alloc_instance user.HasWith
     load_var _2
-    call baml.json.from_string
+    init_field .with
     return
 }
 

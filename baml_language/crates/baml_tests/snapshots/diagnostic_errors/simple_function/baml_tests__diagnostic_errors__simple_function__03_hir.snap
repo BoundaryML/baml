@@ -22,7 +22,7 @@ function user.HelloWorld$render_prompt(name: string) -> baml.llm.PromptAst  [exp
   baml.llm.render_prompt(GPT4, "HelloWorld", map { "name": name })
 }
 function user.from_json(j: baml.json.json) -> user.User  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.User { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": self.name.to_json(), "age": self.age.to_json() }

@@ -4,7 +4,11 @@ source: crates/baml_tests/tests/bytecode_format/main.rs
 function assert.contains(haystack: string, needle: string) -> null {
   28   0    load_var 1             (haystack)
        1    load_var 2             (needle)
+<<<<<<< HEAD
        2    call 33 ntypeargs=0    (baml.String.includes)
+=======
+       2    call 54 ntypeargs=0    (baml.String.includes)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        3    unary_op !             
        4    pop_jump_if_false +2   (to 6)
        5    jump +3                (to 8)
@@ -14,7 +18,11 @@ function assert.contains(haystack: string, needle: string) -> null {
   28   7    jump +3                (to 10)
 
   29   8    load_const 1           ("assertion failed: string does not contain expected substring")
+<<<<<<< HEAD
        9    call 68 ntypeargs=0    (baml.sys.panic)
+=======
+       9    call 141 ntypeargs=0   (baml.sys.panic)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        10   return                 
 }
 
@@ -30,7 +38,11 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
   20   6   jump +3                (to 9)
 
   21   7   load_const 1           ("assertion failed: expected equal values")
+<<<<<<< HEAD
        8   call 68 ntypeargs=0    (baml.sys.panic)
+=======
+       8   call 141 ntypeargs=0   (baml.sys.panic)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        9   return                 
 }
 
@@ -45,7 +57,11 @@ function assert.is_true(condition: bool) -> null {
   4   5   jump +3                (to 8)
 
   5   6   load_const 1           ("assertion failed: expected true")
+<<<<<<< HEAD
       7   call 68 ntypeargs=0    (baml.sys.panic)
+=======
+      7   call 141 ntypeargs=0   (baml.sys.panic)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
       8   return                 
 }
 
@@ -61,7 +77,11 @@ function assert.not_null(value: unknown?) -> null {
   12   6   jump +3                (to 9)
 
   13   7   load_const 1           ("assertion failed: expected non-null value")
+<<<<<<< HEAD
        8   call 68 ntypeargs=0    (baml.sys.panic)
+=======
+       8   call 141 ntypeargs=0   (baml.sys.panic)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        9   return                 
 }
 
@@ -72,6 +92,165 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> void th
        3   return          
 }
 
+<<<<<<< HEAD
+=======
+function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
+  5   0    load_var 1                       (j)
+      1    load_const 0                     ("outcome")
+      2    call 228 ntypeargs=0             (baml.json.field)
+      3    store_var 4                      (_3)
+      4    load_type 1                      
+      5    load_var 4                       (_3)
+      6    call 227 ntypeargs=1             (baml.json.from_json)
+      7    store_var 3                      (_2)
+      8    load_var 1                       (j)
+      9    load_const 2                     ("duration_ms")
+      10   call 228 ntypeargs=0             (baml.json.field)
+      11   store_var 6                      (_6)
+      12   load_type 3                      
+      13   load_var 6                       (_6)
+      14   call 227 ntypeargs=1             (baml.json.from_json)
+      15   store_var 5                      (_5)
+      16   alloc_instance 153 ntypeargs=0   (testing.RunReport)
+      17   load_var 3                       (_2)
+      18   init_field 0                     (outcome)
+      19   load_var 5                       (_5)
+      20   init_field 1                     (duration_ms)
+      21   store_var 2                      (_0)
+      22   load_var 2                       (_0)
+      23   return                           
+}
+
+function testing.RunReport.to_json(self: null) -> baml.json.json {
+  5   0    load_var 1            (self)
+      1    load_field 0          (outcome)
+      2    load_const 0          ("to_json")
+      3    load_map_element      
+      4    call_indirect         
+      5    store_var 3           (_2)
+      6    load_var 1            (self)
+      7    load_field 1          (duration_ms)
+      8    call 31 ntypeargs=0   (baml.Int.to_json)
+      9    store_var 4           (_7)
+      10   load_var 3            (_2)
+      11   load_var 4            (_7)
+      12   load_const 1          ("outcome")
+      13   load_const 2          ("duration_ms")
+      14   alloc_map 2           
+      15   store_var 2           (_0)
+      16   load_var 2            (_0)
+      17   return                
+}
+
+function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest {
+  78   0    load_var 1                       (j)
+       1    load_const 0                     ("type")
+       2    call 228 ntypeargs=0             (baml.json.field)
+       3    store_var 4                      (_3)
+       4    load_type 1                      
+       5    load_var 4                       (_3)
+       6    call 227 ntypeargs=1             (baml.json.from_json)
+       7    store_var 3                      (_2)
+       8    load_var 1                       (j)
+       9    load_const 2                     ("name")
+       10   call 228 ntypeargs=0             (baml.json.field)
+       11   store_var 6                      (_6)
+       12   load_type 1                      
+       13   load_var 6                       (_6)
+       14   call 227 ntypeargs=1             (baml.json.from_json)
+       15   store_var 5                      (_5)
+       16   alloc_instance 138 ntypeargs=0   (testing.SerializedTest)
+       17   load_var 3                       (_2)
+       18   init_field 0                     (type)
+       19   load_var 5                       (_5)
+       20   init_field 1                     (name)
+       21   store_var 2                      (_0)
+       22   load_var 2                       (_0)
+       23   return                           
+}
+
+function testing.SerializedTest.to_json(self: null) -> baml.json.json {
+  78   0    load_var 1            (self)
+       1    load_field 0          (type)
+       2    call 40 ntypeargs=0   (baml.String.to_json)
+       3    store_var 3           (_2)
+       4    load_var 1            (self)
+       5    load_field 1          (name)
+       6    call 40 ntypeargs=0   (baml.String.to_json)
+       7    store_var 4           (_5)
+       8    load_var 3            (_2)
+       9    load_var 4            (_5)
+       10   load_const 0          ("type")
+       11   load_const 1          ("name")
+       12   alloc_map 2           
+       13   store_var 2           (_0)
+       14   load_var 2            (_0)
+       15   return                
+}
+
+function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet {
+  83   0    load_var 1                       (j)
+       1    load_const 0                     ("name")
+       2    call 228 ntypeargs=0             (baml.json.field)
+       3    store_var 4                      (_3)
+       4    load_type 1                      
+       5    load_var 4                       (_3)
+       6    call 227 ntypeargs=1             (baml.json.from_json)
+       7    store_var 3                      (_2)
+       8    load_var 1                       (j)
+       9    load_const 2                     ("items")
+       10   call 228 ntypeargs=0             (baml.json.field)
+       11   store_var 6                      (_6)
+       12   load_type 3                      
+       13   load_var 6                       (_6)
+       14   call 227 ntypeargs=1             (baml.json.from_json)
+       15   store_var 5                      (_5)
+       16   load_var 1                       (j)
+       17   load_const 4                     ("loadingTimeMs")
+       18   call 228 ntypeargs=0             (baml.json.field)
+       19   store_var 8                      (_9)
+       20   load_type 5                      
+       21   load_var 8                       (_9)
+       22   call 227 ntypeargs=1             (baml.json.from_json)
+       23   store_var 7                      (_8)
+       24   alloc_instance 136 ntypeargs=0   (testing.SerializedTestSet)
+       25   load_var 3                       (_2)
+       26   init_field 0                     (name)
+       27   load_var 5                       (_5)
+       28   init_field 1                     (items)
+       29   load_var 7                       (_8)
+       30   init_field 2                     (loadingTimeMs)
+       31   store_var 2                      (_0)
+       32   load_var 2                       (_0)
+       33   return                           
+}
+
+function testing.SerializedTestSet.to_json(self: null) -> baml.json.json {
+  83   0    load_var 1            (self)
+       1    load_field 0          (name)
+       2    call 40 ntypeargs=0   (baml.String.to_json)
+       3    store_var 3           (_2)
+       4    load_var 1            (self)
+       5    load_field 1          (items)
+       6    call 12 ntypeargs=0   (baml.Array.to_json)
+       7    store_var 4           (_5)
+       8    load_var 1            (self)
+       9    load_field 2          (loadingTimeMs)
+       10   call 31 ntypeargs=0   (baml.Int.to_json)
+       11   store_var 5           (_8)
+       12   load_var 3            (_2)
+       13   load_var 4            (_5)
+       14   load_var 5            (_8)
+       15   load_const 0          ("name")
+       16   load_const 1          ("items")
+       17   load_const 2          ("loadingTimeMs")
+       18   alloc_map 3           
+       19   store_var 2           (_0)
+       20   load_var 2            (_0)
+       21   return                
+}
+
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
 function testing.TestCollector.find_testset(self: null, name: string) -> testing.TestSetRegistration {
   49   0    load_var 1             (self)
        1    load_field 2           (testsets)
@@ -80,7 +259,11 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
        4    store_var 5            (__for_idx)
        5    load_var 5             (__for_idx)
        6    load_var 4             (_3)
+<<<<<<< HEAD
        7    call 14 ntypeargs=0    (baml.Array.length)
+=======
+       7    call 24 ntypeargs=0    (baml.Array.length)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        8    cmp_op <               
        9    pop_jump_if_false +2   (to 11)
        10   jump +5                (to 15)
@@ -114,6 +297,46 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
        33   return                 
 }
 
+<<<<<<< HEAD
+=======
+function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector {
+  29   0    load_var 1                       (j)
+       1    load_const 0                     ("prefix")
+       2    call 228 ntypeargs=0             (baml.json.field)
+       3    store_var 4                      (_3)
+       4    load_type 1                      
+       5    load_var 4                       (_3)
+       6    call 227 ntypeargs=1             (baml.json.from_json)
+       7    store_var 3                      (_2)
+       8    load_var 1                       (j)
+       9    load_const 2                     ("tests")
+       10   call 228 ntypeargs=0             (baml.json.field)
+       11   store_var 6                      (_6)
+       12   load_type 3                      
+       13   load_var 6                       (_6)
+       14   call 227 ntypeargs=1             (baml.json.from_json)
+       15   store_var 5                      (_5)
+       16   load_var 1                       (j)
+       17   load_const 4                     ("testsets")
+       18   call 228 ntypeargs=0             (baml.json.field)
+       19   store_var 8                      (_9)
+       20   load_type 5                      
+       21   load_var 8                       (_9)
+       22   call 227 ntypeargs=1             (baml.json.from_json)
+       23   store_var 7                      (_8)
+       24   alloc_instance 145 ntypeargs=0   (testing.TestCollector)
+       25   load_var 3                       (_2)
+       26   init_field 0                     (prefix)
+       27   load_var 5                       (_5)
+       28   init_field 1                     (tests)
+       29   load_var 7                       (_8)
+       30   init_field 2                     (testsets)
+       31   store_var 2                      (_0)
+       32   load_var 2                       (_0)
+       33   return                           
+}
+
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
 function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
   23   0   alloc_instance 131 ntypeargs=0   (testing.TestCollector)
        1   load_var 1                       (prefix)
@@ -160,7 +383,11 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
        26   store_var 10                     (__for_idx)
        27   load_var 10                      (__for_idx)
        28   load_var 9                       (_13)
+<<<<<<< HEAD
        29   call 14 ntypeargs=0              (baml.Array.length)
+=======
+       29   call 24 ntypeargs=0              (baml.Array.length)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        30   cmp_op <                         
        31   pop_jump_if_false +2             (to 33)
        32   jump +37                         (to 69)
@@ -180,7 +407,11 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
        45   load_var 7                       (count)
        46   load_const 5                     (1)
        47   bin_op +                         
+<<<<<<< HEAD
        48   call 124 ntypeargs=0             (baml.unstable.string)
+=======
+       48   call 232 ntypeargs=0             (baml.unstable.string)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        49   store_var 14                     (_30)
        50   load_var 13                      (_28)
        51   load_var 14                      (_30)
@@ -196,7 +427,11 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
        60   init_field 1                     (body)
        61   load_var 4                       (runner)
        62   init_field 2                     (runner)
+<<<<<<< HEAD
        63   call 8 ntypeargs=0               (baml.Array.push)
+=======
+       63   call 17 ntypeargs=0              (baml.Array.push)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        64   pop 1                            
 
   26   65   load_const 6                     (null)
@@ -219,7 +454,11 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
        80   load_var 11                      (t)
        81   load_field 0                     (name)
        82   load_var 8                       (hash_prefix)
+<<<<<<< HEAD
        83   call 34 ntypeargs=0              (baml.String.startsWith)
+=======
+       83   call 51 ntypeargs=0              (baml.String.startsWith)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        84   pop_jump_if_false +5             (to 89)
        85   load_var 7                       (count)
        86   load_const 5                     (1)
@@ -266,7 +505,11 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
        26   store_var 10                     (__for_idx)
        27   load_var 10                      (__for_idx)
        28   load_var 9                       (_13)
+<<<<<<< HEAD
        29   call 14 ntypeargs=0              (baml.Array.length)
+=======
+       29   call 24 ntypeargs=0              (baml.Array.length)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        30   cmp_op <                         
        31   pop_jump_if_false +2             (to 33)
        32   jump +37                         (to 69)
@@ -286,7 +529,11 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
        45   load_var 7                       (count)
        46   load_const 5                     (1)
        47   bin_op +                         
+<<<<<<< HEAD
        48   call 124 ntypeargs=0             (baml.unstable.string)
+=======
+       48   call 232 ntypeargs=0             (baml.unstable.string)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        49   store_var 14                     (_30)
        50   load_var 13                      (_28)
        51   load_var 14                      (_30)
@@ -302,7 +549,11 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
        60   init_field 1                     (collector)
        61   load_var 4                       (runner)
        62   init_field 2                     (runner)
+<<<<<<< HEAD
        63   call 8 ntypeargs=0               (baml.Array.push)
+=======
+       63   call 17 ntypeargs=0              (baml.Array.push)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        64   pop 1                            
 
   37   65   load_const 6                     (null)
@@ -325,7 +576,11 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
        80   load_var 11                      (ts)
        81   load_field 0                     (name)
        82   load_var 8                       (hash_prefix)
+<<<<<<< HEAD
        83   call 34 ntypeargs=0              (baml.String.startsWith)
+=======
+       83   call 51 ntypeargs=0              (baml.String.startsWith)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
        84   pop_jump_if_false +5             (to 89)
        85   load_var 7                       (count)
        86   load_const 5                     (1)
@@ -339,6 +594,79 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
        93   jump -66                         (to 27)
 }
 
+<<<<<<< HEAD
+=======
+function testing.TestCollector.to_json(self: null) -> baml.json.json {
+  29   0    load_var 1            (self)
+       1    load_field 0          (prefix)
+       2    call 40 ntypeargs=0   (baml.String.to_json)
+       3    store_var 3           (_2)
+       4    load_var 1            (self)
+       5    load_field 1          (tests)
+       6    call 12 ntypeargs=0   (baml.Array.to_json)
+       7    store_var 4           (_5)
+       8    load_var 1            (self)
+       9    load_field 2          (testsets)
+       10   call 12 ntypeargs=0   (baml.Array.to_json)
+       11   store_var 5           (_8)
+       12   load_var 3            (_2)
+       13   load_var 4            (_5)
+       14   load_var 5            (_8)
+       15   load_const 0          ("prefix")
+       16   load_const 1          ("tests")
+       17   load_const 2          ("testsets")
+       18   alloc_map 3           
+       19   store_var 2           (_0)
+       20   load_var 2            (_0)
+       21   return                
+}
+
+function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
+  5   0    load_var 1                       (j)
+      1    load_const 0                     ("name")
+      2    call 228 ntypeargs=0             (baml.json.field)
+      3    store_var 4                      (_3)
+      4    load_type 1                      
+      5    load_var 4                       (_3)
+      6    call 227 ntypeargs=1             (baml.json.from_json)
+      7    store_var 3                      (_2)
+      8    load_var 1                       (j)
+      9    load_const 2                     ("body")
+      10   call 228 ntypeargs=0             (baml.json.field)
+      11   store_var 6                      (_6)
+      12   load_type 3                      
+      13   load_var 6                       (_6)
+      14   call 227 ntypeargs=1             (baml.json.from_json)
+      15   store_var 5                      (_5)
+      16   load_var 1                       (j)
+      17   load_const 4                     ("runner")
+      18   call 228 ntypeargs=0             (baml.json.field)
+      19   store_var 8                      (_9)
+      20   load_type 5                      
+      21   load_var 8                       (_9)
+      22   call 227 ntypeargs=1             (baml.json.from_json)
+      23   store_var 7                      (_8)
+      24   alloc_instance 137 ntypeargs=0   (testing.TestRegistration)
+      25   load_var 3                       (_2)
+      26   init_field 0                     (name)
+      27   load_var 5                       (_5)
+      28   init_field 1                     (body)
+      29   load_var 7                       (_8)
+      30   init_field 2                     (runner)
+      31   store_var 2                      (_0)
+      32   load_var 2                       (_0)
+      33   return                           
+}
+
+function testing.TestRegistration.to_json(self: null) -> baml.json.json {
+  13   0   load_type 0            
+       1   load_var 1             (self)
+       2   call 224 ntypeargs=1   (baml.json.to_string)
+       3   call 229 ntypeargs=0   (baml.json.parse)
+       4   return                 
+}
+
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
 function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
   145   0     load_var 1                       (self)
         1     load_field 0                     (collector)
@@ -349,21 +677,33 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         5     store_var 4                      (__for_idx)
         6     load_var 4                       (__for_idx)
         7     load_var 3                       (_3)
+<<<<<<< HEAD
         8     call 14 ntypeargs=0              (baml.Array.length)
+=======
+        8     call 24 ntypeargs=0              (baml.Array.length)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         9     cmp_op <                         
         10    pop_jump_if_false +2             (to 12)
         11    jump +42                         (to 53)
 
   161   12    load_var 1                       (self)
         13    load_field 1                     (expansions)
+<<<<<<< HEAD
         14    call 10 ntypeargs=0              (baml.Map.keys)
+=======
+        14    call 19 ntypeargs=0              (baml.Map.keys)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         15    store_var 10                     (_28)
 
   160   16    load_const 0                     (0)
         17    store_var 11                     (__for_idx_1)
         18    load_var 11                      (__for_idx_1)
         19    load_var 10                      (_28)
+<<<<<<< HEAD
         20    call 14 ntypeargs=0              (baml.Array.length)
+=======
+        20    call 24 ntypeargs=0              (baml.Array.length)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         21    cmp_op <                         
         22    pop_jump_if_false +2             (to 24)
         23    jump +5                          (to 28)
@@ -388,7 +728,11 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         38    load_var 12                      (k)
         39    load_const 2                     ("/")
         40    bin_op +                         
+<<<<<<< HEAD
         41    call 34 ntypeargs=0              (baml.String.startsWith)
+=======
+        41    call 51 ntypeargs=0              (baml.String.startsWith)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         42    pop_jump_if_false +2             (to 44)
         43    jump +6                          (to 49)
 
@@ -400,7 +744,11 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
 
   164   49    load_var 13                      (sub)
         50    load_var 2                       (name)
+<<<<<<< HEAD
         51    call 167 ntypeargs=0             (testing.TestRegistry.expand_set)
+=======
+        51    call 325 ntypeargs=0             (testing.TestRegistry.expand_set)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         52    jump +51                         (to 103)
 
   144   53    load_var 3                       (_3)
@@ -421,7 +769,11 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         66    store_var 4                      (__for_idx)
         67    jump -61                         (to 6)
 
+<<<<<<< HEAD
   147   68    call 66 ntypeargs=0              (baml.sys.now_ms)
+=======
+  159   68    call 146 ntypeargs=0             (baml.sys.now_ms)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         69    store_var 6                      (start)
 
   148   70    alloc_instance 131 ntypeargs=0   (testing.TestCollector)
@@ -439,7 +791,11 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         81    call_indirect                    
         82    pop 1                            
 
+<<<<<<< HEAD
   150   83    call 66 ntypeargs=0              (baml.sys.now_ms)
+=======
+  162   83    call 146 ntypeargs=0             (baml.sys.now_ms)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         84    load_var 6                       (start)
         85    sub_int                          
         86    store_var 8                      (elapsed)
@@ -460,6 +816,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         96    load_field 1                     (expansions)
         97    load_var 2                       (name)
         98    load_var 9                       (sub_registry)
+<<<<<<< HEAD
         99    call 11 ntypeargs=0              (baml.Map.set)
         100   pop 1                            
 
@@ -468,6 +825,53 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         103   return                           
 }
 
+=======
+        99    call 20 ntypeargs=0              (baml.Map.set)
+        100   pop 1                            
+
+  169   101   load_var 1                       (self)
+        102   call 320 ntypeargs=0             (testing.TestRegistry.serialize)
+        103   return                           
+}
+
+function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry {
+  93   0    load_var 1                       (j)
+       1    load_const 0                     ("collector")
+       2    call 228 ntypeargs=0             (baml.json.field)
+       3    store_var 4                      (_3)
+       4    load_type 1                      
+       5    load_var 4                       (_3)
+       6    call 227 ntypeargs=1             (baml.json.from_json)
+       7    store_var 3                      (_2)
+       8    load_var 1                       (j)
+       9    load_const 2                     ("expansions")
+       10   call 228 ntypeargs=0             (baml.json.field)
+       11   store_var 6                      (_6)
+       12   load_type 3                      
+       13   load_var 6                       (_6)
+       14   call 227 ntypeargs=1             (baml.json.from_json)
+       15   store_var 5                      (_5)
+       16   load_var 1                       (j)
+       17   load_const 4                     ("loading_time_ms")
+       18   call 228 ntypeargs=0             (baml.json.field)
+       19   store_var 8                      (_9)
+       20   load_type 5                      
+       21   load_var 8                       (_9)
+       22   call 227 ntypeargs=1             (baml.json.from_json)
+       23   store_var 7                      (_8)
+       24   alloc_instance 144 ntypeargs=0   (testing.TestRegistry)
+       25   load_var 3                       (_2)
+       26   init_field 0                     (collector)
+       27   load_var 5                       (_5)
+       28   init_field 1                     (expansions)
+       29   load_var 7                       (_8)
+       30   init_field 2                     (loading_time_ms)
+       31   store_var 2                      (_0)
+       32   load_var 2                       (_0)
+       33   return                           
+}
+
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
 function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
   87   0   alloc_instance 130 ntypeargs=0   (testing.TestRegistry)
        1   load_var 1                       (collector)
@@ -492,21 +896,33 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         5    store_var 4            (__for_idx)
         6    load_var 4             (__for_idx)
         7    load_var 3             (_3)
+<<<<<<< HEAD
         8    call 14 ntypeargs=0    (baml.Array.length)
+=======
+        8    call 24 ntypeargs=0    (baml.Array.length)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         9    cmp_op <               
         10   pop_jump_if_false +2   (to 12)
         11   jump +42               (to 53)
 
   131   12   load_var 1             (self)
         13   load_field 1           (expansions)
+<<<<<<< HEAD
         14   call 10 ntypeargs=0    (baml.Map.keys)
+=======
+        14   call 19 ntypeargs=0    (baml.Map.keys)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         15   store_var 6            (_13)
 
   130   16   load_const 0           (0)
         17   store_var 7            (__for_idx_1)
         18   load_var 7             (__for_idx_1)
         19   load_var 6             (_13)
+<<<<<<< HEAD
         20   call 14 ntypeargs=0    (baml.Array.length)
+=======
+        20   call 24 ntypeargs=0    (baml.Array.length)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         21   cmp_op <               
         22   pop_jump_if_false +2   (to 24)
         23   jump +5                (to 28)
@@ -531,7 +947,11 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         38   load_var 8             (k)
         39   load_const 2           ("/")
         40   bin_op +               
+<<<<<<< HEAD
         41   call 34 ntypeargs=0    (baml.String.startsWith)
+=======
+        41   call 51 ntypeargs=0    (baml.String.startsWith)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
 
   133   42   pop_jump_if_false +2   (to 44)
         43   jump +6                (to 49)
@@ -544,7 +964,11 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
 
   135   49   load_var 9             (sub)
         50   load_var 2             (name)
+<<<<<<< HEAD
         51   call 177 ntypeargs=0   (testing.TestRegistry.run_test)
+=======
+        51   call 324 ntypeargs=0   (testing.TestRegistry.run_test)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         52   jump +21               (to 73)
 
   124   53   load_var 3             (_3)
@@ -569,7 +993,11 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         69   load_field 1           (body)
         70   load_var 5             (t)
         71   load_field 2           (runner)
+<<<<<<< HEAD
         72   call 176 ntypeargs=0   (testing.run_test)
+=======
+        72   call 331 ntypeargs=0   (testing.run_test)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         73   return                 
 }
 
@@ -585,7 +1013,11 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         7    store_var 5                      (__for_idx)
         8    load_var 5                       (__for_idx)
         9    load_var 4                       (_3)
+<<<<<<< HEAD
         10   call 14 ntypeargs=0              (baml.Array.length)
+=======
+        10   call 24 ntypeargs=0              (baml.Array.length)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         11   cmp_op <                         
         12   pop_jump_if_false +2             (to 14)
         13   jump +69                         (to 82)
@@ -598,7 +1030,11 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         19   store_var 8                      (__for_idx_1)
         20   load_var 8                       (__for_idx_1)
         21   load_var 7                       (_12)
+<<<<<<< HEAD
         22   call 14 ntypeargs=0              (baml.Array.length)
+=======
+        22   call 24 ntypeargs=0              (baml.Array.length)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         23   cmp_op <                         
         24   pop_jump_if_false +2             (to 26)
         25   jump +5                          (to 30)
@@ -617,7 +1053,11 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         35   load_field 1                     (expansions)
         36   load_var 9                       (ts)
         37   load_field 0                     (name)
+<<<<<<< HEAD
         38   call 13 ntypeargs=0              (baml.Map.get)
+=======
+        38   call 23 ntypeargs=0              (baml.Map.get)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         39   store_var 10                     (expanded)
 
   106   40   load_var 10                      (expanded)
@@ -636,7 +1076,11 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         52   load_var 9                       (ts)
         53   load_field 0                     (name)
         54   init_field 1                     (name)
+<<<<<<< HEAD
         55   call 8 ntypeargs=0               (baml.Array.push)
+=======
+        55   call 17 ntypeargs=0              (baml.Array.push)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         56   pop 1                            
         57   jump +20                         (to 77)
 
@@ -647,8 +1091,13 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         61   load_field 0                     (name)
         62   store_var 12                     (_25)
 
+<<<<<<< HEAD
   110   63   load_var 11                      (sub)
         64   call 175 ntypeargs=0             (testing.TestRegistry.serialize)
+=======
+  122   63   load_var 11                      (sub)
+        64   call 320 ntypeargs=0             (testing.TestRegistry.serialize)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         65   store_var 13                     (_26)
 
   108   66   load_var 3                       (items)
@@ -661,7 +1110,11 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
   111   72   load_var 11                      (sub)
         73   load_field 2                     (loading_time_ms)
         74   init_field 2                     (loadingTimeMs)
+<<<<<<< HEAD
         75   call 8 ntypeargs=0               (baml.Array.push)
+=======
+        75   call 17 ntypeargs=0              (baml.Array.push)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         76   pop 1                            
 
   104   77   load_var 8                       (__for_idx_1)
@@ -682,7 +1135,11 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         90   load_var 6                       (t)
         91   load_field 0                     (name)
         92   init_field 1                     (name)
+<<<<<<< HEAD
         93   call 8 ntypeargs=0               (baml.Array.push)
+=======
+        93   call 17 ntypeargs=0              (baml.Array.push)
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         94   pop 1                            
 
   101   95   load_var 5                       (__for_idx)
@@ -692,13 +1149,235 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         99   jump -91                         (to 8)
 }
 
+<<<<<<< HEAD
+=======
+function testing.TestRegistry.to_json(self: null) -> baml.json.json {
+  93   0    load_var 1             (self)
+       1    load_field 0           (collector)
+       2    call 332 ntypeargs=0   (testing.TestCollector.to_json)
+       3    store_var 3            (_2)
+       4    load_var 1             (self)
+       5    load_field 1           (expansions)
+       6    call 21 ntypeargs=0    (baml.Map.to_json)
+       7    store_var 4            (_5)
+       8    load_var 1             (self)
+       9    load_field 2           (loading_time_ms)
+       10   call 31 ntypeargs=0    (baml.Int.to_json)
+       11   store_var 5            (_8)
+       12   load_var 3             (_2)
+       13   load_var 4             (_5)
+       14   load_var 5             (_8)
+       15   load_const 0           ("collector")
+       16   load_const 1           ("expansions")
+       17   load_const 2           ("loading_time_ms")
+       18   alloc_map 3            
+       19   store_var 2            (_0)
+       20   load_var 2             (_0)
+       21   return                 
+}
+
+function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
+  15   0    load_var 1                       (j)
+       1    load_const 0                     ("outcome")
+       2    call 228 ntypeargs=0             (baml.json.field)
+       3    store_var 4                      (_3)
+       4    load_type 1                      
+       5    load_var 4                       (_3)
+       6    call 227 ntypeargs=1             (baml.json.from_json)
+       7    store_var 3                      (_2)
+       8    load_var 1                       (j)
+       9    load_const 2                     ("runs")
+       10   call 228 ntypeargs=0             (baml.json.field)
+       11   store_var 6                      (_6)
+       12   load_type 3                      
+       13   load_var 6                       (_6)
+       14   call 227 ntypeargs=1             (baml.json.from_json)
+       15   store_var 5                      (_5)
+       16   alloc_instance 148 ntypeargs=0   (testing.TestReport)
+       17   load_var 3                       (_2)
+       18   init_field 0                     (outcome)
+       19   load_var 5                       (_5)
+       20   init_field 1                     (runs)
+       21   store_var 2                      (_0)
+       22   load_var 2                       (_0)
+       23   return                           
+}
+
+function testing.TestReport.to_json(self: null) -> baml.json.json {
+  15   0    load_var 1            (self)
+       1    load_field 0          (outcome)
+       2    load_const 0          ("to_json")
+       3    load_map_element      
+       4    call_indirect         
+       5    store_var 3           (_2)
+       6    load_var 1            (self)
+       7    load_field 1          (runs)
+       8    call 12 ntypeargs=0   (baml.Array.to_json)
+       9    store_var 4           (_7)
+       10   load_var 3            (_2)
+       11   load_var 4            (_7)
+       12   load_const 1          ("outcome")
+       13   load_const 2          ("runs")
+       14   alloc_map 2           
+       15   store_var 2           (_0)
+       16   load_var 2            (_0)
+       17   return                
+}
+
+function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
+  17   0    load_var 1                       (j)
+       1    load_const 0                     ("name")
+       2    call 228 ntypeargs=0             (baml.json.field)
+       3    store_var 4                      (_3)
+       4    load_type 1                      
+       5    load_var 4                       (_3)
+       6    call 227 ntypeargs=1             (baml.json.from_json)
+       7    store_var 3                      (_2)
+       8    load_var 1                       (j)
+       9    load_const 2                     ("collector")
+       10   call 228 ntypeargs=0             (baml.json.field)
+       11   store_var 6                      (_6)
+       12   load_type 3                      
+       13   load_var 6                       (_6)
+       14   call 227 ntypeargs=1             (baml.json.from_json)
+       15   store_var 5                      (_5)
+       16   load_var 1                       (j)
+       17   load_const 4                     ("runner")
+       18   call 228 ntypeargs=0             (baml.json.field)
+       19   store_var 8                      (_9)
+       20   load_type 5                      
+       21   load_var 8                       (_9)
+       22   call 227 ntypeargs=1             (baml.json.from_json)
+       23   store_var 7                      (_8)
+       24   alloc_instance 139 ntypeargs=0   (testing.TestSetRegistration)
+       25   load_var 3                       (_2)
+       26   init_field 0                     (name)
+       27   load_var 5                       (_5)
+       28   init_field 1                     (collector)
+       29   load_var 7                       (_8)
+       30   init_field 2                     (runner)
+       31   store_var 2                      (_0)
+       32   load_var 2                       (_0)
+       33   return                           
+}
+
+function testing.TestSetRegistration.to_json(self: null) -> baml.json.json {
+  25   0   load_type 0            
+       1   load_var 1             (self)
+       2   call 224 ntypeargs=1   (baml.json.to_string)
+       3   call 229 ntypeargs=0   (baml.json.parse)
+       4   return                 
+}
+
+function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport {
+  21   0    load_var 1                       (j)
+       1    load_const 0                     ("outcome")
+       2    call 228 ntypeargs=0             (baml.json.field)
+       3    store_var 4                      (_3)
+       4    load_type 1                      
+       5    load_var 4                       (_3)
+       6    call 227 ntypeargs=1             (baml.json.from_json)
+       7    store_var 3                      (_2)
+       8    load_var 1                       (j)
+       9    load_const 2                     ("passed")
+       10   call 228 ntypeargs=0             (baml.json.field)
+       11   store_var 6                      (_6)
+       12   load_type 3                      
+       13   load_var 6                       (_6)
+       14   call 227 ntypeargs=1             (baml.json.from_json)
+       15   store_var 5                      (_5)
+       16   load_var 1                       (j)
+       17   load_const 4                     ("failed")
+       18   call 228 ntypeargs=0             (baml.json.field)
+       19   store_var 8                      (_9)
+       20   load_type 3                      
+       21   load_var 8                       (_9)
+       22   call 227 ntypeargs=1             (baml.json.from_json)
+       23   store_var 7                      (_8)
+       24   load_var 1                       (j)
+       25   load_const 5                     ("total")
+       26   call 228 ntypeargs=0             (baml.json.field)
+       27   store_var 10                     (_12)
+       28   load_type 3                      
+       29   load_var 10                      (_12)
+       30   call 227 ntypeargs=1             (baml.json.from_json)
+       31   store_var 9                      (_11)
+       32   load_var 1                       (j)
+       33   load_const 6                     ("results")
+       34   call 228 ntypeargs=0             (baml.json.field)
+       35   store_var 12                     (_15)
+       36   load_type 7                      
+       37   load_var 12                      (_15)
+       38   call 227 ntypeargs=1             (baml.json.from_json)
+       39   store_var 11                     (_14)
+       40   alloc_instance 152 ntypeargs=0   (testing.TestSetReport)
+       41   load_var 3                       (_2)
+       42   init_field 0                     (outcome)
+       43   load_var 5                       (_5)
+       44   init_field 1                     (passed)
+       45   load_var 7                       (_8)
+       46   init_field 2                     (failed)
+       47   load_var 9                       (_11)
+       48   init_field 3                     (total)
+       49   load_var 11                      (_14)
+       50   init_field 4                     (results)
+       51   store_var 2                      (_0)
+       52   load_var 2                       (_0)
+       53   return                           
+}
+
+function testing.TestSetReport.to_json(self: null) -> baml.json.json {
+  21   0    load_var 1            (self)
+       1    load_field 0          (outcome)
+       2    load_const 0          ("to_json")
+       3    load_map_element      
+       4    call_indirect         
+       5    store_var 3           (_2)
+       6    load_var 1            (self)
+       7    load_field 1          (passed)
+       8    call 31 ntypeargs=0   (baml.Int.to_json)
+       9    store_var 4           (_7)
+       10   load_var 1            (self)
+       11   load_field 2          (failed)
+       12   call 31 ntypeargs=0   (baml.Int.to_json)
+       13   store_var 5           (_10)
+       14   load_var 1            (self)
+       15   load_field 3          (total)
+       16   call 31 ntypeargs=0   (baml.Int.to_json)
+       17   store_var 6           (_13)
+       18   load_var 1            (self)
+       19   load_field 4          (results)
+       20   call 12 ntypeargs=0   (baml.Array.to_json)
+       21   store_var 7           (_16)
+       22   load_var 3            (_2)
+       23   load_var 4            (_7)
+       24   load_var 5            (_10)
+       25   load_var 6            (_13)
+       26   load_var 7            (_16)
+       27   load_const 1          ("outcome")
+       28   load_const 2          ("passed")
+       29   load_const 3          ("failed")
+       30   load_const 4          ("total")
+       31   load_const 5          ("results")
+       32   alloc_map 5           
+       33   store_var 2           (_0)
+       34   load_var 2            (_0)
+       35   return                
+}
+
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
 function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
         0    load_var 1              
         1    make_cell               
         2    store_var 1             
 
+<<<<<<< HEAD
   173   3    load_var 1              (body)
         4    make_closure 359 1      
+=======
+  185   3    load_var 1              (body)
+        4    make_closure 756 1      
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
         5    store_var 3             (base_run)
 
   188   6    load_var 2              (runner)
@@ -748,6 +1427,154 @@ function testing.run_testset(run_children: () -> testing.TestSetReport throws ne
         17   return                  
 }
 
+<<<<<<< HEAD
+=======
+function user.ErrorInfo.from_json(j: baml.json.json) -> ErrorInfo {
+  26   0    load_var 1                     (j)
+       1    load_const 0                   ("code")
+       2    call 228 ntypeargs=0           (baml.json.field)
+       3    store_var 4                    (_3)
+       4    load_type 1                    
+       5    load_var 4                     (_3)
+       6    call 227 ntypeargs=1           (baml.json.from_json)
+       7    store_var 3                    (_2)
+       8    load_var 1                     (j)
+       9    load_const 2                   ("message")
+       10   call 228 ntypeargs=0           (baml.json.field)
+       11   store_var 6                    (_6)
+       12   load_type 3                    
+       13   load_var 6                     (_6)
+       14   call 227 ntypeargs=1           (baml.json.from_json)
+       15   store_var 5                    (_5)
+       16   alloc_instance 1 ntypeargs=0   (user.ErrorInfo)
+       17   load_var 3                     (_2)
+       18   init_field 0                   (code)
+       19   load_var 5                     (_5)
+       20   init_field 1                   (message)
+       21   store_var 2                    (_0)
+       22   load_var 2                     (_0)
+       23   return                         
+}
+
+function user.ErrorInfo.to_json(self: null) -> baml.json.json {
+  26   0    load_var 1            (self)
+       1    load_field 0          (code)
+       2    call 31 ntypeargs=0   (baml.Int.to_json)
+       3    store_var 3           (_2)
+       4    load_var 1            (self)
+       5    load_field 1          (message)
+       6    call 40 ntypeargs=0   (baml.String.to_json)
+       7    store_var 4           (_5)
+       8    load_var 3            (_2)
+       9    load_var 4            (_5)
+       10   load_const 0          ("code")
+       11   load_const 1          ("message")
+       12   alloc_map 2           
+       13   store_var 2           (_0)
+       14   load_var 2            (_0)
+       15   return                
+}
+
+function user.Report.from_json(j: baml.json.json) -> Report {
+  20   0    load_var 1                     (j)
+       1    load_const 0                   ("score")
+       2    call 228 ntypeargs=0           (baml.json.field)
+       3    store_var 4                    (_3)
+       4    load_type 1                    
+       5    load_var 4                     (_3)
+       6    call 227 ntypeargs=1           (baml.json.from_json)
+       7    store_var 3                    (_2)
+       8    load_var 1                     (j)
+       9    load_const 2                   ("label")
+       10   call 228 ntypeargs=0           (baml.json.field)
+       11   store_var 6                    (_6)
+       12   load_type 3                    
+       13   load_var 6                     (_6)
+       14   call 227 ntypeargs=1           (baml.json.from_json)
+       15   store_var 5                    (_5)
+       16   load_var 1                     (j)
+       17   load_const 4                   ("breakdown")
+       18   call 228 ntypeargs=0           (baml.json.field)
+       19   store_var 8                    (_9)
+       20   load_type 5                    
+       21   load_var 8                     (_9)
+       22   call 227 ntypeargs=1           (baml.json.from_json)
+       23   store_var 7                    (_8)
+       24   alloc_instance 5 ntypeargs=0   (user.Report)
+       25   load_var 3                     (_2)
+       26   init_field 0                   (score)
+       27   load_var 5                     (_5)
+       28   init_field 1                   (label)
+       29   load_var 7                     (_8)
+       30   init_field 2                   (breakdown)
+       31   store_var 2                    (_0)
+       32   load_var 2                     (_0)
+       33   return                         
+}
+
+function user.Report.to_json(self: null) -> baml.json.json {
+  20   0    load_var 1            (self)
+       1    load_field 0          (score)
+       2    call 31 ntypeargs=0   (baml.Int.to_json)
+       3    store_var 3           (_2)
+       4    load_var 1            (self)
+       5    load_field 1          (label)
+       6    call 40 ntypeargs=0   (baml.String.to_json)
+       7    store_var 4           (_5)
+       8    load_var 1            (self)
+       9    load_field 2          (breakdown)
+       10   call 21 ntypeargs=0   (baml.Map.to_json)
+       11   store_var 5           (_8)
+       12   load_var 3            (_2)
+       13   load_var 4            (_5)
+       14   load_var 5            (_8)
+       15   load_const 0          ("score")
+       16   load_const 1          ("label")
+       17   load_const 2          ("breakdown")
+       18   alloc_map 3           
+       19   store_var 2           (_0)
+       20   load_var 2            (_0)
+       21   return                
+}
+
+function user.User.from_json(j: baml.json.json) -> User {
+  3   0    load_var 1                     (j)
+      1    load_const 0                   ("name")
+      2    call 228 ntypeargs=0           (baml.json.field)
+      3    store_var 4                    (_3)
+      4    load_type 1                    
+      5    load_var 4                     (_3)
+      6    call 227 ntypeargs=1           (baml.json.from_json)
+      7    store_var 3                    (_2)
+      8    load_var 1                     (j)
+      9    load_const 2                   ("age")
+      10   call 228 ntypeargs=0           (baml.json.field)
+      11   store_var 6                    (_6)
+      12   load_type 3                    
+      13   load_var 6                     (_6)
+      14   call 227 ntypeargs=1           (baml.json.from_json)
+      15   store_var 5                    (_5)
+      16   load_var 1                     (j)
+      17   load_const 4                   ("role")
+      18   call 228 ntypeargs=0           (baml.json.field)
+      19   store_var 8                    (_9)
+      20   load_type 5                    
+      21   load_var 8                     (_9)
+      22   call 227 ntypeargs=1           (baml.json.from_json)
+      23   store_var 7                    (_8)
+      24   alloc_instance 4 ntypeargs=0   (user.User)
+      25   load_var 3                     (_2)
+      26   init_field 0                   (name)
+      27   load_var 5                     (_5)
+      28   init_field 1                   (age)
+      29   load_var 7                     (_8)
+      30   init_field 2                   (role)
+      31   store_var 2                    (_0)
+      32   load_var 2                     (_0)
+      33   return                         
+}
+
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
 function user.User.promote(self: null, bonus: int) -> Report {
   9    0    load_var 1                     (self)
        1    load_var 1                     (self)
@@ -784,6 +1611,36 @@ function user.User.promote(self: null, bonus: int) -> Report {
        26   return                         
 }
 
+<<<<<<< HEAD
+=======
+function user.User.to_json(self: null) -> baml.json.json {
+  3   0    load_var 1            (self)
+      1    load_field 0          (name)
+      2    call 40 ntypeargs=0   (baml.String.to_json)
+      3    store_var 3           (_2)
+      4    load_var 1            (self)
+      5    load_field 1          (age)
+      6    call 31 ntypeargs=0   (baml.Int.to_json)
+      7    store_var 4           (_5)
+      8    load_var 1            (self)
+      9    load_field 2          (role)
+      10   load_const 0          ("to_json")
+      11   load_map_element      
+      12   call_indirect         
+      13   store_var 5           (_8)
+      14   load_var 3            (_2)
+      15   load_var 4            (_5)
+      16   load_var 5            (_8)
+      17   load_const 1          ("name")
+      18   load_const 2          ("age")
+      19   load_const 3          ("role")
+      20   alloc_map 3           
+      21   store_var 2           (_0)
+      22   load_var 2            (_0)
+      23   return                
+}
+
+>>>>>>> 0fd33a6ae (feat(json): Phase 5c — auto-derive from_json per-field with override-honoring)
 function user.http_status(code: int) -> string {
   95    0    load_const 0   ("HTTP ")
         1    store_var 2    (prefix)

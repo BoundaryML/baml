@@ -42,6 +42,7 @@ impl Continuation for MapToJsonContinuation {
             Ok(callee) => NativeCallResult::YieldToCall {
                 callee,
                 args: vec![],
+                type_args: vec![],
                 continuation: self,
             },
             Err(e) => NativeCallResult::Error(e),
@@ -150,6 +151,7 @@ impl BamlClassMap for PackageBamlImpl {
         NativeCallResult::YieldToCall {
             callee,
             args: vec![],
+            type_args: vec![],
             continuation: Box::new(MapToJsonContinuation {
                 entries,
                 idx: 0,

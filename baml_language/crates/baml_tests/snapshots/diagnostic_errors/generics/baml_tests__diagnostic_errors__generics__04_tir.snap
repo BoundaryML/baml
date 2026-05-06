@@ -14,7 +14,7 @@ function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.Jso
   map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
 function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Box<T>
+  Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Box<T>
 }
 function user.use_box() -> int throws never {
   { : int
@@ -34,11 +34,11 @@ function user.Wrapper.to_json(self: user.Wrapper) -> baml.json.json throws baml.
   map { "data": baml.json.to_json(self.data) } : map<string, baml.json.json>
 }
 function user.Wrapper.from_json(j: baml.json.json) -> user.Wrapper<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Wrapper<T>
+  Wrapper { data: baml.json.from_json<T>(baml.json.field(j, "data")) } : user.Wrapper<T>
 }
 function user.use_wrapper() -> user.Wrapper<string> throws never {
-  { : user.Wrapper<string | "hello">
-    Wrapper.of<T>("hello") : user.Wrapper<string | "hello">
+  { : user.Wrapper<string>
+    Wrapper.of<T>("hello") : user.Wrapper<string>
   }
 }
 class user.Pair {
@@ -64,7 +64,7 @@ function user.Pair.to_json(self: user.Pair) -> baml.json.json throws baml.json.J
   map { "first": baml.json.to_json(self.first), "second": baml.json.to_json(self.second) } : map<string, baml.json.json>
 }
 function user.Pair.from_json(j: baml.json.json) -> user.Pair<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Pair<A, B>
+  Pair { first: baml.json.from_json<A>(baml.json.field(j, "first")), second: baml.json.from_json<B>(baml.json.field(j, "second")) } : user.Pair<A, B>
 }
 function user.use_pair() -> string throws never {
   { : string
@@ -96,11 +96,11 @@ function user.Maker.to_json(self: user.Maker) -> baml.json.json throws baml.json
   map { "data": baml.json.to_json(self.data) } : map<string, baml.json.json>
 }
 function user.Maker.from_json(j: baml.json.json) -> user.Maker<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Maker<T>
+  Maker { data: baml.json.from_json<T>(baml.json.field(j, "data")) } : user.Maker<T>
 }
 function user.use_maker_static() -> user.Maker<int> throws never {
-  { : user.Maker<int | 42>
-    Maker.from_value<T>(42) : user.Maker<int | 42>
+  { : user.Maker<int>
+    Maker.from_value<T>(42) : user.Maker<int>
   }
 }
 class user.Holder {
@@ -116,7 +116,7 @@ function user.Holder.to_json(self: user.Holder) -> baml.json.json throws baml.js
   map { "data": self.data.to_json() } : map<string, baml.json.json>
 }
 function user.Holder.from_json(j: baml.json.json) -> user.Holder<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Holder<T>
+  Holder { data: baml.json.from_json<string>(baml.json.field(j, "data")) } : user.Holder<T>
 }
 function user.use_holder() -> int throws never {
   { : int
@@ -137,7 +137,7 @@ function user.Shadow.to_json(self: user.Shadow) -> baml.json.json throws baml.js
   map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
 function user.Shadow.from_json(j: baml.json.json) -> user.Shadow<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Shadow<T>
+  Shadow { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Shadow<T>
 }
 function user.wrong_arity_missing() -> user.Box throws never {
   { : user.Box
@@ -166,7 +166,7 @@ function user.Plain.to_json(self: user.Plain) -> baml.json.json throws baml.json
   map { "name": self.name.to_json() } : map<string, baml.json.json>
 }
 function user.Plain.from_json(j: baml.json.json) -> user.Plain throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Plain
+  Plain { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Plain
 }
 function user.wrong_arity_on_non_generic() -> user.Plain<int> throws never {
   { : user.Plain<int>
@@ -186,7 +186,7 @@ function user.Container.to_json(self: user.Container) -> baml.json.json throws b
   map { "inner": self.inner.to_json() } : map<string, baml.json.json>
 }
 function user.Container.from_json(j: baml.json.json) -> user.Container<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Container<T>
+  Container { inner: baml.json.from_json<Box<T>>(baml.json.field(j, "inner")) } : user.Container<T>
 }
 function user.use_nested() -> int throws never {
   { : int
@@ -211,11 +211,11 @@ function user.Factory.to_json(self: user.Factory) -> baml.json.json throws baml.
   map { "data": baml.json.to_json(self.data) } : map<string, baml.json.json>
 }
 function user.Factory.from_json(j: baml.json.json) -> user.Factory<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Factory<T>
+  Factory { data: baml.json.from_json<T>(baml.json.field(j, "data")) } : user.Factory<T>
 }
 function user.use_factory() -> int throws never {
   { : int
-    let f = Factory.create<T>(42) : user.Factory<42> -> user.Factory<int>
+    let f = Factory.create<T>(42) : user.Factory<int>
     f.get() : int
   }
 }
@@ -235,7 +235,7 @@ function user.MaybeBox.to_json(self: user.MaybeBox) -> baml.json.json throws bam
   map { "value": self.value?.to_json() } : map<string, baml.json.json?>
 }
 function user.MaybeBox.from_json(j: baml.json.json) -> user.MaybeBox<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.MaybeBox<T>
+  MaybeBox { value: baml.json.from_json<T?>(baml.json.field(j, "value")) } : user.MaybeBox<T>
 }
 function user.use_maybe_box() -> int throws never {
   { : int
@@ -255,7 +255,7 @@ function user.Stack.to_json(self: user.Stack) -> baml.json.json throws baml.json
   map { "items": self.items.to_json() } : map<string, baml.json.json>
 }
 function user.Stack.from_json(j: baml.json.json) -> user.Stack<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Stack<T>
+  Stack { items: baml.json.from_json<T[]>(baml.json.field(j, "items")) } : user.Stack<T>
 }
 function user.use_stack() -> string throws never {
   { : string
@@ -270,7 +270,7 @@ function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.Jso
   map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
 function user.Foo.from_json(j: baml.json.json) -> user.Foo<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Foo<T>
+  Foo { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Foo<T>
 }
 function user.bare_in_union_param(f: user.Foo<int> | user.Foo) -> string throws never {
   { : "specific" | "bare"
@@ -330,7 +330,7 @@ function user.Todo.to_json(self: user.Todo) -> baml.json.json throws baml.json.J
   map { "id": self.id.to_json(), "title": self.title.to_json(), "completed": self.completed.to_json(), "userId": self.userId.to_json() } : map<string, baml.json.json>
 }
 function user.Todo.from_json(j: baml.json.json) -> user.Todo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Todo
+  Todo { id: baml.json.from_json<int>(baml.json.field(j, "id")), title: baml.json.from_json<string>(baml.json.field(j, "title")), completed: baml.json.from_json<bool>(baml.json.field(j, "completed")), userId: baml.json.from_json<int>(baml.json.field(j, "userId")) } : user.Todo
 }
 function user.GetTodo() -> user.Todo throws never {
   { : unknown

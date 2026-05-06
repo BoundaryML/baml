@@ -3,11 +3,17 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.Box.from_json(j: baml.json.json) -> Box<void> {
     load_var j
-    call baml.json.stringify
+    load_const "value"
+    call baml.json.field
+    store_var _3
+    load_type #0
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type Box<#0>
+    load_type #0
+    alloc_instance<1> user.Box
     load_var _2
-    call baml.json.from_string
+    init_field .value
     return
 }
 
@@ -22,11 +28,26 @@ function user.Box.to_json(self: null) -> baml.json.json {
 
 function user.User.from_json(j: baml.json.json) -> User {
     load_var j
-    call baml.json.stringify
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type User
+    load_var j
+    load_const "age"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    alloc_instance user.User
     load_var _2
-    call baml.json.from_string
+    init_field .name
+    load_var _5
+    init_field .age
     return
 }
 

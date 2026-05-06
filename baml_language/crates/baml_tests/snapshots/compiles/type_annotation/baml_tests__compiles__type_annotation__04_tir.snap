@@ -22,7 +22,7 @@ function user.RiskFactor.to_json(self: user.RiskFactor) -> baml.json.json throws
   map { "type": self.type.to_json(), "severity": self.severity.to_json() } : map<string, baml.json.json>
 }
 function user.RiskFactor.from_json(j: baml.json.json) -> user.RiskFactor throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.RiskFactor
+  RiskFactor { type: baml.json.from_json<string>(baml.json.field(j, "type")), severity: baml.json.from_json<float>(baml.json.field(j, "severity")) } : user.RiskFactor
 }
 class user.MetaField {
   type: type
@@ -31,7 +31,7 @@ function user.MetaField.to_json(self: user.MetaField) -> baml.json.json throws b
   map { "type": self.type.to_json() } : map<string, baml.json.json>
 }
 function user.MetaField.from_json(j: baml.json.json) -> user.MetaField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.MetaField
+  MetaField { type: baml.json.from_json<type>(baml.json.field(j, "type")) } : user.MetaField
 }
 enum user.Kind
 class user.RiskFactor$stream {

@@ -75,3 +75,40 @@ function to_json<T>(v: T) -> json throws JsonSerializationError | JsonParseError
 function from_string<T>(s: string) -> T throws JsonParseError | JsonDecodeError {
   $rust_function
 }
+
+/// Decode a `json` value to a BAML value of type `T`, honoring user
+/// `from_json` overrides on classes (including through arrays, maps, and
+/// optionals).
+///
+/// Equivalent to `T.from_json(j)` when `T` is a concrete class, but works
+/// through generic boundaries: a synthesized `from_json` body on
+/// `class Box<T> { value T }` calls `baml.json.from_json<T>(...)` to
+/// dispatch on the runtime substitution of `T` without knowing it at
+/// synthesis time. The auto-derive synthesizer
+/// (`baml_compiler2_ast::auto_derive_json`) routes every field through
+/// this function so override dispatch is centralized.
+///
+/// Behaviour by type-arg:
+/// - User class with `from_json` method: dispatch to that method.
+/// - List / Map / Optional of class: walk structurally and dispatch the
+///   inner class's `from_json` per element / value.
+/// - Primitives, enums, media, type-aliases: structural decode equivalent
+///   to `from_string<T>(stringify(j))`.
+///
+/// Throws `JsonParseError` / `JsonDecodeError` on shape mismatch.
+//baml:mut_vm
+//baml:may_yield
+function from_json<T>(j: json) -> T throws JsonParseError | JsonDecodeError {
+  $rust_function
+}
+
+/// Look up `key` in a `json` value when it is a `map<string, json>`; returns
+/// `null` if `j` is not a map or the key is absent.
+///
+/// Used by the auto-derive `from_json` synthesizer to extract field values
+/// from a `json` object without requiring the caller to match-narrow the
+/// `json` union to its map arm.
+//baml:mut_vm
+function field(j: json, key: string) -> json {
+  $rust_function
+}

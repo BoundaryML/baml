@@ -3,11 +3,16 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.AppConfig.from_json(j: baml.json.json) -> AppConfig {
     load_var j
-    call baml.json.stringify
+    load_const "api_key"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type AppConfig
+    alloc_instance user.AppConfig
     load_var _2
-    call baml.json.from_string
+    init_field .api_key
     return
 }
 
@@ -31,11 +36,26 @@ function user.CallOpenAI(cfg: AppConfig) -> llm.openai.OpenAIResponse {
 
 function user.llm.openai.OpenAIResponse.from_json(j: baml.json.json) -> llm.openai.OpenAIResponse {
     load_var j
-    call baml.json.stringify
+    load_const "text"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type llm.openai.OpenAIResponse
+    load_var j
+    load_const "model"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    alloc_instance user.llm.openai.OpenAIResponse
     load_var _2
-    call baml.json.from_string
+    init_field .text
+    load_var _5
+    init_field .model
     return
 }
 

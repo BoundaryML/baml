@@ -10,7 +10,7 @@ function user.AtomicPoint.to_json(self: user.AtomicPoint) -> baml.json.json thro
   map { "x": self.x.to_json(), "y": self.y.to_json() } : map<string, baml.json.json>
 }
 function user.AtomicPoint.from_json(j: baml.json.json) -> user.AtomicPoint throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.AtomicPoint
+  AtomicPoint { x: baml.json.from_json<float>(baml.json.field(j, "x")), y: baml.json.from_json<float>(baml.json.field(j, "y")) } : user.AtomicPoint
 }
 class user.AtomicPoint$stream {
   x: null | float

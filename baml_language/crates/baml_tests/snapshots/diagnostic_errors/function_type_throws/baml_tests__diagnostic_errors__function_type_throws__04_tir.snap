@@ -76,7 +76,7 @@ function user.Worker.to_json(self: user.Worker) -> baml.json.json throws baml.js
   map { "factor": self.factor.to_json() } : map<string, baml.json.json>
 }
 function user.Worker.from_json(j: baml.json.json) -> user.Worker throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Worker
+  Worker { factor: baml.json.from_json<int>(baml.json.field(j, "factor")) } : user.Worker
 }
 function user.direct(cb: (value: int) -> int throws never) -> int throws never {
   { : int

@@ -14,7 +14,7 @@ function user.Formatter.to_json(self: user.Formatter) -> baml.json.json throws b
   map { "prefix": self.prefix.to_json() } : map<string, baml.json.json>
 }
 function user.Formatter.from_json(j: baml.json.json) -> user.Formatter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Formatter
+  Formatter { prefix: baml.json.from_json<string>(baml.json.field(j, "prefix")) } : user.Formatter
 }
 class user.RangeCheck {
   min: int
@@ -29,7 +29,7 @@ function user.RangeCheck.to_json(self: user.RangeCheck) -> baml.json.json throws
   map { "min": self.min.to_json(), "max": self.max.to_json() } : map<string, baml.json.json>
 }
 function user.RangeCheck.from_json(j: baml.json.json) -> user.RangeCheck throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.RangeCheck
+  RangeCheck { min: baml.json.from_json<int>(baml.json.field(j, "min")), max: baml.json.from_json<int>(baml.json.field(j, "max")) } : user.RangeCheck
 }
 class user.Counter {
   value: int
@@ -44,7 +44,7 @@ function user.Counter.to_json(self: user.Counter) -> baml.json.json throws baml.
   map { "value": self.value.to_json() } : map<string, baml.json.json>
 }
 function user.Counter.from_json(j: baml.json.json) -> user.Counter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Counter
+  Counter { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.Counter
 }
 class user.Employee {
   first: string
@@ -64,7 +64,7 @@ function user.Employee.to_json(self: user.Employee) -> baml.json.json throws bam
   map { "first": self.first.to_json(), "last": self.last.to_json() } : map<string, baml.json.json>
 }
 function user.Employee.from_json(j: baml.json.json) -> user.Employee throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Employee
+  Employee { first: baml.json.from_json<string>(baml.json.field(j, "first")), last: baml.json.from_json<string>(baml.json.field(j, "last")) } : user.Employee
 }
 class user.Config {
   encoder: user.Encoder
@@ -73,7 +73,7 @@ function user.Config.to_json(self: user.Config) -> baml.json.json throws baml.js
   map { "encoder": self.encoder.to_json() } : map<string, baml.json.json>
 }
 function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Config
+  Config { encoder: baml.json.from_json<Encoder>(baml.json.field(j, "encoder")) } : user.Config
 }
 class user.Encoder {
   charset: string
@@ -87,7 +87,7 @@ function user.Encoder.to_json(self: user.Encoder) -> baml.json.json throws baml.
   map { "charset": self.charset.to_json() } : map<string, baml.json.json>
 }
 function user.Encoder.from_json(j: baml.json.json) -> user.Encoder throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Encoder
+  Encoder { charset: baml.json.from_json<string>(baml.json.field(j, "charset")) } : user.Encoder
 }
 class user.Box {
   value: T
@@ -101,7 +101,7 @@ function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.Jso
   map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
 function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Box<T>
+  Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Box<T>
 }
 class user.Calculator {
   op: string
@@ -122,7 +122,7 @@ function user.Calculator.to_json(self: user.Calculator) -> baml.json.json throws
   map { "op": self.op.to_json() } : map<string, baml.json.json>
 }
 function user.Calculator.from_json(j: baml.json.json) -> user.Calculator throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Calculator
+  Calculator { op: baml.json.from_json<string>(baml.json.field(j, "op")) } : user.Calculator
 }
 function user.test_bound_mapper() -> string[] throws never {
   { : string[]

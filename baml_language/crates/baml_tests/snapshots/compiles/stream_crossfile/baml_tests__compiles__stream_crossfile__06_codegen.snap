@@ -3,11 +3,36 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.Education.from_json(j: baml.json.json) -> Education {
     load_var j
-    call baml.json.stringify
+    load_const "school"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type Education
+    load_var j
+    load_const "degree"
+    call baml.json.field
+    store_var _6
+    load_type Degree
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "year"
+    call baml.json.field
+    store_var _9
+    load_type int
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    alloc_instance user.Education
     load_var _2
-    call baml.json.from_string
+    init_field .school
+    load_var _5
+    init_field .degree
+    load_var _8
+    init_field .year
     return
 }
 
@@ -38,11 +63,46 @@ function user.Education.to_json(self: null) -> baml.json.json {
 
 function user.Resume.from_json(j: baml.json.json) -> Resume {
     load_var j
-    call baml.json.stringify
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type Resume
+    load_var j
+    load_const "education"
+    call baml.json.field
+    store_var _6
+    load_type Education[]
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "highest_degree"
+    call baml.json.field
+    store_var _9
+    load_type Degree
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    load_var j
+    load_const "aliases"
+    call baml.json.field
+    store_var _12
+    load_type Education[]
+    load_var _12
+    call baml.json.from_json
+    store_var _11
+    alloc_instance user.Resume
     load_var _2
-    call baml.json.from_string
+    init_field .name
+    load_var _5
+    init_field .education
+    load_var _8
+    init_field .highest_degree
+    load_var _11
+    init_field .aliases
     return
 }
 

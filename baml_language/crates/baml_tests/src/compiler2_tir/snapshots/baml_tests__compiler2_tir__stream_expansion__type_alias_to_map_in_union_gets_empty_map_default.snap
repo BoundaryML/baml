@@ -10,7 +10,7 @@ function user.WithMapAlias.to_json(self: user.WithMapAlias) -> baml.json.json th
   map { "settings": self.settings.to_json() } : map<string, baml.json.json>
 }
 function user.WithMapAlias.from_json(j: baml.json.json) -> user.WithMapAlias throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithMapAlias
+  WithMapAlias { settings: baml.json.from_json<Config | int>(baml.json.field(j, "settings")) } : user.WithMapAlias
 }
 type user.Config$stream = map<string, string>
 class user.WithMapAlias$stream {

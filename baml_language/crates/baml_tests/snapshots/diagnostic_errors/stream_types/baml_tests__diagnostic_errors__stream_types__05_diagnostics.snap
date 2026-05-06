@@ -3,16 +3,6 @@ source: crates/baml_tests/src/generated_tests.rs
 assertion_line: 37388
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type `baml.http.Request$stream` has no member `to_json`
-    ╭─[ builtin_refs.baml:23:7 ]
-    │
- 23 │ class WithStreamRef {
-    │       ──────┬──────  
-    │             ╰──────── type `baml.http.Request$stream` has no member `to_json`
-    │ 
-    │ Note: Error code: E0007
-────╯
-
   [validation] Error: Duplicate class `Inner`
     ╭─[ complex.baml:7:7 ]
     │
@@ -27,6 +17,16 @@ assertion_line: 37388
     │         ╰──── duplicate class definition
     │ 
     │ Note: Error code: E0011
+────╯
+
+  [type] Error: type mismatch: expected int, got string
+    ╭─[ main.baml:31:7 ]
+    │
+ 31 │ class Inner {
+    │       ──┬──  
+    │         ╰──── type mismatch: expected int, got string
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [validation] Error: Name `Foo` defined 2 times as: class, type

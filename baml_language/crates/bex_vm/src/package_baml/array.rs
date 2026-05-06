@@ -36,6 +36,7 @@ impl Continuation for MapContinuation {
         NativeCallResult::YieldToCall {
             callee: self.f_ptr,
             args: vec![next_arg],
+            type_args: vec![],
             continuation: self,
         }
     }
@@ -105,6 +106,7 @@ impl Continuation for ToJsonContinuation {
             Ok(callee) => NativeCallResult::YieldToCall {
                 callee,
                 args: vec![],
+                type_args: vec![],
                 continuation: self,
             },
             Err(e) => NativeCallResult::Error(e),
@@ -215,6 +217,7 @@ impl BamlClassArray for PackageBamlImpl {
         NativeCallResult::YieldToCall {
             callee: f_ptr,
             args: vec![first_arg],
+            type_args: vec![],
             continuation: Box::new(MapContinuation {
                 f_ptr,
                 array,
@@ -240,6 +243,7 @@ impl BamlClassArray for PackageBamlImpl {
         NativeCallResult::YieldToCall {
             callee,
             args: vec![],
+            type_args: vec![],
             continuation: Box::new(ToJsonContinuation {
                 array,
                 idx: 0,

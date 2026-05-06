@@ -10,7 +10,7 @@ function user.WithNotNull.to_json(self: user.WithNotNull) -> baml.json.json thro
   map { "gpa": self.gpa.to_json(), "name": self.name.to_json() } : map<string, baml.json.json>
 }
 function user.WithNotNull.from_json(j: baml.json.json) -> user.WithNotNull throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.WithNotNull
+  WithNotNull { gpa: baml.json.from_json<float>(baml.json.field(j, "gpa")), name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.WithNotNull
 }
 class user.WithNotNull$stream {
   gpa: null | float

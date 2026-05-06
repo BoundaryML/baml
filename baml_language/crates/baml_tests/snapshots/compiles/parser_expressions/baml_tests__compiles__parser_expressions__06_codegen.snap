@@ -36,11 +36,36 @@ function user.IndexAccess(users: IndexUser[]) -> string {
 
 function user.IndexUser.from_json(j: baml.json.json) -> IndexUser {
     load_var j
-    call baml.json.stringify
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type IndexUser
+    load_var j
+    load_const "age"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "tags"
+    call baml.json.field
+    store_var _9
+    load_type string[]
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    alloc_instance user.IndexUser
     load_var _2
-    call baml.json.from_string
+    init_field .name
+    load_var _5
+    init_field .age
+    load_var _8
+    init_field .tags
     return
 }
 
@@ -69,11 +94,26 @@ function user.IndexUser.to_json(self: null) -> baml.json.json {
 
 function user.Profile.from_json(j: baml.json.json) -> Profile {
     load_var j
-    call baml.json.stringify
+    load_const "bio"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type Profile
+    load_var j
+    load_const "settings"
+    call baml.json.field
+    store_var _6
+    load_type Settings
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    alloc_instance user.Profile
     load_var _2
-    call baml.json.from_string
+    init_field .bio
+    load_var _5
+    init_field .settings
     return
 }
 
@@ -96,11 +136,16 @@ function user.Profile.to_json(self: null) -> baml.json.json {
 
 function user.Settings.from_json(j: baml.json.json) -> Settings {
     load_var j
-    call baml.json.stringify
+    load_const "theme"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type Settings
+    alloc_instance user.Settings
     load_var _2
-    call baml.json.from_string
+    init_field .theme
     return
 }
 
@@ -131,11 +176,36 @@ function user.TestPrecedence() -> bool {
 
 function user.User.from_json(j: baml.json.json) -> User {
     load_var j
-    call baml.json.stringify
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type User
+    load_var j
+    load_const "profile"
+    call baml.json.field
+    store_var _6
+    load_type Profile
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "tags"
+    call baml.json.field
+    store_var _9
+    load_type string[]
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    alloc_instance user.User
     load_var _2
-    call baml.json.from_string
+    init_field .name
+    load_var _5
+    init_field .profile
+    load_var _8
+    init_field .tags
     return
 }
 

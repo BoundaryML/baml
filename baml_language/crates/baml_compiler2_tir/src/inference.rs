@@ -448,6 +448,10 @@ pub fn infer_scope_types<'db>(
                     if let Some(sm) = baml_compiler2_ppir::function_body_source_map(db, func_loc) {
                         builder.set_body_source_map(sm);
                     }
+                    builder.set_auto_derived(matches!(
+                        func_data.origin,
+                        ast::FunctionOrigin::AutoDerive
+                    ));
 
                     if let FunctionBody::Expr(expr_body) = body.as_ref() {
                         // Get declared return type
@@ -554,18 +558,23 @@ pub fn infer_scope_types<'db>(
                         }
 
                         // Validate declared `throws` against effective escaping throws.
-                        // Auto-derived methods (e.g. synthesized `to_json` / `from_json`)
-                        // use a conservative throws clause that may be wider than what
-                        // any particular class actually throws — suppress the extraneous
-                        // warning for those so users aren't misled.
-                        let warn_extraneous = func_data.origin != ast::FunctionOrigin::AutoDerive;
-                        builder.check_throws_contract(
-                            expr_body,
-                            sig.throws.as_ref(),
-                            sig_sm.throws_type_span,
-                            func_data.span,
-                            warn_extraneous,
-                        );
+                        // Auto-derived methods (synthesized `to_json` /
+                        // `from_json`) use a conservative pre-baked throws
+                        // clause; the body's actual escaping throws can be
+                        // wider when fields have malformed/unknown types.
+                        // The user can't fix the synthesized contract, so
+                        // skip the entire check for auto-derive bodies.
+                        let is_auto_derive =
+                            matches!(func_data.origin, ast::FunctionOrigin::AutoDerive);
+                        if !is_auto_derive {
+                            builder.check_throws_contract(
+                                expr_body,
+                                sig.throws.as_ref(),
+                                sig_sm.throws_type_span,
+                                func_data.span,
+                                true,
+                            );
+                        }
                     }
                     found = true;
                     break;

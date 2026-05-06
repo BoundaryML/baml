@@ -30,10 +30,9 @@ class user.NotJSON {
 }
 function user.NotJSON.to_json(self: user.NotJSON) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   map { "inner": self.inner.to_json() } : map<string, unknown>
-  !! 92..97: unresolved type: name
 }
 function user.NotJSON.from_json(j: baml.json.json) -> user.NotJSON throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.NotJSON
+  NotJSON { inner: baml.json.from_json<name>(baml.json.field(j, "inner")) } : user.NotJSON
 }
 function user.EchoJSON(i: user.JSON) -> user.JSON throws never {
   { : user.NotJSON

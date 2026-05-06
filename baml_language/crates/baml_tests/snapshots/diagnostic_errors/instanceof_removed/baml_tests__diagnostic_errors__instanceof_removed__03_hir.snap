@@ -15,10 +15,10 @@ function user.check_instanceof_in_if(x: user.Cat | user.Dog) -> string  [expr] {
   { if (<missing>) { return "dog" } } "cat"
 }
 function user.from_json(j: baml.json.json) -> user.Cat  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Cat { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
 function user.from_json(j: baml.json.json) -> user.Dog  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Dog { breed: baml.json.from_json(baml.json.field(j, "breed")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "breed": self.breed.to_json() }

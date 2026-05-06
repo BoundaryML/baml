@@ -46,7 +46,7 @@ function user.forward(cb: (value: int) -> int) -> int  [expr] {
   {  } direct(cb)
 }
 function user.from_json(j: baml.json.json) -> user.Worker  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Worker { factor: baml.json.from_json(baml.json.field(j, "factor")) }
 }
 function user.member_map(worker: user.Worker, values: int[]) -> int[]  [expr] {
   {  } values.map(worker.scale)

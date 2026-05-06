@@ -310,25 +310,25 @@ function user.WrongLiteralTypeIntWithString(x: int) -> string  [expr] {
   {  } match (x) { "hello" => "wrong type" }
 }
 function user.from_json(j: baml.json.json) -> user.Cat  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Cat { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
 function user.from_json(j: baml.json.json) -> user.Pending  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Pending { eta: baml.json.from_json(baml.json.field(j, "eta")) }
 }
 function user.from_json(j: baml.json.json) -> user.Dog  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Dog { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
 function user.from_json(j: baml.json.json) -> user.Failure  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Failure { reason: baml.json.from_json(baml.json.field(j, "reason")) }
 }
 function user.from_json(j: baml.json.json) -> user.Success  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Success { data: baml.json.from_json(baml.json.field(j, "data")) }
 }
 function user.from_json(j: baml.json.json) -> user.Fish  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Fish { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
 function user.from_json(j: baml.json.json) -> user.Bird  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Bird { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": self.name.to_json() }

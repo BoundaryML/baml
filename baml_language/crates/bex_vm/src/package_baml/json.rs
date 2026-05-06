@@ -136,9 +136,34 @@ impl BamlNamespaceJson for PackageBamlImpl {
             Ok(callee) => NativeCallResult::YieldToCall {
                 callee,
                 args: vec![],
+                type_args: vec![],
                 continuation: Box::new(ToJsonDynContinuation),
             },
             Err(e) => NativeCallResult::Error(e),
+        }
+    }
+
+    fn from_json(vm: &mut BexVm, j: &Value) -> NativeCallResult {
+        let ty = match vm.current_call_type_args().first().cloned() {
+            Some(t) => t,
+            None => {
+                return NativeCallResult::Error(VmRustFnError::InternalError(
+                    VmInternalError::MissingNativeFunction {
+                        name: "baml.json.from_json: missing type argument".to_string(),
+                    },
+                ));
+            }
+        };
+        json_from_json_dispatch(vm, *j, &ty)
+    }
+
+    fn field(vm: &mut BexVm, j: &Value, key: &str) -> Value {
+        match j {
+            Value::Object(ptr) => match vm.get_object(*ptr) {
+                Object::Map(m) => m.get(key).copied().unwrap_or(Value::Null),
+                _ => Value::Null,
+            },
+            _ => Value::Null,
         }
     }
 }
@@ -1039,4 +1064,352 @@ fn deserialize_media(
         .ok_or_else(|| raise_decode(vm, format!("media class `{qtn}` not found"), path))?;
     let data_val = vm.alloc_rust_data(media_arc);
     Ok(vm.alloc_instance(class_ptr, vec![data_val]))
+}
+
+// ─── from_json dispatcher (Phase 5c) ──────────────────────────────────────────
+
+/// Top-level dispatch for `baml.json.from_json<T>(j)`.
+///
+/// Produces a `NativeCallResult` so that user `from_json` overrides on user
+/// classes are dispatched via `YieldToCall`. For class fields nested inside
+/// `List<C>` / `Map<string, C>` / `Optional<C>` the walker uses continuation
+/// trampolines (mirroring `Map.to_json`'s 5b.4.2 trampoline) so each element /
+/// value goes through `<fqn>.from_json` to honor user overrides.
+///
+/// Generic class dispatch: when `T = Ty::Class(qtn, type_args, _)` with
+/// non-empty `type_args`, the dispatched `<fqn>.from_json` frame is seeded
+/// with `type_args` via the `YieldToCall { type_args, .. }` channel, so the
+/// auto-derived body (e.g. `Box<T> { value: baml.json.from_json<T>(...) }`)
+/// sees `T` substituted to the concrete type at runtime.
+pub fn json_from_json_dispatch(vm: &mut BexVm, j: Value, ty: &Ty) -> NativeCallResult {
+    match ty {
+        Ty::Optional(inner, _) => {
+            if matches!(j, Value::Null) {
+                NativeCallResult::Done(Value::Null)
+            } else {
+                json_from_json_dispatch(vm, j, inner)
+            }
+        }
+        Ty::List(elem, _) => list_from_json_start(vm, j, elem),
+        Ty::Map { value: vty, .. } => map_from_json_start(vm, j, vty),
+        _ => match try_yield_user_from_json(vm, j, ty) {
+            Some(yld) => yld,
+            None => structural_decode_value(vm, j, ty),
+        },
+    }
+}
+
+/// Structural decode by converting `j` (a VM `json` value) to
+/// `serde_json::Value` and running Phase 5a's `ty_serde_to_value`. Used as the
+/// fallback when no override path applies.
+fn structural_decode_value(vm: &mut BexVm, j: Value, ty: &Ty) -> NativeCallResult {
+    let serde = value_to_serde(vm, j);
+    let mut path = String::new();
+    match ty_serde_to_value(vm, &serde, ty, &mut path) {
+        Ok(v) => NativeCallResult::Done(v),
+        Err(e) => NativeCallResult::Error(e),
+    }
+}
+
+/// If `ty` is a class type with a registered `<fqn>.from_json` function,
+/// returns a `YieldToCall` that dispatches it. Threads the class's own
+/// `type_args` into the frame so generic class instantiations like
+/// `Box<Secret>.from_json` see `T = Secret` inside their auto-derived body.
+/// Returns `None` for non-class types, media classes, and classes without a
+/// `from_json`.
+fn try_yield_user_from_json(vm: &mut BexVm, j: Value, ty: &Ty) -> Option<NativeCallResult> {
+    let (qtn, type_args) = match ty {
+        Ty::Class(qtn, type_args, _) => (qtn, type_args),
+        _ => return None,
+    };
+    if media_kind_from_fqn(qtn.display_name.as_str()).is_some() {
+        return None;
+    }
+    let from_json_name = format!("{}.from_json", class_lookup_key(qtn));
+    let callee = vm.find_function_by_name(&from_json_name)?;
+    Some(NativeCallResult::YieldToCall {
+        callee,
+        args: vec![j],
+        type_args: type_args.clone(),
+        continuation: Box::new(IdentityFromJsonCont),
+    })
+}
+
+/// Pass-through continuation used when dispatching `<fqn>.from_json(j)`: the
+/// callee returns the constructed instance directly, so we just hand it back.
+struct IdentityFromJsonCont;
+
+impl Continuation for IdentityFromJsonCont {
+    fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
+        NativeCallResult::Done(value)
+    }
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        Vec::new()
+    }
+    fn apply_forwarding(&mut self, _: &HashMap<HeapPtr, HeapPtr>) {}
+}
+
+// ── List dispatch ─────────────────────────────────────────────────────────────
+
+fn list_from_json_start(vm: &mut BexVm, j: Value, elem_ty: &Ty) -> NativeCallResult {
+    let array = match j {
+        Value::Object(p) => match vm.get_object(p) {
+            Object::Array(a) => a.clone(),
+            _ => {
+                return NativeCallResult::Error(raise_decode(vm, "expected JSON array", ""));
+            }
+        },
+        _ => {
+            return NativeCallResult::Error(raise_decode(vm, "expected JSON array", ""));
+        }
+    };
+    list_drive(vm, array, elem_ty.clone(), Vec::new(), 0)
+}
+
+/// Drive the list walk from index `idx`. Synchronously decodes elements that
+/// don't require yielding and falls into a `ListFromJsonCont` for the first
+/// element that does.
+fn list_drive(
+    vm: &mut BexVm,
+    array: Vec<Value>,
+    elem_ty: Ty,
+    mut results: Vec<Value>,
+    mut idx: usize,
+) -> NativeCallResult {
+    while idx < array.len() {
+        let curr = array[idx];
+        // Optional element: null short-circuits without yielding.
+        if let Some(v) = optional_null_short_circuit(curr, &elem_ty) {
+            results.push(v);
+            idx += 1;
+            continue;
+        }
+        let inner_ty = peel_optional(&elem_ty);
+        if let Some(yld) = try_yield_user_from_json(vm, curr, inner_ty) {
+            return wrap_list_yield(yld, array, elem_ty, results, idx);
+        }
+        match decode_value_sync(vm, curr, &elem_ty) {
+            Ok(v) => {
+                results.push(v);
+                idx += 1;
+            }
+            Err(e) => return NativeCallResult::Error(e),
+        }
+    }
+    let arr_val = Value::Object(vm.tlab.alloc(Object::Array(results)));
+    NativeCallResult::Done(arr_val)
+}
+
+fn wrap_list_yield(
+    yld: NativeCallResult,
+    array: Vec<Value>,
+    elem_ty: Ty,
+    results: Vec<Value>,
+    idx: usize,
+) -> NativeCallResult {
+    let (callee, args, type_args) = match yld {
+        NativeCallResult::YieldToCall {
+            callee,
+            args,
+            type_args,
+            ..
+        } => (callee, args, type_args),
+        other => return other,
+    };
+    NativeCallResult::YieldToCall {
+        callee,
+        args,
+        type_args,
+        continuation: Box::new(ListFromJsonCont {
+            array,
+            elem_ty,
+            results,
+            idx,
+        }),
+    }
+}
+
+struct ListFromJsonCont {
+    array: Vec<Value>,
+    elem_ty: Ty,
+    results: Vec<Value>,
+    idx: usize,
+}
+
+impl Continuation for ListFromJsonCont {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        self.results.push(value);
+        let next_idx = self.idx + 1;
+        list_drive(vm, self.array, self.elem_ty, self.results, next_idx)
+    }
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = Vec::new();
+        for v in self.array.iter().chain(self.results.iter()) {
+            if let Value::Object(p) = v {
+                roots.push(*p);
+            }
+        }
+        roots
+    }
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        for v in self.array.iter_mut().chain(self.results.iter_mut()) {
+            if let Value::Object(p) = v {
+                if let Some(&new) = forwarding.get(p) {
+                    *p = new;
+                }
+            }
+        }
+    }
+}
+
+// ── Map dispatch ──────────────────────────────────────────────────────────────
+
+fn map_from_json_start(vm: &mut BexVm, j: Value, val_ty: &Ty) -> NativeCallResult {
+    let entries: Vec<(String, Value)> = match j {
+        Value::Object(p) => match vm.get_object(p) {
+            Object::Map(m) => m.iter().map(|(k, v)| (k.clone(), *v)).collect(),
+            _ => {
+                return NativeCallResult::Error(raise_decode(vm, "expected JSON object", ""));
+            }
+        },
+        _ => {
+            return NativeCallResult::Error(raise_decode(vm, "expected JSON object", ""));
+        }
+    };
+    map_drive(vm, entries, val_ty.clone(), IndexMap::new(), 0)
+}
+
+fn map_drive(
+    vm: &mut BexVm,
+    entries: Vec<(String, Value)>,
+    val_ty: Ty,
+    mut results: IndexMap<String, Value>,
+    mut idx: usize,
+) -> NativeCallResult {
+    while idx < entries.len() {
+        let curr = entries[idx].1;
+        let key = entries[idx].0.clone();
+        if let Some(v) = optional_null_short_circuit(curr, &val_ty) {
+            results.insert(key, v);
+            idx += 1;
+            continue;
+        }
+        let inner_ty = peel_optional(&val_ty);
+        if let Some(yld) = try_yield_user_from_json(vm, curr, inner_ty) {
+            return wrap_map_yield(yld, entries, val_ty, results, idx);
+        }
+        match decode_value_sync(vm, curr, &val_ty) {
+            Ok(v) => {
+                results.insert(key, v);
+                idx += 1;
+            }
+            Err(e) => return NativeCallResult::Error(e),
+        }
+    }
+    let map_val = Value::Object(vm.tlab.alloc(Object::Map(results)));
+    NativeCallResult::Done(map_val)
+}
+
+fn wrap_map_yield(
+    yld: NativeCallResult,
+    entries: Vec<(String, Value)>,
+    val_ty: Ty,
+    results: IndexMap<String, Value>,
+    idx: usize,
+) -> NativeCallResult {
+    let (callee, args, type_args) = match yld {
+        NativeCallResult::YieldToCall {
+            callee,
+            args,
+            type_args,
+            ..
+        } => (callee, args, type_args),
+        other => return other,
+    };
+    NativeCallResult::YieldToCall {
+        callee,
+        args,
+        type_args,
+        continuation: Box::new(MapFromJsonCont {
+            entries,
+            val_ty,
+            results,
+            idx,
+        }),
+    }
+}
+
+struct MapFromJsonCont {
+    entries: Vec<(String, Value)>,
+    val_ty: Ty,
+    results: IndexMap<String, Value>,
+    idx: usize,
+}
+
+impl Continuation for MapFromJsonCont {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        let key = self.entries[self.idx].0.clone();
+        self.results.insert(key, value);
+        let next_idx = self.idx + 1;
+        map_drive(vm, self.entries, self.val_ty, self.results, next_idx)
+    }
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = Vec::new();
+        for (_, v) in &self.entries {
+            if let Value::Object(p) = v {
+                roots.push(*p);
+            }
+        }
+        for v in self.results.values() {
+            if let Value::Object(p) = v {
+                roots.push(*p);
+            }
+        }
+        roots
+    }
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        for (_, v) in &mut self.entries {
+            if let Value::Object(p) = v {
+                if let Some(&new) = forwarding.get(p) {
+                    *p = new;
+                }
+            }
+        }
+        for v in self.results.values_mut() {
+            if let Value::Object(p) = v {
+                if let Some(&new) = forwarding.get(p) {
+                    *p = new;
+                }
+            }
+        }
+    }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// If `ty` is `Optional<_>` and `v` is `Value::Null`, returns `Some(Null)`.
+/// Otherwise `None` — caller should dispatch on the inner (non-optional) type.
+fn optional_null_short_circuit(v: Value, ty: &Ty) -> Option<Value> {
+    match ty {
+        Ty::Optional(_, _) if matches!(v, Value::Null) => Some(Value::Null),
+        _ => None,
+    }
+}
+
+/// Strip the outer `Optional` wrapper, if any. Used by the list/map walker so
+/// that `Optional<C>` element types still dispatch through `C.from_json`.
+fn peel_optional(ty: &Ty) -> &Ty {
+    match ty {
+        Ty::Optional(inner, _) => inner,
+        other => other,
+    }
+}
+
+/// Synchronous (no-yield) decode of `v` as `ty`. For class-with-override
+/// elements the caller must use the yield path; this helper structurally
+/// decodes everything else.
+fn decode_value_sync(vm: &mut BexVm, v: Value, ty: &Ty) -> Result<Value, VmRustFnError> {
+    let serde = value_to_serde(vm, v);
+    let mut path = String::new();
+    ty_serde_to_value(vm, &serde, ty, &mut path)
 }

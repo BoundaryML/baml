@@ -62,7 +62,7 @@ function user.GenerateTests$render_prompt(count: int, topic: string) -> baml.llm
   baml.llm.render_prompt(GPT4o, "GenerateTests", map { "count": count, "topic": topic })
 }
 function user.from_json(j: baml.json.json) -> user.Sentiment  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Sentiment { feeling: baml.json.from_json(baml.json.field(j, "feeling")), confidence: baml.json.from_json(baml.json.field(j, "confidence")), reasoning: baml.json.from_json(baml.json.field(j, "reasoning")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "feeling": self.feeling.to_json(), "confidence": self.confidence.to_json(), "reasoning": self.reasoning.to_json() }

@@ -9,7 +9,7 @@ function user.MyRunner.to_json(self: user.MyRunner) -> baml.json.json throws bam
   map { "threshold": self.threshold.to_json() } : map<string, baml.json.json>
 }
 function user.MyRunner.from_json(j: baml.json.json) -> user.MyRunner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.MyRunner
+  MyRunner { threshold: baml.json.from_json<float>(baml.json.field(j, "threshold")) } : user.MyRunner
 }
 function user.$init_test_32(registry: testing.TestCollector) -> ? throws never {
   { : null

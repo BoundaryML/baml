@@ -9,7 +9,7 @@ function user.Config.to_json(self: user.Config) -> baml.json.json throws baml.js
   map { "key": self.key.to_json() } : map<string, baml.json.json>
 }
 function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Config
+  Config { key: baml.json.from_json<string>(baml.json.field(j, "key")) } : user.Config
 }
 class user.Response {
   text: string
@@ -18,7 +18,7 @@ function user.Response.to_json(self: user.Response) -> baml.json.json throws bam
   map { "text": self.text.to_json() } : map<string, baml.json.json>
 }
 function user.Response.from_json(j: baml.json.json) -> user.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Response
+  Response { text: baml.json.from_json<string>(baml.json.field(j, "text")) } : user.Response
 }
 function user.RootUsesOwnStream(c: user.Config$stream) -> string throws never {
   { : null | string
@@ -38,11 +38,9 @@ class user.RootWithStreamFields {
 }
 function user.RootWithStreamFields.to_json(self: user.RootWithStreamFields) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   map { "own_stream": self.own_stream.to_json(), "llm_stream": self.llm_stream.to_json() } : map<string, unknown>
-  !! 808..828: type `user.Config$stream` has no member `to_json`
-  !! 808..828: type `user.llm.Config$stream` has no member `to_json`
 }
 function user.RootWithStreamFields.from_json(j: baml.json.json) -> user.RootWithStreamFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.RootWithStreamFields
+  RootWithStreamFields { own_stream: baml.json.from_json<Config$stream>(baml.json.field(j, "own_stream")), llm_stream: baml.json.from_json<root.llm.Config$stream>(baml.json.field(j, "llm_stream")) } : user.RootWithStreamFields
 }
 class user.Config$stream {
   key: null | string
@@ -61,7 +59,7 @@ function user.llm.Config.to_json(self: user.llm.Config) -> baml.json.json throws
   map { "model": self.model.to_json() } : map<string, baml.json.json>
 }
 function user.llm.Config.from_json(j: baml.json.json) -> user.llm.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.llm.Config
+  Config { model: baml.json.from_json<string>(baml.json.field(j, "model")) } : user.llm.Config
 }
 class user.llm.Response {
   text: string
@@ -70,7 +68,7 @@ function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json th
   map { "text": self.text.to_json() } : map<string, baml.json.json>
 }
 function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.llm.Response
+  Response { text: baml.json.from_json<string>(baml.json.field(j, "text")) } : user.llm.Response
 }
 function user.llm.LlmUsesOwnStream(r: user.llm.Response$stream) -> string throws never {
   { : null | string
@@ -90,11 +88,9 @@ class user.llm.LlmWithStreamFields {
 }
 function user.llm.LlmWithStreamFields.to_json(self: user.llm.LlmWithStreamFields) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   map { "own_stream": self.own_stream.to_json(), "root_stream": self.root_stream.to_json() } : map<string, unknown>
-  !! 410..429: type `user.llm.Response$stream` has no member `to_json`
-  !! 410..429: type `user.Config$stream` has no member `to_json`
 }
 function user.llm.LlmWithStreamFields.from_json(j: baml.json.json) -> user.llm.LlmWithStreamFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.llm.LlmWithStreamFields
+  LlmWithStreamFields { own_stream: baml.json.from_json<Response$stream>(baml.json.field(j, "own_stream")), root_stream: baml.json.from_json<root.Config$stream>(baml.json.field(j, "root_stream")) } : user.llm.LlmWithStreamFields
 }
 class user.llm.Config$stream {
   model: null | string

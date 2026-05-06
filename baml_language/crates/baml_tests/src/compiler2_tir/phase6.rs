@@ -685,7 +685,7 @@ function f(u: MaybeUser) -> string? {
       map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      baml.json.from_string<T>(baml.json.stringify(j)) : user.User
+      User { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.User
     }
     type user.MaybeUser = user.User?
     function user.f(u: user.MaybeUser) -> string? throws never {

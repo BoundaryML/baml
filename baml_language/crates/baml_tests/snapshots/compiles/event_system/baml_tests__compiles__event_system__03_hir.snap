@@ -14,7 +14,7 @@ function user.emit_multiple_events() -> void  [expr] {
   { baml.events.send("step", map { "step": 1 }); baml.events.send("step", map { "step": 2 }) } baml.events.send("step", map { "step": 3 })
 }
 function user.from_json(j: baml.json.json) -> user.User  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.User { id: baml.json.from_json(baml.json.field(j, "id")), name: baml.json.from_json(baml.json.field(j, "name")), email: baml.json.from_json(baml.json.field(j, "email")) }
 }
 function user.nested_inner() -> int  [expr] {
   {  } 10

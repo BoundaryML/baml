@@ -3,11 +3,36 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.User.from_json(j: baml.json.json) -> User {
     load_var j
-    call baml.json.stringify
+    load_const "id"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type User
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "email"
+    call baml.json.field
+    store_var _9
+    load_type string
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    alloc_instance user.User
     load_var _2
-    call baml.json.from_string
+    init_field .id
+    load_var _5
+    init_field .name
+    load_var _8
+    init_field .email
     return
 }
 

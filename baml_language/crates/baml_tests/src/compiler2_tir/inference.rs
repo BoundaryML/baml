@@ -113,7 +113,7 @@ fn class_field_access() {
       map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      baml.json.from_string<T>(baml.json.stringify(j)) : user.Foo
+      Foo { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Foo
     }
     function user.f(x: user.Foo) -> string throws never {
       { : never
@@ -155,7 +155,7 @@ fn unresolved_field() {
       map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      baml.json.from_string<T>(baml.json.stringify(j)) : user.Foo
+      Foo { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Foo
     }
     function user.f(x: user.Foo) -> string throws never {
       { : never
@@ -192,7 +192,7 @@ function f(data: Data) -> string {
       map { "name": self.name.to_json() } : map<string, baml.json.json>
     }
     function user.Data.from_json(j: baml.json.json) -> user.Data throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      baml.json.from_string<T>(baml.json.stringify(j)) : user.Data
+      Data { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Data
     }
     function user.f(data: user.Data) -> string throws never {
       { : never
@@ -229,7 +229,7 @@ function f(s: Sentiment) -> string {
       map { "feeling": self.feeling.to_json() } : map<string, baml.json.json>
     }
     function user.Sentiment.from_json(j: baml.json.json) -> user.Sentiment throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      baml.json.from_string<T>(baml.json.stringify(j)) : user.Sentiment
+      Sentiment { feeling: baml.json.from_json<string>(baml.json.field(j, "feeling")) } : user.Sentiment
     }
     function user.f(s: user.Sentiment) -> string throws never {
       { : never
@@ -314,7 +314,7 @@ fn resolve_class_fields_query() {
       map { "x": self.x.to_json(), "y": self.y.to_json(), "label": self.label.to_json() } : map<string, baml.json.json>
     }
     function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      baml.json.from_string<T>(baml.json.stringify(j)) : user.Point
+      Point { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<float>(baml.json.field(j, "y")), label: baml.json.from_json<string>(baml.json.field(j, "label")) } : user.Point
     }
     class user.Point$stream {
       x: null | int

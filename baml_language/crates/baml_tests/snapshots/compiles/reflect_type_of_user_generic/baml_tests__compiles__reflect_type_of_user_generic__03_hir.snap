@@ -6,7 +6,7 @@ class user.Person {
   name: string
 }
 function user.from_json(j: baml.json.json) -> user.Person  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Person { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
 function user.reflect_array() -> type  [expr] {
   {  } reflect.type_of()

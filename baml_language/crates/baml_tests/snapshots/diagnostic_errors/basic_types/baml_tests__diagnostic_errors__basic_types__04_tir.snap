@@ -15,7 +15,7 @@ function user.FieldAttributes.to_json(self: user.FieldAttributes) -> baml.json.j
   map { "money": self.money.to_json(), "currency": self.currency.to_json(), "name": self.name.to_json(), "summary": self.summary.to_json(), "details": self.details?.to_json(), "state": self.state.to_json(), "multiple": self.multiple?.to_json() } : map<string, baml.json.json | baml.json.json?>
 }
 function user.FieldAttributes.from_json(j: baml.json.json) -> user.FieldAttributes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.FieldAttributes
+  FieldAttributes { money: baml.json.from_json<int>(baml.json.field(j, "money")), currency: baml.json.from_json<string>(baml.json.field(j, "currency")), name: baml.json.from_json<string>(baml.json.field(j, "name")), summary: baml.json.from_json<string>(baml.json.field(j, "summary")), details: baml.json.from_json<string?>(baml.json.field(j, "details")), state: baml.json.from_json<string>(baml.json.field(j, "state")), multiple: baml.json.from_json<string?>(baml.json.field(j, "multiple")) } : user.FieldAttributes
 }
 class user.ClassAttributes {
   name: string
@@ -24,7 +24,7 @@ function user.ClassAttributes.to_json(self: user.ClassAttributes) -> baml.json.j
   map { "name": self.name.to_json() } : map<string, baml.json.json>
 }
 function user.ClassAttributes.from_json(j: baml.json.json) -> user.ClassAttributes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.ClassAttributes
+  ClassAttributes { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.ClassAttributes
 }
 class user.FieldAttributes$stream {
   money: null | int @description("In USD")
@@ -149,7 +149,7 @@ function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.J
   map { "id": self.id.to_json(), "name": self.name.to_json(), "email": self.email.to_json() } : map<string, baml.json.json>
 }
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.User
+  User { id: baml.json.from_json<int>(baml.json.field(j, "id")), name: baml.json.from_json<string>(baml.json.field(j, "name")), email: baml.json.from_json<string>(baml.json.field(j, "email")) } : user.User
 }
 enum user.Status
 type user.Role = "user" | "assistant" | "system"

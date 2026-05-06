@@ -451,6 +451,14 @@ pub struct TypeInferenceBuilder<'db> {
     /// current scope. Used to explain callback forwarding without affecting
     /// call instantiation or throws checking semantics.
     lambda_effective_throws: FxHashMap<ExprId, Ty>,
+    /// `true` when the function being analyzed is auto-derived (e.g.
+    /// synthesized `to_json` / `from_json`).  Suppresses diagnostics from
+    /// type-arg lowering — auto-derive references field types verbatim, and
+    /// when those types are user-broken (parser error recovery, typos) we
+    /// don't want to surface synthetic-call type-arg errors that look like the
+    /// user wrote them.  Real type errors still surface from the user's
+    /// own field declaration.
+    is_auto_derived_body: bool,
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
@@ -625,6 +633,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             param_types: Vec::new(),
             nested_lambda_types: FxHashMap::default(),
             lambda_effective_throws: FxHashMap::default(),
+            is_auto_derived_body: false,
         }
     }
 
@@ -637,6 +646,17 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     pub fn set_generic_params(&mut self, params: Vec<Name>) {
         self.generic_params = params;
+    }
+
+    /// Mark this builder as analyzing an auto-derived function body. See
+    /// the `is_auto_derived_body` field comment for what this gates.
+    /// Also toggles the corresponding suppression flag on the diagnostic
+    /// context so member-lookup errors emitted from `MemberAccess` lowering
+    /// (e.g. `self.<f>.to_json()` where `f`'s type is malformed) are
+    /// silenced — the user's underlying field-type error already covers it.
+    pub fn set_auto_derived(&mut self, value: bool) {
+        self.is_auto_derived_body = value;
+        self.context.set_suppress_member_lookup_errors(value);
     }
 
     /// Finish building and return the accumulated results.
@@ -1164,17 +1184,41 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Option<FxHashMap<Name, Ty>> {
         // Look up the callee's resolution to find the declared generic param names.
         let resolution = self.resolutions.get(&callee_id).cloned()?;
-        let func_loc = match resolution {
-            crate::inference::MemberResolution::Free { func_loc } => func_loc,
-            crate::inference::MemberResolution::BoundMethod { func_loc, .. } => func_loc,
-            crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => func_loc,
+        let (func_loc, treat_as_static_method) = match resolution {
+            crate::inference::MemberResolution::Free { func_loc } => (func_loc, true),
+            // `UnboundMethod` covers `Class.method` / `Class<...>.method` call
+            // sites where the receiver is a type name.  When the call writes
+            // `Class<...>.method(...)`, the receiver-type's `<...>` is parsed
+            // as the call's type-args by `find_callee_generic_args` in
+            // `lower_expr_body.rs`; those args fill the *enclosing class's*
+            // generic params (BEP-039), so we include them in the
+            // expected-arity check below.
+            crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => (func_loc, true),
+            // BoundMethod calls (`inst.method(args)`) get class type-args
+            // from the receiver instance's `class_type_args` at runtime, not
+            // from the call site.
+            crate::inference::MemberResolution::BoundMethod { func_loc, .. } => (func_loc, false),
             _ => return None,
         };
         let db = self.context.db();
         let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
         // Only user-declared generic params are supplied explicitly; synthetic effect params
-        // are always inferred.
-        let declared_params: Vec<Name> = sig.user_generic_params.clone();
+        // are always inferred.  For static-method-on-generic-class calls, prepend the
+        // class's generic params: type-args fill `[class_params..., function_params...]`.
+        let class_params: Vec<Name> = if treat_as_static_method {
+            let file = func_loc.file(db);
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            item_tree
+                .classes
+                .values()
+                .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
+                .map(|class_data| class_data.generic_params.clone())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let mut declared_params: Vec<Name> = class_params;
+        declared_params.extend(sig.user_generic_params.iter().cloned());
 
         if type_args.len() != declared_params.len() {
             self.context.report_simple(
@@ -1192,6 +1236,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let mut bindings = FxHashMap::default();
         let ns = self.ns_context.clone();
         let caller_generic_params = self.generic_params.clone();
+        let suppress_diags = self.is_auto_derived_body;
         for (param_name, type_arg_expr) in declared_params.iter().zip(type_args.iter()) {
             let mut diags = Vec::new();
             let ty = crate::lower_type_expr::lower_type_expr_in_ns(
@@ -1202,8 +1247,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &caller_generic_params,
                 &mut diags,
             );
-            for d in diags {
-                self.context.report_simple(d, call_expr_id);
+            // Auto-derived bodies (`to_json` / `from_json` synthesized by
+            // `auto_derive_json`) reference field types verbatim. When a
+            // class has malformed/unresolved field types (parser error
+            // recovery, typos), the synthesizer's `baml.json.from_json<F>`
+            // call surfaces those as type-arg-resolution errors, with spans
+            // pointing at the user's source.  Suppress them here — the real
+            // diagnostic comes from the user's field declaration itself.
+            if !suppress_diags {
+                for d in diags {
+                    self.context.report_simple(d, call_expr_id);
+                }
             }
             bindings.insert(param_name.clone(), ty);
         }
@@ -5505,15 +5559,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
             }
-            Ty::TypeAlias(qtn, _) => {
-                // Expand the alias to its concrete type, then recurse.
-                if let Some(expanded) = self.aliases.get(qtn) {
-                    let expanded = expanded.clone();
-                    return self.resolve_member(&expanded, member, at, bound);
-                }
-                // Alias not in map (cyclic or unresolved) — treat as Unknown
-                Ty::Unknown {
-                    attr: TyAttr::default(),
+            Ty::TypeAlias(_, _) => {
+                // Expand the alias chain to its concrete type, then recurse on
+                // the result.  `expand_alias_chains` already caps iterations at
+                // 64, so cyclic aliases (`type One = Two; type Two = One`)
+                // stop expanding without overflowing the call stack.  If the
+                // chain bottoms out on another `TypeAlias` (cycle never
+                // resolves), fall through to `Unknown`.
+                let expanded = self.expand_alias_chains(base_ty.clone());
+                if matches!(expanded, Ty::TypeAlias(_, _)) {
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                } else {
+                    self.resolve_member(&expanded, member, at, bound)
                 }
             }
             Ty::Unknown { .. } => {

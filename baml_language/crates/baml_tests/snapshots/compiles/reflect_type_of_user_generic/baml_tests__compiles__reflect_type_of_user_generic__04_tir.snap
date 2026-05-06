@@ -9,7 +9,7 @@ function user.Person.to_json(self: user.Person) -> baml.json.json throws baml.js
   map { "name": self.name.to_json() } : map<string, baml.json.json>
 }
 function user.Person.from_json(j: baml.json.json) -> user.Person throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Person
+  Person { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Person
 }
 function user.reflect_type<T>() -> type throws never {
   { : type

@@ -9,7 +9,7 @@ function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json th
   map { "text": self.text.to_json() } : map<string, baml.json.json>
 }
 function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.llm.Response
+  Response { text: baml.json.from_json<string>(baml.json.field(j, "text")) } : user.llm.Response
 }
 class user.llm.Response$stream {
   text: null | string
@@ -20,11 +20,9 @@ class user.llm.Response {
 }
 function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   map { "body": self.body.to_json(), "status": self.status.to_json() } : map<string, unknown>
-  !! 88..96: type `user.llm.Response` has no member `body`
-  !! 88..96: type `user.llm.Response` has no member `status`
 }
 function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.llm.Response
+  Response { body: baml.json.from_json<string>(baml.json.field(j, "body")), status: baml.json.from_json<int>(baml.json.field(j, "status")) } : user.llm.Response
 }
 class user.llm.Response$stream {
   body: null | string

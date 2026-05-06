@@ -10,7 +10,7 @@ function user.TreeNode.to_json(self: user.TreeNode) -> baml.json.json throws bam
   map { "value": self.value.to_json(), "children": self.children.to_json() } : map<string, baml.json.json>
 }
 function user.TreeNode.from_json(j: baml.json.json) -> user.TreeNode throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.TreeNode
+  TreeNode { value: baml.json.from_json<string>(baml.json.field(j, "value")), children: baml.json.from_json<TreeNode[]>(baml.json.field(j, "children")) } : user.TreeNode
 }
 class user.TreeNode$stream {
   value: null | string

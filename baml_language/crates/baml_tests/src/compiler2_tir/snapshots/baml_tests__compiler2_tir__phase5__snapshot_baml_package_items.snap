@@ -3,15 +3,15 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
-  class Array<T> { methods: [length, at, push, pop, concat, reverse, slice, join, map, to_json] }
-  class Bool { methods: [to_json] }
-  class Float { methods: [to_json] }
-  class Int { methods: [to_json] }
-  class Map<K, V> { methods: [length, has, keys, values, set, get, to_json] }
-  class Null { methods: [to_json] }
-  class String { methods: [to_json, length, toLowerCase, toUpperCase, trim, includes, startsWith, endsWith, split, substring, replace, indexOf, charAt, matches, replaceAll, to_bytes] }
+  class Array<T> { methods: [length, at, push, pop, concat, reverse, slice, join, map, to_json, from_json] }
+  class Bool { methods: [to_json, from_json] }
+  class Float { methods: [to_json, from_json] }
+  class Int { methods: [to_json, from_json] }
+  class Map<K, V> { methods: [length, has, keys, values, set, get, to_json, from_json] }
+  class Null { methods: [to_json, from_json] }
+  class String { methods: [to_json, length, toLowerCase, toUpperCase, trim, includes, startsWith, endsWith, split, substring, replace, indexOf, charAt, matches, replaceAll, to_bytes, from_json] }
   class TypeValue { methods: [to_string, to_json, from_json] }
-  class Uint8Array { methods: [to_json, length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, to_string, sort] }
+  class Uint8Array { methods: [to_json, length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, to_string, sort, from_json] }
   function deep_copy<T>
   function deep_equals<T>
 namespace baml.env:
@@ -63,6 +63,8 @@ namespace baml.json:
   class JsonParseError { methods: [to_json, from_json] }
   class JsonSerializationError { methods: [to_json, from_json] }
   type json
+  function field
+  function from_json<T>
   function from_string<T>
   function parse
   function stringify
@@ -102,10 +104,10 @@ namespace baml.llm:
 namespace baml.math:
   function trunc
 namespace baml.media:
-  class Audio { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64] }
-  class Image { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64] }
-  class Pdf { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64] }
-  class Video { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64] }
+  class Audio { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
+  class Image { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
+  class Pdf { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
+  class Video { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
 namespace baml.net:
   class Socket { methods: [read, close, to_json, from_json] }
   function connect

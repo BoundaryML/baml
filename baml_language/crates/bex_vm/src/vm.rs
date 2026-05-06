@@ -1765,6 +1765,7 @@ impl BexVm {
                     NativeCallResult::YieldToCall {
                         callee,
                         args: mut callback_args,
+                        type_args: callback_type_args,
                         continuation,
                     } => {
                         // Push a Native continuation frame, then dispatch the
@@ -1784,13 +1785,38 @@ impl BexVm {
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
 
-                        return self.execute_call_from_locals_offset(
+                        // Mirror the Call-instruction's type-arg plumbing
+                        // (see vm.rs:3757) so a native helper that yields with
+                        // explicit `type_args` (e.g. `baml.json.from_json`
+                        // dispatching a generic class' `from_json`) seeds the
+                        // callee's frame correctly.  Save/restore around the
+                        // dispatch matches the Call-instruction handler.
+                        let prev_pending = std::mem::replace(
+                            &mut self.pending_call_type_args,
+                            callback_type_args.clone(),
+                        );
+                        let frames_before = self.frames.len();
+
+                        let result = self.execute_call_from_locals_offset(
                             real_callee,
                             cb_locals,
                             arg_count,
                             frame_idx,
                             function,
                         );
+
+                        self.pending_call_type_args = prev_pending;
+
+                        // Append explicit type-args to the newly-pushed
+                        // bytecode frame's `type_args` (after class-args from
+                        // BoundMethod / Closure seeding).
+                        if !callback_type_args.is_empty() && self.frames.len() > frames_before {
+                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+                                bf.type_args.extend(callback_type_args);
+                            }
+                        }
+
+                        return result;
                     }
                 }
             }
@@ -2116,6 +2142,7 @@ impl BexVm {
                         NativeCallResult::YieldToCall {
                             callee,
                             args: mut callback_args,
+                            type_args: callback_type_args,
                             continuation,
                         } => {
                             // The continuation wants to call another function.
@@ -2134,13 +2161,35 @@ impl BexVm {
                             let cb_locals = StackIndex::from_raw(self.stack.len());
                             self.stack.extend(callback_args);
 
-                            let ecflo_result = match self.execute_call_from_locals_offset(
+                            // Mirror the Call-instruction's type-arg plumbing for
+                            // continuation-driven YieldToCall (see vm.rs:3757).
+                            let prev_pending = std::mem::replace(
+                                &mut self.pending_call_type_args,
+                                callback_type_args.clone(),
+                            );
+                            let frames_before = self.frames.len();
+
+                            let ecflo_outcome = self.execute_call_from_locals_offset(
                                 real_callee,
                                 cb_locals,
                                 arg_count,
                                 &mut frame_idx,
                                 &mut function,
-                            ) {
+                            );
+
+                            self.pending_call_type_args = prev_pending;
+
+                            if !callback_type_args.is_empty()
+                                && self.frames.len() > frames_before
+                            {
+                                if let Some(Frame::Bytecode(bf)) =
+                                    self.frames.get_mut(frame_idx)
+                                {
+                                    bf.type_args.extend(callback_type_args);
+                                }
+                            }
+
+                            let ecflo_result = match ecflo_outcome {
                                 Ok(result) => result,
                                 Err(VmError::Thrown(exception_value)) => {
                                     self.try_unwind_exception(

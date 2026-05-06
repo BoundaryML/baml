@@ -11,10 +11,10 @@ class user.User {
   age: int
 }
 function user.from_json(j: baml.json.json) -> user.Box  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.from_json(j: baml.json.json) -> user.User  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.User { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
 }
 function user.test_generic_capture(box: user.Box) -> string  [expr] {
   { let get_name = () -> string { {  } box.value.name } } get_name()

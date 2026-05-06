@@ -11,7 +11,7 @@ function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.J
   map { "id": self.id.to_json(), "name": self.name.to_json(), "email": self.email.to_json() } : map<string, baml.json.json>
 }
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.User
+  User { id: baml.json.from_json<int>(baml.json.field(j, "id")), name: baml.json.from_json<string>(baml.json.field(j, "name")), email: baml.json.from_json<string>(baml.json.field(j, "email")) } : user.User
 }
 function user.simple_function() -> int throws never {
   { : 42

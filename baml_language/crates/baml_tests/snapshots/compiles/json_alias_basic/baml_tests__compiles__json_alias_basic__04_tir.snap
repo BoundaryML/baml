@@ -9,7 +9,7 @@ function user.Wrapper.to_json(self: user.Wrapper) -> baml.json.json throws baml.
   map { "data": self.data.to_json() } : map<string, baml.json.json>
 }
 function user.Wrapper.from_json(j: baml.json.json) -> user.Wrapper throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Wrapper
+  Wrapper { data: baml.json.from_json<baml.json.json>(baml.json.field(j, "data")) } : user.Wrapper
 }
 function user.MakeWrapper() -> user.Wrapper throws never {
   { : user.Wrapper

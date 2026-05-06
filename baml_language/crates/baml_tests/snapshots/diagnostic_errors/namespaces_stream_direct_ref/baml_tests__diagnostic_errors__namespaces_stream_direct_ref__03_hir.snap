@@ -20,13 +20,13 @@ function user.RootUsesOwnStream(c: user.Config$stream) -> string  [expr] {
   {  } c.key
 }
 function user.from_json(j: baml.json.json) -> user.Config  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Config { key: baml.json.from_json(baml.json.field(j, "key")) }
 }
 function user.from_json(j: baml.json.json) -> user.RootWithStreamFields  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.RootWithStreamFields { own_stream: baml.json.from_json(baml.json.field(j, "own_stream")), llm_stream: baml.json.from_json(baml.json.field(j, "llm_stream")) }
 }
 function user.from_json(j: baml.json.json) -> user.Response  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.Response { text: baml.json.from_json(baml.json.field(j, "text")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "text": self.text.to_json() }
@@ -54,13 +54,13 @@ function user.llm.LlmUsesRootStream(c: root.Config$stream) -> string  [expr] {
   {  } c.key
 }
 function user.llm.from_json(j: baml.json.json) -> user.llm.Config  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.llm.Config { model: baml.json.from_json(baml.json.field(j, "model")) }
 }
 function user.llm.from_json(j: baml.json.json) -> user.llm.LlmWithStreamFields  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.llm.LlmWithStreamFields { own_stream: baml.json.from_json(baml.json.field(j, "own_stream")), root_stream: baml.json.from_json(baml.json.field(j, "root_stream")) }
 }
 function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  user.llm.Response { text: baml.json.from_json(baml.json.field(j, "text")) }
 }
 function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
   map { "text": self.text.to_json() }

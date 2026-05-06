@@ -121,11 +121,16 @@ function user.ReturnString() -> baml.json.json {
 
 function user.Wrapper.from_json(j: baml.json.json) -> Wrapper {
     load_var j
-    call baml.json.stringify
+    load_const "data"
+    call baml.json.field
+    store_var _3
+    load_type baml.json.json
+    load_var _3
+    call baml.json.from_json
     store_var _2
-    load_type Wrapper
+    alloc_instance user.Wrapper
     load_var _2
-    call baml.json.from_string
+    init_field .data
     return
 }
 
