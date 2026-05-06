@@ -47,14 +47,14 @@ function user.test_err_missing_self() -> string throws never {
 function user.test_err_bound_type_mismatch() -> int throws never {
   { : 0
     let c = Counter { value: 0 } : user.Counter
-    let inc = c.increment : () -> int throws never
+    let inc: (Counter) -> int = c.increment : () -> int throws never -> (user.Counter) -> int throws never
     0 : 0
   }
   !! 789..801: type mismatch: expected (user.Counter) -> int throws never, got () -> int throws never
 }
 function user.test_err_unbound_type_mismatch() -> string throws never {
   { : ""
-    let f = Employee.full_name : (self: user.Employee) -> string throws never
+    let f: () -> string = Employee.full_name : (self: user.Employee) -> string throws never -> () -> string throws never
     "" : ""
   }
   !! 947..966: type mismatch: expected () -> string throws never, got (self: user.Employee) -> string throws never

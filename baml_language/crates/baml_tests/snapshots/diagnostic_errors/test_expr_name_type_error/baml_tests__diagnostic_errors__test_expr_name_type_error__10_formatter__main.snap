@@ -12,7 +12,7 @@ test 42 {
 }
 
 testset "int_name" {
-    for (i in [1, 2, 3]) {
+    for (let i in [1, 2, 3]) {
         test (5 + i) {
             null
         }

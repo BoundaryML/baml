@@ -325,6 +325,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                 if let Some(initializer) = initializer {
                     self.walk_expr(*initializer, body, source_map, true);
                 }
+                if !body.patterns[*pattern].is_irrefutable(&body.patterns) {
+                    self.diagnostics
+                        .push(Hir2Diagnostic::RefutablePatternInLet {
+                            pattern_span: source_map.pattern_span(*pattern),
+                            context: "let",
+                        });
+                }
                 self.register_local_pattern(
                     *pattern,
                     DefinitionSite::Statement(stmt_id),
@@ -340,6 +347,13 @@ impl<'db> SemanticIndexBuilder<'db> {
             } => {
                 self.walk_expr(*collection, body, source_map, true);
                 self.push_scope(ScopeKind::Block, None, source_map.stmt_span(stmt_id));
+                if !body.patterns[*binding].is_irrefutable(&body.patterns) {
+                    self.diagnostics
+                        .push(Hir2Diagnostic::RefutablePatternInLet {
+                            pattern_span: source_map.pattern_span(*binding),
+                            context: "for-let",
+                        });
+                }
                 self.register_local_pattern(
                     *binding,
                     DefinitionSite::Statement(stmt_id),
@@ -509,18 +523,142 @@ impl<'db> SemanticIndexBuilder<'db> {
         source_map: &ast::AstSourceMap,
         visible_from: TextSize,
     ) {
-        if let Some(name) = Self::local_binding_name(&body.patterns, pat_id) {
-            let name_range = source_map.pattern_span(pat_id);
+        // Walk the pattern structurally. `collect_pattern_names` returns the
+        // set of names introduced and emits diagnostics for duplicate names
+        // and Or-alternative mismatches as it goes.
+        let names =
+            Self::collect_pattern_names(&body.patterns, pat_id, source_map, &mut self.diagnostics);
+
+        for (name, name_range) in names {
             let scope_id = self.current_scope_id();
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
                 .push(LocalBinding {
-                    name: name.clone(),
+                    name,
                     site,
                     pattern: pat_id,
                     name_range,
                     visible_from,
                 });
+        }
+    }
+
+    /// Recursively walk a pattern and return the set of names it introduces
+    /// into scope, paired with the source range of each binding's first
+    /// occurrence. Emits diagnostics in two situations:
+    ///
+    /// 1. **Duplicate names within a single pattern.** Within `Class { a, a }`
+    ///    or a chain like `let Foo { x }: let x = ...`, the same name binding
+    ///    appears twice — illegal.
+    ///
+    /// 2. **`Or` alternatives that don't bind the same names.** Each `Or`
+    ///    alternative is its own scope, so duplicates *across* alternatives
+    ///    are fine. But if alternatives bind *different* names, the arm body
+    ///    would only sometimes see a given name — illegal.
+    fn collect_pattern_names(
+        patterns: &la_arena::Arena<ast::Pattern>,
+        pat_id: ast::PatId,
+        source_map: &ast::AstSourceMap,
+        diagnostics: &mut Vec<Hir2Diagnostic>,
+    ) -> FxHashMap<Name, TextRange> {
+        match &patterns[pat_id] {
+            ast::Pattern::Wildcard | ast::Pattern::Type(_) => FxHashMap::default(),
+            ast::Pattern::Bind { name } => {
+                let mut m = FxHashMap::default();
+                m.insert(name.clone(), source_map.pattern_span(pat_id));
+                m
+            }
+            ast::Pattern::Class { fields, .. } => {
+                let mut m: FxHashMap<Name, TextRange> = FxHashMap::default();
+                for f in fields {
+                    let inner =
+                        Self::collect_pattern_names(patterns, f.pat, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                m
+            }
+            ast::Pattern::Chain(parts) => {
+                let mut m: FxHashMap<Name, TextRange> = FxHashMap::default();
+                for id in parts {
+                    let inner = Self::collect_pattern_names(patterns, *id, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                m
+            }
+            ast::Pattern::Or(parts) => {
+                // Each alternative is its own branch. Collect them
+                // independently; duplicates are checked per-branch (already
+                // done by the recursive call), and across-branch parity is
+                // checked here.
+                let branch_sets: Vec<FxHashMap<Name, TextRange>> = parts
+                    .iter()
+                    .map(|id| Self::collect_pattern_names(patterns, *id, source_map, diagnostics))
+                    .collect();
+
+                let mut has_mismatch = false;
+                if let Some(first) = branch_sets.first() {
+                    let first_names: std::collections::BTreeSet<&Name> = first.keys().collect();
+                    let mut mismatched: std::collections::BTreeSet<Name> =
+                        std::collections::BTreeSet::new();
+                    for branch in &branch_sets[1..] {
+                        let branch_names: std::collections::BTreeSet<&Name> =
+                            branch.keys().collect();
+                        for n in first_names.symmetric_difference(&branch_names) {
+                            mismatched.insert((*n).clone());
+                        }
+                    }
+                    if !mismatched.is_empty() {
+                        has_mismatch = true;
+                        // Tighten the span to cover just the Or's branches
+                        // rather than the whole containing pattern (which can
+                        // pull in surrounding trivia and span multiple lines).
+                        let or_span = match (parts.first(), parts.last()) {
+                            (Some(first), Some(last)) => {
+                                let first_range = source_map.pattern_span(*first);
+                                let last_range = source_map.pattern_span(*last);
+                                TextRange::new(first_range.start(), last_range.end())
+                            }
+                            _ => source_map.pattern_span(pat_id),
+                        };
+                        diagnostics.push(Hir2Diagnostic::OrPatternBindingMismatch {
+                            or_span,
+                            mismatched_names: mismatched.into_iter().collect(),
+                        });
+                    }
+                }
+
+                if has_mismatch {
+                    // On mismatch, suppress the Or's bindings entirely so
+                    // downstream scopes don't depend on branch order
+                    // (`let x | _` vs `_ | let x` would otherwise behave
+                    // differently). The primary diagnostic above captures
+                    // the error.
+                    FxHashMap::default()
+                } else {
+                    // Every branch introduces the same set, so the first
+                    // branch's contribution is representative.
+                    branch_sets.into_iter().next().unwrap_or_default()
+                }
+            }
+        }
+    }
+
+    /// Merge `source` into `target`. Any name already present in `target`
+    /// produces a `DuplicatePatternBinding` diagnostic.
+    fn merge_with_dup_check(
+        target: &mut FxHashMap<Name, TextRange>,
+        source: FxHashMap<Name, TextRange>,
+        diagnostics: &mut Vec<Hir2Diagnostic>,
+    ) {
+        for (name, range) in source {
+            if let Some(prev) = target.get(&name) {
+                diagnostics.push(Hir2Diagnostic::DuplicatePatternBinding {
+                    name: name.clone(),
+                    sites: vec![*prev, range],
+                });
+            } else {
+                target.insert(name, range);
+            }
         }
     }
 
@@ -736,19 +874,6 @@ impl<'db> SemanticIndexBuilder<'db> {
             use_offset,
             owner_lambda: self.lambda_stack.last().copied(),
         });
-    }
-
-    /// Extract the binding name from a pattern, if it has one.
-    ///
-    /// The AST canonicalizes `_` to `Wildcard` at construction time
-    /// (`Pattern::binding`), so `_` never reaches us as a `Bind` regardless of
-    /// the surface form. `let`/`for` patterns and `match`/`catch` arm
-    /// patterns therefore use the same extraction.
-    fn local_binding_name(
-        patterns: &la_arena::Arena<ast::Pattern>,
-        pat_id: ast::PatId,
-    ) -> Option<&Name> {
-        patterns[pat_id].binding_name()
     }
 
     // ── Item lowering ────────────────────────────────────────────────────────

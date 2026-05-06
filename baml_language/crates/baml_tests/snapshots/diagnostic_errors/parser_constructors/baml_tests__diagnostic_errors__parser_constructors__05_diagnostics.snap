@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 35720
 ---
 === COMPILER2 DIAGNOSTICS ===
   [validation] Error: Duplicate class `Point`

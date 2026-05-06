@@ -23,7 +23,7 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, EnumLoc, FunctionLoc, LetLoc, TypeAliasLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId, ScopeKind},
-    semantic_index::{BindingId, DefinitionSite},
+    semantic_index::{BindingId, BindingKind},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
@@ -102,10 +102,10 @@ pub enum MemberResolution<'db> {
 pub struct ScopeInference<'db> {
     /// Type of every expression within this scope (NOT nested child scopes).
     expressions: FxHashMap<ExprId, Ty>,
-    /// Binding types: the type a variable is bound to after widening/annotation.
-    /// May differ from the initializer expression type (e.g. `let x = 1` has
-    /// expression type `Literal(1, Fresh)` but binding type `int`).
-    bindings: FxHashMap<PatId, Ty>,
+    /// Pattern types: the type each pattern is associated with. Used both for
+    /// `Pattern::Bind` (the variable's bound type, post widening) and for
+    /// `Pattern::Type` / `Pattern::Class` (the type to runtime-test against).
+    pattern_types: FxHashMap<PatId, Ty>,
     /// Member resolutions: for field-access expressions that resolved to a
     /// class field, enum variant, method, or free function — records the
     /// structural path so MIR can emit the correct `QualifiedName` and LSP
@@ -186,7 +186,7 @@ impl<'db> ScopeInference<'db> {
     /// Look up the binding type for a pattern (the type the variable is bound to,
     /// which may differ from the initializer expression type due to widening).
     pub fn binding_type(&self, pat_id: PatId) -> Option<&Ty> {
-        self.bindings.get(&pat_id)
+        self.pattern_types.get(&pat_id)
     }
 
     /// Look up the type of a parameter by index.
@@ -201,7 +201,7 @@ impl<'db> ScopeInference<'db> {
 
     /// Iterate over all (`PatId`, Ty) pairs for pattern bindings in this scope.
     pub fn iter_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
-        self.bindings.iter()
+        self.pattern_types.iter()
     }
 
     /// Look up the member resolution for an expression in this scope.
@@ -333,7 +333,7 @@ fn infer_scope_types_cycle_initial<'db>(
 ) -> ScopeInference<'db> {
     ScopeInference {
         expressions: FxHashMap::default(),
-        bindings: FxHashMap::default(),
+        pattern_types: FxHashMap::default(),
         resolutions: FxHashMap::default(),
         catch_residual_throws: FxHashMap::default(),
         exhaustive_matches: FxHashSet::default(),
@@ -424,6 +424,9 @@ pub fn infer_scope_types<'db>(
                         }
                     }
                     builder.set_generic_params(generic_params.clone());
+                    if let Some(sm) = baml_compiler2_ppir::function_body_source_map(db, func_loc) {
+                        builder.set_body_source_map(sm);
+                    }
 
                     if let FunctionBody::Expr(expr_body) = body.as_ref() {
                         // Get declared return type
@@ -597,23 +600,14 @@ pub fn infer_scope_types<'db>(
                     let inference_scope_id = index.scope_ids[inference_fsi.index() as usize];
                     let capture_declared_in_ancestor =
                         |_capture_name: &Name, binding_id: &BindingId| -> bool {
-                            // Under the (scope, site) constraint, a same-name
-                            // distinct binding cannot co-exist: parameter
-                            // indices are unique within their scope and
-                            // DefinitionSite::Statement/PatternBinding carry
-                            // the scope-unique AST id directly. Capture
-                            // resolution is identity-keyed; `capture_name` is
-                            // not load-bearing here.
                             binding_id.scope == ancestor_fsi
-                                && match binding_id.site {
-                                    DefinitionSite::Parameter(idx) => {
+                                && match binding_id.kind {
+                                    BindingKind::Parameter(idx) => {
                                         anc_bindings.params.iter().any(|(_, i)| *i == idx)
                                     }
-                                    DefinitionSite::Statement(_)
-                                    | DefinitionSite::PatternBinding(_) => anc_bindings
-                                        .bindings
-                                        .iter()
-                                        .any(|binding| binding.site == binding_id.site),
+                                    BindingKind::Local(idx) => {
+                                        anc_bindings.bindings.get(idx as usize).is_some()
+                                    }
                                 }
                         };
                     // Only call infer_scope_types if this ancestor has any of
@@ -636,27 +630,17 @@ pub fn infer_scope_types<'db>(
                         inference
                     };
                     for (capture_name, binding_id) in captures {
-                        let def_site = binding_id.site;
                         let is_declared_here =
                             capture_declared_in_ancestor(capture_name, binding_id);
                         if !is_declared_here {
                             continue;
                         }
-                        let actual_ty = match def_site {
-                            DefinitionSite::Parameter(idx) => {
-                                anc_inference.param_type(idx).cloned()
-                            }
-                            DefinitionSite::Statement(_) | DefinitionSite::PatternBinding(_) => {
-                                // `binding.site == def_site` uniquely
-                                // identifies the binding under shadowing —
-                                // a name tiebreaker would be redundant.
-                                anc_bindings
-                                    .bindings
-                                    .iter()
-                                    .find(|binding| binding.site == def_site)
-                                    .and_then(|binding| {
-                                        anc_inference.binding_type(binding.pattern).cloned()
-                                    })
+                        let actual_ty = match binding_id.kind {
+                            BindingKind::Parameter(idx) => anc_inference.param_type(idx).cloned(),
+                            BindingKind::Local(idx) => {
+                                anc_bindings.bindings.get(idx as usize).and_then(|binding| {
+                                    anc_inference.binding_type(binding.pattern).cloned()
+                                })
                             }
                         };
                         if let Some(ty) = actual_ty {
@@ -853,7 +837,7 @@ pub fn infer_scope_types<'db>(
 
     let (
         expressions,
-        bindings,
+        pattern_types,
         resolutions,
         catch_residual_throws,
         exhaustive_matches,
@@ -872,7 +856,7 @@ pub fn infer_scope_types<'db>(
 
     ScopeInference {
         expressions,
-        bindings,
+        pattern_types,
         resolutions,
         catch_residual_throws,
         exhaustive_matches,

@@ -2,7 +2,7 @@
 //!
 //! Walks the HIR item trees for user-defined files, resolves types via TIR,
 //! and populates a codegen-ready `SymbolPool` suitable for language-specific
-//! code generators (e.g. `baml_codegen_python`).
+//! code generators (e.g. `codegen_python`).
 
 use std::collections::HashMap;
 
@@ -539,12 +539,16 @@ fn convert_tir_leaf(
         // Type variable — codegen-side `Ty::TypeVar` mirrors TIR.
         TirTy::TypeVar(name, _) => cg::Ty::TypeVar(name.clone()),
 
+        // `$rust_type` — opaque Rust-managed state. Surfaces as
+        // `BamlPyHandle` in Python codegen; other languages will pick
+        // their own opaque-handle mapping.
+        TirTy::RustType { .. } => cg::Ty::RustType,
+
         // Bottom / sentinel / error recovery — map to Unit.
         TirTy::Void { .. }
         | TirTy::Never { .. }
         | TirTy::Unknown { .. }
         | TirTy::Error { .. }
-        | TirTy::RustType { .. }
         | TirTy::Type { .. } => cg::Ty::Unit,
     }
 }

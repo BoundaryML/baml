@@ -1083,6 +1083,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::async_op(async move {
+            crate::ensure_rustls_crypto_provider();
             let client = reqwest::Client::new();
             let response = client
                 .get(&url)
@@ -1118,6 +1119,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 OpErrorKind::Other(format!("Invalid HTTP method '{}': {e}", request.method))
             })?;
 
+            crate::ensure_rustls_crypto_provider();
             let client = reqwest::Client::new();
             let mut builder = client.request(method, &request.url);
 
@@ -1170,6 +1172,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 OpErrorKind::Other(format!("Invalid HTTP method '{}': {e}", request.method))
             })?;
 
+            crate::ensure_rustls_crypto_provider();
             let client = reqwest::Client::new();
             let mut builder = client.request(method, &request.url);
 

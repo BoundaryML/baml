@@ -1,0 +1,26 @@
+[package]
+name = "codegen_python"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+baml_base = { workspace = true }
+baml_codegen_types = { workspace = true }
+askama = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+baml_codegen_types = { workspace = true }
+pretty_assertions = { workspace = true }

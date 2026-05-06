@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "crates/*",
+  "languages/python/rust/*",
   "rig_tests/crates/*",
 ]
 exclude = [ "crates/bridge_go" ]
@@ -28,7 +29,7 @@ baml_builtins_codegen = { path = "crates/baml_builtins_codegen" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
-baml_codegen_python = { path = "crates/baml_codegen_python" }
+codegen_python = { path = "languages/python/rust/codegen_python" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
@@ -41,17 +42,17 @@ baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
-bex_project = { path = "crates/bex_project" }
-bex_engine = { path = "crates/bex_engine" }
+bex_project = { path = "crates/bex_project", default-features = false }
+bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
-sys_llm = { path = "crates/sys_llm" }
-sys_ops = { path = "crates/sys_ops" }
+sys_llm = { path = "crates/sys_llm", default-features = false }
+sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
-sys_native = { path = "crates/sys_native" }
+sys_native = { path = "crates/sys_native", default-features = false }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
-baml_lsp_server = { path = "crates/baml_lsp_server" }
+baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_lsp_types = { path = "crates/baml_lsp_types" }
 baml_project = { path = "crates/baml_project" }
 baml_tests = { path = "crates/baml_tests" }
@@ -61,9 +62,9 @@ bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
 bex_sap = { path = "crates/bex_sap" }
-bridge_ctypes = { path = "crates/bridge_ctypes" }
-bridge_cffi = { path = "crates/bridge_cffi" }
-bridge_python = { path = "crates/bridge_python" }
+bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
+bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
+bridge_python = { path = "languages/python/rust/bridge_python" }
 bridge_wasm = { path = "crates/bridge_wasm" }
 bex_events = { path = "crates/bex_events" }
 bex_events_native = { path = "crates/bex_events_native" }
@@ -90,7 +91,7 @@ ariadne = { version = "0.6" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
 aws-config = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", default-features = false, features = [ "behavior-version-latest" ] }
-google-cloud-auth = { git = "https://github.com/BoundaryML/google-cloud-rust.git", rev = "a18d3e42bd304de897990c3d0f3e90ffd4e428fd", package = "google-cloud-auth", default-features = false, features = [ "default-rustls-provider" ] }
+google-cloud-auth = { git = "https://github.com/BoundaryML/google-cloud-rust.git", rev = "a18d3e42bd304de897990c3d0f3e90ffd4e428fd", package = "google-cloud-auth", default-features = false }
 aws-credential-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
 aws-sdk-bedrockruntime = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", default-features = false, features = [ "behavior-version-latest" ] }
 aws-sigv4 = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", features = [ "sign-http" ] }
@@ -146,6 +147,7 @@ reqwest = { version = "0.13.1", default-features = false, features = [
   "stream",
 ] }
 rowan = { version = "0.16" }
+rustls = { version = "0.23.37", default-features = false }
 rustc-hash = { version = "2.1" }
 salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18b8a6d17a2279a96ed6c3e198", default-features = false, features = [
   "compact_str",
@@ -188,9 +190,10 @@ wasm-bindgen-test = "0.3"
 js-sys = "0.3"
 webbrowser = "1.0.5"
 strum = { version = "0.26", features = [ "derive" ] }
-pyo3 = { version = "0.23.3", default-features = false }
-pyo3-async-runtimes = { version = "0.23" }
-pyo3-build-config = "0.23"
+pyo3 = { version = "0.28", default-features = false }
+pyo3-async-runtimes = { version = "0.28" }
+pyo3-build-config = "0.28"
+pyo3-stub-gen = { version = "0.22", default-features = false }
 napi = { version = "3.8.4", default-features = false }
 napi-derive = "3.5.3"
 napi-build = "2.3.1"

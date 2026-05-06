@@ -38,7 +38,7 @@ pub fn inbound_to_external(
             InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
             InboundValueVariant::Handle(handle) => {
                 let value = handle_table
-                    .resolve(handle.key)
+                    .drain(handle.key)
                     .ok_or(CtypesError::InvalidHandleKey(handle.key))?;
                 Ok(BexExternalValue::from((*value).clone()))
             }
@@ -154,4 +154,44 @@ pub fn kwargs_to_bex_values(
         result.insert(key, value);
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{baml::cffi::BamlHandle, handle_table::CffiHandleTableEntry};
+
+    #[test]
+    fn inbound_handle_drains_table_entry() {
+        let table = CffiHandleTable::new();
+        let key = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 7 });
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key,
+                handle_type: 0,
+            })),
+        };
+        let result = inbound_to_external(inbound, &table).expect("decode succeeds");
+        assert!(matches!(
+            result,
+            BexExternalValue::FunctionRef { global_index: 7 }
+        ));
+        assert!(
+            table.resolve(key).is_none(),
+            "entry must be removed from table after drain"
+        );
+    }
+
+    #[test]
+    fn inbound_handle_missing_key_errors() {
+        let table = CffiHandleTable::new();
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key: 9999,
+                handle_type: 0,
+            })),
+        };
+        let err = inbound_to_external(inbound, &table).expect_err("missing key should error");
+        assert!(matches!(err, CtypesError::InvalidHandleKey(9999)));
+    }
 }

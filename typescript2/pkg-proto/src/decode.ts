@@ -11,10 +11,8 @@ import type { BamlJsValue, BamlJsClass, BamlJsHandle, BamlJsMedia, BamlJsPromptA
 
 const HANDLE_TYPE_NAMES: Record<number, string> = {
   [BamlHandleType.HANDLE_UNSPECIFIED]: 'unspecified',
-  [BamlHandleType.HANDLE_UNKNOWN]: 'unknown',
-  [BamlHandleType.RESOURCE_FILE]: 'file',
-  [BamlHandleType.RESOURCE_SOCKET]: 'socket',
-  [BamlHandleType.RESOURCE_HTTP_RESPONSE]: 'http_response',
+  [BamlHandleType.UNTAGGED_RUST_DATA]: 'rust_data',
+  [BamlHandleType.UNTAGGED_BEX_HEAP]: 'bex_heap',
   [BamlHandleType.FUNCTION_REF]: 'function_ref',
   [BamlHandleType.ADT_MEDIA_IMAGE]: 'image',
   [BamlHandleType.ADT_MEDIA_AUDIO]: 'audio',

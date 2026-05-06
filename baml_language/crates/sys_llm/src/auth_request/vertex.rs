@@ -589,6 +589,8 @@ mod native {
         json_str: &str,
         io: Arc<dyn RuntimeIo>,
     ) -> Result<google_cloud_auth::credentials::AccessTokenCredentials, BuildRequestError> {
+        crate::ensure_rustls_crypto_provider();
+
         let json_value: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
             BuildRequestError::AuthorizationFailed(format!(
                 "Google Cloud: failed to parse credentials JSON: {e}"
@@ -613,6 +615,8 @@ mod native {
     pub(super) fn build_from_adc(
         io: Arc<dyn RuntimeIo>,
     ) -> Result<google_cloud_auth::credentials::AccessTokenCredentials, BuildRequestError> {
+        crate::ensure_rustls_crypto_provider();
+
         let builder = Builder::default()
             .with_scopes(["https://www.googleapis.com/auth/cloud-platform"])
             .with_http_client_provider(BexHttpClientProvider { io: io.clone() })

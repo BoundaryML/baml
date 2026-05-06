@@ -18,6 +18,7 @@ use crate::registry::REGISTRY;
 /// Creating a client per request is cheap (`reqwest::Client::new()` is just
 /// an `Arc` allocation) and avoids the cross-runtime lifetime issue.
 fn new_http_client() -> reqwest::Client {
+    crate::ensure_rustls_crypto_provider();
     reqwest::Client::new()
 }
 

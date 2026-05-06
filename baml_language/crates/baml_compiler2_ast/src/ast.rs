@@ -632,8 +632,10 @@ pub enum Expr {
 pub enum Stmt {
     Expr(ExprId),
     Let {
+        /// The binding pattern. A `: T` annotation lives inside the pattern
+        /// as a `Chain` link, not as a separate field on `Stmt::Let` — see
+        /// [`Pattern::Chain`].
         pattern: PatId,
-        type_annotation: Option<TypeAnnotId>,
         initializer: Option<ExprId>,
         is_watched: bool,
         origin: LetOrigin,
@@ -682,152 +684,145 @@ pub enum Stmt {
     },
 }
 
-/// Patterns — modeled after `Pattern` in `body.rs`.
+/// A pattern in the AST.
 ///
-/// A pattern is `kind` plus an optional trailing `: T` narrow per BEP-015.
-/// Narrow currently carries the type-ascription part of `let x: T = ...`
-/// (and is also where future second-colon narrowing on structural patterns
-/// will land). All other shape lives in [`PatternKind`].
+/// One flat enum. Atoms (`Wildcard`, `Bind`, `Class`, `Type`) describe a
+/// single shape; combinators (`Or`, `Chain`) combine other patterns.
+///
+/// Lowering invariants:
+/// - `_` always lowers to [`Pattern::Wildcard`] — never `Bind { name: "_" }`.
+/// - 1-element `Or` / `Chain` are NOT allocated; they collapse to the inner
+///   pattern. So if you see `Or(parts)` or `Chain(parts)`, `parts.len() >= 2`.
+/// - The `: T` annotation in `let x: T` lives as a [`Pattern::Chain`] link.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Pattern {
-    pub kind: PatternKind,
-    /// Trailing `: T` narrow. For irrefutable `let`, the scrutinee's static
-    /// type must equal this type; checked in TIR, not at the AST level.
-    pub narrow: Option<TypeExpr>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PatternKind {
+pub enum Pattern {
+    // ── Atoms (single-shape patterns) ────────────────────────────────────
     /// `_` — wildcard. Always irrefutable. Binds nothing.
     Wildcard,
-    /// `x` (with `inner: None`) or `let x: <inner>` (with `inner: Some(_)`).
-    /// Binds `name` to the matched value; if `inner` is set, the value must
-    /// also satisfy the inner pattern.
-    Bind { name: Name, inner: Option<PatId> },
-    /// `User { f1, f2: <pat>, ... }` — class destructure. Future variant,
-    /// not yet emitted by the parser.
-    Class { class: Name, fields: Vec<FieldPat> },
-    /// Bare type-match in pattern position (e.g. an arm `int =>`). Future
-    /// variant, not yet emitted by the parser.
+    /// `let x` — name binding. The `let` keyword is required at the syntax
+    /// level but doesn't appear here; the AST just carries the name.
+    Bind { name: Name },
+    /// `pkg.Foo { a, b: <pat>, ... }` — class destructure. `class` is the
+    /// dotted path as segments (single-element vec for unqualified names).
+    Class {
+        class: Vec<Name>,
+        fields: Vec<FieldPat>,
+    },
+    /// Bare type expression in pattern position. Subsumes literal patterns
+    /// (`42`, `"hi"`, `true`), `null`, enum variants (`Status.Active`),
+    /// path types, generics, function types, etc. — anything in `TypeExpr`.
+    /// Refutability is decided by TIR using the scrutinee type; `Type(int)`
+    /// is irrefutable against scrutinee `int` but refutable against `int|str`.
     Type(TypeExpr),
-    /// `42`, `"hi"`, `true`, etc. Refutable.
-    Literal(Literal),
-    /// `null` literal pattern. Refutable.
-    Null,
-    /// `Status.Active` or `baml.panics.DivideByZero` style enum variant.
-    /// `enum_name` carries the dotted path as proper segments (no string
-    /// round-tripping); the trailing identifier is `variant`. Refutable.
-    EnumVariant { enum_name: Vec<Name>, variant: Name },
-    /// `a | b | c` (formerly `Union`). Refutable in general (each part may be).
+
+    // ── Combinators (combine other patterns) ─────────────────────────────
+    /// `p1 | p2 | ...` — alternation. Length always `>= 2`. Every alternative
+    /// must bind the same names (TIR enforces).
     Or(Vec<PatId>),
+    /// `p1 : p2 : ...` — pairwise subtype chain. Length always `>= 2`. Only
+    /// the leftmost link may bind names; every link's natural type must be a
+    /// subtype of the next (TIR enforces).
+    Chain(Vec<PatId>),
 }
 
-/// Single field inside a class destructure pattern: `{ field: <pat> }`.
-/// `pat: None` is shorthand syntax `{ field }` and lowers to a `Bind` of
-/// `field`.
+/// Single field inside a class destructure pattern.
+///
+/// Shorthand `{ f }` lowers to `FieldPat { field: f, pat: <Bind { name: f }> }`,
+/// so consumers never see the missing-pattern shape.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldPat {
     pub field: Name,
-    pub pat: Option<PatId>,
+    pub pat: PatId,
 }
 
 impl Pattern {
-    pub fn wildcard() -> Self {
-        Pattern {
-            kind: PatternKind::Wildcard,
-            narrow: None,
-        }
+    /// First name introduced by this pattern, if any. Convenience wrapper
+    /// around [`Pattern::bound_names`] for callers that just need a single
+    /// representative — e.g. inlay-hint anchors, debug names, "does this
+    /// pattern introduce *some* binding?" checks.
+    ///
+    /// For patterns with multiple bindings (like `let x: let y = 1` or
+    /// destructures), use [`Pattern::bound_names`] instead.
+    pub fn binding_name<'a>(&'a self, patterns: &'a la_arena::Arena<Pattern>) -> Option<&'a Name> {
+        self.bound_names(patterns).into_iter().next()
     }
 
-    /// Plain binding `x`. Name `"_"` is canonicalized to a wildcard so the
-    /// AST never carries a `Bind { name: "_" }`.
-    pub fn binding(name: Name) -> Self {
-        if name.as_str() == "_" {
-            return Pattern::wildcard();
-        }
-        Pattern {
-            kind: PatternKind::Bind { name, inner: None },
-            narrow: None,
-        }
+    /// Collect every name this pattern introduces into scope, in declaration
+    /// order. Walks down through chains, fields, and Or-branches recursively.
+    ///
+    /// Used by HIR to:
+    ///   - register bindings into the surrounding scope, and
+    ///   - check that every alternative of an `Or` introduces the same name
+    ///     set (otherwise the body would see a name that's only sometimes in
+    ///     scope).
+    ///
+    /// All links of a `Chain` can bind. `let x: let y: let z = 1` is a valid
+    /// pattern (pairwise `never <: never`), so all three names land in scope.
+    ///
+    /// For an `Or` pattern, this returns the names of the *first* alternative.
+    /// HIR's uniformity check compares sibling alternatives' name lists; pick
+    /// any branch as the reference and diff the rest.
+    pub fn bound_names<'a>(&'a self, patterns: &'a la_arena::Arena<Pattern>) -> Vec<&'a Name> {
+        let mut out = Vec::new();
+        self.collect_bound_names(patterns, &mut out);
+        out
     }
 
-    /// `Bind { name }` with `narrow: Some(ty)` — the legacy
-    /// `Pattern::TypedBinding { name, ty }` shape. Same `_`-canonicalization
-    /// rule as [`Pattern::binding`]: `typed_binding("_", T)` is a wildcard
-    /// carrying `narrow: Some(T)` (so `let _: int = e` still asserts `int`).
-    pub fn typed_binding(name: Name, ty: TypeExpr) -> Self {
-        if name.as_str() == "_" {
-            return Pattern {
-                kind: PatternKind::Wildcard,
-                narrow: Some(ty),
-            };
-        }
-        Pattern {
-            kind: PatternKind::Bind { name, inner: None },
-            narrow: Some(ty),
-        }
-    }
-
-    pub fn null() -> Self {
-        Pattern {
-            kind: PatternKind::Null,
-            narrow: None,
-        }
-    }
-
-    pub fn literal(lit: Literal) -> Self {
-        Pattern {
-            kind: PatternKind::Literal(lit),
-            narrow: None,
-        }
-    }
-
-    pub fn enum_variant(enum_name: Vec<Name>, variant: Name) -> Self {
-        Pattern {
-            kind: PatternKind::EnumVariant { enum_name, variant },
-            narrow: None,
-        }
-    }
-
-    pub fn or(parts: Vec<PatId>) -> Self {
-        Pattern {
-            kind: PatternKind::Or(parts),
-            narrow: None,
-        }
-    }
-
-    /// If this pattern is a simple `Bind`, return the bound name.
-    pub fn binding_name(&self) -> Option<&Name> {
-        match &self.kind {
-            PatternKind::Bind { name, .. } => Some(name),
-            _ => None,
+    fn collect_bound_names<'a>(
+        &'a self,
+        patterns: &'a la_arena::Arena<Pattern>,
+        out: &mut Vec<&'a Name>,
+    ) {
+        match self {
+            Pattern::Wildcard | Pattern::Type(_) => {}
+            Pattern::Bind { name } => out.push(name),
+            Pattern::Class { fields, .. } => {
+                for f in fields {
+                    patterns[f.pat].collect_bound_names(patterns, out);
+                }
+            }
+            Pattern::Chain(parts) => {
+                for id in parts {
+                    patterns[*id].collect_bound_names(patterns, out);
+                }
+            }
+            // Pick any one alternative to report — the uniformity check is
+            // the caller's job.
+            Pattern::Or(parts) => {
+                if let Some(first) = parts.first() {
+                    patterns[*first].collect_bound_names(patterns, out);
+                }
+            }
         }
     }
 
     /// True iff this pattern is structurally guaranteed to match every value
     /// at its position. **Pure structural check** — does not consider the
-    /// scrutinee's static type. The TIR layer is responsible for verifying
-    /// `narrow` and `Class`/`Type` assertions against the scrutinee type.
+    /// scrutinee's static type. TIR is responsible for verifying `Type` /
+    /// `Class` / chain assertions against the scrutinee type.
     ///
     /// Used by the let-stmt validator to reject patterns that can fail at
     /// runtime; refutable patterns belong in `match` / `if let` / `let-else`.
-    pub fn is_irrefutable(&self, body: &ExprBody) -> bool {
-        match &self.kind {
-            PatternKind::Wildcard => true,
-            PatternKind::Bind { inner, .. } => {
-                inner.is_none_or(|id| body.patterns[id].is_irrefutable(body))
-            }
-            PatternKind::Class { fields, .. } => fields.iter().all(|f| {
-                f.pat
-                    .is_none_or(|id| body.patterns[id].is_irrefutable(body))
-            }),
-            // `Type(T)` is structurally fine; whether the value is actually
-            // a `T` is a typing concern, not a pattern concern.
-            PatternKind::Type(_) => true,
-            PatternKind::Literal(_)
-            | PatternKind::Null
-            | PatternKind::EnumVariant { .. }
-            | PatternKind::Or(_) => false,
+    pub fn is_irrefutable(&self, patterns: &la_arena::Arena<Pattern>) -> bool {
+        match self {
+            Pattern::Wildcard | Pattern::Bind { .. } => true,
+            Pattern::Class { fields, .. } => fields
+                .iter()
+                .all(|f| patterns[f.pat].is_irrefutable(patterns)),
+            // `Type(T)` is structurally fine; whether the value actually is a
+            // `T` is a typing concern, not a pattern concern.
+            Pattern::Type(_) => true,
+            // A chain is structurally as irrefutable as every link. The
+            // pairwise subtype check is a TIR concern.
+            Pattern::Chain(parts) => parts
+                .iter()
+                .all(|id| patterns[*id].is_irrefutable(patterns)),
+            // Or-of-patterns is irrefutable iff EVERY alternative is. That
+            // makes `_ | _` valid in a `let` while keeping refutable cases
+            // (e.g. `1 | 2`) properly rejected.
+            Pattern::Or(parts) => parts
+                .iter()
+                .all(|id| patterns[*id].is_irrefutable(patterns)),
         }
     }
 }

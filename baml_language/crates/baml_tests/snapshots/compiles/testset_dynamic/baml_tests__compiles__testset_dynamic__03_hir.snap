@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 21090
 ---
 === HIR2 ===
 function user.$init_test_25(registry: testing.TestCollector) -> ?  [expr] {

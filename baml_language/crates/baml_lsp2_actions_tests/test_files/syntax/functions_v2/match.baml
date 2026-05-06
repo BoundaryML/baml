@@ -26,9 +26,9 @@ class Situation {
 function Remand(s: Situation) -> string {
   if (s.pets.length() > 0) {
     match (s.pets[0]) {
-      cat: Cat => "Nice cat you got there.",
-      dog: Dog => "Bowwow",
-      rock: Rock => "...",
+      let cat: Cat => "Nice cat you got there.",
+      let dog: Dog => "Bowwow",
+      let rock: Rock => "...",
       _ => "...",
     }
   }

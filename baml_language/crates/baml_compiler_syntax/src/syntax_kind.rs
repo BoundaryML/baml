@@ -252,7 +252,42 @@ pub enum SyntaxKind {
     CATCH_CLAUSE,
     CATCH_ARM,
     CATCH_PATTERN,
+    CATCH_BINDING,
     CATCH_STACK_TRACE_BINDING,
+
+    // ============ Patterns (unified) ============
+    //
+    // Used by let-statements, match arms, and catch arms. Grammar:
+    //   PATTERN     := CHAIN
+    //   CHAIN       := UNION (':' UNION)*
+    //   UNION       := ATOM ('|' ATOM)*
+    //   ATOM        := BINDING_PATTERN
+    //                | DESTRUCTURE_PATTERN
+    //                | TYPE_PATTERN
+    //                | PAREN_PATTERN
+    //
+    // `:` is split before `|`: `let x: int | string` parses as
+    // `let x : (int | string)`.
+    /// Outer wrapper around any pattern. Always present at recursive entry points.
+    PATTERN,
+    /// `pat ':' pat (':' pat)*` — type-narrowing chain.
+    CHAIN_PATTERN,
+    /// `atom ('|' atom)+` — alternation within a single chain link.
+    UNION_PATTERN,
+    /// `'let' WORD` — introduces a name binding.
+    BINDING_PATTERN,
+    /// `('let')? PATH '{' field_pattern (',' field_pattern)* '}'` — class destructure.
+    DESTRUCTURE_PATTERN,
+    /// `WORD` (shorthand) | `WORD ':' PATTERN` (rename / sub-pattern).
+    FIELD_PATTERN,
+    /// Bare type expression as a pattern (literals, paths, generics, arrays, …).
+    /// Does NOT consume `|` — that belongs to `UNION_PATTERN` at the pattern level.
+    TYPE_PATTERN,
+    /// `'(' PATTERN ')'` — explicit grouping.
+    PAREN_PATTERN,
+    /// `'_'` (bare) or `'let' '_'` — wildcard / discard. Distinct from
+    /// `BINDING_PATTERN` so downstream code doesn't have to text-match `_`.
+    WILDCARD_PATTERN,
     THROW_EXPR,
     LAMBDA_EXPR,
     THROWS_CLAUSE,

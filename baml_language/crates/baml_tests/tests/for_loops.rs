@@ -537,7 +537,7 @@ async fn for_loop_over_let_variable_no_parens() {
             let xs = [10, 20, 30];
             let sum = 0;
 
-            for x in xs {
+            for let x in xs {
                 sum += x;
             }
 
