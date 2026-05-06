@@ -191,41 +191,76 @@ export function WhyALanguage() {
     FEATURES.find((feature) => feature.id === activeFeatureId) ?? FEATURES[0];
 
   return (
-    <section aria-labelledby="features-heading" className="w-full bg-[#FBF7ED]">
-      <div className="mx-auto max-w-[1600px] border-b border-[#D9D3C4] px-6 py-20 sm:px-12 sm:py-28">
-        <div className="mx-auto grid max-w-[1240px] items-start gap-14 lg:grid-cols-[0.72fr_1.28fr] lg:gap-16">
-          <div className="lg:sticky lg:top-[calc(var(--navigation-height,56px)+48px)]">
-            <p className="mb-5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#8A8580]">
-              Features
-            </p>
+    <>
+      <section
+        aria-labelledby="features-heading"
+        className="w-full bg-[#FBF7ED]"
+      >
+        <div className="mx-auto max-w-[1600px] border-b border-[#D9D3C4] px-6 py-20 sm:px-12 sm:py-28">
+          <div className="mx-auto grid max-w-[1240px] items-start gap-14 lg:grid-cols-[0.72fr_1.28fr] lg:gap-16">
+            <div className="lg:sticky lg:top-[calc(var(--navigation-height,56px)+48px)]">
+              <p className="mb-5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#8A8580]">
+                Features
+              </p>
 
-            <h2
-              className="mb-7 max-w-[560px] text-[clamp(2.15rem,4.4vw,4.4rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-[#1A1612]"
-              id="features-heading"
-            >
-              BAML is a programming language.
-            </h2>
+              <h2
+                className="mb-7 max-w-[560px] text-[clamp(2.15rem,4.4vw,4.4rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-[#1A1612]"
+                id="features-heading"
+              >
+                BAML is a programming language.
+              </h2>
 
-            <p className="max-w-[540px] text-[clamp(1rem,1.35vw,1.15rem)] leading-[1.62] text-[#5C5852]">
-              Built in{' '}
-              <span className="font-semibold text-[#1A1612]">Rust</span> and
-              used by some of the world&apos;s largest companies. It has a
-              compiler, VM, LSP, formatter, type system with inferred error
-              types, and drops into any system so teams can adopt it
-              incrementally without rewriting their stack.
-            </p>
-          </div>
+              <p className="max-w-[540px] text-[clamp(1rem,1.35vw,1.15rem)] leading-[1.62] text-[#5C5852]">
+                Built in{' '}
+                <span className="font-semibold text-[#1A1612]">Rust</span> and
+                used by some of the world&apos;s largest companies. It has a
+                compiler, VM, LSP, formatter, type system with inferred error
+                types, and drops into any system so teams can adopt it
+                incrementally without rewriting their stack.
+              </p>
+            </div>
 
-          <div className="relative min-h-[760px] lg:min-h-[720px]">
-            <ArchitectureStack
-              activeFeature={activeFeature}
-              activeFeatureId={activeFeatureId}
-              onActiveFeatureChange={setActiveFeatureId}
-            />
+            <div className="relative min-h-[760px] lg:min-h-[720px]">
+              <ArchitectureStack
+                activeFeature={activeFeature}
+                activeFeatureId={activeFeatureId}
+                onActiveFeatureChange={setActiveFeatureId}
+              />
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <style global jsx>{`
+        .feature-chip-grid {
+          container-name: feature-chip-grid;
+          container-type: inline-size;
+        }
+
+        @container feature-chip-grid (max-width: 360px) {
+          .feature-chip {
+            grid-template-columns: 1fr;
+            justify-items: center;
+            min-height: 58px;
+            padding-left: 0.625rem;
+            padding-right: 0.625rem;
+            text-align: center;
+          }
+
+          .feature-chip-label {
+            clip: rect(0 0 0 0);
+            border: 0;
+            height: 1px;
+            margin: -1px;
+            overflow: hidden;
+            padding: 0;
+            position: absolute;
+            white-space: nowrap;
+            width: 1px;
+          }
+        }
+      `}</style>
+    </>
   );
 }
 
@@ -274,7 +309,7 @@ function ArchitectureStack({
           isActive
           title="BAML Control Plane"
         >
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="feature-chip-grid grid grid-cols-2 gap-2 sm:grid-cols-3">
             {FEATURES.map((feature) => (
               <FeatureChip
                 feature={feature}
@@ -444,7 +479,8 @@ function FeatureChip({
 
   return (
     <button
-      className="group grid min-h-[70px] grid-cols-[auto_minmax(0,1fr)] items-center gap-2 overflow-hidden rounded-md border bg-white/80 px-3 py-3 text-left shadow-[0_8px_24px_-22px_rgba(26,22,18,0.45)] transition-[background-color,border-color,box-shadow] hover:bg-white hover:shadow-[0_16px_34px_-26px_rgba(26,22,18,0.55)] focus:outline-none focus:ring-2 focus:ring-[#6D28D9]/25"
+      aria-label={feature.title}
+      className="feature-chip group grid min-h-[70px] grid-cols-[auto_minmax(0,1fr)] items-center gap-2 overflow-hidden rounded-md border bg-white/80 px-3 py-3 text-left shadow-[0_8px_24px_-22px_rgba(26,22,18,0.45)] transition-[background-color,border-color,box-shadow] hover:bg-white hover:shadow-[0_16px_34px_-26px_rgba(26,22,18,0.55)] focus:outline-none focus:ring-2 focus:ring-[#6D28D9]/25"
       onFocus={onActivate}
       onMouseEnter={onActivate}
       style={{
@@ -465,7 +501,7 @@ function FeatureChip({
       >
         <Icon aria-hidden size={16} strokeWidth={1.9} />
       </span>
-      <span className="min-w-0">
+      <span className="feature-chip-label min-w-0">
         <span className="block text-[13px] font-semibold leading-tight text-[#1A1612]">
           {feature.title}
         </span>
