@@ -30,6 +30,14 @@ fn is_fallible(path: &str) -> bool {
                 | "baml.Uint8Array.from_array"
                 | "baml.Uint8Array.from_hex"
                 | "baml.Uint8Array.from_base64"
+                | "baml.Uint8Array.to_json"
+                | "baml.json.parse"
+                | "baml.json.to_string"
+                | "baml.json.from_string"
+                | "baml.media.Pdf.to_json"
+                | "baml.media.Audio.to_json"
+                | "baml.media.Video.to_json"
+                | "baml.media.Image.to_json"
         )
 }
 
@@ -954,7 +962,7 @@ fn clean_param_list(b: &NativeBuiltin) -> String {
         parts.push(format!(
             "{}: {}",
             receiver_param_name(recv),
-            receiver_input_type(recv)
+            receiver_input_type_with_vm_usage(recv, b.vm_usage)
         ));
     }
     for p in &b.params {
@@ -1047,18 +1055,25 @@ fn emit_immut_receiver_extraction_indented(
     needs_owned: bool,
 ) {
     match recv.class_name.as_str() {
-        _ if is_media_class(recv.class_name.as_str()) => {
-            let cls = &recv.class_name;
-            writeln!(
-                out,
-                "{indent}let __instance = vm.as_instance(&args[{idx}])?;"
-            )
-            .unwrap();
-            writeln!(
-                out,
-                "{indent}let {name} = view::media::{cls} {{ instance: __instance }};"
-            )
-            .unwrap();
+        cls if is_media_class(cls) => {
+            if needs_owned {
+                // `//baml:mut_vm` media methods: pass the raw `Value` copy so the
+                // `vm` borrow is released before the mutable-vm call.  The view
+                // struct (`view::media::Cls`) holds `&Instance` which borrows `vm`
+                // and cannot coexist with `&mut BexVm`.
+                writeln!(out, "{indent}let {name} = &args[{idx}];").unwrap();
+            } else {
+                writeln!(
+                    out,
+                    "{indent}let __instance = vm.as_instance(&args[{idx}])?;"
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{indent}let {name} = view::media::{cls} {{ instance: __instance }};"
+                )
+                .unwrap();
+            }
         }
         _ => {
             let rhs = receiver_immut_extraction_expr(&format!("&args[{idx}]"), recv, needs_owned);
@@ -1243,6 +1258,11 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool) -> String {
         if !recv.receiver_type.is_static() {
             let name = receiver_param_name(recv);
             if recv.receiver_type.is_mut() {
+                args.push(name);
+            } else if needs_owned && is_media_class(recv.class_name.as_str()) {
+                // For `//baml:mut_vm` media methods the extraction emits
+                // `let pdf = &args[0];` (a `&Value` copy).  Pass `name` directly —
+                // it is already the `&Value` the trait method expects.
                 args.push(name);
             } else {
                 args.push(call_arg_for_type(&name, &receiver_baml_type(recv), is_ref));
@@ -1442,7 +1462,17 @@ fn receiver_param_name(recv: &Receiver) -> String {
     recv.class_name.to_lowercase()
 }
 
+#[allow(dead_code)]
 fn receiver_input_type(recv: &Receiver) -> String {
+    receiver_input_type_with_vm_usage(recv, VmUsage::None)
+}
+
+/// Like `receiver_input_type` but switches media class receivers to `&Value`
+/// when `vm_usage == MutRef` — the `view::media::Cls<'_>` view struct holds a
+/// `&Instance` borrowed from `vm`, which would conflict with the `&mut BexVm`
+/// parameter required for mutating-VM methods.  Passing the raw `Value` (which
+/// is `Copy`) instead avoids the split-borrow.
+fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> String {
     match recv.class_name.as_str() {
         "Array" => {
             if recv.receiver_type.is_mut() {
@@ -1472,10 +1502,23 @@ fn receiver_input_type(recv: &Receiver) -> String {
                 "&[u8]".to_string()
             }
         }
-        "Pdf" => "&view::media::Pdf<'_>".to_string(),
-        "Audio" => "&view::media::Audio<'_>".to_string(),
-        "Video" => "&view::media::Video<'_>".to_string(),
-        "Image" => "&view::media::Image<'_>".to_string(),
+        name if is_media_class(name) => {
+            // For `//baml:mut_vm` methods the view struct cannot coexist with
+            // `&mut BexVm` (split-borrow).  Use the raw `Value` instead so the
+            // trait impl can extract / clone what it needs from `vm` before the
+            // mutable allocation calls.
+            if matches!(vm_usage, VmUsage::MutRef) {
+                "&Value".to_string()
+            } else {
+                match name {
+                    "Pdf" => "&view::media::Pdf<'_>".to_string(),
+                    "Audio" => "&view::media::Audio<'_>".to_string(),
+                    "Video" => "&view::media::Video<'_>".to_string(),
+                    "Image" => "&view::media::Image<'_>".to_string(),
+                    _ => "&Value".to_string(),
+                }
+            }
+        }
         _ => "&Value".to_string(),
     }
 }

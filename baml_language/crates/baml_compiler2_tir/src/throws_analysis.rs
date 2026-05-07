@@ -155,7 +155,15 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             for arg in args {
                 collect_from_expr(context, *arg, body, out);
             }
-            collect_callee_escaping_throws(context, *callee, args, body, false, out);
+            // When the callee is an `OptionalMemberAccess` (`obj?.method`), the
+            // inferred callee type is `Ty::Optional(Ty::Function { ... })`.
+            // `instantiated_callee_throws` only handles `Ty::Function`, so we
+            // must strip the optional wrapper to get the actual throws.  This
+            // mirrors the type-inference fast-path in `builder.rs` that routes
+            // `Call { callee: OptionalMemberAccess }` through
+            // `finalize_optional_callee_call`.
+            let unwrap_optional = matches!(&body.exprs[*callee], Expr::OptionalMemberAccess { .. });
+            collect_callee_escaping_throws(context, *callee, args, body, unwrap_optional, out);
         }
         Expr::OptionalCall { callee, args } => {
             collect_from_expr(context, *callee, body, out);

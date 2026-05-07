@@ -13,6 +13,9 @@ function user.emit_custom_event(name: string) -> void  [expr] {
 function user.emit_multiple_events() -> void  [expr] {
   { baml.events.send("step", map { "step": 1 }); baml.events.send("step", map { "step": 2 }) } baml.events.send("step", map { "step": 3 })
 }
+function user.from_json(j: baml.json.json) -> user.User  [expr] {
+  user.User { id: baml.json.from_json(baml.json.field(j, "id")), name: baml.json.from_json(baml.json.field(j, "name")), email: baml.json.from_json(baml.json.field(j, "email")) }
+}
 function user.nested_inner() -> int  [expr] {
   {  } 10
 }
@@ -27,4 +30,7 @@ function user.simple_function() -> int  [expr] {
 }
 function user.test_logging() -> void  [expr] {
   { let user = user.User { id: 123, name: "Alice", email: "alice@example.com" }; log.debug(map { "message": "Starting process" }); log.info(map { "user": user, "status": "processing" }); log.warn(map { "warning": "Resource usage high" }) } log.error(map { "code": "E001", "retries": 3 })
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "id": self.id.to_json(), "name": self.name.to_json(), "email": self.email.to_json() }
 }

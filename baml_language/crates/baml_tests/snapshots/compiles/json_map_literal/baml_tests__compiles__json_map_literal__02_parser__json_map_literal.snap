@@ -1,0 +1,61 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "NestedMapLiteral"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "json"
+      WORD "json"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "a"
+              QUOTE """
+              WORD "a"
+              QUOTE """
+            COLON ":"
+            INTEGER_LITERAL "1"
+          COMMA ","
+          OBJECT_FIELD
+            STRING_LITERAL "b"
+              QUOTE """
+              WORD "b"
+              QUOTE """
+            COLON ":"
+            ARRAY_LITERAL "[2, 3]"
+              L_BRACKET "["
+              INTEGER_LITERAL "2"
+              COMMA ","
+              INTEGER_LITERAL "3"
+              R_BRACKET "]"
+          COMMA ","
+          OBJECT_FIELD
+            STRING_LITERAL "c"
+              QUOTE """
+              WORD "c"
+              QUOTE """
+            COLON ":"
+            MAP_LITERAL
+              L_BRACE "{"
+              OBJECT_FIELD
+                STRING_LITERAL "nested"
+                  QUOTE """
+                  WORD "nested"
+                  QUOTE """
+                COLON ":"
+                WORD "null"
+              R_BRACE "}"
+          R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

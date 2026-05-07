@@ -124,6 +124,29 @@ macro_rules! baml_test {
         )
         .await
     }};
+    // baml + show_auto_derive (include synthesized to_json / from_json in the
+    // bytecode snapshot — off by default to keep snapshots stable).
+    (baml: $source:expr, show_auto_derive: $sad:expr $(,)?) => {
+        $crate::engine::run_test_with_options(
+            $source,
+            "main",
+            $crate::engine::IndexMap::new(),
+            $crate::engine::OptLevel::One,
+            $sad,
+        )
+        .await
+    };
+    // baml + entry + show_auto_derive
+    (baml: $source:expr, entry: $entry:expr, show_auto_derive: $sad:expr $(,)?) => {
+        $crate::engine::run_test_with_options(
+            $source,
+            $entry,
+            $crate::engine::IndexMap::new(),
+            $crate::engine::OptLevel::One,
+            $sad,
+        )
+        .await
+    };
 }
 
 /// Like `baml_test!` but at `OptLevel::Two` (includes MIR constant folding).

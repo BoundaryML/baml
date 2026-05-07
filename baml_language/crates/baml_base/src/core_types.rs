@@ -212,13 +212,26 @@ pub enum MediaKind {
     Generic, // could be any of the media types
 }
 
+impl MediaKind {
+    /// Tag value used in the BEP-038 `{ kind, source, value, mime }` JSON
+    /// shape. `Generic` collapses to `"media"` (any media subtype).
+    pub fn tag_str(self) -> &'static str {
+        match self {
+            MediaKind::Image => "image",
+            MediaKind::Audio => "audio",
+            MediaKind::Video => "video",
+            MediaKind::Pdf => "pdf",
+            MediaKind::Generic => "media",
+        }
+    }
+}
+
 impl fmt::Display for MediaKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MediaKind::Image => write!(f, "image"),
-            MediaKind::Audio => write!(f, "audio"),
-            MediaKind::Video => write!(f, "video"),
-            MediaKind::Pdf => write!(f, "pdf"),
+            MediaKind::Image | MediaKind::Audio | MediaKind::Video | MediaKind::Pdf => {
+                write!(f, "{}", self.tag_str())
+            }
             MediaKind::Generic => write!(f, "image | audio | video | pdf"),
         }
     }

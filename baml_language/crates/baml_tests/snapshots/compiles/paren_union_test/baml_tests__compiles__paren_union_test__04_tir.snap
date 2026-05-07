@@ -27,6 +27,12 @@ class user.Union {
   opt_arr_opt_fun_opt_opt_opt_arr_arr_opt_arr: ((user.Union | user.Union?[]? | user.Union | user.Union) -> user.Union | user.Union?[]? | user.Union | user.Union throws never)???[][]?[]
 }
   !! 0..1669: class cycle: user.Union
+function user.Union.to_json(self: user.Union) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Union>(self)) : baml.json.json
+}
+function user.Union.from_json(j: baml.json.json) -> user.Union throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Union
+}
 class user.Union$stream {
   u: null | user.Union$stream | user.Union$stream | user.Union$stream | user.Union$stream
   u_arr: (user.Union$stream | user.Union$stream | user.Union$stream | user.Union$stream)[]

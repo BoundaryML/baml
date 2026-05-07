@@ -1,6 +1,30 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.Resume.from_json(j: baml.json.json) -> Resume {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    alloc_instance user.Resume
+    load_var _2
+    init_field .name
+    return
+}
+
+function user.Resume.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    load_const "name"
+    alloc_map 1
+    return
+}
+
 function user.TypeBuilderFn(from_text: string) -> Resume {
     load_type Resume
     alloc_instance baml.llm.Client

@@ -2,6 +2,72 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
+fn user.Inner.from_json(j: baml.json.json) -> Inner {
+    // Locals:
+    let _0: Inner // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: int
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "value") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(int);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = user.Inner { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.Outer.from_json(j: baml.json.json) -> Outer {
+    // Locals:
+    let _0: Outer // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: Inner
+    let _3: baml.json.json
+    let _4: type
+    let _5: string
+    let _6: baml.json.json
+    let _7: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "inner") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(Inner);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "name") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(string);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _0 = user.Outer { copy _2, copy _5 };
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
 fn user.test_captured_field_access(obj: Outer) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -249,6 +315,63 @@ fn .<lambda(test_sequential_lambdas, 1)>() -> null {
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn user.Outer.to_json(self: Outer) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: Outer // self // param
+    let _2: baml.json.json
+    let _3: Inner
+    let _4: Outer
+    let _5: baml.json.json
+    let _6: string
+    let _7: Outer
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn user.Inner.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _7 = copy _1;
+        _6 = copy _7.1;
+        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+    }
+
+    bb2: {
+        _0 = { const "inner": copy _2, const "name": copy _5 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.Inner.to_json(self: Inner) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: Inner // self // param
+    let _2: baml.json.json
+    let _3: int
+    let _4: Inner
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "value": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }

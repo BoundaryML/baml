@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.decode_auto(j: baml.json.json) -> root.pkg.inner.AutoBox  [expr] {
+  {  } root.pkg.inner.AutoBox.from_json(j)
+}
+function user.decode_root(j: baml.json.json) -> root.pkg.inner.Box  [expr] {
+  {  } root.pkg.inner.Box.from_json(j)
+}
+class user.pkg.inner.AutoBox {
+  value: user.pkg.inner.T
+}
+class user.pkg.inner.Box {
+  value: user.pkg.inner.T
+}
+function user.pkg.inner.from_json(j: baml.json.json) -> user.pkg.inner.Box  [expr] {
+  {  } user.pkg.inner.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
+}
+function user.pkg.inner.from_json(j: baml.json.json) -> user.pkg.inner.AutoBox  [expr] {
+  user.pkg.inner.AutoBox { value: baml.json.from_json(baml.json.field(j, "value")) }
+}
+function user.pkg.inner.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "value": baml.json.to_json(self.value) }
+}
+function user.pkg.inner.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "value": baml.json.to_json(self.value) }
+}

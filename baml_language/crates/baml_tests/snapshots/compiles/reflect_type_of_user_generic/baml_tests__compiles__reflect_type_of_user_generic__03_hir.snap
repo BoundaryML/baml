@@ -5,6 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Person {
   name: string
 }
+function user.from_json(j: baml.json.json) -> user.Person  [expr] {
+  user.Person { name: baml.json.from_json(baml.json.field(j, "name")) }
+}
 function user.reflect_array() -> type  [expr] {
   {  } reflect.type_of()
 }
@@ -16,4 +19,7 @@ function user.reflect_person() -> type  [expr] {
 }
 function user.reflect_type() -> type  [expr] {
   {  } reflect.type_of()
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
 }

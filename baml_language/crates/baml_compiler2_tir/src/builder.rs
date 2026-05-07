@@ -36,6 +36,76 @@ use crate::{
     ty::{Freshness, PrimitiveType, Ty, TyAttr},
 };
 
+// ── Well-known type constructors ──────────────────────────────────────────────
+//
+// These helpers construct `Ty` values for well-known types that appear in
+// synthesized method signatures (e.g., the universal `to_json`/`from_json` on
+// `Ty::TypeVar`). They are free functions so they can be called from both
+// `resolve_member` (mutable context) and `try_resolve_member_on_ty` (shared).
+
+/// Construct `Ty::TypeAlias` for `baml.json.json`.
+fn json_alias_ty() -> Ty {
+    Ty::TypeAlias(
+        crate::ty::QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("json")],
+            Name::new("json"),
+        ),
+        TyAttr::default(),
+    )
+}
+
+/// Construct `Ty::Class` for `baml.json.JsonSerializationError`.
+fn json_serialization_error_ty() -> Ty {
+    Ty::Class(
+        crate::ty::QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("json")],
+            Name::new("JsonSerializationError"),
+        ),
+        vec![],
+        TyAttr::default(),
+    )
+}
+
+/// Construct `Ty::Class` for `baml.json.JsonParseError`.
+fn json_parse_error_ty() -> Ty {
+    Ty::Class(
+        crate::ty::QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("json")],
+            Name::new("JsonParseError"),
+        ),
+        vec![],
+        TyAttr::default(),
+    )
+}
+
+/// Construct the throws type `JsonSerializationError | JsonParseError`.
+///
+/// Used as the conservative throws clause for the universal `to_json` method on
+/// `Ty::TypeVar` — it is a superset of any concrete type's actual throws, so
+/// call-site throw inference stays sound.
+fn json_serialization_or_parse_error_ty() -> Ty {
+    Ty::Union(
+        vec![json_serialization_error_ty(), json_parse_error_ty()],
+        TyAttr::default(),
+    )
+}
+
+/// Construct the throws type `JsonParseError | JsonSerializationError`.
+///
+/// Used as the conservative throws clause for the universal `from_json` method
+/// on `Ty::TypeVar`.
+fn json_parse_or_serialization_error_ty() -> Ty {
+    // Same members, different ordering to match the semantic direction of
+    // each method. Could be the same union; keep separate for clarity.
+    Ty::Union(
+        vec![json_parse_error_ty(), json_serialization_error_ty()],
+        TyAttr::default(),
+    )
+}
+
 /// Format an f64 as a string suitable for a float literal.
 /// Returns `None` for non-finite values (inf, NaN).
 fn format_float(v: f64) -> Option<String> {
@@ -381,6 +451,14 @@ pub struct TypeInferenceBuilder<'db> {
     /// current scope. Used to explain callback forwarding without affecting
     /// call instantiation or throws checking semantics.
     lambda_effective_throws: FxHashMap<ExprId, Ty>,
+    /// `true` when the function being analyzed is auto-derived (e.g.
+    /// synthesized `to_json` / `from_json`).  Suppresses diagnostics from
+    /// type-arg lowering — auto-derive references field types verbatim, and
+    /// when those types are user-broken (parser error recovery, typos) we
+    /// don't want to surface synthetic-call type-arg errors that look like the
+    /// user wrote them.  Real type errors still surface from the user's
+    /// own field declaration.
+    is_auto_derived_body: bool,
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
@@ -555,6 +633,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             param_types: Vec::new(),
             nested_lambda_types: FxHashMap::default(),
             lambda_effective_throws: FxHashMap::default(),
+            is_auto_derived_body: false,
         }
     }
 
@@ -567,6 +646,17 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     pub fn set_generic_params(&mut self, params: Vec<Name>) {
         self.generic_params = params;
+    }
+
+    /// Mark this builder as analyzing an auto-derived function body. See
+    /// the `is_auto_derived_body` field comment for what this gates.
+    /// Also toggles the corresponding suppression flag on the diagnostic
+    /// context so member-lookup errors emitted from `MemberAccess` lowering
+    /// (e.g. `self.<f>.to_json()` where `f`'s type is malformed) are
+    /// silenced — the user's underlying field-type error already covers it.
+    pub fn set_auto_derived(&mut self, value: bool) {
+        self.is_auto_derived_body = value;
+        self.context.set_suppress_member_lookup_errors(value);
     }
 
     /// Finish building and return the accumulated results.
@@ -1094,17 +1184,41 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Option<FxHashMap<Name, Ty>> {
         // Look up the callee's resolution to find the declared generic param names.
         let resolution = self.resolutions.get(&callee_id).cloned()?;
-        let func_loc = match resolution {
-            crate::inference::MemberResolution::Free { func_loc } => func_loc,
-            crate::inference::MemberResolution::BoundMethod { func_loc, .. } => func_loc,
-            crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => func_loc,
+        let (func_loc, treat_as_static_method) = match resolution {
+            crate::inference::MemberResolution::Free { func_loc } => (func_loc, true),
+            // `UnboundMethod` covers `Class.method` / `Class<...>.method` call
+            // sites where the receiver is a type name.  When the call writes
+            // `Class<...>.method(...)`, the receiver-type's `<...>` is parsed
+            // as the call's type-args by `find_callee_generic_args` in
+            // `lower_expr_body.rs`; those args fill the *enclosing class's*
+            // generic params (BEP-039), so we include them in the
+            // expected-arity check below.
+            crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => (func_loc, true),
+            // BoundMethod calls (`inst.method(args)`) get class type-args
+            // from the receiver instance's `class_type_args` at runtime, not
+            // from the call site.
+            crate::inference::MemberResolution::BoundMethod { func_loc, .. } => (func_loc, false),
             _ => return None,
         };
         let db = self.context.db();
         let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
         // Only user-declared generic params are supplied explicitly; synthetic effect params
-        // are always inferred.
-        let declared_params: Vec<Name> = sig.user_generic_params.clone();
+        // are always inferred.  For static-method-on-generic-class calls, prepend the
+        // class's generic params: type-args fill `[class_params..., function_params...]`.
+        let class_params: Vec<Name> = if treat_as_static_method {
+            let file = func_loc.file(db);
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            item_tree
+                .classes
+                .values()
+                .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
+                .map(|class_data| class_data.generic_params.clone())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let mut declared_params: Vec<Name> = class_params;
+        declared_params.extend(sig.user_generic_params.iter().cloned());
 
         if type_args.len() != declared_params.len() {
             self.context.report_simple(
@@ -1122,6 +1236,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let mut bindings = FxHashMap::default();
         let ns = self.ns_context.clone();
         let caller_generic_params = self.generic_params.clone();
+        let suppress_diags = self.is_auto_derived_body;
         for (param_name, type_arg_expr) in declared_params.iter().zip(type_args.iter()) {
             let mut diags = Vec::new();
             let ty = crate::lower_type_expr::lower_type_expr_in_ns(
@@ -1132,8 +1247,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &caller_generic_params,
                 &mut diags,
             );
-            for d in diags {
-                self.context.report_simple(d, call_expr_id);
+            // Auto-derived bodies (`to_json` / `from_json` synthesized by
+            // `auto_derive_json`) reference field types verbatim. When a
+            // class has malformed/unresolved field types (parser error
+            // recovery, typos), the synthesizer's `baml.json.from_json<F>`
+            // call surfaces those as type-arg-resolution errors, with spans
+            // pointing at the user's source.  Suppress them here — the real
+            // diagnostic comes from the user's field declaration itself.
+            if !suppress_diags {
+                for d in diags {
+                    self.context.report_simple(d, call_expr_id);
+                }
             }
             bindings.insert(param_name.clone(), ty);
         }
@@ -1337,6 +1461,134 @@ impl<'db> TypeInferenceBuilder<'db> {
                     bindings_from_inference: false,
                 }
             }
+            Ty::Union(arms, _) => {
+                // When ALL union arms are functions (e.g. method lookup on a union
+                // type such as the `json` alias `null | bool | int | ... | json[]`),
+                // fold them into a single representative callable.
+                //
+                // Fold rules:
+                //   params  — first arm's params (all arms share the same method
+                //             signature modulo the `self` type, which is erased here)
+                //   ret     — union of all return types (deduped)
+                //   throws  — union of all throws types (deduped)
+                //
+                // This is sound because the call site's actual value will be one of
+                // the union arms at runtime, so the folded return / throws is an
+                // over-approximation that covers all possible outcomes.
+                let arms_clone = arms.clone();
+                let expanded: Vec<Ty> = arms_clone
+                    .iter()
+                    .map(|a| self.expand_alias_chains(a.clone()))
+                    .collect();
+
+                let all_fns = expanded.iter().all(|a| matches!(a, Ty::Function { .. }));
+                if all_fns && !expanded.is_empty() {
+                    // Extract (params, ret, throws) from each arm.
+                    let fn_components: Vec<_> = expanded
+                        .iter()
+                        .map(|a| {
+                            let Ty::Function {
+                                params,
+                                ret,
+                                throws,
+                                ..
+                            } = a
+                            else {
+                                unreachable!()
+                            };
+                            (params.clone(), *ret.clone(), *throws.clone())
+                        })
+                        .collect();
+
+                    // Guard the fold: every arm must agree on arity and on the
+                    // non-self param types. Otherwise the call site has no
+                    // single signature to typecheck against — drop to the
+                    // not-callable branch below to surface the ambiguity.
+                    let first_non_self: Vec<&Ty> =
+                        fn_components[0].0.iter().skip(1).map(|(_, t)| t).collect();
+                    let arms_compatible = fn_components.iter().all(|(p, _, _)| {
+                        p.len() == fn_components[0].0.len()
+                            && p.iter()
+                                .skip(1)
+                                .zip(&first_non_self)
+                                .all(|((_, t), expected)| t == *expected)
+                    });
+                    if !arms_compatible {
+                        self.context.report_simple(
+                            TirTypeError::NotCallable {
+                                ty: callee_ty.clone(),
+                            },
+                            expr_id,
+                        );
+                        self.infer_args_for_recovery(args, body);
+                        return CheckedCallInner {
+                            result: Ty::Unknown {
+                                attr: TyAttr::default(),
+                            },
+                            bindings_from_inference: false,
+                        };
+                    }
+
+                    // Use first arm's params as representative.
+                    let first_params = fn_components[0].0.clone();
+
+                    // Union of all return types (deduplicated).
+                    let ret_set: BTreeSet<Ty> =
+                        fn_components.iter().map(|(_, r, _)| r.clone()).collect();
+                    let folded_ret = match ret_set.len() {
+                        1 => ret_set.into_iter().next().unwrap(),
+                        _ => Ty::Union(ret_set.into_iter().collect(), TyAttr::default()),
+                    };
+
+                    // Union of all throws types (flattened and deduplicated).
+                    let mut throws_set: BTreeSet<Ty> = BTreeSet::new();
+                    for (_, _, t) in &fn_components {
+                        throws_set.extend(crate::throw_inference::flatten_ty_to_facts(t));
+                    }
+                    let folded_throws = match throws_set.len() {
+                        0 => Ty::Never {
+                            attr: TyAttr::default(),
+                        },
+                        1 => throws_set.into_iter().next().unwrap(),
+                        _ => Ty::Union(throws_set.into_iter().collect(), TyAttr::default()),
+                    };
+
+                    let folded_fn = Ty::Function {
+                        params: first_params,
+                        ret: Box::new(folded_ret),
+                        throws: Box::new(folded_throws),
+                        attr: TyAttr::default(),
+                    };
+
+                    return self.check_call_inner(CallCheckRequest {
+                        context: CallContext {
+                            expr_id,
+                            args,
+                            body,
+                            expected,
+                        },
+                        callee_ty: folded_fn,
+                        is_method_call,
+                        is_optional_call,
+                        explicit_type_arg_bindings,
+                    });
+                }
+
+                // Not all arms are functions — report not callable.
+                self.context.report_simple(
+                    TirTypeError::NotCallable {
+                        ty: callee_ty.clone(),
+                    },
+                    expr_id,
+                );
+                self.infer_args_for_recovery(args, body);
+                CheckedCallInner {
+                    result: Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                    bindings_from_inference: false,
+                }
+            }
             _ => {
                 self.context.report_simple(
                     TirTypeError::NotCallable {
@@ -1522,18 +1774,26 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Determine if the base is a runtime value (local variable, function
                     // result, etc.) or a bare type name used as a namespace (e.g.
                     // `Factory<int>` in `Factory<int>.create(42)`).
-                    // A base is a type name if it's a single-segment Path whose name is
-                    // NOT a local variable — in that case the access is an "unbound"
-                    // method reference (bound = false).
+                    // A base is a type name if it's a `Path` whose root segment is NOT
+                    // a local variable — multi-segment paths like
+                    // `root.pkg.inner.Box<int>.from_json(j)` resolve to a class type at
+                    // the base position, so the access is an "unbound" static-method
+                    // reference (bound = false).
                     let base_is_value = match &body.exprs[*base] {
-                        Expr::Path(segments) if segments.len() == 1 => {
+                        Expr::Path(segments) if !segments.is_empty() => {
                             self.locals.contains_key(&segments[0])
                         }
                         _ => true, // complex expressions are always values
                     };
 
                     let inner = crate::narrowing::remove_null(&base_ty);
-                    if inner != base_ty && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                    // `Primitive(Null)` is a concrete non-optional type (the null value
+                    // itself) with its own companion class. Treat it like any other
+                    // primitive — do NOT require `?.` chaining for direct method calls.
+                    let is_pure_null = matches!(base_ty, Ty::Primitive(PrimitiveType::Null, _));
+                    if inner != base_ty
+                        && !is_pure_null
+                        && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
                     {
                         if self.in_optional_chain > 0 {
                             // Inside an OptionalChain: auto-unwrap nullable base,
@@ -3180,12 +3440,18 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Validate declared `throws` against effective escaping throws from the body.
+    ///
+    /// `warn_extraneous` controls whether a warning is emitted when the declared
+    /// throws clause contains types that never actually escape from the body.
+    /// Pass `false` for auto-derived methods whose throws clause is declared
+    /// conservatively rather than in response to what the body actually throws.
     pub fn check_throws_contract(
         &mut self,
         body: &ExprBody,
         declared_throws: Option<&TypeExpr>,
         throws_span: Option<TextRange>,
         fallback_span: TextRange,
+        warn_extraneous: bool,
     ) {
         let Some(declared_expr) = declared_throws else {
             return;
@@ -3204,7 +3470,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         for diag in diags {
             self.context.report_at_span(diag, span);
         }
-        self.check_throws_surface(body, &declared_ty, span, true);
+        self.check_throws_surface(body, &declared_ty, span, warn_extraneous);
     }
 
     fn required_match_cases(&self, ty: &Ty) -> Option<BTreeSet<String>> {
@@ -4069,6 +4335,31 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             callee_ty.clone()
         };
+
+        // When the callee has a union type (e.g., a method called on a union-typed
+        // field like `(string | int | MyClass).to_json()`), every member of the union
+        // is a separate function that might execute.  Conservatively union all of
+        // their throws — if every member is a function we can compute a precise
+        // answer; otherwise fall through to return `None` (unknown).
+        if let Ty::Union(ref members, _) = typed_callee {
+            let mut all_throws: BTreeSet<Ty> = BTreeSet::new();
+            for member in members {
+                if let Ty::Function { throws, .. } = member {
+                    all_throws.extend(crate::throw_inference::flatten_ty_to_facts(throws));
+                } else {
+                    // At least one member is not a function — can't compute throws,
+                    // return None to let the fallback handle it.
+                    return None;
+                }
+            }
+            // All members were functions; return the union of their throws.
+            return Some(
+                Self::ty_from_concrete_facts(&all_throws).unwrap_or(Ty::Never {
+                    attr: TyAttr::default(),
+                }),
+            );
+        }
+
         let Ty::Function { params, throws, .. } = typed_callee else {
             return None;
         };
@@ -4480,14 +4771,28 @@ impl<'db> TypeInferenceBuilder<'db> {
             let bound = root_is_value || !is_last_segment;
 
             let inner = crate::narrowing::remove_null(&current_ty);
-            let is_nullable =
-                inner != current_ty && !matches!(current_ty, Ty::Unknown { .. } | Ty::Error { .. });
+            // `Primitive(Null)` is a concrete non-optional type with a companion
+            // class. Calling methods on it directly (e.g. `n.to_json()`) is valid
+            // — do NOT require `?.` chaining.
+            let is_pure_null = matches!(current_ty, Ty::Primitive(PrimitiveType::Null, _));
+            let is_nullable = inner != current_ty
+                && !is_pure_null
+                && !matches!(current_ty, Ty::Unknown { .. } | Ty::Error { .. });
+            // Use `current_ty` for dispatch when the base is Primitive(Null) (or
+            // any non-nullable type): `inner` would be `Never` for Null, which has
+            // no members.
+            let dispatch_ty = if is_nullable { &inner } else { &current_ty };
             let member_ty;
             if is_nullable {
                 if self.in_optional_chain > 0 {
                     // Inside an OptionalChain: resolve and re-wrap the result.
-                    member_ty =
-                        self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx, bound);
+                    member_ty = self.resolve_member_for_path_segment(
+                        dispatch_ty,
+                        seg,
+                        expr_id,
+                        seg_idx,
+                        bound,
+                    );
                     current_ty = Self::make_optional(member_ty.clone());
                 } else {
                     // Outside any chain: null-safety violation — suggest `?.`.
@@ -4510,13 +4815,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                         },
                         expr_id,
                     );
-                    member_ty =
-                        self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx, bound);
+                    member_ty = self.resolve_member_for_path_segment(
+                        dispatch_ty,
+                        seg,
+                        expr_id,
+                        seg_idx,
+                        bound,
+                    );
                     current_ty = Self::make_optional(member_ty.clone());
                 }
             } else {
                 member_ty =
-                    self.resolve_member_for_path_segment(&inner, seg, expr_id, seg_idx, bound);
+                    self.resolve_member_for_path_segment(dispatch_ty, seg, expr_id, seg_idx, bound);
                 current_ty = member_ty.clone();
             }
 
@@ -5003,6 +5313,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Enum(enum_name, _) => {
+                // `to_json` on an enum: returns the variant name as a JSON string.
+                // BEP-038 specifies the enum JSON representation as its variant name string.
+                // Throws `never` — enum serialization always succeeds.
+                if member.as_str() == "to_json" {
+                    return Ty::Function {
+                        params: vec![(Some(Name::new("self")), base_ty.clone())],
+                        ret: Box::new(json_alias_ty()),
+                        throws: Box::new(Ty::Never {
+                            attr: TyAttr::default(),
+                        }),
+                        attr: TyAttr::default(),
+                    };
+                }
+
                 // Validate that the variant exists
                 let variants = self.lookup_enum_variants(enum_name);
                 if variants.contains(member) {
@@ -5082,7 +5406,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Ty::Primitive(PrimitiveType::String, _)
             | Ty::Literal(baml_base::Literal::String(_), _, _) => {
-                // Bridge: string / "literal" → String class
+                // Bridge: string / string-literal → String class
                 self.resolve_builtin_member(&["String"], &[], member, at)
                     .unwrap_or_else(|| {
                         self.context.report_at_member_simple(
@@ -5097,6 +5421,69 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     })
             }
+            // int literal / int → Int companion class
+            Ty::Primitive(PrimitiveType::Int, _)
+            | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
+                .resolve_builtin_member(&["Int"], &[], member, at)
+                .unwrap_or_else(|| {
+                    self.context.report_at_member_simple(
+                        TirTypeError::UnresolvedMember {
+                            base_type: base_ty.clone(),
+                            member: member.clone(),
+                        },
+                        at,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                }),
+            // float literal / float → Float companion class
+            Ty::Primitive(PrimitiveType::Float, _)
+            | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
+                .resolve_builtin_member(&["Float"], &[], member, at)
+                .unwrap_or_else(|| {
+                    self.context.report_at_member_simple(
+                        TirTypeError::UnresolvedMember {
+                            base_type: base_ty.clone(),
+                            member: member.clone(),
+                        },
+                        at,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                }),
+            // bool literal / bool → Bool companion class
+            Ty::Primitive(PrimitiveType::Bool, _)
+            | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
+                .resolve_builtin_member(&["Bool"], &[], member, at)
+                .unwrap_or_else(|| {
+                    self.context.report_at_member_simple(
+                        TirTypeError::UnresolvedMember {
+                            base_type: base_ty.clone(),
+                            member: member.clone(),
+                        },
+                        at,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                }),
+            // null / Null companion class
+            Ty::Primitive(PrimitiveType::Null, _) => self
+                .resolve_builtin_member(&["Null"], &[], member, at)
+                .unwrap_or_else(|| {
+                    self.context.report_at_member_simple(
+                        TirTypeError::UnresolvedMember {
+                            base_type: base_ty.clone(),
+                            member: member.clone(),
+                        },
+                        at,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                }),
             Ty::Type { .. } => {
                 // Bridge: type → TypeValue companion class (provides `.to_string()`, etc.)
                 self.resolve_builtin_member(&["TypeValue"], &[], member, at)
@@ -5121,7 +5508,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 | PrimitiveType::Pdf),
                 _,
             ) => {
-                // Bridge: primitives with builtin companion classes
+                // Bridge: media / binary primitives with builtin companion classes
                 self.resolve_builtin_member(p.builtin_class_path(), &[], member, at)
                     .unwrap_or_else(|| {
                         self.context.report_at_member_simple(
@@ -5135,6 +5522,35 @@ impl<'db> TypeInferenceBuilder<'db> {
                             attr: TyAttr::default(),
                         }
                     })
+            }
+            // Universal `to_json` / `from_json` on generic type variables.
+            //
+            // After Phase 5b.1, every BAML type has `to_json(self) -> json` and
+            // `from_json(j: json) -> Self`. When the base type is a type-variable
+            // `T` (e.g. inside `class Array<T>`), the compiler cannot look up the
+            // concrete companion class; instead we synthesize the expected method
+            // signature directly. The throws clause is conservatively widened to
+            // `JsonSerializationError | JsonParseError` — the actual throws for any
+            // concrete T is a subset, so call-site throw inference stays sound.
+            Ty::TypeVar(_, _) if member.as_str() == "to_json" => {
+                // Type-check: every BAML type has `to_json(self) -> json` after Phase 5b.1.
+                // No MemberResolution stored — the concrete dispatch is deferred to Phase 5b.4
+                // (native Array/Map impls) and never runs with an unresolved TypeVar at runtime.
+                Ty::Function {
+                    params: vec![],
+                    ret: Box::new(json_alias_ty()),
+                    throws: Box::new(json_serialization_or_parse_error_ty()),
+                    attr: TyAttr::default(),
+                }
+            }
+            Ty::TypeVar(name, _) if member.as_str() == "from_json" => {
+                // Type-check: every BAML type has `from_json(j: json) -> Self` after Phase 5b.1.
+                Ty::Function {
+                    params: vec![(Some(Name::new("j")), json_alias_ty())],
+                    ret: Box::new(Ty::TypeVar(name.clone(), TyAttr::default())),
+                    throws: Box::new(json_parse_or_serialization_error_ty()),
+                    attr: TyAttr::default(),
+                }
             }
             Ty::Union(members, _) => {
                 // For union types, try to resolve the field on each member.
@@ -5174,15 +5590,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
             }
-            Ty::TypeAlias(qtn, _) => {
-                // Expand the alias to its concrete type, then recurse.
-                if let Some(expanded) = self.aliases.get(qtn) {
-                    let expanded = expanded.clone();
-                    return self.resolve_member(&expanded, member, at, bound);
-                }
-                // Alias not in map (cyclic or unresolved) — treat as Unknown
-                Ty::Unknown {
-                    attr: TyAttr::default(),
+            Ty::TypeAlias(_, _) => {
+                // Expand the alias chain to its concrete type, then recurse on
+                // the result.  `expand_alias_chains` already caps iterations at
+                // 64, so cyclic aliases (`type One = Two; type Two = One`)
+                // stop expanding without overflowing the call stack.  If the
+                // chain bottoms out on another `TypeAlias` (cycle never
+                // resolves), fall through to `Unknown`.
+                let expanded = self.expand_alias_chains(base_ty.clone());
+                if matches!(expanded, Ty::TypeAlias(_, _)) {
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                } else {
+                    self.resolve_member(&expanded, member, at, bound)
                 }
             }
             Ty::Unknown { .. } => {
@@ -5258,6 +5679,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Enum(enum_name, _) => {
+                // `to_json` on an enum (path-segment form): same as the
+                // `resolve_member_on_ty` arm above — variant name as JSON string.
+                if member.as_str() == "to_json" {
+                    return Ty::Function {
+                        params: vec![(Some(Name::new("self")), base_ty.clone())],
+                        ret: Box::new(json_alias_ty()),
+                        throws: Box::new(Ty::Never {
+                            attr: TyAttr::default(),
+                        }),
+                        attr: TyAttr::default(),
+                    };
+                }
+
                 // Use the no-side-effect helper.
                 if self.enum_has_variant(enum_name, member) {
                     return self.resolve_member(base_ty, member, path_id, bound);
@@ -5366,6 +5800,21 @@ impl<'db> TypeInferenceBuilder<'db> {
             | Ty::Literal(baml_base::Literal::String(_), _, _) => self
                 .resolve_builtin_method(&["String"], &[], member)
                 .map(BuiltinResolution::into_ty),
+            Ty::Primitive(PrimitiveType::Int, _)
+            | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
+                .resolve_builtin_method(&["Int"], &[], member)
+                .map(BuiltinResolution::into_ty),
+            Ty::Primitive(PrimitiveType::Float, _)
+            | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
+                .resolve_builtin_method(&["Float"], &[], member)
+                .map(BuiltinResolution::into_ty),
+            Ty::Primitive(PrimitiveType::Bool, _)
+            | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
+                .resolve_builtin_method(&["Bool"], &[], member)
+                .map(BuiltinResolution::into_ty),
+            Ty::Primitive(PrimitiveType::Null, _) => self
+                .resolve_builtin_method(&["Null"], &[], member)
+                .map(BuiltinResolution::into_ty),
             Ty::Primitive(
                 p @ (PrimitiveType::Uint8Array
                 | PrimitiveType::Image
@@ -5379,6 +5828,20 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Type { .. } => self
                 .resolve_builtin_method(&["TypeValue"], &[], member)
                 .map(BuiltinResolution::into_ty),
+            // Universal `to_json` / `from_json` on generic type variables.
+            // Mirrors the arm in `resolve_member` — no side effects needed here.
+            Ty::TypeVar(_, _) if member.as_str() == "to_json" => Some(Ty::Function {
+                params: vec![],
+                ret: Box::new(json_alias_ty()),
+                throws: Box::new(json_serialization_or_parse_error_ty()),
+                attr: TyAttr::default(),
+            }),
+            Ty::TypeVar(name, _) if member.as_str() == "from_json" => Some(Ty::Function {
+                params: vec![(Some(Name::new("j")), json_alias_ty())],
+                ret: Box::new(Ty::TypeVar(name.clone(), TyAttr::default())),
+                throws: Box::new(json_parse_or_serialization_error_ty()),
+                attr: TyAttr::default(),
+            }),
             Ty::Optional(inner, _) => {
                 // Drill through Optional to resolve the member on the inner type
                 self.try_resolve_member_on_ty(inner, member)

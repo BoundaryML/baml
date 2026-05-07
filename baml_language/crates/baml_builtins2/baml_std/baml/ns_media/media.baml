@@ -1,6 +1,11 @@
 class Pdf {
   _data $rust_type
 
+  //baml:mut_vm
+  function to_json(self) -> baml.json.json {
+    $rust_function
+  }
+
   //baml:vm
   function url(self) -> string? {
     $rust_function
@@ -36,6 +41,11 @@ class Pdf {
 
 class Audio {
   _data $rust_type
+
+  //baml:mut_vm
+  function to_json(self) -> baml.json.json {
+    $rust_function
+  }
 
   //baml:vm
   function url(self) -> string? {
@@ -73,6 +83,11 @@ class Audio {
 class Video {
   _data $rust_type
 
+  //baml:mut_vm
+  function to_json(self) -> baml.json.json {
+    $rust_function
+  }
+
   //baml:vm
   function url(self) -> string? {
     $rust_function
@@ -108,6 +123,11 @@ class Video {
 
 class Image {
   _data $rust_type
+
+  //baml:mut_vm
+  function to_json(self) -> baml.json.json {
+    $rust_function
+  }
 
   //baml:vm
   function url(self) -> string? {

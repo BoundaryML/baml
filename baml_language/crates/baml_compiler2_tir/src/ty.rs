@@ -255,12 +255,16 @@ impl PrimitiveType {
     /// `uint8array` has its class in `baml_builtins2/baml_std/baml/uint8array.baml`.
     pub fn builtin_class_path(&self) -> &'static [&'static str] {
         match self {
+            Self::Int => &["Int"],
+            Self::Float => &["Float"],
+            Self::Bool => &["Bool"],
+            Self::Null => &["Null"],
+            Self::String => &["String"],
             Self::Uint8Array => &["Uint8Array"],
             Self::Image => &["media", "Image"],
             Self::Audio => &["media", "Audio"],
             Self::Video => &["media", "Video"],
             Self::Pdf => &["media", "Pdf"],
-            other => panic!("{other:?} is not a primitive with a builtin class"),
         }
     }
 
