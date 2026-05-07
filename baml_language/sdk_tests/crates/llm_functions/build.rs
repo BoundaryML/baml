@@ -1,8 +1,8 @@
 // Hand-written; drives codegen from real `.baml` source rather than an
 // in-memory `SymbolPool`. Mirrors the pipeline `baml-cli generate`
 // uses: discover files → ProjectDatabase → diagnostics gate →
-// `build_symbol_pool` → `to_source_code`. Same shape as
-// `python_example_09a/build.rs`.
+// `build_symbol_pool` → `to_source_code`. Reference template for the
+// other rig crates' build.rs / conftest.py / pyproject.toml shape.
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -75,7 +75,8 @@ fn main() {
         fs::write(&file_path, &content).unwrap();
     }
 
-    // 5. Symlink customizable/ files into generated/.
+    // 5. Symlink customizable/ files into generated/, identical to the
+    //    template-based crates.
     let customizable_dir = manifest_dir.join("customizable");
     if customizable_dir.exists() {
         for entry in fs::read_dir(&customizable_dir).unwrap() {
@@ -110,17 +111,14 @@ fn main() {
     }
 
     // 6. pyproject.toml + test.sh + test.ps1. Test runner does
-    //    `uv sync`, which installs `baml_core` from the local source
-    //    via `[tool.uv.sources]` — uv invokes the maturin build-backend
-    //    declared in `languages/python/pyproject.toml`, so the PyO3
-    //    extension is compiled into the project venv as part of the
-    //    sync. No separate `maturin develop` step is needed (and adding
-    //    one would re-skew `test.sh` vs `test.ps1`). `[tool.uv]
-    //    package = false` keeps uv from trying to install this
-    //    directory as a wheel; the empty `dev` group satisfies
-    //    maturin's `uv pip install --group dev` step.
+    //    `uv sync` then `maturin develop` against bridge_python's
+    //    Cargo.toml, installing the real `baml_core` (PyO3
+    //    extension) into the project venv. `[tool.uv] package =
+    //    false` keeps uv from trying to install this directory as
+    //    a wheel; the empty `dev` group satisfies maturin's
+    //    `uv pip install --group dev` step.
     let pyproject_toml = r#"[project]
-name = "baml-test-type-shapes"
+name = "baml-test-llm-functions"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
@@ -139,7 +137,7 @@ dev = []
 package = false
 
 [tool.uv.sources]
-baml_core = { path = "../../../../languages/python", editable = true }
+baml_core = { path = "../../../../sdks/python", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["."]
@@ -165,7 +163,7 @@ if ! command -v uv &> /dev/null; then
     echo "Error: uv is not installed"
     exit 1
 fi
-echo "==> uv sync (installs baml_core + deps; maturin builds the PyO3 extension)"
+echo "==> uv sync (installs baml_core + deps, builds Rust extension if needed)"
 uv sync
 echo "==> ruff check"
 uv run ruff check --config pyproject.toml baml_sdk
@@ -193,20 +191,28 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Error "Error: uv is not installed"
     exit 1
 }
-Write-Host "==> uv sync (installs baml_core + deps; maturin builds the PyO3 extension)"
+$BridgePythonDir = (Resolve-Path "../../../../sdks/python/rust/bridge_python").Path
+Write-Host "==> uv sync"
 uv sync
-Write-Host "==> ruff check"
+Write-Host "==> maturin develop (builds bridge_python's PyO3 extension into .venv)"
+uv run maturin develop --manifest-path (Join-Path $BridgePythonDir "Cargo.toml")
+Write-Host "==> Running Python syntax check..."
+$pythonFiles = Get-ChildItem -Recurse -Include *.py,*.pyi | ForEach-Object { $_.FullName }
+if ($pythonFiles) {
+    foreach ($file in $pythonFiles) {
+        uv run python -m py_compile $file
+    }
+}
+Write-Host "==> Running ruff lint..."
 uv run ruff check --config pyproject.toml baml_sdk
-Write-Host "==> pyright"
-uv run pyright baml_sdk
-Write-Host "==> pytest"
+Write-Host "==> Running pytest..."
 uv run pytest -v
 Write-Host "==> All checks passed!"
 "#;
     fs::write(generated_dir.join("test.ps1"), test_ps1).unwrap();
 
     // 7. rerun-if-changed for build.rs + every BAML and customizable
-    //    file.
+    //    file. baml_src/ rebuilds when contents change.
     println!("cargo:rerun-if-changed=build.rs");
     watch_dir(&baml_src);
     if customizable_dir.exists() {

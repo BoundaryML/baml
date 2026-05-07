@@ -36,7 +36,7 @@ fn main() -> std::io::Result<()> {
     prost_build::compile_protos(&proto_strs, &["types"])?;
 
     // Generate Python pb2 + pyi.
-    let python_out = manifest_dir.join("../../languages/python/src");
+    let python_out = manifest_dir.join("../../sdks/python/src");
     let mut cmd = std::process::Command::new(&protoc);
     cmd.arg(format!("--proto_path={}", proto_dir.display()));
     cmd.arg(format!("--python_out={}", python_out.display()));

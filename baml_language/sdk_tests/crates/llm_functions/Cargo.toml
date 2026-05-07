@@ -10,13 +10,13 @@
 # `baml.*` / handle-backed class scenarios from 09a are out of scope
 # here per 11h §12.5.
 [package]
-name = "rig_llm_functions"
+name = "sdk_test_llm_functions"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [build-dependencies]
-codegen_python = { path = "../../../languages/python/rust/codegen_python" }
+codegen_python = { path = "../../../sdks/python/rust/codegen_python" }
 baml_codegen_types = { path = "../../../crates/baml_codegen_types" }
 baml_db = { path = "../../../crates/baml_db" }
 baml_project = { path = "../../../crates/baml_project" }

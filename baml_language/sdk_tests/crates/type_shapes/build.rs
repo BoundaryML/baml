@@ -110,14 +110,17 @@ fn main() {
     }
 
     // 6. pyproject.toml + test.sh + test.ps1. Test runner does
-    //    `uv sync` then `maturin develop` against bridge_python's
-    //    Cargo.toml, installing the real `baml_core` (PyO3
-    //    extension) into the project venv. `[tool.uv] package =
-    //    false` keeps uv from trying to install this directory as
-    //    a wheel; the empty `dev` group satisfies maturin's
-    //    `uv pip install --group dev` step.
+    //    `uv sync`, which installs `baml_core` from the local source
+    //    via `[tool.uv.sources]` — uv invokes the maturin build-backend
+    //    declared in `sdks/python/pyproject.toml`, so the PyO3
+    //    extension is compiled into the project venv as part of the
+    //    sync. No separate `maturin develop` step is needed (and adding
+    //    one would re-skew `test.sh` vs `test.ps1`). `[tool.uv]
+    //    package = false` keeps uv from trying to install this
+    //    directory as a wheel; the empty `dev` group satisfies
+    //    maturin's `uv pip install --group dev` step.
     let pyproject_toml = r#"[project]
-name = "baml-test-docstrings-etc"
+name = "baml-test-type-shapes"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
@@ -136,7 +139,7 @@ dev = []
 package = false
 
 [tool.uv.sources]
-baml_core = { path = "../../../../languages/python", editable = true }
+baml_core = { path = "../../../../sdks/python", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["."]
@@ -162,7 +165,7 @@ if ! command -v uv &> /dev/null; then
     echo "Error: uv is not installed"
     exit 1
 fi
-echo "==> uv sync (installs baml_core + deps, builds Rust extension if needed)"
+echo "==> uv sync (installs baml_core + deps; maturin builds the PyO3 extension)"
 uv sync
 echo "==> ruff check"
 uv run ruff check --config pyproject.toml baml_sdk
@@ -190,21 +193,13 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Error "Error: uv is not installed"
     exit 1
 }
-$BridgePythonDir = (Resolve-Path "../../../../languages/python/rust/bridge_python").Path
-Write-Host "==> uv sync"
+Write-Host "==> uv sync (installs baml_core + deps; maturin builds the PyO3 extension)"
 uv sync
-Write-Host "==> maturin develop (builds bridge_python's PyO3 extension into .venv)"
-uv run maturin develop --manifest-path (Join-Path $BridgePythonDir "Cargo.toml")
-Write-Host "==> Running Python syntax check..."
-$pythonFiles = Get-ChildItem -Recurse -Include *.py,*.pyi | ForEach-Object { $_.FullName }
-if ($pythonFiles) {
-    foreach ($file in $pythonFiles) {
-        uv run python -m py_compile $file
-    }
-}
-Write-Host "==> Running ruff lint..."
+Write-Host "==> ruff check"
 uv run ruff check --config pyproject.toml baml_sdk
-Write-Host "==> Running pytest..."
+Write-Host "==> pyright"
+uv run pyright baml_sdk
+Write-Host "==> pytest"
 uv run pytest -v
 Write-Host "==> All checks passed!"
 "#;
