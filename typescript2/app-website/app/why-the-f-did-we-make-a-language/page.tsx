@@ -42,19 +42,28 @@ const problems = [
 
 const comparisons = [
   {
-    code: `// Hope the AI returns the right format 🤞
-const response = await openai.complete({
-  prompt: \`Extract user info from: \${text}\`
+    code: `import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
+import { z } from "zod";
+
+const User = z.object({
+  name: z.string(),
+  email: z.string(),
+  age: z.number(),
 });
 
-// Runtime error waiting to happen
-const user = JSON.parse(response);
-console.log(user.name); // undefined? string? who knows!`,
+// Schema lives in TypeScript. Prompt is still a string in your app.
+const r = await client.chat.completions.parse({
+  model: "gpt-4o",
+  messages: [{ role: "user", content: \`Extract user info from: \${text}\` }],
+  response_format: zodResponseFormat(User, "user"),
+});
+const user = r.choices[0].message.parsed;`,
     problems: [
-      'No type safety',
-      'Runtime errors',
-      'Manual parsing',
-      'No validation',
+      'Prompt buried in app code',
+      'Schema duplicated per language',
+      'Untestable in isolation',
+      'Locked to one runtime',
     ],
     title: 'Without BAML',
   },

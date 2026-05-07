@@ -238,6 +238,21 @@ export function WhyALanguage() {
       </section>
 
       <style global jsx>{`
+        .icon-pill {
+          transition:
+            box-shadow 220ms ease,
+            border-color 220ms ease,
+            transform 220ms ease;
+        }
+
+        .icon-pill:hover {
+          border-color: rgba(109, 40, 217, 0.55);
+          box-shadow:
+            0 0 0 4px rgba(109, 40, 217, 0.12),
+            0 0 18px rgba(109, 40, 217, 0.32);
+          transform: translateY(-1px);
+        }
+
         .feature-chip-grid {
           container-name: feature-chip-grid;
           container-type: inline-size;
@@ -578,7 +593,7 @@ function IconPill({
     <span
       aria-label={label}
       className={[
-        'grid place-items-center rounded-full border border-[#D9D3C4] bg-white/65',
+        'icon-pill grid place-items-center rounded-full border border-[#D9D3C4] bg-white/65',
         isLarge ? 'size-14' : 'size-10',
       ].join(' ')}
       role="img"

@@ -764,6 +764,40 @@ function GraphPanel({ runningPulse }: { runningPulse: boolean }) {
   const nodeById: Record<string, GraphNode> = Object.fromEntries(
     GRAPH_NODES.map((n) => [n.id, n]),
   );
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [panning, setPanning] = useState(false);
+  const panOriginRef = useRef<{
+    pointerX: number;
+    pointerY: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+
+  const onPanPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    panOriginRef.current = {
+      pointerX: e.clientX,
+      pointerY: e.clientY,
+      startX: pan.x,
+      startY: pan.y,
+    };
+    setPanning(true);
+  };
+
+  const onPanPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const origin = panOriginRef.current;
+    if (!origin) return;
+    setPan({
+      x: origin.startX + (e.clientX - origin.pointerX),
+      y: origin.startY + (e.clientY - origin.pointerY),
+    });
+  };
+
+  const endPan = (e: ReactPointerEvent<HTMLDivElement>) => {
+    panOriginRef.current = null;
+    setPanning(false);
+    (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
+  };
 
   return (
     <div
@@ -860,13 +894,20 @@ function GraphPanel({ runningPulse }: { runningPulse: boolean }) {
 
       {/* canvas */}
       <div
+        onPointerCancel={endPan}
+        onPointerDown={onPanPointerDown}
+        onPointerMove={onPanPointerMove}
+        onPointerUp={endPan}
         style={{
           backgroundImage: `radial-gradient(${G.grid} 1px, transparent 1px)`,
+          backgroundPosition: `${pan.x}px ${pan.y}px`,
           backgroundSize: '22px 22px',
+          cursor: panning ? 'grabbing' : 'grab',
           flex: 1,
           minHeight: 0,
           overflow: 'hidden',
           position: 'relative',
+          touchAction: 'none',
           width: '100%',
         }}
       >
@@ -876,7 +917,10 @@ function GraphPanel({ runningPulse }: { runningPulse: boolean }) {
             height: '100%',
             justifyContent: 'center',
             padding: '20px 24px',
+            transform: `translate(${pan.x}px, ${pan.y}px)`,
+            transition: panning ? 'none' : 'transform 120ms ease',
             width: '100%',
+            willChange: 'transform',
           }}
         >
           <div
@@ -1154,36 +1198,36 @@ export function CompactPerspectivePanel() {
           color: EYEBROW,
           display: 'flex',
           fontFamily: MONO,
-          fontSize: 10,
+          fontSize: 13,
           fontWeight: 600,
           justifyContent: 'space-between',
           letterSpacing: '0.12em',
-          marginBottom: 10,
+          marginBottom: 14,
           padding: '0 4px',
           textTransform: 'uppercase',
         }}
       >
-        <span style={{ alignItems: 'center', display: 'flex', gap: 8 }}>
+        <span style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
           <span
             aria-hidden
             style={{
               background: ACCENT,
               borderRadius: '50%',
-              height: 6,
-              width: 6,
+              height: 8,
+              width: 8,
             }}
           />
           what your agent sees
         </span>
-        <span style={{ alignItems: 'center', display: 'flex', gap: 8 }}>
+        <span style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
           what you see
           <span
             aria-hidden
             style={{
               background: INK,
               borderRadius: '50%',
-              height: 6,
-              width: 6,
+              height: 8,
+              width: 8,
             }}
           />
         </span>
@@ -1442,36 +1486,36 @@ export function PerspectiveSlider() {
               color: EYEBROW,
               display: 'flex',
               fontFamily: MONO,
-              fontSize: 11,
+              fontSize: 14,
               fontWeight: 600,
               justifyContent: 'space-between',
               letterSpacing: '0.14em',
-              marginBottom: 10,
+              marginBottom: 14,
               padding: '0 6px',
               textTransform: 'uppercase',
             }}
           >
-            <span style={{ alignItems: 'center', display: 'flex', gap: 8 }}>
+            <span style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
               <span
                 aria-hidden
                 style={{
                   background: ACCENT,
                   borderRadius: '50%',
-                  height: 6,
-                  width: 6,
+                  height: 8,
+                  width: 8,
                 }}
               />
               what your agent sees
             </span>
-            <span style={{ alignItems: 'center', display: 'flex', gap: 8 }}>
+            <span style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
               what you see
               <span
                 aria-hidden
                 style={{
                   background: INK,
                   borderRadius: '50%',
-                  height: 6,
-                  width: 6,
+                  height: 8,
+                  width: 8,
                 }}
               />
             </span>

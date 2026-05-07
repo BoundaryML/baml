@@ -91,7 +91,7 @@ export function ScriptCopyBtn({
           )}
         </div>
         <div className="relative flex items-center">
-          <div className="min-w-0 w-full grow font-mono">
+          <div className="min-w-0 font-mono">
             <button
               type="button"
               aria-label={
@@ -104,9 +104,9 @@ export function ScriptCopyBtn({
                   copyToClipboard();
                 }
               }}
-              className="h-10 w-full rounded border border-border bg-background px-3 text-[11px] sm:text-xs flex items-center cursor-pointer text-left hover:bg-muted/40 transition-colors"
+              className="h-10 w-fit max-w-full rounded border border-border bg-background px-3 text-[11px] sm:text-xs flex items-center cursor-pointer text-left hover:bg-muted/40 transition-colors"
             >
-              <span className="block w-full overflow-x-auto whitespace-pre">
+              <span className="block overflow-x-auto whitespace-pre">
                 {command}
               </span>
             </button>
