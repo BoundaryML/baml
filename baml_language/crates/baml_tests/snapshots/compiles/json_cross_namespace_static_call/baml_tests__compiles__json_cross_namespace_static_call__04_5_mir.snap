@@ -1,0 +1,137 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.decode_auto(j: baml.json.json) -> pkg.inner.AutoBox<int> {
+    // Locals:
+    let _0: pkg.inner.AutoBox<int> // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(int);
+        _0 = call const fn user.pkg.inner.AutoBox.from_json<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.decode_root(j: baml.json.json) -> pkg.inner.Box<int> {
+    // Locals:
+    let _0: pkg.inner.Box<int> // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(int);
+        _0 = call const fn user.pkg.inner.Box.from_json<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<void> {
+    // Locals:
+    let _0: pkg.inner.Box<void> // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: void
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "value") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(#0);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = user.pkg.inner.Box<TypeArgRef(0)> { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> pkg.inner.AutoBox<void> {
+    // Locals:
+    let _0: pkg.inner.AutoBox<void> // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: void
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "value") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(#0);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = user.pkg.inner.AutoBox<TypeArgRef(0)> { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.pkg.inner.AutoBox.to_json(self: pkg.inner.AutoBox) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: pkg.inner.AutoBox // self // param
+    let _2: baml.json.json
+    let _3: void
+    let _4: pkg.inner.AutoBox
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.json.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "value": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.pkg.inner.Box.to_json(self: pkg.inner.Box) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: pkg.inner.Box // self // param
+    let _2: baml.json.json
+    let _3: void
+    let _4: pkg.inner.Box
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.json.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "value": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}

@@ -924,6 +924,66 @@ async fn round_trip_with_overrides_both_directions() {
 }
 
 #[tokio::test]
+async fn alias_chain_dispatch_to_json() {
+    // `type Inner = B; type Outer = Inner` chains two non-cyclic aliases
+    // through to `class B`.  Calling `b.to_json()` on a value typed as
+    // `Outer` must walk the alias chain inside `resolve_member` until it
+    // bottoms out on `B`, then dispatch B's user `to_json` override.
+    //
+    // Without the `Ty::TypeAlias` arm in `resolve_member` (`builder.rs:4977`)
+    // this would fail with `[E0007] type 'Outer' has no member 'to_json'`.
+    let source = r#"
+        class B {
+            y int
+
+            function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                42
+            }
+        }
+        type Inner = B
+        type Outer = Inner
+
+        function main() -> int throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let b: Outer = B { y: 7 };
+            let j: baml.json.json = b.to_json();
+            match (j) {
+                n: int => n,
+                _ => -1,
+            }
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+async fn alias_chain_dispatch_from_json() {
+    // Same alias chain, but on the static-method side.  `Outer.from_json(j)`
+    // must walk the alias chain to `B` and dispatch B's user `from_json`
+    // override.  The override returns a constant — without alias-chained
+    // member resolution the call would not even compile.
+    let source = r#"
+        class B {
+            y int
+
+            function from_json(j: baml.json.json) -> B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                B { y: 99 }
+            }
+        }
+        type Inner = B
+        type Outer = Inner
+
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j: baml.json.json = baml.json.parse("{\"y\":7}");
+            let b: Outer = Outer.from_json(j);
+            b.y
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+#[tokio::test]
 async fn from_json_wrapper_body_fallback() {
     // Classes with field types unsafe for per-field synthesis (`$rust_type`,
     // function types, `unknown`) fall back to the wrapper body

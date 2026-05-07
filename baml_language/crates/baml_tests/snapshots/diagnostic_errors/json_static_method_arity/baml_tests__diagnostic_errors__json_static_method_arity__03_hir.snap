@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+class user.Box {
+  value: user.T
+}
+function user.bad_extra(j: baml.json.json) -> user.Box  [expr] {
+  {  } Box.from_json(j)
+}
+function user.bad_missing(j: baml.json.json) -> user.Box  [expr] {
+  {  } Box.from_json(j)
+}
+function user.from_json(j: baml.json.json) -> user.Box  [expr] {
+  {  } user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "value": baml.json.to_json(self.value) }
+}

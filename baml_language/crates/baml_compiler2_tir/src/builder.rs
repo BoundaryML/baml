@@ -1745,11 +1745,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Determine if the base is a runtime value (local variable, function
                     // result, etc.) or a bare type name used as a namespace (e.g.
                     // `Factory<int>` in `Factory<int>.create(42)`).
-                    // A base is a type name if it's a single-segment Path whose name is
-                    // NOT a local variable — in that case the access is an "unbound"
-                    // method reference (bound = false).
+                    // A base is a type name if it's a `Path` whose root segment is NOT
+                    // a local variable — multi-segment paths like
+                    // `root.pkg.inner.Box<int>.from_json(j)` resolve to a class type at
+                    // the base position, so the access is an "unbound" static-method
+                    // reference (bound = false).
                     let base_is_value = match &body.exprs[*base] {
-                        Expr::Path(segments) if segments.len() == 1 => {
+                        Expr::Path(segments) if !segments.is_empty() => {
                             self.locals.contains_key(&segments[0])
                         }
                         _ => true, // complex expressions are always values
