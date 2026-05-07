@@ -9,7 +9,7 @@ use bex_project::{BexExternalValue, Ty};
 use indexmap::IndexMap;
 
 use crate::{
-    baml::cffi::{
+    baml_core::cffi::{
         InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry, InboundMapValue,
         InboundValue, inbound_value::Value as InboundValueVariant,
     },
@@ -128,7 +128,7 @@ fn convert_enum(e: InboundEnumValue) -> BexExternalValue {
 }
 
 fn extract_string_key(entry: &InboundMapEntry) -> Result<String, CtypesError> {
-    use crate::baml::cffi::inbound_map_entry::Key;
+    use crate::baml_core::cffi::inbound_map_entry::Key;
     match &entry.key {
         Some(Key::StringKey(s)) => Ok(s.clone()),
         Some(Key::IntKey(i)) => Ok(i.to_string()),
@@ -159,7 +159,7 @@ pub fn kwargs_to_bex_values(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{baml::cffi::BamlHandle, handle_table::CffiHandleTableEntry};
+    use crate::{baml_core::cffi::BamlHandle, handle_table::CffiHandleTableEntry};
 
     #[test]
     fn inbound_handle_drains_table_entry() {

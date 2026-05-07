@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+class user.Container {
+  item: user.T
+}
+class user.User {
+  name: string
+}
+function user.decode_container(s: string) -> user.Container  [expr] {
+  {  } baml.json.from_string(s)
+}
+function user.from_json(j: baml.json.json) -> user.User  [expr] {
+  user.User { name: baml.json.from_json(baml.json.field(j, "name")) }
+}
+function user.from_json(j: baml.json.json) -> user.Container  [expr] {
+  user.Container { item: baml.json.from_json(baml.json.field(j, "item")) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "item": baml.json.to_json(self.item) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}

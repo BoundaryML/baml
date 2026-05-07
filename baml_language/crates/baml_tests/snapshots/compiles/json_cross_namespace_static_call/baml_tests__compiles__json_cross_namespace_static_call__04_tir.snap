@@ -1,0 +1,40 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.decode_root(j: baml.json.json) -> user.pkg.inner.Box<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  { : user.pkg.inner.Box<int>
+    root.pkg.inner.Box.from_json(j) : user.pkg.inner.Box<int>
+  }
+}
+function user.decode_auto(j: baml.json.json) -> user.pkg.inner.AutoBox<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  { : user.pkg.inner.AutoBox<int>
+    root.pkg.inner.AutoBox.from_json(j) : user.pkg.inner.AutoBox<int>
+  }
+}
+class user.pkg.inner.Box {
+  value: T
+}
+function user.pkg.inner.Box.from_json(j: baml.json.json) -> user.pkg.inner.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  { : user.pkg.inner.Box<T>
+    Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.pkg.inner.Box<T>
+  }
+}
+function user.pkg.inner.Box.to_json(self: user.pkg.inner.Box) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
+}
+class user.pkg.inner.AutoBox {
+  value: T
+}
+function user.pkg.inner.AutoBox.to_json(self: user.pkg.inner.AutoBox) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
+}
+function user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> user.pkg.inner.AutoBox<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  AutoBox { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.pkg.inner.AutoBox<T>
+}
+class user.pkg.inner.Box$stream {
+  value: null | T
+}
+class user.pkg.inner.AutoBox$stream {
+  value: null | T
+}

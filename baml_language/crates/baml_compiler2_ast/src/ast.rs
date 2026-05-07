@@ -866,6 +866,9 @@ pub enum FunctionOrigin {
     UserDefined,
     Companion,
     Internal,
+    /// Synthesized by the auto-derive pass (e.g. `to_json` / `from_json`
+    /// methods generated on every user class).
+    AutoDerive,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

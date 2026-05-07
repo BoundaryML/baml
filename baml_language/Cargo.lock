@@ -1680,6 +1680,7 @@ dependencies = [
  "colored",
  "indexmap 2.13.0",
  "log",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "web-time",
@@ -6622,50 +6623,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rig_basic_type_shapes"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
-]
-
-[[package]]
-name = "rig_docstrings_etc"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
-]
-
-[[package]]
-name = "rig_llm_functions"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
-]
-
-[[package]]
-name = "rig_type_shapes"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
-]
-
-[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7029,6 +6986,50 @@ dependencies = [
  "memmap2",
  "smithay-client-toolkit 0.19.2",
  "tiny-skia",
+]
+
+[[package]]
+name = "sdk_test_basic_type_shapes"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_types",
+ "baml_db",
+ "baml_project",
+ "baml_workspace",
+ "codegen_python",
+]
+
+[[package]]
+name = "sdk_test_docstrings_etc"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_types",
+ "baml_db",
+ "baml_project",
+ "baml_workspace",
+ "codegen_python",
+]
+
+[[package]]
+name = "sdk_test_llm_functions"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_types",
+ "baml_db",
+ "baml_project",
+ "baml_workspace",
+ "codegen_python",
+]
+
+[[package]]
+name = "sdk_test_type_shapes"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_types",
+ "baml_db",
+ "baml_project",
+ "baml_workspace",
+ "codegen_python",
 ]
 
 [[package]]

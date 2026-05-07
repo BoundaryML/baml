@@ -154,6 +154,14 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     continue;
                 };
 
+                // Auto-derived methods (`to_json` / `from_json` synthesized
+                // by `auto_derive_json`) are language-level plumbing, not
+                // user-facing API. Skip them so client SDKs don't surface
+                // them as static / instance methods on every class.
+                if matches!(method.origin, FunctionOrigin::AutoDerive) {
+                    continue;
+                }
+
                 let is_instance = method
                     .params
                     .first()

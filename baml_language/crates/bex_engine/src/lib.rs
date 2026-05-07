@@ -504,6 +504,7 @@ impl BexEngine {
                     globals.clone(),
                     resolved_class_names
                         .iter()
+                        .chain(resolved_enum_names.iter())
                         .map(|(k, v)| (k.clone(), *v))
                         .collect(),
                     #[cfg(not(target_arch = "wasm32"))]
@@ -876,6 +877,7 @@ impl BexEngine {
             self.globals.clone(),
             self.resolved_class_names
                 .iter()
+                .chain(self.resolved_enum_names.iter())
                 .map(|(k, v)| (k.clone(), *v))
                 .collect(),
             #[cfg(not(target_arch = "wasm32"))]

@@ -1,4 +1,9 @@
 class Uint8Array {
+  //baml:mut_vm
+  function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+    $rust_function
+  }
+
   function length(self) -> int {
     $rust_function
   }

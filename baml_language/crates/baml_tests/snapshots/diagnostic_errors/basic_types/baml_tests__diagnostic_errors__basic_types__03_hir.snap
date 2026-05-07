@@ -15,6 +15,18 @@ class user.FieldAttributes {
   state: string
   multiple: string?
 }
+function user.from_json(j: baml.json.json) -> user.FieldAttributes  [expr] {
+  user.FieldAttributes { money: baml.json.from_json(baml.json.field(j, "money")), currency: baml.json.from_json(baml.json.field(j, "currency")), name: baml.json.from_json(baml.json.field(j, "name")), summary: baml.json.from_json(baml.json.field(j, "summary")), details: baml.json.from_json(baml.json.field(j, "details")), state: baml.json.from_json(baml.json.field(j, "state")), multiple: baml.json.from_json(baml.json.field(j, "multiple")) }
+}
+function user.from_json(j: baml.json.json) -> user.ClassAttributes  [expr] {
+  user.ClassAttributes { name: baml.json.from_json(baml.json.field(j, "name")) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "money": self.money.to_json(), "currency": self.currency.to_json(), "name": self.name.to_json(), "summary": self.summary.to_json(), "details": self.details?.to_json(), "state": self.state.to_json(), "multiple": self.multiple?.to_json() }
+}
 function user.GetMixedList() -> int | string[]  [llm] {
   baml.llm.call_llm_function(GPT4, "GetMixedList", map {  })
 }
@@ -91,3 +103,9 @@ type user.ReallyLongMapType = map<string, "fieopwaiwjepfoiwajpoweijf" | int | st
 type user.Role = "user" | "assistant" | "system"
 type user.RoleList = "reader"[]
 type user.UnionOfArrays = int[] | string[]
+function user.from_json(j: baml.json.json) -> user.User  [expr] {
+  user.User { id: baml.json.from_json(baml.json.field(j, "id")), name: baml.json.from_json(baml.json.field(j, "name")), email: baml.json.from_json(baml.json.field(j, "email")) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "id": self.id.to_json(), "name": self.name.to_json(), "email": self.email.to_json() }
+}

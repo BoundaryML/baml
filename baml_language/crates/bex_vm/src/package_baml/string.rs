@@ -1,6 +1,16 @@
+use bex_vm_types::types::Value;
+
 use super::{BamlClassString, PackageBamlImpl};
+use crate::BexVm;
 
 impl BamlClassString for PackageBamlImpl {
+    fn to_json(vm: &mut BexVm, string: &str) -> Value {
+        // `string` is already a valid `json` arm — BAML's `json` type alias
+        // includes `string` as one of its union members.  Wrap the Rust `&str`
+        // back into a heap-allocated `Value::Object(Object::String(...))`.
+        vm.alloc_string(string.to_string())
+    }
+
     #[allow(clippy::cast_possible_wrap)]
     fn length(string: &str) -> i64 {
         string.chars().count() as i64

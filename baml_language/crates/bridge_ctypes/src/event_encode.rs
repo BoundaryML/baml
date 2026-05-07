@@ -4,7 +4,7 @@ use bex_events::{CustomEvent, EventKind, FunctionEvent, LogEvent, RuntimeEvent};
 
 use crate::{
     CffiHandleTableOptions,
-    baml::cffi::{
+    baml_core::cffi::{
         self, EventKind as ProtoEventKind, FunctionEndEvent, FunctionStartEvent,
         RuntimeEvent as ProtoRuntimeEvent, SetTagsEvent, TagEntry,
         event_kind::Kind as ProtoEventKindVariant,

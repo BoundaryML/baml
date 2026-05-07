@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.User {
+  name: string
+  age: int
+}
+function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "name": self.name.to_json(), "age": self.age.to_json() } : map<string, baml.json.json>
+}
+function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  User { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.User
+}
+function user.serialize_user(u: user.User) -> string throws baml.json.JsonSerializationError {
+  { : string
+    baml.json.to_string<T>(u) : string
+  }
+}
+function user.deserialize_user(s: string) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  { : user.User
+    baml.json.from_string<T>(s) : user.User
+  }
+}
+class user.User$stream {
+  name: null | string
+  age: null | int
+}

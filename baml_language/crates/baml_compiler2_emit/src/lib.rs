@@ -67,6 +67,7 @@ fn emitted_function_origin(
             baml_compiler2_ast::FunctionOrigin::UserDefined => FunctionOrigin::UserDefined,
             baml_compiler2_ast::FunctionOrigin::Companion => FunctionOrigin::Companion,
             baml_compiler2_ast::FunctionOrigin::Internal => FunctionOrigin::Internal,
+            baml_compiler2_ast::FunctionOrigin::AutoDerive => FunctionOrigin::AutoDerive,
         }
     }
 }
@@ -293,39 +294,51 @@ pub fn generate_project_bytecode_with_opt(
 
             let mut field_indices = HashMap::new();
             let mut fields = Vec::new();
+            // Class-level generic params, used to resolve `T`-references in
+            // field type expressions to `TyTemplate::TypeArgRef(N)`.  When
+            // empty, `tir2_to_template` produces `TyTemplate::Concrete(...)`
+            // for every leaf and `field_template == Concrete(field_type)`.
+            let class_generic_params: Vec<baml_base::Name> = class_data.generic_params.clone();
             for (idx, field) in class_data.fields.iter().enumerate() {
                 field_indices.insert(field.name.to_string(), idx);
-                let field_type = field
-                    .type_expr
-                    .as_ref()
-                    .map(|te| {
+                let (field_type, field_template) = match field.type_expr.as_ref() {
+                    Some(te) => {
                         let mut diags = Vec::new();
-                        // Use `lower_type_expr_in_ns` so unqualified field types
-                        // (e.g. `addresses Address[]` inside a `lorem.Resume`
-                        // declared under `ns_lorem/`) resolve against the
-                        // defining file's namespace. Plain `lower_type_expr`
-                        // passes `&[]` as ns context, leaving sibling-namespace
-                        // class refs unresolved → `Ty::Unknown` → `Ty::Void`,
-                        // which trips the FFI encoder when the class is later
-                        // returned. Mirrors the same fix in
-                        // `compute_function_metadata_from_item_tree` below.
+                        // Pass `class_generic_params` as the binding context so
+                        // `T`-references inside `class Container<T> { item: T }`
+                        // lower to `Tir2Ty::TypeVar("T")` rather than
+                        // `Tir2Ty::Unknown`.  This is the input both to the
+                        // erased-`Ty` (TypeVar→Void) used by codegen and to
+                        // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
+                        // typed runtime walking.
                         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                             db,
                             &te.expr,
                             pkg_items,
                             &pkg_info.namespace_path,
-                            &[],
+                            &class_generic_params,
                             &mut diags,
                         );
-                        cache.convert(&tir_ty)
-                    })
-                    .unwrap_or_else(|| baml_type::Ty::Null {
-                        attr: baml_type::TyAttr::default(),
-                    });
+                        let resolved_ty = cache.convert(&tir_ty);
+                        let template = baml_compiler2_mir::tir2_to_template(
+                            &tir_ty,
+                            cache,
+                            &class_generic_params,
+                        );
+                        (resolved_ty, template)
+                    }
+                    None => {
+                        let null_ty = baml_type::Ty::Null {
+                            attr: baml_type::TyAttr::default(),
+                        };
+                        (null_ty.clone(), baml_type::TyTemplate::Concrete(null_ty))
+                    }
+                };
                 let (field_desc, field_alias, field_skip) = extract_schema_attrs(&field.attributes);
                 fields.push(ClassField {
                     name: field.name.to_string(),
                     field_type,
+                    field_template,
                     description: field_desc,
                     alias: field_alias,
                     skip: field_skip,

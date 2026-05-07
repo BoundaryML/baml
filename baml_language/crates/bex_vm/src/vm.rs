@@ -309,6 +309,21 @@ pub struct BexVm {
     /// Process argv passed to the engine at startup. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
     pub argv: Arc<[String]>,
+
+    /// Type-args of the *currently dispatching* call, populated by the
+    /// `Instruction::Call` handler from the leading `ntypeargs` `Object::Type`
+    /// stack slots before invoking the callee.
+    ///
+    /// For bytecode callees this is redundant (the type-args are written into
+    /// the new frame's `type_args` field by the Call writeback), but for native
+    /// callees it is the only channel — the native dispatch path does not push
+    /// a bytecode frame, so without this slot any leading type-args would be
+    /// silently dropped.
+    ///
+    /// Saved/restored across nested `Call` instructions; native handlers that
+    /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
+    /// even if the inner callback uses different ones.
+    pending_call_type_args: Vec<baml_type::Ty>,
 }
 
 /// VM execution state.
@@ -593,7 +608,21 @@ impl BexVm {
             traced_frames: Vec::new(),
             current_span_context: None,
             argv,
+            pending_call_type_args: Vec::new(),
         }
+    }
+
+    /// Type-args of the currently dispatching call.
+    ///
+    /// Populated by `Instruction::Call` when the call carries `ntypeargs > 0`.
+    /// For BAML→BAML calls these are also written into the callee's frame; for
+    /// BAML→native calls this slot is the **only** channel, since native
+    /// dispatch does not push a bytecode frame.
+    ///
+    /// Returns an empty slice for calls with `ntypeargs == 0` and from outside
+    /// any call dispatch context.
+    pub fn current_call_type_args(&self) -> &[baml_type::Ty] {
+        &self.pending_call_type_args
     }
 
     /// Read an object from the heap via `HeapPtr`.
@@ -875,12 +904,24 @@ impl BexVm {
             .collect();
         let globals = GlobalPool::from_vec(globals_vec);
 
-        // Build resolved_class_names: convert ObjectIndex -> HeapPtr
-        let resolved_class_names: HashMap<String, HeapPtr> = bytecode
+        // Build resolved_class_names: convert ObjectIndex -> HeapPtr.
+        //
+        // Enum HeapPtrs are folded into the same map: BAML's type namespace is
+        // shared across classes and enums (a class and an enum cannot share an
+        // FQN), so callers that need name-based runtime lookup (e.g.
+        // `baml.json.from_string<Color>(...)`) can dispatch on the resulting
+        // `Object` kind.
+        let mut resolved_class_names: HashMap<String, HeapPtr> = bytecode
             .resolved_class_names
             .into_iter()
             .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw())))
             .collect();
+        resolved_class_names.extend(
+            bytecode
+                .resolved_enums_names
+                .into_iter()
+                .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw()))),
+        );
 
         Ok(Self::new(
             heap,
@@ -1117,6 +1158,40 @@ impl BexVm {
             .resolved_class_names
             .get(name)
             .unwrap_or_else(|| panic!("resolve_class: class {name:?} not found"))
+    }
+
+    /// Look up a function by its fully-qualified name by scanning `vm.globals`.
+    ///
+    /// Returns `Some(ptr)` for the first `Object::Function` whose `name` matches,
+    /// or `None` if no such function exists in the global pool.
+    ///
+    /// This is O(globals) and intended for use in native methods that need to
+    /// dispatch to a dynamically resolved method (e.g. `Map.to_json`). Not
+    /// suitable for hot paths; callers that need repeated lookups should cache
+    /// the result.
+    pub fn find_function_by_name(&self, name: &str) -> Option<HeapPtr> {
+        for v in &self.globals {
+            if let Value::Object(ptr) = v {
+                if let Object::Function(f) = self.get_object(*ptr) {
+                    if f.name == name {
+                        return Some(*ptr);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Allocate a `BoundMethod` on the heap, binding `function` (a `HeapPtr`
+    /// pointing to an `Object::Function`) to `receiver`.
+    ///
+    /// When the bound method is called via `YieldToCall`, the VM automatically
+    /// inserts `receiver` as the first argument (`self`).
+    pub fn alloc_bound_method(&mut self, function: HeapPtr, receiver: Value) -> Value {
+        Value::Object(
+            self.tlab
+                .alloc(Object::BoundMethod(BoundMethod { function, receiver })),
+        )
     }
 
     /// Allocate a type descriptor object on the heap.
@@ -1690,6 +1765,7 @@ impl BexVm {
                     NativeCallResult::YieldToCall {
                         callee,
                         args: mut callback_args,
+                        type_args: callback_type_args,
                         continuation,
                     } => {
                         // Push a Native continuation frame, then dispatch the
@@ -1709,13 +1785,53 @@ impl BexVm {
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
 
-                        return self.execute_call_from_locals_offset(
+                        // Mirror the Call-instruction's type-arg plumbing
+                        // (see vm.rs:3757) so a native helper that yields with
+                        // explicit `type_args` (e.g. `baml.json.from_json`
+                        // dispatching a generic class' `from_json`) seeds the
+                        // callee's frame correctly.  Save/restore around the
+                        // dispatch matches the Call-instruction handler.
+                        let prev_pending = std::mem::replace(
+                            &mut self.pending_call_type_args,
+                            callback_type_args.clone(),
+                        );
+                        let frames_before = self.frames.len();
+
+                        let result = self.execute_call_from_locals_offset(
                             real_callee,
                             cb_locals,
                             arg_count,
                             frame_idx,
                             function,
                         );
+
+                        self.pending_call_type_args = prev_pending;
+
+                        // Append explicit type-args to the newly-pushed
+                        // bytecode frame's `type_args` (after class-args from
+                        // BoundMethod / Closure seeding).
+                        if !callback_type_args.is_empty() && self.frames.len() > frames_before {
+                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+                                bf.type_args.extend(callback_type_args);
+                            }
+                        }
+
+                        // Update *frame_idx to point at the new topmost frame.
+                        // Required so the caller's tight inner-dispatch loop
+                        // detects the frame change (the pushed Native
+                        // continuation frame for the outer native that
+                        // yielded) and breaks out to let exec_compact's
+                        // continuation handler run it.  Without this, when the
+                        // recursive callback was itself a Native that returned
+                        // Done synchronously (no frame_idx update from the
+                        // recursion), the inner loop would continue stepping
+                        // the caller's bytecode with a stale Native frame on
+                        // top — eventually reading past the caller's code end.
+                        if !self.frames.is_empty() {
+                            *frame_idx = self.frames.len() - 1;
+                        }
+
+                        return result;
                     }
                 }
             }
@@ -1813,6 +1929,7 @@ impl BexVm {
             VmRustFnError::Panic(panic) => VmError::Thrown(self.panic_to_exception_value(panic)),
             VmRustFnError::BamlError(err) => VmError::Thrown(self.error_to_exception_value(err)),
             VmRustFnError::InternalError(err) => VmError::InternalError(err),
+            VmRustFnError::Thrown(value) => VmError::Thrown(value),
         }
     }
 
@@ -2040,6 +2157,7 @@ impl BexVm {
                         NativeCallResult::YieldToCall {
                             callee,
                             args: mut callback_args,
+                            type_args: callback_type_args,
                             continuation,
                         } => {
                             // The continuation wants to call another function.
@@ -2058,13 +2176,31 @@ impl BexVm {
                             let cb_locals = StackIndex::from_raw(self.stack.len());
                             self.stack.extend(callback_args);
 
-                            let ecflo_result = match self.execute_call_from_locals_offset(
+                            // Mirror the Call-instruction's type-arg plumbing for
+                            // continuation-driven YieldToCall (see vm.rs:3757).
+                            let prev_pending = std::mem::replace(
+                                &mut self.pending_call_type_args,
+                                callback_type_args.clone(),
+                            );
+                            let frames_before = self.frames.len();
+
+                            let ecflo_outcome = self.execute_call_from_locals_offset(
                                 real_callee,
                                 cb_locals,
                                 arg_count,
                                 &mut frame_idx,
                                 &mut function,
-                            ) {
+                            );
+
+                            self.pending_call_type_args = prev_pending;
+
+                            if !callback_type_args.is_empty() && self.frames.len() > frames_before {
+                                if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(frame_idx) {
+                                    bf.type_args.extend(callback_type_args);
+                                }
+                            }
+
+                            let ecflo_result = match ecflo_outcome {
                                 Ok(result) => result,
                                 Err(VmError::Thrown(exception_value)) => {
                                     self.try_unwind_exception(
@@ -3708,13 +3844,29 @@ impl BexVm {
                 // Native frame, also not the target of a type-arg writeback).
                 let frames_before = self.frames.len();
 
+                // Expose the type-args to the callee through `vm
+                // .current_call_type_args()`.  For BAML→BAML calls the values
+                // also flow through the new frame's `type_args` field below;
+                // for BAML→native calls this slot is the only channel.
+                // Save/restore the previous slot so a native handler that
+                // re-enters the VM via YieldToCall sees its own type-args even
+                // when the inner callback uses different ones.
+                let prev_pending_call_type_args =
+                    std::mem::replace(&mut self.pending_call_type_args, type_args.clone());
+
                 let result = self.execute_call_from_locals_offset(
                     callee_ptr,
                     locals_offset,
                     arg_count,
                     frame_idx,
                     function,
-                )?;
+                );
+
+                // Restore the previous slot regardless of how the call
+                // resolved (success, thrown error, yield).  The native
+                // handler has already consumed the slot at this point.
+                self.pending_call_type_args = prev_pending_call_type_args;
+                let result = result?;
 
                 // Append call-site type_args to the newly-pushed bytecode
                 // frame's existing type_args (which were pre-seeded from
@@ -4759,6 +4911,7 @@ impl BexVm {
                     NativeCallResult::YieldToCall {
                         callee,
                         args: mut callback_args,
+                        type_args: callback_type_args,
                         continuation,
                     } => {
                         self.frames.push(Frame::Native(NativeFrame {
@@ -4772,13 +4925,31 @@ impl BexVm {
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
 
-                        let ecflo_result = match self.execute_call_from_locals_offset(
+                        // Mirror the Call-instruction's type-arg plumbing for
+                        // continuation-driven YieldToCall.
+                        let prev_pending = std::mem::replace(
+                            &mut self.pending_call_type_args,
+                            callback_type_args.clone(),
+                        );
+                        let frames_before = self.frames.len();
+
+                        let ecflo_outcome = self.execute_call_from_locals_offset(
                             real_callee,
                             cb_locals,
                             arg_count,
                             &mut frame_idx,
                             &mut function,
-                        ) {
+                        );
+
+                        self.pending_call_type_args = prev_pending;
+
+                        if !callback_type_args.is_empty() && self.frames.len() > frames_before {
+                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(frame_idx) {
+                                bf.type_args.extend(callback_type_args);
+                            }
+                        }
+
+                        let ecflo_result = match ecflo_outcome {
                             Ok(result) => result,
                             Err(VmError::Thrown(exception_value)) => {
                                 self.try_unwind_exception(
@@ -4939,6 +5110,8 @@ impl BexVm {
             }
         }
 
+        // Read opcode byte and advance PC past it.
+        // SAFETY: PC is always in bounds (bytecode invariant).
         // Read opcode byte and advance PC past it.
         // SAFETY: PC is always in bounds (bytecode invariant).
         #[allow(unsafe_code)]
@@ -5461,6 +5634,12 @@ impl BexVm {
                     bf.instruction_ptr = *pc;
 
                     let frames_before = self.frames.len();
+                    // Mirror the native YieldToCall plumbing: stash type_args
+                    // into `pending_call_type_args` so a native callee can
+                    // read them via `current_call_type_args()` (e.g.
+                    // `baml.json.from_json<T>` reads its `T` from there).
+                    let prev_pending =
+                        std::mem::replace(&mut self.pending_call_type_args, type_args.clone());
                     let result = self.execute_call_from_locals_offset(
                         callee_ptr,
                         locals_offset,
@@ -5468,6 +5647,7 @@ impl BexVm {
                         frame_idx,
                         function,
                     );
+                    self.pending_call_type_args = prev_pending;
                     if !type_args.is_empty() && self.frames.len() > frames_before {
                         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                             bf.type_args.extend(type_args);

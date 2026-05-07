@@ -130,6 +130,15 @@ impl OutputFormatContent {
             return Ok(None);
         }
 
+        // The `json` type alias is an opaque leaf from the LLM's perspective.
+        // Regardless of rendering options, the only thing we ask the model to produce
+        // is arbitrary JSON — no schema body, no prefix enumeration.
+        if let Ty::TypeAlias(tn, _) = &self.target {
+            if tn.display_name.as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
+                return Ok(Some("Respond with valid JSON.".to_string()));
+            }
+        }
+
         // Compute which classes and enums to hoist
         let hoisted_classes = self.compute_hoisted_classes(options);
         let hoisted_enums = self.compute_hoisted_enums(options);
@@ -375,6 +384,12 @@ impl OutputFormatContent {
                         } else {
                             Some(format!("Answer in JSON using this {type_word}:\n"))
                         }
+                    }
+                    Ty::TypeAlias(tn, _)
+                        if tn.display_name.as_str()
+                            == ::baml_base::qualified_name::BAML_JSON_JSON =>
+                    {
+                        None
                     }
                     Ty::TypeAlias(..) => Some(format!("Answer in JSON using this {type_word}: ")),
                     Ty::Literal(..) => Some("Answer using this specific value:\n".to_string()),
@@ -824,9 +839,68 @@ impl RenderOptions {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::TyAttr;
+    use baml_type::{TyAttr, TypeName};
 
     use super::*;
+
+    // -------------------------------------------------------------------------
+    // Phase 3: json alias sentinel
+    // -------------------------------------------------------------------------
+
+    /// `Ty::TypeAlias("baml.json.json")` as the target type renders as the static
+    /// literal "Respond with valid JSON." regardless of render options, with no
+    /// schema body appended.
+    #[test]
+    fn test_render_json_alias_sentinel() {
+        let json_tn = TypeName::from_dotted_path(::baml_base::qualified_name::BAML_JSON_JSON);
+        let json_ty = Ty::TypeAlias(json_tn, TyAttr::default());
+        let content = OutputFormatContent::new(json_ty);
+
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some("Respond with valid JSON.".to_string()),
+            "json alias should render as the static prompt literal"
+        );
+    }
+
+    /// With `RenderSetting::Always(prefix)`, the sentinel still overrides and
+    /// returns "Respond with valid JSON." — no prefix + no alias body.
+    #[test]
+    fn test_render_json_alias_sentinel_ignores_explicit_prefix() {
+        let json_tn = TypeName::from_dotted_path(::baml_base::qualified_name::BAML_JSON_JSON);
+        let json_ty = Ty::TypeAlias(json_tn, TyAttr::default());
+        let content = OutputFormatContent::new(json_ty);
+
+        let options = RenderOptions {
+            prefix: RenderSetting::Always("CUSTOM PREFIX: ".to_string()),
+            ..RenderOptions::default()
+        };
+        let rendered = content.render(&options).unwrap();
+        assert_eq!(
+            rendered,
+            Some("Respond with valid JSON.".to_string()),
+            "json alias sentinel overrides explicit prefix"
+        );
+    }
+
+    /// A non-json alias does NOT trigger the sentinel and renders normally.
+    #[test]
+    fn test_render_non_json_alias_does_not_sentinel() {
+        let other_tn = TypeName::from_dotted_path("baml.other.SomeAlias");
+        let other_ty = Ty::TypeAlias(other_tn, TyAttr::default());
+        // Without any class/enum definitions or recursive_type_aliases, the alias
+        // renders as just its display name (the existing fallback).
+        let content = OutputFormatContent::new(other_ty);
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        // Should NOT be "Respond with valid JSON." — exact value depends on the
+        // general TypeAlias rendering path (display name + prefix).
+        assert_ne!(
+            rendered,
+            Some("Respond with valid JSON.".to_string()),
+            "non-json alias should not trigger the json sentinel"
+        );
+    }
 
     #[test]
     fn test_render_string() {

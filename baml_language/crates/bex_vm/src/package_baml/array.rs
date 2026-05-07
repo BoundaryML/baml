@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bex_vm_types::{HeapPtr, types::Value};
 
-use super::{BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl};
+use super::{BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee};
 use crate::BexVm;
 
 /// Continuation for `Array.map`. Accumulates the mapped results one element at
@@ -36,6 +36,7 @@ impl Continuation for MapContinuation {
         NativeCallResult::YieldToCall {
             callee: self.f_ptr,
             args: vec![next_arg],
+            type_args: vec![],
             continuation: self,
         }
     }
@@ -60,6 +61,74 @@ impl Continuation for MapContinuation {
         if let Some(&new_ptr) = forwarding.get(&self.f_ptr) {
             self.f_ptr = new_ptr;
         }
+        for v in &mut self.array {
+            if let Value::Object(ptr) = v {
+                if let Some(&new_ptr) = forwarding.get(ptr) {
+                    *ptr = new_ptr;
+                }
+            }
+        }
+        for v in &mut self.results {
+            if let Value::Object(ptr) = v {
+                if let Some(&new_ptr) = forwarding.get(ptr) {
+                    *ptr = new_ptr;
+                }
+            }
+        }
+    }
+}
+
+// ─── Array.to_json continuation ──────────────────────────────────────────────
+
+/// Continuation for `Array.to_json`. Dispatches `v.to_json()` for each element
+/// in order, accumulating json results and finalizing into a `json[]` value.
+struct ToJsonContinuation {
+    /// The original array elements.
+    array: Vec<Value>,
+    /// Index of the element whose `to_json()` callback result we are about to receive.
+    /// Starts at 0 (we yield for index 0 before constructing the continuation).
+    idx: usize,
+    /// Accumulated json results so far (does not include in-flight result).
+    results: Vec<Value>,
+}
+
+impl Continuation for ToJsonContinuation {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        self.results.push(value);
+        self.idx += 1;
+
+        if self.idx >= self.array.len() {
+            return NativeCallResult::Done(vm.alloc_array(self.results));
+        }
+
+        let next_val = self.array[self.idx];
+        match make_to_json_callee(vm, next_val) {
+            Ok(callee) => NativeCallResult::YieldToCall {
+                callee,
+                args: vec![],
+                type_args: vec![],
+                continuation: self,
+            },
+            Err(e) => NativeCallResult::Error(e),
+        }
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = Vec::new();
+        for v in &self.array {
+            if let Value::Object(ptr) = v {
+                roots.push(*ptr);
+            }
+        }
+        for v in &self.results {
+            if let Value::Object(ptr) = v {
+                roots.push(*ptr);
+            }
+        }
+        roots
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         for v in &mut self.array {
             if let Value::Object(ptr) = v {
                 if let Some(&new_ptr) = forwarding.get(ptr) {
@@ -148,8 +217,34 @@ impl BamlClassArray for PackageBamlImpl {
         NativeCallResult::YieldToCall {
             callee: f_ptr,
             args: vec![first_arg],
+            type_args: vec![],
             continuation: Box::new(MapContinuation {
                 f_ptr,
+                array,
+                idx: 0,
+                results: Vec::with_capacity(capacity),
+            }),
+        }
+    }
+
+    fn to_json(vm: &mut BexVm, array: &[Value]) -> NativeCallResult {
+        if array.is_empty() {
+            return NativeCallResult::Done(vm.alloc_array(vec![]));
+        }
+
+        let array = array.to_vec();
+        let first_val = array[0];
+        let callee = match make_to_json_callee(vm, first_val) {
+            Ok(c) => c,
+            Err(e) => return NativeCallResult::Error(e),
+        };
+
+        let capacity = array.len();
+        NativeCallResult::YieldToCall {
+            callee,
+            args: vec![],
+            type_args: vec![],
+            continuation: Box::new(ToJsonContinuation {
                 array,
                 idx: 0,
                 results: Vec::with_capacity(capacity),

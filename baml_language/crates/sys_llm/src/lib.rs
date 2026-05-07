@@ -246,6 +246,16 @@ fn walk_ty(
             }
         }
         Ty::TypeAlias(type_name, _) => {
+            // The `baml.json.json` recursive alias is an opaque leaf for output-format
+            // rendering — it has no schema body to collect.  Record the sentinel visit so
+            // any later reference is de-duped, but do *not* insert it into
+            // `recursive_type_aliases` (which would trigger schema emission) and do *not*
+            // recurse into the alias body (which would diverge on the self-referential
+            // `json[]` / `map<string, json>` arms).
+            if type_name.display_name.as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
+                visited.insert(type_name.display_name.clone());
+                return;
+            }
             let key = type_name.display_name.clone();
             if !visited.insert(key) {
                 return;

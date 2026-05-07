@@ -92,8 +92,18 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
                 }
 
                 // Methods — look up in item_tree via their LocalItemId.
+                // Skip auto-derived methods (e.g. synthesized `to_json` /
+                // `from_json`): they have no source-level span, so attempting
+                // to describe them via `describe_item_member` would fail when
+                // it tries to slice the source text.
                 for method_id in &class.methods {
                     let method = &item_tree[*method_id];
+                    if matches!(
+                        method.origin,
+                        baml_compiler2_ast::ast::FunctionOrigin::AutoDerive
+                    ) {
+                        continue;
+                    }
                     child_items.push(OutlineItem {
                         name: method.name.to_string(),
                         kind: DefinitionKind::Method,

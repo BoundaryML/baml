@@ -15,6 +15,13 @@ use crate::Name;
 /// are displayed with this prefix (e.g., `baml.llm.call_llm_function`).
 pub const BAML_STD_PREFIX: &str = "baml.";
 
+/// FQN (as a display string) of the recursive `json` type alias defined in
+/// `baml_builtins2/baml_std/baml/ns_json/json.baml`.
+///
+/// Used as a sentinel across Phases 3 and 6 to short-circuit alias-body
+/// recursion for output-format rendering, SAP streaming, and Python codegen.
+pub const BAML_JSON_JSON: &str = "baml.json.json";
+
 /// A qualified name that unambiguously identifies an item.
 ///
 /// Combines a namespace (where the item lives) with a name (what the item

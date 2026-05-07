@@ -8,6 +8,7 @@
 //! can be constructed directly in tests without parsing.
 
 pub mod ast;
+pub(crate) mod auto_derive_json;
 pub(crate) mod companions;
 pub(crate) mod disambiguate;
 pub mod docstring;
@@ -679,8 +680,14 @@ class Array<T> {
             assert_eq!(c.name.as_str(), "Array");
             assert_eq!(c.generic_params.len(), 1);
             assert_eq!(c.generic_params[0].as_str(), "T");
-            assert_eq!(c.methods.len(), 4);
-            for method in &c.methods {
+            // 4 user-defined stubs + 2 auto-derived (`to_json`, `from_json`).
+            let stub_methods: Vec<_> = c
+                .methods
+                .iter()
+                .filter(|m| m.origin != crate::ast::FunctionOrigin::AutoDerive)
+                .collect();
+            assert_eq!(stub_methods.len(), 4);
+            for method in &stub_methods {
                 assert!(
                     matches!(
                         &method.body,

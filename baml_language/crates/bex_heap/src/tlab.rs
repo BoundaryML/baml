@@ -441,6 +441,9 @@ mod tests {
                     field_type: baml_type::Ty::Int {
                         attr: baml_type::TyAttr::default(),
                     },
+                    field_template: baml_type::TyTemplate::Concrete(baml_type::Ty::Int {
+                        attr: baml_type::TyAttr::default(),
+                    }),
                     description: None,
                     alias: None,
                     skip: false,
@@ -450,6 +453,9 @@ mod tests {
                     field_type: baml_type::Ty::Int {
                         attr: baml_type::TyAttr::default(),
                     },
+                    field_template: baml_type::TyTemplate::Concrete(baml_type::Ty::Int {
+                        attr: baml_type::TyAttr::default(),
+                    }),
                     description: None,
                     alias: None,
                     skip: false,

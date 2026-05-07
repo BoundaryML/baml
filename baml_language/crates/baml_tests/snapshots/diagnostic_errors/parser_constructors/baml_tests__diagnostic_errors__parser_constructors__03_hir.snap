@@ -12,6 +12,9 @@ function user.boolArray() -> bool[]  [expr] {
 function user.floatArray() -> float[]  [expr] {
   {  } [1.0, 2.0, 3.0]
 }
+function user.from_json(j: baml.json.json) -> user.Point  [expr] {
+  user.Point { x: baml.json.from_json(baml.json.field(j, "x")), y: baml.json.from_json(baml.json.field(j, "y")) }
+}
 function user.intArray() -> int[]  [expr] {
   {  } [1, 2, 3]
 }
@@ -24,6 +27,9 @@ function user.pointArray() -> user.Point[]  [expr] {
 function user.stringArray() -> string[]  [expr] {
   {  } ["hello", "world", "test"]
 }
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "x": self.x.to_json(), "y": self.y.to_json() }
+}
 class user.Point {
   x: int
   y: int
@@ -32,8 +38,20 @@ class user.Vec2D {
   p: user.Point
   q: user.Point
 }
+function user.from_json(j: baml.json.json) -> user.Point  [expr] {
+  user.Point { x: baml.json.from_json(baml.json.field(j, "x")), y: baml.json.from_json(baml.json.field(j, "y")) }
+}
+function user.from_json(j: baml.json.json) -> user.Vec2D  [expr] {
+  user.Vec2D { p: baml.json.from_json(baml.json.field(j, "p")), q: baml.json.from_json(baml.json.field(j, "q")) }
+}
 function user.point() -> user.Point  [expr] {
   {  } user.Point { x: 1, y: 2 }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "p": self.p.to_json(), "q": self.q.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "x": self.x.to_json(), "y": self.y.to_json() }
 }
 function user.vec2d() -> user.Vec2D  [expr] {
   {  } user.Vec2D { p: user.Point { x: 1, y: 2 }, q: user.Point { x: 3, y: 4 } }

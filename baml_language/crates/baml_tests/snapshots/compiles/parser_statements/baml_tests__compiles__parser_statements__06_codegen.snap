@@ -30,6 +30,72 @@ function user.ConditionalLogic(age: int) -> string {
     return
 }
 
+function user.EdgeFoo.from_json(j: baml.json.json) -> EdgeFoo {
+    load_var j
+    load_const "x"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    alloc_instance user.EdgeFoo
+    load_var _2
+    init_field .x
+    return
+}
+
+function user.EdgeFoo.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .x
+    call baml.Int.to_json
+    load_const "x"
+    alloc_map 1
+    return
+}
+
+function user.Point.from_json(j: baml.json.json) -> Point {
+    load_var j
+    load_const "x"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "y"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    alloc_instance user.Point
+    load_var _2
+    init_field .x
+    load_var _5
+    init_field .y
+    return
+}
+
+function user.Point.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .x
+    call baml.Int.to_json
+    store_var _2
+    load_var self
+    load_field .y
+    call baml.Int.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "x"
+    load_const "y"
+    alloc_map 2
+    return
+}
+
 function user.add_assign() -> int {
     load_const 10
     store_var x

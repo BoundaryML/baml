@@ -25,7 +25,7 @@ use std::sync::Arc;
 pub use baml_project::testing::{OptLevel, compile_source, compile_source_with_opt};
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
-use bex_vm_types::{Function, Object, Program};
+use bex_vm_types::{Function, FunctionOrigin, Object, Program};
 pub use indexmap::IndexMap;
 use sys_native::SysOpsExt;
 
@@ -41,7 +41,18 @@ pub struct TestOutput {
 ///
 /// Strips the `"user."` package prefix from function names so snapshots show
 /// `function main()` rather than `function user.main()`.
+///
+/// Auto-derived methods (e.g. synthesized `to_json` / `from_json` on every user
+/// class) are filtered by default to keep snapshots focused on user-written
+/// source. Pass `show_auto_derive: true` via the `baml_test!` macro to include
+/// them when debugging the synthesizer itself.
 pub fn display_user_functions(program: &Program) -> String {
+    display_user_functions_with_options(program, false)
+}
+
+/// Like [`display_user_functions`], but lets the caller include auto-derived
+/// methods in the bytecode output.
+pub fn display_user_functions_with_options(program: &Program, show_auto_derive: bool) -> String {
     let mut functions: Vec<(String, &Function)> = program
         .function_indices
         .iter()
@@ -54,6 +65,9 @@ pub fn display_user_functions(program: &Program) -> String {
         })
         .filter_map(|(name, idx)| match program.objects.get(*idx) {
             Some(Object::Function(f)) => {
+                if !show_auto_derive && f.origin == FunctionOrigin::AutoDerive {
+                    return None;
+                }
                 // Strip leading "user." package prefix for display.
                 let display_name = name
                     .strip_prefix("user.")
@@ -143,10 +157,22 @@ pub async fn run_test(
     args: IndexMap<&str, BexExternalValue>,
     opt: OptLevel,
 ) -> TestOutput {
+    run_test_with_options(source, entry, args, opt, false).await
+}
+
+/// Like [`run_test`] but lets the caller include auto-derived class methods
+/// (`to_json` / `from_json`) in the bytecode display.
+pub async fn run_test_with_options(
+    source: &str,
+    entry: &str,
+    args: IndexMap<&str, BexExternalValue>,
+    opt: OptLevel,
+    show_auto_derive: bool,
+) -> TestOutput {
     let program = compile_source_with_opt(source, opt);
 
     // Display bytecode before the engine consumes the program.
-    let bytecode = display_user_functions(&program);
+    let bytecode = display_user_functions_with_options(&program, show_auto_derive);
 
     // Resolve the entry name (bare "main" → "user.main" for compiler2 output).
     let resolved_entry = resolve_entry_name(&program, entry);

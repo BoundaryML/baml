@@ -1,0 +1,114 @@
+type json = null | bool | int | float | string | json[] | map<string, json>
+
+class JsonParseError {
+  message string
+}
+class JsonDecodeError {
+  message string
+  path string
+}
+class JsonSerializationError {
+  message string
+  path string
+  reason string
+}
+
+//baml:mut_vm
+function parse(s string) -> json throws JsonParseError {
+  $rust_function
+}
+
+//baml:mut_vm
+function stringify(j json) -> string {
+  $rust_function
+}
+
+//baml:mut_vm
+function stringify_pretty(j json) -> string {
+  $rust_function
+}
+
+/// Serialize any BAML value `v` of type `T` to its canonical JSON string.
+///
+/// The type argument `T` is delivered to the native handler at runtime via
+/// the BEP-039 type-arg channel, so the walker can produce a tagged JSON
+/// document for media values, the variant name for enums, and the natural
+/// JSON shape for primitives / lists / maps / classes.
+///
+/// Throws `JsonSerializationError` for non-representable types
+/// (`uint8array` without explicit encoding, function values, etc.).
+//baml:mut_vm
+function to_string<T>(v: T) -> string throws JsonSerializationError {
+  $rust_function
+}
+
+/// Serialize any BAML value to its `json` representation by dispatching on
+/// the value's runtime type.
+///
+/// Equivalent to `v.to_json()` when `T` is concrete, but works through generic
+/// boundaries: a synthesized `to_json` body on `class Box<T> { value T }` can
+/// call `baml.json.to_json(self.value)` to get override-honoring dispatch
+/// without knowing `T` at synthesis time. The auto-derive synthesizer
+/// (`baml_compiler2_ast::auto_derive_json`) uses this for `TypeVar`-typed
+/// fields where direct method dispatch would fail at runtime (the receiver's
+/// concrete `to_json` only exists on the runtime value, not the static type).
+///
+/// Behaviour matches the per-type `to_json`: dispatches to `Int.to_json`,
+/// `String.to_json`, user-class `to_json` (including overrides),
+/// `Array<T>.to_json`, etc.
+//baml:mut_vm
+//baml:may_yield
+function to_json<T>(v: T) -> json throws JsonSerializationError | JsonParseError {
+  $rust_function
+}
+
+/// Parse a JSON string and coerce it to a BAML value of type `T`.
+///
+/// The type argument `T` is delivered to the native handler at runtime via
+/// the BEP-039 type-arg channel.  The handler parses the string with
+/// `serde_json`, then runs SAP's coercer against the runtime `Ty` to produce
+/// a typed value.
+///
+/// Throws `JsonParseError` if the string is not valid JSON, or
+/// `JsonDecodeError` if the parsed JSON does not match `T`.
+//baml:mut_vm
+function from_string<T>(s: string) -> T throws JsonParseError | JsonDecodeError {
+  $rust_function
+}
+
+/// Decode a `json` value to a BAML value of type `T`, honoring user
+/// `from_json` overrides on classes (including through arrays, maps, and
+/// optionals).
+///
+/// Equivalent to `T.from_json(j)` when `T` is a concrete class, but works
+/// through generic boundaries: a synthesized `from_json` body on
+/// `class Box<T> { value T }` calls `baml.json.from_json<T>(...)` to
+/// dispatch on the runtime substitution of `T` without knowing it at
+/// synthesis time. The auto-derive synthesizer
+/// (`baml_compiler2_ast::auto_derive_json`) routes every field through
+/// this function so override dispatch is centralized.
+///
+/// Behaviour by type-arg:
+/// - User class with `from_json` method: dispatch to that method.
+/// - List / Map / Optional of class: walk structurally and dispatch the
+///   inner class's `from_json` per element / value.
+/// - Primitives, enums, media, type-aliases: structural decode equivalent
+///   to `from_string<T>(stringify(j))`.
+///
+/// Throws `JsonParseError` / `JsonDecodeError` on shape mismatch.
+//baml:mut_vm
+//baml:may_yield
+function from_json<T>(j: json) -> T throws JsonParseError | JsonDecodeError {
+  $rust_function
+}
+
+/// Look up `key` in a `json` value when it is a `map<string, json>`; returns
+/// `null` if `j` is not a map or the key is absent.
+///
+/// Used by the auto-derive `from_json` synthesizer to extract field values
+/// from a `json` object without requiring the caller to match-narrow the
+/// `json` union to its map arm.
+//baml:mut_vm
+function field(j: json, key: string) -> json {
+  $rust_function
+}

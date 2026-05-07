@@ -1,0 +1,92 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.match_parsed(s: string) -> string {
+    load_var s
+    call baml.json.parse
+    store_var j
+    load_var j
+    is_type baml.json.json[]
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var j
+    is_type map<string, baml.json.json>
+    pop_jump_if_false L1
+    jump L10
+
+  L1:
+    load_var j
+    is_type int
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var j
+    is_type float
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var j
+    is_type bool
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var j
+    is_type string
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var j
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L12
+    load_const "null"
+    jump L12
+
+  L6:
+    load_var j
+    jump L12
+
+  L7:
+    load_const "bool"
+    jump L12
+
+  L8:
+    load_const "float"
+    jump L12
+
+  L9:
+    load_const "int"
+    jump L12
+
+  L10:
+    load_var j
+    call baml.json.stringify
+    jump L12
+
+  L11:
+    load_var j
+    call baml.json.stringify
+
+  L12:
+    return
+}
+
+function user.parse_and_roundtrip(s: string) -> string {
+    load_var s
+    call baml.json.parse
+    call baml.json.stringify
+    return
+}
+
+function user.parse_and_roundtrip_pretty(s: string) -> string {
+    load_var s
+    call baml.json.parse
+    call baml.json.stringify_pretty
+    return
+}

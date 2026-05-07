@@ -2,7 +2,7 @@
  * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
  *
  * Source: baml_language/crates/bridge_nodejs/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml/cffi/v1/*.proto
+ * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
 "use strict";
@@ -15,8 +15,8 @@ exports.encodeCallArgs = encodeCallArgs;
 exports.decodeCallResult = decodeCallResult;
 const baml_cffi_1 = require("./proto/baml_cffi");
 const native_1 = require("./native");
-const CallFunctionArgs = baml_cffi_1.baml.cffi.v1.CallFunctionArgs;
-const BamlOutboundValue = baml_cffi_1.baml.cffi.v1.BamlOutboundValue;
+const CallFunctionArgs = baml_cffi_1.baml_core.cffi.v1.CallFunctionArgs;
+const BamlOutboundValue = baml_cffi_1.baml_core.cffi.v1.BamlOutboundValue;
 // ─── Inbound (TS → Rust) ───
 function isPlainObject(value) {
     if (value == null || typeof value !== 'object')

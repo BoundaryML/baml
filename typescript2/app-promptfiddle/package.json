@@ -8,9 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit",
-    "test:hmr": "vitest --project hmr",
-    "test:hmr:run": "vitest run --project hmr"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@b/bridge_wasm": "link:../pkg-playground/wasm",
@@ -51,9 +49,7 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.33",
     "jotai-devtools": "^0.13.0",
-    "playwright": "^1.57.0",
     "tailwindcss": "^4.1.18",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "typescript": "^5.9.3"
   }
 }

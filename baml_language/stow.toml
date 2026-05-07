@@ -33,13 +33,13 @@
 # Auto-allowed naming suffixes: _types, _test, _tests (no prefix needed)
 # Auto-allowed dependency access: _test/_tests crates
 # Ignore crates by name pattern (glob)
-# ignore_crates = ["rig_*"]
+# ignore_crates = ["sdk_test_*"]
 #
 # ===========================================================================
 
 # Ignore crates that don't follow the namespace convention
-# - rig_*: Third-party rig test crates
-ignore_crates = ["rig_*"]
+# - sdk_test_*: SDK test rig crates
+ignore_crates = ["sdk_test_*"]
 
 # Graph visualization settings
 # Run: cargo stow --graph /tmp/deps.svg
