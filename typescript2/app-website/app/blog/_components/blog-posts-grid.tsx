@@ -108,23 +108,6 @@ export function BlogPostsGrid({ posts }: BlogPostsGridProps) {
                   </span>
                 </div>
 
-                <h3
-                  style={{
-                    fontSize: 19,
-                    fontWeight: 600,
-                    lineHeight: 1.25,
-                    letterSpacing: '-0.015em',
-                    color: INK,
-                    margin: 0,
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {post.title}
-                </h3>
-
                 <p
                   style={{
                     fontSize: 14,

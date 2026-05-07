@@ -1,7 +1,7 @@
 'use client';
 
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowRight, Calendar, Code, Play } from 'lucide-react';
+import { ArrowRight, Calendar, Code } from 'lucide-react';
 import Link from 'next/link';
 import posthog from 'posthog-js';
 
@@ -136,23 +136,6 @@ export function PodcastEpisodesGrid({ episodes }: PodcastEpisodesGridProps) {
                   </span>
                 </div>
 
-                <h3
-                  style={{
-                    color: INK,
-                    display: '-webkit-box',
-                    fontSize: 19,
-                    fontWeight: 600,
-                    letterSpacing: '-0.015em',
-                    lineHeight: 1.25,
-                    margin: 0,
-                    overflow: 'hidden',
-                    WebkitBoxOrient: 'vertical',
-                    WebkitLineClamp: 2,
-                  }}
-                >
-                  {episode.title}
-                </h3>
-
                 <p
                   style={{
                     color: MUTED,
@@ -280,7 +263,7 @@ function EpisodePreviewArt({
       aria-hidden
       style={{
         background:
-          'radial-gradient(circle at 78% 22%, rgba(109,40,217,0.16), transparent 28%), linear-gradient(180deg, #FFFDF6 0%, #F4EEE2 100%)',
+          'linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.18))',
         inset: 0,
         padding: 20,
         position: 'absolute',
@@ -288,18 +271,14 @@ function EpisodePreviewArt({
     >
       <div
         style={{
-          alignItems: 'center',
-          color: ACCENT,
-          display: 'flex',
+          color: EYEBROW,
           fontFamily: MONO,
-          fontSize: 11,
-          gap: 8,
-          letterSpacing: '0.1em',
+          fontSize: 10,
+          letterSpacing: '0.12em',
           textTransform: 'uppercase',
         }}
       >
-        <Play size={13} />
-        {isUpcoming ? 'Live soon' : 'Session'}
+        {isUpcoming ? 'Live soon' : 'Podcast'}
       </div>
       <div
         style={{

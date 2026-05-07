@@ -29,7 +29,10 @@ export function SiteBanner() {
           background: CARD_BG,
           borderBottom: `1px solid ${BORDER}`,
           height: RESERVED_HEIGHT,
+          position: 'fixed',
+          top: 0,
           width: '100%',
+          zIndex: 60,
         }}
       />
     );
@@ -37,45 +40,50 @@ export function SiteBanner() {
 
   return (
     <Link
-      href="/fundraiser"
       className="site-banner"
+      href="/thesis"
       style={{
-        display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: 14,
-        width: '100%',
         background: CARD_BG,
         borderBottom: `1px solid ${BORDER}`,
-        padding: '10px 16px',
-        textDecoration: 'none',
         color: INK,
+        display: 'flex',
         fontSize: 13,
+        gap: 14,
+        justifyContent: 'center',
         letterSpacing: '0.01em',
+        minHeight: RESERVED_HEIGHT,
+        padding: '10px 16px',
+        position: 'fixed',
+        textDecoration: 'none',
+        top: 0,
         transition: 'background-color 200ms ease',
+        width: '100%',
+        zIndex: 60,
       }}
     >
       <span
         style={{
-          display: 'inline-flex',
           alignItems: 'center',
-          padding: '2px 8px',
+          background: ACCENT,
+          borderRadius: 999,
+          color: '#ffffff',
+          display: 'inline-flex',
           fontSize: 10,
           fontWeight: 600,
           letterSpacing: '0.14em',
+          padding: '2px 8px',
           textTransform: 'uppercase',
-          color: '#ffffff',
-          background: ACCENT,
-          borderRadius: 999,
         }}
       >
         New
       </span>
       <span style={{ color: MUTED }}>
-        Announcing our{' '}
-        <span style={{ color: INK, fontWeight: 600 }}>$XXM Series A</span>, led
-        by <span style={{ color: INK, fontWeight: 600 }}>X</span>. Building a
-        language for the agent era.
+        We raised XXM from blank to build{' '}
+        <span style={{ color: INK, fontWeight: 600 }}>
+          the language for agents
+        </span>
+        .
       </span>
       <span
         aria-hidden
@@ -90,7 +98,7 @@ export function SiteBanner() {
       </span>
       <style>{`
         .site-banner:hover { background-color: #F5EFE3; }
-        .site-banner:hover .site-banner-arrow { transform: translateX(3px); }
+        .site-banner:hover .site-banner-arrow { transform: translateX(4px); }
         @media (max-width: 600px) {
           .site-banner { font-size: 12px; padding: 8px 12px; gap: 10px; }
         }

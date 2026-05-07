@@ -103,25 +103,12 @@ export function FeaturedPost({ post }: FeaturedPostProps) {
               </span>
             </div>
 
-            <h2
-              style={{
-                fontSize: 'clamp(1.5rem, 2.5vw, 2.1rem)',
-                fontWeight: 600,
-                lineHeight: 1.15,
-                letterSpacing: '-0.02em',
-                margin: 0,
-                color: INK,
-              }}
-            >
-              {post.title}
-            </h2>
-
             <p
               style={{
                 fontSize: 16,
                 lineHeight: 1.6,
                 color: MUTED,
-                margin: '16px 0 0',
+                margin: 0,
                 display: '-webkit-box',
                 WebkitLineClamp: 3,
                 WebkitBoxOrient: 'vertical',
