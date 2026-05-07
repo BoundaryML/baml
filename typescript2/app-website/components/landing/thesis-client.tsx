@@ -13,21 +13,34 @@ const AMBER = '#B45309';
 const BLUE = '#2563EB';
 const COMMENT = '#8A8580';
 
-const SCHEMA_SNIPPET = `// comments explain the schema to humans
-// and are stripped before the LLM sees the prompt
-class Ticket {
-  priority "low" | "medium" | "high"
-  summary string
+const LANGUAGE_SNIPPET = `// One file describes the model boundary, the types,
+// the provider, and the behavior around it.
+class ToolCall {
+  intent "answer" | "read_file" | "run_bash"
+  confidence float
+  args map<string, string>
 }
 
-function TriageTicket(input: string) -> Ticket {
+function PickTool(history: string[]) -> ToolCall {
   client GPT4o
   prompt #"
-    Classify this support ticket.
+    Choose the next tool for this agent loop.
     {{ ctx.output_format }}
-
-    Ticket: {{ input }}
+    {{ _.role("user") }} {{ history }}
   "#
+}
+
+function should_continue(call: ToolCall) -> bool {
+  call.intent != "answer" && call.confidence > 0.7
+}
+
+test "low-confidence tool call stops" {
+  let call = ToolCall {
+    intent "run_bash"
+    confidence 0.4
+    args {}
+  }
+  assert.eq(should_continue(call), false)
 }`;
 
 const PROVIDER_SNIPPET = `client GPT4o {
@@ -179,7 +192,7 @@ function CodeBlock({
           fontSize: 11,
           lineHeight: 1.5,
           margin: 0,
-          maxHeight: 260,
+          maxHeight: 340,
           overflowX: 'auto',
           overflowY: 'auto',
           padding: '12px 14px',
@@ -202,13 +215,29 @@ function CodeBlock({
   );
 }
 
+function stableKeyPart(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36);
+}
+
 function highlightSyntax(code: string) {
-  return code.split('\n').map((line, lineIndex) => (
-    <span key={`line-${lineIndex}`}>
-      {highlightLine(line)}
-      {lineIndex < code.split('\n').length - 1 ? '\n' : null}
-    </span>
-  ));
+  const seen = new Map<string, number>();
+  const lines = code.split('\n');
+
+  return lines.map((line, lineIndex) => {
+    const count = seen.get(line) ?? 0;
+    seen.set(line, count + 1);
+
+    return (
+      <span key={`line-${stableKeyPart(line)}-${count}`}>
+        {highlightLine(line)}
+        {lineIndex < lines.length - 1 ? '\n' : null}
+      </span>
+    );
+  });
 }
 
 function highlightLine(line: string) {
@@ -228,26 +257,32 @@ function highlightLine(line: string) {
 
 function highlightCodePart(part: string) {
   const pieces = part.split(
-    /(\{\{[^}]+\}\}|#?"[^"]*"|`[^`]*`|\b[A-Z][A-Za-z0-9_]*\b|\b(?:class|function|client|provider|options|model|prompt|test|testset|let|return|if|for|match|type|in|is|string|int|bool|float)\b|\b(?:baml|ctx|assert|input)\b)/g,
+    /(\{\{[^}]+\}\}|#?"[^"]*"|`[^`]*`|\b[A-Z][A-Za-z0-9_]*\b|\b(?:class|function|client|provider|options|model|prompt|test|testset|let|return|if|else|for|match|type|in|is|string|int|bool|float|map|true|false)\b|\b(?:baml|ctx|assert|input|role)\b)/g,
   );
 
-  return pieces.map((piece, index) => {
+  const seen = new Map<string, number>();
+
+  return pieces.map((piece) => {
     if (!piece) return null;
+    const count = seen.get(piece) ?? 0;
+    seen.set(piece, count + 1);
+
     let color = INK;
     if (/^\{\{/.test(piece)) color = PURPLE;
     else if (/^#?"/.test(piece) || /^`/.test(piece)) color = AMBER;
     else if (
-      /^(class|function|client|provider|options|model|prompt|test|testset|let|return|if|for|match|type|in|is)$/.test(
+      /^(class|function|client|provider|options|model|prompt|test|testset|let|return|if|else|for|match|type|in|is)$/.test(
         piece,
       )
     )
       color = PURPLE;
-    else if (/^(string|int|bool|float)$/.test(piece)) color = GREEN;
-    else if (/^(baml|ctx|assert|input)$/.test(piece)) color = BLUE;
+    else if (/^(string|int|bool|float|map|true|false)$/.test(piece))
+      color = GREEN;
+    else if (/^(baml|ctx|assert|input|role)$/.test(piece)) color = BLUE;
     else if (/^[A-Z]/.test(piece)) color = GREEN;
 
     return (
-      <span key={`${piece}-${index}`} style={{ color }}>
+      <span key={`${stableKeyPart(piece)}-${count}`} style={{ color }}>
         {piece}
       </span>
     );
@@ -320,26 +355,29 @@ export function ThesisClient() {
 
         <P>
           <strong>
-            We want to make a language that agents are really good at writing.
+            We want to make a language that agents are really good at writing,
+            and humans are really good at understanding.
           </strong>{' '}
-          BAML files are small, explicit, and compiler-checkable. The prompt,
-          schema, tests, provider, and generated client boundary are all in one
-          place, so an agent does not have to infer the contract by chasing
-          Python decorators, JSON schemas, hidden prompts, and parser code
-          across a repo.
+          The next wave of software will be edited by agents and reviewed by
+          humans. That only works if the source is explicit, compact,
+          compiler-checkable, and close to the model boundary it controls.
         </P>
 
         <UL>
           <li>
-            Agents can edit one BAML function instead of four drift-prone files.
+            Agents should edit one coherent program instead of chasing hidden
+            prompts, JSON schemas, parser code, and client wrappers across a
+            repo.
           </li>
           <li>
-            The compiler gives fast feedback when a field, union arm, or return
-            type is wrong.
+            Humans should be able to scan that same program and understand the
+            types, prompts, providers, tests, and control flow without running
+            the whole app in their head.
           </li>
           <li>
-            <Code>baml describe</Code> gives agents a semantic description of
-            project and stdlib APIs before they guess.
+            The compiler should be the shared feedback loop for both of them:
+            fast enough for agents to iterate, strict enough for people to
+            trust.
           </li>
         </UL>
 
@@ -349,25 +387,37 @@ export function ThesisClient() {
 
         <P>
           <strong>
-            We want to give people the right abstractions to build on top of
-            their ML models:
+            BAML started at the model boundary because that is where today’s AI
+            code breaks first.
           </strong>{' '}
-          everything from inline comments that get stripped from your LLM
-          prompts to support for Python and Typescript and making it easy to
-          switch between ML service providers.
+          Prompts, schemas, parsing, retries, tests, and generated clients tend
+          to drift apart as soon as a demo becomes a product. BAML puts those
+          pieces in one file and gives them language semantics instead of
+          framework conventions.
         </P>
 
-        <CodeBlock caption="Schema, prompt, and output format live together.">
-          {SCHEMA_SNIPPET}
+        <CodeBlock caption="The boundary becomes a program agents and humans can both read.">
+          {LANGUAGE_SNIPPET}
         </CodeBlock>
 
         <P>
           <strong>
-            We want to enable people to test the ML features and products
+            For v1, that foundation is growing into a Turing-complete language.
           </strong>{' '}
-          that they're building, which is especially important when you're
-          dealing with probabilistic systems and defining correctness is harder
-          than enumerating edge cases!
+          Not just schemas. Typed functions, tagged unions, <Code>match</Code>,
+          loops, tests, a standard library, and a VM. The goal is to let the
+          ML-shaped part of an application become an actual program.
+        </P>
+
+        <CodeBlock caption="The ML-shaped part can become an actual program.">
+          {V1_SNIPPET}
+        </CodeBlock>
+
+        <P>
+          <strong>Tests have to live next to the behavior they protect.</strong>{' '}
+          AI systems are probabilistic, but the product contract still needs to
+          be checked. BAML test blocks make the expected behavior visible to
+          developers, CI, and coding agents.
         </P>
 
         <UL>
@@ -384,56 +434,42 @@ export function ThesisClient() {
 
         <P>
           <strong>
-            We want it to be easy to deploy changes to your ML features:
+            Provider choice, deployment shape, and observability should be
+            language-level concerns.
           </strong>{' '}
-          you should be able to both self-host everything that calls an OpenAI
-          API and ask us to handle that for you, function-as-a-service style.
-        </P>
-
-        <P>
-          <strong>
-            We want our users to be able to monitor their ML usage and ask
-            questions
-          </strong>{' '}
-          about the precision and recall of their deployed model, about the
-          costs of the current deployment, and about the reliability of the
-          current deployment.
-        </P>
-
-        <P>
-          <strong>
-            We want it to be straightforward to refine your ML usage
-          </strong>
-          , whether that means LLM prompt tuning, fine-tuning an existing
-          open-source model, or training a special-purpose model from scratch.
+          If model calls are part of the program, switching providers, tracking
+          cost and reliability, and deploying changes should not require a pile
+          of disconnected glue code.
         </P>
 
         <CodeBlock caption="Provider choice should be configuration, not a rewrite.">
           {PROVIDER_SNIPPET}
         </CodeBlock>
 
-        <P>And we think that the right way to do all this is to start with:</P>
+        <P>
+          <strong>
+            The thesis is not that every AI app needs another framework.
+          </strong>{' '}
+          It is that agent-authored software needs a source format that is
+          precise enough for machines to edit and legible enough for humans to
+          own. BAML is our attempt to make that format a real programming
+          language.
+        </P>
 
         <UL>
           <li>
-            A freely available, open-source schema language for your ML APIs,
+            Open source language, compiler, VM, LSP, formatter, and generated
+            clients.
           </li>
-          <li>Code generation for your LLM interactions, and</li>
           <li>
-            robust, fast, easy-to-use tooling to support every step of the
-            process.
+            Incremental adoption inside Python, TypeScript, Go, Ruby, and other
+            existing systems.
+          </li>
+          <li>
+            A path from typed model calls today to agent-readable programs
+            tomorrow.
           </li>
         </UL>
-
-        <P>
-          For v1, that foundation is growing into a Turing-complete language:
-          typed functions, tagged unions, <Code>match</Code>, loops, tests, a
-          standard library, and a VM.
-        </P>
-
-        <CodeBlock caption="The ML-shaped part can become an actual program.">
-          {V1_SNIPPET}
-        </CodeBlock>
 
         <P>
           Importantly, this approach has a number of advantages compared to
@@ -448,10 +484,9 @@ export function ThesisClient() {
             No one likes stitching together 10 products to build their workflow.
           </li>
           <li>
-            <Highlight>We don't have lock-in:</Highlight> our schema language,
-            compiler, and IDE integrations are all freely available and
-            open-source, so if users want to use just those, they're more than
-            welcome to.
+            <Highlight>We don't have lock-in:</Highlight> the language,
+            compiler, VM, and IDE integrations are all freely available and
+            open-source, so teams can adopt the pieces they need.
           </li>
           <li>
             <Highlight>

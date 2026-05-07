@@ -527,10 +527,8 @@ const HeroCodeWindow = () => (
 
 type InstallPath = 'claude' | 'codex';
 
-const claudeInstallPrompt =
-  'claude plugin add boundaryml/baml && claude "Use the BAML plugin to add one typed LLM function to this codebase."';
-const codexInstallPrompt =
-  'codex plugin add boundaryml/baml && codex "Use the BAML plugin to add one typed LLM function to this codebase."';
+const claudeInstallPrompt = 'claude plugin add boundaryml/baml';
+const codexInstallPrompt = 'codex plugin add boundaryml/baml';
 const installOptions: {
   id: InstallPath;
   label: string;
