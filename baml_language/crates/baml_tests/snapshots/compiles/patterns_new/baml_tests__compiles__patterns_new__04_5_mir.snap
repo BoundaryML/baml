@@ -1016,13 +1016,13 @@ fn user.mixed_nested_array_class_binding(v: PatternMatrix | PatternBucket[][]) -
     let _40: int[] // x
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "PatternMatrix", module_path: ["user"], display_name: "PatternMatrix" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _2 = is_type(copy _1, PatternMatrix);
         branch copy _2 -> [bb1, bb8];
     }
 
     bb1: {
         _3 = copy _1.0;
-        _4 = is_type(copy _3, List(List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _4 = is_type(copy _3, int[][]);
         branch copy _4 -> [bb2, bb8];
     }
 
@@ -1035,7 +1035,7 @@ fn user.mixed_nested_array_class_binding(v: PatternMatrix | PatternBucket[][]) -
     bb3: {
         _7 = const 0_i64;
         _8 = copy _3[_7];
-        _9 = is_type(copy _8, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _9 = is_type(copy _8, int[]);
         branch copy _9 -> [bb4, bb8];
     }
 
@@ -1051,17 +1051,17 @@ fn user.mixed_nested_array_class_binding(v: PatternMatrix | PatternBucket[][]) -
     }
 
     bb6: {
-        _14 = is_type(copy _12, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _14 = is_type(copy _12, int[]);
         branch copy _14 -> [bb7, bb8];
     }
 
     bb7: {
-        _15 = is_type(copy _8, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _15 = is_type(copy _8, int[]);
         branch copy _15 -> [bb16, bb8];
     }
 
     bb8: {
-        _22 = is_type(copy _1, List(List(Class(TypeName { name: "PatternBucket", module_path: ["user"], display_name: "PatternBucket" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _22 = is_type(copy _1, PatternBucket[][]);
         branch copy _22 -> [bb9, bb14];
     }
 
@@ -1074,7 +1074,7 @@ fn user.mixed_nested_array_class_binding(v: PatternMatrix | PatternBucket[][]) -
     bb10: {
         _25 = const 0_i64;
         _26 = copy _1[_25];
-        _27 = is_type(copy _26, List(Class(TypeName { name: "PatternBucket", module_path: ["user"], display_name: "PatternBucket" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _27 = is_type(copy _26, PatternBucket[]);
         branch copy _27 -> [bb11, bb14];
     }
 
@@ -1087,13 +1087,13 @@ fn user.mixed_nested_array_class_binding(v: PatternMatrix | PatternBucket[][]) -
     bb12: {
         _30 = const 0_i64;
         _31 = copy _26[_30];
-        _32 = is_type(copy _31, Class(TypeName { name: "PatternBucket", module_path: ["user"], display_name: "PatternBucket" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _32 = is_type(copy _31, PatternBucket);
         branch copy _32 -> [bb13, bb14];
     }
 
     bb13: {
         _33 = copy _31.0;
-        _34 = is_type(copy _33, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _34 = is_type(copy _33, int[]);
         branch copy _34 -> [bb15, bb14];
     }
 
@@ -1177,7 +1177,7 @@ fn user.mixed_suffix_class_or_prefix_array_binding(v: PatternBucket[] | int[][])
     let _42: int
 
     bb0: {
-        _2 = is_type(copy _1, List(Class(TypeName { name: "PatternBucket", module_path: ["user"], display_name: "PatternBucket" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _2 = is_type(copy _1, PatternBucket[]);
         branch copy _2 -> [bb1, bb4];
     }
 
@@ -1191,18 +1191,18 @@ fn user.mixed_suffix_class_or_prefix_array_binding(v: PatternBucket[] | int[][])
         _5 = len(_1);
         _6 = copy _5 - const 1_i64;
         _7 = copy _1[_6];
-        _8 = is_type(copy _7, Class(TypeName { name: "PatternBucket", module_path: ["user"], display_name: "PatternBucket" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _8 = is_type(copy _7, PatternBucket);
         branch copy _8 -> [bb3, bb4];
     }
 
     bb3: {
         _9 = copy _7.0;
-        _10 = is_type(copy _9, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _10 = is_type(copy _9, int[]);
         branch copy _10 -> [bb16, bb4];
     }
 
     bb4: {
-        _22 = is_type(copy _1, List(List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _22 = is_type(copy _1, int[][]);
         branch copy _22 -> [bb5, bb11];
     }
 
@@ -1215,7 +1215,7 @@ fn user.mixed_suffix_class_or_prefix_array_binding(v: PatternBucket[] | int[][])
     bb6: {
         _25 = const 0_i64;
         _26 = copy _1[_25];
-        _27 = is_type(copy _26, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _27 = is_type(copy _26, int[]);
         branch copy _27 -> [bb7, bb11];
     }
 
@@ -1231,12 +1231,12 @@ fn user.mixed_suffix_class_or_prefix_array_binding(v: PatternBucket[] | int[][])
     }
 
     bb9: {
-        _32 = is_type(copy _30, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _32 = is_type(copy _30, int[]);
         branch copy _32 -> [bb10, bb11];
     }
 
     bb10: {
-        _33 = is_type(copy _26, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _33 = is_type(copy _26, int[]);
         branch copy _33 -> [bb12, bb11];
     }
 
