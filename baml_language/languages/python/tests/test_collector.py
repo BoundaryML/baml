@@ -20,7 +20,7 @@ import threading
 
 import pytest
 
-from baml.baml_core import BamlRuntime, BamlCtxManager, Collector, call_function, call_function_sync
+from baml_core import BamlRuntime, BamlCtxManager, Collector, call_function, call_function_sync
 from conftest import MockLLMHandler
 
 
@@ -126,7 +126,7 @@ def rt():
 @pytest.fixture
 def ctx(rt):
     """Fresh BamlCtxManager for each test."""
-    import baml.baml_core.ctx_manager as cm
+    import baml_core.ctx_manager as cm
 
     cm.prev_ctx_manager = None
     return BamlCtxManager(rt)
@@ -158,7 +158,7 @@ def llm_rt(mock_server):
 @pytest.fixture
 def llm_ctx(llm_rt):
     """BamlCtxManager for the single-LLM runtime."""
-    import baml.baml_core.ctx_manager as cm
+    import baml_core.ctx_manager as cm
 
     cm.prev_ctx_manager = None
     return BamlCtxManager(llm_rt)
@@ -176,7 +176,7 @@ def pipeline_rt(mock_server):
 @pytest.fixture
 def pipeline_ctx(pipeline_rt):
     """BamlCtxManager for the pipeline LLM runtime."""
-    import baml.baml_core.ctx_manager as cm
+    import baml_core.ctx_manager as cm
 
     cm.prev_ctx_manager = None
     return BamlCtxManager(pipeline_rt)

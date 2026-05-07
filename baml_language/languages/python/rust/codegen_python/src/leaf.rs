@@ -106,7 +106,7 @@ impl LeafBody {
 
     /// True when any class field, function/method param, or return type
     /// in this leaf is `Ty::RustType` — i.e. needs the
-    /// `from baml.baml_core import BamlPyHandle as _BamlPyHandle` line.
+    /// `from baml_core import BamlPyHandle as _BamlPyHandle` line.
     pub(crate) fn needs_baml_pyhandle(&self) -> bool {
         fn ty_uses_rust_type(ty: &Ty) -> bool {
             match ty {
@@ -328,7 +328,7 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
         // so the leaf needs `baml` imported.
         //
         // `Ty::RustType` renders as `_BamlPyHandle` and gets its own
-        // `from baml.baml_core import BamlPyHandle as _BamlPyHandle`
+        // `from baml_core import BamlPyHandle as _BamlPyHandle`
         // line via `needs_baml_pyhandle` — it does *not* go through
         // the cross-leaf segment set.
         Ty::Media(_) => {
@@ -614,7 +614,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
         EmittedSymbol::Class(c) => {
             if let Some(rust_name) = media_reexport_rust_name(c) {
                 return format!(
-                    "from baml.baml_core.baml_py import {rust_name} as {py_name}\n",
+                    "from baml_core.baml_py import {rust_name} as {py_name}\n",
                     py_name = c.py_name,
                 );
             }
@@ -878,7 +878,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     // annotations like `baml.media.Pdf` against the module's runtime
     // globals at model-construction time, so the `TYPE_CHECKING` guard
     // isn't enough. `baml/*` is stdlib (only ever imports from
-    // `baml.baml_core`) and never references user leaves, so the
+    // `baml_core`) and never references user leaves, so the
     // runtime import can't cycle.
     //
     // All other first-segments stay under `if typing.TYPE_CHECKING:`
@@ -910,7 +910,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
             writeln!(out, "    from {dots} import {name}").unwrap();
         }
     }
-    // Factory imports use absolute paths (`baml.baml_core` is a
+    // Factory imports use absolute paths (`baml_core` is a
     // separate installed package, not reachable from this SDK tree)
     // with a `_` alias to keep them private to the module.
     //
@@ -938,9 +938,9 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         out.push('\n');
         if runtime_imports.len() == 1 {
             let (original, alias) = runtime_imports[0];
-            writeln!(out, "from baml.baml_core import {original} as {alias}").unwrap();
+            writeln!(out, "from baml_core import {original} as {alias}").unwrap();
         } else {
-            out.push_str("from baml.baml_core import (\n");
+            out.push_str("from baml_core import (\n");
             for (original, alias) in &runtime_imports {
                 writeln!(out, "    {original} as {alias},").unwrap();
             }
@@ -1108,7 +1108,7 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
         EmittedSymbol::Class(c) => {
             if let Some(rust_name) = media_reexport_rust_name(c) {
                 return format!(
-                    "from baml.baml_core.baml_py import {rust_name} as {py_name}\n",
+                    "from baml_core.baml_py import {rust_name} as {py_name}\n",
                     py_name = c.py_name,
                 );
             }
@@ -1224,7 +1224,7 @@ fn render_typed_params(names: &[String], tys: &[Ty], ctx: &TranslateCtx) -> Stri
 }
 
 /// Mirrors `render_leaf_body` with these differences: no
-/// `baml.baml_core` factory imports; `typing` is needed whenever a
+/// `baml_core` factory imports; `typing` is needed whenever a
 /// signature is present (`needs_typing_pyi`); `enum` and `pydantic`
 /// follow the `.py` rule.
 pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
@@ -1284,7 +1284,7 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     // can resolve `$rust_type` field annotations.
     if body.needs_baml_pyhandle() {
         out.push('\n');
-        out.push_str("from baml.baml_core import BamlPyHandle as _BamlPyHandle\n");
+        out.push_str("from baml_core import BamlPyHandle as _BamlPyHandle\n");
     }
 
     // The `.pyi` re-declares TypeVars because stubs don't import from

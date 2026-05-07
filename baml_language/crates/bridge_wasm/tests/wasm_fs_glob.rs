@@ -8,7 +8,7 @@
 
 use bridge_wasm::{
     BamlWasmRuntime, LspNotification,
-    baml::cffi::{
+    baml_core::cffi::{
         BamlOutboundValue, CallFunctionArgs, baml_outbound_value::Value as OutboundValue,
     },
 };

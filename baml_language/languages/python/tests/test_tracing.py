@@ -36,7 +36,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from baml.baml_core import BamlRuntime, BamlCtxManager, HostSpanManager, call_function, call_function_sync
+from baml_core import BamlRuntime, BamlCtxManager, HostSpanManager, call_function, call_function_sync
 from conftest import MockLLMHandler
 
 
@@ -416,7 +416,7 @@ def ctx(rt):
     NOTE: BamlCtxManager uses a module-level singleton (prev_ctx_manager).
     We need to reset it between tests to avoid cross-test contamination.
     """
-    import baml.baml_core.ctx_manager as cm
+    import baml_core.ctx_manager as cm
 
     cm.prev_ctx_manager = None
     return make_ctx(rt)
@@ -1767,7 +1767,7 @@ class TestCrossBoundaryLLMTracing:
     @pytest.fixture
     def llm_ctx(self, llm_rt):
         """BamlCtxManager for the LLM runtime."""
-        import baml.baml_core.ctx_manager as cm
+        import baml_core.ctx_manager as cm
 
         cm.prev_ctx_manager = None
         return BamlCtxManager(llm_rt)

@@ -14,7 +14,7 @@
 use std::sync::Arc;
 
 use bex_project::{BexExternalAdt, MediaKind, MediaValue};
-use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, baml::cffi::BamlHandleType};
+use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, baml_core::cffi::BamlHandleType};
 use pyo3::{
     Bound, Py, PyAny, PyResult, Python,
     exceptions::{PyRuntimeError, PyTypeError},

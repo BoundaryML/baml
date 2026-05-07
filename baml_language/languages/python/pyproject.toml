@@ -1,12 +1,26 @@
 [project]
-name = "baml"
-version = "0.0.0"
+name = "baml_core"
+version = "0.1.2"
 description = "BAML python bindings (new system, bex_engine)"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
 license = "Apache-2.0"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "protobuf>=6.31.1",
+]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
 [dependency-groups]
@@ -30,16 +44,16 @@ build-backend = "maturin"
 [tool.maturin]
 python-source = "src"
 manifest-path = "rust/bridge_python/Cargo.toml"
-module-name = "baml.baml_core.baml_py"
+module-name = "baml_core.baml_py"
 features = ["extension-module"]
-include = [{ path = "src/baml/py.typed", format = ["sdist", "wheel"] }]
+include = [{ path = "src/baml_core/py.typed", format = ["sdist", "wheel"] }]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 addopts = "-n auto"
 
 [tool.ruff]
-extend-exclude = ["src/baml/cffi/v1/*_pb2.py"]
+extend-exclude = ["src/baml_core/cffi/v1/*_pb2.py"]
 
 [tool.ty.environment]
 extra-paths = ["tests/sim"]

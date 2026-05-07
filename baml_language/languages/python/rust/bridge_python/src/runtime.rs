@@ -227,11 +227,12 @@ impl BamlRuntime {
 
 /// Decode protobuf-encoded function arguments into `BexArgs`.
 fn decode_args(args_proto: &[u8], function_name: &str) -> PyResult<bex_project::BexArgs> {
-    let args = bridge_ctypes::baml::cffi::CallFunctionArgs::decode(args_proto).map_err(|e| {
-        pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
-            "Failed to decode arguments for function '{function_name}': {e}"
-        ))
-    })?;
+    let args =
+        bridge_ctypes::baml_core::cffi::CallFunctionArgs::decode(args_proto).map_err(|e| {
+            pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
+                "Failed to decode arguments for function '{function_name}': {e}"
+            ))
+        })?;
 
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE).map_err(|e| {
         pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
@@ -245,7 +246,7 @@ fn decode_args(args_proto: &[u8], function_name: &str) -> PyResult<bex_project::
 /// Return the process-global `BamlRuntime`, or raise `BamlError` if
 /// `BamlRuntime.initialize_runtime(...)` has not been called yet.
 ///
-/// Used by the pure-Python factories in `baml.baml_core` so generated
+/// Used by the pure-Python factories in `baml_core` so generated
 /// leaves don't have to thread a runtime reference through every call
 /// site.
 #[gen_stub_pyfunction]

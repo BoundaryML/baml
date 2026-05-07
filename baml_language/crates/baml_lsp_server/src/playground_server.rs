@@ -217,8 +217,9 @@ async fn handle_ws_in_message(
                 }
             };
 
-            let args = match bridge_ctypes::baml::cffi::CallFunctionArgs::decode(decoded.as_slice())
-            {
+            let args = match bridge_ctypes::baml_core::cffi::CallFunctionArgs::decode(
+                decoded.as_slice(),
+            ) {
                 Ok(a) => a,
                 Err(e) => {
                     let err_msg = WsOutMessage::CallFunctionError {

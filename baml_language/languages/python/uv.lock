@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.10"
 
 [options]
-exclude-newer = "2026-04-29T01:52:21.264903Z"
+exclude-newer = "2026-04-30T11:08:44.825979Z"
 exclude-newer-span = "-P7D"
 
 [[package]]
@@ -25,8 +25,8 @@ wheels = [
 ]
 
 [[package]]
-name = "baml"
-version = "0.0.0"
+name = "baml-core"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "protobuf" },
