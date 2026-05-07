@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from baml.baml_core import BamlRuntime
+from baml_core import BamlRuntime
 from .baml import _inlinedbaml
 from . import lorem
 

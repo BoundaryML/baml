@@ -1,7 +1,7 @@
 syntax = "proto3";
-package baml.cffi.v1;
+package baml_core.cffi.v1;
 
-import "baml/cffi/v1/baml_inbound.proto";
+import "baml_core/cffi/v1/baml_inbound.proto";
 
 option go_package = "./cffi";
 

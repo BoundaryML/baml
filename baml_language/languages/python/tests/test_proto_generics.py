@@ -1,6 +1,6 @@
 """Unit tests for the generic-aware encoder/decoder helpers added in 13b.
 
-These tests exercise the pure-Python helpers in `baml.baml_core.proto`
+These tests exercise the pure-Python helpers in `baml_core.proto`
 directly — they don't go through the Rust FFI, so they isolate the
 serialization changes from the rest of the bridge.
 
@@ -24,13 +24,13 @@ from typing import Generic, List, TypeVar
 
 import pydantic
 
-from baml.baml_core.proto import (  # noqa: E402
+from baml_core.proto import (  # noqa: E402
     _base_class_for_fqn,
     _baml_ty_to_python_type,
     _parameterize,
     _set_inbound_value,
 )
-from baml.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
+from baml_core.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
 
 
 # Make sim sdk_root importable (needed indirectly for `_resolve_type`-
@@ -211,14 +211,14 @@ def _build_class_value(fqn: str, fields: list, generic_args: list):
 def test_decode_class_parameterizes_with_generic_args(monkeypatch):
     """13b §3.1, §3.4 — a generic class with `generic_args = [int]` decodes
     to a `Box[int]` instance, not bare `Box`."""
-    from baml.baml_core import proto as proto_mod
+    from baml_core import proto as proto_mod
 
     # Patch `_resolve_type` so we don't need a runtime — return our local
     # `Box` regardless of FQN.
     def fake_resolve(fqn: str) -> type:
         return Box
 
-    monkeypatch.setattr("baml.baml_core._resolve_type", fake_resolve)
+    monkeypatch.setattr("baml_core._resolve_type", fake_resolve)
 
     args = [_generic_arg("T", lambda ty: ty.int_type.SetInParent())]
     cv = _build_class_value("user.lorem.Box", [("item", 5)], args)
@@ -238,12 +238,12 @@ def test_decode_class_graceful_degradation_when_args_empty(monkeypatch):
     """13b §3.5 — when the Rust producer hasn't been updated yet,
     `generic_args` is empty. Decode still produces a usable instance —
     just unparameterized."""
-    from baml.baml_core import proto as proto_mod
+    from baml_core import proto as proto_mod
 
     def fake_resolve(fqn: str) -> type:
         return Box
 
-    monkeypatch.setattr("baml.baml_core._resolve_type", fake_resolve)
+    monkeypatch.setattr("baml_core._resolve_type", fake_resolve)
 
     cv = _build_class_value("user.lorem.Box", [("item", 5)], [])
     result = proto_mod._decode_class(cv)
@@ -260,7 +260,7 @@ def test_decode_class_nested_generic(monkeypatch):
     Models the `Crate<Box<int>>` shape (Crate's T is bound to `Box<int>`,
     so `contents: List[T]` becomes `List[Box[int]]`).
     """
-    from baml.baml_core import proto as proto_mod
+    from baml_core import proto as proto_mod
 
     def fake_resolve(fqn: str) -> type:
         if fqn.endswith("Box"):
@@ -269,7 +269,7 @@ def test_decode_class_nested_generic(monkeypatch):
             return Crate
         raise ValueError(f"unexpected fqn: {fqn}")
 
-    monkeypatch.setattr("baml.baml_core._resolve_type", fake_resolve)
+    monkeypatch.setattr("baml_core._resolve_type", fake_resolve)
 
     box_args = [_generic_arg("T", lambda ty: ty.int_type.SetInParent())]
     box_a = _build_class_value("user.lorem.Box", [("item", 5)], box_args)

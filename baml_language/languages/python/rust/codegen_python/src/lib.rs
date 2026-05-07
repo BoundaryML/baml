@@ -250,7 +250,7 @@ fn render_package_init(children: &BTreeSet<String>) -> String {
 #[template(
     source = r#"from __future__ import annotations
 
-from baml.baml_core import BamlRuntime
+from baml_core import BamlRuntime
 from .baml import _inlinedbaml
 
 BamlRuntime.initialize_runtime(
@@ -486,7 +486,7 @@ mod tests {
         assert!(out.contains_key(&PathBuf::from("py.typed")));
 
         let root = &out[&PathBuf::from("__init__.py")];
-        assert!(root.contains("from baml.baml_core import BamlRuntime"));
+        assert!(root.contains("from baml_core import BamlRuntime"));
         assert!(root.contains("from . import baml"));
         // No symbols → no __all__ emitted (preserves G1 byte shape).
         assert!(!root.contains("__all__"));
@@ -1086,7 +1086,7 @@ mod tests {
 
     #[test]
     fn factory_import_present_only_in_leaves_with_functions() {
-        // G5 emits `from baml.baml_core import define_function as
+        // G5 emits `from baml_core import define_function as
         // _define_function` exactly once per leaf that carries any
         // function/companion binding, and never in leaves that don't.
         let mut pool: SymbolPool = HashMap::new();
@@ -1103,12 +1103,12 @@ mod tests {
 
         let lorem = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
-            lorem.contains("from baml.baml_core import define_function as _define_function\n"),
+            lorem.contains("from baml_core import define_function as _define_function\n"),
             "lorem missing factory import:\n{lorem}"
         );
         assert_eq!(
             lorem
-                .matches("from baml.baml_core import define_function as _define_function")
+                .matches("from baml_core import define_function as _define_function")
                 .count(),
             1,
             "factory import should appear exactly once"
@@ -1116,7 +1116,7 @@ mod tests {
 
         let ipsum = &out[&PathBuf::from("ipsum/__init__.py")];
         assert!(
-            !ipsum.contains("baml.baml_core"),
+            !ipsum.contains("baml_core"),
             "ipsum leaf has no functions and must not import factories:\n{ipsum}"
         );
         assert!(
@@ -1130,7 +1130,7 @@ mod tests {
             let s = path.to_string_lossy();
             if s.starts_with("stream_types/") && s.ends_with("__init__.py") {
                 assert!(
-                    !content.contains("baml.baml_core"),
+                    !content.contains("baml_core"),
                     "stream_types leaf {} must not import baml_core:\n{}",
                     path.display(),
                     content
@@ -1812,9 +1812,7 @@ mod tests {
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
-            leaf.contains(
-                "from baml.baml_core import define_static_method as _define_static_method\n"
-            ),
+            leaf.contains("from baml_core import define_static_method as _define_static_method\n"),
             "missing static-method factory import:\n{leaf}"
         );
         assert!(
@@ -1854,7 +1852,7 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
-                "from baml.baml_core import define_instance_method as _define_instance_method\n"
+                "from baml_core import define_instance_method as _define_instance_method\n"
             ),
             "missing instance-method factory import:\n{leaf}"
         );
@@ -1897,7 +1895,7 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         // Multiple factories → parenthesized form, alphabetized by
         // original name (`define_instance_method` < `define_static_method`).
-        let expected_block = "from baml.baml_core import (\n\
+        let expected_block = "from baml_core import (\n\
                               \x20   define_instance_method as _define_instance_method,\n\
                               \x20   define_static_method as _define_static_method,\n\
                               )\n";
@@ -1991,7 +1989,7 @@ mod tests {
         // must not appear in `.pyi`.
         assert!(!root.contains("BamlRuntime"));
         assert!(!root.contains("initialize_runtime"));
-        assert!(!root.contains("baml.baml_core"));
+        assert!(!root.contains("baml_core"));
     }
 
     #[test]
@@ -2102,7 +2100,7 @@ mod tests {
         );
         // No factory call, no `_define_function`.
         assert!(!leaf.contains("_define_function"));
-        assert!(!leaf.contains("baml.baml_core"));
+        assert!(!leaf.contains("baml_core"));
     }
 
     #[test]
@@ -2327,8 +2325,8 @@ mod tests {
                 continue;
             }
             assert!(
-                !content.contains("baml.baml_core"),
-                "{} must not import baml.baml_core",
+                !content.contains("baml_core"),
+                "{} must not import baml_core",
                 path.display()
             );
             assert!(

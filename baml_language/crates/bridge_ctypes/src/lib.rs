@@ -12,10 +12,10 @@ mod value_decode;
 mod value_encode;
 
 /// Generated protobuf module (CFFI / host value types).
-pub mod baml {
+pub mod baml_core {
     pub mod cffi {
         #![allow(clippy::doc_markdown, clippy::empty_structs_with_brackets)]
-        include!(concat!(env!("OUT_DIR"), "/baml.cffi.v1.rs"));
+        include!(concat!(env!("OUT_DIR"), "/baml_core.cffi.v1.rs"));
     }
 }
 

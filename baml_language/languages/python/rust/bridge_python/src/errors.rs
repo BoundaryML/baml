@@ -20,7 +20,7 @@ macro_rules! submit_exception_stub {
             PyClassInfo {
                 struct_id: || std::any::TypeId::of::<$name>(),
                 pyclass_name: stringify!($name),
-                module: Some("baml.baml_core.baml_py"),
+                module: Some("baml_core.baml_py"),
                 doc: "",
                 getters: &[],
                 setters: &[],

@@ -70,10 +70,10 @@ def main() -> int:
 
     # pyo3-stub-gen writes relative to CARGO_MANIFEST_DIR + python-source.
     # Since the symlinked pyproject.toml is at rust/bridge_python/, and
-    # python-source = "src", stubs land at rust/bridge_python/src/baml/...
+    # python-source = "src", stubs land at rust/bridge_python/src/baml_core/...
     # Move them to the real src/ location.
-    crate_src = PYTHON_DIR / "rust" / "bridge_python" / "src" / "baml" / "baml_core"
-    real_src = SRC_DIR / "baml" / "baml_core"
+    crate_src = PYTHON_DIR / "rust" / "bridge_python" / "src" / "baml_core"
+    real_src = SRC_DIR / "baml_core"
 
     # pyo3-stub-gen 0.22 generates baml_py/__init__.pyi (package layout),
     # but baml_py is a single extension module (.so), not a package.

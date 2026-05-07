@@ -18,7 +18,7 @@ import importlib
 import typing
 from typing import Any, Dict, List, Optional
 
-from ..cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
+from .cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
 from .baml_py import (
     BamlAudio,
     BamlImage,

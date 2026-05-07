@@ -57,7 +57,7 @@ mod wasm_lsp;
 mod wasm_playground;
 mod wasm_sys;
 
-pub use bridge_ctypes::{HANDLE_TABLE, baml, external_to_baml_value, kwargs_to_bex_values};
+pub use bridge_ctypes::{HANDLE_TABLE, baml_core, external_to_baml_value, kwargs_to_bex_values};
 pub use error::BridgeError;
 use js_sys::Function;
 use prost::Message;
@@ -278,7 +278,7 @@ impl BamlWasmRuntime {
         args_proto: &[u8],
     ) -> Result<Vec<u8>, JsValue> {
         // Decode protobuf arguments
-        let args = baml::cffi::CallFunctionArgs::decode(args_proto)
+        let args = baml_core::cffi::CallFunctionArgs::decode(args_proto)
             .map_err(|e| JsError::new(&format!("Failed to decode arguments: {e}")))?;
 
         let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)

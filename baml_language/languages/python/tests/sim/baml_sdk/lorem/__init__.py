@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pydantic
 
-from baml.baml_core import define_function as __define_function
+from baml_core import define_function as __define_function
 
 # The BAML source lives in `baml_src/ns_lorem/root.baml`; the compiler
 # strips the `ns_` prefix so its BAML FQN is `user.lorem.*` (engine

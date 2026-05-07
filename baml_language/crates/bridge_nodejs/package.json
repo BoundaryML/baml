@@ -17,7 +17,7 @@
     ]
   },
   "scripts": {
-    "build:proto": "node node_modules/protobufjs-cli/bin/pbjs -t static-module -w commonjs -p ../bridge_ctypes/types -o typescript_src/proto/baml_cffi.js ../bridge_ctypes/types/baml/cffi/v1/baml_inbound.proto ../bridge_ctypes/types/baml/cffi/v1/baml_outbound.proto && node node_modules/protobufjs-cli/bin/pbts -o typescript_src/proto/baml_cffi.d.ts typescript_src/proto/baml_cffi.js",
+    "build:proto": "node node_modules/protobufjs-cli/bin/pbjs -t static-module -w commonjs -p ../bridge_ctypes/types -o typescript_src/proto/baml_cffi.js ../bridge_ctypes/types/baml_core/cffi/v1/baml_inbound.proto ../bridge_ctypes/types/baml_core/cffi/v1/baml_outbound.proto && node node_modules/protobufjs-cli/bin/pbts -o typescript_src/proto/baml_cffi.d.ts typescript_src/proto/baml_cffi.js",
     "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform && cp native.d.ts typescript_src/native.d.ts",
     "build:napi-release": "napi build --js ./native.js --dts ./native.d.ts --platform --release && cp native.d.ts typescript_src/native.d.ts",
     "build:ts_build": "tsc -p tsconfig.json",
