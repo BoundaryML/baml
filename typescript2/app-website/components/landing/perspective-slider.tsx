@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'motion/react';
+import { useReducedMotion } from 'motion/react';
 import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
@@ -22,37 +22,105 @@ const GUTTER_BG = '#F5F1E5';
 const MONO =
   '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 
-const BAML_CODE = `class LineItem {
-  name  string
-  qty   int
-  price float
+const BAML_CODE = `enum RiskTier {
+  low
+  review
+  block
+}
+
+class LineItem {
+  sku         string?
+  name        string
+  quantity    int
+  unit_price  float
+  confidence  float @stream.done
+}
+
+class InvoiceDraft {
+  vendor      string @stream.done
+  currency    string
+  due_date    string?
+  total       float @stream.done
+  line_items  LineItem[]
+}
+
+class ValidationIssue {
+  path      string
+  severity  "warn" | "error"
+  message   string
 }
 
 class Invoice {
-  vendor     string
-  total      float
-  due_date   string
-  line_items LineItem[]
+  vendor       string
+  amount_due   float
+  due_date     string?
+  risk         RiskTier
+  issues       ValidationIssue[]
 }
 
-function ExtractInvoice(text: string) -> Invoice {
+class ParseFailure {
+  reason string
+  retryable bool
+}
+
+function ExtractInvoice(
+  text: string,
+  locale: string
+) -> InvoiceDraft throws ParseFailure {
   client GPT4o
   prompt #"
-    Extract invoice fields from the text.
+    Extract a normalized invoice draft.
+    Prefer ISO dates and preserve uncertain line items.
     {{ ctx.output_format }}
-    {{ _.role("user") }} {{ text }}
+
+    Locale: {{ locale }}
+    {{ _.role("user") }}
+    {{ text }}
   "#
 }
 
-function bucket(invoice: Invoice) -> "small" | "medium" | "large" {
-  if (invoice.total > 10000.0) { "large" }
-  else if (invoice.total > 1000.0) { "medium" }
-  else { "small" }
+function ValidateInvoice(draft: InvoiceDraft) -> ValidationIssue[] {
+  let line_total = draft.line_items
+    .map((item) => item.quantity * item.unit_price)
+    .sum();
+
+  if ((line_total - draft.total).abs() > 0.02) {
+    [ValidationIssue {
+      path: "total",
+      severity: "error",
+      message: "line item sum does not match total",
+    }]
+  } else {
+    []
+  }
 }
 
-function Pipeline(text: string) -> string {
-  let invoice = ExtractInvoice(text);
-  bucket(invoice)
+function RiskScore(draft: InvoiceDraft) -> RiskTier {
+  if (draft.total > 25000.0) { RiskTier.block }
+  else if (draft.currency != "USD") { RiskTier.review }
+  else { RiskTier.low }
+}
+
+function ExtractAndReview(text: string) -> Invoice {
+  let draft = ExtractInvoice(text, "en-US") catch (err) {
+    _: ParseFailure => ExtractInvoice(text, "auto")
+  };
+
+  Invoice {
+    vendor: draft.vendor.trim(),
+    amount_due: draft.total,
+    due_date: draft.due_date,
+    risk: RiskScore(draft),
+    issues: ValidateInvoice(draft),
+  }
+}
+
+testset "invoice-review" {
+  test "flags mismatched totals" {
+    let invoice = ExtractAndReview("Acme invoice 1001...");
+    assert.equal(invoice.risk, RiskTier.review);
+    assert.contains(invoice.issues.map((i) => i.path), "total");
+  }
 }`;
 
 // Hand-tokenized BAML code with editorial color palette. Keeps the bundle
@@ -61,6 +129,7 @@ function Pipeline(text: string) -> string {
 function tokenizeBaml(code: string): { content: string; color?: string }[][] {
   const KEYWORDS = new Set([
     'class',
+    'enum',
     'function',
     'client',
     'prompt',
@@ -71,6 +140,10 @@ function tokenizeBaml(code: string): { content: string; color?: string }[][] {
     'in',
     'return',
     'match',
+    'catch',
+    'throws',
+    'testset',
+    'test',
     'true',
     'false',
   ]);
@@ -344,7 +417,7 @@ type GraphEdge = {
   active?: boolean;
 };
 
-// Single horizontal flow keeps the eye moving left → right and gives
+// Single horizontal flow keeps the eye moving left-to-right and gives
 // ExtractInvoice room to breathe as the visual centerpiece.
 const VIEW_W = 760;
 const VIEW_H = 360;
@@ -372,31 +445,31 @@ const GRAPH_NODES: GraphNode[] = [
     h: 220,
   },
   {
-    id: 'invoice',
+    id: 'draft',
     kind: 'class',
-    label: 'Invoice',
+    label: 'InvoiceDraft',
     state: 'running',
-    x: 408,
+    x: 400,
     y: 76,
-    w: 208,
+    w: 196,
     h: 208,
   },
   {
-    id: 'bucket',
+    id: 'review',
     kind: 'function',
-    label: 'bucket',
+    label: 'ExtractAndReview',
     state: 'idle',
-    x: 632,
+    x: 620,
     y: 154,
-    w: 116,
+    w: 128,
     h: 52,
   },
 ];
 
 const GRAPH_EDGES: GraphEdge[] = [
   { from: 'input', to: 'extract', active: true },
-  { from: 'extract', to: 'invoice', active: true },
-  { from: 'invoice', to: 'bucket' },
+  { from: 'extract', to: 'draft', active: true },
+  { from: 'draft', to: 'review' },
 ];
 
 // Editorial palette specific to the graph panel — pulled from the same token
@@ -485,25 +558,13 @@ function StateIcon({
     );
   }
   return (
-    <svg
-      aria-hidden
-      fill="none"
-      height={size}
-      viewBox="0 0 24 24"
-      width={size}
-    >
+    <svg aria-hidden fill="none" height={size} viewBox="0 0 24 24" width={size}>
       <circle cx="12" cy="12" r="3" fill={idleColor} />
     </svg>
   );
 }
 
-function StateChip({
-  state,
-  accent,
-}: {
-  state: NodeState;
-  accent: string;
-}) {
+function StateChip({ state, accent }: { state: NodeState; accent: string }) {
   const isIdle = state === 'idle';
   return (
     <span
@@ -628,13 +689,7 @@ function NodeShell({
   );
 }
 
-function NodeHeader({
-  n,
-  accent,
-}: {
-  n: GraphNode;
-  accent: string;
-}) {
+function NodeHeader({ n, accent }: { n: GraphNode; accent: string }) {
   const chip = chipForKind(n.kind);
   return (
     <div
@@ -812,7 +867,7 @@ function ResultPreview() {
             width: 5,
           }}
         />
-        Invoice · partial
+        InvoiceDraft · partial
       </div>
       <div style={{ display: 'grid', rowGap: 4 }}>
         {rows.map((r) => (
@@ -1175,6 +1230,217 @@ function GraphPanel({ runningPulse }: { runningPulse: boolean }) {
 
 const HANDLE_SIZE = 44;
 
+export function CompactPerspectivePanel() {
+  const [pos, setPos] = useState(50);
+  const [dragging, setDragging] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
+
+  const updateFromClientX = useCallback((clientX: number) => {
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const next = ((clientX - rect.left) / rect.width) * 100;
+    setPos(Math.max(0, Math.min(100, next)));
+  }, []);
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    setDragging(true);
+    updateFromClientX(e.clientX);
+  };
+
+  useEffect(() => {
+    if (!dragging) return;
+    const move = (e: PointerEvent) => updateFromClientX(e.clientX);
+    const up = () => setDragging(false);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+  }, [dragging, updateFromClientX]);
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? 10 : 4;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      setPos((p) => Math.max(0, p - step));
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      setPos((p) => Math.min(100, p + step));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setPos(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setPos(100);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        background: CARD_BG,
+        border: `1px solid ${BORDER}`,
+        borderRadius: 0,
+        height: '100%',
+        overflow: 'hidden',
+        padding: 10,
+        position: 'relative',
+        width: '100%',
+      }}
+    >
+      <style>{`
+        @keyframes baml-perspective-dash {
+          to { stroke-dashoffset: -20; }
+        }
+        @keyframes baml-perspective-spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+      <div
+        aria-hidden
+        style={{
+          alignItems: 'center',
+          color: EYEBROW,
+          display: 'flex',
+          fontFamily: MONO,
+          fontSize: 10,
+          fontWeight: 600,
+          justifyContent: 'space-between',
+          letterSpacing: '0.12em',
+          marginBottom: 10,
+          padding: '0 4px',
+          textTransform: 'uppercase',
+        }}
+      >
+        <span style={{ alignItems: 'center', display: 'flex', gap: 8 }}>
+          <span
+            aria-hidden
+            style={{
+              background: ACCENT,
+              borderRadius: '50%',
+              height: 6,
+              width: 6,
+            }}
+          />
+          agent source
+        </span>
+        <span style={{ alignItems: 'center', display: 'flex', gap: 8 }}>
+          visual graph
+          <span
+            aria-hidden
+            style={{
+              background: INK,
+              borderRadius: '50%',
+              height: 6,
+              width: 6,
+            }}
+          />
+        </span>
+      </div>
+
+      <div
+        ref={containerRef}
+        onPointerDown={onPointerDown}
+        role="presentation"
+        style={{
+          borderRadius: 8,
+          cursor: dragging ? 'grabbing' : 'ew-resize',
+          height: 'calc(100% - 26px)',
+          minHeight: 0,
+          overflow: 'hidden',
+          position: 'relative',
+          touchAction: 'none',
+          userSelect: 'none',
+          width: '100%',
+        }}
+      >
+        <div style={{ inset: 0, position: 'absolute' }}>
+          <GraphPanel runningPulse={!reduced} />
+        </div>
+        <div
+          style={{
+            clipPath: `inset(0 ${100 - pos}% 0 0)`,
+            inset: 0,
+            position: 'absolute',
+            transition: dragging || reduced ? 'none' : 'clip-path 80ms linear',
+            willChange: 'clip-path',
+          }}
+        >
+          <CodePanel />
+        </div>
+        <div
+          aria-hidden
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.6) 100%)',
+            boxShadow:
+              '0 0 0 1px rgba(26,22,18,0.18), 0 0 24px rgba(109,40,217,0.25)',
+            bottom: 0,
+            left: `${pos}%`,
+            pointerEvents: 'none',
+            position: 'absolute',
+            top: 0,
+            transform: 'translateX(-50%)',
+            transition: dragging || reduced ? 'none' : 'left 80ms linear',
+            width: 2,
+          }}
+        />
+        <div
+          aria-label="Slide between graph view and source code"
+          aria-orientation="horizontal"
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={Math.round(pos)}
+          onKeyDown={onKeyDown}
+          role="slider"
+          tabIndex={0}
+          style={{
+            alignItems: 'center',
+            background: BG,
+            border: `2px solid ${ACCENT}`,
+            borderRadius: '50%',
+            boxShadow:
+              '0 6px 18px rgba(26,22,18,0.25), 0 0 0 6px rgba(109,40,217,0.12)',
+            cursor: dragging ? 'grabbing' : 'grab',
+            display: 'flex',
+            height: HANDLE_SIZE,
+            justifyContent: 'center',
+            left: `${pos}%`,
+            outlineOffset: 4,
+            position: 'absolute',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            transition: dragging || reduced ? 'none' : 'left 80ms linear',
+            width: HANDLE_SIZE,
+          }}
+        >
+          <svg
+            aria-hidden
+            fill="none"
+            height={18}
+            stroke={ACCENT}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2.4}
+            viewBox="0 0 24 24"
+            width={18}
+          >
+            <path d="M9 6 L4 12 L9 18" />
+            <path d="M15 6 L20 12 L15 18" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PerspectiveSlider() {
   const [pos, setPos] = useState(50);
   const [dragging, setDragging] = useState(false);
@@ -1306,9 +1572,9 @@ export function PerspectiveSlider() {
               maxWidth: 620,
             }}
           >
-            BAML is the contract both sides read. You get a graph of your
-            program. Your agent gets typed source it can navigate, refactor, and
-            test. Drag the slider to switch perspectives.
+            BAML is the contract both sides read. Your agent gets typed source
+            it can navigate, refactor, and test. You get the same program as an
+            executable graph. Drag the slider to switch perspectives.
           </p>
         </div>
 
@@ -1351,10 +1617,10 @@ export function PerspectiveSlider() {
                   width: 6,
                 }}
               />
-              what you see
+              what your agent sees
             </span>
             <span style={{ alignItems: 'center', display: 'flex', gap: 8 }}>
-              what your agent sees
+              what you see
               <span
                 aria-hidden
                 style={{
@@ -1383,27 +1649,28 @@ export function PerspectiveSlider() {
               width: '100%',
             }}
           >
-            {/* Layer 1: code panel (background — what your agent sees) */}
+            {/* Layer 1: graph panel (background - what you see) */}
             <div
               style={{
                 inset: 0,
                 position: 'absolute',
               }}
             >
-              <CodePanel />
+              <GraphPanel runningPulse={!reduced} />
             </div>
 
-            {/* Layer 2: graph panel (foreground — clipped to left of slider) */}
+            {/* Layer 2: code panel (foreground - clipped to left of slider) */}
             <div
               style={{
                 clipPath: `inset(0 ${100 - pos}% 0 0)`,
                 inset: 0,
                 position: 'absolute',
-                transition: dragging || reduced ? 'none' : 'clip-path 80ms linear',
+                transition:
+                  dragging || reduced ? 'none' : 'clip-path 80ms linear',
                 willChange: 'clip-path',
               }}
             >
-              <GraphPanel runningPulse={!reduced} />
+              <CodePanel />
             </div>
 
             {/* divider line */}
@@ -1451,8 +1718,7 @@ export function PerspectiveSlider() {
                 position: 'absolute',
                 top: '50%',
                 transform: 'translate(-50%, -50%)',
-                transition:
-                  dragging || reduced ? 'none' : 'left 80ms linear',
+                transition: dragging || reduced ? 'none' : 'left 80ms linear',
                 width: HANDLE_SIZE,
               }}
             >

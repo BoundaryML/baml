@@ -1,25 +1,11 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-import Link from 'next/link';
 import posthog from 'posthog-js';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 
-const BamlPlayground = dynamic(
-  () => import('@/playground/BamlPlayground').then((m) => m.BamlPlayground),
-  {
-    loading: () => (
-      <div className="flex items-center justify-center min-h-[400px] text-muted-foreground text-sm">
-        Loading playground...
-      </div>
-    ),
-    ssr: false,
-  },
-);
-
 import Image from 'next/image';
-import { useIsDesktop } from '@/hooks/use-media-query';
+import { CompactPerspectivePanel } from '@/components/landing/perspective-slider';
 import Marquee from '../magicui/marquee';
 import { ScriptCopyBtn } from '../magicui/script-copy-btn';
 import { Navbar } from '../navbar';
@@ -567,7 +553,6 @@ const installOptions: {
 
 const HeroSection = () => {
   const [installPath, setInstallPath] = useState<InstallPath>('claude');
-  const isDesktop = useIsDesktop();
 
   const selected =
     installOptions.find((option) => option.id === installPath) ??
@@ -665,44 +650,8 @@ const HeroSection = () => {
         className="hero-right-responsive relative"
         style={customStyles.heroRight}
       >
-        <div className="absolute inset-0 flex flex-col">
-          <div className="relative flex-1 min-h-0 overflow-hidden">
-            {isDesktop ? (
-              <BamlPlayground />
-            ) : (
-              <Link
-                className="group relative block h-full w-full"
-                href="/how-the-playground-works"
-              >
-                <Image
-                  alt="BAML playground preview"
-                  src="/bamlPlaygroundLightScreenshot.png"
-                  fill
-                  sizes="(min-width: 1024px) 50vw, 100vw"
-                  className="object-cover object-top"
-                  priority={false}
-                />
-                <div className="absolute inset-x-0 bottom-0 bg-white/85 px-4 py-3 text-center text-[13px] text-[#1A1612]">
-                  Open the playground on a desktop browser to try it live →
-                </div>
-              </Link>
-            )}
-          </div>
-          <Link
-            className="group text-[#5C5852] hover:text-[#A78BFA] no-underline transition-colors duration-500 ease-out"
-            href="/how-the-playground-works"
-            style={{
-              backgroundColor: '#FBF7ED',
-              borderTop: '1px solid #D9D3C4',
-              flexShrink: 0,
-              fontSize: '13px',
-              padding: '12px 24px',
-            }}
-          >
-            <span className="bg-gradient-to-r from-[#A78BFA] to-[#A78BFA] bg-no-repeat [background-position:0_100%] bg-[length:0%_1px] group-hover:bg-[length:100%_1px] transition-[background-size] duration-500 ease-out">
-              Wondering how you&apos;re running BAML in your browser? →
-            </span>
-          </Link>
+        <div className="absolute inset-0 min-h-0 overflow-hidden">
+          <CompactPerspectivePanel />
         </div>
       </div>
     </section>
