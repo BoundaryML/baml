@@ -31,26 +31,31 @@ const SECTION_STICKY_TOP = '130px';
 // ── Code sources ─────────────────────────────────────────────────────────────
 
 const STEP_1_PY = `from openai import OpenAI
-import json
+from pydantic import BaseModel
 
 client = OpenAI()
 
-def extract_invoice(text: str):
-    response = client.chat.completions.create(
+class LineItem(BaseModel):
+    name: str
+    qty: int
+    price: float
+
+class Invoice(BaseModel):
+    vendor: str
+    total: float
+    due_date: str
+    line_items: list[LineItem]
+
+def extract_invoice(text: str) -> Invoice | None:
+    response = client.chat.completions.parse(
         model="gpt-4o",
         messages=[{
             "role": "user",
-            "content": f"""Extract invoice fields. Return JSON with
-vendor, total (float), due_date (YYYY-MM-DD),
-line_items (array of name, qty, price).
-
-Text: {text}"""
-        }]
+            "content": f"Extract the invoice from:\\n\\n{text}",
+        }],
+        response_format=Invoice,
     )
-    try:
-        return json.loads(response.choices[0].message.content)
-    except json.JSONDecodeError:
-        return None  # silent failure
+    return response.choices[0].message.parsed
 `;
 
 const STEP_2_BAML = `class LineItem {
@@ -173,8 +178,8 @@ type Step = {
 const STEPS: Step[] = [
   {
     marker: 'Step 01. Today.',
-    heading: 'Strings, json.loads, fingers crossed.',
-    body: 'A string prompt. Manual JSON parsing. No types. Keep this file open — the rest of the timeline lifts pieces out of it, one at a time.',
+    heading: 'Spaghetti code and strings everywhere.',
+    body: 'Pydantic schemas, OpenAI SDK structured outputs. The prompt still lives as a string in your app — untyped, untested, Python-only.',
     blocks: [
       {
         key: 's1-py',
@@ -183,16 +188,12 @@ const STEPS: Step[] = [
         filename: 'main.py',
         annotations: [
           {
-            lineNumber: 11,
-            text: 'string prompt.\nno schema, no types.',
+            lineNumber: 22,
+            text: 'the prompt is still a string\nin your app code.',
           },
           {
-            lineNumber: 19,
-            text: 'JSON.loads and hope.',
-          },
-          {
-            lineNumber: 21,
-            text: 'silent failure when\nJSON is malformed.',
+            lineNumber: 24,
+            text: 'schema lives in Python.\ncan’t be reused elsewhere.',
           },
         ],
       },
@@ -200,8 +201,8 @@ const STEPS: Step[] = [
   },
   {
     marker: 'Step 02. Lift one prompt out.',
-    heading: 'The first typed BAML function.',
-    body: 'Schema, prompt, and client live once in BAML. Your Python keeps running. The only thing that changes is how that one call looks — and that the result is typed.',
+    heading: 'Turn your LLM calls into typed BAML functions.',
+    body: 'Schema, prompt, and SDK live in BAML — but the rest of your app stays in Python.',
     blocks: [
       {
         key: 's2-baml',
@@ -962,7 +963,7 @@ export function IncrementalAdoption() {
               margin: '0 0 40px 24px',
             }}
           >
-            Adopt Incrementally
+            Adopt BAML Incrementally
           </h2>
           {STEPS.map((s, i) => {
             const isActive = i === activeStep;

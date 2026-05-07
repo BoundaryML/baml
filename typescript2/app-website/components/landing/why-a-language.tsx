@@ -217,7 +217,7 @@ export function WhyALanguage() {
               </h2>
 
               <p className="max-w-[540px] text-[clamp(1rem,1.35vw,1.15rem)] leading-[1.62] text-[#5C5852]">
-                Built in{' '}
+                It&apos;s built in{' '}
                 <span className="font-semibold text-[#1A1612]">Rust</span> and
                 used by some of the world&apos;s largest companies. It has a
                 compiler, VM, LSP, formatter, type system with inferred error

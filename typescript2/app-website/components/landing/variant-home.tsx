@@ -296,6 +296,7 @@ const customStyles = {
     minHeight: '720px',
   } as React.CSSProperties,
   heroLeft: {
+    backgroundColor: '#ffffff',
     borderRight: '1px solid #D9D3C4',
     display: 'flex',
     flexDirection: 'column' as const,

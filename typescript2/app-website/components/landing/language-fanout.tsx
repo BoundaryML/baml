@@ -5,7 +5,6 @@ import Image from 'next/image';
 import { useRef } from 'react';
 import {
   SiGo,
-  SiPython,
   SiRuby,
   SiRust,
   SiTypescript,
@@ -28,12 +27,14 @@ type Lang = {
   name: string;
   Icon?: IconType;
   color?: string;
+  // When set, the tile renders this image (used for multi-color logos).
+  image?: string;
   // When set, the tile renders this string in place of an icon.
   glyph?: string;
 };
 
 const LANGS: Lang[] = [
-  { name: 'Python', Icon: SiPython, color: '#3776AB' },
+  { name: 'Python', image: '/python-icon.png' },
   { name: 'TypeScript', Icon: SiTypescript, color: '#3178C6' },
   { name: 'Ruby', Icon: SiRuby, color: '#CC342D' },
   { name: 'Go', Icon: SiGo, color: '#00ADD8' },
@@ -420,7 +421,15 @@ export function LanguageFanout() {
                       'box-shadow 220ms ease, transform 220ms ease, border-color 220ms ease',
                   }}
                 >
-                  {lang.Icon ? (
+                  {lang.image ? (
+                    <Image
+                      alt={lang.name}
+                      height={40}
+                      src={lang.image}
+                      style={{ height: 40, objectFit: 'contain', width: 40 }}
+                      width={40}
+                    />
+                  ) : lang.Icon ? (
                     <lang.Icon size={40} color={lang.color} />
                   ) : (
                     <span
