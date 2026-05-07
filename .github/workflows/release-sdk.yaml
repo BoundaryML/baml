@@ -24,7 +24,7 @@ on:
       publish:
         description: "Publish to PyPI after building (false = build-only rehearsal)"
         type: boolean
-        default: true
+        default: false
         required: false
 
 concurrency:

@@ -63,7 +63,7 @@ jobs:
               Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe" -OutFile "rustup-init.exe"
               .\rustup-init.exe --default-toolchain stable -y
               Remove-Item "rustup-init.exe"
-              "$env:USERPROFILE/.cargo/bin" | Out-File -FilePath "$env:GITHUB_PATH" -Append
+              Add-Content -Path "$env:GITHUB_PATH" -Value "$env:USERPROFILE\.cargo\bin" -Encoding utf8
           }
 
       - uses: actions/checkout@v4
