@@ -32,15 +32,17 @@ pub struct BackgroundSpawner {
 impl BackgroundSpawner {
     /// Create a spawner using the current async runtime.
     ///
-    /// Native: captures `tokio::runtime::Handle::current()` — must be called
-    /// inside a tokio runtime context, otherwise this panics at runtime.
+    /// Native: captures the current tokio handle when one is active, otherwise
+    /// falls back to a process-local runtime. This keeps callers that are
+    /// constructed from synchronous LSP startup code from panicking.
     /// WASM: zero-size sentinel.
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         #[cfg(not(target_arch = "wasm32"))]
         {
             Self {
-                handle: tokio::runtime::Handle::current(),
+                handle: tokio::runtime::Handle::try_current()
+                    .unwrap_or_else(|_| fallback_runtime().handle().clone()),
             }
         }
         #[cfg(target_arch = "wasm32")]
@@ -69,6 +71,15 @@ impl BackgroundSpawner {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn fallback_runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Runtime::new()
+            .expect("failed to create background tokio runtime for BAML LSP")
+    })
+}
+
 #[cfg(target_arch = "wasm32")]
 pub(super) fn from_file_path(path: &std::path::Path) -> Result<lsp_types::Url, ()> {
     let path_str = path.to_str().ok_or(())?;
@@ -91,4 +102,22 @@ pub(super) fn to_file_path(url: &lsp_types::Url) -> Result<std::path::PathBuf, (
         .decode_utf8()
         .map_err(|_| ())?;
     Ok(std::path::PathBuf::from(decoded.as_ref()))
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::BackgroundSpawner;
+
+    #[test]
+    fn background_spawner_new_works_without_current_tokio_runtime() {
+        let spawner = BackgroundSpawner::new();
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        spawner.spawn(async move {
+            tx.send(()).expect("test receiver should still be alive");
+        });
+
+        rx.recv_timeout(std::time::Duration::from_secs(2))
+            .expect("background task should run on fallback runtime");
+    }
 }

@@ -418,6 +418,17 @@ impl<'a> Parser<'a> {
         i
     }
 
+    fn skip_header_comment_at(&self, mut i: usize) -> usize {
+        if !self.is_header_comment_at(i) {
+            return i;
+        }
+
+        while i < self.tokens.len() && self.tokens[i].kind != TokenKind::Newline {
+            i += 1;
+        }
+        i
+    }
+
     /// Skip a parenthesized argument list starting at `(`, returning the index after it.
     fn skip_parenthesized_from(&self, mut i: usize) -> Option<usize> {
         i = self.skip_trivia_and_comments_from(i);
@@ -2489,7 +2500,24 @@ impl<'a> Parser<'a> {
         let mut brace_depth = 0;
 
         while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
+            let new_i = self.skip_header_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
             let token = &self.tokens[i];
+            if self.is_basic_trivia(token.kind) {
+                i += 1;
+                continue;
+            }
+
             match token.kind {
                 TokenKind::LBrace => brace_depth += 1,
                 TokenKind::RBrace if brace_depth == 1 => break,
@@ -5629,6 +5657,30 @@ function call_llm_function(client: Client, function_name: string) -> unknown {
         let source = r#"
 function f() -> int {
   client.execute()
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn expression_body_header_comment_with_prompt_word_is_not_llm_body() {
+        let source = r#"
+function f() -> string {
+  //# Generate an image from the user prompt.
+  let value = "ok"
+  value
 }
 "#;
 

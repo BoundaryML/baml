@@ -41,12 +41,31 @@ pub struct Symbol {
 #[derive(Debug, Clone)]
 pub struct FunctionSymbol {
     pub name: String,
+    /// Whether the function came directly from user source, a companion, or compiler lowering.
+    pub origin: FunctionOrigin,
     /// Whether this is an LLM function (has `client`/`prompt` declarative body).
     pub is_llm: bool,
     /// The LLM client name (if LLM function).
     pub client_name: Option<String>,
     /// Whether this function is compiler-generated (`render_prompt`, `build_request`, `resolve`).
     pub is_sub_function: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionOrigin {
+    UserDefined,
+    Companion,
+    Internal,
+}
+
+impl From<baml_compiler2_ast::ast::FunctionOrigin> for FunctionOrigin {
+    fn from(origin: baml_compiler2_ast::ast::FunctionOrigin) -> Self {
+        match origin {
+            baml_compiler2_ast::ast::FunctionOrigin::UserDefined => Self::UserDefined,
+            baml_compiler2_ast::ast::FunctionOrigin::Companion => Self::Companion,
+            baml_compiler2_ast::ast::FunctionOrigin::Internal => Self::Internal,
+        }
+    }
 }
 
 /// Extended test metadata for the playground.
@@ -107,11 +126,12 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol>
                         None
                     };
 
-                // Sub-functions have names with '$' (e.g. render_prompt$MyFunc)
+                // Sub-functions have names with '$' (e.g. MyFunc$render_prompt)
                 let is_sub_function = name.as_str().contains('$');
 
                 result.push(FunctionSymbol {
                     name: name.to_string(),
+                    origin: func.origin.into(),
                     is_llm,
                     client_name,
                     is_sub_function,

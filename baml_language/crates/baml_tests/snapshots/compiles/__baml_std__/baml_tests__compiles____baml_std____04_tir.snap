@@ -244,16 +244,18 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
 }
 function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request throws never {
   { : baml.http.Request
+    let return_type = get_return_type(function_name) : type
     let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
     let specialized_prompt = render_prompt(client, function_name, args) : baml.llm.PromptAst
-    primitive_client.build_request(specialized_prompt) : baml.http.Request
+    primitive_client.build_request(specialized_prompt, return_type) : baml.http.Request
   }
 }
 function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request throws never {
   { : baml.http.Request
+    let return_type = get_return_type(function_name) : type
     let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
     let specialized_prompt = render_prompt(client, function_name, args) : baml.llm.PromptAst
-    primitive_client.build_request_stream(specialized_prompt) : baml.http.Request
+    primitive_client.build_request_stream(specialized_prompt, return_type) : baml.http.Request
   }
 }
 function baml.llm.parse<T, S>(function_name: string, json: string) -> T throws never {
@@ -463,7 +465,7 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
           let return_type = get_return_type(context.function_name) : type
           let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
-          let http_request = primitive.build_request_stream(specialized) : baml.http.Request
+          let http_request = primitive.build_request_stream(specialized, return_type) : baml.http.Request
           let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
           let stream: Stream<T, S> = self.__make_stream(sse, context.function_name) : baml.llm.Stream<T, S>
           return stream : baml.llm.Stream<T, S>
@@ -562,7 +564,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
           let return_type = get_return_type(context.function_name) : type
           let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
-          let http_request = primitive.build_request(specialized) : baml.http.Request
+          let http_request = primitive.build_request(specialized, return_type) : baml.http.Request
           let http_response = root.http.send(http_request) : baml.http.Response
           if (http_response.ok() : bool) : T
             { : T

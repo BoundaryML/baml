@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from baml.cffi.v1 import baml_outbound_pb2 as baml_dot_cffi_dot_v1_dot_baml__outbound__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1e\x62\x61ml/cffi/v1/baml_events.proto\x12\x0c\x62\x61ml.cffi.v1\x1a baml/cffi/v1/baml_outbound.proto\"\xc8\x01\n\x0cRuntimeEvent\x12\x0f\n\x07span_id\x18\x01 \x01(\t\x12\x1b\n\x0eparent_span_id\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x14\n\x0croot_span_id\x18\x03 \x01(\t\x12\x14\n\x0ctimestamp_ms\x18\x04 \x01(\x04\x12\x12\n\ncall_stack\x18\x05 \x03(\t\x12&\n\x05\x65vent\x18\x06 \x01(\x0b\x32\x17.baml.cffi.v1.EventKind\x12\x0f\n\x07\x63\x61ll_id\x18\x07 \x01(\x04\x42\x11\n\x0f_parent_span_id\"\x8b\x02\n\tEventKind\x12:\n\x0e\x66unction_start\x18\x01 \x01(\x0b\x32 .baml.cffi.v1.FunctionStartEventH\x00\x12\x36\n\x0c\x66unction_end\x18\x02 \x01(\x0b\x32\x1e.baml.cffi.v1.FunctionEndEventH\x00\x12.\n\x08set_tags\x18\x03 \x01(\x0b\x32\x1a.baml.cffi.v1.SetTagsEventH\x00\x12%\n\x03log\x18\x04 \x01(\x0b\x32\x16.baml.cffi.v1.LogEventH\x00\x12+\n\x06\x63ustom\x18\x05 \x01(\x0b\x32\x19.baml.cffi.v1.CustomEventH\x00\x42\x06\n\x04kind\"w\n\x12\x46unctionStartEvent\x12\x0c\n\x04name\x18\x01 \x01(\t\x12-\n\x04\x61rgs\x18\x02 \x03(\x0b\x32\x1f.baml.cffi.v1.BamlOutboundValue\x12$\n\x04tags\x18\x03 \x03(\x0b\x32\x16.baml.cffi.v1.TagEntry\"f\n\x10\x46unctionEndEvent\x12\x0c\n\x04name\x18\x01 \x01(\t\x12/\n\x06result\x18\x02 \x01(\x0b\x32\x1f.baml.cffi.v1.BamlOutboundValue\x12\x13\n\x0b\x64uration_ms\x18\x03 \x01(\x04\"4\n\x0cSetTagsEvent\x12$\n\x04tags\x18\x01 \x03(\x0b\x32\x16.baml.cffi.v1.TagEntry\"i\n\x0eSourceLocation\x12\x0f\n\x07\x66ile_id\x18\x01 \x01(\r\x12\x0c\n\x04line\x18\x02 \x01(\r\x12\x0e\n\x06\x63olumn\x18\x03 \x01(\r\x12\x14\n\x0cstart_offset\x18\x04 \x01(\r\x12\x12\n\nend_offset\x18\x05 \x01(\r\"\x86\x01\n\x08LogEvent\x12\r\n\x05level\x18\x01 \x01(\t\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.baml.cffi.v1.BamlOutboundValue\x12\x31\n\x06source\x18\x03 \x01(\x0b\x32\x1c.baml.cffi.v1.SourceLocationH\x00\x88\x01\x01\x42\t\n\x07_source\"J\n\x0b\x43ustomEvent\x12\x0c\n\x04name\x18\x01 \x01(\t\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.baml.cffi.v1.BamlOutboundValue\"&\n\x08TagEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\tB\x08Z\x06./cffib\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1e\x62\x61ml/cffi/v1/baml_events.proto\x12\x0c\x62\x61ml.cffi.v1\x1a baml/cffi/v1/baml_outbound.proto\"\xc8\x01\n\x0cRuntimeEvent\x12\x0f\n\x07span_id\x18\x01 \x01(\t\x12\x1b\n\x0eparent_span_id\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x14\n\x0croot_span_id\x18\x03 \x01(\t\x12\x14\n\x0ctimestamp_ms\x18\x04 \x01(\x04\x12\x12\n\ncall_stack\x18\x05 \x03(\t\x12&\n\x05\x65vent\x18\x06 \x01(\x0b\x32\x17.baml.cffi.v1.EventKind\x12\x0f\n\x07\x63\x61ll_id\x18\x07 \x01(\x04\x42\x11\n\x0f_parent_span_id\"\x8b\x02\n\tEventKind\x12:\n\x0e\x66unction_start\x18\x01 \x01(\x0b\x32 .baml.cffi.v1.FunctionStartEventH\x00\x12\x36\n\x0c\x66unction_end\x18\x02 \x01(\x0b\x32\x1e.baml.cffi.v1.FunctionEndEventH\x00\x12.\n\x08set_tags\x18\x03 \x01(\x0b\x32\x1a.baml.cffi.v1.SetTagsEventH\x00\x12%\n\x03log\x18\x04 \x01(\x0b\x32\x16.baml.cffi.v1.LogEventH\x00\x12+\n\x06\x63ustom\x18\x05 \x01(\x0b\x32\x19.baml.cffi.v1.CustomEventH\x00\x42\x06\n\x04kind\"w\n\x12\x46unctionStartEvent\x12\x0c\n\x04name\x18\x01 \x01(\t\x12-\n\x04\x61rgs\x18\x02 \x03(\x0b\x32\x1f.baml.cffi.v1.BamlOutboundValue\x12$\n\x04tags\x18\x03 \x03(\x0b\x32\x16.baml.cffi.v1.TagEntry\"u\n\x10\x46unctionEndEvent\x12\x0c\n\x04name\x18\x01 \x01(\t\x12/\n\x06result\x18\x02 \x01(\x0b\x32\x1f.baml.cffi.v1.BamlOutboundValue\x12\x13\n\x0b\x64uration_ms\x18\x03 \x01(\x04\x12\r\n\x05\x65rror\x18\x04 \x01(\t\"4\n\x0cSetTagsEvent\x12$\n\x04tags\x18\x01 \x03(\x0b\x32\x16.baml.cffi.v1.TagEntry\"i\n\x0eSourceLocation\x12\x0f\n\x07\x66ile_id\x18\x01 \x01(\r\x12\x0c\n\x04line\x18\x02 \x01(\r\x12\x0e\n\x06\x63olumn\x18\x03 \x01(\r\x12\x14\n\x0cstart_offset\x18\x04 \x01(\r\x12\x12\n\nend_offset\x18\x05 \x01(\r\"\x86\x01\n\x08LogEvent\x12\r\n\x05level\x18\x01 \x01(\t\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.baml.cffi.v1.BamlOutboundValue\x12\x31\n\x06source\x18\x03 \x01(\x0b\x32\x1c.baml.cffi.v1.SourceLocationH\x00\x88\x01\x01\x42\t\n\x07_source\"J\n\x0b\x43ustomEvent\x12\x0c\n\x04name\x18\x01 \x01(\t\x12-\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1f.baml.cffi.v1.BamlOutboundValue\"&\n\x08TagEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\tB\x08Z\x06./cffib\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -40,15 +40,15 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_FUNCTIONSTARTEVENT']._serialized_start=555
   _globals['_FUNCTIONSTARTEVENT']._serialized_end=674
   _globals['_FUNCTIONENDEVENT']._serialized_start=676
-  _globals['_FUNCTIONENDEVENT']._serialized_end=778
-  _globals['_SETTAGSEVENT']._serialized_start=780
-  _globals['_SETTAGSEVENT']._serialized_end=832
-  _globals['_SOURCELOCATION']._serialized_start=834
-  _globals['_SOURCELOCATION']._serialized_end=939
-  _globals['_LOGEVENT']._serialized_start=942
-  _globals['_LOGEVENT']._serialized_end=1076
-  _globals['_CUSTOMEVENT']._serialized_start=1078
-  _globals['_CUSTOMEVENT']._serialized_end=1152
-  _globals['_TAGENTRY']._serialized_start=1154
-  _globals['_TAGENTRY']._serialized_end=1192
+  _globals['_FUNCTIONENDEVENT']._serialized_end=793
+  _globals['_SETTAGSEVENT']._serialized_start=795
+  _globals['_SETTAGSEVENT']._serialized_end=847
+  _globals['_SOURCELOCATION']._serialized_start=849
+  _globals['_SOURCELOCATION']._serialized_end=954
+  _globals['_LOGEVENT']._serialized_start=957
+  _globals['_LOGEVENT']._serialized_end=1091
+  _globals['_CUSTOMEVENT']._serialized_start=1093
+  _globals['_CUSTOMEVENT']._serialized_end=1167
+  _globals['_TAGENTRY']._serialized_start=1169
+  _globals['_TAGENTRY']._serialized_end=1207
 # @@protoc_insertion_point(module_scope)

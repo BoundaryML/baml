@@ -179,7 +179,7 @@ class Client {
         let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type);
         let specialized = primitive.specialize_prompt(prompt);
 
-        let http_request = primitive.build_request_stream(specialized);
+        let http_request = primitive.build_request_stream(specialized, return_type);
         let sse = root.http.fetch_sse(http_request);
         let stream: Stream<T, S> = self.__make_stream(sse, context.function_name);
         return stream;
@@ -282,7 +282,7 @@ class Client {
 
         let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type)
         let specialized = primitive.specialize_prompt(prompt)
-        let http_request = primitive.build_request(specialized)
+        let http_request = primitive.build_request(specialized, return_type)
         let http_response = root.http.send(http_request)
 
         if (http_response.ok()) {
@@ -558,6 +558,7 @@ class PrimitiveClient {
   function build_request(
     self,
     prompt: PromptAst,
+    return_type: type,
   ) -> root.http.Request throws root.errors.LlmClient {
     $rust_io_function
   }
@@ -565,6 +566,7 @@ class PrimitiveClient {
   function build_request_stream(
     self,
     prompt: PromptAst,
+    return_type: type,
   ) -> root.http.Request throws root.errors.LlmClient {
     $rust_io_function
   }

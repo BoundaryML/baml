@@ -50,14 +50,16 @@ class FunctionStartEvent(_message.Message):
     def __init__(self, name: _Optional[str] = ..., args: _Optional[_Iterable[_Union[_baml_outbound_pb2.BamlOutboundValue, _Mapping]]] = ..., tags: _Optional[_Iterable[_Union[TagEntry, _Mapping]]] = ...) -> None: ...
 
 class FunctionEndEvent(_message.Message):
-    __slots__ = ("name", "result", "duration_ms")
+    __slots__ = ("name", "result", "duration_ms", "error")
     NAME_FIELD_NUMBER: _ClassVar[int]
     RESULT_FIELD_NUMBER: _ClassVar[int]
     DURATION_MS_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
     name: str
     result: _baml_outbound_pb2.BamlOutboundValue
     duration_ms: int
-    def __init__(self, name: _Optional[str] = ..., result: _Optional[_Union[_baml_outbound_pb2.BamlOutboundValue, _Mapping]] = ..., duration_ms: _Optional[int] = ...) -> None: ...
+    error: str
+    def __init__(self, name: _Optional[str] = ..., result: _Optional[_Union[_baml_outbound_pb2.BamlOutboundValue, _Mapping]] = ..., duration_ms: _Optional[int] = ..., error: _Optional[str] = ...) -> None: ...
 
 class SetTagsEvent(_message.Message):
     __slots__ = ("tags",)

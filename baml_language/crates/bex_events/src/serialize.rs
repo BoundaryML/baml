@@ -254,6 +254,8 @@ fn event_content_to_json(event: &EventKind) -> serde_json::Value {
                     "function_display_name": end.name,
                     "result": result_json,
                     "duration_ms": u64::try_from(end.duration.as_millis()).unwrap_or(u64::MAX),
+                    "error": end.error.as_deref(),
+                    "status": if end.error.is_some() { "error" } else { "success" },
                 }
             })
         }

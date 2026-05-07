@@ -20,7 +20,7 @@ export interface DeserializedRuntimeEvent {
 
 export type DeserializedEventKind =
   | { $case: 'functionStart'; functionStart: { name: string; args: BamlJsValue[] } }
-  | { $case: 'functionEnd'; functionEnd: { name: string; durationMs: number; result: BamlJsValue | null } }
+  | { $case: 'functionEnd'; functionEnd: { name: string; durationMs: number; result: BamlJsValue | null; error?: string | null } }
   | { $case: 'log'; log: { data: BamlJsValue | null; level: string; source?: SourceLocation } }
   | { $case: 'custom'; custom: { name: string; data: BamlJsValue | null } }
   | { $case: 'setTags'; setTags: { tags: TagEntry[] } };
@@ -41,6 +41,17 @@ export interface LogDecoration {
   count: number;
 }
 
+export interface SourceNavigationTarget {
+  fileId?: number;
+  filePath?: string;
+  line: number;
+  column: number;
+  endLine?: number;
+  endColumn?: number;
+  startOffset?: number;
+  endOffset?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Shared domain types
 // ---------------------------------------------------------------------------
@@ -51,11 +62,12 @@ export interface DiagnosticEntry {
 }
 
 export type FunctionKind = 'llm' | 'expr';
+export type FunctionOrigin = 'userDefined' | 'companion' | 'internal';
 
 export interface LlmCapabilities {
-  /** Whether render_prompt sub-function exists. Call via `callFunction("${name}.render_prompt", args)`. */
+  /** Whether render_prompt sub-function exists. Call via `callFunction("${name}$render_prompt", args)`. */
   renderPrompt: boolean;
-  /** Whether build_request sub-function exists. Call via `callFunction("${name}.build_request", args)`. */
+  /** Whether build_request sub-function exists. Call via `callFunction("${name}$build_request", args)`. */
   buildRequest: boolean;
   /** The LLM client name (e.g., "MyClient"). */
   clientName?: string;
@@ -66,12 +78,13 @@ export interface LlmCapabilities {
  *  Sub-functions (render_prompt, build_request) are not separate entries —
  *  they are represented as capabilities on the parent function.
  *  To call them, use the naming convention with `callFunction`:
- *  - `callFunction("${fn.name}.render_prompt", args)` → PromptAst
- *  - `callFunction("${fn.name}.build_request", args)` → HTTP Request
+ *  - `callFunction("${fn.name}$render_prompt", args)` → PromptAst
+ *  - `callFunction("${fn.name}$build_request", args)` → HTTP Request
  */
 export interface FunctionInfo {
   name: string;
   kind: FunctionKind;
+  origin: FunctionOrigin;
   capabilities?: LlmCapabilities;
 }
 
@@ -96,6 +109,7 @@ export type PlaygroundNotification =
 
 export type CfgNodeType =
   | 'functionRoot'
+  | 'llmFunction'
   | 'headerContextEnter'
   | 'branchGroup'
   | 'branchArm'
@@ -108,7 +122,9 @@ export interface CfgNode {
   logFilterKey: string;
   label: string;
   sourceExpr: number | null;
+  sourceSpan?: SourceNavigationTarget;
   nodeType: CfgNodeType;
+  llmClient?: string;
   isContainer: boolean;
 }
 
@@ -140,6 +156,9 @@ export interface CursorContext {
    *  (smallest span) to least specific (largest span). The TS side tries each
    *  in order, highlighting the first that matches a CFG node. */
   sourceExprCandidates?: number[];
+  /** Function body that owns sourceExprId/sourceExprCandidates. This can differ
+   *  from functionName at call sites, where functionName is the callee. */
+  sourceExprFunctionName?: string | null;
   testName: string | null;
   /** Byte offset of the cursor position for cursor ↔ event matching. */
   cursorOffset?: number | null;

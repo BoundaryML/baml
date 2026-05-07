@@ -371,6 +371,192 @@ function Test() -> string {
     }
 
     #[test]
+    fn test_image_instance_method_completion() {
+        let test = CursorTest::new(
+            r#"
+function Test(img: image) -> string {
+    img.<[CURSOR]
+    "done"
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        for expected in ["url", "file", "base64", "mime_type"] {
+            assert!(
+                labels.contains(&expected),
+                "Should contain image method '{expected}', got: {labels:?}"
+            );
+        }
+        assert!(
+            !labels.contains(&"from_url"),
+            "Instance image completion should not contain static constructors, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_image_static_constructor_completion() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> image {
+    image.<[CURSOR]
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        for expected in ["from_url", "from_file", "from_base64"] {
+            assert!(
+                labels.contains(&expected),
+                "Should contain image constructor '{expected}', got: {labels:?}"
+            );
+        }
+        assert!(
+            !labels.contains(&"base64"),
+            "Static image completion should not contain instance methods, got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_string_completion_uses_stdlib_method_names() {
+        let test = CursorTest::new(
+            r#"
+function Test(s: string) -> string {
+    s.<[CURSOR]
+    "done"
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"toLowerCase"),
+            "Should contain stdlib string method 'toLowerCase', got: {labels:?}"
+        );
+        assert!(
+            !labels.contains(&"lower"),
+            "Should not contain stale hardcoded string method 'lower', got: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_all_media_types_have_instance_method_completion() {
+        for media_type in ["image", "audio", "video", "pdf"] {
+            let test = CursorTest::new(&format!(
+                r#"
+function Test(value: {media_type}) -> string {{
+    value.<[CURSOR]
+    "done"
+}}
+"#
+            ));
+
+            let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+            let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+            for expected in ["url", "file", "base64", "mime_type"] {
+                assert!(
+                    labels.contains(&expected),
+                    "Should contain {media_type} method '{expected}', got: {labels:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_all_media_types_have_static_constructor_completion() {
+        for media_type in ["image", "audio", "video", "pdf"] {
+            let test = CursorTest::new(&format!(
+                r#"
+function Test() -> {media_type} {{
+    {media_type}.<[CURSOR]
+}}
+"#
+            ));
+
+            let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+            let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+            for expected in ["from_url", "from_file", "from_base64"] {
+                assert!(
+                    labels.contains(&expected),
+                    "Should contain {media_type} constructor '{expected}', got: {labels:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_uint8array_instance_method_completion() {
+        let test = CursorTest::new(
+            r#"
+function Test(bytes: uint8array) -> string {
+    bytes.<[CURSOR]
+    "done"
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        for expected in ["length", "to_base64", "to_string", "sort"] {
+            assert!(
+                labels.contains(&expected),
+                "Should contain uint8array method '{expected}', got: {labels:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_package_qualified_builtin_class_method_completion() {
+        let test = CursorTest::new(
+            r#"
+function Test(array: int[]) -> int {
+    baml.Array.<[CURSOR]
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        for expected in ["length", "at", "push", "map"] {
+            assert!(
+                labels.contains(&expected),
+                "Should contain baml.Array method '{expected}', got: {labels:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_package_qualified_media_class_method_completion() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> image {
+    baml.media.Image.<[CURSOR]
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        for expected in ["url", "base64", "from_url", "from_base64"] {
+            assert!(
+                labels.contains(&expected),
+                "Should contain baml.media.Image method '{expected}', got: {labels:?}"
+            );
+        }
+    }
+
+    #[test]
     fn test_baml_package_completions() {
         // Test that `baml.` shows completions for the baml package namespace.
         let test = CursorTest::new(
