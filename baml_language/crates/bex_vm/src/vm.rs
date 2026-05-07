@@ -45,8 +45,8 @@ use bex_vm_types::{
     ObjectType, PanicClass, StackIndex, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, BlockNotification},
     types::{
-        BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, Future, FutureType,
-        Instance, Type, UnscheduledFuture,
+        BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, FutureType, Instance, Type,
+        UnscheduledFuture,
     },
 };
 use indexmap::IndexMap;
@@ -359,8 +359,11 @@ pub enum VmExecState {
 
     /// VM notifies caller about a future that needs to be scheduled.
     ///
-    /// - Input: an `UnscheduledFuture` object
-    /// - Output: a `Future` object (may be pending or ready) pushed to the top of the stack
+    /// - Input: a `HeapPtr` to the `UnscheduledFuture` object the VM allocated.
+    /// - Output: the engine pushes a `Future::Pending(future_id)` heap pointer
+    ///   onto the VM stack. Terminal transitions (`Ready`/`Error`/`Cancelled`/
+    ///   `InternalError`) happen later via the `FutureManager`; the VM only
+    ///   ever sees `Pending` directly after this yield.
     ///
     /// Bytecode execution continues when control flow is handled back to the
     /// VM.
@@ -1000,11 +1003,6 @@ impl BexVm {
     // TODO: Same problem as above. Ideally takes (&str, &str) instead.
     pub fn alloc_variant(&mut self, enm: HeapPtr, index: usize) -> Value {
         Value::Object(self.tlab.alloc(Object::Variant(Variant { enm, index })))
-    }
-
-    /// Allocate a future object.
-    pub fn alloc_future(&mut self, future: Future) -> Value {
-        Value::Object(self.tlab.alloc(Object::Future(future)))
     }
 
     /// Allocate a collector object on the heap.
@@ -2036,6 +2034,11 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
+        // Re-arm the long-running-loop detector at every yield boundary so
+        // each `exec()` call starts with a fresh budget; a single `exec()`
+        // call yields back to the embedder eventually (e.g. via `Await`,
+        // `EarlyYield`, etc.), which is the right granularity for the
+        // counter to reset at.
         self.early_yield.reset();
         match self.exec_inner() {
             Err(VmError::InternalError(err)) => {
@@ -5743,6 +5746,12 @@ impl BexVm {
 
                 // ── Await ─────────────────────────────────────────────────────
                 OpCode::Await => {
+                    // Compact opcodes are 1 byte; rewinding by `AWAIT_OPCODE_LEN`
+                    // puts `pc` back at the `OpCode::Await` byte so the outer
+                    // exec loop re-executes the same Await on resume. The
+                    // regular (non-compact) path expresses the same intent by
+                    // explicitly setting `bf.instruction_ptr = instruction_ptr`.
+                    const AWAIT_OPCODE_LEN: usize = 1;
                     let value = self.stack.ensure_stack_top();
                     let wanted_type = bex_vm_types::types::FutureType::Any;
                     let index = self.as_object_ptr(&self.stack[value], wanted_type.into())?;
@@ -5759,7 +5768,7 @@ impl BexVm {
                                 // Rewind pc to the Await opcode so the outer loop
                                 // saves a position that re-executes Await once the
                                 // future completes.
-                                *pc -= 1;
+                                *pc -= AWAIT_OPCODE_LEN;
                                 return Ok(Some(VmExecState::Await(future_id)));
                             }
                             FutureRead::Ready(v) => v,
@@ -5776,7 +5785,7 @@ impl BexVm {
                                 // Yield back to the engine; it will surface the original
                                 // error from the FutureManager's `SetOnce` (the entry is
                                 // leaked by design for InternalError).
-                                *pc -= 1;
+                                *pc -= AWAIT_OPCODE_LEN;
                                 return Ok(Some(VmExecState::Await(future_id)));
                             }
                         }

@@ -23,10 +23,10 @@
 //! - The heap object alone is sufficient to drive the VM's `Await`
 //!   instruction after it resumes; the engine's "ready" future does not
 //!   carry the value, it is purely a "you may proceed" signal.
-//! - All operations on a [`FutureManagerGuard`] hold an exclusive
-//!   [`SharedHeapPermitGuard`], so terminal-transition-then-remove is
-//!   atomic with respect to any other [`FutureManagerGuard`] operation
-//!   (notably [`FutureManagerGuard::future_ready`]).
+//! - All operations on a [`FutureManagerGuard`] hold the manager's state
+//!   mutex, so terminal-transition-then-remove is atomic with respect to
+//!   any other [`FutureManagerGuard`] operation (notably
+//!   [`FutureManagerGuard::future_ready`]).
 //! - Existing `Arc<tokio::sync::SetOnce<_>>` clones held by waiters keep
 //!   working after the entry is dropped — removal only releases the
 //!   manager's own `Arc`.
@@ -50,7 +50,7 @@
 //! `future_ready` always finds a waiter that yields the original error.
 
 use ::bex_heap::{
-    HeapPermit, PermitProof, SharedHeapPermit, SharedHeapPermitGuard, Tlab, TlabHolder,
+    HeapPermit, HeapPermitManager, InactiveHeapPermit, PermitProof, Tlab, TlabHolder,
 };
 use ::bex_vm_types::{
     FutureRead, HeapPtr, Object, ObjectType, RootHaver, Value,
@@ -59,40 +59,75 @@ use ::bex_vm_types::{
 use ::core::sync::atomic::AtomicUsize;
 use ::std::{collections::HashMap, sync::Arc};
 use ::sys_types::CancellationToken;
+use ::tokio::sync::{Mutex, MutexGuard};
 
 use crate::EngineError;
 
 /// Manages all futures for the Bex engine.
 ///
-/// This is a shared resource managed using a [`SharedHeapPermit`].
+/// The wrapped [`InactiveHeapPermit`] is registered with
+/// [`HeapPermitManager.holders`](::bex_heap::HeapPermitManager) so GC can
+/// `collect_roots` / `forward_roots` on the inner. It is **never activated**
+/// by the manager itself — every method requires a [`PermitProof`] from
+/// the caller's own active permit, witnessing that GC is gated externally.
+/// The wrapping [`tokio::sync::Mutex`] provides the single-writer invariant
+/// that previous releases derived from `SharedHeapPermit`.
 pub struct FutureManager {
-    inner: SharedHeapPermit<FutureManagerInner>,
+    permit: Mutex<InactiveHeapPermit<FutureManagerInner>>,
 }
 
 impl FutureManager {
-    pub fn new(inner: SharedHeapPermit<FutureManagerInner>) -> Self {
-        Self { inner }
-    }
-    pub async fn acquire(&self) -> FutureManagerGuard<'_> {
-        FutureManagerGuard {
-            inner: self.inner.acquire().await,
+    pub fn new(permit: InactiveHeapPermit<FutureManagerInner>) -> Self {
+        Self {
+            permit: Mutex::new(permit),
         }
     }
 
-    /// Number of `Pending` futures currently tracked. Acquires the manager.
-    pub async fn active_future_count(&self) -> usize {
-        self.inner.acquire().await.active_future_count()
+    /// Acquire exclusive access to the future registry.
+    ///
+    /// `proof` is a witness that the caller currently holds an active heap
+    /// permit. Its lifetime `'a` ties the returned guard to it: the
+    /// borrow checker rejects any program that drops the proof source
+    /// while the guard is still live. That tie is what makes the unsafe
+    /// `holder` / `holder_mut` accesses inside the guard's `HeapPermit`
+    /// impl sound — there is no safe way to construct a `FutureManagerGuard`
+    /// without a real `PermitProof`, and no safe way to keep the guard
+    /// past the proof's lifetime.
+    ///
+    /// Engine call sites should scope the guard tightly (a single
+    /// transition: `new_future` / `fulfill_future` / `cancel_future` /
+    /// `future_ready`) and drop it before re-borrowing the permit holder
+    /// mutably (e.g. `vm.stack.push(...)` after `new_future`).
+    pub async fn acquire<'a>(&'a self, proof: PermitProof<'a>) -> FutureManagerGuard<'a> {
+        FutureManagerGuard {
+            permit_guard: self.permit.lock().await,
+            proof,
+        }
+    }
+
+    /// Number of `Pending` futures currently tracked.
+    ///
+    /// Takes a one-shot heap permit internally so external diagnostic callers
+    /// (notably tests) don't need to construct a `PermitProof` themselves.
+    pub async fn active_future_count(&self, mgr: &HeapPermitManager) -> usize {
+        let inactive = mgr.new_permit(()).await;
+        let active = inactive.acquire().await;
+        let guard = self.acquire(active.proof()).await;
+        guard.active_future_count()
     }
 }
 
 pub struct FutureManagerGuard<'a> {
-    inner: SharedHeapPermitGuard<'a, FutureManagerInner>,
+    permit_guard: MutexGuard<'a, InactiveHeapPermit<FutureManagerInner>>,
+    /// Caller-supplied witness; `'a` ties the guard's existence to the
+    /// caller's active heap permit so GC exclusion is type-system-enforced.
+    proof: PermitProof<'a>,
 }
 
 impl FutureManagerGuard<'_> {
     /// Number of `Pending` futures currently tracked by the manager.
     pub fn active_future_count(&self) -> usize {
-        self.inner.active_future_count()
+        self.holder().active_future_count()
     }
 
     /// Registers a future with the future manager and returns a unique ID.
@@ -101,33 +136,41 @@ impl FutureManagerGuard<'_> {
         // usize". We satisfy this by drawing the value from the manager's
         // monotonic `AtomicUsize`; uniqueness is preserved as long as the
         // counter hasn't wrapped (which would take 2^64 calls).
-        let id = self
-            .inner
+        let inner = self.holder_mut();
+        let id = inner
             .next_future_id
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let id = FutureId::from_usize(id);
 
-        let ptr = self
-            .inner
-            .tlab
-            .alloc_future(::bex_vm_types::Future::pending(id));
+        let ptr = inner.tlab.alloc_future(::bex_vm_types::Future::pending(id));
 
         let future_state = FutureState {
             future: ptr,
             ready: Arc::new(tokio::sync::SetOnce::new()),
             cancel,
         };
-        self.inner.active_futures.insert(id, future_state);
+        inner.active_futures.insert(id, future_state);
         (id, ptr)
     }
     pub fn fulfill_future(&mut self, id: FutureId, value: Value) -> Result<(), EngineError> {
         self.complete_pending(id, |fut| {
-            // SAFETY: complete_pending guarantees we hold the future_permit
+            // SAFETY: complete_pending guarantees we hold the `future_permit`
             // (single-writer invariant) and that `fut` is currently Pending.
             unsafe { fut.set_ready(value) };
         })?;
         Ok(())
     }
+    /// Transition a future to `Future::Error(value)` with the given BAML
+    /// error/panic value.
+    ///
+    /// **Currently unused by the engine in production.** All sys-op errors
+    /// route through [`Self::internal_error_future`] (which preserves the
+    /// original `EngineError` for surfacing). This API is reserved for a
+    /// future capability where user-callable async functions can throw
+    /// BAML values that the VM's `Await` opcode would re-throw via
+    /// [`bex_vm_types::FutureRead::Error`]. The plumbing is kept in place
+    /// (write here → variant in the heap object → throw in `Await`) so
+    /// that wiring it up later is a one-call-site change.
     pub fn err_future(&mut self, id: FutureId, err: Value) -> Result<(), EngineError> {
         self.complete_pending(id, |fut| {
             // SAFETY: see `fulfill_future`.
@@ -161,21 +204,22 @@ impl FutureManagerGuard<'_> {
         err: EngineError,
     ) -> Result<(), EngineError> {
         let entry = self
-            .inner
+            .holder()
             .active_futures
             .get(&id)
             .ok_or(EngineError::FutureNotFound { future_id: id })?;
-        // SAFETY: the `FutureManagerGuard` holds the future_permit Mutex,
+        // SAFETY: the `FutureManagerGuard` holds the `FutureManager` Mutex,
         // so we are the unique caller; the heap object is alive because
         // the entry roots it via `RootHaver::collect_roots`.
         let fut = unsafe { entry.future_ref() }?;
+        let read = fut.read();
         let observed = FutureType::of(fut);
         debug_assert!(
-            matches!(fut.read(), FutureRead::Pending(_)),
+            matches!(read, FutureRead::Pending(_)),
             "internal_error_future called on non-Pending future {id:?} \
              (actual: {observed:?}); invariant violated"
         );
-        if !matches!(fut.read(), FutureRead::Pending(_)) {
+        if !matches!(read, FutureRead::Pending(_)) {
             // Release-build invariant guard: a previously-resolved future
             // should never re-enter this path. Surfacing as an error
             // (rather than the legacy silent overwrite) makes the bug
@@ -187,7 +231,7 @@ impl FutureManagerGuard<'_> {
                 ),
             });
         }
-        // SAFETY: single-writer via future_permit Mutex.
+        // SAFETY: single-writer via `FutureManager` Mutex.
         unsafe { fut.set_internal_error() };
         let set = entry.ready.set(Err(err));
         debug_assert!(
@@ -234,20 +278,21 @@ impl FutureManagerGuard<'_> {
         // the leaked `SetOnce` payload and silently lose the error.
         {
             let entry_ref = self
-                .inner
+                .holder()
                 .active_futures
                 .get(&id)
                 .ok_or(EngineError::FutureNotFound { future_id: id })?;
-            // SAFETY: the `FutureManagerGuard` holds the future_permit Mutex.
+            // SAFETY: the `FutureManagerGuard` holds the `FutureManager` Mutex.
             let fut = unsafe { entry_ref.future_ref() }?;
+            let read = fut.read();
             let observed = FutureType::of(fut);
             debug_assert!(
-                matches!(fut.read(), FutureRead::Pending(_)),
+                matches!(read, FutureRead::Pending(_)),
                 "complete_pending called with non-Pending heap state for {id:?} \
                  (actual: {observed:?}); invariant violated — only fulfill/err/cancel may \
                  route through this helper"
             );
-            if !matches!(fut.read(), FutureRead::Pending(_)) {
+            if !matches!(read, FutureRead::Pending(_)) {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
                         "complete_pending called with non-Pending heap state for {id:?} \
@@ -257,14 +302,14 @@ impl FutureManagerGuard<'_> {
             }
         }
         // Phase 2: state is Pending. Remove the entry and apply the
-        // transition under the future_permit Mutex (single-writer).
+        // transition under the `FutureManager` Mutex (single-writer).
         let entry = self
-            .inner
+            .holder_mut()
             .active_futures
             .remove(&id)
-            .expect("entry was present in phase 1 and we hold the future_permit");
+            .expect("entry was present in phase 1 and we hold the `FutureManager` Mutex");
         // SAFETY: the entry is still rooting the heap object via local
-        // ownership; the future_permit Mutex enforces single-writer.
+        // ownership; the `FutureManager` Mutex enforces single-writer.
         let fut = unsafe { entry.future_ref() }?;
         transition(fut);
         let set = entry.ready.set(Ok(()));
@@ -302,11 +347,15 @@ impl FutureManagerGuard<'_> {
         &self,
         id: FutureId,
     ) -> Result<impl Future<Output = Result<(), EngineError>> + use<>, EngineError> {
-        let waiter = match self.inner.active_futures.get(&id) {
+        let inner = self.holder();
+        let waiter = match inner.active_futures.get(&id) {
             Some(future) => Some(Arc::clone(&future.ready)),
             None => {
-                let next = self
-                    .inner
+                // Relaxed is fine: ordering with respect to the
+                // `active_futures` HashMap is provided by the FutureManager
+                // Mutex that this guard holds. We just need the latest
+                // issued counter to bounds-check the id.
+                let next = inner
                     .next_future_id
                     .load(std::sync::atomic::Ordering::Relaxed);
                 if id.as_usize() >= next {
@@ -325,21 +374,28 @@ impl FutureManagerGuard<'_> {
 }
 impl TlabHolder for FutureManagerGuard<'_> {
     fn tlab(&self) -> &Tlab {
-        self.inner.tlab()
+        self.holder().tlab()
     }
     fn tlab_mut(&mut self) -> &mut Tlab {
-        self.inner.tlab_mut()
+        self.holder_mut().tlab_mut()
     }
 }
 impl HeapPermit<FutureManagerInner> for FutureManagerGuard<'_> {
     fn holder(&self) -> &FutureManagerInner {
-        &self.inner
+        // SAFETY: `InactiveHeapPermit::holder`'s contract is "permit is
+        // active". Here it isn't — but `self.proof: PermitProof<'a>` is a
+        // runtime witness that *some* active heap permit is alive for `'a`,
+        // which is exactly the GC-exclusion guarantee that contract is
+        // meant to encode. The `MutexGuard` provides single-writer.
+        unsafe { self.permit_guard.holder() }
     }
     fn holder_mut(&mut self) -> &mut FutureManagerInner {
-        &mut self.inner
+        // SAFETY: see [`Self::holder`]; `&mut self` plus the MutexGuard
+        // provide exclusive access on this thread.
+        unsafe { self.permit_guard.holder_mut() }
     }
     fn proof(&self) -> PermitProof<'_> {
-        self.inner.proof()
+        self.proof
     }
 }
 
@@ -372,6 +428,11 @@ impl RootHaver for FutureManagerInner {
         }
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        // Drop the cached TLAB cursor — GC has swapped semispaces and our
+        // `alloc_ptr`/`alloc_limit` now point into a region the heap will
+        // hand out as a fresh chunk. The next `alloc_future` must refill
+        // from the post-GC cursor. Mirrors `BexVm::forward_roots`.
+        self.tlab.invalidate();
         for future in self.active_futures.values_mut() {
             future.forward_roots(roots);
         }
@@ -392,7 +453,7 @@ struct FutureState {
     /// - `Ok(())` means there is a BAML value ready on the heap
     /// - `Err(err)` means it's `InternalError` and `err` is the error value
     ready: Arc<tokio::sync::SetOnce<Result<(), EngineError>>>,
-    pub cancel: CancellationToken,
+    cancel: CancellationToken,
 }
 impl FutureState {
     /// Returns an immutable reference to the heap-allocated `Future`.
@@ -402,13 +463,14 @@ impl FutureState {
     /// terminal-state writes go through the `set_*` methods that take
     /// `&self`. This lets the spawned async task and the VM read/write
     /// the same heap object concurrently without a data race, as long as
-    /// the writer holds the future_permit Mutex (single-writer invariant).
+    /// the writer holds the `FutureManager` Mutex (single-writer invariant).
     ///
     /// # Safety
-    /// Caller must hold the future_permit (i.e., a [`FutureManagerGuard`])
-    /// for the duration of any subsequent access to the returned reference.
+    /// Caller must hold the `FutureManager` Mutex (i.e., a
+    /// [`FutureManagerGuard`]) for the duration of any subsequent access
+    /// to the returned reference.
     unsafe fn future_ref(&self) -> Result<&bex_vm_types::Future, EngineError> {
-        // SAFETY: caller holds the future_permit; heap object is alive.
+        // SAFETY: caller holds the `FutureManager` Mutex; heap object is alive.
         let obj = unsafe { self.future.get() };
         match obj {
             Object::Future(fut) => Ok(fut),
@@ -431,24 +493,33 @@ impl RootHaver for FutureState {
 
 #[cfg(test)]
 mod tests {
-    use ::bex_heap::{BexHeap, HeapPermitManager};
+    use ::bex_heap::{ActiveHeapPermit, BexHeap, HeapPermitManager};
     use ::bex_vm_types::Value;
 
     use super::*;
 
-    async fn make_manager() -> FutureManager {
+    /// Build a fresh `FutureManager` plus the `HeapPermitManager` it was
+    /// registered against. Tests then take a one-shot `ActiveHeapPermit` over
+    /// `()` from `pm` to obtain the `PermitProof` required by
+    /// `FutureManager::acquire`.
+    async fn make_manager() -> (FutureManager, Arc<HeapPermitManager>) {
         let heap = BexHeap::new(Vec::new());
         let permit_manager = Arc::new(HeapPermitManager::new());
         let permit = permit_manager
             .new_permit(FutureManagerInner::new(Tlab::new_empty(Arc::clone(&heap))))
             .await;
-        FutureManager::new(SharedHeapPermit::new(permit))
+        (FutureManager::new(permit), permit_manager)
+    }
+
+    async fn temp_permit(pm: &HeapPermitManager) -> ActiveHeapPermit<()> {
+        pm.new_permit(()).await.acquire().await
     }
 
     #[tokio::test]
     async fn fulfill_removes_entry() {
-        let mgr = make_manager().await;
-        let mut guard = mgr.acquire().await;
+        let (mgr, pm) = make_manager().await;
+        let temp = temp_permit(&pm).await;
+        let mut guard = mgr.acquire(temp.proof()).await;
         let (id, _ptr) = guard.new_future(CancellationToken::new());
         assert_eq!(guard.active_future_count(), 1);
         guard.fulfill_future(id, Value::Int(42)).unwrap();
@@ -457,8 +528,9 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_removes_entry_and_fires_token() {
-        let mgr = make_manager().await;
-        let mut guard = mgr.acquire().await;
+        let (mgr, pm) = make_manager().await;
+        let temp = temp_permit(&pm).await;
+        let mut guard = mgr.acquire(temp.proof()).await;
         let token = CancellationToken::new();
         let (id, _ptr) = guard.new_future(token.clone());
         assert!(!token.is_cancelled());
@@ -473,8 +545,9 @@ mod tests {
         // `internal_error_future` deliberately leaks so the original error stays
         // pinned to the registry's `SetOnce` for surfacing through a later
         // VM `Await(future_id)` yield.
-        let mgr = make_manager().await;
-        let mut guard = mgr.acquire().await;
+        let (mgr, pm) = make_manager().await;
+        let temp = temp_permit(&pm).await;
+        let mut guard = mgr.acquire(temp.proof()).await;
         let (id_a, _) = guard.new_future(CancellationToken::new());
         let (id_b, _) = guard.new_future(CancellationToken::new());
         assert_eq!(guard.active_future_count(), 2);
@@ -498,8 +571,9 @@ mod tests {
         // host. This is the key correctness path that the H1+H2 unification
         // restored — without the leak, a race window would collapse the error
         // to `VmInternalError::AwaitedFutureInternalError`.
-        let mgr = make_manager().await;
-        let mut guard = mgr.acquire().await;
+        let (mgr, pm) = make_manager().await;
+        let temp = temp_permit(&pm).await;
+        let mut guard = mgr.acquire(temp.proof()).await;
         let (id, _) = guard.new_future(CancellationToken::new());
         let original = EngineError::TypeMismatch {
             message: "synthetic op error".into(),
@@ -531,8 +605,9 @@ mod tests {
         if cfg!(debug_assertions) {
             return;
         }
-        let mgr = make_manager().await;
-        let mut guard = mgr.acquire().await;
+        let (mgr, pm) = make_manager().await;
+        let temp = temp_permit(&pm).await;
+        let mut guard = mgr.acquire(temp.proof()).await;
         let (id, _) = guard.new_future(CancellationToken::new());
         let original = EngineError::TypeMismatch {
             message: "stale".into(),
@@ -563,8 +638,9 @@ mod tests {
 
     #[tokio::test]
     async fn double_complete_returns_not_found() {
-        let mgr = make_manager().await;
-        let mut guard = mgr.acquire().await;
+        let (mgr, pm) = make_manager().await;
+        let temp = temp_permit(&pm).await;
+        let mut guard = mgr.acquire(temp.proof()).await;
         let (id, _) = guard.new_future(CancellationToken::new());
         guard.fulfill_future(id, Value::Int(1)).unwrap();
         let again = guard.fulfill_future(id, Value::Int(2));
@@ -573,8 +649,9 @@ mod tests {
 
     #[tokio::test]
     async fn future_ready_immediate_for_completed_id() {
-        let mgr = make_manager().await;
-        let mut guard = mgr.acquire().await;
+        let (mgr, pm) = make_manager().await;
+        let temp = temp_permit(&pm).await;
+        let mut guard = mgr.acquire(temp.proof()).await;
         let (id, _) = guard.new_future(CancellationToken::new());
         guard.fulfill_future(id, Value::Int(1)).unwrap();
         // Entry is gone; future_ready should treat it as already-resolved.
@@ -585,13 +662,14 @@ mod tests {
 
     #[tokio::test]
     async fn future_ready_for_never_issued_id_errors() {
-        let mgr = make_manager().await;
-        let guard = mgr.acquire().await;
-        // No futures have been issued; any non-zero id is bogus. The contract
-        // on `from_usize` is "no two live ids collide" — for this test we
-        // construct one that is plainly out of range, which is safe since no
-        // other id exists for it to collide with.
-        let bogus = FutureId::from_usize(99);
+        let (mgr, pm) = make_manager().await;
+        let temp = temp_permit(&pm).await;
+        let guard = mgr.acquire(temp.proof()).await;
+        // No futures have been issued; any id beyond `next_future_id` is
+        // bogus. `usize::MAX` is unambiguously out of range regardless of
+        // how many futures the test setup happens to issue, so the assertion
+        // doesn't get brittle if the manager initializes its counter.
+        let bogus = FutureId::from_usize(usize::MAX);
         let result = guard.future_ready(bogus);
         assert!(matches!(result, Err(EngineError::FutureNotFound { .. })));
     }
@@ -602,17 +680,20 @@ mod tests {
         // separate critical section; then the waiter should resolve. This
         // exercises the path where `future_ready` clones the `Arc<SetOnce>`
         // before the entry is removed.
-        let mgr = make_manager().await;
-        let mut guard = mgr.acquire().await;
+        let (mgr, pm) = make_manager().await;
+        let temp = temp_permit(&pm).await;
+        let mut guard = mgr.acquire(temp.proof()).await;
         let (id, _) = guard.new_future(CancellationToken::new());
         let waiter = guard.future_ready(id).expect("waiter should be created");
         drop(guard);
 
-        let mut guard = mgr.acquire().await;
+        let temp2 = temp_permit(&pm).await;
+        let mut guard = mgr.acquire(temp2.proof()).await;
         guard.fulfill_future(id, Value::Int(123)).unwrap();
         drop(guard);
+        drop(temp2);
 
         waiter.await.expect("waiter should resolve to Ok(())");
-        assert_eq!(mgr.active_future_count().await, 0);
+        assert_eq!(mgr.active_future_count(&pm).await, 0);
     }
 }

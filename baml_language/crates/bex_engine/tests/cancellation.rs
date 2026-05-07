@@ -438,3 +438,221 @@ async fn cancel_is_idempotent() {
     let result = handle.await.expect("task panicked");
     assert_cancelled(&result);
 }
+
+// ============================================================================
+// 8. M1 — `cancel_function_call(call_id)` actually cancels a running call.
+// ============================================================================
+
+#[tokio::test]
+async fn cancel_function_call_by_id_actually_cancels() {
+    // The host calls `engine.cancel_function_call(call_id)` instead of firing
+    // a `CancellationToken` directly. This exercises the `active_calls` /
+    // `ActiveCallGuard` registration path. Pre-fix: the registry was empty
+    // and `cancel_function_call` always returned `FunctionCallNotFound`,
+    // leaving the call to run to completion (10s sleep). Post-fix: the
+    // registered cancel token fires and the call returns Cancelled within
+    // ~1s.
+    let source = r#"
+        function main() -> int {
+            baml.sys.sleep(10000);
+            42
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let call_id = sys_types::CallId::next();
+    let start = std::time::Instant::now();
+
+    let handle = tokio::spawn({
+        let engine = Arc::clone(&engine);
+        async move {
+            engine
+                .call_function(
+                    "main",
+                    vec![],
+                    FunctionCallContextBuilder::new(call_id).build(),
+                    true,
+                )
+                .await
+        }
+    });
+
+    // Let the function reach the sleep, then cancel by id.
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    engine
+        .cancel_function_call(call_id)
+        .expect("call_id should be registered while the call is in flight");
+
+    let result = handle.await.expect("task panicked");
+    let elapsed = start.elapsed();
+
+    assert_cancelled(&result);
+    assert!(
+        elapsed < std::time::Duration::from_secs(2),
+        "cancel_function_call took too long: {elapsed:?} (expected < 2s)"
+    );
+
+    // After completion, the entry is gone — a second cancel returns NotFound.
+    assert!(matches!(
+        engine.cancel_function_call(call_id),
+        Err(EngineError::FunctionCallNotFound { .. })
+    ));
+}
+
+#[tokio::test]
+async fn duplicate_call_id_is_rejected() {
+    // Two concurrent calls with the same `CallId` should fail-fast on the
+    // second. The first holds the registry slot via `ActiveCallGuard`.
+    let source = r#"
+        function main() -> int {
+            baml.sys.sleep(500);
+            7
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let shared_id = sys_types::CallId::next();
+    let first = tokio::spawn({
+        let engine = Arc::clone(&engine);
+        async move {
+            engine
+                .call_function(
+                    "main",
+                    vec![],
+                    FunctionCallContextBuilder::new(shared_id).build(),
+                    true,
+                )
+                .await
+        }
+    });
+
+    // Give the first call time to register, then start the duplicate.
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    let second_result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(shared_id).build(),
+            true,
+        )
+        .await;
+    assert!(
+        matches!(second_result, Err(EngineError::DuplicateCallId { .. })),
+        "expected DuplicateCallId, got {second_result:?}"
+    );
+
+    // First call should still complete normally.
+    let first_result = first.await.expect("task panicked");
+    assert_eq!(
+        first_result.expect("first call failed"),
+        BexExternalValue::Int(7)
+    );
+}
+
+// ============================================================================
+// 9. M3 — engine-synthesized vs VM-thrown Cancelled panic shape equivalence.
+// ============================================================================
+
+#[tokio::test]
+async fn cancelled_panic_shape_equivalence() {
+    // The engine produces two cancellation paths that must be observationally
+    // equivalent for host bridges:
+    //   (a) `cancelled_unhandled_throw()` synthesizes one when the engine
+    //       short-circuits before the VM runs (pre-call check; "cancel wins"
+    //       after Complete).
+    //   (b) The VM's `Await` opcode throws `baml.panics.Cancelled` when the
+    //       awaited future is in `Cancelled` state.
+    //
+    // Both must produce the same `class_name` and the same `message` field
+    // so downstream `is_cancelled_engine_error` works uniformly.
+    use bex_engine::cancelled_unhandled_throw;
+    use indexmap::IndexMap;
+
+    fn extract_instance(v: &BexExternalValue) -> (&str, &IndexMap<String, BexExternalValue>) {
+        match v {
+            BexExternalValue::Instance { class_name, fields } => (class_name.as_str(), fields),
+            other => panic!("expected Instance, got {other:?}"),
+        }
+    }
+
+    let synthesized = cancelled_unhandled_throw();
+    let synthesized_value = match synthesized {
+        EngineError::UnhandledThrow { value, .. } => *value,
+        other => panic!("cancelled_unhandled_throw returned non-UnhandledThrow: {other:?}"),
+    };
+
+    let source = r#"
+        function main() -> int {
+            baml.sys.sleep(5000);
+            42
+        }
+    "#;
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let cancel = CancellationToken::new();
+    let cancel_clone = cancel.clone();
+    let handle = tokio::spawn({
+        let engine = Arc::clone(&engine);
+        async move {
+            engine
+                .call_function(
+                    "main",
+                    vec![],
+                    FunctionCallContextBuilder::new(sys_types::CallId::next())
+                        .with_cancel_token(cancel_clone)
+                        .build(),
+                    true,
+                )
+                .await
+        }
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    cancel.cancel();
+    let vm_result = handle.await.expect("task panicked");
+    let vm_value = match vm_result {
+        Err(EngineError::UnhandledThrow { value, .. }) => *value,
+        other => panic!("expected UnhandledThrow from VM Await, got {other:?}"),
+    };
+
+    let (s_class, s_fields) = extract_instance(&synthesized_value);
+    let (v_class, v_fields) = extract_instance(&vm_value);
+
+    assert_eq!(s_class, CANCELLED_PANIC_CLASS);
+    assert_eq!(v_class, CANCELLED_PANIC_CLASS);
+    assert_eq!(s_fields.len(), v_fields.len(), "field count must match");
+    for (s_key, s_val) in s_fields {
+        let v_val = v_fields
+            .get(s_key)
+            .unwrap_or_else(|| panic!("VM panic missing field {s_key}"));
+        assert_eq!(s_val, v_val, "field {s_key} differs");
+    }
+}

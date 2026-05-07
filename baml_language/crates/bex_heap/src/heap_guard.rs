@@ -207,16 +207,16 @@ impl<T: RootHaver> SharedHeapPermit<T> {
 pub struct SharedHeapPermitGuard<'a, T: RootHaver> {
     state: tokio::sync::MutexGuard<'a, InactiveHeapPermit<T>>,
     _permit: tokio::sync::OwnedSemaphorePermit,
-    /// Ties the auto `Send`/`Sync` of `ActiveHeapPermit` to `T`.
+    /// Ties the auto `Send`/`Sync` of `SharedHeapPermitGuard` to `T`.
     ///
     /// Without this marker, every field of this struct is unconditionally
     /// `Sync` (notably because [`PermitCell<T>`] has a manual unconditional
     /// `unsafe impl Sync` — which is itself load-bearing, so that
     /// `Weak<PermitCell<dyn RootHaver>>` can live in the manager's shared
     /// `Mutex<Vec<…>>`). That would let the compiler auto-derive
-    /// `ActiveHeapPermit<T>: Sync` even when `T: !Sync`, and two threads
-    /// sharing `&ActiveHeapPermit<T>` could each call [`Self::holder`] to
-    /// observe `&T` at the same time — UB when `T: !Sync`.
+    /// `SharedHeapPermitGuard<T>: Sync` even when `T: !Sync`, and two threads
+    /// sharing `&SharedHeapPermitGuard<T>` could each call [`Self::holder`]
+    /// to observe `&T` at the same time — UB when `T: !Sync`.
     _marker: PhantomData<T>,
 }
 impl<'a, T: RootHaver> HeapPermit<T> for SharedHeapPermitGuard<'a, T> {

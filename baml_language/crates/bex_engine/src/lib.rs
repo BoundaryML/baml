@@ -88,10 +88,7 @@ pub use bex_external_types::{BexExternalValue, Ty, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
-pub use bex_heap::{
-    ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit, SharedHeapPermit,
-    SharedHeapPermitGuard,
-};
+pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SysOp, Value, VmGlobals,
@@ -126,6 +123,52 @@ pub struct UserFunctionInfo {
 // Span Tracking (per-invocation, NOT on Arc<BexEngine>)
 // ============================================================================
 
+/// RAII guard that owns a `CallId` slot in `BexEngine::active_calls`. The
+/// slot is inserted by [`Self::register`] and removed on drop, matching
+/// the lifetime of the `call_function` invocation. The constructor and
+/// the registry insert are atomic — there is no window during which the
+/// slot exists without an owning guard, so a panic at the registration
+/// site cannot leak entries.
+struct ActiveCallGuard {
+    engine: Arc<BexEngine>,
+    call_id: CallId,
+}
+
+impl ActiveCallGuard {
+    /// Atomically reserve `call_id` in `engine.active_calls` and return a
+    /// guard that will release the slot on drop. Returns
+    /// [`EngineError::DuplicateCallId`] if the id is already in flight.
+    fn register(
+        engine: Arc<BexEngine>,
+        call_id: CallId,
+        cancel: CancellationToken,
+    ) -> Result<Self, EngineError> {
+        let mut map = engine
+            .active_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if map.contains_key(&call_id) {
+            return Err(EngineError::DuplicateCallId { call_id });
+        }
+        map.insert(call_id, cancel);
+        drop(map);
+        Ok(Self { engine, call_id })
+    }
+}
+
+impl Drop for ActiveCallGuard {
+    fn drop(&mut self) {
+        // `unwrap_or_else(into_inner)` so a poisoned mutex during unwind
+        // doesn't double-panic.
+        let mut map = self
+            .engine
+            .active_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        map.remove(&self.call_id);
+    }
+}
+
 /// A single active span in the engine's per-invocation span stack.
 struct EngineSpan {
     span_id: SpanId,
@@ -155,7 +198,7 @@ pub enum EngineError {
     #[error("Function call with ID {call_id} not found")]
     FunctionCallNotFound { call_id: CallId },
 
-    #[error("Future with ID {future_id:?} not found")]
+    #[error("Future with ID {future_id} not found")]
     FutureNotFound { future_id: FutureId },
 
     #[error("Function not found: {name}")]
@@ -163,9 +206,6 @@ pub enum EngineError {
 
     #[error("{0}")]
     ExternalOpFailed(#[from] OpError),
-
-    #[error("Future channel closed unexpectedly")]
-    FutureChannelClosed,
 
     #[error("VM internal error: {0}")]
     VmInternalError(bex_vm::errors::VmInternalError),
@@ -256,7 +296,11 @@ pub fn is_cancelled_engine_error(err: &EngineError) -> bool {
 /// fail-fast and post-completion "cancel wins" race). Mirrors the shape of a
 /// `baml.panics.Cancelled` instance produced by the VM's `Await` opcode so
 /// host bridges can detect both cases by inspecting `class_name`.
-fn cancelled_unhandled_throw() -> EngineError {
+///
+/// Exposed publicly so bridges and other layers that need to surface a
+/// cancellation outside the engine's normal control flow can produce one
+/// in the canonical shape rather than rolling their own.
+pub fn cancelled_unhandled_throw() -> EngineError {
     let mut fields = indexmap::IndexMap::new();
     fields.insert(
         "message".to_string(),
@@ -639,7 +683,7 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
-            futures: FutureManager::new(SharedHeapPermit::new(futures_permit)),
+            futures: FutureManager::new(futures_permit),
         })
     }
 
@@ -775,7 +819,9 @@ impl BexEngine {
     /// for telemetry and tests that verify the future manager cleans up
     /// completed futures.
     pub async fn active_future_count(&self) -> usize {
-        self.futures.active_future_count().await
+        self.futures
+            .active_future_count(&self.heap_permit_manager)
+            .await
     }
 
     /// Resolve a [`bex_external_types::Handle`] to its current [`HeapPtr`].
@@ -889,6 +935,12 @@ impl BexEngine {
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
+
+        // Register this call so `cancel_function_call(call_id)` can target
+        // it. The RAII guard removes the entry on drop (including panic
+        // unwind). Insertion and guard construction are atomic, so a panic
+        // here cannot leak registry entries.
+        let _call_guard = ActiveCallGuard::register(Arc::clone(self), call_id, cancel.clone())?;
 
         // Create VM with shared heap (each VM gets its own TLAB).
         // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
@@ -1267,6 +1319,27 @@ impl BexEngine {
         }
     }
 
+    /// Heuristic-driven GC check that does **not** require the caller to
+    /// hold an active heap permit. Use this when the caller is already in a
+    /// permit-released state (e.g., the engine's `Await` branch waiting on
+    /// a `SetOnce`) — calling [`Self::gc_safepoint`] there would do an
+    /// extra release-and-reacquire pair around the heuristic for nothing.
+    async fn maybe_collect_garbage(&self) {
+        let i_am_checking = self
+            .checking_gc
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok();
+        if i_am_checking {
+            if let Some(level) = self.heap.should_collect() {
+                self.collect_garbage(level).await;
+            }
+            self.checking_gc.store(false, Ordering::Release);
+        }
+        // If we are not the checker, the actual checker (some other VM) is
+        // either already waiting in `request_park` or about to. Our caller
+        // is permit-released, so they're not blocking that wait.
+    }
+
     /// Drive the VM to completion, dispatching sys-ops, awaits, span
     /// notifications, and early-yield events.
     ///
@@ -1392,22 +1465,35 @@ impl BexEngine {
                         .collect();
                     let operation = unscheduled.operation;
 
-                    // Setup future
+                    // Setup future. Each `futures.acquire(vm.proof())` is
+                    // scoped tightly so the proof's borrow on `vm` ends
+                    // before any subsequent `vm.stack` mutation; the type
+                    // system enforces GC exclusion via the `'a` tie
+                    // between proof and guard. The cost is one extra
+                    // uncontended Mutex lock on the early-cancel path
+                    // below — far cheaper than restructuring the
+                    // VM-stack-and-cancel choreography.
                     // TODO: detached cancellation
                     let future_cancel = cancel.child_token();
-                    let mut future_permit = self.futures.acquire().await;
-                    let (future_id, future_ptr) = future_permit.new_future(future_cancel.clone());
+                    let (future_id, future_ptr) = {
+                        let mut g = self.futures.acquire(vm.proof()).await;
+                        g.new_future(future_cancel.clone())
+                    };
                     vm.stack.push(Value::Object(future_ptr));
                     if cancel.is_cancelled() {
-                        // Early cancellation-- don't need to even start the future.
-                        // (`future_cancel` is a child of `cancel` and is only cancelled
-                        // here via parent inheritance, so checking `cancel` directly is
-                        // equivalent and matches the post-exec safepoint below.)
-                        future_permit.cancel_future(future_id)?;
-                        drop(future_permit);
+                        // Early cancellation -- don't even start the
+                        // future. (`future_cancel` is a child of `cancel`,
+                        // so checking `cancel` here is equivalent to
+                        // checking the inheriting child.) Re-acquire the
+                        // FutureManager Mutex to cancel the just-created
+                        // entry; see the comment above for why this
+                        // second acquire is structural, not redundant.
+                        self.futures
+                            .acquire(vm.proof())
+                            .await
+                            .cancel_future(future_id)?;
                         continue;
                     }
-                    drop(future_permit);
 
                     // Execute sys_op
                     let sys_op_result =
@@ -1415,9 +1501,11 @@ impl BexEngine {
 
                     match sys_op_result {
                         SysOpResult::Ready(result) => {
-                            // We may be blocked by other threads doing futures stuff,
-                            // but since we hold our VM permit it should never be blocked by GC.
-                            let mut future_permit = self.futures.acquire().await;
+                            // VM permit is still held, gating GC for the
+                            // duration of this critical section. The
+                            // FutureManager Mutex serializes against other
+                            // mutators; no second semaphore acquire here.
+                            let mut future_permit = self.futures.acquire(vm.proof()).await;
                             // Cancellation safepoint: if cancellation fires between the
                             // pre-exec early check and the commit, surface it as a Cancelled
                             // future rather than fulfilling. The VM's next `Await` will throw
@@ -1456,13 +1544,13 @@ impl BexEngine {
                             #[cfg(not(target_arch = "wasm32"))]
                             tokio::spawn(async move {
                                 if let Err(err) = task.await {
-                                    tracing::error!(?err, "spawned future task failed");
+                                    tracing::error!(?err, ?future_id, "spawned future task failed");
                                 }
                             });
                             #[cfg(target_arch = "wasm32")]
                             wasm_bindgen_futures::spawn_local(async move {
                                 if let Err(err) = task.await {
-                                    tracing::error!(?err, "spawned future task failed");
+                                    tracing::error!(?err, ?future_id, "spawned future task failed");
                                 }
                             });
                         }
@@ -1470,11 +1558,23 @@ impl BexEngine {
                 }
 
                 VmExecState::Await(future_id) => {
-                    vm = self.gc_safepoint(vm).await;
-                    let future_permit = self.futures.acquire().await;
-                    let future = future_permit.future_ready(future_id)?;
-                    drop(future_permit);
+                    // Tightly-scoped guard so the proof's borrow on `vm`
+                    // ends before we release the VM permit below.
+                    let future = {
+                        let g = self.futures.acquire(vm.proof()).await;
+                        g.future_ready(future_id)?
+                    };
+                    // Release the VM permit before the SetOnce wait — the
+                    // wait is the safepoint. Holding a permit through the
+                    // wait would deadlock concurrent GC park (which needs
+                    // every permit) against the spawned task that fulfils
+                    // this future (which needs a permit to write the heap).
+                    let inactive = vm.release();
+                    // While parked, run a heuristic-driven GC check (no
+                    // permit dance needed since we're already released).
+                    self.maybe_collect_garbage().await;
                     future.await?;
+                    vm = inactive.acquire().await;
                 }
 
                 VmExecState::Event {
@@ -1652,38 +1752,53 @@ impl BexEngine {
 
     /// Runs a future, handling cancellation.
     /// When completed, updates the future state on the heap.
+    ///
+    /// Holding-no-permit during the long `select!` wait means GC can run
+    /// freely while the inner sys-op is in flight. After `select!` resolves,
+    /// the spawned task takes a one-shot heap permit (`NoOpRootHaver` —
+    /// nothing to root) so its brief writeback to the `FutureManager`'s
+    /// registry is gated against GC just like any in-VM caller.
     async fn run_future(
         self: Arc<Self>,
         future: OpFuture,
         future_id: FutureId,
         cancel: CancellationToken,
     ) -> Result<(), EngineError> {
-        tokio::select! {
+        // Stack-local enum, never stored or sent across threads — the size
+        // mismatch between variants (Cancelled is ZST, Result carries a
+        // ~300-byte BexExternalValue+OpError) doesn't matter here.
+        #[allow(clippy::large_enum_variant)]
+        enum Outcome {
+            Cancelled,
+            Result(Result<BexExternalValue, OpError>),
+        }
+        let outcome = tokio::select! {
             biased;
-            () = cancel.cancelled() => {
-                let mut future_guard = self.futures.acquire().await;
+            () = cancel.cancelled() => Outcome::Cancelled,
+            r = future            => Outcome::Result(r),
+        };
+
+        // One-shot heap permit for GC exclusion during the brief writeback.
+        // `()`'s `RootHaver` impl has no roots — this permit is purely a
+        // "block GC while I write" mechanism.
+        let inactive = self.heap_permit_manager.new_permit(()).await;
+        let active = inactive.acquire().await;
+        let mut future_guard = self.futures.acquire(active.proof()).await;
+        match outcome {
+            Outcome::Cancelled => {
                 future_guard.cancel_future(future_id)?;
-                drop(future_guard);
-                Ok(())
             }
-            result = future => {
-                let mut future_guard = self.futures.acquire().await;
-                match result {
-                    Ok(value) => {
-                        let value = self.convert_external_to_vm_value(
-                            &mut future_guard,
-                            value,
-                        );
-                        future_guard.fulfill_future(future_id, value)?;
-                    }
-                    Err(err) => {
-                        future_guard.internal_error_future(future_id, err.into())?;
-                    }
-                }
-                drop(future_guard);
-                Ok(())
+            Outcome::Result(Ok(value)) => {
+                let value = self.convert_external_to_vm_value(&mut future_guard, value);
+                future_guard.fulfill_future(future_id, value)?;
+            }
+            Outcome::Result(Err(err)) => {
+                future_guard.internal_error_future(future_id, err.into())?;
             }
         }
+        drop(future_guard);
+        drop(active);
+        Ok(())
     }
 
     /// Build a `SpanContext` from the current `SpanState`.

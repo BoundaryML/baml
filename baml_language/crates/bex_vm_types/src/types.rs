@@ -946,13 +946,13 @@ impl std::fmt::Display for Object {
 ///
 /// # Safety
 ///
-/// Writers must hold `future_permit` (the [`FutureManager`]'s
-/// [`SharedHeapPermit`] guard), which the engine uses to enforce a
-/// single-writer invariant. Readers may run on any thread; the
-/// Acquire/Release pairing on `state` provides the necessary happens-before.
+/// Writers must hold the [`FutureManager`]'s state mutex (a
+/// `tokio::sync::Mutex` over the manager's `InactiveHeapPermit`), which
+/// the engine uses to enforce a single-writer invariant. Readers may run
+/// on any thread; the Acquire/Release pairing on `state` provides the
+/// necessary happens-before.
 ///
 /// [`FutureManager`]: <https://docs.rs/bex_engine>
-/// [`SharedHeapPermit`]: <https://docs.rs/bex_heap>
 #[repr(C)]
 pub struct Future {
     /// Atomic discriminant (one of [`FutureTag`]). Loaded with `Acquire`,
@@ -960,7 +960,7 @@ pub struct Future {
     state: AtomicU8,
     /// Set at construction; never modified. Valid for `Pending` and
     /// `InternalError` states.
-    future_id: FutureId,
+    id: FutureId,
     /// Written at most once (preceded by an `Acquire`/`Release` handshake
     /// on `state`). Valid only when `state` indicates `Ready` or `Error`.
     value: UnsafeCell<MaybeUninit<Value>>,
@@ -968,9 +968,18 @@ pub struct Future {
 
 // SAFETY: All access to `value` is gated by the Acquire/Release handshake
 // on `state` and the single-writer invariant enforced by the
-// `FutureManager`'s `SharedHeapPermit` guard.
+// `FutureManager`'s state mutex.
 unsafe impl Send for Future {}
 unsafe impl Sync for Future {}
+
+// `Future::read` calls `MaybeUninit::<Value>::assume_init_read`, which is
+// sound only because `Value: Copy`. If `Value` ever gains a non-trivial
+// `Drop` (e.g. by holding an `Arc<…>` or `Box<…>`), `assume_init_read`
+// becomes UB on the second read. Guard against that at compile time.
+const _: () = {
+    const fn assert_copy<T: Copy>() {}
+    assert_copy::<Value>();
+};
 
 /// Discriminant byte for [`Future::state`].
 #[repr(u8)]
@@ -1022,7 +1031,7 @@ impl Future {
     pub fn pending(id: FutureId) -> Self {
         Self {
             state: AtomicU8::new(FutureTag::Pending as u8),
-            future_id: id,
+            id,
             value: UnsafeCell::new(MaybeUninit::uninit()),
         }
     }
@@ -1035,7 +1044,7 @@ impl Future {
     pub fn read(&self) -> FutureRead {
         let tag = self.state.load(Ordering::Acquire);
         match tag {
-            t if t == FutureTag::Pending as u8 => FutureRead::Pending(self.future_id),
+            t if t == FutureTag::Pending as u8 => FutureRead::Pending(self.id),
             t if t == FutureTag::Ready as u8 => {
                 // SAFETY: the Acquire-load above synchronized with the
                 // writer's Release-store of `Ready`, so the preceding
@@ -1050,7 +1059,7 @@ impl Future {
                 FutureRead::Error(v)
             }
             t if t == FutureTag::Cancelled as u8 => FutureRead::Cancelled,
-            t if t == FutureTag::InternalError as u8 => FutureRead::InternalError(self.future_id),
+            t if t == FutureTag::InternalError as u8 => FutureRead::InternalError(self.id),
             other => unreachable!("invalid Future discriminant byte: {other}"),
         }
     }
@@ -1065,7 +1074,7 @@ impl Future {
     /// # Safety
     ///
     /// The caller must hold exclusive access to the heap (e.g., a parked
-    /// [`HeapGuard`]). Concurrent calls to `set_*` would race.
+    /// `HeapGuard`). Concurrent calls to `set_*` would race.
     pub unsafe fn value_mut_for_fixup(&mut self) -> Option<&mut Value> {
         let tag = *self.state.get_mut();
         if tag == FutureTag::Ready as u8 || tag == FutureTag::Error as u8 {
@@ -1091,21 +1100,36 @@ impl Future {
         self.state.store(FutureTag::Ready as u8, Ordering::Release);
     }
 
-    /// Transition to `Error`. See [`Self::set_ready`] for safety.
+    /// Transition to `Error`.
+    ///
+    /// # Safety
+    ///
+    /// See [`Self::set_ready`] — caller must hold `future_permit` and the
+    /// future must currently be `Pending`.
     pub unsafe fn set_error(&self, value: Value) {
         // SAFETY: single-writer invariant via `future_permit`.
         unsafe { (*self.value.get()).write(value) };
         self.state.store(FutureTag::Error as u8, Ordering::Release);
     }
 
-    /// Transition to `Cancelled`. See [`Self::set_ready`] for safety.
+    /// Transition to `Cancelled`.
+    ///
+    /// # Safety
+    ///
+    /// See [`Self::set_ready`] — caller must hold `future_permit` and the
+    /// future must currently be `Pending`.
     pub unsafe fn set_cancelled(&self) {
         self.state
             .store(FutureTag::Cancelled as u8, Ordering::Release);
     }
 
     /// Transition to `InternalError`. The `FutureId` retained is the one
-    /// from construction. See [`Self::set_ready`] for safety.
+    /// from construction.
+    ///
+    /// # Safety
+    ///
+    /// See [`Self::set_ready`] — caller must hold `future_permit` and the
+    /// future must currently be `Pending`.
     pub unsafe fn set_internal_error(&self) {
         self.state
             .store(FutureTag::InternalError as u8, Ordering::Release);
@@ -1115,12 +1139,26 @@ impl Future {
 impl Clone for Future {
     fn clone(&self) -> Self {
         // Snapshot the current state and clone the corresponding payload.
-        // Used by `deep_copy_value_recursive` and any other site that
-        // duplicates the heap object.
+        // The only legitimate caller is the GC's heap-relocation copy
+        // (`gc.rs` `copy_object_to_inactive`), which clones the heap object
+        // into the inactive space and then `forward_roots` updates the
+        // `FutureManager`'s pointer to the moved object before any reader
+        // observes the clone — so the FutureManager and the heap object
+        // stay in sync.
+        //
+        // Futures are conceptually *handles*, not values: there is no
+        // "the same future, but a copy" in the runtime. User-level
+        // `deep_copy` reflects this by sharing the original `HeapPtr`
+        // for any `Future` rather than calling this `Clone` impl. See
+        // `crates/bex_vm/src/package_baml/root.rs::deep_copy_value_recursive`.
+        // Any other caller of this impl must ensure the `FutureManager`
+        // is taught about the new pointer, otherwise terminal-state writes
+        // will be applied to the original and the clone will be observable
+        // in a permanently stale state.
         let read = self.read();
         let cloned = Self {
             state: AtomicU8::new(0), // placeholder; rewritten below
-            future_id: self.future_id,
+            id: self.id,
             value: UnsafeCell::new(MaybeUninit::uninit()),
         };
         let tag: u8 = match read {
@@ -1176,6 +1214,15 @@ pub struct UnscheduledFuture {
 pub struct FutureId {
     id: usize,
 }
+
+impl std::fmt::Display for FutureId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Render as a bare number so error messages read as
+        // "Future with ID 42 not found" instead of "FutureId { id: 42 }".
+        self.id.fmt(f)
+    }
+}
+
 impl FutureId {
     /// Construct a [`FutureId`] from a raw `usize`.
     ///

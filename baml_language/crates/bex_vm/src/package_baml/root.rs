@@ -34,6 +34,18 @@ fn deep_copy_value_recursive(
                 return Value::Object(new_ptr);
             }
 
+            // Futures are *handles*, not values: a `Future` is the user-
+            // visible name for an entry the engine's `FutureManager` writes
+            // terminal state into. Even after the future completes, its
+            // on-heap representation remains shared mutable state from the
+            // runtime's point of view — there is no notion of "the same
+            // future, but a copy". Short-circuit before cloning the Object
+            // (which would otherwise clone the `Future` struct uselessly).
+            if matches!(vm.get_object(ptr), Object::Future(_)) {
+                copied_objects.insert(ptr, ptr);
+                return Value::Object(ptr);
+            }
+
             let object = vm.get_object(ptr).clone();
 
             let new_ptr = match object {
@@ -97,7 +109,9 @@ fn deep_copy_value_recursive(
                 Object::Enum(e) => vm.tlab.alloc(Object::Enum(e)),
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
                 Object::RustData(arc) => vm.tlab.alloc(Object::RustData(Arc::clone(&arc))),
-                Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
+                // `Object::Future(_)` is short-circuited above; it can't
+                // reach this match arm.
+                Object::Future(_) => unreachable!("Future short-circuited above"),
                 Object::UnscheduledFuture(f) => vm.tlab.alloc(Object::UnscheduledFuture(f)),
                 Object::Collector(c) => vm.tlab.alloc(Object::Collector(c)),
                 Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),
