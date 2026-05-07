@@ -1,5 +1,9 @@
 'use client';
 
+import { BAML } from '@boundaryml/baml-lezer';
+import { EditorView, lineNumbers } from '@codemirror/view';
+import { vscodeLightInit } from '@uiw/codemirror-theme-vscode';
+import CodeMirror from '@uiw/react-codemirror';
 import { useReducedMotion } from 'motion/react';
 import {
   type CSSProperties,
@@ -123,146 +127,30 @@ testset "invoice-review" {
   }
 }`;
 
-// Hand-tokenized BAML code with editorial color palette. Keeps the bundle
-// light (no shiki on this section) while staying visually consistent with
-// the github-light theme used elsewhere on the page.
-function tokenizeBaml(code: string): { content: string; color?: string }[][] {
-  const KEYWORDS = new Set([
-    'class',
-    'enum',
-    'function',
-    'client',
-    'prompt',
-    'let',
-    'if',
-    'else',
-    'for',
-    'in',
-    'return',
-    'match',
-    'catch',
-    'throws',
-    'testset',
-    'test',
-    'true',
-    'false',
-  ]);
-  const TYPES = new Set(['string', 'int', 'float', 'bool', 'map']);
-  const COL = {
-    keyword: '#CF222E',
-    type: '#0550AE',
-    string: '#0A3069',
-    number: '#0550AE',
-    comment: '#6E7781',
-    func: '#8250DF',
-    ident: '#1F2328',
-    punct: '#1F2328',
-    jinja: '#953800',
-  };
-
-  const out: { content: string; color?: string }[][] = [];
-
-  for (const rawLine of code.split('\n')) {
-    const tokens: { content: string; color?: string }[] = [];
-    let i = 0;
-    const line = rawLine;
-
-    if (line.trimStart().startsWith('//')) {
-      tokens.push({ content: line, color: COL.comment });
-      out.push(tokens);
-      continue;
-    }
-
-    while (i < line.length) {
-      const ch = line[i];
-
-      // whitespace
-      if (ch === ' ' || ch === '\t') {
-        let j = i;
-        while (j < line.length && (line[j] === ' ' || line[j] === '\t')) j++;
-        tokens.push({ content: line.slice(i, j) });
-        i = j;
-        continue;
-      }
-
-      // jinja {{ ... }}
-      if (ch === '{' && line[i + 1] === '{') {
-        const end = line.indexOf('}}', i);
-        const stop = end === -1 ? line.length : end + 2;
-        tokens.push({ content: line.slice(i, stop), color: COL.jinja });
-        i = stop;
-        continue;
-      }
-
-      // multi-line string opener "#" — but we treat single line tokens here
-      if (ch === '#' && line[i + 1] === '"') {
-        tokens.push({ content: line.slice(i), color: COL.string });
-        i = line.length;
-        continue;
-      }
-      if (ch === '"' && line[i - 1] === '#') {
-        tokens.push({ content: line.slice(i), color: COL.string });
-        i = line.length;
-        continue;
-      }
-
-      // string literal
-      if (ch === '"') {
-        let j = i + 1;
-        while (j < line.length && line[j] !== '"') j++;
-        const stop = Math.min(line.length, j + 1);
-        tokens.push({ content: line.slice(i, stop), color: COL.string });
-        i = stop;
-        continue;
-      }
-
-      // number
-      if (/[0-9]/.test(ch)) {
-        let j = i;
-        while (j < line.length && /[0-9.]/.test(line[j])) j++;
-        tokens.push({ content: line.slice(i, j), color: COL.number });
-        i = j;
-        continue;
-      }
-
-      // identifier
-      if (/[A-Za-z_]/.test(ch)) {
-        let j = i;
-        while (j < line.length && /[A-Za-z0-9_]/.test(line[j])) j++;
-        const word = line.slice(i, j);
-        let color: string | undefined;
-        if (KEYWORDS.has(word)) {
-          color = COL.keyword;
-        } else if (TYPES.has(word)) {
-          color = COL.type;
-        } else if (line[j] === '(') {
-          color = COL.func;
-        } else if (/^[A-Z]/.test(word)) {
-          color = COL.type;
-        } else {
-          color = COL.ident;
-        }
-        tokens.push({ content: word, color });
-        i = j;
-        continue;
-      }
-
-      // punctuation / fallback
-      tokens.push({ content: ch, color: COL.punct });
-      i++;
-    }
-
-    out.push(tokens);
-  }
-
-  return out;
-}
-
-const CODE_TOKENS = tokenizeBaml(BAML_CODE);
-
 // ── Code panel ────────────────────────────────────────────────────────────────
 
-const LINE_HEIGHT = 22;
+const codeMirrorTheme = vscodeLightInit({
+  settings: {
+    background: CODE_BG,
+    fontFamily: MONO,
+    fontSize: '13px',
+    foreground: INK,
+    gutterActiveForeground: MUTED,
+    gutterBackground: GUTTER_BG,
+    gutterBorder: BORDER,
+    gutterForeground: '#B8B0A0',
+    lineHighlight: 'transparent',
+    selection: 'rgba(109,40,217,0.18)',
+    selectionMatch: 'rgba(109,40,217,0.12)',
+  },
+});
+
+const codeMirrorExtensions = [
+  BAML(),
+  lineNumbers(),
+  EditorView.editable.of(false),
+  EditorView.lineWrapping,
+];
 
 function CodePanel() {
   return (
@@ -331,65 +219,21 @@ function CodePanel() {
       <div
         style={{
           background: CODE_BG,
-          display: 'flex',
           flex: 1,
-          fontFamily: MONO,
-          fontSize: 13,
-          lineHeight: `${LINE_HEIGHT}px`,
           minHeight: 0,
           overflow: 'auto',
         }}
       >
-        <div
-          aria-hidden
-          style={{
-            background: GUTTER_BG,
-            borderRight: `1px solid ${BORDER}`,
-            color: '#B8B0A0',
-            flexShrink: 0,
-            fontVariantNumeric: 'tabular-nums',
-            padding: '14px 10px',
-            textAlign: 'right',
-            userSelect: 'none',
-            width: 44,
-          }}
-        >
-          {CODE_TOKENS.map((_, i) => (
-            <div key={`ln-${i}`} style={{ height: LINE_HEIGHT }}>
-              {i + 1}
-            </div>
-          ))}
-        </div>
-        <pre
-          style={{
-            color: INK,
-            flex: 1,
-            margin: 0,
-            minWidth: 0,
-            padding: '14px 18px',
-            tabSize: 2,
-            whiteSpace: 'pre',
-          }}
-        >
-          <code style={{ fontFamily: MONO }}>
-            {CODE_TOKENS.map((line, i) => (
-              <div key={`l-${i}`} style={{ minHeight: LINE_HEIGHT }}>
-                {line.length === 0 ? (
-                  <span>&#8203;</span>
-                ) : (
-                  line.map((tok, j) => (
-                    <span
-                      key={`t-${i}-${j}`}
-                      style={{ color: tok.color || INK }}
-                    >
-                      {tok.content}
-                    </span>
-                  ))
-                )}
-              </div>
-            ))}
-          </code>
-        </pre>
+        <CodeMirror
+          basicSetup={false}
+          editable={false}
+          extensions={codeMirrorExtensions}
+          height="100%"
+          readOnly
+          style={{ background: CODE_BG, fontFamily: MONO, height: '100%' }}
+          theme={codeMirrorTheme}
+          value={BAML_CODE}
+        />
       </div>
     </div>
   );
@@ -1231,7 +1075,7 @@ function GraphPanel({ runningPulse }: { runningPulse: boolean }) {
 const HANDLE_SIZE = 44;
 
 export function CompactPerspectivePanel() {
-  const [pos, setPos] = useState(50);
+  const [pos, setPos] = useState(60);
   const [dragging, setDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
@@ -1347,11 +1191,9 @@ export function CompactPerspectivePanel() {
 
       <div
         ref={containerRef}
-        onPointerDown={onPointerDown}
         role="presentation"
         style={{
           borderRadius: 8,
-          cursor: dragging ? 'grabbing' : 'ew-resize',
           height: 'calc(100% - 26px)',
           minHeight: 0,
           overflow: 'hidden',
@@ -1399,6 +1241,7 @@ export function CompactPerspectivePanel() {
           aria-valuemin={0}
           aria-valuenow={Math.round(pos)}
           onKeyDown={onKeyDown}
+          onPointerDown={onPointerDown}
           role="slider"
           tabIndex={0}
           style={{
@@ -1416,6 +1259,7 @@ export function CompactPerspectivePanel() {
             outlineOffset: 4,
             position: 'absolute',
             top: '50%',
+            touchAction: 'none',
             transform: 'translate(-50%, -50%)',
             transition: dragging || reduced ? 'none' : 'left 80ms linear',
             width: HANDLE_SIZE,
@@ -1442,7 +1286,7 @@ export function CompactPerspectivePanel() {
 }
 
 export function PerspectiveSlider() {
-  const [pos, setPos] = useState(50);
+  const [pos, setPos] = useState(60);
   const [dragging, setDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
@@ -1635,7 +1479,6 @@ export function PerspectiveSlider() {
 
           <div
             ref={containerRef}
-            onPointerDown={onPointerDown}
             role="presentation"
             style={{
               ...sliderStyle,
@@ -1700,6 +1543,7 @@ export function PerspectiveSlider() {
               aria-valuemin={0}
               aria-valuenow={Math.round(pos)}
               onKeyDown={onKeyDown}
+              onPointerDown={onPointerDown}
               role="slider"
               tabIndex={0}
               style={{
@@ -1717,6 +1561,7 @@ export function PerspectiveSlider() {
                 outlineOffset: 4,
                 position: 'absolute',
                 top: '50%',
+                touchAction: 'none',
                 transform: 'translate(-50%, -50%)',
                 transition: dragging || reduced ? 'none' : 'left 80ms linear',
                 width: HANDLE_SIZE,

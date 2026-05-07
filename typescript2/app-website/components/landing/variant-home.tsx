@@ -584,7 +584,7 @@ const HeroSection = () => {
               >
                 Install
               </p>
-              <div style={{ maxWidth: 512, width: '100%' }}>
+              <div style={{ maxWidth: 400, width: '100%' }}>
                 <ScriptCopyBtn
                   className="block w-full max-w-none"
                   codeLanguage="bash"
