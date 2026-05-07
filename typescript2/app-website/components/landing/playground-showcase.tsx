@@ -32,7 +32,7 @@ export function PlaygroundShowcase() {
               Live playground
             </p>
             <h2 className="m-0 mt-3 max-w-4xl text-balance text-[clamp(2rem,4vw,3.5rem)] font-semibold leading-[1.08] tracking-[-0.025em] text-[#1A1612]">
-              Edit BAML and run it in the browser.
+              Try BAML right here in your browser.
             </h2>
           </div>
         </div>
