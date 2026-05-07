@@ -1,8 +1,8 @@
 [workspace]
 members = [
   "crates/*",
-  "languages/python/rust/*",
-  "rig_tests/crates/*",
+  "sdks/python/rust/*",
+  "sdk_tests/crates/*",
 ]
 exclude = [ "crates/bridge_go" ]
 resolver = "2"
@@ -29,7 +29,7 @@ baml_builtins_codegen = { path = "crates/baml_builtins_codegen" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
-codegen_python = { path = "languages/python/rust/codegen_python" }
+codegen_python = { path = "sdks/python/rust/codegen_python" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
@@ -64,7 +64,7 @@ bex_heap = { path = "crates/bex_heap" }
 bex_sap = { path = "crates/bex_sap" }
 bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
 bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
-bridge_python = { path = "languages/python/rust/bridge_python" }
+bridge_python = { path = "sdks/python/rust/bridge_python" }
 bridge_wasm = { path = "crates/bridge_wasm" }
 bex_events = { path = "crates/bex_events" }
 bex_events_native = { path = "crates/bex_events_native" }

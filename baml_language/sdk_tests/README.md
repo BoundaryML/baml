@@ -8,16 +8,16 @@ end-to-end.
 
 ```bash
 # Run tests for a specific crate
-cargo test -p rig_empty
+cargo test -p sdk_test_llm_functions
 
-# Run all rig tests
-cargo test -p 'rig_*'
+# Run all sdk tests
+cargo test -p 'sdk_test_*'
 ```
 
 ## Directory Structure
 
 ```text
-rig_tests/
+sdk_tests/
 └── crates/
     └── <fixture>/
         ├── Cargo.toml
@@ -61,4 +61,4 @@ Crates are hand-maintained. The reference template is
    fixture.
 4. Replace `customizable/test_main.py` with assertions over the
    generated SDK.
-5. `cargo test -p rig_<name>`.
+5. `cargo test -p sdk_test_<name>`.

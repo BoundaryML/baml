@@ -1,15 +1,14 @@
-# Rig crate for per-Ty-variant type-shape coverage. Each subnamespace
-# under `baml_src/ns_*/` targets a specific family of BAML constructs
-# (literal types, map types, union types, etc.) and emits the
-# corresponding `baml_sdk.<ns>` Python package.
+# Rig crate covering BAML `///` doc-comment lowering. Each `ns_*/`
+# subnamespace exercises a specific doc-comment shape and the Python
+# tests assert on the runtime `__doc__` of the generated symbols.
 [package]
-name = "rig_basic_type_shapes"
+name = "sdk_test_docstrings_etc"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [build-dependencies]
-codegen_python = { path = "../../../languages/python/rust/codegen_python" }
+codegen_python = { path = "../../../sdks/python/rust/codegen_python" }
 baml_codegen_types = { path = "../../../crates/baml_codegen_types" }
 baml_db = { path = "../../../crates/baml_db" }
 baml_project = { path = "../../../crates/baml_project" }

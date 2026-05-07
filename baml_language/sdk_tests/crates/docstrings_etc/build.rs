@@ -1,8 +1,8 @@
 // Hand-written; drives codegen from real `.baml` source rather than an
 // in-memory `SymbolPool`. Mirrors the pipeline `baml-cli generate`
 // uses: discover files → ProjectDatabase → diagnostics gate →
-// `build_symbol_pool` → `to_source_code`. Reference template for the
-// other rig crates' build.rs / conftest.py / pyproject.toml shape.
+// `build_symbol_pool` → `to_source_code`. Same shape as
+// `python_example_09a/build.rs`.
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -75,8 +75,7 @@ fn main() {
         fs::write(&file_path, &content).unwrap();
     }
 
-    // 5. Symlink customizable/ files into generated/, identical to the
-    //    template-based crates.
+    // 5. Symlink customizable/ files into generated/.
     let customizable_dir = manifest_dir.join("customizable");
     if customizable_dir.exists() {
         for entry in fs::read_dir(&customizable_dir).unwrap() {
@@ -118,7 +117,7 @@ fn main() {
     //    a wheel; the empty `dev` group satisfies maturin's
     //    `uv pip install --group dev` step.
     let pyproject_toml = r#"[project]
-name = "baml-test-llm-functions"
+name = "baml-test-docstrings-etc"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
@@ -137,7 +136,7 @@ dev = []
 package = false
 
 [tool.uv.sources]
-baml_core = { path = "../../../../languages/python", editable = true }
+baml_core = { path = "../../../../sdks/python", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["."]
@@ -191,7 +190,7 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Error "Error: uv is not installed"
     exit 1
 }
-$BridgePythonDir = (Resolve-Path "../../../../languages/python/rust/bridge_python").Path
+$BridgePythonDir = (Resolve-Path "../../../../sdks/python/rust/bridge_python").Path
 Write-Host "==> uv sync"
 uv sync
 Write-Host "==> maturin develop (builds bridge_python's PyO3 extension into .venv)"
@@ -212,7 +211,7 @@ Write-Host "==> All checks passed!"
     fs::write(generated_dir.join("test.ps1"), test_ps1).unwrap();
 
     // 7. rerun-if-changed for build.rs + every BAML and customizable
-    //    file. baml_src/ rebuilds when contents change.
+    //    file.
     println!("cargo:rerun-if-changed=build.rs");
     watch_dir(&baml_src);
     if customizable_dir.exists() {

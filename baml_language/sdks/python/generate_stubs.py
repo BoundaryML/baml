@@ -1,6 +1,6 @@
 """Generate .pyi stubs from PyO3 code.
 
-Usage (from languages/python/):
+Usage (from sdks/python/):
     uv run python generate_stubs.py
 """
 
@@ -11,7 +11,7 @@ import sys
 import sysconfig
 from pathlib import Path
 
-# This script lives in languages/python/.
+# This script lives in sdks/python/.
 PYTHON_DIR = Path(__file__).resolve().parent
 SRC_DIR = PYTHON_DIR / "src"
 WORKSPACE_ROOT = PYTHON_DIR.parent.parent

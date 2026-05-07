@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - sam/publish-python
+      - sam/sdks-rename
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -89,7 +90,7 @@ jobs:
         with:
           target: ${{ matrix._.target }}
           command: build
-          working-directory: baml_language/languages/python
+          working-directory: baml_language/sdks/python
           # No --manifest-path: that flag would make maturin resolve the
           # symlinked rust/bridge_python/pyproject.toml and then look for
           # python-source in rust/bridge_python/src/, which is empty
@@ -109,5 +110,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: python-sdk-${{ matrix._.target }}
-          path: baml_language/languages/python/dist
+          path: baml_language/sdks/python/dist
           if-no-files-found: error

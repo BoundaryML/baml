@@ -136,7 +136,7 @@ dev = []
 package = false
 
 [tool.uv.sources]
-baml_core = { path = "../../../../languages/python", editable = true }
+baml_core = { path = "../../../../sdks/python", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["."]
@@ -190,7 +190,7 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Error "Error: uv is not installed"
     exit 1
 }
-$BridgePythonDir = (Resolve-Path "../../../../languages/python/rust/bridge_python").Path
+$BridgePythonDir = (Resolve-Path "../../../../sdks/python/rust/bridge_python").Path
 Write-Host "==> uv sync"
 uv sync
 Write-Host "==> maturin develop (builds bridge_python's PyO3 extension into .venv)"

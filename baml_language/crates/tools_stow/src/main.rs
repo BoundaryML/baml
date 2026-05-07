@@ -110,7 +110,7 @@ pub struct Config {
     /// Global dependency rules that apply to all namespaces
     #[serde(default)]
     pub dependency_rules: Vec<DependencyRule>,
-    /// Crate name patterns to ignore entirely (e.g., "rig_*")
+    /// Crate name patterns to ignore entirely (e.g., `sdk_test_*`)
     #[serde(default)]
     pub ignore_crates: Vec<String>,
     /// Graph visualization settings

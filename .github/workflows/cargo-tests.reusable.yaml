@@ -71,19 +71,19 @@ jobs:
       - name: "Run language test suites"
         run: |
           found=0
-          for dir in baml_language/languages/*/; do
+          for dir in baml_language/sdks/*/; do
             lang=$(basename "$dir")
             if [ -f "$dir/test.sh" ]; then
               echo "==> Running $lang test suite"
               bash "$dir/test.sh"
               found=$((found + 1))
             else
-              echo "::error::languages/$lang/ exists but has no test.sh"
+              echo "::error::sdks/$lang/ exists but has no test.sh"
               exit 1
             fi
           done
           if [ "$found" -eq 0 ]; then
-            echo "::warning::No language test suites found in languages/*/"
+            echo "::warning::No language test suites found in sdks/*/"
           fi
 
       - name: "Check documentation"
@@ -144,19 +144,19 @@ jobs:
       - name: "Run language test suites"
         run: |
           found=0
-          for dir in baml_language/languages/*/; do
+          for dir in baml_language/sdks/*/; do
             lang=$(basename "$dir")
             if [ -f "$dir/test.sh" ]; then
               echo "==> Running $lang test suite"
               bash "$dir/test.sh"
               found=$((found + 1))
             else
-              echo "::error::languages/$lang/ exists but has no test.sh"
+              echo "::error::sdks/$lang/ exists but has no test.sh"
               exit 1
             fi
           done
           if [ "$found" -eq 0 ]; then
-            echo "::warning::No language test suites found in languages/*/"
+            echo "::warning::No language test suites found in sdks/*/"
           fi
 
   cargo-test-windows:
@@ -205,19 +205,19 @@ jobs:
       - name: "Run language test suites"
         run: |
           found=0
-          for dir in baml_language/languages/*/; do
+          for dir in baml_language/sdks/*/; do
             lang=$(basename "$dir")
             if [ -f "$dir/test.sh" ]; then
               echo "==> Running $lang test suite"
               bash "$dir/test.sh"
               found=$((found + 1))
             else
-              echo "::error::languages/$lang/ exists but has no test.sh"
+              echo "::error::sdks/$lang/ exists but has no test.sh"
               exit 1
             fi
           done
           if [ "$found" -eq 0 ]; then
-            echo "::warning::No language test suites found in languages/*/"
+            echo "::warning::No language test suites found in sdks/*/"
           fi
 
   cargo-test-wasm:
