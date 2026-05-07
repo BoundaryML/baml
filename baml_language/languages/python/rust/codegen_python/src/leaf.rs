@@ -702,6 +702,26 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
 /// through its JSON-schema definitions machinery instead of recursing.
 fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) -> String {
     use askama::Template;
+
+    // Special-case the stdlib `baml.json.json` alias.  Its expanded form is
+    // a recursive JSON-shaped union (`bool | int | float | str | List[json]
+    // | Dict[str, json] | None`), and pyright reports the inner forward-refs
+    // inside `TypeAliasType(...)` as `reportInvalidTypeForm` (the variable
+    // doesn't exist yet at module-load time, even though pydantic resolves
+    // it later).  Emitting `typing.Any` instead is precise enough for user
+    // signatures that traffic in `json` values and avoids the lint.
+    // TODO: replace with a proper recursive-alias representation once
+    // pyright handles `TypeAliasType` forward-refs (or once we move json to
+    // a stricter codegen surface).
+    if a.source.pkg.as_str() == "baml"
+        && a.source.namespace_path.len() == 1
+        && a.source.namespace_path[0].as_str() == "json"
+        && a.source.bare_name() == "json"
+    {
+        let py_name = &a.py_name;
+        return format!("{py_name}: typing.TypeAlias = typing.Any\n");
+    }
+
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
         self_ref: if a.recursive {
