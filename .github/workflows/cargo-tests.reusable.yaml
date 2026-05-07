@@ -60,6 +60,10 @@ jobs:
       - name: "Install uv"
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings
+        working-directory: baml_language
+
       - name: "Run tests with nextest"
         run: cargo nextest run --all-features
         working-directory: baml_language
@@ -87,7 +91,7 @@ jobs:
           fi
 
       - name: "Check documentation"
-        run: cargo doc --all --no-deps
+        run: cargo doc --all --no-deps --timings
         working-directory: baml_language
         env:
           RUSTDOCFLAGS: "-D warnings"
@@ -100,6 +104,14 @@ jobs:
           path: |
             baml_language/**/*.snap.new
             baml_language/**/target/nextest/
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-test-linux
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
 
   cargo-test-macos:
     name: "cargo test (macos)"
@@ -135,10 +147,14 @@ jobs:
       - name: "Install uv"
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings
+        working-directory: baml_language
+
       - name: "Run tests"
         run: |
           cargo nextest run --all-features
-          cargo test --all-features --doc
+          cargo test --all-features --doc --timings
         working-directory: baml_language
 
       - name: "Run language test suites"
@@ -158,6 +174,14 @@ jobs:
           if [ "$found" -eq 0 ]; then
             echo "::warning::No language test suites found in sdks/*/"
           fi
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-test-macos
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
 
   cargo-test-windows:
     name: "cargo test (windows)"
@@ -196,10 +220,14 @@ jobs:
         run: irm https://astral.sh/uv/install.ps1 | iex
         shell: powershell
 
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings
+        working-directory: baml_language
+
       - name: "Run tests"
         run: |
           cargo nextest run --all-features
-          cargo test --all-features --doc
+          cargo test --all-features --doc --timings
         working-directory: baml_language
 
       - name: "Run language test suites"
@@ -219,6 +247,14 @@ jobs:
           if [ "$found" -eq 0 ]; then
             echo "::warning::No language test suites found in sdks/*/"
           fi
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-test-windows
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
 
   cargo-test-wasm:
     name: "cargo test (wasm)"
@@ -246,12 +282,20 @@ jobs:
       - name: "Build for WASM"
         run: |
           WASM_PACKAGES=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | "-p \(.name)"' | xargs)
-          cargo build $WASM_PACKAGES --target wasm32-unknown-unknown --no-default-features --release
+          cargo build $WASM_PACKAGES --target wasm32-unknown-unknown --no-default-features --release --timings
         working-directory: baml_language
 
       - name: "List WASM artifacts"
         run: ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
         working-directory: baml_language
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-test-wasm
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
   # Size Gate — one job per platform, unified PR comment at the end
@@ -280,7 +324,7 @@ jobs:
         id: check
         working-directory: baml_language
         run: |
-          cargo run -p cargo-size-gate -- size-gate check \
+          cargo run --timings -p cargo-size-gate -- size-gate check \
             --only bridge_cffi-stripped,bridge_cffi \
             --format json > size-gate-linux.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
@@ -300,6 +344,14 @@ jobs:
         with:
           name: size-gate-binary
           path: baml_language/target/debug/cargo-size-gate
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-size-gate-linux
+          path: baml_language/target/cargo-timings/
           if-no-files-found: ignore
 
       - name: "Fail on policy violation"
@@ -329,7 +381,7 @@ jobs:
         id: check
         working-directory: baml_language
         run: |
-          cargo run -p cargo-size-gate -- size-gate check \
+          cargo run --timings -p cargo-size-gate -- size-gate check \
             --only bridge_cffi-stripped,bridge_cffi \
             --format json > size-gate-macos.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
@@ -341,6 +393,14 @@ jobs:
         with:
           name: size-gate-macos
           path: baml_language/size-gate-macos.json
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-size-gate-macos
+          path: baml_language/target/cargo-timings/
           if-no-files-found: ignore
 
       - name: "Fail on policy violation"
@@ -377,7 +437,7 @@ jobs:
         id: check
         working-directory: baml_language
         run: |
-          cargo run -p cargo-size-gate -- size-gate check \
+          cargo run --timings -p cargo-size-gate -- size-gate check \
             --only bridge_cffi-stripped,bridge_cffi \
             --format json > size-gate-windows.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
@@ -389,6 +449,14 @@ jobs:
         with:
           name: size-gate-windows
           path: baml_language/size-gate-windows.json
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-size-gate-windows
+          path: baml_language/target/cargo-timings/
           if-no-files-found: ignore
 
       - name: "Fail on policy violation"
@@ -420,7 +488,7 @@ jobs:
         id: check
         working-directory: baml_language
         run: |
-          cargo run -p cargo-size-gate -- size-gate check \
+          cargo run --timings -p cargo-size-gate -- size-gate check \
             --only bridge_wasm \
             --format json > size-gate-wasm.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
@@ -432,6 +500,14 @@ jobs:
         with:
           name: size-gate-wasm
           path: baml_language/size-gate-wasm.json
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-size-gate-wasm
+          path: baml_language/target/cargo-timings/
           if-no-files-found: ignore
 
       - name: "Fail on policy violation"
@@ -530,8 +606,16 @@ jobs:
       - name: "Build with MSRV"
         env:
           MSRV: ${{ steps.msrv.outputs.value }}
-        run: cargo "+${MSRV}" test --no-run --all-features
+        run: cargo "+${MSRV}" test --no-run --all-features --timings
         working-directory: baml_language
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-msrv
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
 
   check-dependencies:
     name: "check dependencies"
@@ -595,6 +679,10 @@ jobs:
         with:
           version: 2025.12.12
 
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --workspace --all-features --timings
+        working-directory: baml_language
+
       - name: "Run snapshot tests"
         run: |
           cargo insta test --workspace --all-features --unreferenced=reject
@@ -617,3 +705,34 @@ jobs:
           path: |
             baml_language/crates/baml_tests/snapshots/**/*.snap.new
             baml_language/crates/baml_tests/snapshots/**/*.snap
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-snapshot
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
+  cargo-timings:
+    name: "cargo timings (merged)"
+    runs-on: ubuntu-latest
+    if: ${{ always() && (inputs.code_changed == 'true' || inputs.run_all) }}
+    needs:
+      - cargo-test-linux
+      - cargo-test-macos
+      - cargo-test-windows
+      - cargo-test-wasm
+      - size-gate-linux
+      - size-gate-macos
+      - size-gate-windows
+      - size-gate-wasm
+      - cargo-build-msrv
+      - snapshot-tests
+    steps:
+      - name: "Merge cargo timings artifacts"
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: cargo-timings
+          pattern: cargo-timings-*
+          delete-merged: true
