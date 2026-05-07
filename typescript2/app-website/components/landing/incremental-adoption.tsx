@@ -30,6 +30,7 @@ const CODE_PAD_LEFT = 16;
 const LINE_HEIGHT = 20;
 const lineCenterY = (n: number) =>
   TAB_HEIGHT + 1 + CODE_PAD_TOP + (n - 0.5) * LINE_HEIGHT;
+const SECTION_STICKY_TOP = '130px';
 
 // ── Code sources ─────────────────────────────────────────────────────────────
 
@@ -861,8 +862,8 @@ export function IncrementalAdoption() {
   // Per step body typewriter progress.
   const step0Progress = useTransform(
     scrollYProgress,
-    [0, 0.001, 0.18, 0.22],
-    [1, 1, 1, 0],
+    [0, 0.04, 0.18, 0.22],
+    [0, 1, 1, 0],
   );
   const step1Progress = useTransform(
     scrollYProgress,
@@ -1033,7 +1034,7 @@ export function IncrementalAdoption() {
                     }}
                   >
                     <p style={{ margin: 0 }}>
-                      <TypingText text={s.body} progress={stepProgresses[i]} />
+                      <TypingText progress={stepProgresses[i]} text={s.body} />
                     </p>
                   </motion.div>
                 </div>
@@ -1051,10 +1052,19 @@ export function IncrementalAdoption() {
             height: 'min(840px, 92vh)',
             overflow: 'hidden',
             position: 'sticky',
-            top: 'calc(var(--navigation-height, 56px) + 24px)',
+            top: SECTION_STICKY_TOP,
           }}
         >
-          <MigrationProgress activeStep={activeStep} />
+          <div
+            style={{
+              background: BG,
+              position: 'sticky',
+              top: 0,
+              zIndex: 2,
+            }}
+          >
+            <MigrationProgress activeStep={activeStep} />
+          </div>
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
             <StickyPanel activeStep={activeStep} />
           </div>

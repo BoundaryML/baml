@@ -204,7 +204,7 @@ export function WhyALanguage() {
       >
         <div className="mx-auto max-w-[1600px] border-b border-[#D9D3C4] px-6 py-20 sm:px-12 sm:py-28">
           <div className="mx-auto grid max-w-[1240px] items-start gap-14 lg:grid-cols-[0.72fr_1.28fr] lg:gap-16">
-            <div className="lg:sticky lg:top-[calc(var(--navigation-height,56px)+48px)]">
+            <div>
               <p className="mb-5 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#8A8580]">
                 Features
               </p>
@@ -354,7 +354,7 @@ function ArchitectureStack({
 
       <motion.aside
         animate={{ opacity: 1, x: 0, y: 0 }}
-        className="mt-8 rounded-lg border border-[#D9D3C4] bg-[#FFFCF6]/90 p-5 shadow-[0_22px_70px_-46px_rgba(26,22,18,0.55)] backdrop-blur-md lg:sticky lg:top-[170px] lg:mt-52 lg:w-[300px]"
+        className="mt-8 rounded-lg border border-[#D9D3C4] bg-[#FFFCF6]/90 p-5 shadow-[0_22px_70px_-46px_rgba(26,22,18,0.55)] backdrop-blur-md lg:mt-52 lg:w-[300px]"
         initial={{ opacity: 0, x: 10, y: 8 }}
         key={activeFeature.id}
         transition={{ duration: 0.22, ease: [0.22, 0.61, 0.36, 1] }}

@@ -1,7 +1,9 @@
 'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
+import { ScriptCopyBtn } from '../magicui/script-copy-btn';
 
 const BG = '#ffffff';
 const BORDER = '#D9D3C4';
@@ -27,20 +29,26 @@ import json
 
 client = OpenAI()
 
-def extract_user(text: str):
+def qualify_lead(email: str):
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{
             "role": "user",
-            "content": f"""Extract the user. Return JSON with
-name (string), email (string), age (int), tier
-(one of free, pro, enterprise).
+            "content": f"""Qualify this sales lead. Return JSON:
+contact: {{ name, email, role }}
+company: {{ name, size: startup|midmarket|enterprise }}
+signals: array of {{ label, score 0-100, evidence }}
+next_action: ignore|nurture|book_demo|escalate
+follow_up: short email draft
 
-Text: {text}"""
+Email: {email}"""
         }]
     )
     try:
-        return json.loads(response.choices[0].message.content)
+        data = json.loads(response.choices[0].message.content)
+        if data["next_action"] == "escalate" and len(data["signals"]) == 0:
+            raise ValueError("missing evidence")
+        return data
     except json.JSONDecodeError:
         return None
 `;
@@ -49,20 +57,27 @@ const TS_NATIVE = `import OpenAI from "openai";
 
 const client = new OpenAI();
 
-async function extractUser(text: string) {
+async function qualifyLead(email: string) {
   const r = await client.chat.completions.create({
     model: "gpt-4o",
     messages: [{
       role: "user",
-      content: \`Extract the user. Return JSON with
-name (string), email (string), age (int), tier
-(one of free, pro, enterprise).
+      content: \`Qualify this sales lead. Return JSON:
+contact: { name, email, role }
+company: { name, size: startup|midmarket|enterprise }
+signals: [{ label, score, evidence }]
+next_action: ignore|nurture|book_demo|escalate
+follow_up: short email draft
 
-Text: \${text}\`,
+Email: \${email}\`,
     }],
   });
   try {
-    return JSON.parse(r.choices[0].message.content ?? "");
+    const lead = JSON.parse(r.choices[0].message.content ?? "");
+    if (lead.next_action === "escalate" && !lead.signals?.length) {
+      throw new Error("missing evidence");
+    }
+    return lead;
   } catch {
     return null;
   }
@@ -79,53 +94,83 @@ import (
   "github.com/sashabaranov/go-openai"
 )
 
-type User struct {
-  Name  string \`json:"name"\`
-  Email string \`json:"email"\`
-  Age   int    \`json:"age"\`
-  Tier  string \`json:"tier"\`
+type Signal struct {
+  Label    string \`json:"label"\`
+  Score    int    \`json:"score"\`
+  Evidence string \`json:"evidence"\`
 }
 
-func ExtractUser(text string) (*User, error) {
+type Lead struct {
+  Contact    map[string]string \`json:"contact"\`
+  Company    map[string]string \`json:"company"\`
+  Signals    []Signal          \`json:"signals"\`
+  NextAction string            \`json:"next_action"\`
+  FollowUp   string            \`json:"follow_up"\`
+}
+
+func QualifyLead(email string) (*Lead, error) {
   c := openai.NewClient("OPENAI_API_KEY")
   resp, err := c.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
     Model: openai.GPT4o,
     Messages: []openai.ChatCompletionMessage{{
       Role:    openai.ChatMessageRoleUser,
-      Content: fmt.Sprintf(\`Extract the user. Return JSON with
-name (string), email (string), age (int), tier (free|pro|enterprise).
+      Content: fmt.Sprintf(\`Qualify this lead as JSON with
+contact, company, signals[], next_action, follow_up.
+next_action is ignore|nurture|book_demo|escalate.
 
-Text: %s\`, text),
+Email: %s\`, email),
     }},
   })
   if err != nil { return nil, err }
-  var u User
-  if err := json.Unmarshal([]byte(resp.Choices[0].Message.Content), &u); err != nil {
+  var lead Lead
+  if err := json.Unmarshal([]byte(resp.Choices[0].Message.Content), &lead); err != nil {
     return nil, err
   }
-  return &u, nil
+  return &lead, nil
 }
 `;
 
 const RUST_NATIVE = `use serde::Deserialize;
 
 #[derive(Deserialize)]
-struct User {
-    name: String,
-    email: String,
-    age: i64,
-    tier: String,
+struct Signal {
+    label: String,
+    score: i64,
+    evidence: String,
 }
 
-async fn extract_user(text: &str) -> anyhow::Result<User> {
+#[derive(Deserialize)]
+struct Contact {
+    name: String,
+    email: String,
+    role: String,
+}
+
+#[derive(Deserialize)]
+struct Company {
+    name: String,
+    size: String,
+}
+
+#[derive(Deserialize)]
+struct Lead {
+    contact: Contact,
+    company: Company,
+    signals: Vec<Signal>,
+    next_action: String,
+    follow_up: String,
+}
+
+async fn qualify_lead(email: &str) -> anyhow::Result<Lead> {
     let body = serde_json::json!({
         "model": "gpt-4o",
         "messages": [{
             "role": "user",
             "content": format!(
-                "Extract the user. Return JSON with \
-                 name (string), email (string), age (int), \
-                 tier (free|pro|enterprise).\n\nText: {text}"
+                "Qualify this lead. Return JSON with contact, \
+                 company, signals[], next_action, follow_up. \
+                 next_action is ignore|nurture|book_demo|escalate.\n\n\
+                 Email: {email}"
             ),
         }],
     });
@@ -211,67 +256,58 @@ ticket: \${ticket}\`,
 }
 `;
 
-const BAML_USER = `class User {
-  name  string
-  email string
-  age   int
-  tier  "free" | "pro" | "enterprise"
+const BAML_USER = `class LeadDecision {
+  contact_email string
+  company       string
+  signals       string[] @description("Evidence from the email")
+  score         int @description("0 to 100")
+  next_action   "ignore" | "nurture" | "book_demo" | "escalate"
+  rationale     string
+  follow_up     string
 }
 
-function ExtractUser(text: string) -> User {
+function QualifyLead(email: string) -> LeadDecision {
   client GPT4o
   prompt #"
-    Extract the user from the text.
+    Decide if sales should act on this inbound lead.
+    Use evidence, explain the score, and draft the next message.
     {{ ctx.output_format }}
-    {{ _.role("user") }} {{ text }}
+    {{ _.role("user") }} {{ email }}
   "#
 }
 `;
 
-const BAML_WORKFLOW = `class Ticket {
+const BAML_WORKFLOW = `class TicketDecision {
   intent   "refund" | "bug" | "upgrade" | "question"
   priority "low" | "medium" | "high"
-  summary  string
+  reason   string @description("Why this route is correct")
+  reply    string
 }
 
-function ClassifyTicket(text: string) -> Ticket {
+function HandleTicket(text: string) -> TicketDecision {
   client GPT4o
   prompt #"
-    Classify this support ticket.
+    Classify, decide priority, explain the route, and draft a reply.
+    Escalate high-priority refunds and bugs.
     {{ ctx.output_format }}
     {{ _.role("user") }} {{ text }}
   "#
-}
-
-function DraftReply(text: string, ticket: Ticket) -> string {
-  client GPT4o
-  prompt #"
-    Write a concise support reply.
-    Intent: {{ ticket.intent }}
-    Priority: {{ ticket.priority }}
-    Ticket: {{ text }}
-  "#
-}
-
-function HandleTicket(text: string) -> string {
-  let ticket = ClassifyTicket(text)
-  if (ticket.priority == "high") {
-    return "Escalating: " + ticket.summary
-  }
-  DraftReply(text, ticket)
 }
 `;
 
 const PY_CALLER = `from baml_client import b
 
-user = b.ExtractUser("Ada, ada@example.com, pro, 37")
-print(user.email)
+lead = b.QualifyLead(inbound_email)
+if lead.next_action == "book_demo":
+    crm.create_task(lead.contact_email, lead.follow_up)
 `;
 
 const TS_CALLER = `import { b } from "@/baml_client";
 
-const user = await b.ExtractUser("Ada, ada@example.com, pro, 37");
-console.log(user.email);
+const lead = await b.QualifyLead(inboundEmail);
+if (lead.next_action === "book_demo") {
+  await crm.createTask(lead.contact_email, lead.follow_up);
+}
 `;
 
 const GO_CALLER = `package main
@@ -280,9 +316,9 @@ import "context"
 import b "example.com/app/baml_client"
 
 func main() {
-  user, err := b.ExtractUser(context.Background(), "Ada, ada@example.com, pro, 37")
+  lead, err := b.QualifyLead(context.Background(), inboundEmail)
   if err != nil { panic(err) }
-  println(user.Email)
+  println(lead.NextAction)
 }
 `;
 
@@ -290,24 +326,24 @@ const RUST_CALLER = `use baml_client::b;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let user = b::extract_user("Ada, ada@example.com, pro, 37").await?;
-    println!("{}", user.email);
+    let lead = b::qualify_lead(inbound_email()).await?;
+    println!("{}", lead.next_action);
     Ok(())
 }
 `;
 
 const PY_WORKFLOW_CALLER = `from baml_client import b
 
-reply = b.HandleTicket("I was charged twice and need a refund today")
-print(reply)
+decision = b.HandleTicket("I was charged twice and need a refund today")
+print(decision.priority, decision.reason)
 `;
 
 const TS_WORKFLOW_CALLER = `import { b } from "@/baml_client";
 
 export async function POST(req: Request) {
   const { ticket } = await req.json();
-  const reply = await b.HandleTicket(ticket);
-  return Response.json({ reply });
+  const decision = await b.HandleTicket(ticket);
+  return Response.json(decision);
 }
 `;
 
@@ -333,61 +369,61 @@ const COMPARISONS: Comparison[] = [
     id: 'python',
     tab: 'Python',
     headline: 'BAML vs Python.',
-    body: 'Python is what most agent codebases start with. The OpenAI client returns a string. You parse it. You hope. BAML moves the schema, prompt, and parsing into one typed function.',
+    body: 'Python is what most agent codebases start with. Once the output is nested, scored, and action-oriented, the OpenAI client still returns a string. BAML moves the schema, prompt, evidence requirements, and parsing into one typed function.',
     bullets: [
-      'No more f-string prompts. The schema lives in the language.',
-      'No more JSON.loads then guess. The return type drives parsing.',
+      'The BAML version asks for the app decision, evidence, rationale, and next action directly.',
+      'No more JSON.loads plus manual evidence checks. The return type drives parsing.',
       'Same Python app calls BAML through a generated typed client.',
       'Pydantic still works. BAML replaces the prompt and parse boundary, not your data layer.',
     ],
-    baml: { code: BAML_USER, lang: 'baml', filename: 'extract.baml' },
+    baml: { code: BAML_USER, lang: 'baml', filename: 'lead.baml' },
     caller: { code: PY_CALLER, lang: 'python', filename: 'app.py' },
-    native: { code: PY_NATIVE, lang: 'python', filename: 'extract.py' },
+    native: { code: PY_NATIVE, lang: 'python', filename: 'lead.py' },
   },
   {
     id: 'typescript',
     tab: 'TypeScript',
     headline: 'BAML vs TypeScript.',
-    body: 'TypeScript types vanish at runtime. Your OpenAI response is any. BAML keeps the type all the way through parsing, so the value you hand to the rest of your app is the type you declared.',
+    body: 'TypeScript types vanish at runtime. When the model returns a recommended action plus scored evidence, your OpenAI response is still any. BAML keeps the declared type through parsing and into the generated client.',
     bullets: [
       'BAML compiles, then generates a typed TS client.',
-      'Structured outputs are repaired during decoding, not after.',
+      'The output shape includes rationale, so app code branches on an explained decision.',
       'Streams typed partials into your UI without bespoke JSON parsers.',
       'Drop in next to Zod. Use BAML at the LLM boundary, Zod elsewhere.',
     ],
-    baml: { code: BAML_USER, lang: 'baml', filename: 'extract.baml' },
+    baml: { code: BAML_USER, lang: 'baml', filename: 'lead.baml' },
     caller: { code: TS_CALLER, lang: 'typescript', filename: 'route.ts' },
-    native: { code: TS_NATIVE, lang: 'typescript', filename: 'extract.ts' },
+    native: { code: TS_NATIVE, lang: 'typescript', filename: 'lead.ts' },
   },
   {
     id: 'go',
     tab: 'Go',
     headline: 'BAML vs Go.',
-    body: 'Go gives you struct tags and json.Unmarshal. That works for clean JSON. LLMs do not return clean JSON. BAML repairs malformed output during decoding and gives you a typed value.',
+    body: 'Go gives you struct tags and json.Unmarshal. That works for clean JSON. LLMs often return explanations, missing fields, or fuzzy enum values. BAML keeps the prompt, schema, and decoder together and gives Go a typed value.',
     bullets: [
       'BAML generates a typed Go client. Call it like any other function.',
-      'Schema and prompt live next to each other in one .baml file.',
+      'Reasoning requirements live with the prompt and type, not in comments around json.Unmarshal.',
       'No more boilerplate ChatCompletionRequest setup per function.',
       'Tests live next to the code. Run with baml test.',
     ],
-    baml: { code: BAML_USER, lang: 'baml', filename: 'extract.baml' },
+    baml: { code: BAML_USER, lang: 'baml', filename: 'lead.baml' },
     caller: { code: GO_CALLER, lang: 'go', filename: 'main.go' },
-    native: { code: GO_NATIVE, lang: 'go', filename: 'extract.go' },
+    native: { code: GO_NATIVE, lang: 'go', filename: 'lead.go' },
   },
   {
     id: 'rust',
     tab: 'Rust',
     headline: 'BAML vs Rust.',
-    body: 'Rust with serde and reqwest is fast and safe. It is also a lot of code per LLM call. BAML keeps the safety, drops the boilerplate, and generates a typed client to call from Rust.',
+    body: 'Rust with serde and reqwest is fast and safe. The friction is all the LLM-specific glue: request construction, prompt/schema drift, repair, and error paths. BAML keeps the safety and generates the typed Rust-facing boundary.',
     bullets: [
       'One .baml file replaces request building, JSON parsing, and error plumbing.',
-      'Schema-aware parsing handles partial and malformed model output.',
+      'Schema-aware parsing handles partial and malformed model output before Rust receives it.',
       'Run pure BAML on the BAML VM, or call it from Rust through a generated client.',
-      "BAML's class layout is contiguous and resolved at compile time.",
+      'The generated Rust-facing type includes the decision, evidence, and rationale.',
     ],
-    baml: { code: BAML_USER, lang: 'baml', filename: 'extract.baml' },
+    baml: { code: BAML_USER, lang: 'baml', filename: 'lead.baml' },
     caller: { code: RUST_CALLER, lang: 'rust', filename: 'main.rs' },
-    native: { code: RUST_NATIVE, lang: 'rust', filename: 'extract.rs' },
+    native: { code: RUST_NATIVE, lang: 'rust', filename: 'lead.rs' },
   },
   {
     id: 'langgraph',
@@ -396,8 +432,8 @@ const COMPARISONS: Comparison[] = [
     body: 'LangGraph is a graph runtime. BAML is the typed language boundary around the model calls inside that runtime. For many workflows, the BAML version is just functions, control flow, tests, and generated clients.',
     bullets: [
       'Use BAML inside LangGraph when you need a graph, or use BAML alone when the workflow is mostly typed model calls.',
-      'The prompt, schema, parsing, and tests live in the same file.',
-      'Control flow can be plain BAML functions instead of graph nodes for simple workflows.',
+      'The prompt, output type, explanation field, and tests live in the same file.',
+      'For simple workflows, one BAML function can replace classify, route, draft, and parse nodes.',
       'Generated Python keeps app code small and typed.',
     ],
     baml: { code: BAML_WORKFLOW, lang: 'baml', filename: 'support.baml' },
@@ -415,7 +451,7 @@ const COMPARISONS: Comparison[] = [
     body: 'AI SDK is great at request and streaming plumbing. BAML is better at making the model boundary a reusable typed function with tests, providers, and generated clients.',
     bullets: [
       'Keep AI SDK for UI streaming, use BAML for prompts and typed outputs.',
-      'BAML functions are reusable outside one route handler.',
+      'BAML functions return reusable decisions, not route-local generated objects.',
       'Provider switching is a client block, not a rewrite across handlers.',
       'Tests sit next to the function instead of in app-layer fixtures.',
     ],
@@ -906,21 +942,33 @@ export function VsClient() {
 
 // ── Closing CTA ──────────────────────────────────────────────────────────────
 
-const INSTALL_PROMPT =
-  'claude plugin add boundaryml/baml && claude "Use the BAML plugin to add one typed LLM function to this codebase."';
+type InstallPath = 'claude' | 'codex';
+
+const installOptions: {
+  command: string;
+  icon?: string;
+  id: InstallPath;
+  label: string;
+}[] = [
+  {
+    command: 'claude plugin add boundaryml/baml',
+    icon: '/Claude Color SVG.svg',
+    id: 'claude',
+    label: 'Claude plugin',
+  },
+  {
+    command: 'codex plugin add boundaryml/baml',
+    icon: '/Codex Color.svg',
+    id: 'codex',
+    label: 'Codex plugin',
+  },
+];
 
 function ClosingCta() {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(INSTALL_PROMPT);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      /* clipboard blocked */
-    }
-  };
+  const [installPath, setInstallPath] = useState<InstallPath>('claude');
+  const selected =
+    installOptions.find((option) => option.id === installPath) ??
+    installOptions[0];
 
   return (
     <section
@@ -963,88 +1011,57 @@ function ClosingCta() {
           Skip the CLI. Tell your agent to install it.
         </h2>
 
-        <div
-          style={{
-            display: 'grid',
-            gap: 32,
-            gridTemplateColumns: '1fr 1fr',
-            marginTop: 40,
-          }}
-        >
-          <div
-            style={{
-              background: CODE_BG,
-              border: `1px solid ${BORDER}`,
-              borderRadius: 10,
-              boxShadow:
-                '0 1px 0 rgba(0,0,0,0.02), 0 8px 28px -18px rgba(0,0,0,0.22)',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                alignItems: 'center',
-                background: GUTTER_BG,
-                borderBottom: `1px solid ${BORDER}`,
-                color: MUTED,
-                display: 'flex',
-                fontFamily: MONO,
-                fontSize: 11,
-                gap: 12,
-                justifyContent: 'space-between',
-                letterSpacing: '0.06em',
-                padding: '8px 10px 8px 14px',
-                textTransform: 'uppercase' as const,
-              }}
-            >
-              <span>same Claude plugin install as the homepage</span>
-              <button
-                onClick={handleCopy}
-                style={{
-                  background: copied ? ACCENT : '#ffffff',
-                  border: `1px solid ${copied ? ACCENT : BORDER}`,
-                  borderRadius: 6,
-                  color: copied ? '#ffffff' : MUTED,
-                  cursor: 'pointer',
-                  fontFamily: MONO,
-                  fontSize: 10.5,
-                  fontWeight: 500,
-                  letterSpacing: '0.08em',
-                  padding: '4px 10px',
-                  textTransform: 'uppercase' as const,
-                  transition:
-                    'background 160ms ease, color 160ms ease, border-color 160ms ease',
-                }}
-                type="button"
-              >
-                {copied ? 'Copied' : 'Copy prompt'}
-              </button>
+        <div className="cta-grid">
+          <div style={{ alignSelf: 'start' }}>
+            <ScriptCopyBtn
+              className="block w-full max-w-md"
+              codeLanguage="bash"
+              commandMap={{ bash: selected.command } as const}
+              darkTheme="none"
+              lightTheme="none"
+              showMultiplePackageOptions={false}
+            />
+            <div className="plugin-pill-row">
+              {installOptions.map((option) => {
+                const isActive = installPath === option.id;
+                return (
+                  <button
+                    className={`plugin-pill${isActive ? ' plugin-pill--active' : ''}`}
+                    key={option.id}
+                    onClick={() => {
+                      setInstallPath(option.id);
+                    }}
+                    type="button"
+                  >
+                    {option.icon && (
+                      <Image
+                        alt={option.label}
+                        className="size-4"
+                        height={16}
+                        src={option.icon}
+                        width={16}
+                      />
+                    )}
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
-            <pre
-              style={{
-                color: INK,
-                fontFamily: MONO,
-                fontSize: 12.5,
-                lineHeight: 1.6,
-                margin: 0,
-                padding: '14px 18px',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}
-            >
-              <code style={{ fontFamily: MONO }}>{INSTALL_PROMPT}</code>
-            </pre>
+            <div className="manual-install">
+              <span className="manual-install__label">Prefer manual setup?</span>
+              <a
+                className="manual-install__link"
+                href="https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages"
+                rel="noreferrer"
+                target="_blank"
+              >
+                See manual install instructions
+                <span aria-hidden>→</span>
+              </a>
+            </div>
           </div>
 
-          <div
-            style={{
-              alignItems: 'flex-start',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 18,
-              paddingTop: 4,
-            }}
-          >
+          <div className="cta-right">
             <p
               style={{
                 color: MUTED,
@@ -1054,83 +1071,194 @@ function ClosingCta() {
                 maxWidth: 460,
               }}
             >
-              This matches the homepage install path. The agent gets the BAML
-              plugin, adds one typed LLM function, generates the client for your
-              language, and shows the app-side call site.
+              Pick the agent you use, install the BAML plugin, then ask it to
+              add one typed LLM function to your codebase. The plugin gives the
+              agent BAML-specific context instead of making it infer the syntax
+              from scratch.
             </p>
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 12,
-                marginTop: 6,
-              }}
-            >
+            <div className="cta-row">
               <a
+                className="editorial-btn editorial-btn--primary"
                 href="https://docs.boundaryml.com"
-                style={{
-                  alignItems: 'center',
-                  background: ACCENT,
-                  borderRadius: 999,
-                  color: '#ffffff',
-                  display: 'inline-flex',
-                  fontFamily: HAND,
-                  fontSize: 14,
-                  fontWeight: 500,
-                  gap: 8,
-                  padding: '12px 22px',
-                  textDecoration: 'none',
-                }}
+                rel="noreferrer"
+                target="_blank"
               >
                 Read the docs
-                <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>
-                  →
-                </span>
+                <span aria-hidden>→</span>
               </a>
               <a
+                className="editorial-btn"
                 href="https://github.com/BoundaryML/baml"
-                style={{
-                  alignItems: 'center',
-                  background: '#ffffff',
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: 999,
-                  color: INK,
-                  display: 'inline-flex',
-                  fontFamily: HAND,
-                  fontSize: 14,
-                  fontWeight: 500,
-                  gap: 8,
-                  padding: '12px 22px',
-                  textDecoration: 'none',
-                }}
+                rel="noreferrer"
+                target="_blank"
               >
                 Star on GitHub
               </a>
               <a
+                className="editorial-btn editorial-btn--ghost"
                 href="/thesis"
-                style={{
-                  alignItems: 'center',
-                  background: 'transparent',
-                  borderRadius: 999,
-                  color: ACCENT,
-                  display: 'inline-flex',
-                  fontFamily: HAND,
-                  fontSize: 14,
-                  fontWeight: 500,
-                  gap: 8,
-                  padding: '12px 4px',
-                  textDecoration: 'none',
-                }}
               >
                 Read the thesis
-                <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>
-                  →
-                </span>
+                <span aria-hidden>→</span>
               </a>
             </div>
           </div>
         </div>
       </div>
+
+      <style>{`
+        .cta-grid {
+          display: grid;
+          gap: 32px;
+          grid-template-columns: 1fr 1fr;
+          margin-top: 40px;
+        }
+        .cta-right {
+          align-items: flex-start;
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+          padding-top: 4px;
+        }
+        .cta-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-top: 6px;
+        }
+        .plugin-pill-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 12px;
+        }
+        .plugin-pill {
+          align-items: center;
+          background: transparent;
+          border: 1px solid ${BORDER};
+          border-radius: 8px;
+          color: ${MUTED};
+          cursor: pointer;
+          display: inline-flex;
+          font-family: ${HAND};
+          font-size: 14px;
+          font-weight: 500;
+          gap: 6px;
+          padding: 10px 16px;
+          transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease;
+        }
+        .plugin-pill:hover {
+          border-color: ${ACCENT};
+          color: ${ACCENT};
+        }
+        .plugin-pill--active,
+        .plugin-pill--active:hover {
+          background: ${INK};
+          border-color: ${INK};
+          color: #ffffff;
+        }
+        .editorial-btn {
+          align-items: center;
+          background: #ffffff;
+          border: 1px solid ${BORDER};
+          border-radius: 999px;
+          color: ${INK};
+          display: inline-flex;
+          font-family: ${HAND};
+          font-size: 14px;
+          font-weight: 500;
+          gap: 8px;
+          letter-spacing: 0.01em;
+          padding: 12px 22px;
+          text-decoration: none;
+          transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, transform 200ms ease;
+        }
+        .editorial-btn span[aria-hidden] {
+          font-size: 16px;
+          line-height: 1;
+        }
+        .editorial-btn:hover {
+          background: #FBF8F1;
+          border-color: ${ACCENT};
+          color: ${ACCENT};
+          transform: translateY(-1px);
+        }
+        .editorial-btn--primary {
+          background: ${ACCENT};
+          border-color: ${ACCENT};
+          color: #ffffff;
+        }
+        .editorial-btn--primary:hover {
+          background: #5B21B6;
+          border-color: #5B21B6;
+          color: #ffffff;
+        }
+        .editorial-btn--ghost {
+          background: transparent;
+          border-color: transparent;
+          color: ${ACCENT};
+          padding: 12px 4px;
+        }
+        .editorial-btn--ghost:hover {
+          background: transparent;
+          border-color: transparent;
+          color: #5B21B6;
+        }
+        .manual-install {
+          align-items: center;
+          color: ${MUTED};
+          display: flex;
+          flex-wrap: wrap;
+          font-family: ${HAND};
+          font-size: 13px;
+          gap: 6px;
+          margin-top: 20px;
+        }
+        .manual-install__label {
+          color: #8A8580;
+        }
+        .manual-install__link {
+          align-items: center;
+          color: ${ACCENT};
+          display: inline-flex;
+          gap: 4px;
+          text-decoration: none;
+          transition: color 200ms ease;
+        }
+        .manual-install__link:hover {
+          color: #5B21B6;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+        @media (max-width: 900px) {
+          .cta-grid {
+            grid-template-columns: 1fr;
+            gap: 40px;
+          }
+        }
+        @media (max-width: 640px) {
+          .cta-row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+          }
+          .editorial-btn {
+            justify-content: center;
+            width: 100%;
+          }
+          .editorial-btn--ghost {
+            padding: 12px 22px;
+          }
+          .plugin-pill-row {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .plugin-pill {
+            justify-content: center;
+            width: 100%;
+          }
+        }
+      `}</style>
     </section>
   );
 }

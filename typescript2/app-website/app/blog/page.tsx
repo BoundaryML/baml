@@ -9,34 +9,38 @@ export async function generateMetadata(): Promise<Metadata> {
   const blogUrl = `${baseUrl}/blog`;
 
   return {
-    title: 'BAML Blog - Insights, Tutorials, and AI Development Updates',
-    description: 'Explore the latest insights, tutorials, and updates from the BAML team. Learn best practices for building type-safe, production-ready AI applications.',
     alternates: {
       canonical: blogUrl,
     },
-    keywords: 'BAML blog, AI development, LLM tutorials, machine learning insights, type safety, AI engineering, production AI',
+    description:
+      'Explore the latest insights, tutorials, and updates from the BAML team. Learn best practices for building type-safe, production-ready AI applications.',
+    keywords:
+      'BAML blog, AI development, LLM tutorials, machine learning insights, type safety, AI engineering, production AI',
     openGraph: {
-      title: 'BAML Blog - Insights, Tutorials, and AI Development Updates',
-      description: 'Explore the latest insights, tutorials, and updates from the BAML team. Learn best practices for building type-safe, production-ready AI applications.',
-      url: blogUrl,
-      siteName: 'BAML',
-      type: 'website',
+      description:
+        'Explore the latest insights, tutorials, and updates from the BAML team. Learn best practices for building type-safe, production-ready AI applications.',
       images: [
         {
+          alt: 'BAML Blog - AI Development Insights',
+          height: 630,
           url: `${baseUrl}/baml-og-background.png`,
           width: 1200,
-          height: 630,
-          alt: 'BAML Blog - AI Development Insights',
         },
       ],
+      siteName: 'BAML',
+      title: 'BAML Blog - Insights, Tutorials, and AI Development Updates',
+      type: 'website',
+      url: blogUrl,
     },
+    title: 'BAML Blog - Insights, Tutorials, and AI Development Updates',
     twitter: {
       card: 'summary_large_image',
-      title: 'BAML Blog - Insights, Tutorials, and AI Development Updates',
-      description: 'Explore the latest insights, tutorials, and updates from the BAML team.',
-      images: [`${baseUrl}/baml-og-background.png`],
       creator: '@boundaryml',
+      description:
+        'Explore the latest insights, tutorials, and updates from the BAML team.',
+      images: [`${baseUrl}/baml-og-background.png`],
       site: '@boundaryml',
+      title: 'BAML Blog - Insights, Tutorials, and AI Development Updates',
     },
   };
 }
@@ -47,12 +51,12 @@ export default async function BlogPage() {
   return (
     <div
       style={{
-        background: '#ffffff',
+        background: '#FBF7ED',
         color: '#1A1612',
-        width: '100%',
-        maxWidth: 1600,
         margin: '0 auto',
+        maxWidth: 1600,
         minHeight: '100vh',
+        width: '100%',
       }}
     >
       <Navbar />

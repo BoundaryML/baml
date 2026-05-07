@@ -58,10 +58,10 @@ const teamMembers: TeamMember[] = [
     bio: 'Greg works at the seam between product and compiler — translating things developers want to do into things the compiler can guarantee. He cares deeply about the path from "I have an idea" to "it just works".',
   },
   {
-    name: 'Dhilan Shah',
+    bio: 'Paulo works with teams building production AI systems, turning hard-won implementation feedback into sharper workflows for BAML users.',
+    image: '/testimonials/people/paulo.png',
+    name: 'Paulo Rossi',
     role: 'Engineer',
-    image: '/dhilan.jpg',
-    bio: 'Dhilan works across the stack on the parts of BAML that developers actually touch — the website, the playground, and the integrations that make the language feel approachable. He believes the fastest way to learn a tool is to try it and have it not get in your way.',
   },
   {
     bio: 'Kai works across the product surface and developer experience, helping BAML feel direct, legible, and fast to adopt in real codebases.',
@@ -69,15 +69,15 @@ const teamMembers: TeamMember[] = [
     role: 'Engineer',
   },
   {
-    bio: 'Paulo works with teams building production AI systems, turning hard-won implementation feedback into sharper workflows for BAML users.',
-    image: '/testimonials/people/paulo.png',
-    name: 'Paulo Rossi',
-    role: 'Engineer',
-  },
-  {
     bio: 'Avery works on the places where language tooling meets product polish, making BAML easier to understand, test, and ship.',
     name: 'Avery',
     role: 'Engineer',
+  },
+  {
+    name: 'Dhilan Shah',
+    role: 'Engineer',
+    image: '/dhilan.jpg',
+    bio: 'Dhilan works across the stack on the parts of BAML that developers actually touch — the website, the playground, and the integrations that make the language feel approachable. He believes the fastest way to learn a tool is to try it and have it not get in your way.',
   },
 ];
 
@@ -137,49 +137,12 @@ export default function WhoAreWePage() {
                 margin: 0,
               }}
             >
-              baml looks for people that like hard problems. We are building a
-              programming language, compiler, VM, LSP, playground, and generated
-              clients for the parts of AI engineering that break when demos
-              become products.
+              We built BAML to solve hard problems at the edge of production
+              AI. Our work spans distributed systems, compilers, developer
+              tools, and the constantly changing shape of modern AI.
             </p>
-            <p
-              style={{
-                fontSize: 18,
-                lineHeight: 1.6,
-                color: MUTED,
-                margin: '14px 0 0',
-              }}
-            >
-              The work is unusually broad:{' '}
-              <span
-                style={{
-                  fontFamily: 'var(--font-serif)',
-                  fontStyle: 'italic',
-                  fontWeight: 500,
-                  color: ACCENT,
-                }}
-              >
-                language design, distributed systems, developer tools, product
-                taste, and production ML weirdness
-              </span>
-              .
-            </p>
-            <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
-              <Link
-                href="/jobs"
-                style={{
-                  alignItems: 'center',
-                  background: INK,
-                  borderRadius: 6,
-                  color: '#ffffff',
-                  display: 'inline-flex',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  gap: 8,
-                  padding: '12px 20px',
-                  textDecoration: 'none',
-                }}
-              >
+            <div className="team-cta-row" style={{ marginTop: 28 }}>
+              <Link className="editorial-btn editorial-btn--primary" href="/jobs">
                 See open roles
                 <ArrowRight size={16} />
               </Link>
@@ -480,68 +443,28 @@ export default function WhoAreWePage() {
             write clearly, debug patiently, and care about making AI software
             less fragile.
           </p>
-          <div
-            style={{
-              display: 'flex',
-              gap: 12,
-              justifyContent: 'center',
-              flexWrap: 'wrap',
-            }}
-          >
+          <div className="team-cta-row team-cta-row--center">
             <Link
-              href="https://github.com/boundaryml/baml"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '12px 20px',
-                borderRadius: 6,
-                background: INK,
-                color: BG,
-                fontSize: 14,
-                fontWeight: 500,
-                textDecoration: 'none',
-                transition: 'opacity 200ms ease',
-              }}
-            >
-              <Github size={16} />
-              Star on GitHub
-            </Link>
-            <Link
+              className="editorial-btn editorial-btn--primary"
               href="/jobs"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '12px 20px',
-                borderRadius: 6,
-                background: ACCENT,
-                color: '#ffffff',
-                fontSize: 14,
-                fontWeight: 500,
-                textDecoration: 'none',
-                transition: 'opacity 200ms ease',
-              }}
             >
               Open roles
               <ArrowRight size={16} />
             </Link>
             <Link
+              className="editorial-btn editorial-btn--dark"
+              href="https://github.com/boundaryml/baml"
+              rel="noreferrer"
+              target="_blank"
+            >
+              <Github size={16} />
+              Star on GitHub
+            </Link>
+            <Link
+              className="editorial-btn"
               href="https://boundaryml.com/discord"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '12px 20px',
-                borderRadius: 6,
-                background: BG,
-                color: INK,
-                border: `1px solid ${BORDER}`,
-                fontSize: 14,
-                fontWeight: 500,
-                textDecoration: 'none',
-                transition: 'background-color 200ms ease',
-              }}
+              rel="noreferrer"
+              target="_blank"
             >
               <MessageCircle size={16} />
               Join Discord
@@ -559,6 +482,65 @@ export default function WhoAreWePage() {
         }
         .team-icon:hover { color: ${ACCENT}; }
         .team-icon-linkedin:hover { color: #0A66C2; }
+
+        .team-cta-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .team-cta-row--center { justify-content: center; }
+        .editorial-btn {
+          align-items: center;
+          background: #ffffff;
+          border: 1px solid ${BORDER};
+          border-radius: 999px;
+          color: ${INK};
+          display: inline-flex;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 500;
+          gap: 8px;
+          letter-spacing: 0.01em;
+          padding: 12px 22px;
+          text-decoration: none;
+          transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, transform 200ms ease;
+        }
+        .editorial-btn:hover {
+          background: #FBF8F1;
+          border-color: ${ACCENT};
+          color: ${ACCENT};
+          transform: translateY(-1px);
+        }
+        .editorial-btn--primary {
+          background: ${ACCENT};
+          border-color: ${ACCENT};
+          color: #ffffff;
+        }
+        .editorial-btn--primary:hover {
+          background: #5B21B6;
+          border-color: #5B21B6;
+          color: #ffffff;
+        }
+        .editorial-btn--dark {
+          background: ${INK};
+          border-color: ${INK};
+          color: #ffffff;
+        }
+        .editorial-btn--dark:hover {
+          background: #2A211A;
+          border-color: #2A211A;
+          color: #ffffff;
+        }
+        @media (max-width: 640px) {
+          .team-cta-row {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .editorial-btn {
+            justify-content: center;
+            width: 100%;
+          }
+        }
       `}</style>
     </div>
   );

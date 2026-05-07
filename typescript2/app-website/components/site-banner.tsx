@@ -79,7 +79,7 @@ export function SiteBanner() {
         New
       </span>
       <span style={{ color: MUTED }}>
-        We raised XXM from blank to build{' '}
+        We raised XM from _ at XXM to build{' '}
         <span style={{ color: INK, fontWeight: 600 }}>
           the language for agents
         </span>

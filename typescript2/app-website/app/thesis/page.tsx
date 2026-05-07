@@ -5,7 +5,7 @@ import { Navbar } from '@/components/navbar';
 
 export const metadata: Metadata = {
   description:
-    'The BAML thesis: open-source schemas, code generation, and tooling for ML APIs.',
+    'The BAML thesis: a programming language that agents are good at writing and humans are good at understanding.',
   title: 'The BAML Thesis',
 };
 
