@@ -51,6 +51,10 @@ import { companionFunctionName } from './shared/companion-functions';
 
 registerBuiltinResultRenderers();
 
+const LOGS_PANEL_DEFAULT_HEIGHT = 180;
+const LOGS_PANEL_MIN_HEIGHT = 40;
+const LOGS_PANEL_MAX_HEIGHT = 620;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -375,7 +379,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [previewLoading, setPreviewLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(220);
-  const [logsPanelHeight, setLogsPanelHeight] = useState(280);
+  const [logsPanelHeight, setLogsPanelHeight] = useState(LOGS_PANEL_DEFAULT_HEIGHT);
   const resizingRef = useRef(false);
   const [resultModes, setResultModes] = useState<Record<number, 'parsed' | 'raw'>>({});
 
@@ -959,8 +963,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
     const onMouseMove = (moveE: MouseEvent) => {
       const delta = startY - moveE.clientY;
-      const maxHeight = Math.max(180, Math.min(620, window.innerHeight - 220));
-      setLogsPanelHeight(Math.max(140, Math.min(maxHeight, startHeight + delta)));
+      const maxHeight = Math.max(LOGS_PANEL_MIN_HEIGHT, Math.min(LOGS_PANEL_MAX_HEIGHT, window.innerHeight - 220));
+      setLogsPanelHeight(Math.max(LOGS_PANEL_MIN_HEIGHT, Math.min(maxHeight, startHeight + delta)));
     };
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);

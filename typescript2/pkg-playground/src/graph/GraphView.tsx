@@ -271,6 +271,21 @@ function GraphViewInner({
           outline: none !important;
           box-shadow: none !important;
         }
+        .react-flow.dark {
+          --xy-controls-button-background-color-default: rgba(24, 24, 27, 0.92);
+          --xy-controls-button-background-color-hover-default: rgba(39, 39, 42, 0.96);
+          --xy-controls-button-color-default: #e4e4e7;
+          --xy-controls-button-color-hover-default: #ffffff;
+          --xy-controls-button-border-color-default: rgba(255, 255, 255, 0.10);
+          --xy-controls-box-shadow-default: 0 8px 24px rgba(0, 0, 0, 0.24);
+        }
+        .react-flow__controls {
+          border: 1px solid rgba(255, 255, 255, 0.10);
+          border-radius: 8px;
+          overflow: hidden;
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+        }
         @keyframes baml-graph-spin {
           to { transform: rotate(360deg); }
         }
@@ -296,6 +311,7 @@ function GraphViewInner({
         fitView
         fitViewOptions={{ minZoom: 0.3, maxZoom: 0.85, padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
+        colorMode="dark"
       >
         <Controls
           position="bottom-left"
