@@ -1358,6 +1358,44 @@ mod tests {
     }
 
     #[test]
+    fn recursive_alias_quotes_cross_leaf_and_root_refs() {
+        // A recursive alias body referencing names from other leaves
+        // and from the root has to emit them as forward-ref strings.
+        // The RHS of `TypeAliasType(...)` evaluates eagerly at module
+        // load; cross-leaf imports are TYPE_CHECKING-guarded and root
+        // names are also imported under TYPE_CHECKING from non-root
+        // leaves — bare references would `NameError` at line eval.
+        let mut pool: SymbolPool = HashMap::new();
+        let foo = cg_name("user", &[], "Foo"); // root-routed
+        let bar = cg_name("user", &["util"], "Bar"); // cross-leaf
+        let alias = cg_name("user", &["lorem"], "Mixed"); // recursive in lorem
+        pool.insert(foo.clone(), class(foo.clone()));
+        pool.insert(bar.clone(), class(bar.clone()));
+        pool.insert(
+            alias.clone(),
+            alias_full(
+                alias.clone(),
+                Ty::Union(vec![
+                    Ty::Class(foo, vec![]),
+                    Ty::Class(bar, vec![]),
+                    Ty::List(Box::new(Ty::TypeAlias(alias))),
+                ]),
+                true,
+                "lorem.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains(
+                "Mixed = typing_extensions.TypeAliasType(\"Mixed\", typing.Union[\"Foo\", \"util.Bar\", typing.List[\"Mixed\"]])\n"
+            ),
+            "lorem leaf missing properly-quoted recursive alias body:\n{leaf}"
+        );
+    }
+
+    #[test]
     fn non_recursive_alias_referencing_recursive_one_is_unquoted() {
         // type Bar = List<JsonValue>  (non-recursive).
         let mut pool: SymbolPool = HashMap::new();

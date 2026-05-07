@@ -607,7 +607,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
         self_ref: None,
-        quote_same_leaf_refs: false,
+        defer_name_refs: false,
     };
 
     match s {
@@ -712,11 +712,16 @@ fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) 
         } else {
             None
         },
-        // 18c: in a recursive alias body every same-leaf name ref is
-        // emitted as a forward-ref string, so the hoisted alias can
-        // reference classes/aliases/enums declared later in the leaf
-        // without breaking line-eval-time name resolution.
-        quote_same_leaf_refs: a.recursive,
+        // 18c: a recursive alias's RHS evaluates eagerly at module
+        // load (it's the RHS of `TypeAliasType(...)`). Every named
+        // reference — same-leaf, cross-leaf, root-routed — has to be
+        // emitted as a forward-ref string so the line doesn't
+        // `NameError`: same-leaf names may not yet be defined (the
+        // alias is hoisted), and cross-leaf / root-routed names live
+        // under `if typing.TYPE_CHECKING:` and aren't in runtime
+        // globals. Pydantic resolves the strings later when it walks
+        // the alias.
+        defer_name_refs: a.recursive,
     };
     let rhs = translate_ty(&a.resolves_to, &ctx);
     if a.recursive {
@@ -1096,7 +1101,7 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
         self_ref: None,
-        quote_same_leaf_refs: false,
+        defer_name_refs: false,
     };
 
     match s {
