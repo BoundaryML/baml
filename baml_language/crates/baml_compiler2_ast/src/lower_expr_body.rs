@@ -1575,6 +1575,21 @@ impl LoweringContext {
         // CALL_EXPR structure: callee expr node (or WORD token), then CALL_ARGS node
         let callee_node = node.children().find(|n| n.kind() != SyntaxKind::CALL_ARGS);
 
+        // Extract explicit type arguments from the callee node.
+        // When `foo<T, U>(args)` is parsed, the parser emits a PATH_EXPR containing
+        // the callee tokens and a GENERIC_ARGS child node. We walk that node to
+        // collect each TYPE_EXPR child and lower it to an AST TypeExpr.
+        let type_args: Vec<TypeExpr> = callee_node
+            .iter()
+            .flat_map(rowan::SyntaxNode::children)
+            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+            .into_iter()
+            .flat_map(|args_node| args_node.children())
+            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+            .collect();
+
         let callee = if let Some(n) = callee_node {
             self.lower_expr_in_chain(&n)
         } else {
@@ -1651,7 +1666,14 @@ impl LoweringContext {
             })
             .unwrap_or_default();
 
-        let id = self.alloc_expr(Expr::Call { callee, args }, node.text_range());
+        let id = self.alloc_expr(
+            Expr::Call {
+                callee,
+                type_args,
+                args,
+            },
+            node.text_range(),
+        );
         if self.needs_chain_wrap.remove(&callee) {
             self.needs_chain_wrap.insert(id);
         }
@@ -1660,6 +1682,11 @@ impl LoweringContext {
 
     fn lower_path_expr(&mut self, node: &SyntaxNode) -> ExprId {
         // PATH_EXPR contains WORD (or keyword-as-ident) tokens joined by DOTs.
+        //
+        // When a PATH_EXPR is wrapped in another PATH_EXPR for generic-arg
+        // annotation (e.g. `reflect.type_of<User>` → outer PATH_EXPR wrapping
+        // inner PATH_EXPR + GENERIC_ARGS), the outer node has no direct token
+        // children. In that case, delegate to the inner PATH_EXPR node.
         let mut segments: Vec<(Name, TextRange)> = Vec::new();
 
         for elem in node.children_with_tokens() {
@@ -1671,6 +1698,11 @@ impl LoweringContext {
         }
 
         if segments.is_empty() {
+            // Check for a nested PATH_EXPR child (produced by the parser when
+            // `foo.bar<T>` wraps the `foo.bar` PATH_EXPR in an outer PATH_EXPR).
+            if let Some(inner) = node.children().find(|n| n.kind() == SyntaxKind::PATH_EXPR) {
+                return self.lower_path_expr(&inner);
+            }
             return self.alloc_expr(Expr::Missing, node.text_range());
         }
 
@@ -1763,6 +1795,7 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Call {
                 callee,
+                type_args: vec![],
                 args: vec![arg],
             },
             range,
@@ -2026,11 +2059,14 @@ impl LoweringContext {
         let mut spreads = Vec::new();
         let mut position = 0;
         let mut type_name = None;
+        let mut type_args: Vec<TypeExpr> = vec![];
 
         // Look for the optional type name (first WORD or path before the brace):
         //   - A simple WORD token: `MyClass { ... }` → `TypePath::bare`.
         //   - A qualified path node: `baml.errors.DevOther { ... }` (parsed as
         //     PATH_EXPR) → `TypePath` of all the WORD segments.
+        //   - A generic path: `Foo<int> { ... }` (parsed as PATH_EXPR with
+        //     GENERIC_ARGS child) → `TypePath::bare("Foo")` + `type_args = [int]`.
         'outer: for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => {
@@ -2051,6 +2087,17 @@ impl LoweringContext {
                     if !segments.is_empty() {
                         type_name = Some(TypePath::new(segments));
                     }
+                    // Also extract explicit generic type args from `Foo<int>` syntax:
+                    // PATH_EXPR contains a GENERIC_ARGS child with TYPE_EXPR children.
+                    type_args = child_node
+                        .children()
+                        .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+                        .into_iter()
+                        .flat_map(|args_node| args_node.children())
+                        .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+                        .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                        .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+                        .collect();
                     break 'outer;
                 }
             }
@@ -2115,6 +2162,7 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Object {
                 type_name,
+                type_args,
                 fields,
                 spreads,
             },
@@ -2739,6 +2787,7 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Call {
                 callee: method_target,
+                type_args: vec![],
                 args: vec![name_expr, lambda_arg, runner_arg],
             },
             span,
@@ -2826,6 +2875,7 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Call {
                 callee: method_target,
+                type_args: vec![],
                 args: vec![name_expr, sub_collector_arg, runner_arg],
             },
             span,

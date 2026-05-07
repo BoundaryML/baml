@@ -10,7 +10,7 @@ use std::{
 
 use bex_project::{BexExternalAdt, BexExternalValue, Handle, MediaKind};
 
-use crate::baml::cffi::BamlHandleType;
+use crate::baml_core::cffi::BamlHandleType;
 
 /// Newtype wrapper around opaque `$rust_type` objects
 /// (`Arc<dyn Any + Send + Sync>`) stored as a handle.

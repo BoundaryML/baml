@@ -358,7 +358,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Check if the current token can start a type expression.
-    /// Valid type starts: Word (type name), string literal, integer/float literal, `LParen` (tuple).
+    /// Valid type starts: Word (type name), string literal, integer/float literal,
+    /// `-` followed by an integer/float literal (negative literal type), `LParen` (tuple).
     fn is_at_type_start(&self) -> bool {
         self.at(TokenKind::Word)
             || self.at(TokenKind::Quote) // string literal type
@@ -366,6 +367,11 @@ impl<'a> Parser<'a> {
             || self.at(TokenKind::IntegerLiteral)
             || self.at(TokenKind::FloatLiteral)
             || self.at(TokenKind::LParen) // tuple/parenthesized type
+            || (self.at(TokenKind::Minus)
+                && matches!(
+                    self.peek(1).map(|t| t.kind),
+                    Some(TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
+                ))
     }
 
     /// Check if a token kind is basic trivia (whitespace/newlines, not comments).
@@ -7439,6 +7445,118 @@ function Demo() -> int {
         assert!(
             text.contains("-1"),
             "expected `-1` inside GENERIC_ARGS, got `{text}`"
+        );
+    }
+
+    #[test]
+    fn class_field_negative_integer_literal_type_with_colon() {
+        // `field: -1` — `is_at_type_start` must accept `Minus` followed by an
+        // integer literal so the class-field gate doesn't reject negative
+        // literal types and fall through to "missing a type annotation".
+        let source = r#"
+class Foo {
+  literal_neg_one: -1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let field = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FIELD)
+            .expect("expected FIELD node");
+        let type_expr = field
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("expected TYPE_EXPR inside FIELD");
+        assert!(
+            type_expr.text().to_string().contains("-1"),
+            "expected field type to contain `-1`, got: {}",
+            type_expr.text()
+        );
+    }
+
+    #[test]
+    fn class_field_negative_integer_literal_type_no_colon() {
+        // BEP-019 colon-less form: `field -1`. Same gate, exercises the path
+        // where `has_colon == false` so the type must start on the same line.
+        let source = r#"
+class Foo {
+  literal_neg_one -1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let field = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FIELD)
+            .expect("expected FIELD node");
+        let type_expr = field
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("expected TYPE_EXPR inside FIELD");
+        assert!(
+            type_expr.text().to_string().contains("-1"),
+            "expected field type to contain `-1`, got: {}",
+            type_expr.text()
+        );
+    }
+
+    #[test]
+    fn class_field_negative_literal_in_union_type() {
+        // `-1 | 0 | 1` in field position — combines the field-start gate with
+        // the union-continuation path inside `parse_type_with`.
+        let source = r#"
+class Foo {
+  bounded: -1 | 0 | 1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let field = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FIELD)
+            .expect("expected FIELD node");
+        let type_expr = field
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("expected TYPE_EXPR inside FIELD");
+        let text = type_expr.text().to_string();
+        assert!(
+            text.contains("-1") && text.contains('0') && text.contains('1'),
+            "expected union to contain -1, 0, 1; got: {text}"
+        );
+    }
+
+    #[test]
+    fn function_parameter_negative_integer_literal_type() {
+        // `(x: -1) -> int` — same gate is consulted by `parse_parameter`.
+        let source = r#"
+function Demo(x: -1) -> int {
+  0
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER)
+            .expect("expected PARAMETER node");
+        let type_expr = param
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("expected TYPE_EXPR inside PARAMETER");
+        assert!(
+            type_expr.text().to_string().contains("-1"),
+            "expected parameter type to contain `-1`, got: {}",
+            type_expr.text()
         );
     }
 

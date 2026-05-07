@@ -307,12 +307,24 @@ impl BexHeap {
 
         for obj in objects.iter_mut() {
             if let Object::Function(func) = obj {
-                // Resolve each constant, converting ObjectIndex to HeapPtr
+                // Resolve each constant, converting ObjectIndex to HeapPtr.
+                // ConstValue::Type is NOT pre-resolved here — it must be
+                // materialised at runtime by the LoadType instruction, which
+                // reads directly from `bytecode.constants`.  We store a Null
+                // placeholder so the resolved_constants vec stays index-aligned.
                 func.bytecode.resolved_constants = func
                     .bytecode
                     .constants
                     .iter()
-                    .map(|cv| cv.to_value(resolve_idx))
+                    .map(|cv| match cv {
+                        bex_vm_types::ConstValue::Type(_) => bex_vm_types::Value::Null,
+                        // ClassWithTypeArgs is NOT pre-resolved: `IsType` reads it
+                        // directly from `constants` at execution time.
+                        bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => {
+                            bex_vm_types::Value::Null
+                        }
+                        other => other.to_value(resolve_idx),
+                    })
                     .collect();
             }
         }

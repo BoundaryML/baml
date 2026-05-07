@@ -41,8 +41,8 @@ use bex_vm_types::{
     ObjectType, PanicClass, StackIndex, UnaryOp, Value, Variant,
     bytecode::{self, BlockNotification},
     types::{
-        BoundMethod, Cell, Closure, Function, FunctionType, Future, FutureType, Instance,
-        PendingFuture, Type,
+        BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, Future, FutureType,
+        Instance, PendingFuture, Type,
     },
 };
 use indexmap::IndexMap;
@@ -59,15 +59,20 @@ use crate::{
 pub const MAX_FRAMES: usize = 256;
 
 /// Bytecode call frame — pushed when entering a bytecode function.
-/// Deliberately Copy so the exec-loop can snapshot/restore cheaply.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct BytecodeFrame {
+#[derive(Clone, Debug)]
+pub struct BytecodeFrame {
     /// Pointer to the running function (or closure) object.
-    pub(crate) function: HeapPtr,
+    pub function: HeapPtr,
     /// Instruction pointer (IP). Points to the next instruction.
-    pub(crate) instruction_ptr: usize,
+    pub instruction_ptr: usize,
     /// Local variables offset in the eval stack.
     pub(crate) locals_offset: StackIndex,
+    /// Resolved type arguments for this call frame.
+    ///
+    /// Populated by the `Call { ntypeargs }` instruction when the callee is
+    /// generic.  Empty for non-generic calls.  Used by the `LoadType`
+    /// instruction to substitute `TypeArgRef(n)` leaves in a `TyTemplate`.
+    pub type_args: Vec<baml_type::Ty>,
     /// Byte offset of the most recently dispatched opcode (compact path).
     /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
     /// up-to-date before each `step()` call.
@@ -88,7 +93,7 @@ impl RootHaver for BytecodeFrame {
 /// Native continuation frame — pushed when a native function yields via
 /// `NativeCallResult::YieldToCall`. Sits below the callback's bytecode
 /// frame on the call stack and is popped when the callback returns.
-pub(crate) struct NativeFrame {
+pub struct NativeFrame {
     /// Pointer to the native function object (for GC roots + stack traces).
     pub(crate) function: HeapPtr,
     /// The continuation to invoke with the callback's return value.
@@ -107,7 +112,7 @@ impl RootHaver for NativeFrame {
 }
 
 /// Call frame — either a bytecode frame or a native continuation frame.
-pub(crate) enum Frame {
+pub enum Frame {
     Bytecode(BytecodeFrame),
     Native(NativeFrame),
 }
@@ -250,7 +255,7 @@ pub struct BexVm {
     /// On each function call we create a new [`Frame`] and push it on this
     /// stack. On each return, we destroy the frame and pop it from the stack
     /// to resume the execution of the previous frame.
-    pub(crate) frames: Vec<Frame>,
+    pub frames: Vec<Frame>,
 
     /// Evaluation stack.
     ///
@@ -901,6 +906,7 @@ impl BexVm {
             function,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
+            type_args: vec![],
             faulting_pc: 0,
         }));
 
@@ -1005,10 +1011,11 @@ impl BexVm {
     /// TODO: Seems to low level for an embedder, provide an API that takes
     /// class name and mapping of field name => value instead.
     pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> Value {
-        Value::Object(
-            self.tlab
-                .alloc(Object::Instance(Instance { class, fields })),
-        )
+        Value::Object(self.tlab.alloc(Object::Instance(Instance {
+            class,
+            class_type_args: vec![],
+            fields,
+        })))
     }
 
     // TODO: Same problem as above. Ideally takes (&str, &str) instead.
@@ -1145,6 +1152,7 @@ impl BexVm {
             function: function_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(locals_offset),
+            type_args: vec![],
             faulting_pc: 0,
         }));
         self.allocate_real_locals_for_frame(function_ptr)?;
@@ -1256,6 +1264,7 @@ impl BexVm {
         let class_ptr = self.error_class_ptrs[class as usize];
         let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
             class: class_ptr,
+            class_type_args: vec![],
             fields,
         }));
         Value::Object(instance_ptr)
@@ -1327,6 +1336,7 @@ impl BexVm {
         let class_ptr = self.panic_class_ptrs[class as usize];
         let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
             class: class_ptr,
+            class_type_args: vec![],
             fields,
         }));
         Value::Object(instance_ptr)
@@ -1544,24 +1554,21 @@ impl BexVm {
     }
 
     /// Prepare a `YieldToCall`-style invocation: if `callee` is a
-    /// `BoundMethod`, insert the receiver at the front of `args` and return
-    /// the inner `Function`'s `HeapPtr`; otherwise return `callee` unchanged.
-    ///
-    /// This ensures that native builtins (e.g. `Array.map`) that call user
-    /// callbacks via `YieldToCall { callee, args }` work correctly with bound
-    /// methods — the receiver is transparently prepended so the arity check in
-    /// `execute_call_from_locals_offset` sees the full argument count.
+    /// `BoundMethod`, insert the receiver at the front of `args`. The returned
+    /// `HeapPtr` is `callee` unchanged — keeping the `BoundMethod` identity so
+    /// that `execute_call_from_locals_offset` can extract the receiver's
+    /// `class_type_args` to seed `frame.type_args` (needed for
+    /// `reflect.type_of<T>()` inside generic methods invoked indirectly).
+    /// `execute_call_from_locals_offset` and `load_function` both unwrap the
+    /// `BoundMethod` to its inner `Function` for dispatch.
     fn resolve_bound_method_callee(&self, callee: HeapPtr, args: &mut Vec<Value>) -> HeapPtr {
         let obj = self.get_object(callee);
         if let Object::BoundMethod(bm) = obj {
             let receiver = bm.receiver;
-            let fn_ptr = bm.function;
             // Prepend receiver so the inner function sees [self, arg1, ..., argN].
             args.insert(0, receiver);
-            fn_ptr
-        } else {
-            callee
         }
+        callee
     }
 
     fn execute_call_from_locals_offset(
@@ -1572,6 +1579,30 @@ impl BexVm {
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
+        // Extract captured_type_args from a Closure callee before we discard
+        // the concrete Closure type in favour of the inner Function.
+        // These are injected into the new BytecodeFrame after it is created.
+        let closure_type_args: Vec<baml_type::Ty> = match self.get_object(callee_ptr) {
+            Object::Closure(c) => c.captured_type_args.clone(),
+            _ => vec![],
+        };
+
+        // For BoundMethod callees, extract the receiver's class_type_args so
+        // they can seed frame.type_args before call-site explicit type args are
+        // appended.  This implements the De Bruijn ordering:
+        //   frame.type_args = receiver.class_type_args ++ explicit_call_site_args
+        // matching enclosing_generic_params() which puts class params first.
+        let bound_method_class_type_args: Vec<baml_type::Ty> = match self.get_object(callee_ptr) {
+            Object::BoundMethod(bm) => match bm.receiver {
+                Value::Object(recv_ptr) => match self.get_object(recv_ptr) {
+                    Object::Instance(inst) => inst.class_type_args.clone(),
+                    _ => vec![],
+                },
+                _ => vec![],
+            },
+            _ => vec![],
+        };
+
         // Resolve the callee: either a plain Function, a Closure, or a BoundMethod wrapping one.
         let callee = match self.get_object(callee_ptr) {
             Object::Function(f) => f,
@@ -1700,10 +1731,30 @@ impl BexVm {
                 };
 
                 // Push the new frame.
+                // Seed frame.type_args from:
+                //  1. BoundMethod callees: the receiver's class_type_args (De
+                //     Bruijn slot 0..n_class_params).  The Call-instruction
+                //     writeback at vm.rs:3619-3629 appends explicit call-site
+                //     type args after these, preserving ordering
+                //     [class_args, fn_args].
+                //  2. Closure callees: captured_type_args (whole-frame snapshot
+                //     taken at MakeClosure time; enclosing_generic_params()
+                //     already widened to class+fn params so the ordering is
+                //     consistent).
+                //  3. Plain Function callees: vec![] (no-op).
+                //
+                // Note: BoundMethod takes priority over Closure; a method can
+                // never be both simultaneously.
+                let initial_type_args = if !bound_method_class_type_args.is_empty() {
+                    bound_method_class_type_args
+                } else {
+                    closure_type_args
+                };
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
                     function: callee_ptr,
                     instruction_ptr: 0,
                     locals_offset,
+                    type_args: initial_type_args,
                     faulting_pc: 0,
                 }));
                 self.allocate_real_locals_for_frame(callee_ptr)?;
@@ -2762,6 +2813,32 @@ impl BexVm {
                         })
                     }
 
+                    // Type comparison: structural equality using baml_type::Ty's derived Eq
+                    (Value::Object(left_index), Value::Object(right_index))
+                        if matches!(self.get_object(left_index), Object::Type(_))
+                            && matches!(self.get_object(right_index), Object::Type(_)) =>
+                    {
+                        let Object::Type(left_ty) = self.get_object(left_index) else {
+                            unreachable!()
+                        };
+                        let Object::Type(right_ty) = self.get_object(right_index) else {
+                            unreachable!()
+                        };
+
+                        Value::Bool(match op {
+                            CmpOp::Eq => left_ty == right_ty,
+                            CmpOp::NotEq => left_ty != right_ty,
+                            _ => {
+                                return Err(VmInternalError::CannotApplyCmpOp {
+                                    left: Type::Object(ObjectType::Type),
+                                    right: Type::Object(ObjectType::Type),
+                                    op,
+                                }
+                                .into());
+                            }
+                        })
+                    }
+
                     _ => Value::Bool(match op {
                         CmpOp::Eq => left == right,
                         CmpOp::NotEq => left != right,
@@ -3255,9 +3332,40 @@ impl BexVm {
                 }
             }
 
-            Instruction::AllocInstance(index) => {
+            Instruction::AllocInstance {
+                class_obj: index,
+                ntypeargs,
+            } => {
                 // Convert compile-time ObjectIndex to HeapPtr
                 let class_ptr = self.idx_to_ptr(index);
+
+                // Pop class-level type args from the stack (sitting below any
+                // field init instructions that follow).  When ntypeargs == 0
+                // this is a no-op for non-generic classes.
+                let class_type_args: Vec<baml_type::Ty> = if ntypeargs > 0 {
+                    let n = ntypeargs as usize;
+                    let base = self
+                        .stack
+                        .len()
+                        .checked_sub(n)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(n))?;
+                    let mut collected = Vec::with_capacity(n);
+                    for slot in base..(base + n) {
+                        let v = self.stack[StackIndex::from_raw(slot)];
+                        let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        collected.push(*ty.clone());
+                    }
+                    for _ in 0..n {
+                        self.stack.remove(base);
+                    }
+                    collected
+                } else {
+                    vec![]
+                };
+
                 let Object::Class(class) = self.get_object(class_ptr) else {
                     return Err(VmInternalError::TypeError {
                         expected: ObjectType::Class.into(),
@@ -3273,6 +3381,7 @@ impl BexVm {
                 // Allocate an instance of the class.
                 let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
                     class: class_ptr,
+                    class_type_args,
                     fields,
                 }));
 
@@ -3539,9 +3648,52 @@ impl BexVm {
                 ))));
             }
 
-            Instruction::Call(callee) => {
+            Instruction::Call { callee, ntypeargs } => {
                 let callee_value = self.globals[callee];
                 let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+
+                // Pop `ntypeargs` Object::Type values from the stack into a Vec<Ty>.
+                // These sit below the regular value args on the stack:
+                //   [..., type_arg_0, ..., type_arg_{n-1}, val_arg_0, ..., val_arg_{m-1}]
+                let ntypeargs_usize = ntypeargs as usize;
+                let type_args: Vec<baml_type::Ty> = if ntypeargs_usize > 0 {
+                    let total_needed = arg_count + ntypeargs_usize;
+                    let base = self
+                        .stack
+                        .len()
+                        .checked_sub(total_needed)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(total_needed))?;
+
+                    // Collect Object::Type values from the stack slots.
+                    let mut collected = Vec::with_capacity(ntypeargs_usize);
+                    for slot in base..(base + ntypeargs_usize) {
+                        let v = self.stack[StackIndex::from_raw(slot)];
+                        let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                        let obj = self.get_object(ptr);
+                        match obj {
+                            Object::Type(ty) => {
+                                collected.push(*ty.clone());
+                            }
+                            other => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Type.into(),
+                                    got: ObjectType::of(other).into(),
+                                }
+                                .into());
+                            }
+                        }
+                    }
+
+                    // Remove the type-arg slots by shifting val-args over them.
+                    for _ in 0..ntypeargs_usize {
+                        self.stack.remove(base);
+                    }
+
+                    collected
+                } else {
+                    vec![]
+                };
+
                 let args_offset = self
                     .stack
                     .len()
@@ -3549,13 +3701,66 @@ impl BexVm {
                     .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?;
                 let locals_offset = StackIndex::from_raw(args_offset);
 
-                return self.execute_call_from_locals_offset(
+                // Snapshot the frame count so we can tell whether
+                // execute_call_from_locals_offset actually pushed a new
+                // bytecode frame (it does for FunctionKind::Bytecode but not
+                // for completed Native calls — Native YieldToCall pushes a
+                // Native frame, also not the target of a type-arg writeback).
+                let frames_before = self.frames.len();
+
+                let result = self.execute_call_from_locals_offset(
                     callee_ptr,
                     locals_offset,
                     arg_count,
                     frame_idx,
                     function,
-                );
+                )?;
+
+                // Append call-site type_args to the newly-pushed bytecode
+                // frame's existing type_args (which were pre-seeded from
+                // Closure::captured_type_args for closure callees, and empty
+                // otherwise).  Skip the writeback unless a new bytecode frame
+                // was actually pushed — for completed Native calls *frame_idx
+                // still points to the caller and we'd clobber its generics.
+                if !type_args.is_empty() && self.frames.len() > frames_before {
+                    if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+                        bf.type_args.extend(type_args);
+                    }
+                }
+
+                if let Some(state) = result {
+                    return Ok(Some(state));
+                }
+            }
+
+            Instruction::LoadType(idx) => {
+                let template = match &function.bytecode.constants[idx] {
+                    ConstValue::Type(t) => t.clone(),
+                    _ => {
+                        return Err(VmInternalError::UnexpectedConstantKind.into());
+                    }
+                };
+
+                let ty = {
+                    let frame_type_args = if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                        bf.type_args.clone()
+                    } else {
+                        vec![]
+                    };
+                    if template.is_fully_concrete() {
+                        // Fast path: no walk needed for plain Concrete leaf.
+                        if let baml_type::TyTemplate::Concrete(t) = &template {
+                            t.clone()
+                        } else {
+                            template.substitute(&frame_type_args)
+                        }
+                    } else {
+                        template.substitute(&frame_type_args)
+                    }
+                };
+
+                let value = self.alloc_type(ty);
+                self.stack.push(value);
             }
 
             Instruction::CallIndirect => {
@@ -3590,7 +3795,6 @@ impl BexVm {
                     );
                     let visible_arity = full_arity.saturating_sub(1);
                     let receiver = bm.receiver;
-                    let fn_ptr = bm.function;
 
                     // Pop the callee (bound_method) off the top.
                     let _popped = self.stack.ensure_pop();
@@ -3608,8 +3812,11 @@ impl BexVm {
                     // Stack: [receiver, arg1, ..., argN] — full_arity items at args_offset.
                     let locals_offset = StackIndex::from_raw(args_offset);
 
+                    // Pass the BoundMethod ptr (not bm.function) so
+                    // execute_call_from_locals_offset can extract the
+                    // receiver's class_type_args to seed frame.type_args.
                     if let Some(state) = self.execute_call_from_locals_offset(
-                        fn_ptr,
+                        callee_ptr,
                         locals_offset,
                         full_arity,
                         frame_idx,
@@ -3819,23 +4026,64 @@ impl BexVm {
 
             Instruction::IsType(const_idx) => {
                 let value = self.stack.ensure_pop();
-                let expected = &function.bytecode.resolved_constants[const_idx];
-                let result = match expected {
-                    Value::Object(class_ptr) => {
-                        // Class identity check: is value an instance of this class?
+                // Read the raw constant so we can handle ClassWithTypeArgs
+                // (which is NOT pre-resolved into resolved_constants).
+                let raw_const = &function.bytecode.constants[const_idx];
+                let result = match raw_const {
+                    ConstValue::ClassWithTypeArgs {
+                        class_obj,
+                        type_args_templates,
+                    } => {
+                        // Parametric class check: verify class identity AND
+                        // that the instance's class_type_args match the
+                        // expected templates (substituted with current
+                        // frame.type_args for TypeArgRef leaves).
+                        let class_ptr = self.idx_to_ptr(*class_obj);
                         match value {
                             Value::Object(val_ptr) => match self.get_object(val_ptr) {
-                                Object::Instance(instance) => instance.class == *class_ptr,
+                                Object::Instance(inst) if inst.class == class_ptr => {
+                                    let frame_type_args =
+                                        if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                                            bf.type_args.clone()
+                                        } else {
+                                            vec![]
+                                        };
+                                    // Resolve each template and compare with
+                                    // the instance's stored class_type_args.
+                                    let expected_args: Vec<baml_type::Ty> = type_args_templates
+                                        .iter()
+                                        .map(|t| t.substitute(&frame_type_args))
+                                        .collect();
+                                    expected_args == inst.class_type_args
+                                }
                                 _ => false,
                             },
                             _ => false,
                         }
                     }
-                    Value::Int(tag) => {
-                        // Type tag check: does value's type tag match?
-                        value_type_tag(&value) == *tag
+                    // Fall through to the pre-resolved path for non-template
+                    // constants (Object ptr for monomorphic classes, Int for
+                    // primitive type tags).
+                    _ => {
+                        let expected = &function.bytecode.resolved_constants[const_idx];
+                        match expected {
+                            Value::Object(class_ptr) => {
+                                // Class identity check: is value an instance of this class?
+                                match value {
+                                    Value::Object(val_ptr) => match self.get_object(val_ptr) {
+                                        Object::Instance(instance) => instance.class == *class_ptr,
+                                        _ => false,
+                                    },
+                                    _ => false,
+                                }
+                            }
+                            Value::Int(tag) => {
+                                // Type tag check: does value's type tag match?
+                                value_type_tag(&value) == *tag
+                            }
+                            _ => false,
+                        }
                     }
-                    _ => false,
                 };
                 self.stack.push(Value::Bool(result));
             }
@@ -3903,25 +4151,49 @@ impl BexVm {
                 self.stack.push(Value::Object(ptr));
             }
 
-            Instruction::MakeClosure(obj_idx) => {
-                // Capture count was pushed onto the stack by a preceding LoadConst.
-                let Value::Int(capture_count) = self.stack.ensure_pop() else {
-                    unreachable!("MakeClosure: capture count must be Int");
-                };
-                // Safety: capture_count is always a small non-negative integer
-                // emitted by the compiler as a LoadConst.
-                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                let capture_count = capture_count as usize;
+            Instruction::MakeClosure {
+                obj_idx,
+                capture_count,
+                ntypeargs,
+            } => {
                 let mut captures = Vec::with_capacity(capture_count);
                 for _ in 0..capture_count {
                     captures.push(self.stack.ensure_pop());
                 }
                 // Captures were pushed left-to-right, popped right-to-left.
                 captures.reverse();
+
+                // Pop type args (pushed before the captures, so they come off
+                // the stack after the captures are popped).
+                let captured_type_args: Vec<baml_type::Ty> = if ntypeargs > 0 {
+                    let mut type_args = Vec::with_capacity(ntypeargs);
+                    for _ in 0..ntypeargs {
+                        let v = self.stack.ensure_pop();
+                        let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                        let obj = self.get_object(ptr);
+                        match obj {
+                            Object::Type(ty) => type_args.push(*ty.clone()),
+                            other => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Type.into(),
+                                    got: ObjectType::of(other).into(),
+                                }
+                                .into());
+                            }
+                        }
+                    }
+                    // Type args were pushed left-to-right, popped right-to-left.
+                    type_args.reverse();
+                    type_args
+                } else {
+                    vec![]
+                };
+
                 let function_ptr = self.idx_to_ptr(obj_idx);
                 let closure = Object::Closure(Closure {
                     function: function_ptr,
                     captures,
+                    captured_type_args,
                 });
                 let ptr = self.tlab.alloc(closure);
                 self.stack.push(Value::Object(ptr));
@@ -4148,8 +4420,6 @@ impl BexVm {
                     source_location,
                 }));
             }
-
-            Instruction::_Pad(..) => unsafe { std::hint::unreachable_unchecked() },
         }
 
         Ok(None)
@@ -4262,6 +4532,31 @@ impl BexVm {
                         return Err(VmInternalError::CannotApplyCmpOp {
                             left: bex_vm_types::types::Type::Object(ObjectType::Variant),
                             right: bex_vm_types::types::Type::Object(ObjectType::Variant),
+                            op,
+                        }
+                        .into());
+                    }
+                })
+            }
+
+            // Type comparison: structural equality using baml_type::Ty's derived Eq
+            (Value::Object(li), Value::Object(ri))
+                if matches!(self.get_object(li), Object::Type(_))
+                    && matches!(self.get_object(ri), Object::Type(_)) =>
+            {
+                let Object::Type(lt) = self.get_object(li) else {
+                    unreachable!()
+                };
+                let Object::Type(rt) = self.get_object(ri) else {
+                    unreachable!()
+                };
+                Value::Bool(match op {
+                    CmpOp::Eq => lt == rt,
+                    CmpOp::NotEq => lt != rt,
+                    _ => {
+                        return Err(VmInternalError::CannotApplyCmpOp {
+                            left: bex_vm_types::types::Type::Object(ObjectType::Type),
+                            right: bex_vm_types::types::Type::Object(ObjectType::Type),
                             op,
                         }
                         .into());
@@ -4611,6 +4906,16 @@ impl BexVm {
         }
 
         #[inline(always)]
+        unsafe fn read_u16_unchecked(code: &[u8], pc: &mut usize) -> u16 {
+            unsafe {
+                let p = *pc;
+                let bytes = [*code.get_unchecked(p), *code.get_unchecked(p + 1)];
+                *pc = p + 2;
+                u16::from_le_bytes(bytes)
+            }
+        }
+
+        #[inline(always)]
         unsafe fn read_i32_unchecked(code: &[u8], pc: &mut usize) -> i32 {
             unsafe {
                 let p = *pc;
@@ -4853,7 +5158,34 @@ impl BexVm {
 
                 OpCode::AllocInstance => {
                     let raw = { read_u32_unchecked(code, pc) };
+                    let ntypeargs = { read_u16_unchecked(code, pc) } as usize;
                     let class_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
+
+                    // Pop class-level type args from the stack (sitting below any
+                    // field init instructions that follow).
+                    let class_type_args: Vec<baml_type::Ty> = if ntypeargs > 0 {
+                        let base = self
+                            .stack
+                            .len()
+                            .checked_sub(ntypeargs)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(ntypeargs))?;
+                        let mut collected = Vec::with_capacity(ntypeargs);
+                        for slot in base..(base + ntypeargs) {
+                            let v = self.stack[StackIndex::from_raw(slot)];
+                            let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                            let Object::Type(ty) = self.get_object(ptr) else {
+                                unreachable!("as_object_ptr guarantees Type variant");
+                            };
+                            collected.push(*ty.clone());
+                        }
+                        for _ in 0..ntypeargs {
+                            self.stack.remove(base);
+                        }
+                        collected
+                    } else {
+                        vec![]
+                    };
+
                     let Object::Class(class) = self.get_object(class_ptr) else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Class.into(),
@@ -4867,6 +5199,7 @@ impl BexVm {
                         self.tlab
                             .alloc(Object::Instance(bex_vm_types::types::Instance {
                                 class: class_ptr,
+                                class_type_args,
                                 fields,
                             }));
                     self.stack.push(Value::Object(instance_ptr));
@@ -5084,9 +5417,37 @@ impl BexVm {
                 // ── Call ──────────────────────────────────────────────────────
                 OpCode::Call => {
                     let raw = read_u32_unchecked(code, pc);
+                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
                     let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let callee_value = self.globals[callee_global];
                     let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+
+                    // Pop `ntypeargs` Object::Type values from the stack into a Vec<Ty>.
+                    // These sit below the regular value args on the stack.
+                    let type_args: Vec<baml_type::Ty> = if ntypeargs > 0 {
+                        let total_needed = arg_count + ntypeargs;
+                        let base = self
+                            .stack
+                            .len()
+                            .checked_sub(total_needed)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(total_needed))?;
+                        let mut collected = Vec::with_capacity(ntypeargs);
+                        for slot in base..(base + ntypeargs) {
+                            let v = self.stack[StackIndex::from_raw(slot)];
+                            let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                            let Object::Type(ty) = self.get_object(ptr) else {
+                                unreachable!("as_object_ptr guarantees Type variant");
+                            };
+                            collected.push(*ty.clone());
+                        }
+                        for _ in 0..ntypeargs {
+                            self.stack.remove(base);
+                        }
+                        collected
+                    } else {
+                        vec![]
+                    };
+
                     let args_offset = self
                         .stack
                         .len()
@@ -5098,13 +5459,21 @@ impl BexVm {
                         unsafe { std::hint::unreachable_unchecked() }
                     };
                     bf.instruction_ptr = *pc;
-                    return self.execute_call_from_locals_offset(
+
+                    let frames_before = self.frames.len();
+                    let result = self.execute_call_from_locals_offset(
                         callee_ptr,
                         locals_offset,
                         arg_count,
                         frame_idx,
                         function,
                     );
+                    if !type_args.is_empty() && self.frames.len() > frames_before {
+                        if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+                            bf.type_args.extend(type_args);
+                        }
+                    }
+                    return result;
                 }
 
                 // ── CallIndirect ──────────────────────────────────────────────
@@ -5353,17 +5722,50 @@ impl BexVm {
                 OpCode::IsType => {
                     let const_idx = { read_u32_unchecked(code, pc) as usize };
                     let value = self.stack.ensure_pop();
-                    let expected = &function.bytecode.resolved_constants[const_idx];
-                    let result = match expected {
-                        Value::Object(class_ptr) => match value {
-                            Value::Object(val_ptr) => match self.get_object(val_ptr) {
-                                Object::Instance(instance) => instance.class == *class_ptr,
+                    // Inspect the raw constant first to handle ClassWithTypeArgs
+                    // (parametric class identity check). Other kinds fall through
+                    // to the pre-resolved Object/Int path.
+                    let raw_const = &function.bytecode.constants[const_idx];
+                    let result = match raw_const {
+                        ConstValue::ClassWithTypeArgs {
+                            class_obj,
+                            type_args_templates,
+                        } => {
+                            let class_ptr = self.idx_to_ptr(*class_obj);
+                            match value {
+                                Value::Object(val_ptr) => match self.get_object(val_ptr) {
+                                    Object::Instance(inst) if inst.class == class_ptr => {
+                                        let frame_type_args =
+                                            if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                                                bf.type_args.clone()
+                                            } else {
+                                                vec![]
+                                            };
+                                        let expected_args: Vec<baml_type::Ty> = type_args_templates
+                                            .iter()
+                                            .map(|t| t.substitute(&frame_type_args))
+                                            .collect();
+                                        expected_args == inst.class_type_args
+                                    }
+                                    _ => false,
+                                },
                                 _ => false,
-                            },
-                            _ => false,
-                        },
-                        Value::Int(tag) => value_type_tag(&value) == *tag,
-                        _ => false,
+                            }
+                        }
+                        _ => {
+                            let expected = &function.bytecode.resolved_constants[const_idx];
+                            match expected {
+                                Value::Object(class_ptr) => match value {
+                                    Value::Object(val_ptr) => match self.get_object(val_ptr) {
+                                        Object::Instance(instance) => instance.class == *class_ptr,
+                                        _ => false,
+                                    },
+                                    _ => false,
+                                },
+                                Value::Int(tag) => value_type_tag(&value) == *tag,
+                                _ => false,
+                            }
+                        }
                     };
                     self.stack.push(Value::Bool(result));
                 }
@@ -5439,24 +5841,71 @@ impl BexVm {
                 // ── MakeClosure ───────────────────────────────────────────────
                 OpCode::MakeClosure => {
                     let obj_idx_raw = { read_u32_unchecked(code, pc) as usize };
-                    // Capture count is on the stack (pushed by preceding LoadConst).
-                    let Value::Int(capture_count) = self.stack.ensure_pop() else {
-                        unreachable!("MakeClosure: capture count must be Int");
-                    };
-                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                    let capture_count = capture_count as usize;
+                    let capture_count = { read_u16_unchecked(code, pc) as usize };
+                    let ntypeargs = { read_u16_unchecked(code, pc) as usize };
                     let mut captures = Vec::with_capacity(capture_count);
                     for _ in 0..capture_count {
                         captures.push(self.stack.ensure_pop());
                     }
                     captures.reverse();
+
+                    // Pop type args (pushed before the captures).
+                    let captured_type_args: Vec<baml_type::Ty> = if ntypeargs > 0 {
+                        let mut type_args = Vec::with_capacity(ntypeargs);
+                        for _ in 0..ntypeargs {
+                            let v = self.stack.ensure_pop();
+                            let ptr = self.as_object_ptr(&v, ObjectType::Type)?;
+                            let Object::Type(ty) = self.get_object(ptr) else {
+                                unreachable!("as_object_ptr guarantees Type variant");
+                            };
+                            type_args.push(*ty.clone());
+                        }
+                        type_args.reverse();
+                        type_args
+                    } else {
+                        vec![]
+                    };
+
                     let function_ptr = self.idx_to_ptr(ObjectIndex::from_raw(obj_idx_raw));
                     let closure = Object::Closure(Closure {
                         function: function_ptr,
                         captures,
+                        captured_type_args,
                     });
                     let ptr = self.tlab.alloc(closure);
                     self.stack.push(Value::Object(ptr));
+                }
+
+                // ── LoadType ──────────────────────────────────────────────────
+                OpCode::LoadType => {
+                    let idx = { read_u32_unchecked(code, pc) as usize };
+                    let template = match &function.bytecode.constants[idx] {
+                        ConstValue::Type(t) => t.clone(),
+                        _ => {
+                            return Err(VmInternalError::UnexpectedConstantKind.into());
+                        }
+                    };
+
+                    let ty = {
+                        let frame_type_args = if let Frame::Bytecode(bf) = &self.frames[*frame_idx]
+                        {
+                            bf.type_args.clone()
+                        } else {
+                            vec![]
+                        };
+                        if template.is_fully_concrete() {
+                            if let baml_type::TyTemplate::Concrete(t) = &template {
+                                t.clone()
+                            } else {
+                                template.substitute(&frame_type_args)
+                            }
+                        } else {
+                            template.substitute(&frame_type_args)
+                        }
+                    };
+
+                    let value = self.alloc_type(ty);
+                    self.stack.push(value);
                 }
 
                 // ── MakeBoundMethod ───────────────────────────────────────────

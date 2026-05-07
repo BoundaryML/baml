@@ -111,7 +111,7 @@ fn main() {
 
     // 6. pyproject.toml + test.sh + test.ps1. Test runner does
     //    `uv sync` then `maturin develop` against bridge_python's
-    //    Cargo.toml, installing the real `baml.baml_core` (PyO3
+    //    Cargo.toml, installing the real `baml_core` (PyO3
     //    extension) into the project venv. `[tool.uv] package =
     //    false` keeps uv from trying to install this directory as
     //    a wheel; the empty `dev` group satisfies maturin's
@@ -121,7 +121,7 @@ name = "baml-test-basic-type-shapes"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-    "baml",
+    "baml_core",
     "pydantic>=2",
     "typing-extensions",
     "pytest>=7",
@@ -136,7 +136,7 @@ dev = []
 package = false
 
 [tool.uv.sources]
-baml = { path = "../../../../languages/python", editable = true }
+baml_core = { path = "../../../../languages/python", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["."]
@@ -162,7 +162,7 @@ if ! command -v uv &> /dev/null; then
     echo "Error: uv is not installed"
     exit 1
 fi
-echo "==> uv sync (installs baml + deps, builds Rust extension if needed)"
+echo "==> uv sync (installs baml_core + deps, builds Rust extension if needed)"
 uv sync
 echo "==> ruff check"
 uv run ruff check --config pyproject.toml baml_sdk

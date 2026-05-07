@@ -294,7 +294,7 @@ class user.SameNameOuter$stream {
   other: null | user.SameNameInner$stream
 }
 class user.Box$stream {
-  value: null | unknown
+  value: null | T
 }
 class user.OptionalPerson$stream {
   age: null | int

@@ -663,7 +663,11 @@ mod tests {
 
     /// Allocates an instance whose fields point to the given objects.
     fn instance(class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
-        heap_alloc(Object::Instance(Instance { class, fields }))
+        heap_alloc(Object::Instance(Instance {
+            class,
+            class_type_args: Vec::new(),
+            fields,
+        }))
     }
 
     #[test]

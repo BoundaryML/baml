@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use baml_compiler2_mir::{
     AggregateKind, BinOp, Constant, IndexKind, Local, Operand, Place, Rvalue, UnaryOp,
 };
-use baml_type::Ty;
+use baml_type::TyTemplate;
 
 use crate::analysis::{LocalClassification, LocalDefUse};
 
@@ -40,7 +40,8 @@ pub(crate) trait PullSink {
     fn alloc_uint8array(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
     fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error>;
 
-    fn alloc_class_instance(&mut self, class_name: &str) -> Result<(), Self::Error>;
+    fn alloc_class_instance(&mut self, class_name: &str, ntypeargs: u16)
+    -> Result<(), Self::Error>;
     fn init_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error>;
 
     fn alloc_enum_variant(&mut self, enum_name: &str, variant: &str) -> Result<(), Self::Error>;
@@ -49,8 +50,30 @@ pub(crate) trait PullSink {
     fn type_tag(&mut self) -> Result<(), Self::Error>;
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error>;
-    fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error>;
+    fn is_type(&mut self, ty_template: &TyTemplate) -> Result<(), Self::Error>;
+    /// Materialize an `Object::Type` from a `TyTemplate` constant.
+    /// Emits `Instruction::LoadType(const_idx)` in the bytecode emitter.
+    fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error>;
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
+
+    /// Same as `make_closure` but with an additional `ntypeargs` count for
+    /// the type arguments pushed before the captures.  Implementors that emit
+    /// typed closures must override this to consume the type-arg slots; the
+    /// default impl falls back to `make_closure` and asserts in debug builds
+    /// so a sink that forgets to override it is caught immediately rather
+    /// than silently modeling the wrong stack shape.
+    fn make_closure_with_type_args(
+        &mut self,
+        lambda_idx: usize,
+        capture_count: usize,
+        ntypeargs: usize,
+    ) -> Result<(), Self::Error> {
+        debug_assert_eq!(
+            ntypeargs, 0,
+            "PullSink::make_closure_with_type_args must be overridden for typed closures"
+        );
+        self.make_closure(lambda_idx, capture_count)
+    }
 
     /// Load a captured variable from the current closure's captures array.
     /// Emits `LoadCapture(idx)` in the bytecode emitter.
@@ -346,8 +369,18 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
                 }
                 sink.alloc_array(fields.len())
             }
-            AggregateKind::Class(class_name) => {
-                sink.alloc_class_instance(class_name)?;
+            AggregateKind::Class {
+                name: class_name,
+                type_arg_templates,
+            } => {
+                // Emit one LoadType per class-level type arg (before AllocInstance
+                // so the VM can pop them from the stack).
+                let ntypeargs = u16::try_from(type_arg_templates.len())
+                    .expect("type_arg_templates count fits in u16");
+                for template in type_arg_templates {
+                    sink.load_type(template)?;
+                }
+                sink.alloc_class_instance(class_name, ntypeargs)?;
                 for (field_idx, field_operand) in fields.iter().enumerate() {
                     let name = sink.class_field_name(class_name, field_idx);
                     walk_operand_pull(sink, field_operand)?;
@@ -368,22 +401,31 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             sink.type_tag()
         }
         Rvalue::Len(place) => sink.len_of_place(place),
-        Rvalue::IsType { operand, ty } => {
+        Rvalue::IsType {
+            operand,
+            ty_template,
+        } => {
             walk_operand_pull(sink, operand)?;
-            sink.is_type(ty)
+            sink.is_type(ty_template)
         }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
+            type_arg_templates,
         } => {
+            // Push type-arg templates first (they sit below the captures on the stack).
+            for template in type_arg_templates {
+                sink.load_type(template)?;
+            }
             for capture in captures {
                 walk_operand_pull(sink, capture)?;
             }
-            sink.make_closure(*lambda_idx, captures.len())
+            sink.make_closure_with_type_args(*lambda_idx, captures.len(), type_arg_templates.len())
         }
         Rvalue::MakeBoundMethod { .. } => {
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("MakeBoundMethod must be handled in emit_rvalue_pull")
         }
+        Rvalue::LoadType(template) => sink.load_type(template),
     }
 }

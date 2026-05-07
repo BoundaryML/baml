@@ -134,11 +134,12 @@ impl BamlRuntime {
 
 /// Decode protobuf-encoded function arguments into `BexArgs`.
 fn decode_args(args_proto: &[u8], function_name: &str) -> napi::Result<bex_project::BexArgs> {
-    let args = bridge_ctypes::baml::cffi::CallFunctionArgs::decode(args_proto).map_err(|e| {
-        invalid_argument_error(format!(
-            "Failed to decode arguments for function '{function_name}': {e}"
-        ))
-    })?;
+    let args =
+        bridge_ctypes::baml_core::cffi::CallFunctionArgs::decode(args_proto).map_err(|e| {
+            invalid_argument_error(format!(
+                "Failed to decode arguments for function '{function_name}': {e}"
+            ))
+        })?;
 
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE).map_err(|e| {
         invalid_argument_error(format!(

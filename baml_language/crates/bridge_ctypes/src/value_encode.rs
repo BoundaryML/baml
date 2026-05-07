@@ -4,7 +4,7 @@ use baml_type::Literal;
 use bex_project::{BexExternalAdt, BexExternalValue, Ty};
 
 use crate::{
-    baml::cffi::{
+    baml_core::cffi::{
         BamlHandle, BamlOutboundMapEntry, BamlOutboundValue, BamlTy, BamlTyBool, BamlTyFloat,
         BamlTyInt, BamlTyList, BamlTyLiteral, BamlTyMap, BamlTyMedia, BamlTyName, BamlTyNull,
         BamlTyOptional, BamlTyString, BamlTyUint8Array, BamlTyUnionVariant, BamlTyUnknown,
@@ -151,7 +151,7 @@ pub fn external_to_baml_value(
 }
 
 fn literal_to_field_type_literal(lit: &Literal) -> BamlTyLiteral {
-    use crate::baml::cffi::{
+    use crate::baml_core::cffi::{
         BamlLiteralBool, BamlLiteralInt, BamlLiteralString,
         baml_ty_literal::Literal as LiteralOneof,
     };
@@ -166,8 +166,8 @@ fn literal_to_field_type_literal(lit: &Literal) -> BamlTyLiteral {
     }
 }
 
-fn media_kind_to_proto_enum(kind: bex_project::MediaKind) -> crate::baml::cffi::MediaTypeEnum {
-    use crate::baml::cffi::MediaTypeEnum as E;
+fn media_kind_to_proto_enum(kind: bex_project::MediaKind) -> crate::baml_core::cffi::MediaTypeEnum {
+    use crate::baml_core::cffi::MediaTypeEnum as E;
     match kind {
         bex_project::MediaKind::Image => E::Image,
         bex_project::MediaKind::Audio => E::Audio,
@@ -177,8 +177,10 @@ fn media_kind_to_proto_enum(kind: bex_project::MediaKind) -> crate::baml::cffi::
     }
 }
 
-fn bex_media_to_proto_media(media: &bex_project::MediaValue) -> crate::baml::cffi::BamlValueMedia {
-    use crate::baml::cffi::{BamlValueMedia, baml_value_media::Value as BamlValueMediaValue};
+fn bex_media_to_proto_media(
+    media: &bex_project::MediaValue,
+) -> crate::baml_core::cffi::BamlValueMedia {
+    use crate::baml_core::cffi::{BamlValueMedia, baml_value_media::Value as BamlValueMediaValue};
     BamlValueMedia {
         media: media_kind_to_proto_enum(media.kind).into(),
         mime_type: media.mime_type(),
@@ -195,21 +197,21 @@ fn bex_media_to_proto_media(media: &bex_project::MediaValue) -> crate::baml::cff
 /// Adapter so we can use `.map(arc_prompt_ast_to_proto)` instead of a closure (PR review).
 fn arc_prompt_ast_to_proto(
     p: &std::sync::Arc<bex_project::PromptAst>,
-) -> crate::baml::cffi::BamlValuePromptAst {
+) -> crate::baml_core::cffi::BamlValuePromptAst {
     bex_prompt_ast_to_proto_prompt_ast(p.as_ref())
 }
 
 /// Adapter so we can use `.map(arc_prompt_ast_simple_to_proto)` instead of a closure (PR review).
 fn arc_prompt_ast_simple_to_proto(
     s: &std::sync::Arc<bex_project::PromptAstSimple>,
-) -> crate::baml::cffi::BamlValuePromptAstSimple {
+) -> crate::baml_core::cffi::BamlValuePromptAstSimple {
     bex_prompt_ast_simple_to_proto_prompt_ast_simple(s.as_ref())
 }
 
 fn bex_prompt_ast_to_proto_prompt_ast(
     prompt_ast: &bex_project::PromptAst,
-) -> crate::baml::cffi::BamlValuePromptAst {
-    use crate::baml::cffi::{
+) -> crate::baml_core::cffi::BamlValuePromptAst {
+    use crate::baml_core::cffi::{
         BamlValuePromptAst, BamlValuePromptAstMessage, BamlValuePromptAstMultiple,
         baml_value_prompt_ast::Value as BamlValuePromptAstValue,
     };
@@ -238,8 +240,8 @@ fn bex_prompt_ast_to_proto_prompt_ast(
 
 fn bex_prompt_ast_simple_to_proto_prompt_ast_simple(
     simple_prompt_ast: &bex_project::PromptAstSimple,
-) -> crate::baml::cffi::BamlValuePromptAstSimple {
-    use crate::baml::cffi::{
+) -> crate::baml_core::cffi::BamlValuePromptAstSimple {
+    use crate::baml_core::cffi::{
         BamlValuePromptAstSimple, BamlValuePromptAstSimpleMultiple,
         baml_value_prompt_ast_simple::Value as BamlValuePromptAstSimpleValue,
     };
@@ -279,14 +281,14 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
             key_type: Some(Box::new(ty_to_field_type(key))),
             value_type: Some(Box::new(ty_to_field_type(value))),
         }))),
-        Ty::Class(tn, _) => Some(FieldType::ClassType(crate::baml::cffi::BamlTyClass {
+        Ty::Class(tn, _, _) => Some(FieldType::ClassType(crate::baml_core::cffi::BamlTyClass {
             name: Some(BamlTyName {
                 name: tn.display_name.to_string(),
                 generic_args: vec![],
             }),
         })),
         Ty::EnumVariant(tn, ..) | Ty::Enum(tn, _) => {
-            Some(FieldType::EnumType(crate::baml::cffi::BamlTyEnum {
+            Some(FieldType::EnumType(crate::baml_core::cffi::BamlTyEnum {
                 name: tn.display_name.to_string(),
             }))
         }
@@ -326,7 +328,7 @@ mod tests {
     use bex_project::{BexExternalValue, MediaContent, MediaValue, PromptAst, PromptAstSimple};
 
     use super::*;
-    use crate::baml::cffi::{BamlHandleType, baml_outbound_value::Value as BamlValueVariant};
+    use crate::baml_core::cffi::{BamlHandleType, baml_outbound_value::Value as BamlValueVariant};
 
     fn extract_handle(out: BamlOutboundValue) -> BamlHandle {
         match out.value {

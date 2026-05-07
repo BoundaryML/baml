@@ -87,6 +87,8 @@ enum StructuralTy {
     // Special
     Never,
     Void,
+    /// The `type` metatype keyword — opaque, only compatible with itself.
+    Type,
     /// The explicit `unknown` keyword — top type (supertype of everything).
     BuiltinUnknown,
     Unknown,
@@ -130,6 +132,11 @@ impl StructuralTy {
 
         // Void is only compatible with itself (handled by reflexivity above)
         if matches!(self, StructuralTy::Void) || matches!(other, StructuralTy::Void) {
+            return false;
+        }
+
+        // Type is only compatible with itself (handled by reflexivity above)
+        if matches!(self, StructuralTy::Type) || matches!(other, StructuralTy::Type) {
             return false;
         }
 
@@ -426,8 +433,9 @@ fn normalize_impl(
         // `$rust_type` — opaque Rust-managed state. Treated as Unknown
         // in the structural type system (cannot be constructed or destructured
         // by user code).
-        // `type` — the BAML metatype keyword. Also opaque in the structural system.
-        Ty::RustType { .. } | Ty::Type { .. } => StructuralTy::Unknown,
+        Ty::RustType { .. } => StructuralTy::Unknown,
+        // `type` — the BAML metatype keyword. Strict: only compatible with `type`.
+        Ty::Type { .. } => StructuralTy::Type,
     }
 }
 

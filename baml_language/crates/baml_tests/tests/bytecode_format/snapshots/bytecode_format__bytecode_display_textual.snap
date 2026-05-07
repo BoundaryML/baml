@@ -737,8 +737,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
     make_cell
     store_var ?1
     load_var body
-    load_const ?
-    make_closure .<lambda(run_test, 0)>
+    make_closure .<lambda(run_test, 0)>, 1
     store_var base_run
     load_var runner
     load_const null

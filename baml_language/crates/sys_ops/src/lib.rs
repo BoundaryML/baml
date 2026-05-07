@@ -258,7 +258,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         response: String,
-        type_def: baml_type::Ty,
+        type_arg_0: baml_type::Ty,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = match convert_io_primitive_client(&client) {
@@ -266,7 +266,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
             Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
         };
         SysOpOutput::Ready(
-            sys_llm::execute_parse_response_from_owned(&old_client, &response, &type_def, ctx)
+            sys_llm::execute_parse_response_from_owned(&old_client, &response, &type_arg_0, ctx)
                 .map(bex_external_types::AsBexExternalValue::into_bex_external_value)
                 .map_err(OpErrorKind::from),
         )
@@ -608,6 +608,8 @@ impl<T> io::IoNamespaceLlm for T {
         _call_id: CallId,
         json: String,
         cache: io::owned::llm::StreamCache,
+        _type_arg_0: baml_type::Ty,
+        _type_arg_1: baml_type::Ty,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
@@ -626,6 +628,8 @@ impl<T> io::IoNamespaceLlm for T {
         _call_id: CallId,
         json: String,
         cache: io::owned::llm::StreamCache,
+        _type_arg_0: baml_type::Ty,
+        _type_arg_1: baml_type::Ty,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {

@@ -2,8 +2,10 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
-    alloc_instance user.llm.openai.Outer
-    alloc_instance user.llm.openai.Box
+    load_type string
+    alloc_instance<1> user.llm.openai.Outer
+    load_type string
+    alloc_instance<1> user.llm.openai.Box
     load_const "done"
     init_field .value
     init_field .inner
@@ -14,8 +16,10 @@ function user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
 }
 
 function user.DeepGenericDestructureQualifiedLet() -> int {
-    alloc_instance user.llm.openai.Outer
-    alloc_instance user.llm.openai.Box
+    load_type int
+    alloc_instance<1> user.llm.openai.Outer
+    load_type int
+    alloc_instance<1> user.llm.openai.Box
     load_const 52
     init_field .value
     init_field .inner
@@ -123,7 +127,8 @@ function user.DestructureQualifiedMatch() -> int {
 }
 
 function user.GenericDestructureNamespaceQualifiedLet() -> int {
-    alloc_instance user.llm.openai.Box
+    load_type string
+    alloc_instance<1> user.llm.openai.Box
     load_const "ok"
     init_field .value
     load_field .value
@@ -132,7 +137,8 @@ function user.GenericDestructureNamespaceQualifiedLet() -> int {
 }
 
 function user.GenericDestructureQualifiedLet() -> int {
-    alloc_instance user.llm.openai.Box
+    load_type int
+    alloc_instance<1> user.llm.openai.Box
     load_const 49
     init_field .value
     load_field .value
@@ -145,7 +151,7 @@ function user.GenericTypePatternNamespaceQualifiedMatch() -> int {
     init_field .0
     store_var boxed
     load_var boxed
-    is_type llm.openai.Box
+    is_type llm.openai.Box<...>
     pop_jump_if_false L0
     load_var boxed
     load_field .0
@@ -155,7 +161,7 @@ function user.GenericTypePatternNamespaceQualifiedMatch() -> int {
 
   L0:
     load_var boxed
-    is_type llm.openai.Box
+    is_type llm.openai.Box<...>
     pop_jump_if_false L2
     load_var boxed
     load_field .0
@@ -177,7 +183,7 @@ function user.GenericTypePatternQualifiedMatch() -> int {
     init_field .0
     store_var boxed
     load_var boxed
-    is_type llm.openai.Box
+    is_type llm.openai.Box<...>
     pop_jump_if_false L0
     load_var boxed
     load_field .0
@@ -187,7 +193,7 @@ function user.GenericTypePatternQualifiedMatch() -> int {
 
   L0:
     load_var boxed
-    is_type llm.openai.Box
+    is_type llm.openai.Box<...>
     pop_jump_if_false L2
     load_var boxed
     load_field .0

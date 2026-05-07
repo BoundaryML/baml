@@ -87,15 +87,13 @@ function user.call_with_callback(runner: ((int) -> int throws never) -> int thro
     load_var runner
     is_type ((string) -> int throws never) -> int throws never
     pop_jump_if_false L2
-    load_const ?
-    make_closure .<lambda(call_with_callback, 1)>
+    make_closure .<lambda(call_with_callback, 1)>, 0
     load_var runner
     call_indirect
     jump L2
 
   L1:
-    load_const ?
-    make_closure .<lambda(call_with_callback, 0)>
+    make_closure .<lambda(call_with_callback, 0)>, 0
     load_var runner
     call_indirect
 
@@ -468,8 +466,7 @@ function user.int_widens_to_union(v: int | string) -> int {
 
 function user.let_fn_return_widen() -> int | string {
     load_const 0
-    load_const ?
-    make_closure .<lambda(let_fn_return_widen, 0)>
+    make_closure .<lambda(let_fn_return_widen, 0)>, 0
     call_indirect
     return
 }

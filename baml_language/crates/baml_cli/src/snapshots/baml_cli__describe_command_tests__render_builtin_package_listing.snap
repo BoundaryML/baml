@@ -7,6 +7,7 @@ class            Map                              <builtin>/baml/containers.baml
 function         deep_copy                        <builtin>/baml/core.baml:2
 function         deep_equals                      <builtin>/baml/core.baml:7
 class            String                           <builtin>/baml/string.baml:1
+class            TypeValue                        <builtin>/baml/type_class.baml:9
 class            Uint8Array                       <builtin>/baml/uint8array.baml:1
 function         env.get                          <builtin>/baml/ns_env/env.baml:1
 function         env.get_or_panic                 <builtin>/baml/ns_env/env.baml:5
@@ -68,12 +69,12 @@ class            llm.StreamAccumulator            <builtin>/baml/ns_llm/llm_type
 class            llm.StreamCache                  <builtin>/baml/ns_llm/llm_types.baml:456
 class            llm.Stream                       <builtin>/baml/ns_llm/llm_types.baml:472
 class            llm.PrimitiveClient              <builtin>/baml/ns_llm/llm_types.baml:537
-function         llm.from_shorthand               <builtin>/baml/ns_llm/llm_types.baml:594
-function         llm.get_jinja_template           <builtin>/baml/ns_llm/llm_types.baml:600
-function         llm.get_return_type              <builtin>/baml/ns_llm/llm_types.baml:604
-function         llm.get_stream_return_type       <builtin>/baml/ns_llm/llm_types.baml:613
-function         llm.__sap_parse_final            <builtin>/baml/ns_llm/llm_types.baml:618
-function         llm.__sap_parse_partial          <builtin>/baml/ns_llm/llm_types.baml:623
+function         llm.from_shorthand               <builtin>/baml/ns_llm/llm_types.baml:597
+function         llm.get_jinja_template           <builtin>/baml/ns_llm/llm_types.baml:603
+function         llm.get_return_type              <builtin>/baml/ns_llm/llm_types.baml:607
+function         llm.get_stream_return_type       <builtin>/baml/ns_llm/llm_types.baml:616
+function         llm.__sap_parse_final            <builtin>/baml/ns_llm/llm_types.baml:621
+function         llm.__sap_parse_partial          <builtin>/baml/ns_llm/llm_types.baml:626
 function         math.trunc                       <builtin>/baml/ns_math/math.baml:1
 class            media.Pdf                        <builtin>/baml/ns_media/media.baml:1
 class            media.Audio                      <builtin>/baml/ns_media/media.baml:37

@@ -6,10 +6,12 @@ fn user.CommentAfterArrow() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: map<string, unknown>
+    let _2: type
 
     bb0: {
         _1 = {  };
-        _0 = call const fn baml.llm.call_llm_function(const fn user.TestClient, const "CommentAfterArrow", copy _1) -> [bb1];
+        _2 = load_type(string);
+        _0 = call const fn baml.llm.call_llm_function<copy _2>(const fn user.TestClient, const "CommentAfterArrow", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -82,10 +84,12 @@ fn user.FunctionWithComments(a: string, b: int) -> string {
     let _1: string // a // param
     let _2: int // b // param
     let _3: map<string, unknown>
+    let _4: type
 
     bb0: {
         _3 = { const "a": copy _1, const "b": copy _2 };
-        _0 = call const fn baml.llm.call_llm_function(const fn user.TestClient, const "FunctionWithComments", copy _3) -> [bb1];
+        _4 = load_type(string);
+        _0 = call const fn baml.llm.call_llm_function<copy _4>(const fn user.TestClient, const "FunctionWithComments", copy _3) -> [bb1];
     }
 
     bb1: {

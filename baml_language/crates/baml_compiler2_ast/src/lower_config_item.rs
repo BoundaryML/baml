@@ -80,6 +80,7 @@ pub(crate) fn lower_config_value(
         let arg = alloc(Expr::Literal(Literal::String(var_name.to_string())));
         return alloc(Expr::Call {
             callee,
+            type_args: vec![],
             args: vec![arg],
         });
     }

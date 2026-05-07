@@ -16,11 +16,10 @@ function $init_test() -> null {
     return
 }
 
-function user.$init_test_25(registry: testing.TestCollector) -> null {
+function user.$init_test_27(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "test"
-    load_const ?
-    make_closure .<lambda($init_test_25, 0)>
+    make_closure .<lambda($init_test_27, 0)>, 0
     load_const null
     call testing.TestCollector.register_test_set
     pop 1
@@ -29,6 +28,7 @@ function user.$init_test_25(registry: testing.TestCollector) -> null {
 }
 
 function user.ClassifySentiment(text: string) -> Sentiment {
+    load_type Sentiment
     load_global user.GPT4o
     load_const "ClassifySentiment"
     load_var text
@@ -65,7 +65,7 @@ function user.ClassifySentiment$parse(json: string) -> Sentiment {
     return
 }
 
-function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<Sentiment, null | Sentiment$stream> {
     load_var sse
     load_const "ClassifySentiment"
     load_const null
@@ -83,7 +83,7 @@ function user.ClassifySentiment$render_prompt(text: string) -> baml.llm.PromptAs
     return
 }
 
-function user.ClassifySentiment$stream(text: string) -> baml.llm.Stream {
+function user.ClassifySentiment$stream(text: string) -> baml.llm.Stream<Sentiment, null | Sentiment$stream> {
     load_global user.GPT4o
     load_const "ClassifySentiment"
     load_var text
@@ -94,6 +94,7 @@ function user.ClassifySentiment$stream(text: string) -> baml.llm.Stream {
 }
 
 function user.ClassifySentiment2(text: string) -> string {
+    load_type string
     load_global user.GPT4o
     load_const "ClassifySentiment2"
     load_var text
@@ -130,7 +131,7 @@ function user.ClassifySentiment2$parse(json: string) -> string {
     return
 }
 
-function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> {
     load_var sse
     load_const "ClassifySentiment2"
     load_const null
@@ -148,7 +149,7 @@ function user.ClassifySentiment2$render_prompt(text: string) -> baml.llm.PromptA
     return
 }
 
-function user.ClassifySentiment2$stream(text: string) -> baml.llm.Stream {
+function user.ClassifySentiment2$stream(text: string) -> baml.llm.Stream<string, null | string> {
     load_global user.GPT4o
     load_const "ClassifySentiment2"
     load_var text
@@ -232,6 +233,7 @@ function user.GPT4o$new() -> null {
 }
 
 function user.GenerateTests(count: int, topic: string) -> string[] {
+    load_type string[]
     load_global user.GPT4o
     load_const "GenerateTests"
     load_var count
@@ -274,7 +276,7 @@ function user.GenerateTests$parse(json: string) -> string[] {
     return
 }
 
-function user.GenerateTests$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+function user.GenerateTests$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string[], string[]> {
     load_var sse
     load_const "GenerateTests"
     load_const null
@@ -294,7 +296,7 @@ function user.GenerateTests$render_prompt(count: int, topic: string) -> baml.llm
     return
 }
 
-function user.GenerateTests$stream(count: int, topic: string) -> baml.llm.Stream {
+function user.GenerateTests$stream(count: int, topic: string) -> baml.llm.Stream<string[], string[]> {
     load_global user.GPT4o
     load_const "GenerateTests"
     load_var count

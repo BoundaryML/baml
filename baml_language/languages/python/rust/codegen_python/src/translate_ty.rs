@@ -17,6 +17,17 @@ use crate::{
 pub(crate) struct TranslateCtx {
     pub(crate) current_leaf: LeafPath,
     pub(crate) self_ref: Option<SelfRef>,
+    /// 18c: set when emitting the body of a recursive
+    /// `typing_extensions.TypeAliasType` alias. The RHS of a
+    /// `TypeAliasType(...)` call evaluates eagerly at module load, so
+    /// every named reference in the body — same-leaf, cross-leaf,
+    /// root-routed — must be emitted as a string forward-ref to avoid
+    /// `NameError`. Same-leaf hoisting (recursive aliases land above
+    /// the rest of the leaf) and `TYPE_CHECKING`-guarded cross-leaf
+    /// imports both leave the names absent at line-eval time; the
+    /// quoted form defers resolution until pydantic walks the alias
+    /// later.
+    pub(crate) defer_name_refs: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,7 +62,14 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
             render_name_ref_or_self_ref(name, ctx, &arg_strs.join(", "))
         }
         Ty::TypeAlias(name) => render_name_ref_or_self_ref(name, ctx, ""),
-        Ty::Enum(name) => render_name_ref(name, ctx),
+        Ty::Enum(name) => {
+            let head = render_name_ref(name, ctx);
+            if should_defer_name_ref(ctx) {
+                py_string(&head)
+            } else {
+                head
+            }
+        }
         Ty::TypeVar(name) => name.as_str().to_string(),
         Ty::Optional(inner) => format!("typing.Optional[{}]", translate_ty(inner, ctx)),
         Ty::List(inner) => format!("typing.List[{}]", translate_ty(inner, ctx)),
@@ -100,7 +118,7 @@ fn render_name_ref_or_self_ref(name: &Name, ctx: &TranslateCtx, generic_args: &s
     } else {
         format!("{head}[{generic_args}]")
     };
-    if should_quote_self_ref(name, ctx) {
+    if should_quote_self_ref(name, ctx) || should_defer_name_ref(ctx) {
         py_string(&full)
     } else {
         full
@@ -114,6 +132,24 @@ fn should_quote_self_ref(name: &Name, ctx: &TranslateCtx) -> bool {
         }
         None => false,
     }
+}
+
+/// 18c: in a recursive-alias body, every named reference is emitted as
+/// a string forward-ref. The body is the RHS of a `TypeAliasType(...)`
+/// call which evaluates eagerly at module load, but the names it can
+/// touch are unavailable then:
+///
+/// - same-leaf names: the recursive alias is hoisted to the top of
+///   the leaf, so the class/alias/enum being referenced may not yet
+///   be defined when this line runs.
+/// - cross-leaf and root-routed names: their imports live under
+///   `if typing.TYPE_CHECKING:` (false at runtime), so the symbols
+///   aren't present in the module's runtime globals.
+///
+/// Quoting them as forward-ref strings defers resolution to pydantic's
+/// schema-build pass, which walks the alias lazily.
+fn should_defer_name_ref(ctx: &TranslateCtx) -> bool {
+    ctx.defer_name_refs
 }
 
 fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> String {
@@ -148,6 +184,7 @@ mod tests {
         TranslateCtx {
             current_leaf: leaf(segments),
             self_ref: None,
+            defer_name_refs: false,
         }
     }
 
@@ -158,6 +195,25 @@ mod tests {
     ) -> TranslateCtx {
         TranslateCtx {
             current_leaf: leaf(current_segments),
+            defer_name_refs: false,
+            self_ref: Some(SelfRef {
+                routed_leaf: leaf(self_segments),
+                bare_name: bare_name.to_string(),
+            }),
+        }
+    }
+
+    /// Mirrors how `render_type_alias` builds the ctx for a recursive
+    /// alias's RHS: `defer_name_refs` is on, `self_ref` is set, and
+    /// every named leaf in the body becomes a string forward-ref.
+    fn ctx_recursive_alias_body(
+        current_segments: &[&str],
+        self_segments: &[&str],
+        bare_name: &str,
+    ) -> TranslateCtx {
+        TranslateCtx {
+            current_leaf: leaf(current_segments),
+            defer_name_refs: true,
             self_ref: Some(SelfRef {
                 routed_leaf: leaf(self_segments),
                 bare_name: bare_name.to_string(),
@@ -591,13 +647,46 @@ mod tests {
                 expected: "typing.Union[int, typing.List[\"RecList\"]]",
             },
             Case {
-                label: "recursive alias leaves other refs unquoted",
+                label: "recursive alias leaves other refs unquoted under self_ref-only",
                 ty: Ty::List(Box::new(Ty::Class(
                     name("user", &["util"], "Other"),
                     vec![],
                 ))),
                 ctx: ctx_with_self(&["util"], &["util"], "RecList"),
                 expected: "typing.List[Other]",
+            },
+            // 18c: real recursive-alias bodies set `defer_name_refs`,
+            // which forces every named leaf to be a string forward-ref
+            // — including same-leaf siblings, cross-leaf names, and
+            // root-routed names. The RHS of `TypeAliasType(...)`
+            // evaluates eagerly at module load and these names aren't
+            // in scope then (hoisting + TYPE_CHECKING guards).
+            Case {
+                label: "recursive body quotes same-leaf sibling",
+                ty: Ty::List(Box::new(Ty::Class(
+                    name("user", &["util"], "Other"),
+                    vec![],
+                ))),
+                ctx: ctx_recursive_alias_body(&["util"], &["util"], "RecList"),
+                expected: "typing.List[\"Other\"]",
+            },
+            Case {
+                label: "recursive body quotes cross-leaf class as dotted forward-ref",
+                ty: Ty::List(Box::new(Ty::Class(name("user", &["util"], "Bar"), vec![]))),
+                ctx: ctx_recursive_alias_body(&["lorem"], &["lorem"], "RecList"),
+                expected: "typing.List[\"util.Bar\"]",
+            },
+            Case {
+                label: "recursive body quotes root-routed name",
+                ty: Ty::Class(name("user", &[], "Foo"), vec![]),
+                ctx: ctx_recursive_alias_body(&["lorem"], &["lorem"], "RecList"),
+                expected: "\"Foo\"",
+            },
+            Case {
+                label: "recursive body quotes cross-leaf enum",
+                ty: Ty::Enum(name("user", &["ipsum"], "Sentiment")),
+                ctx: ctx_recursive_alias_body(&["lorem"], &["lorem"], "RecList"),
+                expected: "\"ipsum.Sentiment\"",
             },
             Case {
                 label: "non recursive alias same leaf",

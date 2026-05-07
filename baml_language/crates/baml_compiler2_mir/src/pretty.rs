@@ -255,14 +255,25 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
         Terminator::Call {
             callee,
             args,
+            ntypeargs,
             destination,
             target,
             unwind,
         } => {
             write!(f, "{destination} = call ")?;
             write_operand(f, callee)?;
+            if *ntypeargs > 0 {
+                write!(f, "<")?;
+                for (i, arg) in args.iter().take(*ntypeargs).enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write_operand(f, arg)?;
+                }
+                write!(f, ">")?;
+            }
             write!(f, "(")?;
-            for (i, arg) in args.iter().enumerate() {
+            for (i, arg) in args.iter().skip(*ntypeargs).enumerate() {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
@@ -369,7 +380,22 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         Rvalue::Aggregate { kind, fields } => {
             match kind {
                 AggregateKind::Array => write!(f, "array")?,
-                AggregateKind::Class(name) => write!(f, "{name}")?,
+                AggregateKind::Class {
+                    name,
+                    type_arg_templates,
+                } => {
+                    write!(f, "{name}")?;
+                    if !type_arg_templates.is_empty() {
+                        write!(f, "<")?;
+                        for (i, t) in type_arg_templates.iter().enumerate() {
+                            if i > 0 {
+                                write!(f, ", ")?;
+                            }
+                            write!(f, "{t:?}")?;
+                        }
+                        write!(f, ">")?;
+                    }
+                }
                 AggregateKind::EnumVariant { enum_name, variant } => {
                     write!(f, "{enum_name}::{variant}")?;
                 }
@@ -392,16 +418,24 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         Rvalue::Len(place) => {
             write!(f, "len({place})")
         }
-        Rvalue::IsType { operand, ty } => {
+        Rvalue::IsType {
+            operand,
+            ty_template,
+        } => {
             write!(f, "is_type(")?;
             write_operand(f, operand)?;
-            write!(f, ", {ty:?})")
+            write!(f, ", {ty_template})")
         }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
+            type_arg_templates,
         } => {
-            write!(f, "make_closure lambda[{lambda_idx}](")?;
+            write!(f, "make_closure lambda[{lambda_idx}]")?;
+            if !type_arg_templates.is_empty() {
+                write!(f, "<{} type_args>", type_arg_templates.len())?;
+            }
+            write!(f, "(")?;
             for (i, cap) in captures.iter().enumerate() {
                 if i > 0 {
                     write!(f, ", ")?;
@@ -414,6 +448,9 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write!(f, "make_bound_method {item_ref}(")?;
             write_operand(f, receiver)?;
             write!(f, ")")
+        }
+        Rvalue::LoadType(template) => {
+            write!(f, "load_type({template})")
         }
     }
 }

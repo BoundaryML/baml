@@ -1474,7 +1474,7 @@ fn json_to_external_with_ty(value: &serde_json::Value, ty: &Ty) -> Result<BexExt
             ),
         },
 
-        Ty::Class(type_name, _) => match value {
+        Ty::Class(type_name, _, _) => match value {
             J::Object(map) => Ok(BexExternalValue::Instance {
                 class_name: type_name.display_name.to_string(),
                 fields: map
@@ -1953,7 +1953,7 @@ mod tests {
 
     #[test]
     fn test_typed_class_instance_gets_name() {
-        let ty = Ty::Class(tn("User"), Default::default());
+        let ty = Ty::Class(tn("User"), Vec::new(), Default::default());
         let val =
             json_to_external_with_ty(&serde_json::json!({"id": 1, "name": "alice"}), &ty).unwrap();
         match val {
@@ -2673,7 +2673,7 @@ mod tests {
 
     #[test]
     fn test_parse_cli_value_class_via_json_has_class_name() {
-        let ty = Ty::Class(tn("User"), Default::default());
+        let ty = Ty::Class(tn("User"), Vec::new(), Default::default());
         let val = parse_cli_value(r#"{"id":1}"#, &ty).unwrap();
         match val {
             BexExternalValue::Instance { class_name, .. } => {

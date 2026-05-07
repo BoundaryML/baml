@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use baml_codegen_types::{self as cg, Origin, SymbolPool};
-use baml_compiler2_ast::{DeclarativeMeta, FunctionOrigin};
+use baml_compiler2_ast::FunctionOrigin;
 use baml_compiler2_hir::{
     compiler2_all_files, file_package,
     ids::{FunctionMarker, LocalItemId},
@@ -325,14 +325,13 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 continue;
             }
 
-            let func_name_str = func.name.as_str();
-            let is_companion = func_name_str.contains('$');
-
-            // For parent functions, require declarative LLM meta.
-            // Companion functions inherit validity from their parent.
-            if !is_companion && !matches!(&func.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
-                continue;
-            }
+            // Companion functions arrive as their own pool entries (names
+            // containing `$`); they share the parent's span so
+            // `group_and_sort` keeps them contiguous. No further
+            // parent-vs-companion gating needed: companion validity is
+            // encoded by the suffix; non-LLM parents (pure-expression
+            // bodies, etc.) are valid too. `FunctionOrigin::Internal` is
+            // already filtered above.
 
             let func_generic_params: Vec<Name> = func.generic_params.clone();
             let arguments: Vec<cg::FunctionArgument> = func
@@ -870,5 +869,32 @@ mod tests {
             key.namespace_path,
         );
         assert!(!key.is_stream(), "Sentiment must not be marked as stream");
+    }
+
+    /// Pure-expression functions (no `llm` declarative meta) must reach the
+    /// pool as `Symbol::Function` entries so Python codegen emits a factory
+    /// binding for them. Regression for 18b §2 / 18c2: a non-LLM,
+    /// non-internal parent function used to be filtered out, leaving the
+    /// only emission path through synthetic class-field workarounds.
+    #[test]
+    fn test_pure_expression_function_reaches_pool() {
+        let root = Path::new("/tmp/18c2_pure_expression_function");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            "function ReturnInt() -> int { 42 }\n",
+        );
+
+        let pool = build_symbol_pool(&db);
+
+        let key = pool
+            .keys()
+            .find(|k| k.name.as_str() == "ReturnInt")
+            .expect("ReturnInt must be in the pool");
+        assert!(
+            matches!(pool.get(key), Some(cg::Symbol::Function(_))),
+            "ReturnInt must be a Function symbol",
+        );
     }
 }

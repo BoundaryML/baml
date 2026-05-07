@@ -17,7 +17,7 @@ use crate::{
     },
     py_string,
     routing::{LeafPath, route_class_ref},
-    translate_ty::{TranslateCtx, translate_ty},
+    translate_ty::{SelfRef, TranslateCtx, translate_ty},
 };
 
 /// All symbols that land in one leaf's body, in final render order.
@@ -59,7 +59,23 @@ impl LeafBody {
         {
             out.push("typing");
         }
+        // Recursive aliases (18c) render via
+        // `typing_extensions.TypeAliasType`.
+        if self.has_recursive_alias() {
+            out.push("typing_extensions");
+        }
         out
+    }
+
+    /// True when any type alias in this leaf is flagged recursive.
+    /// Drives the `import typing_extensions` line for both `.py` and
+    /// `.pyi` since recursive aliases render via
+    /// `typing_extensions.TypeAliasType` (18c).
+    pub(crate) fn has_recursive_alias(&self) -> bool {
+        self.symbols.iter().any(|(s, _)| match s {
+            EmittedSymbol::TypeAlias(a) => a.recursive,
+            _ => false,
+        })
     }
 
     pub(crate) fn needs_pydantic(&self) -> bool {
@@ -90,7 +106,7 @@ impl LeafBody {
 
     /// True when any class field, function/method param, or return type
     /// in this leaf is `Ty::RustType` — i.e. needs the
-    /// `from baml.baml_core import BamlPyHandle as _BamlPyHandle` line.
+    /// `from baml_core import BamlPyHandle as _BamlPyHandle` line.
     pub(crate) fn needs_baml_pyhandle(&self) -> bool {
         fn ty_uses_rust_type(ty: &Ty) -> bool {
             match ty {
@@ -127,55 +143,70 @@ impl LeafBody {
         self.symbols.is_empty()
     }
 
-    /// First segments of every cross-leaf routed module path referenced
-    /// by this leaf's `.py`, deduped and sorted.
+    /// Root imports referenced by this leaf, in two buckets. Every
+    /// import resolves through the SDK root (`baml_sdk/`); we never
+    /// import a different namespace's submodule directly.
+    ///
+    /// Concretely, from a leaf at `baml_sdk/a/b/`, a reference to a
+    /// type at `baml_sdk/c/d/` is brought in by importing `c` through
+    /// the root (`from <root_dots> import c`); the translator then
+    /// emits the dotted access `c.d.Symbol` and `c/__init__.py`'s own
+    /// `from . import d` line takes care of loading `c.d`. References
+    /// to root-namespace types (`baml_sdk/Foo`) are imported by name
+    /// (`from <root_dots> import Foo`) and emitted bare.
+    ///
+    /// - `segments`: first segments of routed module paths (e.g.
+    ///   `lorem`, `util`) — imported as `from <root_dots> import <seg>`.
+    /// - `root_names`: bare names of types that live at the root leaf
+    ///   itself and are referenced from a non-root leaf — imported as
+    ///   `from <root_dots> import <name>`.
     ///
     /// Function/method types don't actually render annotations in the
     /// `.py` (factory bindings only), but they're walked anyway so the
     /// import block is identical across `.py` and `.pyi`. The
     /// `TYPE_CHECKING` guard makes the extras free at runtime.
-    pub(crate) fn cross_leaf_first_segments_py(&self) -> Vec<String> {
-        let mut set: BTreeSet<String> = BTreeSet::new();
+    pub(crate) fn root_imports_py(&self) -> RootImports {
+        let mut acc = RootImportSets::default();
         let current = &self.leaf;
         for (sym, _) in &self.symbols {
             match sym {
                 EmittedSymbol::Class(c) => {
                     for prop in &c.properties {
-                        collect_cross_leaf(&prop.ty, current, &mut set);
+                        collect_root_imports(&prop.ty, current, &mut acc);
                     }
                     for m in &c.static_methods {
                         for ty in &m.arg_tys {
-                            collect_cross_leaf(ty, current, &mut set);
+                            collect_root_imports(ty, current, &mut acc);
                         }
-                        collect_cross_leaf(&m.return_ty, current, &mut set);
+                        collect_root_imports(&m.return_ty, current, &mut acc);
                     }
                     for m in &c.instance_methods {
                         for ty in &m.arg_tys {
-                            collect_cross_leaf(ty, current, &mut set);
+                            collect_root_imports(ty, current, &mut acc);
                         }
-                        collect_cross_leaf(&m.return_ty, current, &mut set);
+                        collect_root_imports(&m.return_ty, current, &mut acc);
                     }
                 }
                 EmittedSymbol::Function(f) => {
                     for ty in &f.arg_tys {
-                        collect_cross_leaf(ty, current, &mut set);
+                        collect_root_imports(ty, current, &mut acc);
                     }
-                    collect_cross_leaf(&f.return_ty, current, &mut set);
+                    collect_root_imports(&f.return_ty, current, &mut acc);
                 }
                 EmittedSymbol::TypeAlias(a) => {
-                    collect_cross_leaf(&a.resolves_to, current, &mut set);
+                    collect_root_imports(&a.resolves_to, current, &mut acc);
                 }
                 EmittedSymbol::Enum(_) => {}
             }
         }
-        set.into_iter().collect()
+        acc.into_imports()
     }
 
-    /// First segments for the `.pyi` companion. Now that class fields
+    /// Root imports for the `.pyi` companion. Now that class fields
     /// are mirrored into `.pyi`, the walk shape matches `.py` exactly —
     /// properties, methods, function/alias types all contribute.
-    pub(crate) fn cross_leaf_first_segments_pyi(&self) -> Vec<String> {
-        self.cross_leaf_first_segments_py()
+    pub(crate) fn root_imports_pyi(&self) -> RootImports {
+        self.root_imports_py()
     }
 
     /// Whether this leaf's `.pyi` needs `import typing`. Any rendered
@@ -220,42 +251,76 @@ impl LeafBody {
     }
 }
 
-/// Add the first routed segment of every `Name`-bearing reference
-/// whose routed leaf differs from `current`. Empty-routed-leaf
-/// references (root-leaf from a non-root leaf) emit no import — the
-/// translator renders those as bare names without prefix.
-fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
+/// Imports a leaf reaches for through the SDK root, finalized into
+/// deterministic sorted vectors. Returned by
+/// `LeafBody::root_imports_*`. Every import in this struct uses the
+/// relative-path form `from <root_dots> import <name>` — we never
+/// import a different namespace's submodule directly; everything goes
+/// through the root.
+pub(crate) struct RootImports {
+    /// First segments of routed module paths used by this leaf —
+    /// `from <root_dots> import <seg>`.
+    pub(crate) segments: Vec<String>,
+    /// Bare names of root-namespace types referenced by this non-root
+    /// leaf — `from <root_dots> import <name>`. Empty for the root
+    /// leaf itself; root types it owns need no import.
+    pub(crate) root_names: Vec<String>,
+}
+
+#[derive(Default)]
+struct RootImportSets {
+    segments: BTreeSet<String>,
+    root_names: BTreeSet<String>,
+}
+
+impl RootImportSets {
+    fn into_imports(self) -> RootImports {
+        RootImports {
+            segments: self.segments.into_iter().collect(),
+            root_names: self.root_names.into_iter().collect(),
+        }
+    }
+}
+
+/// Walk a `Ty` and record every reference it carries that needs to be
+/// imported through the SDK root:
+///
+/// - References whose routed leaf differs from `current` and has at
+///   least one segment go into `segments` (first segment only — the
+///   first-segment module is imported via the root, then the type is
+///   accessed via the dotted form `<seg>.<rest>.Symbol`).
+/// - References whose routed leaf is empty (root namespace) and
+///   `current` is non-root go into `root_names` (bare type name — the
+///   translator emits these references as the bare name and relies on
+///   a `from <root_dots> import <Name>` line to bring it into scope).
+/// - Same-leaf references are skipped — translator emits them as bare
+///   names and the symbol is locally defined.
+fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
     match ty {
         Ty::Class(name, args) => {
-            let routed = route_class_ref(name);
-            if routed != *current && !routed.segments.is_empty() {
-                out.insert(routed.segments[0].clone());
-            }
+            record_name_routing(name, current, out);
             for a in args {
-                collect_cross_leaf(a, current, out);
+                collect_root_imports(a, current, out);
             }
         }
         Ty::Enum(name) | Ty::TypeAlias(name) => {
-            let routed = route_class_ref(name);
-            if routed != *current && !routed.segments.is_empty() {
-                out.insert(routed.segments[0].clone());
-            }
+            record_name_routing(name, current, out);
         }
-        Ty::Optional(inner) | Ty::List(inner) => collect_cross_leaf(inner, current, out),
+        Ty::Optional(inner) | Ty::List(inner) => collect_root_imports(inner, current, out),
         Ty::Map { key, value } => {
-            collect_cross_leaf(key, current, out);
-            collect_cross_leaf(value, current, out);
+            collect_root_imports(key, current, out);
+            collect_root_imports(value, current, out);
         }
         Ty::Union(items) => {
             for item in items {
-                collect_cross_leaf(item, current, out);
+                collect_root_imports(item, current, out);
             }
         }
         Ty::Callable { params, ret } => {
             for p in params {
-                collect_cross_leaf(p, current, out);
+                collect_root_imports(p, current, out);
             }
-            collect_cross_leaf(ret, current, out);
+            collect_root_imports(ret, current, out);
         }
         // `Ty::Media(_)` is rendered by `translate_ty` as the literal
         // dotted form `baml.media.Image` etc. — no `Name` involved, but
@@ -263,11 +328,11 @@ fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
         // so the leaf needs `baml` imported.
         //
         // `Ty::RustType` renders as `_BamlPyHandle` and gets its own
-        // `from baml.baml_core import BamlPyHandle as _BamlPyHandle`
+        // `from baml_core import BamlPyHandle as _BamlPyHandle`
         // line via `needs_baml_pyhandle` — it does *not* go through
         // the cross-leaf segment set.
         Ty::Media(_) => {
-            out.insert("baml".to_string());
+            out.segments.insert("baml".to_string());
         }
         Ty::Int
         | Ty::Float
@@ -281,6 +346,28 @@ fn collect_cross_leaf(ty: &Ty, current: &LeafPath, out: &mut BTreeSet<String>) {
         | Ty::BuiltinUnknown
         | Ty::Unit
         | Ty::BamlOptions => {}
+    }
+}
+
+fn record_name_routing(
+    name: &baml_codegen_types::Name,
+    current: &LeafPath,
+    out: &mut RootImportSets,
+) {
+    let routed = route_class_ref(name);
+    if routed == *current {
+        return;
+    }
+    if routed.segments.is_empty() {
+        // Root-routed type referenced from a non-root leaf — translator
+        // emits the bare name (`Foo`), so we pull it in via
+        // `from <dots> import Foo`. The root leaf itself never reaches
+        // here (current is also empty there, so `routed == *current`).
+        if !current.segments.is_empty() {
+            out.root_names.insert(name.bare_name().to_string());
+        }
+    } else {
+        out.segments.insert(routed.segments[0].clone());
     }
 }
 
@@ -300,11 +387,25 @@ pub(crate) fn group_and_sort(
     // span 0), emit type aliases last — the alias's RHS may reference
     // stream classes in the same leaf, and the class must be defined
     // before the alias's RHS evaluates.
+    //
+    // Then, with a second stable pass, hoist recursive aliases to the
+    // very front of the leaf. Pyright recognizes a
+    // `Name = typing_extensions.TypeAliasType("Name", …)` assignment
+    // as a type alias only after the assignment line; consuming
+    // classes whose field annotations name the alias must come *after*
+    // the assignment or pyright reports
+    // `reportInvalidTypeForm` on the alias's own self-reference (18c).
     let mut out: BTreeMap<LeafPath, LeafBody> = BTreeMap::new();
     for (leaf, mut pairs) in buckets {
         pairs.sort_by(|a, b| {
             a.1.cmp(&b.1)
                 .then_with(|| symbol_kind_ord(&a.0).cmp(&symbol_kind_ord(&b.0)))
+        });
+        // Stable hoist: recursive aliases first, everything else in
+        // the order produced by the previous sort.
+        pairs.sort_by_key(|(sym, _)| match sym {
+            EmittedSymbol::TypeAlias(a) if a.recursive => 0u8,
+            _ => 1,
         });
         out.insert(
             leaf.clone(),
@@ -463,6 +564,21 @@ struct TypeAliasPy {
     rhs: String,
 }
 
+/// Recursive aliases (18c): `Name = typing_extensions.TypeAliasType("Name", <RHS>)`.
+/// `<RHS>` is the structural Python expression with self-references
+/// emitted as `"Name"` forward-refs so the alias's home-module globals
+/// resolve them at schema-build time.
+#[derive(askama::Template)]
+#[template(
+    source = "{{ py_name }} = typing_extensions.TypeAliasType(\"{{ py_name }}\", {{ rhs }})",
+    ext = "py.j2",
+    escape = "none"
+)]
+struct TypeAliasTypePy {
+    py_name: String,
+    rhs: String,
+}
+
 /// `tight_to_prev` is true when this method shares its
 /// `source_method_root` with the previous one (sync/async/companion
 /// fan-out). The first method also gets `true` — the template emits
@@ -491,13 +607,14 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
         self_ref: None,
+        defer_name_refs: false,
     };
 
     match s {
         EmittedSymbol::Class(c) => {
             if let Some(rust_name) = media_reexport_rust_name(c) {
                 return format!(
-                    "from baml.baml_core.baml_py import {rust_name} as {py_name}\n",
+                    "from baml_core.baml_py import {rust_name} as {py_name}\n",
                     py_name = c.py_name,
                 );
             }
@@ -564,20 +681,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
             out
         }
         EmittedSymbol::TypeAlias(a) => {
-            let rhs = translate_ty(&a.resolves_to, &ctx);
-            let rhs = if a.recursive {
-                // Wrap the entire RHS in single quotes so Pydantic
-                // defers resolution to `model_rebuild` time.
-                format!("'{rhs}'")
-            } else {
-                rhs
-            };
-            let mut out = TypeAliasPy {
-                py_name: a.py_name.clone(),
-                rhs,
-            }
-            .render()
-            .expect("type_alias template should always render");
+            let mut out = render_type_alias(a, leaf);
             out.push('\n');
             out
         }
@@ -586,6 +690,54 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
             out.push('\n');
             out
         }
+    }
+}
+
+/// Render a type alias to its source line. Shared between `.py` and
+/// `.pyi`; the body is identical (12d §3.3).
+///
+/// Non-recursive aliases render as `Name: typing.TypeAlias = <RHS>`.
+/// Recursive aliases (18c) render via `typing_extensions.TypeAliasType`
+/// with inner self-references quoted, so Pydantic resolves them
+/// through its JSON-schema definitions machinery instead of recursing.
+fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) -> String {
+    use askama::Template;
+    let ctx = TranslateCtx {
+        current_leaf: leaf.clone(),
+        self_ref: if a.recursive {
+            Some(SelfRef {
+                routed_leaf: leaf.clone(),
+                bare_name: a.source.bare_name().to_string(),
+            })
+        } else {
+            None
+        },
+        // 18c: a recursive alias's RHS evaluates eagerly at module
+        // load (it's the RHS of `TypeAliasType(...)`). Every named
+        // reference — same-leaf, cross-leaf, root-routed — has to be
+        // emitted as a forward-ref string so the line doesn't
+        // `NameError`: same-leaf names may not yet be defined (the
+        // alias is hoisted), and cross-leaf / root-routed names live
+        // under `if typing.TYPE_CHECKING:` and aren't in runtime
+        // globals. Pydantic resolves the strings later when it walks
+        // the alias.
+        defer_name_refs: a.recursive,
+    };
+    let rhs = translate_ty(&a.resolves_to, &ctx);
+    if a.recursive {
+        TypeAliasTypePy {
+            py_name: a.py_name.clone(),
+            rhs,
+        }
+        .render()
+        .expect("type_alias_type template should always render")
+    } else {
+        TypeAliasPy {
+            py_name: a.py_name.clone(),
+            rhs,
+        }
+        .render()
+        .expect("type_alias template should always render")
     }
 }
 
@@ -690,11 +842,19 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     let mut out = String::new();
 
     let mut stdlibs = body.stdlib_imports();
-    let cross_leaf_segments = body.cross_leaf_first_segments_py();
-    // The cross-leaf block uses `typing.TYPE_CHECKING`, so even a
-    // function-only leaf with a cross-leaf parameter still needs
+    let root_imports = body.root_imports_py();
+    let root_segments = &root_imports.segments;
+    let root_names = &root_imports.root_names;
+    // The root-import block uses `typing.TYPE_CHECKING`, so even a
+    // function-only leaf with a root-routed parameter still needs
     // `typing`. Append (not insert) — "typing" sorts after "enum".
-    if !cross_leaf_segments.is_empty() && !stdlibs.contains(&"typing") {
+    if (!root_segments.is_empty() || !root_names.is_empty()) && !stdlibs.contains(&"typing") {
+        stdlibs.push("typing");
+    }
+    // Generic functions emit `T = typing.TypeVar("T")` lines below; the
+    // `Class`/`TypeAlias` rule in `stdlib_imports` doesn't catch the
+    // function-only-but-generic case (e.g. stdlib `baml.unstable.string<T>`).
+    if !body.generic_typevars().is_empty() && !stdlibs.contains(&"typing") {
         stdlibs.push("typing");
     }
     let needs_pydantic = body.needs_pydantic();
@@ -709,40 +869,48 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
             out.push_str("import pydantic\n");
         }
     }
-    // Cross-leaf imports go between the stdlib block and the factory
-    // imports. `baml` is lifted to a runtime import — Pydantic v2
-    // resolves field annotations like `baml.media.Pdf` against the
-    // module's runtime globals at model-construction time, so the
-    // `TYPE_CHECKING` guard isn't enough. `baml/*` is stdlib (only
-    // ever imports from `baml.baml_core`) and never references user
-    // leaves, so the runtime import can't cycle.
+    // Root imports go between the stdlib block and the factory
+    // imports. Every line resolves through the SDK root via the
+    // relative-path form — we never import a different namespace's
+    // submodule directly.
+    //
+    // `baml` is lifted to a runtime import: Pydantic v2 resolves field
+    // annotations like `baml.media.Pdf` against the module's runtime
+    // globals at model-construction time, so the `TYPE_CHECKING` guard
+    // isn't enough. `baml/*` is stdlib (only ever imports from
+    // `baml_core`) and never references user leaves, so the
+    // runtime import can't cycle.
     //
     // All other first-segments stay under `if typing.TYPE_CHECKING:`
-    // so recursive cross-leaf references (leaf A → leaf B → leaf A)
-    // don't create an import cycle. `from __future__ import annotations`
+    // so recursive references (leaf A → leaf B → leaf A) don't
+    // create an import cycle. `from __future__ import annotations`
     // (in every header) makes annotations resolve lazily as strings.
     //
     // Dot count = depth + 1: anchors at the `baml_sdk/` root
     // regardless of the installed package name.
     let dots = ".".repeat(body.leaf.segments.len() + 1);
     let (runtime_segments, type_checking_segments): (Vec<&String>, Vec<&String>) =
-        cross_leaf_segments
-            .iter()
-            .partition(|seg| seg.as_str() == "baml");
+        root_segments.iter().partition(|seg| seg.as_str() == "baml");
     if !runtime_segments.is_empty() {
         out.push('\n');
         for seg in &runtime_segments {
             writeln!(out, "from {dots} import {seg}").unwrap();
         }
     }
-    if !type_checking_segments.is_empty() {
+    if !type_checking_segments.is_empty() || !root_names.is_empty() {
         out.push('\n');
         out.push_str("if typing.TYPE_CHECKING:\n");
         for seg in &type_checking_segments {
             writeln!(out, "    from {dots} import {seg}").unwrap();
         }
+        // Root-namespace types referenced from a non-root leaf — the
+        // translator emitted them as bare names (e.g. `Foo`), so we
+        // import the names directly from the root leaf's `__init__`.
+        for name in root_names {
+            writeln!(out, "    from {dots} import {name}").unwrap();
+        }
     }
-    // Factory imports use absolute paths (`baml.baml_core` is a
+    // Factory imports use absolute paths (`baml_core` is a
     // separate installed package, not reachable from this SDK tree)
     // with a `_` alias to keep them private to the module.
     //
@@ -770,9 +938,9 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         out.push('\n');
         if runtime_imports.len() == 1 {
             let (original, alias) = runtime_imports[0];
-            writeln!(out, "from baml.baml_core import {original} as {alias}").unwrap();
+            writeln!(out, "from baml_core import {original} as {alias}").unwrap();
         } else {
-            out.push_str("from baml.baml_core import (\n");
+            out.push_str("from baml_core import (\n");
             for (original, alias) in &runtime_imports {
                 writeln!(out, "    {original} as {alias},").unwrap();
             }
@@ -933,13 +1101,14 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
         self_ref: None,
+        defer_name_refs: false,
     };
 
     match s {
         EmittedSymbol::Class(c) => {
             if let Some(rust_name) = media_reexport_rust_name(c) {
                 return format!(
-                    "from baml.baml_core.baml_py import {rust_name} as {py_name}\n",
+                    "from baml_core.baml_py import {rust_name} as {py_name}\n",
                     py_name = c.py_name,
                 );
             }
@@ -988,14 +1157,7 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
         }
         EmittedSymbol::TypeAlias(a) => {
             // Type alias is identical between `.py` and `.pyi`.
-            let rhs = translate_ty(&a.resolves_to, &ctx);
-            let rhs = if a.recursive { format!("'{rhs}'") } else { rhs };
-            let mut out = TypeAliasPy {
-                py_name: a.py_name.clone(),
-                rhs,
-            }
-            .render()
-            .expect("type_alias template should always render");
+            let mut out = render_type_alias(a, leaf);
             out.push('\n');
             out
         }
@@ -1062,7 +1224,7 @@ fn render_typed_params(names: &[String], tys: &[Ty], ctx: &TranslateCtx) -> Stri
 }
 
 /// Mirrors `render_leaf_body` with these differences: no
-/// `baml.baml_core` factory imports; `typing` is needed whenever a
+/// `baml_core` factory imports; `typing` is needed whenever a
 /// signature is present (`needs_typing_pyi`); `enum` and `pydantic`
 /// follow the `.py` rule.
 pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
@@ -1076,12 +1238,16 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         .symbols
         .iter()
         .any(|(s, _)| matches!(s, EmittedSymbol::Enum(_)));
-    let cross_leaf_segments = body.cross_leaf_first_segments_pyi();
-    // The cross-leaf block uses `typing.TYPE_CHECKING`, so `typing`
+    let root_imports = body.root_imports_pyi();
+    let root_segments = &root_imports.segments;
+    let root_names = &root_imports.root_names;
+    // The root-import block uses `typing.TYPE_CHECKING`, so `typing`
     // must be in scope even if no signature would pull it in.
-    let needs_typing = body.needs_typing_pyi() || !cross_leaf_segments.is_empty();
+    let needs_typing =
+        body.needs_typing_pyi() || !root_segments.is_empty() || !root_names.is_empty();
+    let needs_typing_extensions = body.has_recursive_alias();
     let needs_pydantic = body.needs_pydantic();
-    let has_stdlib_block = needs_enum || needs_typing || needs_pydantic;
+    let has_stdlib_block = needs_enum || needs_typing || needs_typing_extensions || needs_pydantic;
     if has_stdlib_block {
         out.push('\n');
         if needs_enum {
@@ -1090,19 +1256,27 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         if needs_typing {
             out.push_str("import typing\n");
         }
+        if needs_typing_extensions {
+            out.push_str("import typing_extensions\n");
+        }
         if needs_pydantic {
             out.push_str("import pydantic\n");
         }
     }
 
-    // Same cross-leaf block as `.py`. The guard is a no-op in `.pyi`
+    // Same root-import block as `.py`. The guard is a no-op in `.pyi`
     // but kept for diffability.
-    if !cross_leaf_segments.is_empty() {
+    if !root_segments.is_empty() || !root_names.is_empty() {
         out.push('\n');
         out.push_str("if typing.TYPE_CHECKING:\n");
         let dots = ".".repeat(body.leaf.segments.len() + 1);
-        for seg in &cross_leaf_segments {
+        for seg in root_segments {
             writeln!(out, "    from {dots} import {seg}").unwrap();
+        }
+        // Root-namespace types referenced from this non-root leaf —
+        // mirrors the `.py` block.
+        for name in root_names {
+            writeln!(out, "    from {dots} import {name}").unwrap();
         }
     }
 
@@ -1110,7 +1284,7 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     // can resolve `$rust_type` field annotations.
     if body.needs_baml_pyhandle() {
         out.push('\n');
-        out.push_str("from baml.baml_core import BamlPyHandle as _BamlPyHandle\n");
+        out.push_str("from baml_core import BamlPyHandle as _BamlPyHandle\n");
     }
 
     // The `.pyi` re-declares TypeVars because stubs don't import from

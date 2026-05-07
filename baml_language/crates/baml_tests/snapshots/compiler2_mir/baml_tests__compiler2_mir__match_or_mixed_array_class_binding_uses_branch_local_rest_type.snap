@@ -37,18 +37,18 @@ fn user.f(v: NumberBag | int[][]) -> int {
     let _31: 0
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "NumberBag", module_path: ["user"], display_name: "NumberBag" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _2 = is_type(copy _1, NumberBag);
         branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
         _3 = copy _1.0;
-        _4 = is_type(copy _3, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _4 = is_type(copy _3, int[]);
         branch copy _4 -> [bb14, bb2];
     }
 
     bb2: {
-        _9 = is_type(copy _1, List(List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _9 = is_type(copy _1, int[][]);
         branch copy _9 -> [bb3, bb9];
     }
 
@@ -61,7 +61,7 @@ fn user.f(v: NumberBag | int[][]) -> int {
     bb4: {
         _12 = const 0_i64;
         _13 = copy _1[_12];
-        _14 = is_type(copy _13, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _14 = is_type(copy _13, int[]);
         branch copy _14 -> [bb5, bb9];
     }
 
@@ -77,12 +77,12 @@ fn user.f(v: NumberBag | int[][]) -> int {
     }
 
     bb7: {
-        _19 = is_type(copy _17, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _19 = is_type(copy _17, int[]);
         branch copy _19 -> [bb8, bb9];
     }
 
     bb8: {
-        _20 = is_type(copy _13, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        _20 = is_type(copy _13, int[]);
         branch copy _20 -> [bb10, bb9];
     }
 

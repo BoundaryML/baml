@@ -3,8 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.test_annotated() -> int {
     load_const 21
-    load_const ?
-    make_closure .<lambda(test_annotated, 0)>
+    make_closure .<lambda(test_annotated, 0)>, 0
     call_indirect
     return
 }
@@ -17,24 +16,21 @@ function user.test_capture() -> int {
     store_deref ?1
     load_const 32
     load_var offset
-    load_const ?
-    make_closure .<lambda(test_capture, 0)>
+    make_closure .<lambda(test_capture, 0)>, 1
     call_indirect
     return
 }
 
 function user.test_generic_lambda() -> int {
     load_const 42
-    load_const ?
-    make_closure .<lambda(test_generic_lambda, 0)>
+    make_closure .<lambda(test_generic_lambda, 0)>, 0
     call_indirect
     return
 }
 
 function user.test_inferred_return() -> int {
     load_const 21
-    load_const ?
-    make_closure .<lambda(test_inferred_return, 0)>
+    make_closure .<lambda(test_inferred_return, 0)>, 0
     call_indirect
     return
 }
@@ -44,8 +40,7 @@ function user.test_map_inferred() -> int[] {
     load_const 2
     load_const 3
     alloc_array 3
-    load_const ?
-    make_closure .<lambda(test_map_inferred, 0)>
+    make_closure .<lambda(test_map_inferred, 0)>, 0
     call baml.Array.map
     return
 }
@@ -53,31 +48,27 @@ function user.test_map_inferred() -> int[] {
 function user.test_multi_param() -> int {
     load_const 20
     load_const 22
-    load_const ?
-    make_closure .<lambda(test_multi_param, 0)>
+    make_closure .<lambda(test_multi_param, 0)>, 0
     call_indirect
     return
 }
 
 function user.test_nested() -> int {
     load_const 41
-    load_const ?
-    make_closure .<lambda(test_nested, 0)>
+    make_closure .<lambda(test_nested, 0)>, 0
     call_indirect
     return
 }
 
 function user.test_throws() -> int {
     load_const 42
-    load_const ?
-    make_closure .<lambda(test_throws, 0)>
+    make_closure .<lambda(test_throws, 0)>, 0
     call_indirect
     return
 }
 
 function user.test_zero_param() -> int {
-    load_const ?
-    make_closure .<lambda(test_zero_param, 0)>
+    make_closure .<lambda(test_zero_param, 0)>, 0
     call_indirect
     return
 }

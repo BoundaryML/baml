@@ -95,7 +95,7 @@ fn call_function_inner(
     length: usize,
     id: u32,
 ) -> Result<(), BridgeError> {
-    use bridge_ctypes::baml::cffi::CallFunctionArgs;
+    use bridge_ctypes::baml_core::cffi::CallFunctionArgs;
 
     let runtime = get_runtime()?;
 

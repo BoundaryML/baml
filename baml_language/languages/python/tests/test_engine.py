@@ -17,7 +17,7 @@ import tempfile
 
 import pytest
 
-from baml.baml_core import BamlRuntime, FunctionResult, HostSpanManager, flush_events, get_version, call_function, call_function_sync
+from baml_core import BamlRuntime, FunctionResult, HostSpanManager, flush_events, get_version, call_function, call_function_sync
 
 
 # ============================================================================
@@ -261,7 +261,7 @@ class TestTracing:
         a per-test ``BAML_TRACE_FILE``; without resetting the singleton,
         the second test onward reuses the first test's sink — which points
         at a temp file that has since been ``unlink``'d."""
-        import baml.baml_core.ctx_manager as cm
+        import baml_core.ctx_manager as cm
 
         cm.prev_ctx_manager = None
         yield
@@ -295,7 +295,7 @@ class TestTracing:
 
     def test_trace_decorator_sync(self):
         """@trace decorator records function start/end events."""
-        from baml.baml_core import BamlCtxManager
+        from baml_core import BamlCtxManager
 
         # ``BAML_TRACE_FILE`` must be set before ``make_runtime`` runs, since
         # the runtime wires its event sink to whatever the env var pointed at
@@ -328,7 +328,7 @@ class TestTracing:
     @pytest.mark.asyncio
     async def test_trace_decorator_async(self):
         """@trace decorator works with async functions."""
-        from baml.baml_core import BamlCtxManager
+        from baml_core import BamlCtxManager
 
         with self._trace_file() as trace_file:
             rt = make_runtime(EXPR_FUNCS_BAML)
@@ -354,7 +354,7 @@ class TestTracing:
 
     def test_nested_trace_callstack(self):
         """Nested @trace calls build a proper call stack."""
-        from baml.baml_core import BamlCtxManager
+        from baml_core import BamlCtxManager
 
         rt = make_runtime(EXPR_FUNCS_BAML)
         ctx = BamlCtxManager(rt)
@@ -382,7 +382,7 @@ class TestTracing:
 
     def test_flush_trace_events(self):
         """Flushing writes trace events to the JSONL file."""
-        from baml.baml_core import BamlCtxManager
+        from baml_core import BamlCtxManager
 
         with self._trace_file() as trace_file:
             rt = make_runtime(EXPR_FUNCS_BAML)
@@ -402,7 +402,7 @@ class TestTracing:
 
     def test_tag_propagation(self):
         """Tags set on the current span are emitted as SetTags events."""
-        from baml.baml_core import BamlCtxManager
+        from baml_core import BamlCtxManager
 
         with self._trace_file() as trace_file:
             rt = make_runtime(EXPR_FUNCS_BAML)

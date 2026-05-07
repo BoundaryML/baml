@@ -483,7 +483,7 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code(sym.into()));
             spans.extend(expr_desc_spans(*inner, body, inference));
         }
-        Expr::Call { callee, args } => {
+        Expr::Call { callee, args, .. } => {
             spans.extend(expr_desc_spans(*callee, body, inference));
             spans.push(DetailSpan::Code("(".into()));
             for (i, arg) in args.iter().enumerate() {
@@ -2009,7 +2009,7 @@ impl CompilerRunner {
                 Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
                 Expr::Binary { op, .. } => format!("... {op:?} ..."),
                 Expr::Unary { op, expr: inner } => format!("{op:?} {}", expr_desc(*inner, body)),
-                Expr::Call { callee, args } => {
+                Expr::Call { callee, args, .. } => {
                     let callee_str = expr_desc(*callee, body);
                     format!("{callee_str}({})", if args.is_empty() { "" } else { "..." })
                 }

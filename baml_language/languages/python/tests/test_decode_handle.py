@@ -13,13 +13,13 @@ import typing
 
 import pytest
 
-from baml.baml_core import BamlPyHandle
-from baml.baml_core.baml_py import (
+from baml_core import BamlPyHandle
+from baml_core.baml_py import (
     _seed_function_ref_handle,
     _seed_generic_media_handle,
 )
-from baml.baml_core.proto import _decode_handle
-from baml.cffi.v1 import baml_inbound_pb2
+from baml_core.proto import _decode_handle
+from baml_core.cffi.v1 import baml_inbound_pb2
 
 
 def _make_handle(key: int, handle_type: int) -> "baml_inbound_pb2.BamlHandle":

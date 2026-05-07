@@ -29,13 +29,11 @@ function user.capture_before_after_shadow() -> int {
     load_const 2
     store_deref ?2
     load_var x
-    load_const ?
-    make_closure .<lambda(capture_before_after_shadow, 0)>
+    make_closure .<lambda(capture_before_after_shadow, 0)>, 1
     call_indirect
     store_var _6
     load_var x
-    load_const ?
-    make_closure .<lambda(capture_before_after_shadow, 1)>
+    make_closure .<lambda(capture_before_after_shadow, 1)>, 1
     call_indirect
     store_var _8
     load_var _6
@@ -97,8 +95,7 @@ function user.nested_lambda_capture() -> int {
     load_const 7
     store_deref ?1
     load_var x
-    load_const ?
-    make_closure .<lambda(nested_lambda_capture, 0)>
+    make_closure .<lambda(nested_lambda_capture, 0)>, 1
     call_indirect
     return
 }

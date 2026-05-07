@@ -3,11 +3,11 @@
 // Encodes TS objects → CallFunctionArgs protobuf bytes (for sending to Rust)
 // Decodes BamlOutboundValue protobuf bytes → TS objects (for receiving from Rust)
 
-import { baml } from './proto/baml_cffi';
+import { baml_core } from './proto/baml_cffi';
 import { BamlHandle } from './native';
 
-const CallFunctionArgs = baml.cffi.v1.CallFunctionArgs;
-const BamlOutboundValue = baml.cffi.v1.BamlOutboundValue;
+const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
+const BamlOutboundValue = baml_core.cffi.v1.BamlOutboundValue;
 
 // ─── Inbound (TS → Rust) ───
 
@@ -17,7 +17,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     return proto === Object.prototype || proto === null;
 }
 
-function setInboundValue(iv: baml.cffi.v1.IInboundValue, value: unknown): void {
+function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown): void {
     if (value === null || value === undefined) {
         return; // Leave oneof unset → null
     }
@@ -36,18 +36,18 @@ function setInboundValue(iv: baml.cffi.v1.IInboundValue, value: unknown): void {
     } else if (value instanceof BamlHandle) {
         iv.handle = { key: value.key, handleType: value.handleType };
     } else if (Array.isArray(value)) {
-        const listVal: baml.cffi.v1.IInboundValue[] = [];
+        const listVal: baml_core.cffi.v1.IInboundValue[] = [];
         for (const item of value) {
-            const child: baml.cffi.v1.IInboundValue = {};
+            const child: baml_core.cffi.v1.IInboundValue = {};
             setInboundValue(child, item);
             listVal.push(child);
         }
         iv.listValue = { values: listVal };
     } else if (isPlainObject(value)) {
-        const entries: baml.cffi.v1.IInboundMapEntry[] = [];
+        const entries: baml_core.cffi.v1.IInboundMapEntry[] = [];
         for (const [k, v] of Object.entries(value)) {
-            const entry: baml.cffi.v1.IInboundMapEntry = { stringKey: k };
-            const childVal: baml.cffi.v1.IInboundValue = {};
+            const entry: baml_core.cffi.v1.IInboundMapEntry = { stringKey: k };
+            const childVal: baml_core.cffi.v1.IInboundValue = {};
             setInboundValue(childVal, v);
             entry.value = childVal;
             entries.push(entry);
@@ -61,10 +61,10 @@ function setInboundValue(iv: baml.cffi.v1.IInboundValue, value: unknown): void {
 }
 
 export function encodeCallArgs(kwargs: Record<string, unknown>): Buffer {
-    const entries: baml.cffi.v1.IInboundMapEntry[] = [];
+    const entries: baml_core.cffi.v1.IInboundMapEntry[] = [];
     for (const [key, value] of Object.entries(kwargs)) {
-        const entry: baml.cffi.v1.IInboundMapEntry = { stringKey: key };
-        const iv: baml.cffi.v1.IInboundValue = {};
+        const entry: baml_core.cffi.v1.IInboundMapEntry = { stringKey: key };
+        const iv: baml_core.cffi.v1.IInboundValue = {};
         setInboundValue(iv, value);
         entry.value = iv;
         entries.push(entry);
@@ -75,7 +75,7 @@ export function encodeCallArgs(kwargs: Record<string, unknown>): Buffer {
 
 // ─── Outbound (Rust → TS) ───
 
-function decodeValueHolder(holder: baml.cffi.v1.IBamlOutboundValue): unknown {
+function decodeValueHolder(holder: baml_core.cffi.v1.IBamlOutboundValue): unknown {
     if (holder.nullValue != null) return null;
     if (holder.stringValue != null) return holder.stringValue;
     if (holder.intValue != null) return Number(holder.intValue);

@@ -10,7 +10,7 @@ mod ffi;
 pub mod host_spans;
 mod panic;
 
-pub use bridge_ctypes::baml;
+pub use bridge_ctypes::baml_core;
 pub use engine::{flush_event_sink, get_event_sink};
 pub use error::BridgeError;
 pub use ffi::{

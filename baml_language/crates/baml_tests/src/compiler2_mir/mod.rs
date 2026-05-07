@@ -191,3 +191,70 @@ fn match_or_mixed_array_class_binding_uses_branch_local_rest_type() {
         render_mir(&db, file)
     );
 }
+
+// ─── Phase 4: reflect.type_of concrete types ─────────────────────────────────
+
+/// `reflect.type_of<User>()` should lower to `_N = load_type(Concrete(User))`.
+#[test]
+fn reflect_type_of_class() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        class User { name string }
+        function f() -> type {
+            reflect.type_of<User>()
+        }
+        "#,
+    );
+    mir_snapshot!("reflect_type_of_class", render_mir(&db, file));
+}
+
+/// `reflect.type_of<int[]>()` — concrete array type.
+#[test]
+fn reflect_type_of_array() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function f() -> type {
+            reflect.type_of<int[]>()
+        }
+        "#,
+    );
+    mir_snapshot!("reflect_type_of_array", render_mir(&db, file));
+}
+
+// ─── Phase 5: reflect.type_of with generic type params ───────────────────────
+
+/// `reflect.type_of<T>()` inside a generic function should lower to
+/// `_N = load_type(TypeArgRef(0))`.
+#[test]
+fn reflect_type_of_bare_typevar() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function f<T>() -> type {
+            reflect.type_of<T>()
+        }
+        "#,
+    );
+    mir_snapshot!("reflect_type_of_bare_typevar", render_mir(&db, file));
+}
+
+/// `reflect.type_of<T[]>()` — composite array wrapping a type-var.
+/// Should lower to `_N = load_type(Array(TypeArgRef(0)))`.
+#[test]
+fn reflect_type_of_array_of_typevar() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function f<T>() -> type {
+            reflect.type_of<T[]>()
+        }
+        "#,
+    );
+    mir_snapshot!("reflect_type_of_array_of_typevar", render_mir(&db, file));
+}

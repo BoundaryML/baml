@@ -33,13 +33,13 @@ use crate::{BexArgs, RuntimeError, project::BexProject};
 /// responsible for nested class shaping.
 fn coerce_arg_to_declared_type(value: BexExternalValue, ty: &Ty) -> BexExternalValue {
     match (value, ty) {
-        (BexExternalValue::Map { entries, .. }, Ty::Class(type_name, _)) => {
+        (BexExternalValue::Map { entries, .. }, Ty::Class(type_name, _, _)) => {
             BexExternalValue::Instance {
                 class_name: type_name.to_string(),
                 fields: entries,
             }
         }
-        (BexExternalValue::Instance { fields, .. }, Ty::Class(type_name, _)) => {
+        (BexExternalValue::Instance { fields, .. }, Ty::Class(type_name, _, _)) => {
             BexExternalValue::Instance {
                 class_name: type_name.to_string(),
                 fields,

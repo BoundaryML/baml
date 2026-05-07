@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
-use baml_type::{MediaKind, Ty, TyAttr, TypeName};
+use baml_type::{MediaKind, Ty, TyAttr, TyTemplate, TypeName};
 use indexmap::IndexMap;
 
 use crate::{
@@ -125,7 +125,13 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         Tir2Ty::Primitive(PrimitiveType::Pdf, attr) => Ty::Media(MediaKind::Pdf, attr.clone()),
 
         // Named types
-        Tir2Ty::Class(qtn, _, attr) => Ty::Class(qtn_to_type_name(qtn), attr.clone()),
+        Tir2Ty::Class(qtn, type_args, attr) => {
+            let resolved_args: Vec<Ty> = type_args
+                .iter()
+                .map(|a| convert_tir2_ty(a, resolved))
+                .collect();
+            Ty::Class(qtn_to_type_name(qtn), resolved_args, attr.clone())
+        }
         Tir2Ty::Enum(qtn, attr) => Ty::Enum(qtn_to_type_name(qtn), attr.clone()),
         Tir2Ty::TypeAlias(qtn, attr) => {
             if resolved.recursive.contains(qtn) {
@@ -224,6 +230,40 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         // TypeVar should never reach MIR — it is erased to Unknown before VIR.
         // Map defensively to Void as error recovery.
         Tir2Ty::TypeVar(..) => Ty::Void { attr },
+    }
+}
+
+// ─── Ty → TyTemplate conversion for already-resolved Ty values ──────────────
+
+/// Convert an already-resolved `baml_type::Ty` back to a `TyTemplate`.
+///
+/// This is needed for `IsType` pattern-matching where the pattern type comes
+/// through `convert_tir2_ty` (so `TypeVars` are already erased), but we still
+/// need a `TyTemplate` to carry class-level type args for the VM to compare
+/// against `Instance::class_type_args`.
+///
+/// For all leaf types that aren't `Ty::Class`, the result is
+/// `TyTemplate::Concrete(ty)`.  For `Ty::Class(tn, args, _)` we produce
+/// `TyTemplate::Class(tn, args.map(Concrete))` so the VM can compare the
+/// resolved args against the instance's `class_type_args`.
+///
+/// Note: by the time `emit_is_type_branch` is called, any `TypeVars` in the
+/// pattern have already been resolved to concrete types — so no
+/// `generic_params` are needed.  If future patterns introduce `TypeVars` that
+/// survive to MIR, thread `enclosing_generic_params()` through here.
+pub(crate) fn ty_to_template_from_resolved_ty(ty: &Ty) -> TyTemplate {
+    match ty {
+        Ty::Class(tn, args, _) if !args.is_empty() => {
+            // Parametric class: produce TyTemplate::Class with Concrete leaves.
+            // This allows the VM to check `expected_args == inst.class_type_args`.
+            TyTemplate::Class(
+                tn.clone(),
+                args.iter().map(ty_to_template_from_resolved_ty).collect(),
+            )
+        }
+        // All other types: wrap in Concrete.  The VM uses this for the
+        // existing fast paths (primitive type tags, monomorphic classes).
+        other => TyTemplate::Concrete(other.clone()),
     }
 }
 
@@ -371,6 +411,12 @@ struct LoweringContext<'db> {
     // type even when the MIR local was declared with a coarser type (e.g.
     // catch variables declared as BuiltinUnknown).
     path_root_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+    // TIR-inferred type of every prefix `segments[..=seg_idx]` for multi-segment
+    // local-rooted Path expressions. Used by the Phase-8 method-call prepend to
+    // read the receiver-prefix type (`segments[..segments.len() - 1]`) so that
+    // class-level type args are threaded correctly through depth ≥ 3 paths
+    // like `holder.box.describe()`.
+    path_segment_types: FxHashMap<(FileScopeId, AstExprId, usize), Tir2Ty>,
     // Per-segment member resolutions for multi-segment local-rooted Path expressions.
     // Set by TIR's infer_local_rooted_path; indexed by (scope, Path ExprId).
     // path_member_resolutions[(scope, expr_id)][i] is the resolution for segments[i+1].
@@ -593,7 +639,7 @@ impl<'db> LoweringContext<'db> {
             })
             .unwrap_or_else(|| index.scope_at_offset(func_span.start(), Some(&func_data.name)));
 
-        // --- Eagerly aggregate expr_types, pat_types, resolutions, exhaustive_matches, path_root_types, and path_member_resolutions from all scopes ---
+        // --- Eagerly aggregate expr_types, pat_types, resolutions, exhaustive_matches, path_root_types, path_segment_types, and path_member_resolutions from all scopes ---
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
@@ -603,6 +649,8 @@ impl<'db> LoweringContext<'db> {
         let mut exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)> =
             rustc_hash::FxHashSet::default();
         let mut path_root_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
+        let mut path_segment_types: FxHashMap<(FileScopeId, AstExprId, usize), Tir2Ty> =
+            FxHashMap::default();
         let mut path_member_resolutions: FxHashMap<
             (FileScopeId, AstExprId),
             Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
@@ -618,6 +666,7 @@ impl<'db> LoweringContext<'db> {
             >,
              exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>,
              path_root_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+             path_segment_types: &mut FxHashMap<(FileScopeId, AstExprId, usize), Tir2Ty>,
              path_member_resolutions: &mut FxHashMap<
                 (FileScopeId, AstExprId),
                 Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
@@ -639,6 +688,9 @@ impl<'db> LoweringContext<'db> {
                 for (&expr_id, ty) in inference.iter_path_root_types() {
                     path_root_types.insert((fsi, expr_id), ty.clone());
                 }
+                for (&(expr_id, seg_idx), ty) in inference.iter_path_segment_types() {
+                    path_segment_types.insert((fsi, expr_id, seg_idx), ty.clone());
+                }
                 for (&expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
                     path_member_resolutions.insert((fsi, expr_id), member_resolutions.clone());
                 }
@@ -652,6 +704,7 @@ impl<'db> LoweringContext<'db> {
             &mut resolutions,
             &mut exhaustive_matches,
             &mut path_root_types,
+            &mut path_segment_types,
             &mut path_member_resolutions,
         );
 
@@ -667,6 +720,7 @@ impl<'db> LoweringContext<'db> {
                 &mut resolutions,
                 &mut exhaustive_matches,
                 &mut path_root_types,
+                &mut path_segment_types,
                 &mut path_member_resolutions,
             );
         }
@@ -751,6 +805,7 @@ impl<'db> LoweringContext<'db> {
             resolutions,
             exhaustive_matches,
             path_root_types,
+            path_segment_types,
             path_member_resolutions,
             current_scope: func_scope_id,
             body: expr_body,
@@ -795,7 +850,7 @@ impl<'db> LoweringContext<'db> {
         let index = file_semantic_index(db, file);
         let let_scope_id: FileScopeId = index.scope_at_offset(let_span.start(), Some(&let_name));
 
-        // --- Eagerly aggregate expr_types, pat_types, resolutions, path_root_types, path_member_resolutions from let scope ---
+        // --- Eagerly aggregate expr_types, pat_types, resolutions, path_root_types, path_segment_types, path_member_resolutions from let scope ---
         let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
@@ -805,6 +860,8 @@ impl<'db> LoweringContext<'db> {
         let mut exhaustive_matches: rustc_hash::FxHashSet<(FileScopeId, AstExprId)> =
             rustc_hash::FxHashSet::default();
         let mut path_root_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
+        let mut path_segment_types: FxHashMap<(FileScopeId, AstExprId, usize), Tir2Ty> =
+            FxHashMap::default();
         let mut path_member_resolutions: FxHashMap<
             (FileScopeId, AstExprId),
             Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
@@ -820,6 +877,7 @@ impl<'db> LoweringContext<'db> {
             >,
              exhaustive_matches: &mut rustc_hash::FxHashSet<(FileScopeId, AstExprId)>,
              path_root_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+             path_segment_types: &mut FxHashMap<(FileScopeId, AstExprId, usize), Tir2Ty>,
              path_member_resolutions: &mut FxHashMap<
                 (FileScopeId, AstExprId),
                 Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
@@ -841,6 +899,9 @@ impl<'db> LoweringContext<'db> {
                 for (&expr_id, ty) in inference.iter_path_root_types() {
                     path_root_types.insert((fsi, expr_id), ty.clone());
                 }
+                for (&(expr_id, seg_idx), ty) in inference.iter_path_segment_types() {
+                    path_segment_types.insert((fsi, expr_id, seg_idx), ty.clone());
+                }
                 for (&expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
                     path_member_resolutions.insert((fsi, expr_id), member_resolutions.clone());
                 }
@@ -854,6 +915,7 @@ impl<'db> LoweringContext<'db> {
             &mut resolutions,
             &mut exhaustive_matches,
             &mut path_root_types,
+            &mut path_segment_types,
             &mut path_member_resolutions,
         );
 
@@ -869,6 +931,7 @@ impl<'db> LoweringContext<'db> {
                 &mut resolutions,
                 &mut exhaustive_matches,
                 &mut path_root_types,
+                &mut path_segment_types,
                 &mut path_member_resolutions,
             );
         }
@@ -926,6 +989,7 @@ impl<'db> LoweringContext<'db> {
             resolutions,
             exhaustive_matches,
             path_root_types,
+            path_segment_types,
             path_member_resolutions,
             current_scope: let_scope_id,
             body: expr_body,
@@ -1155,6 +1219,21 @@ impl<'db> LoweringContext<'db> {
             })
     }
 
+    /// Compute the `TyTemplate` slice for the class-level type args of a class
+    /// construction expression.
+    ///
+    /// Returns `vec![]` for non-generic (or unresolved) classes.
+    fn class_type_arg_templates(&self, expr_id: AstExprId) -> Vec<TyTemplate> {
+        let generic_params = self.enclosing_generic_params();
+        match self.expr_types.get(&(self.current_scope, expr_id)) {
+            Some(Tir2Ty::Class(_, type_args, _)) if !type_args.is_empty() => type_args
+                .iter()
+                .map(|t| self.ty_to_template(t, &generic_params))
+                .collect(),
+            _ => vec![],
+        }
+    }
+
     /// Get the `baml_type::Ty` for a pattern binding
     fn pat_ty(&self, pat_id: AstPatId) -> Ty {
         self.pat_types
@@ -1174,6 +1253,15 @@ impl<'db> LoweringContext<'db> {
     fn path_root_ty(&self, expr_id: AstExprId) -> Option<Ty> {
         self.path_root_types
             .get(&(self.current_scope, expr_id))
+            .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
+    }
+
+    /// Get the TIR-inferred type of `segments[..=seg_idx]` for a multi-segment
+    /// local-rooted Path expression. Returns `None` if not recorded.
+    #[allow(dead_code)]
+    fn path_segment_ty(&self, expr_id: AstExprId, seg_idx: usize) -> Option<Ty> {
+        self.path_segment_types
+            .get(&(self.current_scope, expr_id, seg_idx))
             .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
     }
 
@@ -1696,11 +1784,22 @@ impl LoweringContext<'_> {
         let lambda_pending_idx = self.pending_lambdas.len();
         self.pending_lambdas.push(lambda_mir);
 
+        // Build TyTemplate entries for each enclosing generic type param so
+        // the closure can materialise them at runtime.  These resolve in the
+        // **outer** frame (TypeArgRef(N) → outer frame.type_args[N]).
+        let enclosing_params = self.enclosing_generic_params();
+        let type_arg_templates: Vec<TyTemplate> = enclosing_params
+            .iter()
+            .enumerate()
+            .map(|(n, _)| TyTemplate::TypeArgRef(n as u32))
+            .collect();
+
         self.builder.assign(
             dest,
             Rvalue::MakeClosure {
                 lambda_idx: lambda_pending_idx,
                 captures: capture_operands,
+                type_arg_templates,
             },
         );
     }
@@ -1785,7 +1884,7 @@ impl LoweringContext<'_> {
                 self.lower_unary(expr_id, op, expr, dest);
             }
 
-            AstExpr::Call { callee, args } => {
+            AstExpr::Call { callee, args, .. } => {
                 self.lower_call(expr_id, callee, &args, dest);
             }
 
@@ -1807,6 +1906,7 @@ impl LoweringContext<'_> {
                 type_name,
                 fields,
                 spreads,
+                ..
             } => {
                 self.lower_object(expr_id, type_name.as_ref(), &fields, &spreads, dest);
             }
@@ -2176,7 +2276,7 @@ impl<'db> LoweringContext<'db> {
             };
 
         for seg in &segments[1..] {
-            if let Ty::Class(ref tn, _) = current_ty.clone() {
+            if let Ty::Class(ref tn, _, _) = current_ty.clone() {
                 if let Some(fields) = self.class_fields.get(tn) {
                     if let Some(&idx) = fields.get(seg.as_str()) {
                         let next_ty = self.class_field_ty(tn, seg);
@@ -2750,6 +2850,16 @@ impl LoweringContext<'_> {
         // Check if callee is a method call (MemberAccess or multi-segment Path with a
         // MemberResolution::BoundMethod/UnboundMethod/Free). Field and Variant resolutions are not callable.
         // If the base is a real value (not a package namespace), prepend it as self.
+        //
+        // When the base is a class-instance receiver with generic type args, we need to
+        // thread those type args as leading call-site type args so that methods with
+        // `reflect.type_of<T>()` can see the class-level type param at runtime.
+        // `receiver_base_for_class_type_args` is set to the base expression id when this applies
+        // (MemberAccess callee path — `expr_types` is used for the lookup).
+        // `receiver_path_tir_ty` is used for multi-segment Path callees (e.g. `b.describe()`) where
+        // the receiver type is looked up from `path_root_types` instead of `expr_types`.
+        let mut receiver_base_for_class_type_args: Option<AstExprId> = None;
+        let mut receiver_path_tir_ty: Option<Tir2Ty> = None;
         let (callee_operand, arg_operands) = if let AstExpr::MemberAccess { base, .. } =
             &callee_expr
         {
@@ -2798,6 +2908,9 @@ impl LoweringContext<'_> {
                     // For immediate calls, emit the callee as a plain function constant
                     // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                     let receiver_op = self.lower_to_operand(*base);
+                    // Record the receiver base expr so we can later emit LoadType for its
+                    // class-level type args (De Bruijn ordering: class params first).
+                    receiver_base_for_class_type_args = Some(*base);
                     let callee_op = {
                         let resolution =
                             self.resolutions.get(&(self.current_scope, callee)).cloned();
@@ -2915,6 +3028,21 @@ impl LoweringContext<'_> {
                     );
                     Operand::Copy(Place::local(recv_local))
                 };
+                // Record the receiver-prefix's TIR type so that class-level type args
+                // can be threaded as leading call-site type args (De Bruijn order: class
+                // params first). For depth-2 paths like `b.describe()`, the prefix is
+                // `b` (segment 0). For depth-3 paths like `holder.box.describe()`, the
+                // prefix is `holder.box` (segment 1). In general:
+                //   prefix_idx = receiver_segments.len() - 1 = segments.len() - 2.
+                // Reading `path_root_types` here would pick up the root variable's type
+                // (e.g. `Holder`) instead of the actual receiver type (`Box<int>`),
+                // missing the class-level type args. `segments.len() >= 2` is guaranteed
+                // by the `is_local_method` predicate above.
+                let prefix_idx = segments.len() - 2;
+                receiver_path_tir_ty = self
+                    .path_segment_types
+                    .get(&(self.current_scope, callee, prefix_idx))
+                    .cloned();
                 let mut all_args = vec![receiver_op];
                 all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
                 (callee_op, all_args)
@@ -2938,6 +3066,18 @@ impl LoweringContext<'_> {
                         .map(|cap_idx| Operand::Copy(Place::Capture(cap_idx)))
                 };
                 if let Some(receiver_op) = receiver_op {
+                    // Future-proof parity with `is_local_method`: prefer the
+                    // receiver-prefix's segment type so that, if the package-rooted
+                    // path ever produces a parametric instance receiver, class-level
+                    // type args still flow through the Phase-8 prepend. Today
+                    // `is_pkg_method` resolves to package-namespaced callees with
+                    // no parametric receiver, so this is a no-op
+                    // (`class_type_args.is_empty()` short-circuits the prepend).
+                    let prefix_idx = segments.len() - 2;
+                    receiver_path_tir_ty = self
+                        .path_segment_types
+                        .get(&(self.current_scope, callee, prefix_idx))
+                        .cloned();
                     let mut all_args = vec![receiver_op];
                     all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
                     (callee_op, all_args)
@@ -2961,6 +3101,16 @@ impl LoweringContext<'_> {
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
+        // Check if callee is `reflect.type_of<T>()` — a value-producing intrinsic.
+        // Unlike void intrinsics (log.*, baml.events.send), this emits an assignment
+        // of `Rvalue::LoadType(template)` to `dest` rather than a StatementKind::Intrinsic.
+        if let Some(template) = self.check_type_of_intrinsic(callee, expr_id) {
+            self.builder.assign(dest, Rvalue::LoadType(template));
+            self.builder.goto(target);
+            self.builder.set_current_block(target);
+            return;
+        }
+
         // Check if callee is a compiler intrinsic (log.*, baml.events.send).
         // Intrinsics are void side effects — emit as a statement, not a call.
         if let Some(op) = self.check_intrinsic(callee) {
@@ -2975,6 +3125,79 @@ impl LoweringContext<'_> {
             self.builder.set_current_block(target);
             return;
         }
+
+        // ── Phase 5: Emit LoadType temps for explicit type arguments ─────────
+        // When the call carries explicit type args (e.g. `describe<User>()` or
+        // `fwd<T>()` where T forwards to `described_type<T>()`), materialise
+        // each as a `type` value on the stack before the regular value args.
+        // The VM pops these `ntypeargs` Object::Type values into the new frame's
+        // `type_args` vec so that inner `reflect.type_of<T>()` calls can
+        // substitute them at runtime.
+        let ast_type_args: Vec<AstTypeExpr> =
+            if let AstExpr::Call { type_args, .. } = &self.body.exprs[expr_id] {
+                type_args.clone()
+            } else {
+                vec![]
+            };
+        let explicit_type_arg_operands = self.lower_explicit_type_args(&ast_type_args);
+
+        // ── Phase 8: Prepend receiver's class-level type args ────────────────
+        // For `b.describe()` where `b: Box<int>`, the method `describe` is compiled
+        // as a direct call `describe(b)` (not via MakeBoundMethod). The VM's
+        // BoundMethod path for seeding frame.type_args is bypassed, so we instead
+        // emit LoadType for each class-level type arg and prepend them as leading
+        // call-site type args.  This preserves De Bruijn ordering:
+        //   frame.type_args = [class_T, class_U, ..., fn_A, fn_B, ...]
+        // matching `enclosing_generic_params()` = class_params ++ fn_params.
+        //
+        // There are two receiver paths:
+        //   1. MemberAccess callee (`base.method()`): receiver type from `expr_types[recv_base_id]`.
+        //   2. Path callee (`b.describe()` compiled as Path(["b","describe"])): receiver type
+        //      from `path_root_types[callee_expr_id]` (TIR records root segment type there).
+        let receiver_tir_ty: Option<Tir2Ty> =
+            if let Some(recv_base_id) = receiver_base_for_class_type_args {
+                self.expr_types
+                    .get(&(self.current_scope, recv_base_id))
+                    .cloned()
+            } else {
+                receiver_path_tir_ty
+            };
+        let receiver_class_type_arg_operands: Vec<Operand> = match receiver_tir_ty {
+            Some(Tir2Ty::Class(_, class_type_args, _)) if !class_type_args.is_empty() => {
+                let generic_params = self.enclosing_generic_params();
+                class_type_args
+                    .iter()
+                    .map(|ty_arg| {
+                        let template = self.ty_to_template(ty_arg, &generic_params);
+                        let temp = self.builder.temp(Ty::type_type());
+                        self.builder
+                            .assign(Place::local(temp), Rvalue::LoadType(template));
+                        Operand::Copy(Place::local(temp))
+                    })
+                    .collect()
+            }
+            _ => vec![],
+        };
+
+        let type_arg_operands: Vec<Operand> = if !receiver_class_type_arg_operands.is_empty() {
+            let mut combined = receiver_class_type_arg_operands;
+            combined.extend(explicit_type_arg_operands);
+            combined
+        } else {
+            explicit_type_arg_operands
+        };
+        let ntypeargs = type_arg_operands.len();
+
+        // Prepend type-arg operands before the value-arg operands.
+        // (For regular BAML calls, type args are leading so the callee's frame
+        // can pop them into `frame.type_args` before reading value args.)
+        let all_arg_operands_for_call = if ntypeargs > 0 {
+            let mut combined = type_arg_operands.clone();
+            combined.extend(arg_operands.iter().cloned());
+            combined
+        } else {
+            arg_operands.clone()
+        };
 
         // Check if callee resolves to a builtin IO function (sys-op)
         let is_sys_op = self.check_sys_op(callee);
@@ -2992,9 +3215,22 @@ impl LoweringContext<'_> {
             let future_local = self.builder.temp(future_ty);
             let future_place = Place::Local(future_local);
             let resume = self.builder.create_block();
+            // For generic IO builtins (`$rust_io_function` with type params),
+            // the compiler injects synthetic trailing value-arg slots — one
+            // `baml_type::Ty` per type parameter.  The Rust glue reads them
+            // positionally after the regular value args.  We therefore append
+            // type-arg operands AFTER the value args here (unlike regular BAML
+            // calls where they are prepended as leading args).
+            let sys_op_arg_operands = if ntypeargs > 0 {
+                let mut combined = arg_operands;
+                combined.extend(type_arg_operands);
+                combined
+            } else {
+                arg_operands
+            };
             self.builder.dispatch_future(
                 callee_operand,
-                arg_operands,
+                sys_op_arg_operands,
                 future_place.clone(),
                 resume,
             );
@@ -3008,15 +3244,22 @@ impl LoweringContext<'_> {
             // first, then assign from the temp to the real destination.
             match &dest {
                 Place::Local(_) => {
-                    self.builder
-                        .call(callee_operand, arg_operands, dest, target, unwind);
+                    self.builder.call_with_type_args(
+                        callee_operand,
+                        all_arg_operands_for_call,
+                        ntypeargs,
+                        dest,
+                        target,
+                        unwind,
+                    );
                 }
                 _ => {
                     let call_ty = self.expr_ty(expr_id);
                     let tmp = self.builder.temp(call_ty);
-                    self.builder.call(
+                    self.builder.call_with_type_args(
                         callee_operand,
-                        arg_operands,
+                        all_arg_operands_for_call,
+                        ntypeargs,
                         Place::local(tmp),
                         target,
                         unwind,
@@ -3190,7 +3433,304 @@ impl LoweringContext<'_> {
     }
 }
 
-// ─── 3.6: Helper methods ─────────────────────────────────────────────────────
+// ─── 3.6: reflect.type_of intrinsic ─────────────────────────────────────────
+
+impl LoweringContext<'_> {
+    /// Detect a `reflect.type_of<T>()` call and, if found, resolve the type
+    /// argument and return the corresponding `TyTemplate`.
+    ///
+    /// Returns `Some(template)` when:
+    /// - The callee is the `baml.reflect.type_of` `$compiler_intrinsic`.
+    /// - The call carries exactly one type argument.
+    /// - The type argument resolves to a concrete `Ty` (no `TypeVar` leaves).
+    ///
+    /// Returns `None` when the callee is not `type_of` **or** when the type
+    /// argument contains a `TypeVar` (generic-parameter reference).  The latter
+    /// case is deferred to Phase 5 which will produce `TyTemplate::TypeArgRef`
+    /// leaves; attempting it here would emit a broken `LoadType` instruction.
+    fn check_type_of_intrinsic(
+        &self,
+        callee: AstExprId,
+        call_expr_id: AstExprId,
+    ) -> Option<TyTemplate> {
+        use baml_compiler2_ast::BuiltinKind;
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+
+        // ── 1. Check the callee resolves to `baml.reflect.type_of` ──────────
+        let func_loc = if let AstExpr::Path(segments) = &self.body.exprs[callee] {
+            if segments.len() == 1 {
+                let span_start = self
+                    .source_map
+                    .as_ref()
+                    .map(|sm| sm.expr_span(callee).start())
+                    .unwrap_or_default();
+                let resolved = baml_compiler2_tir::resolve::resolve_name_at_in_scope(
+                    self.db,
+                    self.file,
+                    span_start,
+                    &segments[0],
+                    self.scope_func_name.as_ref(),
+                );
+                match resolved {
+                    baml_compiler2_tir::resolve::ResolvedName::Builtin(
+                        baml_compiler2_hir::contributions::Definition::Function(fl),
+                    ) => Some(fl),
+                    baml_compiler2_tir::resolve::ResolvedName::Item(
+                        baml_compiler2_hir::contributions::Definition::Function(fl),
+                    ) => Some(fl),
+                    _ => None,
+                }
+            } else {
+                use baml_compiler2_tir::inference::MemberResolution;
+                let from_pmr = self
+                    .path_member_resolutions
+                    .get(&(self.current_scope, callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .and_then(|res| match res {
+                        MemberResolution::Free { func_loc } => Some(*func_loc),
+                        MemberResolution::BoundMethod { func_loc, .. }
+                        | MemberResolution::UnboundMethod { func_loc, .. } => Some(*func_loc),
+                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                    });
+                if from_pmr.is_some() {
+                    from_pmr
+                } else {
+                    self.resolutions
+                        .get(&(self.current_scope, callee))
+                        .and_then(|res| match res {
+                            MemberResolution::Free { func_loc } => Some(*func_loc),
+                            MemberResolution::BoundMethod { func_loc, .. }
+                            | MemberResolution::UnboundMethod { func_loc, .. } => Some(*func_loc),
+                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                                None
+                            }
+                        })
+                }
+            }
+        } else {
+            None
+        }?;
+
+        let body = baml_compiler2_ppir::function_body(self.db, func_loc);
+        if !matches!(
+            body.as_ref(),
+            baml_compiler2_hir::body::FunctionBody::Builtin(BuiltinKind::Intrinsic)
+        ) {
+            return None;
+        }
+        let item_ref = def_to_item_ref(
+            self.db,
+            baml_compiler2_hir::contributions::Definition::Function(func_loc),
+        );
+        if item_ref.to_string().as_str() != "reflect.type_of" {
+            return None;
+        }
+
+        // ── 2. Extract the single type argument ─────────────────────────────
+        let type_args = if let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] {
+            type_args.clone()
+        } else {
+            return None;
+        };
+        let type_arg = type_args.into_iter().next()?;
+
+        // ── 3. Lower the type expression to a Tir2Ty ────────────────────────
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_items = package_items(self.db, pkg_id);
+
+        // Include the enclosing class + function generic params so that `T`
+        // in `reflect.type_of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
+        // than an unresolved-type error — both for free generic functions and
+        // for methods on generic classes.  The order (class params first,
+        // then function params) mirrors TIR's `enclosing_class_generic_params
+        // ++ user_generic_params` convention used in `callable.rs`.
+        let generic_params = self.enclosing_generic_params();
+
+        let mut diags = Vec::new();
+        let tir_ty = lower_type_expr_in_ns(
+            self.db,
+            &type_arg,
+            pkg_items,
+            &pkg_info.namespace_path,
+            &generic_params,
+            &mut diags,
+        );
+
+        // ── 4. (Phase 5) Build TyTemplate — TypeVar → TypeArgRef(N) ────────────
+        let template = self.ty_to_template(&tir_ty, &generic_params);
+        Some(template)
+    }
+
+    /// Recursively convert a `Tir2Ty` to a `TyTemplate`.
+    ///
+    /// `Tir2Ty::TypeVar("T")` whose name appears at position `N` in
+    /// `generic_params` maps to `TyTemplate::TypeArgRef(N)`.  All other types
+    /// recurse structurally and bottom out at `TyTemplate::Concrete(...)`.
+    ///
+    /// This is the Phase 5 replacement for the direct `convert_tir2_ty` call
+    /// that Phase 4 used for fully-concrete types.
+    fn ty_to_template(&self, ty: &Tir2Ty, generic_params: &[baml_base::Name]) -> TyTemplate {
+        match ty {
+            Tir2Ty::TypeVar(name, _) => {
+                // Find the de Bruijn index in the enclosing function's param list.
+                if let Some(n) = generic_params.iter().position(|p| p == name) {
+                    TyTemplate::TypeArgRef(
+                        u32::try_from(n).expect("generic param index fits in u32"),
+                    )
+                } else {
+                    // TypeVar not found in enclosing params — defensive fallback.
+                    // This should not happen for well-typed programs.
+                    TyTemplate::Concrete(Ty::Void {
+                        attr: baml_type::TyAttr::default(),
+                    })
+                }
+            }
+            Tir2Ty::List(inner, _) => {
+                TyTemplate::Array(Box::new(self.ty_to_template(inner, generic_params)))
+            }
+            Tir2Ty::Optional(inner, _) => {
+                TyTemplate::Optional(Box::new(self.ty_to_template(inner, generic_params)))
+            }
+            Tir2Ty::Map(k, v, _) => TyTemplate::Map(
+                Box::new(self.ty_to_template(k, generic_params)),
+                Box::new(self.ty_to_template(v, generic_params)),
+            ),
+            Tir2Ty::Union(parts, _) => TyTemplate::Union(
+                parts
+                    .iter()
+                    .map(|p| self.ty_to_template(p, generic_params))
+                    .collect(),
+            ),
+            Tir2Ty::Class(qtn, type_args, attr) => {
+                if type_args
+                    .iter()
+                    .any(baml_compiler2_tir::generics::contains_typevar)
+                {
+                    // Generic class instantiation with type-variable args.
+                    let template_args: Vec<TyTemplate> = type_args
+                        .iter()
+                        .map(|a| self.ty_to_template(a, generic_params))
+                        .collect();
+                    TyTemplate::Class(qtn_to_type_name(qtn), template_args)
+                } else {
+                    // Monomorphic class — no TypeVars in args.
+                    let resolved_args: Vec<Ty> = type_args
+                        .iter()
+                        .map(|a| convert_tir2_ty(a, &self.resolved_aliases))
+                        .collect();
+                    TyTemplate::Concrete(Ty::Class(
+                        qtn_to_type_name(qtn),
+                        resolved_args,
+                        attr.clone(),
+                    ))
+                }
+            }
+            // EvolvingList and EvolvingMap: treat like their non-evolving counterparts.
+            Tir2Ty::EvolvingList(inner, _) => {
+                TyTemplate::Array(Box::new(self.ty_to_template(inner, generic_params)))
+            }
+            Tir2Ty::EvolvingMap(k, v, _) => TyTemplate::Map(
+                Box::new(self.ty_to_template(k, generic_params)),
+                Box::new(self.ty_to_template(v, generic_params)),
+            ),
+            // All remaining concrete leaf types.
+            other => TyTemplate::Concrete(convert_tir2_ty(other, &self.resolved_aliases)),
+        }
+    }
+
+    /// Return the list of generic parameter names in scope for the
+    /// **enclosing** function being lowered.  Empty for top-level expressions
+    /// that have no enclosing generic function.
+    ///
+    /// When the enclosing function is a method on a generic class, the
+    /// class-level params come first, followed by the function-level params
+    /// — matching TIR's `enclosing_class_generic_params ++ generic_params`
+    /// convention (see `baml_compiler2_tir::callable`).  This keeps MIR's
+    /// view of in-scope generics consistent with how TIR types the body.
+    ///
+    /// **Runtime caveat**: the runtime ABI does not yet thread class-level
+    /// type args through method calls (a method's `frame.type_args` is
+    /// populated only from explicit call-site `<...>` args, not from the
+    /// receiver's class type args).  Class-level generics resolve correctly
+    /// at the MIR layer via this helper, but `reflect.type_of<T>()` where
+    /// `T` is a class-level param will substitute to `Ty::unknown` at
+    /// runtime until that gap is closed.
+    fn enclosing_generic_params(&self) -> Vec<baml_base::Name> {
+        let Some(fl) = self.func_loc else {
+            return Vec::new();
+        };
+        let item_tree = file_item_tree(self.db, fl.file(self.db));
+        let func_id = fl.id(self.db);
+        let mut params: Vec<baml_base::Name> = item_tree
+            .classes
+            .values()
+            .find(|class_data| class_data.methods.contains(&func_id))
+            .map(|class_data| class_data.generic_params.clone())
+            .unwrap_or_default();
+        params.extend(item_tree[func_id].generic_params.iter().cloned());
+        params
+    }
+
+    /// Emit `LoadType` rvalue assignments for the explicit type arguments of a
+    /// generic call and return the resulting operands plus the count.
+    ///
+    /// For each `TypeExpr` in `ast_type_args`:
+    /// 1. Lowers it to `Tir2Ty` (respecting the enclosing generic params so
+    ///    that `T` resolves to `Tir2Ty::TypeVar("T")` rather than an error).
+    /// 2. Converts it to a `TyTemplate` via `ty_to_template` (`TypeVar` → `TypeArgRef(N)`).
+    /// 3. Assigns `Rvalue::LoadType(template)` to a fresh `type`-typed temp.
+    /// 4. Appends that temp as an `Operand::Copy` to the returned vec.
+    ///
+    /// Returns `(type_arg_operands, ntypeargs)` — the number equals
+    /// `ast_type_args.len()`.  Returns an empty vec when there are no type args.
+    fn lower_explicit_type_args(&mut self, ast_type_args: &[AstTypeExpr]) -> Vec<Operand> {
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+
+        if ast_type_args.is_empty() {
+            return vec![];
+        }
+
+        let generic_params = self.enclosing_generic_params();
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_items = package_items(self.db, pkg_id);
+
+        let type_ty = baml_type::Ty::Opaque(
+            baml_type::TypeName {
+                name: baml_base::Name::new("Type"),
+                module_path: vec![
+                    baml_base::Name::new("baml"),
+                    baml_base::Name::new("reflect"),
+                ],
+                display_name: baml_base::Name::new("type"),
+            },
+            baml_type::TyAttr::default(),
+        );
+
+        let mut operands = Vec::with_capacity(ast_type_args.len());
+        for type_arg in ast_type_args {
+            let mut diags = Vec::new();
+            let tir_ty = lower_type_expr_in_ns(
+                self.db,
+                type_arg,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &generic_params,
+                &mut diags,
+            );
+            // Ignore diagnostics here — TIR already validated the type args.
+            let template = self.ty_to_template(&tir_ty, &generic_params);
+            let temp = self.builder.temp(type_ty.clone());
+            self.builder
+                .assign(Place::local(temp), Rvalue::LoadType(template));
+            operands.push(Operand::Copy(Place::local(temp)));
+        }
+        operands
+    }
+}
+
+// ─── 3.7: Helper methods ─────────────────────────────────────────────────────
 
 impl LoweringContext<'_> {
     fn lower_to_operand(&mut self, expr_id: AstExprId) -> Operand {
@@ -3277,7 +3817,7 @@ impl LoweringContext<'_> {
         // which is keyed by `TypeName`.
         let ty = self.expr_ty(expr_id);
         let type_name_key: Option<TypeName> = match &ty {
-            Ty::Class(tn, _) => Some(tn.clone()),
+            Ty::Class(tn, _, _) => Some(tn.clone()),
             _ => None,
         };
         // Prefer the TIR-resolved fully-qualified name (`<package>.<ns>.<name>`)
@@ -3328,10 +3868,14 @@ impl LoweringContext<'_> {
                     .map(|(_, e)| self.lower_to_operand(*e))
                     .collect()
             };
+            let type_arg_templates = self.class_type_arg_templates(expr_id);
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
-                    kind: AggregateKind::Class(class_name),
+                    kind: AggregateKind::Class {
+                        name: class_name,
+                        type_arg_templates,
+                    },
                     fields: field_operands,
                 },
             );
@@ -3394,10 +3938,14 @@ impl LoweringContext<'_> {
                         .iter()
                         .map(|(_, e)| self.lower_to_operand(*e))
                         .collect();
+                    let type_arg_templates = self.class_type_arg_templates(expr_id);
                     self.builder.assign(
                         dest,
                         Rvalue::Aggregate {
-                            kind: AggregateKind::Class(class_name),
+                            kind: AggregateKind::Class {
+                                name: class_name,
+                                type_arg_templates,
+                            },
                             fields: field_operands,
                         },
                     );
@@ -3439,10 +3987,14 @@ impl LoweringContext<'_> {
                 }
             }
 
+            let type_arg_templates = self.class_type_arg_templates(expr_id);
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
-                    kind: AggregateKind::Class(class_name),
+                    kind: AggregateKind::Class {
+                        name: class_name,
+                        type_arg_templates,
+                    },
                     fields: result,
                 },
             );
@@ -3554,7 +4106,7 @@ impl LoweringContext<'_> {
         };
 
         // Look up field index from class_fields
-        let field_idx = if let Ty::Class(tn, _) = unwrapped_ty {
+        let field_idx = if let Ty::Class(tn, _, _) = unwrapped_ty {
             self.class_fields
                 .get(tn)
                 .and_then(|fields| fields.get(&field_str))
@@ -3574,7 +4126,7 @@ impl LoweringContext<'_> {
                 })),
             );
         } else {
-            if let Ty::Class(tn, _) = unwrapped_ty {
+            if let Ty::Class(tn, _, _) = unwrapped_ty {
                 self.emit_panic_call(
                     &format!(
                         "internal compiler error: MIR failed to resolve field access \
@@ -4215,7 +4767,7 @@ impl LoweringContext<'_> {
                 };
 
                 for seg in &segments[1..] {
-                    if let Ty::Class(ref tn, _) = current_ty.clone() {
+                    if let Ty::Class(ref tn, _, _) = current_ty.clone() {
                         if let Some(fields) = self.class_fields.get(tn) {
                             if let Some(&idx) = fields.get(seg.as_str()) {
                                 let next_ty = self.class_field_ty(tn, seg);
@@ -4250,7 +4802,7 @@ impl LoweringContext<'_> {
                 let member_name = member.clone();
                 let base_place = self.lower_lvalue(base_id);
                 let base_ty = self.expr_ty(base_id);
-                if let Ty::Class(ref tn, _) = base_ty {
+                if let Ty::Class(ref tn, _, _) = base_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
@@ -4351,7 +4903,7 @@ impl LoweringContext<'_> {
                     Ty::Optional(inner, _) => inner.as_ref(),
                     _ => &base_ty,
                 };
-                if let Ty::Class(tn, _) = unwrapped_ty {
+                if let Ty::Class(tn, _, _) = unwrapped_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
@@ -5055,9 +5607,15 @@ impl LoweringContext<'_> {
                 }
             }
         } else {
+            // Convert Ty → TyTemplate so the emitter can handle generic class
+            // checks (Ty::Class with args containing TypeVars map to
+            // TyTemplate::Class with TypeArgRef leaves).  For non-generic types
+            // the template is TyTemplate::Concrete(ty) — the emitter falls back
+            // to the same fast path as before.
+            let ty_template = ty_to_template_from_resolved_ty(&ty);
             let test = Rvalue::IsType {
                 operand: Operand::Copy(Place::Local(scrutinee)),
-                ty,
+                ty_template,
             };
             let test_local = self.builder.temp(Ty::Bool {
                 attr: TyAttr::default(),
@@ -5255,7 +5813,7 @@ impl LoweringContext<'_> {
             Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
             Ty::Null { .. } => Some(baml_type::typetag::NULL),
             Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
-            Ty::Class(tn, _) => self.class_type_tags.get(tn).copied(),
+            Ty::Class(tn, _, _) => self.class_type_tags.get(tn).copied(),
             _ => None,
         }
     }
@@ -5280,7 +5838,7 @@ impl LoweringContext<'_> {
     fn class_pattern_type_name(&self, pat_id: AstPatId) -> Option<TypeName> {
         let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
         match convert_tir2_ty(tir_ty, &self.resolved_aliases) {
-            Ty::Class(tn, _) => Some(tn),
+            Ty::Class(tn, _, _) => Some(tn),
             _ => None,
         }
     }
@@ -6361,13 +6919,35 @@ pub fn lower_function<'db>(
             mir.item_ref = item_ref;
             mir
         }
-        FunctionBody::Builtin(kind) => MirFunction {
-            arity,
-            span: None,
-            item_ref,
-            kind: MirFunctionKind::Builtin(*kind),
-            lambdas: vec![],
-        },
+        FunctionBody::Builtin(kind) => {
+            use baml_compiler2_ast::BuiltinKind;
+            // For IO builtins (`$rust_io_function`), the compiler injects one
+            // synthetic trailing value-arg slot for each generic type parameter
+            // (e.g. `parse<T>` gets one extra `baml_type::Ty` slot after the
+            // regular params).  We must include those synthetic slots in the
+            // arity so that `DispatchFuture` pops the correct number of args
+            // from the stack.
+            let extra_arity = if matches!(kind, BuiltinKind::Io) {
+                // For IO builtins (`$rust_io_function`), the compiler injects
+                // one synthetic trailing value-arg slot for each *function-level*
+                // generic type parameter.  Class-level generics (from the
+                // enclosing class definition) do NOT generate extra slots —
+                // `baml_builtins2_codegen` only adds type-arg params for
+                // function-level generics.  We therefore only count the
+                // function's own generic_params here.
+                let item_tree = file_item_tree(db, func_loc.file(db));
+                item_tree[func_loc.id(db)].generic_params.len()
+            } else {
+                0
+            };
+            MirFunction {
+                arity: arity + extra_arity,
+                span: None,
+                item_ref,
+                kind: MirFunctionKind::Builtin(*kind),
+                lambdas: vec![],
+            }
+        }
         FunctionBody::Missing => MirFunction {
             arity,
             span: None,

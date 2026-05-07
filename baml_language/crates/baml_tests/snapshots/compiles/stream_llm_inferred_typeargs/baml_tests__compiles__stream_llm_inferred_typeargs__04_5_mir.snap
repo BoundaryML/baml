@@ -1,0 +1,120 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.TestClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: baml.llm.PrimitiveClientOptions
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4o-mini", const "http://localhost:1234", const null, const null, const null, const null, const null, const null, const null, const "test-key", const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "TestClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TestFunc(input: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+    let _3: type
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _3 = load_type(string);
+        _0 = call const fn baml.llm.call_llm_function<copy _3>(const fn user.TestClient, const "TestFunc", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TestFunc$build_request(input: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.build_request(const fn user.TestClient, const "TestFunc", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TestFunc$build_request_stream(input: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.build_request_stream(const fn user.TestClient, const "TestFunc", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TestFunc$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "TestFunc", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TestFunc$render_prompt(input: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const fn user.TestClient, const "TestFunc", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.call_stream_inferred() -> baml.llm.Stream<string, null | string> {
+    // Locals:
+    let _0: baml.llm.Stream<string, null | string> // _0 // return
+    let _1: map<string, unknown>
+
+    bb0: {
+        _1 = { const "input": const "world" };
+        _0 = call const fn baml.llm.stream_llm_function(const fn user.TestClient, const "TestFunc", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
