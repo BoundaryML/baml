@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 11861
 ---
 function $init() -> null {
     call $init_let_0
@@ -10,6 +9,7 @@ function $init() -> null {
 }
 
 function user.GenerateImage(prompt: string) -> image {
+    load_type image
     load_global user.OpenAIImageResponses
     load_const "GenerateImage"
     load_var prompt
@@ -46,7 +46,7 @@ function user.GenerateImage$parse(json: string) -> image {
     return
 }
 
-function user.GenerateImage$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+function user.GenerateImage$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<image, image> {
     load_var sse
     load_const "GenerateImage"
     load_const null
@@ -64,7 +64,7 @@ function user.GenerateImage$render_prompt(prompt: string) -> baml.llm.PromptAst 
     return
 }
 
-function user.GenerateImage$stream(prompt: string) -> baml.llm.Stream {
+function user.GenerateImage$stream(prompt: string) -> baml.llm.Stream<image, image> {
     load_global user.OpenAIImageResponses
     load_const "GenerateImage"
     load_var prompt
@@ -75,6 +75,7 @@ function user.GenerateImage$stream(prompt: string) -> baml.llm.Stream {
 }
 
 function user.GenerateImageSet(prompt: string) -> image[] {
+    load_type image[]
     load_global user.OpenAIImageResponses
     load_const "GenerateImageSet"
     load_var prompt
@@ -111,7 +112,7 @@ function user.GenerateImageSet$parse(json: string) -> image[] {
     return
 }
 
-function user.GenerateImageSet$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+function user.GenerateImageSet$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<image[], image[]> {
     load_var sse
     load_const "GenerateImageSet"
     load_const null
@@ -129,7 +130,7 @@ function user.GenerateImageSet$render_prompt(prompt: string) -> baml.llm.PromptA
     return
 }
 
-function user.GenerateImageSet$stream(prompt: string) -> baml.llm.Stream {
+function user.GenerateImageSet$stream(prompt: string) -> baml.llm.Stream<image[], image[]> {
     load_global user.OpenAIImageResponses
     load_const "GenerateImageSet"
     load_var prompt
@@ -140,6 +141,7 @@ function user.GenerateImageSet$stream(prompt: string) -> baml.llm.Stream {
 }
 
 function user.GenerateMixedImageNarrative(prompt: string) -> (image | string)[] {
+    load_type image | string[]
     load_global user.OpenAIImageResponses
     load_const "GenerateMixedImageNarrative"
     load_var prompt
@@ -176,7 +178,7 @@ function user.GenerateMixedImageNarrative$parse(json: string) -> (image | string
     return
 }
 
-function user.GenerateMixedImageNarrative$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+function user.GenerateMixedImageNarrative$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<(image | string)[], (image | string)[]> {
     load_var sse
     load_const "GenerateMixedImageNarrative"
     load_const null
@@ -194,7 +196,7 @@ function user.GenerateMixedImageNarrative$render_prompt(prompt: string) -> baml.
     return
 }
 
-function user.GenerateMixedImageNarrative$stream(prompt: string) -> baml.llm.Stream {
+function user.GenerateMixedImageNarrative$stream(prompt: string) -> baml.llm.Stream<(image | string)[], (image | string)[]> {
     load_global user.OpenAIImageResponses
     load_const "GenerateMixedImageNarrative"
     load_var prompt

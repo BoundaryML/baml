@@ -2406,7 +2406,7 @@ impl<'a> Parser<'a> {
                 p.start_node(SyntaxKind::PARAMETER_LIST);
                 p.finish_node();
                 // Parse the body
-                p.parse_function_body();
+                p.parse_function_body(true);
                 return;
             }
 
@@ -2414,9 +2414,18 @@ impl<'a> Parser<'a> {
             p.parse_parameter_list();
 
             // Return type
+            let mut allow_llm_body = true;
             if p.eat(TokenKind::Arrow) {
+                if p.at(TokenKind::LBrace) {
+                    // The `{` belongs to the function body, not a return type.
+                    // Keep recovery in expression-body mode so `client` text
+                    // inside the broken body does not masquerade as an LLM
+                    // directive.
+                    allow_llm_body = false;
+                }
                 p.parse_type();
             } else {
+                allow_llm_body = false;
                 p.error_unexpected_token("return type (->)".to_string());
             }
 
@@ -2430,7 +2439,7 @@ impl<'a> Parser<'a> {
 
             // Body
             if p.at(TokenKind::LBrace) {
-                p.parse_function_body();
+                p.parse_function_body(allow_llm_body);
             } else {
                 p.error_unexpected_token("function body".to_string());
             }
@@ -2489,9 +2498,9 @@ impl<'a> Parser<'a> {
         });
     }
 
-    fn parse_function_body(&mut self) {
+    fn parse_function_body(&mut self, allow_llm_body: bool) {
         // Scan tokens to determine function type before parsing (single pass)
-        if self.looks_like_llm_function_body() {
+        if allow_llm_body && self.looks_like_llm_function_body() {
             self.parse_llm_function_body();
         } else {
             self.parse_expr_function_body();
@@ -5678,6 +5687,27 @@ function f() -> string {
 
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn missing_return_type_body_with_client_word_is_not_llm_body() {
+        let source = r#"
+function Foo() -> {
+  client GPT4
+}
+"#;
+
+        let (root, _errors) = parse_source(source);
 
         let func = root
             .descendants()

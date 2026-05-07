@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 11723
 ---
 === MIR2 ===
 fn user.GenerateImage(prompt: string) -> image {
@@ -8,10 +7,12 @@ fn user.GenerateImage(prompt: string) -> image {
     let _0: image // _0 // return
     let _1: string // prompt // param
     let _2: map<string, unknown>
+    let _3: type
 
     bb0: {
         _2 = { const "prompt": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const fn user.OpenAIImageResponses, const "GenerateImage", copy _2) -> [bb1];
+        _3 = load_type(image);
+        _0 = call const fn baml.llm.call_llm_function<copy _3>(const fn user.OpenAIImageResponses, const "GenerateImage", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -86,10 +87,12 @@ fn user.GenerateImageSet(prompt: string) -> image[] {
     let _0: image[] // _0 // return
     let _1: string // prompt // param
     let _2: map<string, unknown>
+    let _3: type
 
     bb0: {
         _2 = { const "prompt": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const fn user.OpenAIImageResponses, const "GenerateImageSet", copy _2) -> [bb1];
+        _3 = load_type(image[]);
+        _0 = call const fn baml.llm.call_llm_function<copy _3>(const fn user.OpenAIImageResponses, const "GenerateImageSet", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -164,10 +167,12 @@ fn user.GenerateMixedImageNarrative(prompt: string) -> (image | string)[] {
     let _0: (image | string)[] // _0 // return
     let _1: string // prompt // param
     let _2: map<string, unknown>
+    let _3: type
 
     bb0: {
         _2 = { const "prompt": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const fn user.OpenAIImageResponses, const "GenerateMixedImageNarrative", copy _2) -> [bb1];
+        _3 = load_type(image | string[]);
+        _0 = call const fn baml.llm.call_llm_function<copy _3>(const fn user.OpenAIImageResponses, const "GenerateMixedImageNarrative", copy _2) -> [bb1];
     }
 
     bb1: {
