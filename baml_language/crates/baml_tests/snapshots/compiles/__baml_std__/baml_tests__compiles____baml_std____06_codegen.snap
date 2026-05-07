@@ -4,7 +4,28 @@ source: crates/baml_tests/src/generated_tests.rs
 function baml.Array.at(self: null, index: int) -> void? {
 }
 
+function baml.Array.clear(self: null) -> null {
+}
+
 function baml.Array.concat(self: null, other: void[]) -> void[] {
+}
+
+function baml.Array.every(self: null, predicate: (void) -> bool throws never) -> bool {
+}
+
+function baml.Array.find(self: null, predicate: (void) -> bool throws never) -> void? {
+}
+
+function baml.Array.find_index(self: null, predicate: (void) -> bool throws never) -> int? {
+}
+
+function baml.Array.find_last(self: null, predicate: (void) -> bool throws never) -> void? {
+}
+
+function baml.Array.find_last_index(self: null, predicate: (void) -> bool throws never) -> int? {
+}
+
+function baml.Array.flat_map(self: null, f: (void) -> void[] throws never) -> void[] {
 }
 
 function baml.Array.from_json(j: baml.json.json) -> baml.Array<void> {
@@ -13,7 +34,19 @@ function baml.Array.from_json(j: baml.json.json) -> baml.Array<void> {
     return
 }
 
+function baml.Array.includes(self: null, item: void) -> bool {
+}
+
+function baml.Array.index_of(self: null, item: void) -> int? {
+}
+
+function baml.Array.insert(self: null, item: void, idx: int) -> int {
+}
+
 function baml.Array.join(self: null, separator: string) -> string {
+}
+
+function baml.Array.last_index_of(self: null, item: void) -> int? {
 }
 
 function baml.Array.length(self: null) -> int {
@@ -28,13 +61,28 @@ function baml.Array.pop(self: null) -> void? {
 function baml.Array.push(self: null, item: void) -> int {
 }
 
+function baml.Array.reduce(self: null, reducer: (void, void) -> void throws never, initial: void) -> void {
+}
+
 function baml.Array.reverse(self: null) -> void[] {
+}
+
+function baml.Array.shift(self: null) -> void? {
 }
 
 function baml.Array.slice(self: null, start: int, end: int) -> void[] {
 }
 
+function baml.Array.some(self: null, predicate: (void) -> bool throws never) -> bool {
+}
+
+function baml.Array.splice(self: null, start: int, count: int, replace: void[]) -> null {
+}
+
 function baml.Array.to_json(self: null) -> baml.json.json {
+}
+
+function baml.Array.unshift(self: null, item: void) -> int {
 }
 
 function baml.Bool.from_json(j: baml.json.json) -> baml.Bool {

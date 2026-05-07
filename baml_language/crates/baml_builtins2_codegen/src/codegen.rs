@@ -880,7 +880,16 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
 
 fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     let glue_name = format!("__glue_{method_name}");
-    let needs_owned = matches!(b.vm_usage, VmUsage::MutRef) || b.may_yield;
+    // When the receiver is `&mut self`, parameter extractions run BEFORE the
+    // mutable receiver extraction. If any parameter borrows VM state shared-ly
+    // (e.g. `vm.as_array(&args[i])?` for a `T[]` param), that borrow conflicts
+    // with the subsequent mutable borrow. Cloning param values up front frees
+    // the immutable borrow before the mutable one.
+    let receiver_is_mut_self = b
+        .receiver
+        .as_ref()
+        .is_some_and(|r| r.receiver_type.is_mut());
+    let needs_owned = matches!(b.vm_usage, VmUsage::MutRef) || b.may_yield || receiver_is_mut_self;
 
     writeln!(
         out,

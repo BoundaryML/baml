@@ -19,27 +19,43 @@ class baml.Array {
 class baml.Map {
 }
 function baml.at(self: ?, index: int) -> baml.T?  [builtin]
+function baml.clear(self: ?) -> null  [builtin]
 function baml.concat(self: ?, other: baml.T[]) -> baml.T[]  [builtin]
-function baml.from_json(j: baml.json.json) -> baml.Array  [expr] {
-  baml.Array {  }
-}
+function baml.every(self: ?, predicate: (baml.T) -> bool throws baml.E) -> bool  [builtin]
+function baml.find(self: ?, predicate: (baml.T) -> bool throws baml.E) -> baml.T?  [builtin]
+function baml.find_index(self: ?, predicate: (baml.T) -> bool throws baml.E) -> int?  [builtin]
+function baml.find_last(self: ?, predicate: (baml.T) -> bool throws baml.E) -> baml.T?  [builtin]
+function baml.find_last_index(self: ?, predicate: (baml.T) -> bool throws baml.E) -> int?  [builtin]
+function baml.flat_map(self: ?, f: (baml.T) -> baml.U[] throws baml.E) -> baml.U[]  [builtin]
 function baml.from_json(j: baml.json.json) -> baml.Map  [expr] {
   baml.Map {  }
 }
+function baml.from_json(j: baml.json.json) -> baml.Array  [expr] {
+  baml.Array {  }
+}
 function baml.get(self: ?, key: baml.K) -> baml.V?  [builtin]
 function baml.has(self: ?, key: baml.K) -> bool  [builtin]
+function baml.includes(self: ?, item: baml.T) -> bool  [builtin]
+function baml.index_of(self: ?, item: baml.T) -> int?  [builtin]
+function baml.insert(self: ?, item: baml.T, idx: int) -> int  [builtin]
 function baml.join(self: ?, separator: string) -> string  [builtin]
 function baml.keys(self: ?) -> baml.K[]  [builtin]
+function baml.last_index_of(self: ?, item: baml.T) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.map(self: ?, f: (baml.T) -> baml.U throws baml.E) -> baml.U[]  [builtin]
 function baml.pop(self: ?) -> baml.T?  [builtin]
 function baml.push(self: ?, item: baml.T) -> int  [builtin]
+function baml.reduce(self: ?, reducer: (baml.A, baml.T) -> baml.A throws baml.E, initial: baml.A) -> baml.A  [builtin]
 function baml.reverse(self: ?) -> baml.T[]  [builtin]
 function baml.set(self: ?, key: baml.K, value: baml.V) -> null  [builtin]
+function baml.shift(self: ?) -> baml.T?  [builtin]
 function baml.slice(self: ?, start: int, end: int) -> baml.T[]  [builtin]
+function baml.some(self: ?, predicate: (baml.T) -> bool throws baml.E) -> bool  [builtin]
+function baml.splice(self: ?, start: int, count: int, replace: baml.T[]) -> null  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
+function baml.unshift(self: ?, item: baml.T) -> int  [builtin]
 function baml.values(self: ?) -> baml.V[]  [builtin]
 
 --- <builtin>/baml/core.baml ---

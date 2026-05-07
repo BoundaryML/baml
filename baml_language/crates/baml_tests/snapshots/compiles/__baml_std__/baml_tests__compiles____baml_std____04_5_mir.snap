@@ -23,22 +23,21 @@ fn baml.Bool.to_json = builtin(vm)
 
 fn baml.Array.at = builtin(vm)
 
+fn baml.Array.clear = builtin(vm)
+
 fn baml.Array.concat = builtin(vm)
 
-fn baml.Array.from_json(j: baml.json.json) -> baml.Array<void> {
-    // Locals:
-    let _0: baml.Array<void> // _0 // return
-    let _1: baml.json.json // j // param
+fn baml.Array.every = builtin(vm)
 
-    bb0: {
-        _0 = baml.Array<TypeArgRef(0)> {  };
-        goto -> bb1;
-    }
+fn baml.Array.find = builtin(vm)
 
-    bb1: {
-        return;
-    }
-}
+fn baml.Array.find_index = builtin(vm)
+
+fn baml.Array.find_last = builtin(vm)
+
+fn baml.Array.find_last_index = builtin(vm)
+
+fn baml.Array.flat_map = builtin(vm)
 
 fn baml.Map.from_json(j: baml.json.json) -> baml.Map<void, void> {
     // Locals:
@@ -55,13 +54,36 @@ fn baml.Map.from_json(j: baml.json.json) -> baml.Map<void, void> {
     }
 }
 
+fn baml.Array.from_json(j: baml.json.json) -> baml.Array<void> {
+    // Locals:
+    let _0: baml.Array<void> // _0 // return
+    let _1: baml.json.json // j // param
+
+    bb0: {
+        _0 = baml.Array<TypeArgRef(0)> {  };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.Map.get = builtin(vm)
 
 fn baml.Map.has = builtin(vm)
 
+fn baml.Array.includes = builtin(vm)
+
+fn baml.Array.index_of = builtin(vm)
+
+fn baml.Array.insert = builtin(vm)
+
 fn baml.Array.join = builtin(vm)
 
 fn baml.Map.keys = builtin(vm)
+
+fn baml.Array.last_index_of = builtin(vm)
 
 fn baml.Map.length = builtin(vm)
 
@@ -73,15 +95,25 @@ fn baml.Array.pop = builtin(vm)
 
 fn baml.Array.push = builtin(vm)
 
+fn baml.Array.reduce = builtin(vm)
+
 fn baml.Array.reverse = builtin(vm)
 
 fn baml.Map.set = builtin(vm)
 
+fn baml.Array.shift = builtin(vm)
+
 fn baml.Array.slice = builtin(vm)
+
+fn baml.Array.some = builtin(vm)
+
+fn baml.Array.splice = builtin(vm)
+
+fn baml.Map.to_json = builtin(vm)
 
 fn baml.Array.to_json = builtin(vm)
 
-fn baml.Map.to_json = builtin(vm)
+fn baml.Array.unshift = builtin(vm)
 
 fn baml.Map.values = builtin(vm)
 
