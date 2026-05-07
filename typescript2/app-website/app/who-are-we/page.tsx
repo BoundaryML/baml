@@ -13,11 +13,11 @@ const EYEBROW = '#8A8580';
 const CARD_BG = '#FBF8F1';
 
 type TeamMember = {
+  bio: string;
+  image?: string;
+  linkedin?: string;
   name: string;
   role: string;
-  image: string;
-  bio: string;
-  linkedin?: string;
   twitter?: string;
 };
 
@@ -62,6 +62,22 @@ const teamMembers: TeamMember[] = [
     role: 'Engineer',
     image: '/dhilan.jpg',
     bio: 'Dhilan works across the stack on the parts of BAML that developers actually touch — the website, the playground, and the integrations that make the language feel approachable. He believes the fastest way to learn a tool is to try it and have it not get in your way.',
+  },
+  {
+    bio: 'Kai works across the product surface and developer experience, helping BAML feel direct, legible, and fast to adopt in real codebases.',
+    name: 'Kai',
+    role: 'Engineer',
+  },
+  {
+    bio: 'Paulo works with teams building production AI systems, turning hard-won implementation feedback into sharper workflows for BAML users.',
+    image: '/testimonials/people/paulo.png',
+    name: 'Paulo Rossi',
+    role: 'Engineer',
+  },
+  {
+    bio: 'Avery works on the places where language tooling meets product polish, making BAML easier to understand, test, and ship.',
+    name: 'Avery',
+    role: 'Engineer',
   },
 ];
 
@@ -269,17 +285,43 @@ export default function WhoAreWePage() {
                       flexShrink: 0,
                     }}
                   >
-                    <Image
-                      alt={member.name}
-                      height={112}
-                      src={member.image}
-                      width={96}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                      }}
-                    />
+                    {member.image ? (
+                      <Image
+                        alt={member.name}
+                        height={112}
+                        src={member.image}
+                        style={{
+                          height: '100%',
+                          objectFit: 'cover',
+                          width: '100%',
+                        }}
+                        width={96}
+                      />
+                    ) : (
+                      <div
+                        aria-label={member.name}
+                        role="img"
+                        style={{
+                          alignItems: 'center',
+                          background:
+                            'linear-gradient(135deg, #FFFDF6 0%, #F4EEE2 100%)',
+                          color: ACCENT,
+                          display: 'flex',
+                          fontSize: 28,
+                          fontWeight: 600,
+                          height: '100%',
+                          justifyContent: 'center',
+                          letterSpacing: '-0.04em',
+                          width: '100%',
+                        }}
+                      >
+                        {member.name
+                          .split(' ')
+                          .map((part) => part[0])
+                          .join('')
+                          .slice(0, 2)}
+                      </div>
+                    )}
                   </div>
                   <div
                     style={{

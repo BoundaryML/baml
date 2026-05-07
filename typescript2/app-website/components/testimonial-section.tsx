@@ -1,8 +1,7 @@
-import { Github } from 'lucide-react';
+import { ArrowRight, Github } from 'lucide-react';
 import { siteConfig } from '@/app/_lib/config';
 import { SectionHeader } from './section-header';
 import { SocialProofTestimonials } from './testimonial-scroll';
-import { Button } from './ui/button';
 
 export function TestimonialSection() {
   const { testimonials } = siteConfig;
@@ -41,15 +40,19 @@ export function TestimonialSection() {
         </p>
       </SectionHeader>
       <SocialProofTestimonials testimonials={testimonials} />
-      <div className="mt-8 flex justify-center">
+      <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <a
+          className="editorial-btn"
           href="https://github.com/BoundaryML/site/issues/new?template=testimonial.yml"
           rel="noopener noreferrer"
           target="_blank"
-          className="editorial-btn"
         >
           <Github className="h-4 w-4" />
           Share your story
+        </a>
+        <a className="editorial-btn thesis-btn" href="/thesis">
+          Read our thesis
+          <ArrowRight className="h-4 w-4 thesis-arrow" />
         </a>
       </div>
       <style>{`
@@ -73,6 +76,22 @@ export function TestimonialSection() {
           border-color: #6D28D9;
           color: #6D28D9;
           transform: translateY(-1px);
+        }
+        .thesis-btn {
+          background: #F5EFFE;
+          border-color: #D8C8F5;
+          color: #6D28D9;
+        }
+        .thesis-btn:hover {
+          background: #E9DDFB;
+          border-color: #A78BFA;
+          color: #5B21B6;
+        }
+        .thesis-arrow {
+          transition: transform 200ms ease;
+        }
+        .thesis-btn:hover .thesis-arrow {
+          transform: translateX(4px);
         }
       `}</style>
     </section>

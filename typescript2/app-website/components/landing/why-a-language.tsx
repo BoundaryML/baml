@@ -19,6 +19,8 @@ import {
   SiGo,
   SiGooglegemini,
   SiOpenai,
+  SiOpenjdk,
+  SiRuby,
   SiTypescript,
 } from 'react-icons/si';
 
@@ -172,17 +174,21 @@ const APP_CLIENTS: {
   { color: '#3776AB', imageSrc: '/python-icon.png', label: 'Python' },
   { color: '#3178C6', Icon: SiTypescript, label: 'TypeScript' },
   { color: '#00ADD8', Icon: SiGo, label: 'Go' },
+  { color: '#CC342D', Icon: SiRuby, label: 'Ruby' },
+  { color: '#ED8B00', Icon: SiOpenjdk, label: 'Java' },
   { color: '#6D28D9', label: 'More clients', symbol: '+' },
 ];
 
 const LLM_PROVIDERS: {
   color: string;
-  Icon: IconType;
+  Icon?: IconType;
   label: string;
+  symbol?: string;
 }[] = [
   { color: '#111111', Icon: SiOpenai, label: 'OpenAI' },
   { color: '#D97757', Icon: SiClaude, label: 'Claude' },
   { color: '#4285F4', Icon: SiGooglegemini, label: 'Gemini' },
+  { color: '#6D28D9', label: 'More providers', symbol: '+' },
 ];
 
 export function WhyALanguage() {
@@ -282,12 +288,13 @@ function ArchitectureStack({
         style={{ perspective: '1200px' }}
       >
         <LayerCard
-          className="z-30 w-[78%]"
+          castsShadow
+          className="z-30 w-full lg:h-[250px] lg:w-[108%] lg:-translate-x-6"
           eyebrow="Top Layer"
           floatDelay={0}
           title="Application"
         >
-          <div className="flex flex-wrap justify-center gap-2">
+          <div className="flex flex-wrap justify-center gap-4">
             {APP_CLIENTS.map((client) => (
               <IconPill
                 color={client.color}
@@ -295,6 +302,7 @@ function ArchitectureStack({
                 imageSrc={client.imageSrc}
                 key={client.label}
                 label={client.label}
+                size="large"
                 symbol={client.symbol}
               />
             ))}
@@ -303,13 +311,15 @@ function ArchitectureStack({
 
         <LayerCard
           activeTint={activeFeature.tint}
-          className="z-20 -mt-4 w-full lg:-mt-1 lg:w-[108%]"
-          eyebrow="Control Plane"
+          castsShadow
+          className="z-20 -mt-3 w-full lg:-mt-3 lg:h-[250px] lg:w-[108%]"
+          eyebrow="Language Layer"
           floatDelay={0.18}
           isActive
-          title="BAML Control Plane"
+          logoSrc="/bamllogopurple.svg"
+          title="BAML Language Layer"
         >
-          <div className="feature-chip-grid grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="feature-chip-grid grid w-full grid-cols-2 gap-2 sm:grid-cols-3">
             {FEATURES.map((feature) => (
               <FeatureChip
                 feature={feature}
@@ -322,18 +332,20 @@ function ArchitectureStack({
         </LayerCard>
 
         <LayerCard
-          className="z-10 -mt-4 w-[82%] lg:-mt-1"
+          className="z-10 -mt-3 w-full lg:-mt-3 lg:h-[250px] lg:w-[108%] lg:translate-x-6"
           eyebrow="Bottom Layer"
           floatDelay={0.36}
           title="LLM Infrastructure"
         >
-          <div className="flex flex-wrap justify-center gap-2">
+          <div className="flex flex-wrap justify-center gap-4">
             {LLM_PROVIDERS.map((provider) => (
               <IconPill
                 color={provider.color}
                 Icon={provider.Icon}
                 key={provider.label}
                 label={provider.label}
+                size="large"
+                symbol={provider.symbol}
               />
             ))}
           </div>
@@ -342,7 +354,7 @@ function ArchitectureStack({
 
       <motion.aside
         animate={{ opacity: 1, x: 0, y: 0 }}
-        className="mt-8 rounded-lg border border-[#D9D3C4] bg-[#FFFCF6]/90 p-5 shadow-[0_22px_70px_-46px_rgba(26,22,18,0.55)] backdrop-blur-md lg:sticky lg:top-[170px] lg:mt-44 lg:w-[300px]"
+        className="mt-8 rounded-lg border border-[#D9D3C4] bg-[#FFFCF6]/90 p-5 shadow-[0_22px_70px_-46px_rgba(26,22,18,0.55)] backdrop-blur-md lg:sticky lg:top-[170px] lg:mt-52 lg:w-[300px]"
         initial={{ opacity: 0, x: 10, y: 8 }}
         key={activeFeature.id}
         transition={{ duration: 0.22, ease: [0.22, 0.61, 0.36, 1] }}
@@ -398,21 +410,30 @@ function ArchitectureStack({
 
 function LayerCard({
   activeTint,
+  castsShadow = false,
   children,
   className,
   eyebrow,
   floatDelay,
   isActive = false,
+  logoSrc,
   title,
 }: {
   activeTint?: string;
+  castsShadow?: boolean;
   children: ReactNode;
   className: string;
   eyebrow: string;
   floatDelay: number;
   isActive?: boolean;
+  logoSrc?: string;
   title: string;
 }) {
+  const restingShadow = castsShadow
+    ? '0 34px 60px -42px rgba(26,22,18,0.62), 0 14px 30px -28px rgba(26,22,18,0.42)'
+    : '0 1px 0 rgba(255,255,255,0.65) inset';
+  const activeShadow = `0 0 0 1px ${activeTint ?? '#6D28D9'}33, 0 34px 60px -42px rgba(26,22,18,0.62), 0 14px 30px -28px rgba(26,22,18,0.42)`;
+
   return (
     <div
       className={[
@@ -425,13 +446,11 @@ function LayerCard({
     >
       <motion.div
         animate={{
-          boxShadow: isActive
-            ? `0 0 0 1px ${activeTint ?? '#6D28D9'}33`
-            : '0 1px 0 rgba(255,255,255,0.65) inset',
+          boxShadow: isActive ? activeShadow : restingShadow,
           y: [0, -7, 0],
         }}
         className={[
-          'relative rounded-lg border border-[#D9D3C4] bg-[#FFFCF6]/78 p-5 backdrop-blur-xl',
+          'relative h-full rounded-lg border border-[#D9D3C4] bg-[#FFFCF6]/78 p-5 backdrop-blur-xl',
         ].join(' ')}
         transition={{
           boxShadow: { duration: 0.25 },
@@ -448,7 +467,7 @@ function LayerCard({
               'linear-gradient(135deg, rgba(255,255,255,0.68), rgba(255,255,255,0.08))',
           }}
         />
-        <div className="relative">
+        <div className="relative flex h-full flex-col">
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
               <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-[#8A8580]">
@@ -458,8 +477,36 @@ function LayerCard({
                 {title}
               </h3>
             </div>
+            {logoSrc ? (
+              <motion.div
+                animate={{
+                  boxShadow: [
+                    '0 0 0 1px rgba(167,99,255,0.22), 0 0 14px rgba(167,99,255,0.16)',
+                    '0 0 0 1px rgba(167,99,255,0.34), 0 0 22px rgba(167,99,255,0.24)',
+                    '0 0 0 1px rgba(167,99,255,0.22), 0 0 14px rgba(167,99,255,0.16)',
+                  ],
+                }}
+                className="grid size-11 shrink-0 place-items-center rounded-md border border-[#A763FF]/30 bg-white/65"
+                transition={{
+                  duration: 2.8,
+                  ease: 'easeInOut',
+                  repeat: Number.POSITIVE_INFINITY,
+                }}
+              >
+                <Image
+                  alt=""
+                  aria-hidden
+                  className="h-7 w-7 object-contain"
+                  height={28}
+                  src={logoSrc}
+                  width={28}
+                />
+              </motion.div>
+            ) : null}
           </div>
-          {children}
+          <div className="flex w-full flex-1 items-center justify-center">
+            {children}
+          </div>
         </div>
       </motion.div>
     </div>
@@ -515,29 +562,45 @@ function IconPill({
   Icon,
   imageSrc,
   label,
+  size = 'default',
   symbol,
 }: {
   color: string;
   Icon?: IconType;
   imageSrc?: string;
   label: string;
+  size?: 'default' | 'large';
   symbol?: string;
 }) {
+  const isLarge = size === 'large';
+
   return (
     <span
       aria-label={label}
-      className="grid size-10 place-items-center rounded-full border border-[#D9D3C4] bg-white/65"
+      className={[
+        'grid place-items-center rounded-full border border-[#D9D3C4] bg-white/65',
+        isLarge ? 'size-14' : 'size-10',
+      ].join(' ')}
       role="img"
       title={label}
     >
       {imageSrc ? (
-        <Image alt="" aria-hidden height={20} src={imageSrc} width={20} />
+        <Image
+          alt=""
+          aria-hidden
+          height={isLarge ? 28 : 20}
+          src={imageSrc}
+          width={isLarge ? 28 : 20}
+        />
       ) : Icon ? (
-        <Icon aria-hidden size={18} style={{ color }} />
+        <Icon aria-hidden size={isLarge ? 25 : 18} style={{ color }} />
       ) : (
         <span
           aria-hidden
-          className="font-mono text-lg font-semibold leading-none"
+          className={[
+            'font-mono font-semibold leading-none',
+            isLarge ? 'text-2xl' : 'text-lg',
+          ].join(' ')}
           style={{ color }}
         >
           {symbol}

@@ -935,6 +935,18 @@ export function IncrementalAdoption() {
         }}
       >
         <div>
+          <h2
+            style={{
+              color: INK,
+              fontSize: 'clamp(2rem, 3.2vw, 3.4rem)',
+              fontWeight: 600,
+              letterSpacing: '-0.03em',
+              lineHeight: 0.98,
+              margin: '0 0 40px 24px',
+            }}
+          >
+            Adopt Incrementally
+          </h2>
           {STEPS.map((s, i) => {
             const isActive = i === activeStep;
             const STACK_TOP_BASE = 80;
@@ -1042,9 +1054,7 @@ export function IncrementalAdoption() {
             top: 'calc(var(--navigation-height, 56px) + 24px)',
           }}
         >
-          <MigrationProgress
-            activeStep={activeStep}
-          />
+          <MigrationProgress activeStep={activeStep} />
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
             <StickyPanel activeStep={activeStep} />
           </div>

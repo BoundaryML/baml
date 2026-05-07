@@ -28,7 +28,7 @@ const navStyles = {
     padding: '16px 24px',
     position: 'fixed',
     textTransform: 'uppercase',
-    top: 0,
+    top: 41,
     width: '100%',
     zIndex: 50,
   } as React.CSSProperties,
@@ -40,7 +40,7 @@ const navStyles = {
     textAlign: 'right' as const,
   } as React.CSSProperties,
   navSpacer: {
-    height: 65,
+    height: 106,
   } as React.CSSProperties,
 };
 
@@ -92,16 +92,6 @@ function NavStars() {
         }}
         width={14}
       />
-      <span
-        aria-hidden
-        style={{
-          color: hovered ? '#6D28D9' : '#8A8178',
-          fontSize: 11,
-          lineHeight: 1,
-        }}
-      >
-        ★
-      </span>
       <span className="min-w-[4ch] tabular-nums">{display}</span>
     </Link>
   );
@@ -134,7 +124,6 @@ export function Navbar() {
         </div>
         <NavStars />
         <ForAgentsLink />
-        <LearnBamlLink />
         <style>{`
           .nav-link {
             display: inline-flex;
@@ -178,34 +167,6 @@ function ForAgentsLink() {
       }}
     >
       For agents
-    </Link>
-  );
-}
-
-function LearnBamlLink() {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <Link
-      href="https://docs.boundaryml.com/home"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      rel="noopener noreferrer"
-      style={{
-        ...navStyles.navItem,
-        background: hovered
-          ? 'linear-gradient(135deg, #DDD0F7 0%, #C4B5FD 100%)'
-          : 'linear-gradient(135deg, #F5EFFE 0%, #E9DDFB 100%)',
-        border: `1px solid ${hovered ? '#A78BFA' : '#D8C8F5'}`,
-        borderRadius: 8,
-        color: hovered ? '#4C1D95' : '#6D28D9',
-        padding: '6px 14px',
-        transition:
-          'background 850ms ease, color 850ms ease, border-color 850ms ease',
-      }}
-      target="_blank"
-    >
-      Learn BAML
     </Link>
   );
 }
