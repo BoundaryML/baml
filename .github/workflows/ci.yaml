@@ -492,6 +492,106 @@ jobs:
           run: cd baml_language && cargo codspeed run
           token: ${{ secrets.CODSPEED_TOKEN }}
 
+  # ----------------------------------------------------------------
+  # Suite A2 — cross-language walltime benchmarks (BAML / Python / Go).
+  # See baml_language/crates/baml_tests/benches/cross_lang/ and the
+  # benchmarking2 infra repo. These jobs are deliberately NOT in
+  # ci-failure-alert.needs: they should never block a merge — they
+  # enqueue work that runs asynchronously on a dedicated worker.
+  # ----------------------------------------------------------------
+
+  suite-a2-drift-check:
+    name: "suite a2 drift check"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    if: |
+      github.event_name != 'merge_group' &&
+      (needs.determine_changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch')
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Drift-check Suite A2 vs runtime_benchmark.rs
+        run: python3 baml_language/crates/baml_tests/benches/cross_lang/harness/drift_check.py
+
+  suite-a2-enqueue:
+    name: "suite a2 (enqueue)"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    if: |
+      github.event_name != 'merge_group' &&
+      (
+        github.ref == 'refs/heads/canary' && needs.determine_changes.outputs.code == 'true' ||
+        github.event_name == 'workflow_dispatch'
+      )
+    timeout-minutes: 5
+    steps:
+      - name: Enqueue benchmark run
+        env:
+          BAML_BENCH_SERVICE_URL: ${{ secrets.BAML_BENCH_SERVICE_URL }}
+          BAML_BENCH_SERVICE_TOKEN: ${{ secrets.BAML_BENCH_SERVICE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BAML_BENCH_SERVICE_URL:-}" ]; then
+            echo "## Suite A2 — skipped (BAML_BENCH_SERVICE_URL not configured)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          payload="$(jq -n \
+            --arg repo  '${{ github.repository }}' \
+            --arg ref   '${{ github.ref_name }}' \
+            --arg sha   '${{ github.sha }}' \
+            --arg wf    '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+            '{repo:$repo, ref:$ref, sha:$sha, suites:["suite_a2"], workflow_url:$wf}')"
+          resp="$(curl -fsS -X POST \
+            -H "Authorization: Bearer $BAML_BENCH_SERVICE_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "${BAML_BENCH_SERVICE_URL%/}/benchmark-runs")"
+          run_id="$(jq -r .id <<<"$resp")"
+          echo "## Suite A2 — \`$run_id\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Run details](${BAML_BENCH_SERVICE_URL%/}/benchmark-runs/$run_id)" >> "$GITHUB_STEP_SUMMARY"
+
+  suite-b-enqueue:
+    name: "suite b (enqueue)"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    if: |
+      github.event_name != 'merge_group' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request' && contains(github.event.pull_request.body, 'RUN_BAML_SWE_BENCH=1'))
+      )
+    timeout-minutes: 5
+    steps:
+      - name: Enqueue Suite B run
+        env:
+          BAML_BENCH_SERVICE_URL: ${{ secrets.BAML_BENCH_SERVICE_URL }}
+          BAML_BENCH_SERVICE_TOKEN: ${{ secrets.BAML_BENCH_SERVICE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BAML_BENCH_SERVICE_URL:-}" ]; then
+            echo "## Suite B — skipped (BAML_BENCH_SERVICE_URL not configured)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          payload="$(jq -n \
+            --arg repo  '${{ github.repository }}' \
+            --arg ref   '${{ github.ref_name }}' \
+            --arg sha   '${{ github.sha }}' \
+            --arg wf    '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+            '{repo:$repo, ref:$ref, sha:$sha, suites:["suite_b"], workflow_url:$wf}')"
+          resp="$(curl -fsS -X POST \
+            -H "Authorization: Bearer $BAML_BENCH_SERVICE_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "${BAML_BENCH_SERVICE_URL%/}/benchmark-runs")"
+          run_id="$(jq -r .id <<<"$resp")"
+          status="$(jq -r .status <<<"$resp")"
+          if [ "$status" = "quota_skipped" ]; then
+            echo "## Suite B — skipped (rolling 24h spend cap)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Suite B — \`$run_id\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "[Run details](${BAML_BENCH_SERVICE_URL%/}/benchmark-runs/$run_id)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   # CI Failure Alert - Required status check using "skipped = success" pattern
   # See: https://devopsdirective.com/posts/2025/08/github-actions-required-checks-for-conditional-jobs/
   #
