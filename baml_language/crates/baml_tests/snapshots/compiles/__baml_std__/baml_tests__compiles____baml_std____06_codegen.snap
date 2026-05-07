@@ -317,6 +317,12 @@ function baml.Int.trailing_ones(self: null) -> int {
 function baml.Int.trailing_zeros(self: null) -> int {
 }
 
+function baml.Map.clear(self: null) -> null {
+}
+
+function baml.Map.delete(self: null, key: void) -> void? {
+}
+
 function baml.Map.from_json(j: baml.json.json) -> baml.Map<void, void> {
     load_type #0
     load_type #1
@@ -325,6 +331,9 @@ function baml.Map.from_json(j: baml.json.json) -> baml.Map<void, void> {
 }
 
 function baml.Map.get(self: null, key: void) -> void? {
+}
+
+function baml.Map.get_or_insert(self: null, key: void, default: void) -> void {
 }
 
 function baml.Map.has(self: null, key: void) -> bool {
@@ -336,7 +345,7 @@ function baml.Map.keys(self: null) -> void[] {
 function baml.Map.length(self: null) -> int {
 }
 
-function baml.Map.set(self: null, key: void, value: void) -> null {
+function baml.Map.set(self: null, key: void, value: void) -> void? {
 }
 
 function baml.Map.to_json(self: null) -> baml.json.json {

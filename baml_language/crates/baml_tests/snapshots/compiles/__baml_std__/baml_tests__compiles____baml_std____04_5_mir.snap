@@ -23,9 +23,13 @@ fn baml.Bool.to_json = builtin(vm)
 
 fn baml.Array.at = builtin(vm)
 
+fn baml.Map.clear = builtin(vm)
+
 fn baml.Array.clear = builtin(vm)
 
 fn baml.Array.concat = builtin(vm)
+
+fn baml.Map.delete = builtin(vm)
 
 fn baml.Array.every = builtin(vm)
 
@@ -70,6 +74,8 @@ fn baml.Array.from_json(j: baml.json.json) -> baml.Array<void> {
 }
 
 fn baml.Map.get = builtin(vm)
+
+fn baml.Map.get_or_insert = builtin(vm)
 
 fn baml.Map.has = builtin(vm)
 

@@ -326,11 +326,30 @@ class Map<K, V> {
     $rust_function
   }
 
+  /// Inserts or replaces the entry for `key`. Returns the previously
+  /// associated value, or `null` if `key` was not already present.
+  ///
+  /// # Examples
+  /// ```
+  /// let m: map<string, int> = {};
+  /// m.set("a", 1)         // null  (was absent)
+  /// m.set("a", 2)         // 1     (returns the old value)
+  /// m.get("a")            // 2
+  /// ```
   //baml:mut_self
-  function set(self, key: K, value: V) -> null {
+  function set(self, key: K, value: V) -> V? {
     $rust_function
   }
 
+  /// Returns the value associated with `key`, or `null` if the key is not
+  /// present.
+  ///
+  /// # Examples
+  /// ```
+  /// let m: map<string, int> = {"a": 1};
+  /// m.get("a")     // 1
+  /// m.get("b")     // null
+  /// ```
   //baml:vm
   function get(self, key: K) -> V? {
     $rust_function
@@ -339,6 +358,52 @@ class Map<K, V> {
   //baml:mut_vm
   //baml:may_yield
   function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+    $rust_function
+  }
+
+  /// Removes and returns the entry for `key`. Returns `null` if the key was
+  /// not present.
+  ///
+  /// # Examples
+  /// ```
+  /// let m: map<string, int> = {"a": 1, "b": 2};
+  /// m.delete("a")     // 1
+  /// m.delete("a")     // null  (already gone)
+  /// m.length()        // 1
+  /// ```
+  //baml:mut_self
+  function delete(self, key: K) -> V? {
+    $rust_function
+  }
+
+  /// Returns the existing value for `key`, or inserts `default` and returns
+  /// it if the key was absent. Mutates `self` only when the key was absent.
+  ///
+  /// `default` is always evaluated by the caller. To compute a default
+  /// lazily (only when needed), see `get_or_insert_computed` (deferred).
+  ///
+  /// # Examples
+  /// ```
+  /// let m: map<string, int> = {};
+  /// m.get_or_insert("k", 10)   // 10  (inserted)
+  /// m.get_or_insert("k", 99)   // 10  (existing — `99` ignored)
+  /// ```
+  //baml:mut_self
+  function get_or_insert(self, key: K, default: V) -> V {
+    $rust_function
+  }
+
+  /// Removes all entries from the map, leaving it with `length() == 0`.
+  /// Mutates `self` in place.
+  ///
+  /// # Examples
+  /// ```
+  /// let m: map<string, int> = {"a": 1, "b": 2};
+  /// m.clear();
+  /// m.length()    // 0
+  /// ```
+  //baml:mut_self
+  function clear(self) -> null {
     $rust_function
   }
 }

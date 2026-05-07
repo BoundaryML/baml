@@ -223,7 +223,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
             ts.collector(sub_collector) : void
             let elapsed = baml.sys.now_ms() - start : int
             let sub_registry = TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed } : testing.TestRegistry
-            self.expansions.set(name, sub_registry) : null
+            self.expansions.set(name, sub_registry) : testing.TestRegistry?
             return self.serialize() : testing.SerializedTestDef[]
           }
       }
