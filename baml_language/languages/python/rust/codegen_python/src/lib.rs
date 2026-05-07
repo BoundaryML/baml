@@ -2352,6 +2352,66 @@ mod tests {
     }
 
     #[test]
+    fn cross_leaf_user_root() {
+        // Non-root leaf (`lorem`) references a root-namespace user type
+        // (`Foo` declared at `root.baml`). The translator emits the
+        // bare name `Foo` thanks to the empty-segment routing
+        // shortcut, so the leaf needs `from .. import Foo` to bring
+        // the name into scope. Both `.py` and `.pyi` carry a guarded
+        // import.
+        let mut pool: SymbolPool = HashMap::new();
+        let foo = cg_name("user", &[], "Foo");
+        let envelope = cg_name("user", &["lorem"], "Envelope");
+        pool.insert(foo.clone(), class(foo.clone()));
+        pool.insert(
+            envelope.clone(),
+            class_with_props(
+                envelope,
+                vec![("inner", Ty::Class(foo, vec![]))],
+                "lorem.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            py.contains("if typing.TYPE_CHECKING:\n    from .. import Foo\n"),
+            "py missing guarded root Foo import:\n{py}"
+        );
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            pyi.contains("if typing.TYPE_CHECKING:\n    from .. import Foo\n"),
+            "pyi missing guarded root Foo import:\n{pyi}"
+        );
+        assert!(pyi.contains("    inner: Foo\n"));
+    }
+
+    #[test]
+    fn root_leaf_does_not_self_import_root_types() {
+        // Same `Foo` referenced from a same-leaf class on the root
+        // leaf — no import should be emitted (it's locally defined).
+        let mut pool: SymbolPool = HashMap::new();
+        let foo = cg_name("user", &[], "Foo");
+        let consumer = cg_name("user", &[], "FooConsumer");
+        pool.insert(foo.clone(), class(foo.clone()));
+        pool.insert(
+            consumer.clone(),
+            class_with_props(
+                consumer,
+                vec![("inner", Ty::Class(foo, vec![]))],
+                "root.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("__init__.py")];
+        assert!(
+            !py.contains("from . import Foo") && !py.contains("from .. import Foo"),
+            "root leaf should not import its own Foo:\n{py}"
+        );
+    }
+
+    #[test]
     fn cross_leaf_user_baml() {
         // lorem leaf references baml.http.Response — needs a runtime
         // `from .. import baml` so the `baml.http.Response` annotation
