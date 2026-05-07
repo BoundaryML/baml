@@ -47,6 +47,9 @@ pub struct PpirTypeAttrs {
 pub enum PpirTy {
     Named {
         path: Vec<Name>,
+        /// Generic args passed at the use site (e.g. `Box<int>` → `[int]`).
+        /// Empty for non-generic types and references that omit args.
+        generic_args: Vec<PpirTy>,
         attrs: PpirTypeAttrs,
     },
     Int {
@@ -139,8 +142,11 @@ impl PpirTy {
     pub fn clone_without_attrs(&self) -> Self {
         let d = PpirTypeAttrs::default();
         match self {
-            Self::Named { path, .. } => Self::Named {
+            Self::Named {
+                path, generic_args, ..
+            } => Self::Named {
                 path: path.clone(),
+                generic_args: generic_args.clone(),
                 attrs: d,
             },
             Self::Int { .. } => Self::Int { attrs: d },
@@ -182,6 +188,7 @@ impl PpirTy {
     pub fn named(name: impl Into<Name>) -> Self {
         PpirTy::Named {
             path: vec![name.into()],
+            generic_args: vec![],
             attrs: PpirTypeAttrs::default(),
         }
     }
@@ -240,8 +247,13 @@ impl PpirTy {
             TypeExpr::Null { .. } => PpirTy::Null { attrs },
             TypeExpr::Never { .. } => PpirTy::Never { attrs },
             TypeExpr::Void { .. } => PpirTy::Never { attrs },
-            TypeExpr::Path { segments, .. } => PpirTy::Named {
+            TypeExpr::Path {
+                segments,
+                generic_args,
+                ..
+            } => PpirTy::Named {
                 path: segments.clone(),
+                generic_args: generic_args.iter().map(Self::convert_type_expr).collect(),
                 attrs,
             },
             TypeExpr::Optional { inner, .. } => PpirTy::Optional {
@@ -300,9 +312,11 @@ impl PpirTy {
     /// Convert a `PpirTy` back to a `TypeExpr` for synthesized AST items.
     pub fn to_type_expr(&self) -> TypeExpr {
         match self {
-            PpirTy::Named { path, .. } => TypeExpr::Path {
+            PpirTy::Named {
+                path, generic_args, ..
+            } => TypeExpr::Path {
                 segments: path.clone(),
-                generic_args: vec![],
+                generic_args: generic_args.iter().map(PpirTy::to_type_expr).collect(),
                 attrs: vec![],
             },
             PpirTy::Int { .. } => TypeExpr::Int { attrs: vec![] },

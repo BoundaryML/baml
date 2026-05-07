@@ -1334,8 +1334,13 @@ mod tests {
     }
 
     #[test]
-    fn recursive_type_alias_single_quotes_rhs() {
-        // type JsonValue = int | str | List<JsonValue>  (recursive)
+    fn recursive_type_alias_emits_type_alias_type() {
+        // type JsonValue = int | str | List<JsonValue>  (recursive).
+        // Per 18c, recursive aliases render via
+        // `typing_extensions.TypeAliasType` with self-references quoted
+        // as forward-refs, so a `BaseModel` field annotated with
+        // `JsonValue` no longer infinite-recurses during Pydantic
+        // schema build.
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["tree"], "JsonValue");
         let rhs = Ty::Union(vec![
@@ -1346,9 +1351,48 @@ mod tests {
         pool.insert(n.clone(), alias_full(n, rhs, true, "tree.baml", 0));
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("tree/__init__.py")];
+        assert!(leaf.contains("import typing_extensions\n"));
         assert!(leaf.contains(
-            "JsonValue: typing.TypeAlias = 'typing.Union[int, str, typing.List[JsonValue]]'\n"
+            "JsonValue = typing_extensions.TypeAliasType(\"JsonValue\", typing.Union[int, str, typing.List[\"JsonValue\"]])\n"
         ));
+    }
+
+    #[test]
+    fn recursive_alias_quotes_cross_leaf_and_root_refs() {
+        // A recursive alias body referencing names from other leaves
+        // and from the root has to emit them as forward-ref strings.
+        // The RHS of `TypeAliasType(...)` evaluates eagerly at module
+        // load; cross-leaf imports are TYPE_CHECKING-guarded and root
+        // names are also imported under TYPE_CHECKING from non-root
+        // leaves — bare references would `NameError` at line eval.
+        let mut pool: SymbolPool = HashMap::new();
+        let foo = cg_name("user", &[], "Foo"); // root-routed
+        let bar = cg_name("user", &["util"], "Bar"); // cross-leaf
+        let alias = cg_name("user", &["lorem"], "Mixed"); // recursive in lorem
+        pool.insert(foo.clone(), class(foo.clone()));
+        pool.insert(bar.clone(), class(bar.clone()));
+        pool.insert(
+            alias.clone(),
+            alias_full(
+                alias.clone(),
+                Ty::Union(vec![
+                    Ty::Class(foo, vec![]),
+                    Ty::Class(bar, vec![]),
+                    Ty::List(Box::new(Ty::TypeAlias(alias))),
+                ]),
+                true,
+                "lorem.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains(
+                "Mixed = typing_extensions.TypeAliasType(\"Mixed\", typing.Union[\"Foo\", \"util.Bar\", typing.List[\"Mixed\"]])\n"
+            ),
+            "lorem leaf missing properly-quoted recursive alias body:\n{leaf}"
+        );
     }
 
     #[test]
@@ -2137,7 +2181,9 @@ mod tests {
     }
 
     #[test]
-    fn pyi_recursive_type_alias_keeps_single_quoting() {
+    fn pyi_recursive_type_alias_emits_type_alias_type() {
+        // `.pyi` mirrors `.py`: recursive aliases render via
+        // `typing_extensions.TypeAliasType` (18c).
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["tree"], "JsonValue");
         let rhs = Ty::Union(vec![
@@ -2149,8 +2195,9 @@ mod tests {
 
         let out = to_source_code(&pool, &[]);
         let leaf = &out[&PathBuf::from("tree/__init__.pyi")];
+        assert!(leaf.contains("import typing_extensions\n"));
         assert!(leaf.contains(
-            "JsonValue: typing.TypeAlias = 'typing.Union[int, str, typing.List[JsonValue]]'\n"
+            "JsonValue = typing_extensions.TypeAliasType(\"JsonValue\", typing.Union[int, str, typing.List[\"JsonValue\"]])\n"
         ));
     }
 
@@ -2340,6 +2387,66 @@ mod tests {
             "pyi missing guarded ipsum import:\n{pyi}"
         );
         assert!(pyi.contains("    sentiment: ipsum.Sentiment\n"));
+    }
+
+    #[test]
+    fn cross_leaf_user_root() {
+        // Non-root leaf (`lorem`) references a root-namespace user type
+        // (`Foo` declared at `root.baml`). The translator emits the
+        // bare name `Foo` thanks to the empty-segment routing
+        // shortcut, so the leaf needs `from .. import Foo` to bring
+        // the name into scope. Both `.py` and `.pyi` carry a guarded
+        // import.
+        let mut pool: SymbolPool = HashMap::new();
+        let foo = cg_name("user", &[], "Foo");
+        let envelope = cg_name("user", &["lorem"], "Envelope");
+        pool.insert(foo.clone(), class(foo.clone()));
+        pool.insert(
+            envelope.clone(),
+            class_with_props(
+                envelope,
+                vec![("inner", Ty::Class(foo, vec![]))],
+                "lorem.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            py.contains("if typing.TYPE_CHECKING:\n    from .. import Foo\n"),
+            "py missing guarded root Foo import:\n{py}"
+        );
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            pyi.contains("if typing.TYPE_CHECKING:\n    from .. import Foo\n"),
+            "pyi missing guarded root Foo import:\n{pyi}"
+        );
+        assert!(pyi.contains("    inner: Foo\n"));
+    }
+
+    #[test]
+    fn root_leaf_does_not_self_import_root_types() {
+        // Same `Foo` referenced from a same-leaf class on the root
+        // leaf — no import should be emitted (it's locally defined).
+        let mut pool: SymbolPool = HashMap::new();
+        let foo = cg_name("user", &[], "Foo");
+        let consumer = cg_name("user", &[], "FooConsumer");
+        pool.insert(foo.clone(), class(foo.clone()));
+        pool.insert(
+            consumer.clone(),
+            class_with_props(
+                consumer,
+                vec![("inner", Ty::Class(foo, vec![]))],
+                "root.baml",
+                0,
+            ),
+        );
+        let out = to_source_code(&pool, &[]);
+        let py = &out[&PathBuf::from("__init__.py")];
+        assert!(
+            !py.contains("from . import Foo") && !py.contains("from .. import Foo"),
+            "root leaf should not import its own Foo:\n{py}"
+        );
     }
 
     #[test]

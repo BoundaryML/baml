@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18194
 ---
 function user.alias_intersection_in_match_arm(v: int | string) -> int {
     load_var v
@@ -87,15 +88,13 @@ function user.call_with_callback(runner: ((int) -> int throws never) -> int thro
     load_var runner
     is_type ((string) -> int throws never) -> int throws never
     pop_jump_if_false L2
-    load_const ?
-    make_closure .<lambda(call_with_callback, 1)>
+    make_closure .<lambda(call_with_callback, 1)>, 0
     load_var runner
     call_indirect
     jump L2
 
   L1:
-    load_const ?
-    make_closure .<lambda(call_with_callback, 0)>
+    make_closure .<lambda(call_with_callback, 0)>, 0
     load_var runner
     call_indirect
 
@@ -428,14 +427,22 @@ function user.int_widens_to_alias(v: int | float) -> int {
 function user.int_widens_to_optional(v: int?) -> int? {
     load_var v
     is_type int
-    pop_jump_if_false L0
+    pop_jump_if_false L2
     load_var v
-    pop 1
-    load_const false
+    load_const null
+    cmp_op ==
     pop_jump_if_false L0
-    load_var v
+    jump L1
 
   L0:
+    load_var v
+    is_type int
+    pop_jump_if_false L2
+
+  L1:
+    load_var v
+
+  L2:
     return
 }
 
@@ -460,8 +467,7 @@ function user.int_widens_to_union(v: int | string) -> int {
 
 function user.let_fn_return_widen() -> int | string {
     load_const 0
-    load_const ?
-    make_closure .<lambda(let_fn_return_widen, 0)>
+    make_closure .<lambda(let_fn_return_widen, 0)>, 0
     call_indirect
     return
 }
@@ -556,11 +562,17 @@ function user.nested_paren_union_array_one(items: (int | string)[]) -> int {
 
 function user.nested_paren_union_array_optional(v: (int | string)[]?) -> int {
     load_var v
-    pop 1
-    load_const false
+    load_const null
+    cmp_op ==
     pop_jump_if_false L0
+    jump L1
 
   L0:
+    load_var v
+    is_type (int | string)[]
+    pop_jump_if_false L1
+
+  L1:
     load_const 1
     return
 }
@@ -581,7 +593,7 @@ function user.or_with_repeated_bare_binding(v: int) -> int {
     load_var v
     is_type int
     pop_jump_if_false L0
-    jump L2
+    jump L3
 
   L0:
     load_var v
@@ -592,12 +604,18 @@ function user.or_with_repeated_bare_binding(v: int) -> int {
   L1:
     load_var v
     is_type int
-    pop_jump_if_false L3
+    pop_jump_if_false L4
+    load_var v
+    jump L4
 
   L2:
     load_var v
+    jump L4
 
   L3:
+    load_var v
+
+  L4:
     return
 }
 
@@ -605,7 +623,7 @@ function user.or_with_repeated_typed_binding(v: int | string) -> int {
     load_var v
     is_type int
     pop_jump_if_false L0
-    jump L2
+    jump L3
 
   L0:
     load_var v
@@ -615,12 +633,16 @@ function user.or_with_repeated_typed_binding(v: int | string) -> int {
 
   L1:
     load_const 0
-    jump L3
+    jump L4
 
   L2:
     load_var v
+    jump L4
 
   L3:
+    load_var v
+
+  L4:
     return
 }
 
@@ -643,10 +665,14 @@ function user.paren_chains_in_or(v: int) -> int {
   L0:
     load_var v
     is_type int
-    pop_jump_if_false L1
+    pop_jump_if_false L2
+    load_const 1
+    jump L2
 
   L1:
     load_const 1
+
+  L2:
     return
 }
 

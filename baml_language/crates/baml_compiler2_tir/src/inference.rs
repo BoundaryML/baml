@@ -123,6 +123,12 @@ pub struct ScopeInference<'db> {
     /// are declared as `BuiltinUnknown` by `lower_catch` before `bind_pattern`
     /// has a chance to refine them).
     path_root_types: FxHashMap<ExprId, Ty>,
+    /// TIR-inferred type of every prefix `segments[..=i]` for multi-segment
+    /// local-rooted `Path` expressions. Index `0` mirrors `path_root_types`;
+    /// later indices are produced by chaining `resolve_member` over each
+    /// segment. MIR uses this to thread receiver-prefix class type-args
+    /// through method-call paths of depth ≥ 3 (e.g. `holder.box.describe()`).
+    path_segment_types: FxHashMap<(ExprId, usize), Ty>,
     /// Per-segment member resolutions for multi-segment local-rooted `Path` expressions.
     ///
     /// For `obj.a.b` (`Path(["obj", "a", "b"])`), contains resolutions for segments
@@ -240,6 +246,18 @@ impl<'db> ScopeInference<'db> {
         self.path_root_types.iter()
     }
 
+    /// Look up the type of `segments[..=seg_idx]` for a multi-segment
+    /// local-rooted `Path` expression. Index `0` mirrors `path_root_type`.
+    pub fn path_segment_type(&self, expr_id: ExprId, seg_idx: usize) -> Option<&Ty> {
+        self.path_segment_types.get(&(expr_id, seg_idx))
+    }
+
+    /// Iterate over all `((ExprId, seg_idx), Ty)` entries for multi-segment
+    /// local-rooted paths in this scope.
+    pub fn iter_path_segment_types(&self) -> impl Iterator<Item = (&(ExprId, usize), &Ty)> {
+        self.path_segment_types.iter()
+    }
+
     /// Look up per-segment member resolutions for a multi-segment local-rooted
     /// `Path` expression. Returns `None` if not recorded (e.g. package-rooted
     /// paths or paths with only a single segment).
@@ -338,6 +356,7 @@ fn infer_scope_types_cycle_initial<'db>(
         catch_residual_throws: FxHashMap::default(),
         exhaustive_matches: FxHashSet::default(),
         path_root_types: FxHashMap::default(),
+        path_segment_types: FxHashMap::default(),
         path_member_resolutions: FxHashMap::default(),
         nested_lambda_types: FxHashMap::default(),
         param_types: Vec::new(),
@@ -690,8 +709,43 @@ pub fn infer_scope_types<'db>(
                                             }
                                         });
 
-                                    // Seed builder with lambda params
-                                    let generic_params: Vec<Name> = func_def.generic_params.clone();
+                                    // Seed builder with lambda params.
+                                    // Combine the enclosing function's generic params with the
+                                    // lambda's own generic params so that `T` from
+                                    // `function foo<T>() { ... || { reflect.type_of<T>() } }` is
+                                    // visible inside the lambda body.
+                                    //
+                                    // Also include class-level generic params if the enclosing
+                                    // function is a class method.  For a method on `class Box<T>`,
+                                    // `func_data.generic_params` is empty (no function-level
+                                    // generics), but a closure body inside `describe(self)` must
+                                    // still resolve `T` from `reflect.type_of<T>()`.
+                                    let mut generic_params: Vec<Name> = {
+                                        let mut gp = func_data.generic_params.clone();
+                                        if let Some(parent_fsi) = ancestor_scope.parent {
+                                            let parent_scope =
+                                                &index.scopes[parent_fsi.index() as usize];
+                                            if matches!(parent_scope.kind, ScopeKind::Class) {
+                                                if let Some(class_name) = &parent_scope.name {
+                                                    for class_data in item_tree.classes.values() {
+                                                        if class_data.name == *class_name {
+                                                            let mut merged =
+                                                                class_data.generic_params.clone();
+                                                            merged.extend(gp);
+                                                            gp = merged;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        gp
+                                    };
+                                    for p in &func_def.generic_params {
+                                        if !generic_params.contains(p) {
+                                            generic_params.push(p.clone());
+                                        }
+                                    }
                                     builder.set_generic_params(generic_params.clone());
                                     for (i, param) in func_def.params.iter().enumerate() {
                                         let param_ty = param
@@ -762,8 +816,77 @@ pub fn infer_scope_types<'db>(
                                             }
                                         });
 
-                                    // Seed builder with lambda params
-                                    let generic_params: Vec<Name> = func_def.generic_params.clone();
+                                    // Seed builder with lambda params.
+                                    // Mirror the Function-branch merge: a lambda assigned via
+                                    // `let f = || { ... reflect.type_of<T>() }` inside a generic
+                                    // method/function must still see the enclosing function's
+                                    // generic params (and any class-level params if the
+                                    // enclosing function is a method).  The `Let` ancestor
+                                    // hides those; walk up to the nearest `Function` scope to
+                                    // recover them.
+                                    let mut generic_params: Vec<Name> = {
+                                        let mut gp: Vec<Name> = Vec::new();
+                                        let mut current = ancestor_scope.parent;
+                                        while let Some(fsi) = current {
+                                            let scope = &index.scopes[fsi.index() as usize];
+                                            match &scope.kind {
+                                                ScopeKind::Function => {
+                                                    for fd in item_tree.functions.values() {
+                                                        if fd.span == scope.range
+                                                            && scope.name.as_ref() == Some(&fd.name)
+                                                        {
+                                                            gp.clone_from(&fd.generic_params);
+                                                            if let Some(grandparent_fsi) =
+                                                                scope.parent
+                                                            {
+                                                                let grandparent_scope = &index
+                                                                    .scopes
+                                                                    [grandparent_fsi.index()
+                                                                        as usize];
+                                                                if matches!(
+                                                                    grandparent_scope.kind,
+                                                                    ScopeKind::Class
+                                                                ) {
+                                                                    if let Some(class_name) =
+                                                                        &grandparent_scope.name
+                                                                    {
+                                                                        for class_data in item_tree
+                                                                            .classes
+                                                                            .values()
+                                                                        {
+                                                                            if class_data.name
+                                                                                == *class_name
+                                                                            {
+                                                                                let mut merged =
+                                                                                    class_data
+                                                                                        .generic_params
+                                                                                        .clone();
+                                                                                merged.extend(gp);
+                                                                                gp = merged;
+                                                                                break;
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
+                                                    break;
+                                                }
+                                                ScopeKind::Let => {
+                                                    current = scope.parent;
+                                                }
+                                                _ => break,
+                                            }
+                                        }
+                                        gp
+                                    };
+                                    for p in &func_def.generic_params {
+                                        if !generic_params.contains(p) {
+                                            generic_params.push(p.clone());
+                                        }
+                                    }
                                     builder.set_generic_params(generic_params.clone());
                                     for (i, param) in func_def.params.iter().enumerate() {
                                         let param_ty = param
@@ -843,6 +966,7 @@ pub fn infer_scope_types<'db>(
         exhaustive_matches,
         diagnostics,
         path_root_types,
+        path_segment_types,
         path_member_resolutions,
         param_types,
         nested_lambda_types,
@@ -861,6 +985,7 @@ pub fn infer_scope_types<'db>(
         catch_residual_throws,
         exhaustive_matches,
         path_root_types,
+        path_segment_types,
         path_member_resolutions,
         nested_lambda_types,
         param_types,

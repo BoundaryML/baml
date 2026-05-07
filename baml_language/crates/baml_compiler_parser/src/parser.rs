@@ -357,7 +357,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Check if the current token can start a type expression.
-    /// Valid type starts: Word (type name), string literal, integer/float literal, `LParen` (tuple).
+    /// Valid type starts: Word (type name), string literal, integer/float literal,
+    /// `-` followed by an integer/float literal (negative literal type), `LParen` (tuple).
     fn is_at_type_start(&self) -> bool {
         self.at(TokenKind::Word)
             || self.at(TokenKind::Quote) // string literal type
@@ -365,6 +366,11 @@ impl<'a> Parser<'a> {
             || self.at(TokenKind::IntegerLiteral)
             || self.at(TokenKind::FloatLiteral)
             || self.at(TokenKind::LParen) // tuple/parenthesized type
+            || (self.at(TokenKind::Minus)
+                && matches!(
+                    self.peek(1).map(|t| t.kind),
+                    Some(TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
+                ))
     }
 
     /// Check if a token kind is basic trivia (whitespace/newlines, not comments).
@@ -3150,16 +3156,8 @@ impl<'a> Parser<'a> {
 
         // A bare WORD may start a destructure (`Class { ... }`) or a type/path
         // pattern. Look ahead through dotted segments for a `{`.
-        // Class destructure patterns are gated for now — emit an error and
-        // skip past the `{ ... }` to recover.
         if self.at(TokenKind::Word) && self.looks_like_destructure_pattern() {
-            self.error_unexpected_token(
-                "class destructure patterns are not yet supported".to_string(),
-            );
-            self.with_node(SyntaxKind::DESTRUCTURE_PATTERN, |p| {
-                p.parse_path();
-                p.parse_destructure_field_list();
-            });
+            self.parse_destructure_pattern(false);
             return;
         }
 
@@ -3329,12 +3327,7 @@ impl<'a> Parser<'a> {
 
         // Decide between simple binding (`let x`) and destructure
         // (`let Class { ... }`) by peeking past dotted segments for `{`.
-        // Class destructure patterns are gated for now — emit an error and
-        // skip past the `{ ... }` to recover.
         if self.looks_like_destructure_pattern() {
-            self.error_unexpected_token(
-                "class destructure patterns are not yet supported".to_string(),
-            );
             self.parse_path();
             self.parse_destructure_field_list();
             self.wrap_events_in_node(start, SyntaxKind::DESTRUCTURE_PATTERN);
@@ -3359,7 +3352,6 @@ impl<'a> Parser<'a> {
     /// wrapper begins (callers use `wrap_events_in_node` themselves in that
     /// case — see `parse_let_pattern`). For pattern atoms with no `let`, this
     /// emits a self-contained `DESTRUCTURE_PATTERN`.
-    #[allow(dead_code)] // gated — kept for when destructure patterns are re-enabled
     fn parse_destructure_pattern(&mut self, _has_let: bool) {
         self.with_node(SyntaxKind::DESTRUCTURE_PATTERN, |p| {
             p.parse_path();
@@ -6567,7 +6559,6 @@ function Demo() -> int {
     }
 
     #[test]
-    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_basic_with_let() {
         // `let Class { field } = ...` — destructure with a `let` prefix at
         // the let-statement level. The chain link is a single
@@ -6609,7 +6600,6 @@ function Demo() -> int {
     }
 
     #[test]
-    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_many_fields() {
         let source = r#"
 function Demo() -> int {
@@ -6635,7 +6625,6 @@ function Demo() -> int {
     }
 
     #[test]
-    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_with_inner_let_rename() {
         // `Class { field: let renamed }` — explicit rename via inner `let`.
         // The field's value is a PATTERN containing a BINDING_PATTERN.
@@ -6671,7 +6660,6 @@ function Demo() -> int {
     }
 
     #[test]
-    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_field_typed() {
         // `Class { field: int }` — field value is a TYPE_PATTERN. Field-level
         // `:` is consumed by parse_field_pattern, NOT by the chain parser, so
@@ -6699,7 +6687,6 @@ function Demo() -> int {
     }
 
     #[test]
-    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_nested() {
         // `Class { field: Class2 { field2 } }` — nested destructure.
         let source = r#"
@@ -6735,7 +6722,6 @@ function Demo() -> int {
     }
 
     #[test]
-    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_in_match_arm_no_let() {
         // In match arms, `Class { field }` does NOT require `let` — the
         // ambiguity-with-expressions argument doesn't apply there.
@@ -6776,6 +6762,85 @@ function Demo() -> int {
             !has_let,
             "match-arm destructure should NOT have a leading `let`"
         );
+    }
+
+    #[test]
+    fn pattern_destructure_chain_union_precedence() {
+        // `let Class { field }: let y | Other { field }: let z = ...`
+        // parses as a chain split on the two top-level `:` separators:
+        //   Class { field } : (let y | Other { field }) : let z
+        let source = r#"
+function Demo() -> int {
+  let Class { field }: let y | Other { field }: let z = Class { field: 1 };
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_let_pattern(&root);
+        let chain = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
+            .expect("expected CHAIN_PATTERN");
+
+        assert_eq!(
+            child_kinds(&chain),
+            vec![
+                SyntaxKind::DESTRUCTURE_PATTERN,
+                SyntaxKind::UNION_PATTERN,
+                SyntaxKind::BINDING_PATTERN,
+            ],
+        );
+
+        let union = chain
+            .children()
+            .find(|n| n.kind() == SyntaxKind::UNION_PATTERN)
+            .expect("expected UNION_PATTERN as middle chain link");
+        assert_eq!(
+            child_kinds(&union),
+            vec![SyntaxKind::BINDING_PATTERN, SyntaxKind::DESTRUCTURE_PATTERN],
+        );
+    }
+
+    #[test]
+    fn pattern_parenthesized_destructure_chains_can_be_union_alternatives() {
+        let source = r#"
+function Demo() -> int {
+  match (x) {
+    (Class { field }: let y) | (Other { field }: let y) => 1
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let arm = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::MATCH_ARM)
+            .expect("expected MATCH_ARM");
+        let pattern = arm
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("expected PATTERN");
+        let union = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::UNION_PATTERN)
+            .expect("expected top-level UNION_PATTERN");
+
+        assert_eq!(
+            child_kinds(&union),
+            vec![SyntaxKind::PAREN_PATTERN, SyntaxKind::PAREN_PATTERN],
+        );
+        for paren in union.children() {
+            let inner_pattern = paren
+                .children()
+                .find(|n| n.kind() == SyntaxKind::PATTERN)
+                .expect("expected PATTERN inside paren");
+            assert_eq!(child_kinds(&inner_pattern), vec![SyntaxKind::CHAIN_PATTERN]);
+        }
     }
 
     #[test]
@@ -6900,7 +6965,6 @@ function Demo() -> int {
     }
 
     #[test]
-    #[ignore = "class destructure patterns gated"]
     fn pattern_destructure_namespaced_class() {
         // `name.space.Class { ... }` — destructure on a dotted-path class
         // name. The path goes through parse_path inside the destructure,
@@ -7276,6 +7340,118 @@ function Demo() -> int {
     }
 
     #[test]
+    fn class_field_negative_integer_literal_type_with_colon() {
+        // `field: -1` — `is_at_type_start` must accept `Minus` followed by an
+        // integer literal so the class-field gate doesn't reject negative
+        // literal types and fall through to "missing a type annotation".
+        let source = r#"
+class Foo {
+  literal_neg_one: -1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let field = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FIELD)
+            .expect("expected FIELD node");
+        let type_expr = field
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("expected TYPE_EXPR inside FIELD");
+        assert!(
+            type_expr.text().to_string().contains("-1"),
+            "expected field type to contain `-1`, got: {}",
+            type_expr.text()
+        );
+    }
+
+    #[test]
+    fn class_field_negative_integer_literal_type_no_colon() {
+        // BEP-019 colon-less form: `field -1`. Same gate, exercises the path
+        // where `has_colon == false` so the type must start on the same line.
+        let source = r#"
+class Foo {
+  literal_neg_one -1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let field = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FIELD)
+            .expect("expected FIELD node");
+        let type_expr = field
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("expected TYPE_EXPR inside FIELD");
+        assert!(
+            type_expr.text().to_string().contains("-1"),
+            "expected field type to contain `-1`, got: {}",
+            type_expr.text()
+        );
+    }
+
+    #[test]
+    fn class_field_negative_literal_in_union_type() {
+        // `-1 | 0 | 1` in field position — combines the field-start gate with
+        // the union-continuation path inside `parse_type_with`.
+        let source = r#"
+class Foo {
+  bounded: -1 | 0 | 1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let field = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FIELD)
+            .expect("expected FIELD node");
+        let type_expr = field
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("expected TYPE_EXPR inside FIELD");
+        let text = type_expr.text().to_string();
+        assert!(
+            text.contains("-1") && text.contains('0') && text.contains('1'),
+            "expected union to contain -1, 0, 1; got: {text}"
+        );
+    }
+
+    #[test]
+    fn function_parameter_negative_integer_literal_type() {
+        // `(x: -1) -> int` — same gate is consulted by `parse_parameter`.
+        let source = r#"
+function Demo(x: -1) -> int {
+  0
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER)
+            .expect("expected PARAMETER node");
+        let type_expr = param
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("expected TYPE_EXPR inside PARAMETER");
+        assert!(
+            type_expr.text().to_string().contains("-1"),
+            "expected parameter type to contain `-1`, got: {}",
+            type_expr.text()
+        );
+    }
+
+    #[test]
     fn pattern_function_type_named_param() {
         // `(x: int, y: int) -> int` — named-parameter form, also a TYPE_PATTERN.
         let source = r#"
@@ -7397,7 +7573,6 @@ function Demo() -> int {
     }
 
     #[test]
-    #[ignore = "class destructure patterns gated"]
     fn for_in_with_destructure_pattern() {
         // The for-in binding accepts arbitrary patterns — including
         // destructures — so long as `let` is present.

@@ -127,6 +127,9 @@ pub enum VmInternalError {
     #[error("Invalid manual notify")]
     InvalidManualNotify,
 
+    #[error("unexpected constant kind: expected a TyTemplate constant at this index")]
+    UnexpectedConstantKind,
+
     #[error("invalid compact opcode byte: {0}")]
     InvalidOpcode(u8),
 }

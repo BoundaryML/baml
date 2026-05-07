@@ -348,13 +348,40 @@ pub fn generate_project_bytecode_with_opt(
             })));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
-            classes.insert(fq_name, field_indices);
+            classes.insert(fq_name.clone(), field_indices);
+            // MIR TypeName display for user-defined classes omits the `user.`
+            // package prefix in diagnostics/snapshots. Register the same key
+            // so emit-time type checks can do a direct display-name lookup.
+            let display_name = if pkg_info.package.as_str() == "user" {
+                if pkg_info.namespace_path.is_empty() {
+                    class_data.name.to_string()
+                } else {
+                    let ns: Vec<&str> = pkg_info
+                        .namespace_path
+                        .iter()
+                        .map(baml_base::Name::as_str)
+                        .collect();
+                    format!("{}.{}", ns.join("."), class_data.name)
+                }
+            } else {
+                fq_name.clone()
+            };
+            class_object_indices
+                .entry(display_name.clone())
+                .or_insert(class_obj_idx);
             // Also register with the short (unqualified) class name so that MIR aggregates,
             // which store only the local name (e.g., "Point" not "user.Point"), can find it.
             let short_name = class_data.name.to_string();
             class_object_indices
                 .entry(short_name.clone())
                 .or_insert(class_obj_idx);
+            classes.entry(display_name).or_insert_with(|| {
+                let mut m = HashMap::new();
+                for (idx, field) in class_data.fields.iter().enumerate() {
+                    m.insert(field.name.to_string(), idx);
+                }
+                m
+            });
             classes.entry(short_name).or_insert_with(|| {
                 // Rebuild field_indices since we moved it above; re-read from class_data.
                 let mut m = HashMap::new();
@@ -697,9 +724,10 @@ pub fn generate_project_bytecode_with_opt(
             let mut constants: Vec<bex_vm_types::ConstValue> = Vec::new();
             for (_name, global_slot) in init_test_fns {
                 instructions.push(Instruction::LoadVar(1)); // slot 1 = first param ("registry")
-                instructions.push(Instruction::Call(bex_vm_types::GlobalIndex::from_raw(
-                    *global_slot,
-                )));
+                instructions.push(Instruction::Call {
+                    callee: bex_vm_types::GlobalIndex::from_raw(*global_slot),
+                    ntypeargs: 0,
+                });
                 instructions.push(Instruction::Pop(1));
             }
             // Return null
@@ -1327,9 +1355,10 @@ fn compile_init_function<'db>(
         )));
 
         // Emit: Call(helper_global_slot) then StoreGlobal(let_slot)
-        init_instructions.push(Instruction::Call(bex_vm_types::GlobalIndex::from_raw(
-            helper_global_slot,
-        )));
+        init_instructions.push(Instruction::Call {
+            callee: bex_vm_types::GlobalIndex::from_raw(helper_global_slot),
+            ntypeargs: 0,
+        });
         init_meta.push(bex_vm_types::bytecode::InstructionMeta {
             operand: Some(bex_vm_types::bytecode::OperandMeta::Callable(format!(
                 "$init_let_{i}"

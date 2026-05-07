@@ -106,6 +106,9 @@ pub enum TirTypeError {
         first_type: Ty,
         other_type: Ty,
     },
+    /// A `let` statement or `for-let` binding uses a pattern that can fail
+    /// for values of the type flowing into it.
+    RefutablePatternInLet { context: &'static str },
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
@@ -128,6 +131,15 @@ pub enum TirTypeError {
     /// Wrong number of type arguments for a generic class.
     WrongNumberOfTypeArgs {
         class_name: Name,
+        expected: usize,
+        got: usize,
+    },
+    /// Wrong number of explicit type arguments at a function call site.
+    ///
+    /// E.g. `f<int>(x)` when `f` declares zero type params, or
+    /// `f<int, string>(x)` when `f<T>` declares only one.
+    WrongTypeArgArity {
+        callee_name: Name,
         expected: usize,
         got: usize,
     },
@@ -293,6 +305,10 @@ impl fmt::Display for TirTypeError {
                 humanize_ty(first_type),
                 humanize_ty(other_type)
             ),
+            TirTypeError::RefutablePatternInLet { context } => write!(
+                f,
+                "refutable pattern in {context} binding; refutable patterns belong in `match`"
+            ),
             TirTypeError::InvalidCatchBindingType { type_name } => write!(
                 f,
                 "invalid catch binding type `{type_name}`; use a concrete type instead"
@@ -351,6 +367,16 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "class `{class_name}` expects {expected} type argument(s), got {got}"
+                )
+            }
+            TirTypeError::WrongTypeArgArity {
+                callee_name,
+                expected,
+                got,
+            } => {
+                write!(
+                    f,
+                    "function `{callee_name}` expects {expected} type argument(s), got {got}"
                 )
             }
             TirTypeError::TypeIsNotGeneric { type_name, kind } => {

@@ -325,13 +325,6 @@ impl<'db> SemanticIndexBuilder<'db> {
                 if let Some(initializer) = initializer {
                     self.walk_expr(*initializer, body, source_map, true);
                 }
-                if !body.patterns[*pattern].is_irrefutable(&body.patterns) {
-                    self.diagnostics
-                        .push(Hir2Diagnostic::RefutablePatternInLet {
-                            pattern_span: source_map.pattern_span(*pattern),
-                            context: "let",
-                        });
-                }
                 self.register_local_pattern(
                     *pattern,
                     DefinitionSite::Statement(stmt_id),
@@ -347,13 +340,6 @@ impl<'db> SemanticIndexBuilder<'db> {
             } => {
                 self.walk_expr(*collection, body, source_map, true);
                 self.push_scope(ScopeKind::Block, None, source_map.stmt_span(stmt_id));
-                if !body.patterns[*binding].is_irrefutable(&body.patterns) {
-                    self.diagnostics
-                        .push(Hir2Diagnostic::RefutablePatternInLet {
-                            pattern_span: source_map.pattern_span(*binding),
-                            context: "for-let",
-                        });
-                }
                 self.register_local_pattern(
                     *binding,
                     DefinitionSite::Statement(stmt_id),
@@ -462,7 +448,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Unary { expr, .. } | ast::Expr::OptionalChain { expr } => {
                 self.walk_expr(*expr, body, source_map, true);
             }
-            ast::Expr::Call { callee, args } | ast::Expr::OptionalCall { callee, args } => {
+            ast::Expr::Call { callee, args, .. } | ast::Expr::OptionalCall { callee, args } => {
                 self.walk_expr(*callee, body, source_map, true);
                 for &arg in args {
                     self.walk_expr(arg, body, source_map, true);
@@ -570,10 +556,20 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::Pattern::Class { fields, .. } => {
                 let mut m: FxHashMap<Name, TextRange> = FxHashMap::default();
+                let mut seen_fields: FxHashMap<Name, Vec<TextRange>> = FxHashMap::default();
                 for f in fields {
+                    seen_fields
+                        .entry(f.field.clone())
+                        .or_default()
+                        .push(f.field_span);
                     let inner =
                         Self::collect_pattern_names(patterns, f.pat, source_map, diagnostics);
                     Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                for (name, sites) in seen_fields {
+                    if sites.len() > 1 {
+                        diagnostics.push(Hir2Diagnostic::DuplicatePatternField { name, sites });
+                    }
                 }
                 m
             }

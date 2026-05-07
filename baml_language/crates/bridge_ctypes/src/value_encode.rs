@@ -279,7 +279,7 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
             key_type: Some(Box::new(ty_to_field_type(key))),
             value_type: Some(Box::new(ty_to_field_type(value))),
         }))),
-        Ty::Class(tn, _) => Some(FieldType::ClassType(crate::baml::cffi::BamlTyClass {
+        Ty::Class(tn, _, _) => Some(FieldType::ClassType(crate::baml::cffi::BamlTyClass {
             name: Some(BamlTyName {
                 name: tn.display_name.to_string(),
                 generic_args: vec![],

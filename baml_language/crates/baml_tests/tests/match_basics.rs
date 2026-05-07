@@ -2307,6 +2307,23 @@ async fn match_bool_variable_exhaustive() {
     );
 }
 
+#[tokio::test]
+async fn match_or_wildcard_bool_is_exhaustive() {
+    let output = baml_test! {
+        baml: r#"
+            function check(flag: bool) -> int {
+                match (flag) {
+                    _ | true => 1
+                }
+            }
+        "#,
+        entry: "check",
+        args: { "flag" => BexExternalValue::Bool(false) },
+    };
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
 // ============================================================================
 // String Patterns with 4+ Arms Tests
 // ============================================================================

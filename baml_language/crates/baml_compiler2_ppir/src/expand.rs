@@ -140,16 +140,36 @@ fn requalify_for_caller(ty: PpirTy, alias_ns: &[Name], caller_ns: &[Name]) -> Pp
         return ty;
     }
     match ty {
-        PpirTy::Named { path, attrs } if path.len() == 1 && path[0].as_str() != "root" => {
+        PpirTy::Named {
+            path,
+            generic_args,
+            attrs,
+        } if path.len() == 1 && path[0].as_str() != "root" => {
             let mut qualified = Vec::with_capacity(alias_ns.len() + 2);
             qualified.push(SmolStr::from("root"));
             qualified.extend(alias_ns.iter().cloned());
             qualified.extend(path);
             PpirTy::Named {
                 path: qualified,
+                generic_args: generic_args
+                    .into_iter()
+                    .map(|ga| requalify_for_caller(ga, alias_ns, caller_ns))
+                    .collect(),
                 attrs,
             }
         }
+        PpirTy::Named {
+            path,
+            generic_args,
+            attrs,
+        } => PpirTy::Named {
+            path,
+            generic_args: generic_args
+                .into_iter()
+                .map(|ga| requalify_for_caller(ga, alias_ns, caller_ns))
+                .collect(),
+            attrs,
+        },
         PpirTy::Union { variants, attrs } => PpirTy::Union {
             variants: variants
                 .into_iter()
@@ -276,7 +296,9 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
         | PpirTy::CannotBeStreamed { .. } => ty.clone_without_attrs(),
 
         // Named types — depends on classification
-        PpirTy::Named { path, .. } => {
+        PpirTy::Named {
+            path, generic_args, ..
+        } => {
             // Already *$stream → unchanged
             if path.last().is_some_and(|n| n.as_str().ends_with("$stream")) {
                 return ty.clone_without_attrs();
@@ -290,6 +312,10 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
                             .iter()
                             .cloned()
                             .chain(std::iter::once(SmolStr::new(format!("{bare_name}$stream"))))
+                            .collect(),
+                        generic_args: generic_args
+                            .iter()
+                            .map(|ga| expand_partial(ga, ctx))
                             .collect(),
                         attrs: d,
                     }
@@ -408,7 +434,9 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
         ),
 
         // Named types
-        PpirTy::Named { path, .. } => {
+        PpirTy::Named {
+            path, generic_args, ..
+        } => {
             // Already *$stream → treat like T$stream
             if path.last().is_some_and(|n| n.as_str().ends_with("$stream")) {
                 (
@@ -436,9 +464,17 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                             .cloned()
                             .chain(std::iter::once(SmolStr::new(format!("{bare_name}$stream"))))
                             .collect();
+                        // Thread the original generic args through, so that
+                        // `Foo<X>` becomes `Foo$stream<expand_partial(X)>` and
+                        // matches the synthesized class's generic arity.
+                        let stream_args: Vec<PpirTy> = generic_args
+                            .iter()
+                            .map(|ga| expand_partial(ga, ctx))
+                            .collect();
                         (
                             PpirTy::Named {
                                 path: stream_path,
+                                generic_args: stream_args,
                                 attrs: d.clone(),
                             },
                             DefaultWhenPending::PrependNull,
@@ -487,9 +523,14 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                             .cloned()
                             .chain(std::iter::once(SmolStr::new(format!("{bare_name}$stream"))))
                             .collect();
+                        let stream_args: Vec<PpirTy> = generic_args
+                            .iter()
+                            .map(|ga| expand_partial(ga, ctx))
+                            .collect();
                         (
                             PpirTy::Named {
                                 path: stream_path,
+                                generic_args: stream_args,
                                 attrs: d.clone(),
                             },
                             DefaultWhenPending::PrependNull,

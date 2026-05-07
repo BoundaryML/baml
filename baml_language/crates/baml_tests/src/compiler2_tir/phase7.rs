@@ -403,6 +403,30 @@ fn inner_declared_type_does_not_leak_after_shadow() {
 }
 
 #[test]
+fn assignment_uses_declared_type_after_narrowing() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int? {
+  let x: int? = 1;
+  if (x != null) {
+    x = null;
+  };
+  return x;
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("x = null : null"),
+        "assignment should be checked against the declared optional type after narrowing:\n{output}"
+    );
+    assert!(
+        !output.contains("type mismatch"),
+        "narrowed current type should not become the assignment contract:\n{output}"
+    );
+}
+
+#[test]
 fn unannotated_inner_shadow_masks_outer_declared_type() {
     let mut db = make_db();
     let file = db.add_file(

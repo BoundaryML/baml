@@ -25,9 +25,9 @@ class            llm.StreamAccumulator            <builtin>/baml/ns_llm/llm_type
 class            llm.StreamCache                  <builtin>/baml/ns_llm/llm_types.baml:456
 class            llm.Stream                       <builtin>/baml/ns_llm/llm_types.baml:472
 class            llm.PrimitiveClient              <builtin>/baml/ns_llm/llm_types.baml:537
-function         llm.from_shorthand               <builtin>/baml/ns_llm/llm_types.baml:594
-function         llm.get_jinja_template           <builtin>/baml/ns_llm/llm_types.baml:600
-function         llm.get_return_type              <builtin>/baml/ns_llm/llm_types.baml:604
-function         llm.get_stream_return_type       <builtin>/baml/ns_llm/llm_types.baml:613
-function         llm.__sap_parse_final            <builtin>/baml/ns_llm/llm_types.baml:618
-function         llm.__sap_parse_partial          <builtin>/baml/ns_llm/llm_types.baml:623
+function         llm.from_shorthand               <builtin>/baml/ns_llm/llm_types.baml:597
+function         llm.get_jinja_template           <builtin>/baml/ns_llm/llm_types.baml:603
+function         llm.get_return_type              <builtin>/baml/ns_llm/llm_types.baml:607
+function         llm.get_stream_return_type       <builtin>/baml/ns_llm/llm_types.baml:616
+function         llm.__sap_parse_final            <builtin>/baml/ns_llm/llm_types.baml:621
+function         llm.__sap_parse_partial          <builtin>/baml/ns_llm/llm_types.baml:626

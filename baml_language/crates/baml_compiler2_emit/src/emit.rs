@@ -14,7 +14,7 @@ use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
     Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
-use baml_type::Ty;
+use baml_type::{Ty, TyTemplate};
 use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
     GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
@@ -401,7 +401,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
-                    Ty::Class(type_name, _) => {
+                    Ty::Class(type_name, _, _) => {
                         let &obj_idx = self
                             .class_object_indices
                             .get(type_name.display_name.as_str())?;
@@ -1160,15 +1160,24 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         if let Rvalue::MakeClosure {
             lambda_idx,
             captures,
+            type_arg_templates,
         } = rvalue
         {
+            // Emit LoadType for each type-arg template first (not in closure-capture mode).
+            for template in type_arg_templates {
+                unwrap_infallible(self.load_type(template));
+            }
             let prev = self.loading_for_closure_capture;
             self.loading_for_closure_capture = true;
             for capture in captures {
                 self.emit_operand_pull(capture);
             }
             self.loading_for_closure_capture = prev;
-            unwrap_infallible(self.make_closure(*lambda_idx, captures.len()));
+            unwrap_infallible(self.make_closure_with_type_args(
+                *lambda_idx,
+                captures.len(),
+                type_arg_templates.len(),
+            ));
             return;
         }
         // Specialize BinaryOp when both operand types are statically known.
@@ -1422,6 +1431,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::Call {
                 callee,
                 args,
+                ntypeargs,
                 destination,
                 target,
                 unwind: _,
@@ -1438,7 +1448,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                    let inst = self.emit(Instruction::Call(global_callee));
+                    let inst = self.emit(Instruction::Call {
+                        callee: global_callee,
+                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                    });
                     if let Some(name) = &func_name {
                         self.set_operand(inst, OperandMeta::Callable(name.clone()));
                     }
@@ -2094,6 +2107,33 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         locals
     }
+
+    /// Emit a `MakeClosure` bytecode instruction with the given counts.
+    ///
+    /// This is the underlying implementation called by both the `PullSink`
+    /// trait methods (`make_closure` and `make_closure_with_type_args`).
+    fn emit_make_closure_bytecode(
+        &mut self,
+        lambda_idx: usize,
+        capture_count: usize,
+        ntypeargs: usize,
+    ) {
+        let obj_idx = *self
+            .lambda_object_indices
+            .get(lambda_idx)
+            .unwrap_or_else(|| panic!("make_closure: lambda_idx {lambda_idx} out of range"));
+        let name = self
+            .lambda_names
+            .get(lambda_idx)
+            .cloned()
+            .unwrap_or_else(|| format!("<lambda {lambda_idx}>"));
+        let inst = self.emit(Instruction::MakeClosure {
+            obj_idx: ObjectIndex::from_raw(obj_idx),
+            capture_count,
+            ntypeargs,
+        });
+        self.set_operand(inst, OperandMeta::Object(name));
+    }
 }
 
 impl PullSink for StackifyCodegen<'_, '_> {
@@ -2218,7 +2258,10 @@ impl PullSink for StackifyCodegen<'_, '_> {
             .get("baml.deep_copy")
             .copied()
             .unwrap_or_else(|| panic!("undefined function: baml.deep_copy"));
-        let inst = self.emit(Instruction::Call(GlobalIndex::from_raw(deep_copy_idx)));
+        let inst = self.emit(Instruction::Call {
+            callee: GlobalIndex::from_raw(deep_copy_idx),
+            ntypeargs: 0,
+        });
         self.set_operand(inst, OperandMeta::Callable("baml.deep_copy".to_string()));
         Ok(())
     }
@@ -2228,11 +2271,16 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
-    fn alloc_class_instance(&mut self, class_name: &str) -> Result<(), Self::Error> {
+    fn alloc_class_instance(
+        &mut self,
+        class_name: &str,
+        ntypeargs: u16,
+    ) -> Result<(), Self::Error> {
         if let Some(&class_obj_idx) = self.class_object_indices.get(class_name) {
-            let inst = self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
-                class_obj_idx,
-            )));
+            let inst = self.emit(Instruction::AllocInstance {
+                class_obj: ObjectIndex::from_raw(class_obj_idx),
+                ntypeargs,
+            });
             self.set_operand(inst, OperandMeta::Object(class_name.to_string()));
         } else {
             // Class not found — this can happen when the parser produces an
@@ -2301,77 +2349,150 @@ impl PullSink for StackifyCodegen<'_, '_> {
             .copied()
             .unwrap_or_else(|| panic!("undefined function: baml.Array.length"));
         pull_semantics::walk_place_pull(self, place)?;
-        let inst = self.emit(Instruction::Call(GlobalIndex::from_raw(global_idx)));
+        let inst = self.emit(Instruction::Call {
+            callee: GlobalIndex::from_raw(global_idx),
+            ntypeargs: 0,
+        });
         self.set_operand(inst, OperandMeta::Callable("baml.Array.length".to_string()));
         Ok(())
     }
 
-    fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error> {
-        if let Ty::Class(tn, _) | Ty::TypeAlias(tn, _) = ty {
-            let class_name_str = tn.display_name.as_str();
-            if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
-                let c = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
-                let inst = self.emit(Instruction::IsType(c));
-                self.set_operand(inst, OperandMeta::Const(class_name_str.to_string()));
-            } else {
+    fn is_type(&mut self, ty_template: &TyTemplate) -> Result<(), Self::Error> {
+        // Helper: emit IsType for a concrete Ty leaf.
+        match ty_template {
+            // ── Class check ──────────────────────────────────────────────────
+            TyTemplate::Class(tn, type_args_templates) => {
+                // Generic class instantiation with TypeArgRef leaves or
+                // concrete-but-parametric (e.g. Foo<int>).  Use the
+                // ClassWithTypeArgs constant so the VM can compare args.
+                let class_name_str = tn.display_name.as_str();
+                if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
+                    let c = self.add_constant(ConstValue::ClassWithTypeArgs {
+                        class_obj: ObjectIndex::from_raw(class_obj_idx),
+                        type_args_templates: type_args_templates.clone(),
+                    });
+                    let inst = self.emit(Instruction::IsType(c));
+                    self.set_operand(inst, OperandMeta::Const(format!("{class_name_str}<...>")));
+                } else {
+                    self.emit(Instruction::Pop(1));
+                    let idx = self.add_constant(ConstValue::Bool(false));
+                    let inst = self.emit(Instruction::LoadConst(idx));
+                    self.set_operand(inst, OperandMeta::Const("false".to_string()));
+                }
+                return Ok(());
+            }
+            TyTemplate::Concrete(ty) => {
+                // ── Class (concrete) ─────────────────────────────────────────
+                let maybe_class = match ty {
+                    Ty::Class(tn, ty_args, _) => Some((tn, Some(ty_args.as_slice()))),
+                    Ty::TypeAlias(tn, _) => Some((tn, None)),
+                    _ => None,
+                };
+                if let Some((tn, ty_args_opt)) = maybe_class {
+                    let class_name_str = tn.display_name.as_str();
+                    if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
+                        match ty_args_opt {
+                            Some(ty_args) if !ty_args.is_empty() => {
+                                // Concrete generic class, e.g. Foo<int>: emit
+                                // ClassWithTypeArgs with Concrete templates.
+                                let type_args_templates: Vec<TyTemplate> = ty_args
+                                    .iter()
+                                    .map(|t| TyTemplate::Concrete(t.clone()))
+                                    .collect();
+                                let c = self.add_constant(ConstValue::ClassWithTypeArgs {
+                                    class_obj: ObjectIndex::from_raw(class_obj_idx),
+                                    type_args_templates,
+                                });
+                                let inst = self.emit(Instruction::IsType(c));
+                                self.set_operand(
+                                    inst,
+                                    OperandMeta::Const(format!("{class_name_str}<...>")),
+                                );
+                            }
+                            _ => {
+                                // Monomorphic class or TypeAlias: fast pointer-identity path.
+                                let c = self.add_constant(ConstValue::Object(
+                                    ObjectIndex::from_raw(class_obj_idx),
+                                ));
+                                let inst = self.emit(Instruction::IsType(c));
+                                self.set_operand(
+                                    inst,
+                                    OperandMeta::Const(class_name_str.to_string()),
+                                );
+                            }
+                        }
+                    } else {
+                        self.emit(Instruction::Pop(1));
+                        let idx = self.add_constant(ConstValue::Bool(false));
+                        let inst = self.emit(Instruction::LoadConst(idx));
+                        self.set_operand(inst, OperandMeta::Const("false".to_string()));
+                    }
+                    return Ok(());
+                }
+
+                // ── Primitive type tags ───────────────────────────────────────
+                let type_tag = match ty {
+                    Ty::Int { .. } => Some(baml_type::typetag::INT),
+                    Ty::String { .. } => Some(baml_type::typetag::STRING),
+                    Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
+                    Ty::Null { .. } => Some(baml_type::typetag::NULL),
+                    Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
+                    Ty::Enum(..) => Some(baml_type::typetag::ENUM),
+                    Ty::List(..) => Some(baml_type::typetag::LIST),
+                    Ty::Map { .. } => Some(baml_type::typetag::MAP),
+                    Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
+                    Ty::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
+                    Ty::Literal(lit, _) => Some(match lit {
+                        baml_base::Literal::Int(_) => baml_type::typetag::INT,
+                        baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,
+                        baml_base::Literal::String(_) => baml_type::typetag::STRING,
+                        baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,
+                    }),
+                    _ => None,
+                };
+
+                if let Some(tag) = type_tag {
+                    let c = self.add_constant(ConstValue::Int(tag));
+                    let inst = self.emit(Instruction::IsType(c));
+                    self.set_operand(inst, OperandMeta::Const(ty.to_string()));
+                } else {
+                    self.emit(Instruction::Pop(1));
+                    let idx = self.add_constant(ConstValue::Bool(false));
+                    let inst = self.emit(Instruction::LoadConst(idx));
+                    self.set_operand(inst, OperandMeta::Const("false".to_string()));
+                }
+            }
+            // ── Other templates (Array, Optional, Union, Map) ─────────────────
+            // These don't arise from pattern matching today — fall back to false.
+            _ => {
                 self.emit(Instruction::Pop(1));
                 let idx = self.add_constant(ConstValue::Bool(false));
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const("false".to_string()));
             }
-            return Ok(());
-        }
-
-        let type_tag = match ty {
-            Ty::Int { .. } => Some(baml_type::typetag::INT),
-            Ty::String { .. } => Some(baml_type::typetag::STRING),
-            Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
-            Ty::Null { .. } => Some(baml_type::typetag::NULL),
-            Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
-            Ty::Enum(..) => Some(baml_type::typetag::ENUM),
-            Ty::List(..) => Some(baml_type::typetag::LIST),
-            Ty::Map { .. } => Some(baml_type::typetag::MAP),
-            Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
-            Ty::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
-            Ty::Literal(lit, _) => Some(match lit {
-                baml_base::Literal::Int(_) => baml_type::typetag::INT,
-                baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,
-                baml_base::Literal::String(_) => baml_type::typetag::STRING,
-                baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,
-            }),
-            _ => None,
-        };
-
-        if let Some(tag) = type_tag {
-            let c = self.add_constant(ConstValue::Int(tag));
-            let inst = self.emit(Instruction::IsType(c));
-            self.set_operand(inst, OperandMeta::Const(ty.to_string()));
-        } else {
-            self.emit(Instruction::Pop(1));
-            let idx = self.add_constant(ConstValue::Bool(false));
-            let inst = self.emit(Instruction::LoadConst(idx));
-            self.set_operand(inst, OperandMeta::Const("false".to_string()));
         }
         Ok(())
     }
 
+    fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error> {
+        let const_idx = self.add_constant(ConstValue::Type(template.clone()));
+        let inst = self.emit(Instruction::LoadType(const_idx));
+        self.set_operand(inst, OperandMeta::Const(template.to_string()));
+        Ok(())
+    }
+
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error> {
-        let obj_idx = *self
-            .lambda_object_indices
-            .get(lambda_idx)
-            .unwrap_or_else(|| panic!("make_closure: lambda_idx {lambda_idx} out of range"));
-        let name = self
-            .lambda_names
-            .get(lambda_idx)
-            .cloned()
-            .unwrap_or_else(|| format!("<lambda {lambda_idx}>"));
-        // Push capture count onto the stack so MakeClosure can pop it at runtime.
-        // This avoids widening the Instruction enum for a rarely-used second field.
-        #[allow(clippy::cast_possible_wrap)] // capture_count is always small
-        let count_idx = self.add_constant(ConstValue::Int(capture_count as i64));
-        self.emit(Instruction::LoadConst(count_idx));
-        let inst = self.emit(Instruction::MakeClosure(ObjectIndex::from_raw(obj_idx)));
-        self.set_operand(inst, OperandMeta::Object(name));
+        self.emit_make_closure_bytecode(lambda_idx, capture_count, 0);
+        Ok(())
+    }
+
+    fn make_closure_with_type_args(
+        &mut self,
+        lambda_idx: usize,
+        capture_count: usize,
+        ntypeargs: usize,
+    ) -> Result<(), Self::Error> {
+        self.emit_make_closure_bytecode(lambda_idx, capture_count, ntypeargs);
         Ok(())
     }
 
@@ -2389,7 +2510,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
         let class_name = match self.resolve_place_type(base) {
-            Some(Ty::Class(tn, _)) => tn.display_name.to_string(),
+            Some(Ty::Class(tn, _, _)) => tn.display_name.to_string(),
             _ => return format!("{field_idx}"),
         };
         self.lookup_class_field_name(&class_name, field_idx)

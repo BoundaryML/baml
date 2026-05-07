@@ -144,7 +144,7 @@ class Client {
             attempt_delay = inherited_delay_ms
           }
 
-          let result2: Stream<T, S> = self.execute_once_stream(
+          let result2: Stream<T, S> = self.execute_once_stream<T, S>(
             context,
             attempt_delay,
           ) catch (e) {
@@ -157,7 +157,7 @@ class Client {
         throw root.errors.DevOther { message: "All orchestration steps failed" };
       }
       null => {
-        let result: Stream<T, S> = self.execute_once_stream(
+        let result: Stream<T, S> = self.execute_once_stream<T, S>(
           context,
           inherited_delay_ms,
         );
@@ -174,7 +174,7 @@ class Client {
     match (self.client_type) {
       ClientType.Primitive => {
         let primitive = self.to_primitive_client();
-        let return_type = get_return_type(context.function_name);
+        let return_type = reflect.type_of<T>();
 
         let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type);
         let specialized = primitive.specialize_prompt(prompt);
@@ -187,7 +187,7 @@ class Client {
 
       ClientType.Fallback => {
         for (let sub in self.sub_clients) {
-          let result2: Stream<T, S> = sub.execute_stream(
+          let result2: Stream<T, S> = sub.execute_stream<T, S>(
             context,
             active_delay_ms,
           ) catch (e) {
@@ -204,7 +204,7 @@ class Client {
         }
         let idx = self.counter % self.sub_clients.length()
         self.counter += 1
-        let result3: Stream<T, S> = self.sub_clients[idx].execute_stream(
+        let result3: Stream<T, S> = self.sub_clients[idx].execute_stream<T, S>(
           context,
           active_delay_ms,
         );
@@ -248,7 +248,7 @@ class Client {
             attempt_delay = inherited_delay_ms
           }
 
-          let result2: T = self.execute_once_oneshot(
+          let result2: T = self.execute_once_oneshot<T>(
             context,
             attempt_delay,
           ) catch (e) {
@@ -261,7 +261,7 @@ class Client {
         throw root.errors.DevOther { message: "All orchestration steps failed" };
       }
       null => {
-        let result: T = self.execute_once_oneshot(
+        let result: T = self.execute_once_oneshot<T>(
           context,
           inherited_delay_ms,
         );
@@ -278,7 +278,7 @@ class Client {
     match (self.client_type) {
       ClientType.Primitive => {
         let primitive = self.to_primitive_client()
-        let return_type = get_return_type(context.function_name)
+        let return_type = reflect.type_of<T>()
 
         let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type)
         let specialized = primitive.specialize_prompt(prompt)
@@ -287,7 +287,7 @@ class Client {
 
         if (http_response.ok()) {
           let body = http_response.text()
-          let result: T = primitive.parse(body, return_type) catch (e) {
+          let result: T = primitive.parse<T>(body) catch (e) {
             _ => {
               if (active_delay_ms > 0) {
                 root.sys.sleep(active_delay_ms)
@@ -309,7 +309,7 @@ class Client {
 
       ClientType.Fallback => {
         for (let sub in self.sub_clients) {
-          let result2: T = sub.execute_oneshot(
+          let result2: T = sub.execute_oneshot<T>(
             context,
             active_delay_ms,
           ) catch (e) {
@@ -326,7 +326,7 @@ class Client {
         }
         let idx = self.counter % self.sub_clients.length()
         self.counter += 1
-        let result3: T = self.sub_clients[idx].execute_oneshot(
+        let result3: T = self.sub_clients[idx].execute_oneshot<T>(
           context,
           active_delay_ms,
         );
@@ -493,7 +493,7 @@ class Stream<T, S> {
       }
 
       let content = self._acc.content();
-      let parsed: S | root.stream.StreamNoYield = __sap_parse_partial(content, self._cache);
+      let parsed: S | root.stream.StreamNoYield = __sap_parse_partial<T, S>(content, self._cache);
       match (parsed) {
         _: root.stream.StreamNoYield => {
           continue;
@@ -530,7 +530,7 @@ class Stream<T, S> {
     }
 
     let content = self._acc.content();
-    __sap_parse_final(content, self._cache)
+    __sap_parse_final<T, S>(content, self._cache)
   }
 }
 
@@ -584,10 +584,13 @@ class PrimitiveClient {
 
   /// DO NOT CALL FROM USER CODE
   /// Requires the response to be done (no partials).
+  ///
+  /// The `type_def` parameter is automatically threaded by the compiler from
+  /// the call-site type argument `<T>` — callers write `primitive.parse<T>(body)`
+  /// without passing an explicit type value.
   function parse<T>(
     self,
     http_response_body: string,
-    type_def: type,
   ) -> T throws root.errors.LlmClient {
     $rust_io_function
   }

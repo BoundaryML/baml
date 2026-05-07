@@ -300,6 +300,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::NonExhaustiveMatch { .. } => DiagnosticId::NonExhaustiveMatch,
         TirTypeError::UnreachableArm => DiagnosticId::UnreachableArm,
         TirTypeError::OrPatternBindingTypeMismatch { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::RefutablePatternInLet { .. } => DiagnosticId::RefutablePatternInLet,
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
         TirTypeError::ThrowsContractViolation { .. }
         | TirTypeError::CallbackThrowsContractViolation { .. } => {
@@ -311,6 +312,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
         TirTypeError::WrongNumberOfTypeArgs { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::WrongTypeArgArity { .. } => DiagnosticId::ArgumentCountMismatch,
         // Optional chaining diagnostics
         TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnnecessaryNullCoalesce { .. } => DiagnosticId::InvalidOperator,
