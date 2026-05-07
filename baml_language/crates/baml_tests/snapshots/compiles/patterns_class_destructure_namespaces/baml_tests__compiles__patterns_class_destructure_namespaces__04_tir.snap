@@ -133,8 +133,8 @@ class user.llm.openai.Response$stream {
   score: null | int
 }
 class user.llm.openai.Box$stream {
-  value: null | unknown
+  value: null | T
 }
 class user.llm.openai.Outer$stream {
-  inner: null | user.llm.openai.Box$stream
+  inner: null | user.llm.openai.Box$stream<T>
 }

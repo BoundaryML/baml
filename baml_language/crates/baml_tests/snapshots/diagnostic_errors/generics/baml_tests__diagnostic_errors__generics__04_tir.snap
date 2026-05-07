@@ -212,41 +212,41 @@ function user.bare_in_union_param(f: user.Foo<int> | user.Foo) -> string throws 
   !! 5777..5783: class `Foo` expects 1 type argument(s), got 0
 }
 class user.Box$stream {
-  value: null | unknown
+  value: null | T
 }
 class user.Wrapper$stream {
-  data: null | unknown
+  data: null | T
 }
 class user.Pair$stream {
-  first: null | unknown
-  second: null | unknown
+  first: null | A
+  second: null | B
 }
 class user.Maker$stream {
-  data: null | unknown
+  data: null | T
 }
 class user.Holder$stream {
   data: null | string
 }
 class user.Shadow$stream {
-  value: null | unknown
+  value: null | T
 }
 class user.Plain$stream {
   name: null | string
 }
 class user.Container$stream {
-  inner: null | user.Box$stream
+  inner: null | user.Box$stream<T>
 }
 class user.Factory$stream {
-  data: null | unknown
+  data: null | T
 }
 class user.MaybeBox$stream {
-  value: null | unknown
+  value: null | T
 }
 class user.Stack$stream {
-  items: unknown[]
+  items: T[]
 }
 class user.Foo$stream {
-  value: null | unknown
+  value: null | T
 }
 class user.Todo {
   id: int
