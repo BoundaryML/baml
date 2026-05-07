@@ -448,7 +448,13 @@ mod tests {
         // openai-responses uses a different streaming shape (output[].content[].text
         // + status) that extract_delta does not yet parse; treat it as unsupported
         // until that handling lands.
-        for p in ["google-ai", "aws-bedrock", "vertex-ai", "openai-responses"] {
+        for p in [
+            "google-ai",
+            "aws-bedrock",
+            "vertex-ai",
+            "openai-responses",
+            "ai-gateway-images",
+        ] {
             let err = new_accumulator(p).unwrap_err();
             assert!(
                 matches!(err, LlmOpError::NotImplemented { .. }),

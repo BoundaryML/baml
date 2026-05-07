@@ -154,6 +154,7 @@ pub(crate) fn parse_response(
         LlmProvider::AwsBedrock => bedrock::parse_bedrock_response(body),
 
         LlmProvider::OpenAiResponses => openai::responses::parse_openai_responses_response(body),
+        LlmProvider::AiGatewayImages => openai::images::parse_openai_images_response(body),
         LlmProvider::GoogleAi => google::parse_google_response(body),
         LlmProvider::VertexAi => google::parse_vertex_response(body),
         LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => Err(

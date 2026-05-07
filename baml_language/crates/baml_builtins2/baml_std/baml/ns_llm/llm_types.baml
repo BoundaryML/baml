@@ -353,7 +353,7 @@ class Client {
 // if it has provider-specific options).
 // ---------------------------------------------------------------------------
 
-// @providers-no-options: openai, openai-generic, openai-responses, ollama, openrouter, google-ai, fallback, round-robin
+// @providers-no-options: openai, openai-generic, openai-responses, ai-gateway-images, ollama, openrouter, google-ai, fallback, round-robin
 
 class MediaUrlHandler {
   image string | null
