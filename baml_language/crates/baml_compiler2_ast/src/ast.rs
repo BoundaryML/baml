@@ -708,6 +708,13 @@ pub enum Pattern {
         class: Vec<Name>,
         fields: Vec<FieldPat>,
     },
+    /// `[prefix..., ..rest?, suffix...]` — array destructure. Each element is
+    /// a normal pattern; `rest` binds the copied middle slice when present.
+    Array {
+        prefix: Vec<PatId>,
+        rest: Option<ArrayRestPat>,
+        suffix: Vec<PatId>,
+    },
     /// Bare type expression in pattern position. Subsumes literal patterns
     /// (`42`, `"hi"`, `true`), `null`, enum variants (`Status.Active`),
     /// path types, generics, function types, etc. — anything in `TypeExpr`.
@@ -734,6 +741,11 @@ pub struct FieldPat {
     pub field: Name,
     pub field_span: text_size::TextRange,
     pub pat: PatId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArrayRestPat {
+    pub pat: Option<PatId>,
 }
 
 impl Pattern {
@@ -780,6 +792,23 @@ impl Pattern {
             Pattern::Class { fields, .. } => {
                 for f in fields {
                     patterns[f.pat].collect_bound_names(patterns, out);
+                }
+            }
+            Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+            } => {
+                for id in prefix {
+                    patterns[*id].collect_bound_names(patterns, out);
+                }
+                if let Some(rest) = rest
+                    && let Some(id) = rest.pat
+                {
+                    patterns[id].collect_bound_names(patterns, out);
+                }
+                for id in suffix {
+                    patterns[*id].collect_bound_names(patterns, out);
                 }
             }
             Pattern::Chain(parts) => {

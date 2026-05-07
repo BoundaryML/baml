@@ -389,3 +389,33 @@ function alias_intersection_in_match_arm(v: AliasA) -> int {
         let _ => 0
     }
 }
+
+// ============================================================================
+// Nested array/class destructuring with branch-local bindings
+// ============================================================================
+
+class PatternBucket {
+    values int[]
+}
+
+class PatternMatrix {
+    rows int[][]
+}
+
+// Same binding comes from a class field in the suffix branch and from an array
+// rest pattern in the prefix branch.
+function mixed_suffix_class_or_prefix_array_binding(v: PatternBucket[] | int[][]) -> int {
+    match (v) {
+        [.._, PatternBucket { values: let x }] | [[..let x]: int[], .._] => x.length(),
+        _ => 0
+    }
+}
+
+// Same binding comes from array destructuring inside a class on one side and
+// class destructuring inside nested arrays on the other.
+function mixed_nested_array_class_binding(v: PatternMatrix | PatternBucket[][]) -> int {
+    match (v) {
+        PatternMatrix { rows: [[..let x]: int[]] } | [[PatternBucket { values: let x }]] => x.length(),
+        _ => 0
+    }
+}

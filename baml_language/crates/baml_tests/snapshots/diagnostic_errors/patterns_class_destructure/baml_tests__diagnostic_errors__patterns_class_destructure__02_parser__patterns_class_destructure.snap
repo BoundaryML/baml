@@ -813,7 +813,7 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "class_destructure_chain_binding_middle_link_is_invalid"
+    WORD "class_destructure_chain_middle_binding_aliases_value"
     PARAMETER_LIST
       L_PAREN "("
       PARAMETER

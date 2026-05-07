@@ -2,8 +2,11 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
-function user.binding_in_middle_of_chain() -> int  [expr] {
-  { let x: 1: int: y = 1 } 1
+class user.NumberBag {
+  field: int[]
+}
+class user.Team {
+  scores: int[]
 }
 function user.chain_violates_subtype(v: int) -> int  [expr] {
   {  } match (v) { n: int: string => 1 }
@@ -13,6 +16,9 @@ function user.literal_chain_valid_then_invalid_cases_are_checked() -> int  [expr
 }
 function user.literal_narrow_violates(v: int) -> int  [expr] {
   {  } match (v) { n: "hello": int => 1 }
+}
+function user.mixed_class_array_or_binding_type_mismatch(v: user.NumberBag | string[][]) -> int  [expr] {
+  {  } match (v) { NumberBag { field: field } | [[..field]: string[]] => field.length() }
 }
 function user.or_different_names_three(v: int) -> int  [expr] {
   {  } match (v) { x | y | z => 1 }
@@ -31,4 +37,22 @@ function user.or_one_binds_one_doesnt(v: int) -> int  [expr] {
 }
 function user.or_same_name_distinct_narrows(v: int | string) -> int  [expr] {
   {  } match (v) { x: int | x: string => 1 }
+}
+function user.refutable_for_array_prefix(rows: int[][]) -> int  [expr] {
+  { let total = 0; for [first, ..] in rows { total Add= first } } total
+}
+function user.refutable_for_class_field_array_prefix(teams: user.Team[]) -> int  [expr] {
+  { let total = 0; for Team { scores: [first, ..] } in teams { total Add= first } } total
+}
+function user.refutable_let_array_prefix(xs: int[]) -> int  [expr] {
+  { let [first, ..] = xs } first
+}
+function user.refutable_let_empty_array(xs: int[]) -> int  [expr] {
+  { let [] = xs } 1
+}
+function user.structural_array_chain_conflicts_with_scalar(v: int) -> int  [expr] {
+  {  } match (v) { [..]: int => 1, _ => 0 }
+}
+function user.typed_array_chain_conflicts_with_other_array_type(v: int[]) -> int  [expr] {
+  {  } match (v) { [x]: int[]: string[] => x, _ => 0 }
 }

@@ -167,3 +167,27 @@ fn generic_class_destructure_field_projection_uses_instantiated_type() {
         "generic class destructure lowered a projected field through a void local:\n{output}"
     );
 }
+
+#[test]
+fn match_or_mixed_array_class_binding_uses_branch_local_rest_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        class NumberBag {
+            field int[]
+        }
+
+        function f(v: NumberBag | int[][]) -> int {
+            match (v) {
+                NumberBag { field } | [[..let field]: int[], .._] => field[0],
+                _ => 0
+            }
+        }
+        "#,
+    );
+    mir_snapshot!(
+        "match_or_mixed_array_class_binding_uses_branch_local_rest_type",
+        render_mir(&db, file)
+    );
+}

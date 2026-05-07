@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18194
 ---
 function user.alias_intersection_in_match_arm(v: int | string) -> int {
     load_var v
@@ -541,6 +540,229 @@ function user.match_nested_paren_union(v: (int | string)[]) -> int {
 
   L0:
     load_const 1
+    return
+}
+
+function user.mixed_nested_array_class_binding(v: PatternMatrix | PatternBucket[][]) -> int {
+    load_var v
+    is_type PatternMatrix
+    pop_jump_if_false L0
+    load_var v
+    load_field .0
+    store_var _3
+    load_var _3
+    is_type int[][]
+    pop_jump_if_false L0
+    load_var _3
+    call baml.Array.length
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L0
+    load_var _3
+    load_const 0
+    load_array_element
+    store_var _8
+    load_var _8
+    is_type int[]
+    pop_jump_if_false L0
+    load_var _8
+    call baml.Array.length
+    load_const 0
+    cmp_op >=
+    pop_jump_if_false L0
+    load_var _8
+    load_const 0
+    load_var _8
+    call baml.Array.length
+    call baml.Array.slice
+    is_type int[]
+    pop_jump_if_false L0
+    load_var _8
+    is_type int[]
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var v
+    is_type PatternBucket[][]
+    pop_jump_if_false L1
+    load_var v
+    call baml.Array.length
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    load_var v
+    load_const 0
+    load_array_element
+    store_var _26
+    load_var _26
+    is_type PatternBucket[]
+    pop_jump_if_false L1
+    load_var _26
+    call baml.Array.length
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    load_var _26
+    load_const 0
+    load_array_element
+    store_var _31
+    load_var _31
+    is_type PatternBucket
+    pop_jump_if_false L1
+    load_var _31
+    load_field .values
+    is_type int[]
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_var v
+    load_const 0
+    load_array_element
+    load_const 0
+    load_array_element
+    load_field .values
+    call baml.Array.length
+    jump L4
+
+  L3:
+    load_var v
+    load_field .0
+    load_const 0
+    load_array_element
+    store_var _18
+    load_var _18
+    load_const 0
+    load_var _18
+    call baml.Array.length
+    call baml.Array.slice
+    call baml.Array.length
+
+  L4:
+    return
+}
+
+function user.mixed_suffix_class_or_prefix_array_binding(v: PatternBucket[] | int[][]) -> int {
+    load_var v
+    is_type PatternBucket[]
+    pop_jump_if_false L0
+    load_var v
+    call baml.Array.length
+    load_const 1
+    cmp_op >=
+    pop_jump_if_false L0
+    load_var v
+    load_var v
+    call baml.Array.length
+    load_const 1
+    bin_op -
+    load_array_element
+    store_var _7
+    load_var _7
+    is_type PatternBucket
+    pop_jump_if_false L0
+    load_var _7
+    load_field .values
+    is_type int[]
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var v
+    is_type int[][]
+    pop_jump_if_false L1
+    load_var v
+    call baml.Array.length
+    load_const 1
+    cmp_op >=
+    pop_jump_if_false L1
+    load_var v
+    load_const 0
+    load_array_element
+    store_var _26
+    load_var _26
+    is_type int[]
+    pop_jump_if_false L1
+    load_var _26
+    call baml.Array.length
+    load_const 0
+    cmp_op >=
+    pop_jump_if_false L1
+    load_var _26
+    load_const 0
+    load_var _26
+    call baml.Array.length
+    call baml.Array.slice
+    is_type int[]
+    pop_jump_if_false L1
+    load_var _26
+    is_type int[]
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_var v
+    load_const 1
+    load_var v
+    call baml.Array.length
+    call baml.Array.slice
+    pop 1
+    load_var v
+    load_const 0
+    load_array_element
+    store_var _37
+    load_var _37
+    load_const 0
+    load_var _37
+    call baml.Array.length
+    call baml.Array.slice
+    store_var _38
+    load_var v
+    load_const 1
+    load_var v
+    call baml.Array.length
+    call baml.Array.slice
+    pop 1
+    load_var _38
+    call baml.Array.length
+    jump L4
+
+  L3:
+    load_var v
+    load_const 0
+    load_var v
+    call baml.Array.length
+    load_const 1
+    bin_op -
+    call baml.Array.slice
+    pop 1
+    load_var v
+    load_const 0
+    load_var v
+    call baml.Array.length
+    load_const 1
+    bin_op -
+    call baml.Array.slice
+    pop 1
+    load_var v
+    load_var v
+    call baml.Array.length
+    load_const 1
+    bin_op -
+    load_array_element
+    load_field .values
+    call baml.Array.length
+
+  L4:
     return
 }
 

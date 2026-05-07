@@ -60,6 +60,23 @@ pub(crate) mod support {
                     .join(", ");
                 format!("{class_path} {{ {fs} }}")
             }
+            Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+            } => {
+                let mut parts = Vec::new();
+                parts.extend(prefix.iter().map(|p| pat_desc(*p, body)));
+                if let Some(rest) = rest {
+                    let rest_desc = rest
+                        .pat
+                        .map(|p| pat_desc(p, body))
+                        .unwrap_or_else(String::new);
+                    parts.push(format!("..{rest_desc}"));
+                }
+                parts.extend(suffix.iter().map(|p| pat_desc(*p, body)));
+                format!("[{}]", parts.join(", "))
+            }
             Pattern::Type(ty) => ty.to_string(),
             Pattern::Or(pats) => pats
                 .iter()
@@ -1250,6 +1267,31 @@ pub(crate) mod support {
                         })
                         .collect();
                     format!("{class_path} {{ {} }}", field_strs.join(", "))
+                }
+                Pattern::Array {
+                    prefix: prefix_pats,
+                    rest,
+                    suffix,
+                } => {
+                    let mut parts = Vec::new();
+                    parts.extend(
+                        prefix_pats
+                            .iter()
+                            .map(|p| pat_desc_hir(*p, body, prefix, local_type_names)),
+                    );
+                    if let Some(rest) = rest {
+                        let rest_desc = rest
+                            .pat
+                            .map(|p| pat_desc_hir(p, body, prefix, local_type_names))
+                            .unwrap_or_else(String::new);
+                        parts.push(format!("..{rest_desc}"));
+                    }
+                    parts.extend(
+                        suffix
+                            .iter()
+                            .map(|p| pat_desc_hir(*p, body, prefix, local_type_names)),
+                    );
+                    format!("[{}]", parts.join(", "))
                 }
             }
         }

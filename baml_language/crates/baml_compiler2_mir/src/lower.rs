@@ -3725,7 +3725,7 @@ impl LoweringContext<'_> {
                 initializer,
                 is_watched,
                 ..
-            } if self.pattern_contains_class(pattern) => {
+            } if self.pattern_contains_structural(pattern) => {
                 let local_ty = self.pat_ty(pattern);
                 let scrutinee = self.builder.temp(local_ty);
 
@@ -5260,11 +5260,11 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn pattern_contains_class(&self, pat_id: AstPatId) -> bool {
+    fn pattern_contains_structural(&self, pat_id: AstPatId) -> bool {
         match &self.body.patterns[pat_id] {
-            AstPattern::Class { .. } => true,
+            AstPattern::Class { .. } | AstPattern::Array { .. } => true,
             AstPattern::Chain(parts) | AstPattern::Or(parts) => {
-                parts.iter().any(|p| self.pattern_contains_class(*p))
+                parts.iter().any(|p| self.pattern_contains_structural(*p))
             }
             AstPattern::Wildcard | AstPattern::Bind { .. } | AstPattern::Type(_) => false,
         }
@@ -5328,6 +5328,158 @@ impl LoweringContext<'_> {
             })),
         );
         Some(field_local)
+    }
+
+    fn const_int_local(&mut self, value: i64) -> Local {
+        let local = self.builder.temp(Ty::Int {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(
+            Place::local(local),
+            Rvalue::Use(Operand::Constant(Constant::Int(value))),
+        );
+        local
+    }
+
+    fn const_usize_int_local(&mut self, value: usize) -> Local {
+        self.const_int_local(i64::try_from(value).expect("array pattern length/index overflow"))
+    }
+
+    fn array_len_local(&mut self, scrutinee: Local) -> Local {
+        let len_local = self.builder.temp(Ty::Int {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(
+            Place::local(len_local),
+            Rvalue::Len(Place::local(scrutinee)),
+        );
+        len_local
+    }
+
+    fn lower_array_pattern_length_test(
+        &mut self,
+        scrutinee: Local,
+        has_rest: bool,
+        fixed_len: usize,
+        success: BlockId,
+        failure: BlockId,
+    ) {
+        let len_local = self.array_len_local(scrutinee);
+        let expected = self.const_usize_int_local(fixed_len);
+        let test_local = self.builder.temp(Ty::Bool {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(
+            Place::local(test_local),
+            Rvalue::BinaryOp {
+                op: if has_rest { BinOp::Ge } else { BinOp::Eq },
+                left: Operand::Copy(Place::local(len_local)),
+                right: Operand::Copy(Place::local(expected)),
+            },
+        );
+        self.builder
+            .branch(Operand::Copy(Place::local(test_local)), success, failure);
+    }
+
+    fn project_array_pattern_element_from_start(
+        &mut self,
+        scrutinee: Local,
+        elem_pat: AstPatId,
+        index: usize,
+    ) -> Local {
+        let index_local = self.const_usize_int_local(index);
+        self.project_array_pattern_element(scrutinee, elem_pat, index_local)
+    }
+
+    fn project_array_pattern_element_from_end(
+        &mut self,
+        scrutinee: Local,
+        elem_pat: AstPatId,
+        index_from_end: usize,
+    ) -> Local {
+        let len_local = self.array_len_local(scrutinee);
+        let offset = self.const_usize_int_local(index_from_end);
+        let index_local = self.builder.temp(Ty::Int {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(
+            Place::local(index_local),
+            Rvalue::BinaryOp {
+                op: BinOp::Sub,
+                left: Operand::Copy(Place::local(len_local)),
+                right: Operand::Copy(Place::local(offset)),
+            },
+        );
+        self.project_array_pattern_element(scrutinee, elem_pat, index_local)
+    }
+
+    fn project_array_pattern_element(
+        &mut self,
+        scrutinee: Local,
+        elem_pat: AstPatId,
+        index_local: Local,
+    ) -> Local {
+        let elem_ty = self.pat_ty(elem_pat);
+        let elem_local = self.builder.temp(elem_ty);
+        self.builder.assign(
+            Place::local(elem_local),
+            Rvalue::Use(Operand::Copy(Place::Index {
+                base: Box::new(Place::Local(scrutinee)),
+                index: index_local,
+                kind: IndexKind::Array,
+            })),
+        );
+        elem_local
+    }
+
+    fn project_array_pattern_rest(
+        &mut self,
+        scrutinee: Local,
+        rest_pat: AstPatId,
+        prefix_len: usize,
+        suffix_len: usize,
+    ) -> Local {
+        let rest_ty = self.pat_ty(rest_pat);
+        let rest_local = self.builder.temp(rest_ty);
+        let start = self.const_usize_int_local(prefix_len);
+        let end = if suffix_len == 0 {
+            self.array_len_local(scrutinee)
+        } else {
+            let len_local = self.array_len_local(scrutinee);
+            let suffix = self.const_usize_int_local(suffix_len);
+            let end = self.builder.temp(Ty::Int {
+                attr: TyAttr::default(),
+            });
+            self.builder.assign(
+                Place::local(end),
+                Rvalue::BinaryOp {
+                    op: BinOp::Sub,
+                    left: Operand::Copy(Place::local(len_local)),
+                    right: Operand::Copy(Place::local(suffix)),
+                },
+            );
+            end
+        };
+        let target = self.builder.create_block();
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        self.builder.call(
+            Operand::Constant(Constant::Function(ItemRef::Method {
+                package: Name::new("baml"),
+                namespace: Vec::new(),
+                class: Name::new("Array"),
+                name: Name::new("slice"),
+            })),
+            vec![
+                Operand::Copy(Place::local(scrutinee)),
+                Operand::Copy(Place::local(start)),
+                Operand::Copy(Place::local(end)),
+            ],
+            Place::local(rest_local),
+            target,
+            unwind,
+        );
+        self.builder.set_current_block(target);
+        rest_local
     }
 
     fn lower_pattern_test(
@@ -5528,6 +5680,94 @@ impl LoweringContext<'_> {
                     }
                 }
             }
+            AstPattern::Array {
+                prefix,
+                rest,
+                suffix,
+            } => {
+                let array_success = self.builder.create_block();
+
+                if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned() {
+                    self.emit_is_tir_type_branch(scrutinee, &tir_ty, array_success, failure);
+                } else {
+                    self.builder.goto(array_success);
+                }
+
+                self.builder.set_current_block(array_success);
+                let has_rest_test = rest.as_ref().and_then(|r| r.pat).is_some();
+                let element_count = prefix.len() + suffix.len();
+                let has_nested_tests = element_count > 0 || has_rest_test;
+                let after_len = if has_nested_tests {
+                    self.builder.create_block()
+                } else {
+                    success
+                };
+                self.lower_array_pattern_length_test(
+                    scrutinee,
+                    rest.is_some(),
+                    prefix.len() + suffix.len(),
+                    after_len,
+                    failure,
+                );
+                if !has_nested_tests {
+                    return;
+                }
+
+                self.builder.set_current_block(after_len);
+                let rest_entry = has_rest_test.then(|| self.builder.create_block());
+                let element_success = rest_entry.unwrap_or(success);
+                if element_count == 0 {
+                    self.builder.goto(element_success);
+                }
+
+                for (idx, elem_pat) in prefix.iter().copied().enumerate() {
+                    let next = if idx + 1 == element_count {
+                        element_success
+                    } else {
+                        self.builder.create_block()
+                    };
+                    let elem_local =
+                        self.project_array_pattern_element_from_start(scrutinee, elem_pat, idx);
+                    self.lower_pattern_test(elem_local, elem_pat, next, failure);
+                    if idx + 1 < element_count {
+                        self.builder.set_current_block(next);
+                    }
+                }
+
+                for (suffix_idx, elem_pat) in suffix.iter().copied().enumerate() {
+                    let absolute_idx_from_end = suffix.len() - suffix_idx;
+                    let elem_idx = prefix.len() + suffix_idx;
+                    let next = if elem_idx + 1 == element_count {
+                        element_success
+                    } else {
+                        self.builder.create_block()
+                    };
+                    let elem_local = self.project_array_pattern_element_from_end(
+                        scrutinee,
+                        elem_pat,
+                        absolute_idx_from_end,
+                    );
+                    self.lower_pattern_test(elem_local, elem_pat, next, failure);
+                    if elem_idx + 1 < element_count {
+                        self.builder.set_current_block(next);
+                    }
+                }
+
+                if let Some(rest) = rest
+                    && let Some(rest_pat) = rest.pat
+                {
+                    if let Some(rest_entry) = rest_entry {
+                        self.builder.set_current_block(rest_entry);
+                    }
+                    let rest_local = self.project_array_pattern_rest(
+                        scrutinee,
+                        rest_pat,
+                        prefix.len(),
+                        suffix.len(),
+                    );
+                    self.lower_pattern_test(rest_local, rest_pat, success, failure);
+                }
+            }
             AstPattern::Chain(_) => unreachable!("handled above"),
         }
     }
@@ -5541,7 +5781,7 @@ impl LoweringContext<'_> {
             AstPattern::Or(parts) => parts
                 .iter()
                 .any(|part| self.is_irrefutable_catch_all(*part)),
-            AstPattern::Type(_) | AstPattern::Class { .. } => false,
+            AstPattern::Type(_) | AstPattern::Class { .. } | AstPattern::Array { .. } => false,
         }
     }
 
@@ -5655,6 +5895,43 @@ impl LoweringContext<'_> {
                     }
                 }
             }
+            AstPattern::Array {
+                prefix,
+                rest,
+                suffix,
+            } => {
+                for (idx, elem_pat) in prefix.iter().copied().enumerate() {
+                    let elem_local =
+                        self.project_array_pattern_element_from_start(scrutinee, elem_pat, idx);
+                    self.bind_pattern_inner(
+                        elem_local, elem_pat, root, elem_pat, fresh_cell, is_watched,
+                    );
+                }
+                if let Some(rest) = rest
+                    && let Some(rest_pat) = rest.pat
+                {
+                    let rest_local = self.project_array_pattern_rest(
+                        scrutinee,
+                        rest_pat,
+                        prefix.len(),
+                        suffix.len(),
+                    );
+                    self.bind_pattern_inner(
+                        rest_local, rest_pat, root, rest_pat, fresh_cell, is_watched,
+                    );
+                }
+                for (suffix_idx, elem_pat) in suffix.iter().copied().enumerate() {
+                    let absolute_idx_from_end = suffix.len() - suffix_idx;
+                    let elem_local = self.project_array_pattern_element_from_end(
+                        scrutinee,
+                        elem_pat,
+                        absolute_idx_from_end,
+                    );
+                    self.bind_pattern_inner(
+                        elem_local, elem_pat, root, elem_pat, fresh_cell, is_watched,
+                    );
+                }
+            }
             AstPattern::Wildcard | AstPattern::Type(_) => {}
         }
     }
@@ -5673,7 +5950,7 @@ impl LoweringContext<'_> {
     /// wildcards, enum variants, and types without tag mappings.
     fn classify_pattern_type_tag(&self, pat_id: AstPatId) -> Option<Vec<i64>> {
         let pat = &self.body.patterns[pat_id];
-        if self.pattern_contains_class(pat_id) {
+        if self.pattern_contains_structural(pat_id) {
             return None;
         }
         // For Chain patterns the narrow's resolved TIR type lives at the

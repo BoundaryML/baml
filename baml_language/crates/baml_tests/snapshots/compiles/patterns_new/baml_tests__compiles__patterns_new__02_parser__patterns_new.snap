@@ -2764,6 +2764,233 @@ SOURCE_FILE
             INTEGER_LITERAL "0"
           R_BRACE "}"
         R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "PatternBucket"
+    L_BRACE "{"
+    FIELD
+      WORD "values"
+      TYPE_EXPR "int[]"
+        WORD "int"
+        L_BRACKET "["
+        R_BRACKET "]"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "PatternMatrix"
+    L_BRACE "{"
+    FIELD
+      WORD "rows"
+      TYPE_EXPR "int[][]"
+        WORD "int"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "mixed_suffix_class_or_prefix_array_binding"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "PatternBucket[] | int[][]"
+          WORD "PatternBucket"
+          L_BRACKET "["
+          R_BRACKET "]"
+          PIPE "|"
+          WORD "int"
+          L_BRACKET "["
+          R_BRACKET "]"
+          L_BRACKET "["
+          R_BRACKET "]"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "v"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              UNION_PATTERN
+                ARRAY_PATTERN
+                  L_BRACKET "["
+                  ARRAY_PATTERN_ELEMENT
+                    DOT_DOT ".."
+                    PATTERN
+                      WILDCARD_PATTERN "_"
+                        WORD "_"
+                  COMMA ","
+                  ARRAY_PATTERN_ELEMENT
+                    PATTERN
+                      DESTRUCTURE_PATTERN
+                        WORD "PatternBucket"
+                        L_BRACE "{"
+                        FIELD_PATTERN
+                          WORD "values"
+                          COLON ":"
+                          PATTERN
+                            BINDING_PATTERN "let x"
+                              KW_LET "let"
+                              WORD "x"
+                        R_BRACE "}"
+                  R_BRACKET "]"
+                PIPE "|"
+                ARRAY_PATTERN
+                  L_BRACKET "["
+                  ARRAY_PATTERN_ELEMENT
+                    PATTERN
+                      CHAIN_PATTERN
+                        ARRAY_PATTERN
+                          L_BRACKET "["
+                          ARRAY_PATTERN_ELEMENT
+                            DOT_DOT ".."
+                            PATTERN
+                              BINDING_PATTERN "let x"
+                                KW_LET "let"
+                                WORD "x"
+                          R_BRACKET "]"
+                        COLON ":"
+                        TYPE_PATTERN
+                          TYPE_EXPR "int[]"
+                            WORD "int"
+                            L_BRACKET "["
+                            R_BRACKET "]"
+                  COMMA ","
+                  ARRAY_PATTERN_ELEMENT
+                    DOT_DOT ".."
+                    PATTERN
+                      WILDCARD_PATTERN "_"
+                        WORD "_"
+                  R_BRACKET "]"
+            FAT_ARROW "=>"
+            CALL_EXPR
+              PATH_EXPR "x.length"
+                WORD "x"
+                DOT "."
+                WORD "length"
+              CALL_ARGS "()"
+                L_PAREN "("
+                R_PAREN ")"
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "mixed_nested_array_class_binding"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "PatternMatrix | PatternBucket[][]"
+          WORD "PatternMatrix"
+          PIPE "|"
+          WORD "PatternBucket"
+          L_BRACKET "["
+          R_BRACKET "]"
+          L_BRACKET "["
+          R_BRACKET "]"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "v"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              UNION_PATTERN
+                DESTRUCTURE_PATTERN
+                  WORD "PatternMatrix"
+                  L_BRACE "{"
+                  FIELD_PATTERN
+                    WORD "rows"
+                    COLON ":"
+                    PATTERN
+                      ARRAY_PATTERN
+                        L_BRACKET "["
+                        ARRAY_PATTERN_ELEMENT
+                          PATTERN
+                            CHAIN_PATTERN
+                              ARRAY_PATTERN
+                                L_BRACKET "["
+                                ARRAY_PATTERN_ELEMENT
+                                  DOT_DOT ".."
+                                  PATTERN
+                                    BINDING_PATTERN "let x"
+                                      KW_LET "let"
+                                      WORD "x"
+                                R_BRACKET "]"
+                              COLON ":"
+                              TYPE_PATTERN
+                                TYPE_EXPR "int[]"
+                                  WORD "int"
+                                  L_BRACKET "["
+                                  R_BRACKET "]"
+                        R_BRACKET "]"
+                  R_BRACE "}"
+                PIPE "|"
+                ARRAY_PATTERN
+                  L_BRACKET "["
+                  ARRAY_PATTERN_ELEMENT
+                    PATTERN
+                      ARRAY_PATTERN
+                        L_BRACKET "["
+                        ARRAY_PATTERN_ELEMENT
+                          PATTERN
+                            DESTRUCTURE_PATTERN
+                              WORD "PatternBucket"
+                              L_BRACE "{"
+                              FIELD_PATTERN
+                                WORD "values"
+                                COLON ":"
+                                PATTERN
+                                  BINDING_PATTERN "let x"
+                                    KW_LET "let"
+                                    WORD "x"
+                              R_BRACE "}"
+                        R_BRACKET "]"
+                  R_BRACKET "]"
+            FAT_ARROW "=>"
+            CALL_EXPR
+              PATH_EXPR "x.length"
+                WORD "x"
+                DOT "."
+                WORD "length"
+              CALL_ARGS "()"
+                L_PAREN "("
+                R_PAREN ")"
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
+          R_BRACE "}"
+        R_BRACE "}"
 
 === ERRORS ===
 None

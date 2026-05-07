@@ -1462,6 +1462,9 @@ class user.MatchSuccess {
 class user.MatchFailure {
   reason: string
 }
+class user.ArrayPatternTriviaBox {
+  values: int[]
+}
 enum user.MatchStatus
 type user.MatchResult = user.MatchSuccess | user.MatchFailure
 function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bool) -> string throws never {
@@ -1752,20 +1755,37 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
       1 | 2 | 3 =>
         0 : 0
   }
-  !! 3883..3893: unreachable arm
-  !! 3908..3915: unreachable arm
-  !! 8388..8393: operator `Mul` cannot be applied to `bool` and `bool`
-  !! 8396..8401: operator `Mul` cannot be applied to `int` and `bool`
-  !! 8424..8429: operator `Mul` cannot be applied to `bool` and `bool`
-  !! 8436..8441: operator `Mul` cannot be applied to `int` and `bool`
-  !! 8448..8453: operator `Mul` cannot be applied to `bool` and `int`
-  !! 12738..12902: type mismatch: expected string, got 0
+  !! 3933..3943: unreachable arm
+  !! 3958..3965: unreachable arm
+  !! 8438..8443: operator `Mul` cannot be applied to `bool` and `bool`
+  !! 8446..8451: operator `Mul` cannot be applied to `int` and `bool`
+  !! 8474..8479: operator `Mul` cannot be applied to `bool` and `bool`
+  !! 8486..8491: operator `Mul` cannot be applied to `int` and `bool`
+  !! 8498..8503: operator `Mul` cannot be applied to `bool` and `int`
+  !! 12788..12952: type mismatch: expected string, got 0
+}
+function user.ArrayPatternTrivia(xs: int[][], v: user.ArrayPatternTriviaBox | int[][]) -> int throws never {
+  { : int | 0
+    match (xs : int[][]) : int | 0
+      [[..first]: int[], ..rest] =>
+        first.length() : int
+      _ =>
+        0 : 0
+    match (v : user.ArrayPatternTriviaBox | int[][]) : int | 0
+      ArrayPatternTriviaBox { values: x } | [[..x]: int[], .._] =>
+        x.length() : int
+      _ =>
+        0 : 0
+  }
 }
 class user.MatchSuccess$stream {
   data: null | string
 }
 class user.MatchFailure$stream {
   reason: null | string
+}
+class user.ArrayPatternTriviaBox$stream {
+  values: int[]
 }
 type user.MatchResult$stream = user.MatchSuccess$stream | user.MatchFailure$stream
 class user.OtherPoint {

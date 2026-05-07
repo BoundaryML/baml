@@ -160,17 +160,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: type mismatch: expected never, got user.Box
-     ╭─[ patterns_class_destructure.baml:145:90 ]
-     │
- 145 │ ╭─▶ function class_destructure_chain_binding_middle_link_is_invalid(boxed: Box<int>) -> int {
- 146 │ ├─▶     let Box { value }: let alias: Box<int> = boxed;
-     │ │                                                         
-     │ ╰───────────────────────────────────────────────────────── type mismatch: expected never, got user.Box
-     │     
-     │     Note: Error code: E0001
-─────╯
-
   [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
      ╭─[ patterns_class_destructure.baml:158:92 ]
      │

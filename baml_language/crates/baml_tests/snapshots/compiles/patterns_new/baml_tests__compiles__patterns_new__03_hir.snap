@@ -5,6 +5,12 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.AppError {
   code: int
 }
+class user.PatternBucket {
+  values: int[]
+}
+class user.PatternMatrix {
+  rows: int[][]
+}
 type user.AliasA = int | string
 type user.AliasB = string | bool
 type user.Number = int | float
@@ -103,6 +109,12 @@ function user.literal_widens_to_int(v: int) -> int  [expr] {
 }
 function user.match_nested_paren_union(v: int | string[]) -> int  [expr] {
   {  } match (v) { _: int | string[] => 1 }
+}
+function user.mixed_nested_array_class_binding(v: user.PatternMatrix | user.PatternBucket[][]) -> int  [expr] {
+  {  } match (v) { PatternMatrix { rows: [[..x]: int[]] } | [[PatternBucket { values: x }]] => x.length(), _ => 0 }
+}
+function user.mixed_suffix_class_or_prefix_array_binding(v: user.PatternBucket[] | int[][]) -> int  [expr] {
+  {  } match (v) { [.._, PatternBucket { values: x }] | [[..x]: int[], .._] => x.length(), _ => 0 }
 }
 function user.multi_narrow_chain(v: int) -> int  [expr] {
   {  } match (v) { n: int: int => n }

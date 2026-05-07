@@ -13,10 +13,10 @@ use text_size::TextRange;
 use crate::{
     LoweringDiagnostic,
     ast::{
-        AssignOp, AstSourceMap, BinaryOp, CatchArm, CatchArmId, CatchClause, CatchClauseKind, Expr,
-        ExprBody, ExprId, FieldPat, FunctionBodyDef, FunctionDef, LetOrigin, Literal, LoopOrigin,
-        MatchArm, MatchArmId, Param, PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId,
-        TypeAnnotId, TypeExpr, UnaryOp,
+        ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CatchArm, CatchArmId, CatchClause,
+        CatchClauseKind, Expr, ExprBody, ExprId, FieldPat, FunctionBodyDef, FunctionDef, LetOrigin,
+        Literal, LoopOrigin, MatchArm, MatchArmId, Param, PatId, Pattern, SpannedTypeExpr,
+        SpreadField, Stmt, StmtId, TypeAnnotId, TypeExpr, UnaryOp,
     },
 };
 
@@ -1069,7 +1069,7 @@ impl LoweringContext {
 
     /// Dispatch on the kind of an atom-shaped pattern node (`CHAIN_PATTERN`,
     /// `UNION_PATTERN`, `BINDING_PATTERN`, `WILDCARD_PATTERN`, `DESTRUCTURE_PATTERN`,
-    /// `TYPE_PATTERN`, `PAREN_PATTERN`). Returns a fresh `PatId`.
+    /// `ARRAY_PATTERN`, `TYPE_PATTERN`, `PAREN_PATTERN`). Returns a fresh `PatId`.
     fn lower_pattern_atom_node(&mut self, node: &SyntaxNode) -> PatId {
         match node.kind() {
             SyntaxKind::CHAIN_PATTERN => self.lower_chain_pattern(node),
@@ -1079,6 +1079,7 @@ impl LoweringContext {
                 self.alloc_pattern(Pattern::Wildcard, node.text_range())
             }
             SyntaxKind::DESTRUCTURE_PATTERN => self.lower_destructure_pattern(node),
+            SyntaxKind::ARRAY_PATTERN => self.lower_array_pattern(node),
             SyntaxKind::TYPE_PATTERN => self.lower_type_pattern(node),
             SyntaxKind::PAREN_PATTERN => {
                 match node.children().find(|n| n.kind() == SyntaxKind::PATTERN) {
@@ -1164,6 +1165,20 @@ impl LoweringContext {
                     self.check_pattern_void_in_annotation(f.pat, context);
                 }
             }
+            Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+            } => {
+                for p in prefix.into_iter().chain(suffix) {
+                    self.check_pattern_void_in_annotation(p, context);
+                }
+                if let Some(rest) = rest
+                    && let Some(p) = rest.pat
+                {
+                    self.check_pattern_void_in_annotation(p, context);
+                }
+            }
             Pattern::Wildcard | Pattern::Bind { .. } => {}
         }
     }
@@ -1246,6 +1261,51 @@ impl LoweringContext {
             field_span,
             pat,
         }
+    }
+
+    fn lower_array_pattern(&mut self, node: &SyntaxNode) -> PatId {
+        let mut prefix = Vec::new();
+        let mut rest = None;
+        let mut suffix = Vec::new();
+        let mut seen_rest = false;
+
+        for elem in node
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::ARRAY_PATTERN_ELEMENT)
+        {
+            let is_rest = elem.children_with_tokens().any(|c| {
+                matches!(
+                    c,
+                    rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::DOT_DOT
+                )
+            });
+            let pat = elem
+                .children()
+                .find(|n| n.kind() == SyntaxKind::PATTERN)
+                .map(|p| self.lower_pattern(&p));
+
+            if is_rest {
+                seen_rest = true;
+                if rest.is_none() {
+                    rest = Some(ArrayRestPat { pat });
+                }
+            } else if let Some(pat) = pat {
+                if seen_rest {
+                    suffix.push(pat);
+                } else {
+                    prefix.push(pat);
+                }
+            }
+        }
+
+        self.alloc_pattern(
+            Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+            },
+            node.text_range(),
+        )
     }
 
     fn lower_catch_expr(&mut self, node: &SyntaxNode) -> ExprId {

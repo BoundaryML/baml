@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18056
 ---
 === MIR2 ===
 fn user.alias_intersection_in_match_arm(v: int | string) -> int {
@@ -968,6 +967,328 @@ fn user.match_nested_paren_union(v: (int | string)[]) -> int {
     }
 
     bb2: {
+        return;
+    }
+}
+
+fn user.mixed_nested_array_class_binding(v: PatternMatrix | PatternBucket[][]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: PatternMatrix | PatternBucket[][] // v // param
+    let _2: bool
+    let _3: int[][]
+    let _4: bool
+    let _5: int
+    let _6: bool
+    let _7: int
+    let _8: int[]
+    let _9: bool
+    let _10: int
+    let _11: bool
+    let _12: int[]
+    let _13: int
+    let _14: bool
+    let _15: bool
+    let _16: int[][]
+    let _17: int
+    let _18: int[]
+    let _19: int[]
+    let _20: int
+    let _21: int[] // x
+    let _22: bool
+    let _23: int
+    let _24: bool
+    let _25: int
+    let _26: PatternBucket[]
+    let _27: bool
+    let _28: int
+    let _29: bool
+    let _30: int
+    let _31: PatternBucket
+    let _32: bool
+    let _33: int[]
+    let _34: bool
+    let _35: int
+    let _36: PatternBucket[]
+    let _37: int
+    let _38: PatternBucket
+    let _39: int[]
+    let _40: int[] // x
+
+    bb0: {
+        _2 = is_type(copy _1, Class(TypeName { name: "PatternMatrix", module_path: ["user"], display_name: "PatternMatrix" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb1, bb8];
+    }
+
+    bb1: {
+        _3 = copy _1.0;
+        _4 = is_type(copy _3, List(List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _4 -> [bb2, bb8];
+    }
+
+    bb2: {
+        _5 = len(_3);
+        _6 = copy _5 == const 1_i64;
+        branch copy _6 -> [bb3, bb8];
+    }
+
+    bb3: {
+        _7 = const 0_i64;
+        _8 = copy _3[_7];
+        _9 = is_type(copy _8, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _9 -> [bb4, bb8];
+    }
+
+    bb4: {
+        _10 = len(_8);
+        _11 = copy _10 >= const 0_i64;
+        branch copy _11 -> [bb5, bb8];
+    }
+
+    bb5: {
+        _13 = len(_8);
+        _12 = call const fn baml.Array.slice(copy _8, const 0_i64, copy _13) -> [bb6];
+    }
+
+    bb6: {
+        _14 = is_type(copy _12, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _14 -> [bb7, bb8];
+    }
+
+    bb7: {
+        _15 = is_type(copy _8, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _15 -> [bb16, bb8];
+    }
+
+    bb8: {
+        _22 = is_type(copy _1, List(List(Class(TypeName { name: "PatternBucket", module_path: ["user"], display_name: "PatternBucket" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _22 -> [bb9, bb14];
+    }
+
+    bb9: {
+        _23 = len(_1);
+        _24 = copy _23 == const 1_i64;
+        branch copy _24 -> [bb10, bb14];
+    }
+
+    bb10: {
+        _25 = const 0_i64;
+        _26 = copy _1[_25];
+        _27 = is_type(copy _26, List(Class(TypeName { name: "PatternBucket", module_path: ["user"], display_name: "PatternBucket" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _27 -> [bb11, bb14];
+    }
+
+    bb11: {
+        _28 = len(_26);
+        _29 = copy _28 == const 1_i64;
+        branch copy _29 -> [bb12, bb14];
+    }
+
+    bb12: {
+        _30 = const 0_i64;
+        _31 = copy _26[_30];
+        _32 = is_type(copy _31, Class(TypeName { name: "PatternBucket", module_path: ["user"], display_name: "PatternBucket" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _32 -> [bb13, bb14];
+    }
+
+    bb13: {
+        _33 = copy _31.0;
+        _34 = is_type(copy _33, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _34 -> [bb15, bb14];
+    }
+
+    bb14: {
+        _0 = const 0_i64;
+        goto -> bb18;
+    }
+
+    bb15: {
+        _35 = const 0_i64;
+        _36 = copy _1[_35];
+        _37 = const 0_i64;
+        _38 = copy _36[_37];
+        _39 = copy _38.0;
+        _40 = copy _39;
+        _0 = call const fn baml.Array.length(copy _40) -> [bb18];
+    }
+
+    bb16: {
+        _16 = copy _1.0;
+        _17 = const 0_i64;
+        _18 = copy _16[_17];
+        _20 = len(_18);
+        _19 = call const fn baml.Array.slice(copy _18, const 0_i64, copy _20) -> [bb17];
+    }
+
+    bb17: {
+        _21 = copy _19;
+        _0 = call const fn baml.Array.length(copy _21) -> [bb18];
+    }
+
+    bb18: {
+        return;
+    }
+}
+
+fn user.mixed_suffix_class_or_prefix_array_binding(v: PatternBucket[] | int[][]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: PatternBucket[] | int[][] // v // param
+    let _2: bool
+    let _3: int
+    let _4: bool
+    let _5: int
+    let _6: int
+    let _7: PatternBucket
+    let _8: bool
+    let _9: int[]
+    let _10: bool
+    let _11: PatternBucket[]
+    let _12: int
+    let _13: int
+    let _14: PatternBucket[]
+    let _15: int
+    let _16: int
+    let _17: int
+    let _18: int
+    let _19: PatternBucket
+    let _20: int[]
+    let _21: int[] // x
+    let _22: bool
+    let _23: int
+    let _24: bool
+    let _25: int
+    let _26: int[]
+    let _27: bool
+    let _28: int
+    let _29: bool
+    let _30: int[]
+    let _31: int
+    let _32: bool
+    let _33: bool
+    let _34: int[][]
+    let _35: int
+    let _36: int
+    let _37: int[]
+    let _38: int[]
+    let _39: int
+    let _40: int[] // x
+    let _41: int[][]
+    let _42: int
+
+    bb0: {
+        _2 = is_type(copy _1, List(Class(TypeName { name: "PatternBucket", module_path: ["user"], display_name: "PatternBucket" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _2 -> [bb1, bb4];
+    }
+
+    bb1: {
+        _3 = len(_1);
+        _4 = copy _3 >= const 1_i64;
+        branch copy _4 -> [bb2, bb4];
+    }
+
+    bb2: {
+        _5 = len(_1);
+        _6 = copy _5 - const 1_i64;
+        _7 = copy _1[_6];
+        _8 = is_type(copy _7, Class(TypeName { name: "PatternBucket", module_path: ["user"], display_name: "PatternBucket" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _8 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _9 = copy _7.0;
+        _10 = is_type(copy _9, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _10 -> [bb16, bb4];
+    }
+
+    bb4: {
+        _22 = is_type(copy _1, List(List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _22 -> [bb5, bb11];
+    }
+
+    bb5: {
+        _23 = len(_1);
+        _24 = copy _23 >= const 1_i64;
+        branch copy _24 -> [bb6, bb11];
+    }
+
+    bb6: {
+        _25 = const 0_i64;
+        _26 = copy _1[_25];
+        _27 = is_type(copy _26, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _27 -> [bb7, bb11];
+    }
+
+    bb7: {
+        _28 = len(_26);
+        _29 = copy _28 >= const 0_i64;
+        branch copy _29 -> [bb8, bb11];
+    }
+
+    bb8: {
+        _31 = len(_26);
+        _30 = call const fn baml.Array.slice(copy _26, const 0_i64, copy _31) -> [bb9];
+    }
+
+    bb9: {
+        _32 = is_type(copy _30, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _32 -> [bb10, bb11];
+    }
+
+    bb10: {
+        _33 = is_type(copy _26, List(Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
+        branch copy _33 -> [bb12, bb11];
+    }
+
+    bb11: {
+        _0 = const 0_i64;
+        goto -> bb19;
+    }
+
+    bb12: {
+        _35 = len(_1);
+        _34 = call const fn baml.Array.slice(copy _1, const 1_i64, copy _35) -> [bb13];
+    }
+
+    bb13: {
+        _36 = const 0_i64;
+        _37 = copy _1[_36];
+        _39 = len(_37);
+        _38 = call const fn baml.Array.slice(copy _37, const 0_i64, copy _39) -> [bb14];
+    }
+
+    bb14: {
+        _40 = copy _38;
+        _42 = len(_1);
+        _41 = call const fn baml.Array.slice(copy _1, const 1_i64, copy _42) -> [bb15];
+    }
+
+    bb15: {
+        _0 = call const fn baml.Array.length(copy _40) -> [bb19];
+    }
+
+    bb16: {
+        _12 = len(_1);
+        _13 = copy _12 - const 1_i64;
+        _11 = call const fn baml.Array.slice(copy _1, const 0_i64, copy _13) -> [bb17];
+    }
+
+    bb17: {
+        _15 = len(_1);
+        _16 = copy _15 - const 1_i64;
+        _14 = call const fn baml.Array.slice(copy _1, const 0_i64, copy _16) -> [bb18];
+    }
+
+    bb18: {
+        _17 = len(_1);
+        _18 = copy _17 - const 1_i64;
+        _19 = copy _1[_18];
+        _20 = copy _19.0;
+        _21 = copy _20;
+        _0 = call const fn baml.Array.length(copy _21) -> [bb19];
+    }
+
+    bb19: {
         return;
     }
 }

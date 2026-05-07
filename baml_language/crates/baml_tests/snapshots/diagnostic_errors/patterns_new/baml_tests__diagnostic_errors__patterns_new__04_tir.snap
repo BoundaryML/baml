@@ -72,10 +72,79 @@ function user.literal_chain_valid_then_invalid_cases_are_checked() -> int throws
   !! 2750..2754: type mismatch: expected 1 | 2, got int
   !! 2755..2761: type mismatch: expected 1, got 1 | 2
 }
-function user.binding_in_middle_of_chain() -> int throws never {
+function user.structural_array_chain_conflicts_with_scalar(v: int) -> int throws never {
+  { : 1 | 0
+    match (v : int) : 1 | 0
+      [..]: int =>
+        1 : 1
+      _ =>
+        0 : 0
+  }
+  !! 2936..2949: type mismatch: expected int, got unknown[]
+}
+function user.typed_array_chain_conflicts_with_other_array_type(v: int[]) -> int throws never {
+  { : unknown | 0
+    match (v : int[]) : unknown | 0
+      [x]: int[]: string[] =>
+        x : unknown
+      _ =>
+        0 : 0
+  }
+  !! 3192..3198: type mismatch: expected string[], got int[]
+}
+class user.NumberBag {
+  field: int[]
+}
+function user.mixed_class_array_or_binding_type_mismatch(v: user.NumberBag | string[][]) -> int throws never {
+  { : int
+    match (v : user.NumberBag | string[][]) : int
+      NumberBag { field: field } | [[..field]: string[]] =>
+        field.length() : int
+  }
+  !! 3544..3570: Or-pattern alternatives bind `field` with conflicting types: `int[]` vs `string[]`
+}
+class user.Team {
+  scores: int[]
+}
+function user.refutable_let_empty_array(xs: int[]) -> int throws never {
   { : 1
-    let x: 1: int: y = 1 : 1 -> int
+    let [] = xs : int[]
     1 : 1
   }
-  !! 3078..3082: type mismatch: expected never, got int
+  !! 3976..3979: refutable pattern in let binding; refutable patterns belong in `match`
+}
+function user.refutable_let_array_prefix(xs: int[]) -> int throws never {
+  { : int
+    let [first, ..] = xs : int[]
+    first : int
+  }
+  !! 4115..4131: refutable pattern in let binding; refutable patterns belong in `match`
+}
+function user.refutable_for_array_prefix(rows: int[][]) -> int throws never {
+  { : int
+    let total = 0 : 0 -> int
+    for [first, ..] in rows
+      { : void
+        total Add= first : int
+      }
+    total : int
+  }
+  !! 4293..4309: refutable pattern in for-let binding; refutable patterns belong in `match`
+}
+function user.refutable_for_class_field_array_prefix(teams: user.Team[]) -> int throws never {
+  { : int
+    let total = 0 : 0 -> int
+    for Team { scores: [first, ..] } in teams
+      { : void
+        total Add= first : int
+      }
+    total : int
+  }
+  !! 4513..4549: refutable pattern in for-let binding; refutable patterns belong in `match`
+}
+class user.NumberBag$stream {
+  field: int[]
+}
+class user.Team$stream {
+  scores: int[]
 }

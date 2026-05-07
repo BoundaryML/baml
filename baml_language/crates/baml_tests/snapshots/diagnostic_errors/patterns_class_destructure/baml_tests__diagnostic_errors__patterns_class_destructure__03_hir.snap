@@ -26,7 +26,7 @@ class user.SameNameOuter {
   field: user.SameNameInner
   other: user.SameNameInner
 }
-function user.class_destructure_chain_binding_middle_link_is_invalid(boxed: user.Box) -> int  [expr] {
+function user.class_destructure_chain_middle_binding_aliases_value(boxed: user.Box) -> int  [expr] {
   { let Box { value: value }: alias: user.Box = boxed } value Add alias.value
 }
 function user.class_destructure_duplicate_binding_name_across_fields() -> int  [expr] {

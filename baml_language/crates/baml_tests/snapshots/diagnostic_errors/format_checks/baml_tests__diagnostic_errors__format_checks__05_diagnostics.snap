@@ -451,9 +451,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: unreachable arm
-     ╭─[ match_exprs.baml:157:18 ]
+     ╭─[ match_exprs.baml:161:18 ]
      │
- 157 │         "bye" => "farewell",
+ 161 │         "bye" => "farewell",
      │                  ─────┬────  
      │                       ╰────── unreachable arm
      │ 
@@ -461,9 +461,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: unreachable arm
-     ╭─[ match_exprs.baml:158:14 ]
+     ╭─[ match_exprs.baml:162:14 ]
      │
- 158 │         _ => "other"
+ 162 │         _ => "other"
      │              ───┬───  
      │                 ╰───── unreachable arm
      │ 
@@ -471,9 +471,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `bool` and `bool`
-     ╭─[ match_exprs.baml:307:20 ]
+     ╭─[ match_exprs.baml:311:20 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                    ──┬──  
      │                      ╰──── operator `Mul` cannot be applied to `bool` and `bool`
      │ 
@@ -481,9 +481,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `int` and `bool`
-     ╭─[ match_exprs.baml:307:28 ]
+     ╭─[ match_exprs.baml:311:28 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                            ──┬──  
      │                              ╰──── operator `Mul` cannot be applied to `int` and `bool`
      │ 
@@ -491,9 +491,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `bool` and `bool`
-     ╭─[ match_exprs.baml:307:56 ]
+     ╭─[ match_exprs.baml:311:56 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                                                        ──┬──  
      │                                                          ╰──── operator `Mul` cannot be applied to `bool` and `bool`
      │ 
@@ -501,9 +501,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `int` and `bool`
-     ╭─[ match_exprs.baml:307:68 ]
+     ╭─[ match_exprs.baml:311:68 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                                                                    ──┬──  
      │                                                                      ╰──── operator `Mul` cannot be applied to `int` and `bool`
      │ 
@@ -511,9 +511,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `bool` and `int`
-     ╭─[ match_exprs.baml:307:80 ]
+     ╭─[ match_exprs.baml:311:80 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                                                                                ──┬──  
      │                                                                                  ╰──── operator `Mul` cannot be applied to `bool` and `int`
      │ 
@@ -521,11 +521,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: type mismatch: expected string, got 0
-     ╭─[ match_exprs.baml:446:6 ]
+     ╭─[ match_exprs.baml:450:6 ]
      │
- 446 │ ╭─▶     }
+ 450 │ ╭─▶     }
      ┆ ┆   
- 451 │ ├─▶     }
+ 455 │ ├─▶     }
      │ │           
      │ ╰─────────── type mismatch: expected string, got 0
      │     

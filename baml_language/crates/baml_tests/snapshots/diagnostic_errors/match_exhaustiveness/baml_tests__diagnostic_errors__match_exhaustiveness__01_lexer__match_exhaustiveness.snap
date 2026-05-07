@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 33609
 ---
 Slash "/"
 Slash "/"
@@ -7798,8 +7797,7 @@ Enum "enum"
 Word "discriminants"
 LParen "("
 IntegerLiteral "0"
-Dot "."
-Dot "."
+DotDot ".."
 IntegerLiteral "3"
 RParen ")"
 Word "should"

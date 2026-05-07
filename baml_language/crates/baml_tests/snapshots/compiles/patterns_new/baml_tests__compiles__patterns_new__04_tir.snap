@@ -371,9 +371,39 @@ function user.alias_intersection_in_match_arm(v: user.AliasA) -> int throws neve
         0 : 0
   }
 }
+class user.PatternBucket {
+  values: int[]
+}
+class user.PatternMatrix {
+  rows: int[][]
+}
+function user.mixed_suffix_class_or_prefix_array_binding(v: user.PatternBucket[] | int[][]) -> int throws never {
+  { : int | 0
+    match (v : user.PatternBucket[] | int[][]) : int | 0
+      [.._, PatternBucket { values: x }] | [[..x]: int[], .._] =>
+        x.length() : int
+      _ =>
+        0 : 0
+  }
+}
+function user.mixed_nested_array_class_binding(v: user.PatternMatrix | user.PatternBucket[][]) -> int throws never {
+  { : int | 0
+    match (v : user.PatternMatrix | user.PatternBucket[][]) : int | 0
+      PatternMatrix { rows: [[..x]: int[]] } | [[PatternBucket { values: x }]] =>
+        x.length() : int
+      _ =>
+        0 : 0
+  }
+}
 type user.Number$stream = int | float
 class user.AppError$stream {
   code: null | int
 }
 type user.AliasA$stream = int | string
 type user.AliasB$stream = string | bool
+class user.PatternBucket$stream {
+  values: int[]
+}
+class user.PatternMatrix$stream {
+  rows: int[][]
+}

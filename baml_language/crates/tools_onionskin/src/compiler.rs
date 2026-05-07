@@ -630,6 +630,24 @@ fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBo
                 .collect();
             format!("{} {{ {} }}", class_path.join("."), field_strs.join(", "))
         }
+        Pattern::Array {
+            prefix,
+            rest,
+            suffix,
+        } => {
+            let mut parts = prefix
+                .iter()
+                .map(|p| pat_desc(*p, body))
+                .collect::<Vec<_>>();
+            if let Some(rest) = rest {
+                parts.push(match rest.pat {
+                    Some(p) => format!("..{}", pat_desc(p, body)),
+                    None => "..".to_string(),
+                });
+            }
+            parts.extend(suffix.iter().map(|p| pat_desc(*p, body)));
+            format!("[{}]", parts.join(", "))
+        }
         Pattern::Or(pats) => pats
             .iter()
             .map(|p| pat_desc(*p, body))
@@ -1930,6 +1948,24 @@ impl CompilerRunner {
                         .map(|f| format!("{}: {}", f.field, pat_desc(f.pat, body)))
                         .collect();
                     format!("{} {{ {} }}", class_path.join("."), field_strs.join(", "))
+                }
+                Pattern::Array {
+                    prefix,
+                    rest,
+                    suffix,
+                } => {
+                    let mut parts = prefix
+                        .iter()
+                        .map(|p| pat_desc(*p, body))
+                        .collect::<Vec<_>>();
+                    if let Some(rest) = rest {
+                        parts.push(match rest.pat {
+                            Some(p) => format!("..{}", pat_desc(p, body)),
+                            None => "..".to_string(),
+                        });
+                    }
+                    parts.extend(suffix.iter().map(|p| pat_desc(*p, body)));
+                    format!("[{}]", parts.join(", "))
                 }
                 Pattern::Or(pats) => pats
                     .iter()

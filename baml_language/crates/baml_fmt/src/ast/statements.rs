@@ -171,12 +171,14 @@ impl Printable for ExpressionStmt {
 
 /// Corresponds to a [`SyntaxKind::LET_STMT`] node or a [`SyntaxKind::WATCH_LET`] node.
 ///
-/// Post-pattern-rewrite shape: `KW_WATCH? PATTERN EQUALS? <expr>? SEMICOLON?`.
-/// The `let` keyword, binding name, and any `: T` annotation now live inside
-/// the [`super::MatchPattern`] (e.g. `let x: int` parses as a `Chain([Bind, Type])`).
+/// Post-pattern-rewrite shape: `KW_WATCH? KW_LET? PATTERN EQUALS? <expr>? SEMICOLON?`.
+/// Simple bindings carry `let` inside the [`super::MatchPattern`] (e.g.
+/// `let x: int` parses as a `Chain([Bind, Type])`). Array destructuring uses
+/// the statement-level `let` before an `ARRAY_PATTERN`.
 #[derive(Debug)]
 pub struct LetStmt {
     pub watch: Option<t::Watch>,
+    pub let_keyword: Option<t::Let>,
     pub pattern: super::MatchPattern,
     pub initializer: Option<(t::Equals, Expression)>,
     /// Not required in some contexts like for-let loops
@@ -202,6 +204,11 @@ impl FromCST for LetStmt {
             None
         };
 
+        let let_keyword = it
+            .next_if_kind(SyntaxKind::KW_LET)
+            .map(t::Let::from_cst)
+            .transpose()?;
+
         let pattern: super::MatchPattern = it.expect_parse()?;
 
         let initializer = if let Some(equals) = it.next_if_kind(SyntaxKind::EQUALS) {
@@ -216,6 +223,7 @@ impl FromCST for LetStmt {
 
         Ok(LetStmt {
             watch,
+            let_keyword,
             pattern,
             initializer,
             semicolon,
@@ -231,7 +239,11 @@ impl Printable for LetStmt {
             printer.print_raw_token(watch);
             printer.print_str(" ");
         }
-        // The pattern carries `let`, the binding name, and any `: T` narrow.
+        if let Some(let_keyword) = &self.let_keyword {
+            printer.print_raw_token(let_keyword);
+            printer.print_str(" ");
+        }
+        // Simple binding patterns carry `let`, the binding name, and any `: T` narrow.
         multi_lined |= printer.print(&self.pattern, shape.clone()).multi_lined;
 
         if let Some((equals, expr)) = &self.initializer {
@@ -686,6 +698,10 @@ impl PrintMultiLine for ForIteratorArgs {
                     printer.print_raw_token(watch);
                     printer.print_spaces(1);
                 }
+                if let Some(let_keyword) = &let_stmt.let_keyword {
+                    printer.print_raw_token(let_keyword);
+                    printer.print_spaces(1);
+                }
                 printer.print(&let_stmt.pattern, inner_shape.clone());
             }
             ForBinding::Bare(word) => {
@@ -733,6 +749,10 @@ impl ForIteratorArgs {
             ForBinding::Let(let_stmt) => {
                 if let Some(watch) = &let_stmt.watch {
                     printer.print_raw_token(watch);
+                    printer.print_spaces(1);
+                }
+                if let Some(let_keyword) = &let_stmt.let_keyword {
+                    printer.print_raw_token(let_keyword);
                     printer.print_spaces(1);
                 }
                 if printer
@@ -791,6 +811,7 @@ impl Printable for ForIteratorArgs {
                 .watch
                 .as_ref()
                 .map(Token::span)
+                .or_else(|| let_stmt.let_keyword.as_ref().map(Token::span))
                 .unwrap_or_else(|| let_stmt.pattern.leftmost_token()),
             ForBinding::Bare(word) => word.span(),
         }

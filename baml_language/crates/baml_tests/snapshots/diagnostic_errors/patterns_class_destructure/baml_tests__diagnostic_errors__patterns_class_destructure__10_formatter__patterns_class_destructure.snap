@@ -102,7 +102,7 @@ function generic_class_type_pattern_in_chain_requires_type_args(boxed: Box<int>)
     }
 }
 
-function class_destructure_chain_binding_middle_link_is_invalid(boxed: Box<int>) -> int {
+function class_destructure_chain_middle_binding_aliases_value(boxed: Box<int>) -> int {
     let Box { value }: let alias: Box<int> = boxed;
     value + alias.value
 }

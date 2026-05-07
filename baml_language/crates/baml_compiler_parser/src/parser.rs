@@ -76,6 +76,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Comma => SyntaxKind::COMMA,
         TokenKind::Semicolon => SyntaxKind::SEMICOLON,
         TokenKind::DotDotDot => SyntaxKind::DOT_DOT_DOT,
+        TokenKind::DotDot => SyntaxKind::DOT_DOT,
         TokenKind::Dot => SyntaxKind::DOT,
         TokenKind::Dollar => SyntaxKind::DOLLAR,
 
@@ -2815,7 +2816,12 @@ impl<'a> Parser<'a> {
             if !p.at(TokenKind::Let) {
                 p.error_unexpected_token("'let'".to_string());
             }
-            p.parse_pattern();
+            if p.peek(1).map(|t| t.kind) == Some(TokenKind::LBracket) {
+                p.bump(); // statement `let`
+                p.parse_pattern();
+            } else {
+                p.parse_pattern();
+            }
 
             // Initializer
             if p.eat(TokenKind::Equals) {
@@ -2838,7 +2844,12 @@ impl<'a> Parser<'a> {
             if !p.at(TokenKind::Let) {
                 p.error_unexpected_token("'let'".to_string());
             }
-            p.parse_pattern();
+            if p.peek(1).map(|t| t.kind) == Some(TokenKind::LBracket) {
+                p.bump(); // statement `let`
+                p.parse_pattern();
+            } else {
+                p.parse_pattern();
+            }
 
             // Initializer
             if p.eat(TokenKind::Equals) {
@@ -3030,6 +3041,7 @@ impl<'a> Parser<'a> {
     //   UNION       := ATOM ('|' ATOM)*
     //   ATOM        := BINDING_PATTERN
     //                | DESTRUCTURE_PATTERN
+    //                | ARRAY_PATTERN
     //                | TYPE_PATTERN
     //                | PAREN_PATTERN
     //
@@ -3107,6 +3119,11 @@ impl<'a> Parser<'a> {
 
         if self.at(TokenKind::Let) {
             self.parse_let_pattern();
+            return;
+        }
+
+        if self.at(TokenKind::LBracket) {
+            self.parse_array_pattern();
             return;
         }
 
@@ -3232,6 +3249,7 @@ impl<'a> Parser<'a> {
                     | TokenKind::Hash
                     | TokenKind::Minus
                     | TokenKind::LParen
+                    | TokenKind::LBracket
                     | TokenKind::Let
             )
         )
@@ -3381,6 +3399,57 @@ impl<'a> Parser<'a> {
             if p.eat(TokenKind::Colon) {
                 p.parse_pattern();
             }
+        });
+    }
+
+    /// Parse an array destructure pattern:
+    /// `'[' (PATTERN | '..' PATTERN?) (',' ...)* ','? ']'`.
+    ///
+    /// Array slots are normal pattern positions. A binding must therefore be
+    /// written with `let`, e.g. `[let first, ..let rest]`.
+    fn parse_array_pattern(&mut self) {
+        self.with_node(SyntaxKind::ARRAY_PATTERN, |p| {
+            if !p.expect(TokenKind::LBracket) {
+                return;
+            }
+
+            let mut seen_rest = false;
+            while !p.at(TokenKind::RBracket) && !p.at_end() {
+                if p.at(TokenKind::DotDot) {
+                    if seen_rest {
+                        p.error_unexpected_token(
+                            "only one '..' rest pattern is allowed in an array pattern".to_string(),
+                        );
+                    }
+                    seen_rest = true;
+                }
+                p.parse_array_pattern_element();
+
+                if p.at(TokenKind::RBracket) {
+                    break;
+                }
+                if !p.eat(TokenKind::Comma) {
+                    p.error_unexpected_token("',' or ']' after array pattern element".to_string());
+                    if !p.at(TokenKind::RBracket) && !p.at_end() {
+                        p.bump();
+                    }
+                }
+            }
+
+            p.expect(TokenKind::RBracket);
+        });
+    }
+
+    fn parse_array_pattern_element(&mut self) {
+        self.with_node(SyntaxKind::ARRAY_PATTERN_ELEMENT, |p| {
+            if p.eat(TokenKind::DotDot) {
+                if !p.at(TokenKind::Comma) && !p.at(TokenKind::RBracket) && !p.at_end() {
+                    p.parse_pattern();
+                }
+                return;
+            }
+
+            p.parse_pattern();
         });
     }
 
@@ -3693,7 +3762,12 @@ impl<'a> Parser<'a> {
             if !p.at(TokenKind::Let) {
                 p.error_unexpected_token("'let'".to_string());
             }
-            p.parse_pattern();
+            if p.peek(1).map(|t| t.kind) == Some(TokenKind::LBracket) {
+                p.bump(); // statement `let`
+                p.parse_pattern();
+            } else {
+                p.parse_pattern();
+            }
         });
     }
 
@@ -6703,6 +6777,93 @@ function Demo() -> int {
         assert!(
             !has_let,
             "match-arm destructure should NOT have a leading `let`"
+        );
+    }
+
+    #[test]
+    fn pattern_array_slots_are_normal_patterns() {
+        let source = r#"
+function Demo() -> int {
+  match (x) {
+    [let first, string, ..let rest] => 1
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let arm = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::MATCH_ARM)
+            .expect("expected MATCH_ARM");
+        let pattern = arm
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("expected PATTERN");
+        let array = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::ARRAY_PATTERN)
+            .expect("expected ARRAY_PATTERN");
+        let elements: Vec<_> = array
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::ARRAY_PATTERN_ELEMENT)
+            .collect();
+        assert_eq!(elements.len(), 3);
+
+        let first_inner = elements[0]
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("first element should contain a PATTERN");
+        assert_eq!(child_kinds(&first_inner), vec![SyntaxKind::BINDING_PATTERN]);
+
+        let second_inner = elements[1]
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("second element should contain a PATTERN");
+        assert_eq!(child_kinds(&second_inner), vec![SyntaxKind::TYPE_PATTERN]);
+
+        assert!(
+            elements[2].children_with_tokens().any(|c| {
+                matches!(
+                    c,
+                    rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::DOT_DOT
+                )
+            }),
+            "rest element should contain DOT_DOT"
+        );
+    }
+
+    #[test]
+    fn pattern_array_destructure_in_let_statement() {
+        let source = r#"
+function Demo() -> int {
+  let [..let rest] = xs;
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_let_pattern(&root);
+        assert_eq!(child_kinds(&pattern), vec![SyntaxKind::ARRAY_PATTERN]);
+    }
+
+    #[test]
+    fn pattern_array_rejects_multiple_rest_markers() {
+        let source = r#"
+function Demo() -> int {
+  match (x) {
+    [..let left, ..let right] => 1
+  }
+}
+"#;
+
+        let (_root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected parse error for multiple array rest markers"
         );
     }
 

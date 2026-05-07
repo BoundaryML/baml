@@ -9,6 +9,10 @@ class MatchFailure {
     reason string
 }
 
+class ArrayPatternTriviaBox {
+    values int[]
+}
+
 enum MatchStatus {
     Active
     Inactive
@@ -448,5 +452,34 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Nested Or-of-Or with trivia at outer and inner pipes =====
     match (x) {
         (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0
+    }
+}
+
+function ArrayPatternTrivia(xs: int[][], v: ArrayPatternTriviaBox | int[][]) -> int {
+    // ===== Trivia in nested array patterns =====
+    match (xs) {
+        [ // outer open trailing
+            /* first elem leading */
+            [ /* inner open trailing */ .. /* rest marker trailing */ let first /* first trailing */ ] /* inner close leading */
+            : /* type colon trailing */ int[] /* typed inner trailing */,
+            // rest element leading
+            .. /* outer rest marker trailing */ let rest /* outer rest trailing */,
+            /* outer close leading */
+        ] => first.length(),
+        _ => 0
+    }
+
+    // ===== Trivia in mixed array/class Or-patterns =====
+    match (v) {
+        ArrayPatternTriviaBox {
+            values: /* class field colon trailing */ let x /* class binding trailing */
+        } /* class alt trailing */
+        | /* pipe trailing */
+        [ /* array alt open trailing */
+            [..let x] /* inner array trailing */ : /* inner type colon trailing */ int[],
+            .._ /* ignored rest trailing */,
+            /* array alt close leading */
+        ] => x.length(),
+        _ => 0
     }
 }

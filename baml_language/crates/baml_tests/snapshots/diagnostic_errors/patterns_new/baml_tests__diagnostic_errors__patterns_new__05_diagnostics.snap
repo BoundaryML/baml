@@ -113,12 +113,73 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected never, got int
-    ╭─[ patterns_new.baml:88:14 ]
+  [type] Error: type mismatch: expected int, got unknown[]
+    ╭─[ patterns_new.baml:86:16 ]
     │
- 88 │     let x: 1: int: let y = 1;
-    │              ──┬─  
-    │                ╰─── type mismatch: expected never, got int
+ 86 │ ╭─▶     match (v) {
+ 87 │ ├─▶         [..]: int => 1,
+    │ │                             
+    │ ╰───────────────────────────── type mismatch: expected int, got unknown[]
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected string[], got int[]
+    ╭─[ patterns_new.baml:96:17 ]
+    │
+ 96 │         [let x]: int[]: string[] => x,
+    │                 ───┬──  
+    │                    ╰──── type mismatch: expected string[], got int[]
     │ 
     │ Note: Error code: E0001
 ────╯
+
+  [type] Error: Or-pattern alternatives bind `field` with conflicting types: `int[]` vs `string[]`
+     ╭─[ patterns_new.baml:109:30 ]
+     │
+ 109 │         NumberBag { field } | [[..let field]: string[]] => field.length()
+     │                              ─────────────┬────────────  
+     │                                           ╰────────────── Or-pattern alternatives bind `field` with conflicting types: `int[]` vs `string[]`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_new.baml:123:8 ]
+     │
+ 123 │     let [] = xs;
+     │        ─┬─  
+     │         ╰─── refutable pattern in let binding; refutable patterns belong in `match`
+     │ 
+     │ Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_new.baml:129:8 ]
+     │
+ 129 │     let [let first, ..] = xs;
+     │        ────────┬───────  
+     │                ╰───────── refutable pattern in let binding; refutable patterns belong in `match`
+     │ 
+     │ Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in for-let binding; refutable patterns belong in `match`
+     ╭─[ patterns_new.baml:136:13 ]
+     │
+ 136 │     for (let [let first, ..] in rows) {
+     │             ────────┬───────  
+     │                     ╰───────── refutable pattern in for-let binding; refutable patterns belong in `match`
+     │ 
+     │ Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in for-let binding; refutable patterns belong in `match`
+     ╭─[ patterns_new.baml:145:10 ]
+     │
+ 145 │     for (let Team { scores: [let first, ..] } in teams) {
+     │          ──────────────────┬─────────────────  
+     │                            ╰─────────────────── refutable pattern in for-let binding; refutable patterns belong in `match`
+     │ 
+     │ Note: Error code: E0111
+─────╯

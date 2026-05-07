@@ -84,10 +84,71 @@ function literal_chain_valid_then_invalid_cases_are_checked() -> int {
     ok + bad
 }
 
-// Binding link in the middle of a chain — only Wildcard/Bind atoms with no
-// concrete narrow can act as "no test" links, and they contribute `never` to
-// the chain rule. So `1: int: let y` requires `int <: never`, which fails.
-function binding_in_middle_of_chain() -> int {
-    let x: 1: int: let y = 1;
+// Structural array shape cannot be chained into a scalar type.
+function structural_array_chain_conflicts_with_scalar(v: int) -> int {
+    match (v) {
+        [..]: int => 1,
+        _ => 0,
+    }
+}
+
+// A typed array destructure cannot be chained into an array of an incompatible
+// element type.
+function typed_array_chain_conflicts_with_other_array_type(v: int[]) -> int {
+    match (v) {
+        [let x]: int[]: string[] => x,
+        _ => 0,
+    }
+}
+
+class NumberBag {
+    field: int[],
+}
+
+// Same binding name across mixed class/array alternatives, but the class field
+// and array-rest branch bind different element types.
+function mixed_class_array_or_binding_type_mismatch(v: NumberBag | string[][]) -> int {
+    match (v) {
+        NumberBag { field } | [[..let field]: string[]] => field.length(),
+    }
+}
+
+// ============================================================================
+// Array destructuring refutability in irrefutable contexts
+// ============================================================================
+
+class Team {
+    scores: int[],
+}
+
+// Empty array patterns can fail when the input is non-empty.
+function refutable_let_empty_array(xs: int[]) -> int {
+    let [] = xs;
     1
+}
+
+// Prefix patterns can fail when the input is too short.
+function refutable_let_array_prefix(xs: int[]) -> int {
+    let [let first, ..] = xs;
+    first
+}
+
+// For-loop bindings are irrefutable contexts too.
+function refutable_for_array_prefix(rows: int[][]) -> int {
+    let total = 0;
+    for (let [let first, ..] in rows) {
+        total += first
+    }
+    ;
+    total
+}
+
+// Refutability propagates through class fields.
+function refutable_for_class_field_array_prefix(teams: Team[]) -> int {
+    let total = 0;
+    for (let Team { scores: [let first, ..] } in teams) {
+        total += first
+    }
+    ;
+    total
 }

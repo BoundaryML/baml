@@ -134,6 +134,7 @@ define_punctuation_tokens! {
     "," => SyntaxKind::COMMA => Comma;
     ";" => SyntaxKind::SEMICOLON => Semicolon;
     "..." => SyntaxKind::DOT_DOT_DOT => DotDotDot;
+    ".." => SyntaxKind::DOT_DOT => DotDot;
     "." => SyntaxKind::DOT => Dot;
     "$" => SyntaxKind::DOLLAR => Dollar;
     "->" => SyntaxKind::ARROW => Arrow;

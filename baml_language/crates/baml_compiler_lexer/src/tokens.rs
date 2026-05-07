@@ -154,6 +154,8 @@ pub enum TokenKind {
     Semicolon,
     #[token("...")]
     DotDotDot,
+    #[token("..")]
+    DotDot,
     #[token(".")]
     Dot,
     #[token("$")]
@@ -382,6 +384,7 @@ impl std::fmt::Display for TokenKind {
 
             // Spread/Ellipsis
             TokenKind::DotDotDot => "'...'",
+            TokenKind::DotDot => "'..'",
         };
         write!(f, "{s}")
     }

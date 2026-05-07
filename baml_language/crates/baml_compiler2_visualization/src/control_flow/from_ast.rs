@@ -677,6 +677,22 @@ impl<'a> AstGraphBuilder<'a> {
                     .collect();
                 format!("{} {{ {} }}", class_path.join("."), field_strs.join(", "))
             }
+            ast::Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+            } => {
+                let mut parts: Vec<String> =
+                    prefix.iter().map(|p| self.format_pattern(*p)).collect();
+                if let Some(rest) = rest {
+                    parts.push(match rest.pat {
+                        Some(p) => format!("..{}", self.format_pattern(p)),
+                        None => "..".to_string(),
+                    });
+                }
+                parts.extend(suffix.iter().map(|p| self.format_pattern(*p)));
+                format!("[{}]", parts.join(", "))
+            }
             // Chain binds tighter than Or, so an Or child of a Chain needs
             // explicit parens (`(a | b): int`); a Chain child of an Or does
             // NOT (`a: int | b: string` already groups correctly), but we

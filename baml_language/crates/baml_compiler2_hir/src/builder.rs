@@ -573,6 +573,28 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
                 m
             }
+            ast::Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+            } => {
+                let mut m: FxHashMap<Name, TextRange> = FxHashMap::default();
+                for id in prefix {
+                    let inner = Self::collect_pattern_names(patterns, *id, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                if let Some(rest) = rest
+                    && let Some(id) = rest.pat
+                {
+                    let inner = Self::collect_pattern_names(patterns, id, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                for id in suffix {
+                    let inner = Self::collect_pattern_names(patterns, *id, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                m
+            }
             ast::Pattern::Chain(parts) => {
                 let mut m: FxHashMap<Name, TextRange> = FxHashMap::default();
                 for id in parts {
