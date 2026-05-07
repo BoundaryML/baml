@@ -893,6 +893,27 @@ mod tests {
         assert_eq!(array_length.fn_name, "baml_array_length");
         assert!(array_length.receiver.is_some());
         assert_eq!(array_length.params.len(), 0);
+        // Non-throwing builtin must have empty throws (otherwise codegen would
+        // wrap it in a spurious `Result`).
+        assert!(array_length.throws.is_empty());
+
+        // Concrete-error throws: `Uint8Array.from_hex` rejects malformed input
+        // with `InvalidArgument`. Pin this so a regression in throws extraction
+        // (or in the .baml signature) trips this test instead of silently
+        // dropping the `Result` wrapper from the generated trait method.
+        let from_hex = vm_builtins
+            .iter()
+            .find(|b| b.path == "baml.Uint8Array.from_hex")
+            .expect("missing Uint8Array.from_hex");
+        assert_eq!(from_hex.throws, vec!["InvalidArgument"]);
+
+        // Generic-throws: `Array.map<U, E>(... throws E)` carries the callback's
+        // error type through. The extractor records the generic name verbatim.
+        let array_map = vm_builtins
+            .iter()
+            .find(|b| b.path == "baml.Array.map")
+            .expect("missing Array.map");
+        assert_eq!(array_map.throws, vec!["E"]);
 
         let deep_copy = vm_builtins
             .iter()

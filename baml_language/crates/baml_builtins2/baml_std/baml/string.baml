@@ -462,7 +462,7 @@ class String {
   /// string.from_code_points([233])              // "é"
   /// string.from_code_points([128017])           // "🐑"
   /// string.from_code_points([-1])               // throws — out of range
-  /// string.from_code_points([0xD800])           // throws — surrogate
+  /// string.from_code_points([55296])            // throws — surrogate (U+D800)
   /// ```
   function from_code_points(unicode: int[]) -> string throws root.errors.InvalidArgument {
     $rust_function

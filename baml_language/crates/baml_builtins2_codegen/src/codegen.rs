@@ -25,7 +25,9 @@ use crate::types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage};
 /// A builtin is fallible if it declares a `throws` clause in its `.baml` source,
 /// or if its path is in the implicit allowlist below (for builtins that fail
 /// without a declared throws clause — e.g. `baml.sys.panic` always throws,
-/// `baml.unstable.string` can fail at runtime on certain values).
+/// `baml.unstable.string` can fail at runtime on certain values, and the
+/// random methods can raise a `HostUnavailable` panic if the OS entropy source
+/// is inaccessible).
 fn is_fallible(b: &NativeBuiltin) -> bool {
     !b.throws.is_empty()
         || b.path.starts_with("baml.unstable.")
@@ -36,6 +38,7 @@ fn is_fallible(b: &NativeBuiltin) -> bool {
                 | "baml.media.Audio.to_json"
                 | "baml.media.Video.to_json"
                 | "baml.media.Image.to_json"
+                | "baml.Float.random"
         )
 }
 

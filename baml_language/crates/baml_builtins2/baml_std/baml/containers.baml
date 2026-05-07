@@ -264,7 +264,7 @@ class Array<T> {
     $rust_function
   }
 
-  /// Inserts `item` at byte position `idx`, shifting existing elements at
+  /// Inserts `item` at index `idx`, shifting existing elements at
   /// `[idx, length())` one position to the right. Returns the new length.
   /// Mutates `self` in place.
   ///

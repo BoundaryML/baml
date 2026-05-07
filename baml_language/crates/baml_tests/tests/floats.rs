@@ -210,6 +210,13 @@ async fn float_min_with_nan_suppresses_nan() {
 }
 
 #[tokio::test]
+async fn float_min_nan_receiver_suppresses_nan() {
+    // Symmetric: NaN as `self`, finite as `other`.
+    let n = run_float("function main() -> float { float.nan().min(3.0) }").await;
+    assert_eq!(n, 3.0);
+}
+
+#[tokio::test]
 async fn float_min_both_nan_is_nan() {
     let n = run_float("function main() -> float { float.nan().min(float.nan()) }").await;
     assert!(n.is_nan());
@@ -227,6 +234,13 @@ async fn float_max_basic() {
 #[tokio::test]
 async fn float_max_with_nan_suppresses_nan() {
     let n = run_float("function main() -> float { (3.0).max(float.nan()) }").await;
+    assert_eq!(n, 3.0);
+}
+
+#[tokio::test]
+async fn float_max_nan_receiver_suppresses_nan() {
+    // Symmetric: NaN as `self`, finite as `other`.
+    let n = run_float("function main() -> float { float.nan().max(3.0) }").await;
     assert_eq!(n, 3.0);
 }
 
@@ -336,6 +350,25 @@ async fn float_round_above_half() {
     approx(
         run_float("function main() -> float { (1.6).round() }").await,
         2.0,
+        1e-12,
+    );
+}
+
+#[tokio::test]
+async fn float_round_two_point_five_is_three() {
+    // Pins half-away-from-zero (→ 3.0) — banker's rounding would give 2.0.
+    approx(
+        run_float("function main() -> float { (2.5).round() }").await,
+        3.0,
+        1e-12,
+    );
+}
+
+#[tokio::test]
+async fn float_round_negative_two_point_five_is_neg_three() {
+    approx(
+        run_float("function main() -> float { (-2.5).round() }").await,
+        -3.0,
         1e-12,
     );
 }
@@ -478,6 +511,36 @@ async fn float_iround_nan_throws() {
     expect_throw("function main() -> int { float.nan().iround() }").await;
 }
 
+#[tokio::test]
+async fn float_iround_inf_throws() {
+    expect_throw("function main() -> int { float.inf().iround() }").await;
+}
+
+#[tokio::test]
+async fn float_ifloor_nan_throws() {
+    expect_throw("function main() -> int { float.nan().ifloor() }").await;
+}
+
+#[tokio::test]
+async fn float_ifloor_inf_throws() {
+    expect_throw("function main() -> int { float.inf().ifloor() }").await;
+}
+
+#[tokio::test]
+async fn float_ifloor_neg_inf_throws() {
+    expect_throw("function main() -> int { (-float.inf()).ifloor() }").await;
+}
+
+#[tokio::test]
+async fn float_iceil_nan_throws() {
+    expect_throw("function main() -> int { float.nan().iceil() }").await;
+}
+
+#[tokio::test]
+async fn float_iceil_inf_throws() {
+    expect_throw("function main() -> int { float.inf().iceil() }").await;
+}
+
 // ─── sqrt / pow / log / hypot ─────────────────────────────────────────────────
 
 #[tokio::test]
@@ -539,6 +602,26 @@ async fn float_pow_fractional_exp() {
 #[tokio::test]
 async fn float_pow_negative_base_fractional_is_nan() {
     let n = run_float("function main() -> float { (-1.0).pow(0.5) }").await;
+    assert!(n.is_nan());
+}
+
+#[tokio::test]
+async fn float_pow_one_to_nan_is_one() {
+    // IEEE 754-2008 special case: 1^anything (including NaN) is 1.
+    let n = run_float("function main() -> float { (1.0).pow(float.nan()) }").await;
+    assert_eq!(n, 1.0);
+}
+
+#[tokio::test]
+async fn float_pow_nan_to_zero_is_one() {
+    // IEEE 754-2008 special case: x^0 (including NaN) is 1.
+    let n = run_float("function main() -> float { float.nan().pow(0.0) }").await;
+    assert_eq!(n, 1.0);
+}
+
+#[tokio::test]
+async fn float_pow_nan_to_one_is_nan() {
+    let n = run_float("function main() -> float { float.nan().pow(1.0) }").await;
     assert!(n.is_nan());
 }
 

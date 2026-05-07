@@ -1,7 +1,7 @@
 use bex_vm_types::Value;
 
 use super::{BamlClassInt, PackageBamlImpl};
-use crate::errors::{VmBamlError, VmRustFnError};
+use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 
 impl BamlClassInt for PackageBamlImpl {
     fn to_json(int: i64) -> Value {
@@ -109,7 +109,10 @@ impl BamlClassInt for PackageBamlImpl {
         let threshold = (1u128 << 64) / range * range;
         let mut buf = [0u8; 8];
         loop {
-            getrandom::getrandom(&mut buf).expect("int.random: host entropy source unavailable");
+            getrandom::getrandom(&mut buf).map_err(|e| VmPanic::HostUnavailable {
+                resource: "entropy".to_string(),
+                message: format!("getrandom failed in int.random: {e}"),
+            })?;
             let r = u128::from(u64::from_le_bytes(buf));
             if r < threshold {
                 // r % range < range ≤ 2^64 - 1 < i64 width when added to lower,

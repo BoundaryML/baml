@@ -36,6 +36,12 @@ pub enum VmPanic {
     /// The graceful-ish way to handle potential OOM errors, instead of hard-crashing.
     #[error("memory allocation failed: {message}")]
     AllocFailure { message: String },
+
+    /// A required host resource is unavailable — e.g. the OS entropy source
+    /// returned an error in a sandboxed runtime. Catchable so user code can
+    /// fall back gracefully instead of aborting the host process.
+    #[error("host resource '{resource}' unavailable: {message}")]
+    HostUnavailable { resource: String, message: String },
 }
 
 /// An error value from the BAML standard library. Maps 1:1 to a `baml.errors.*` class.

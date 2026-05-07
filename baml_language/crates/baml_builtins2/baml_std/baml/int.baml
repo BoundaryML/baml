@@ -46,9 +46,9 @@ class Int {
 
   /// Clamps `self` into the range `[min, max]`.
   ///
-  /// If `min > max`, the result is `min` for `self <= max`, otherwise `max` —
-  /// in other words the call effectively snaps to whichever bound was crossed
-  /// first. Most callers will pass `min <= max`.
+  /// Equivalent to `self.min(max).max(min)`. Callers should pass `min <= max`;
+  /// if `min > max` the result is always `min` (the lower-clamp wins because
+  /// it runs after the upper-clamp).
   ///
   /// # Examples
   /// ```
@@ -229,8 +229,10 @@ class Int {
   ///
   /// Throws `InvalidArgument` if `lower >= upper` (the range would be empty).
   /// Uses the host's cryptographic entropy source — no user-supplied RNG
-  /// handle. The full `int` range is supported (e.g. `random(int.min_value(),
-  /// int.max_value())`).
+  /// handle. The largest representable half-open range is supported (e.g.
+  /// `random(int.min_value(), int.max_value())` returns a value in
+  /// `[int.min_value(), int.max_value())`; `int.max_value()` itself is never
+  /// returned).
   ///
   /// # Examples
   /// ```

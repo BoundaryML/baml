@@ -1345,6 +1345,11 @@ impl BexVm {
                 let msg = self.alloc_string(message);
                 (PanicClass::AllocFailure, vec![msg])
             }
+            VmPanic::HostUnavailable { resource, message } => {
+                let resource = self.alloc_string(resource);
+                let message = self.alloc_string(message);
+                (PanicClass::HostUnavailable, vec![resource, message])
+            }
         };
         self.alloc_panic_value(class, fields)
     }

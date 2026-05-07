@@ -1,7 +1,7 @@
 use bex_vm_types::Value;
 
 use super::{BamlClassFloat, PackageBamlImpl};
-use crate::errors::{VmBamlError, VmRustFnError};
+use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 
 // `i64::MIN as f64` is exactly representable (`-2^63`); `i64::MAX as f64` rounds
 // up to `2^63` (one past `i64::MAX`). So the in-range predicate is
@@ -196,15 +196,18 @@ impl BamlClassFloat for PackageBamlImpl {
     }
 
     #[allow(clippy::cast_precision_loss)]
-    fn random() -> f64 {
+    fn random() -> Result<f64, VmRustFnError> {
         // Uniform draw on [0, 1) using 53 mantissa bits. Standard construction:
         // take a u64, drop the top 11 bits, multiply by 2^-53.
         let mut buf = [0u8; 8];
-        getrandom::getrandom(&mut buf).expect("float.random: host entropy source unavailable");
+        getrandom::getrandom(&mut buf).map_err(|e| VmPanic::HostUnavailable {
+            resource: "entropy".to_string(),
+            message: format!("getrandom failed in float.random: {e}"),
+        })?;
         let bits = u64::from_le_bytes(buf) >> 11; // 53-bit value, ≤ 2^53 - 1
         // 2^-53 = 1.0 / (1u64 << 53). The cast `bits as f64` is lossless
         // because bits ≤ 2^53 - 1 fits in f64's 53-bit mantissa.
-        bits as f64 * (1.0 / (1u64 << 53) as f64)
+        Ok(bits as f64 * (1.0 / (1u64 << 53) as f64))
     }
 
     // ── Constants ─────────────────────────────────────────────────────────────

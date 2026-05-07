@@ -24,10 +24,10 @@ class Float {
   ///
   /// # Examples
   /// ```
-  /// float.inf().is_infinite()        // true
-  /// (-float.inf()).is_infinite()     // true
-  /// (1e308).is_infinite()            // false  (large but finite)
-  /// float.nan().is_infinite()        // false
+  /// float.inf().is_infinite()                 // true
+  /// (-float.inf()).is_infinite()              // true
+  /// (1000000.0 * 1000000.0).is_infinite()     // false  (1e12, large but finite)
+  /// float.nan().is_infinite()                 // false
   /// ```
   function is_infinite(self) -> bool {
     $rust_function
@@ -87,9 +87,9 @@ class Float {
 
   /// Clamps `self` into the range `[min, max]`.
   ///
-  /// If `min > max`, the result is undefined-but-deterministic: this returns
-  /// `max` for `self <= max`, otherwise `min` (the same step-by-step semantics
-  /// as `int.clamp`). Most callers should pass `min <= max`.
+  /// Equivalent to `self.min(max).max(min)`. Callers should pass `min <= max`;
+  /// if `min > max` the result is always `min` (the lower-clamp wins because
+  /// it runs after the upper-clamp).
   ///
   /// NaN propagates through both `min` and `max` calls — if `self` is NaN,
   /// the result is NaN.
@@ -235,14 +235,27 @@ class Float {
     $rust_function
   }
 
-  /// Returns the logarithm of `self` in the given `base`.
-  /// Returns NaN if `self <= 0`, `base <= 0`, or `base == 1`.
+  /// Returns the logarithm of `self` in the given `base`. Equivalent to
+  /// `self.ln() / base.ln()`.
+  ///
+  /// The boundary behavior follows directly from that formula:
+  /// - `self < 0` → NaN  (since `ln(negative) = NaN`)
+  /// - `self == 0`, `base > 0`, `base != 1` → `-∞`
+  /// - `base < 0` → NaN
+  /// - `base == 0`, `self > 0` → `±0` (sign opposite of `ln(self)`, since
+  ///   `±finite / -∞ = ∓0`)
+  /// - `base == 1`, `self > 0`, `self != 1` → `±∞` (sign matches `ln(self)`,
+  ///   since `ln(1) == +0.0` and `±finite / +0.0 = ±∞`)
+  /// - `base == 1`, `self == 1` → NaN (`0 / 0`)
   ///
   /// # Examples
   /// ```
   /// (1000.0).log(10.0)   // 3.0
   /// (8.0).log(2.0)       // 3.0
   /// (-1.0).log(10.0)     // NaN
+  /// (0.0).log(10.0)      // -infinity
+  /// (2.0).log(1.0)       // +infinity
+  /// (1.0).log(1.0)       // NaN
   /// ```
   function log(self, base: float) -> float {
     $rust_function

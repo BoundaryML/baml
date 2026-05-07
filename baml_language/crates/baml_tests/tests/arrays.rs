@@ -295,11 +295,18 @@ fn int_arr(items: &[i64]) -> BexExternalValue {
     }
 }
 
-async fn expect_throw(src: &str) {
+async fn expect_throw(src: &str, expected_class: &str) {
     let output = baml_test!(baml: src, entry: "main");
-    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!(
+            "expected UnhandledThrow({expected_class}), got: {:?}",
+            output.result
+        );
     };
+    let BexExternalValue::Instance { class_name, .. } = value.as_ref() else {
+        panic!("expected throw Instance({expected_class}), got: {value:?}");
+    };
+    assert_eq!(class_name, expected_class);
 }
 
 // ─── clear ────────────────────────────────────────────────────────────────────
@@ -527,6 +534,7 @@ async fn array_insert_negative_throws() {
             xs.insert(0, -1)
         }
     "#,
+        "baml.errors.InvalidArgument",
     )
     .await;
 }
@@ -540,6 +548,7 @@ async fn array_insert_past_length_throws() {
             xs.insert(0, 100)
         }
     "#,
+        "baml.errors.InvalidArgument",
     )
     .await;
 }
@@ -639,6 +648,7 @@ async fn array_splice_negative_start_throws() {
             xs.splice(-1, 0, [])
         }
     "#,
+        "baml.errors.InvalidArgument",
     )
     .await;
 }
@@ -652,6 +662,7 @@ async fn array_splice_start_past_length_throws() {
             xs.splice(99, 0, [])
         }
     "#,
+        "baml.errors.InvalidArgument",
     )
     .await;
 }
@@ -665,6 +676,7 @@ async fn array_splice_negative_count_throws() {
             xs.splice(0, -1, [])
         }
     "#,
+        "baml.errors.InvalidArgument",
     )
     .await;
 }

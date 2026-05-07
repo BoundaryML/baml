@@ -6263,6 +6263,45 @@ fn baml.panics.Cancelled.from_json(j: baml.json.json) -> baml.panics.Cancelled {
     }
 }
 
+fn baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable {
+    // Locals:
+    let _0: baml.panics.HostUnavailable // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+    let _5: string
+    let _6: baml.json.json
+    let _7: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "resource") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "message") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(string);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _0 = baml.panics.HostUnavailable { copy _2, copy _5 };
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
 fn baml.panics.IndexOutOfBounds.from_json(j: baml.json.json) -> baml.panics.IndexOutOfBounds {
     // Locals:
     let _0: baml.panics.IndexOutOfBounds // _0 // return
@@ -6529,6 +6568,39 @@ fn baml.panics.Cancelled.to_json(self: baml.panics.Cancelled) -> baml.json.json 
     }
 
     bb2: {
+        return;
+    }
+}
+
+fn baml.panics.HostUnavailable.to_json(self: baml.panics.HostUnavailable) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.HostUnavailable // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: baml.panics.HostUnavailable
+    let _5: baml.json.json
+    let _6: string
+    let _7: baml.panics.HostUnavailable
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _7 = copy _1;
+        _6 = copy _7.1;
+        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+    }
+
+    bb2: {
+        _0 = { const "resource": copy _2, const "message": copy _5 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }

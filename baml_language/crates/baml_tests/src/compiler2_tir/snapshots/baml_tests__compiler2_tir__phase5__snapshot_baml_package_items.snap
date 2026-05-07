@@ -117,6 +117,7 @@ namespace baml.panics:
   class AssertionFailed { methods: [to_json, from_json] }
   class Cancelled { methods: [to_json, from_json] }
   class DivisionByZero { methods: [to_json, from_json] }
+  class HostUnavailable { methods: [to_json, from_json] }
   class IndexOutOfBounds { methods: [to_json, from_json] }
   class MapKeyNotFound { methods: [to_json, from_json] }
   type Panic

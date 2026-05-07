@@ -4,6 +4,24 @@ use baml_tests::baml_test;
 use baml_type::Ty;
 use bex_engine::BexExternalValue;
 
+/// Assert the most recent BAML execution failed with `UnhandledThrow` whose
+/// payload is an `Instance` of `expected_class`.  Use this rather than a bare
+/// `UnhandledThrow { .. }` match — the latter passes for any uncaught throw
+/// (including unrelated panics like `IndexOutOfBounds`), which masks regressions
+/// where the wrong error class is raised.
+fn assert_throw_class(
+    result: &Result<BexExternalValue, bex_engine::EngineError>,
+    expected_class: &str,
+) {
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = result else {
+        panic!("expected UnhandledThrow({expected_class}), got: {result:?}");
+    };
+    let BexExternalValue::Instance { class_name, .. } = value.as_ref() else {
+        panic!("expected throw Instance({expected_class}), got: {value:?}");
+    };
+    assert_eq!(class_name, expected_class);
+}
+
 #[tokio::test]
 async fn concat_strings() {
     let output = baml_test!(
@@ -495,9 +513,7 @@ async fn string_substring_mid_codepoint_throws() {
         }
     "#
     );
-    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
+    assert_throw_class(&output.result, "baml.errors.InvalidArgument");
 }
 
 #[tokio::test]
@@ -562,9 +578,7 @@ async fn string_char_at_mid_codepoint_throws() {
         }
     "#
     );
-    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
+    assert_throw_class(&output.result, "baml.errors.InvalidArgument");
 }
 
 #[tokio::test]
@@ -588,9 +602,7 @@ async fn string_char_at_past_end_throws() {
         }
     "#
     );
-    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
+    assert_throw_class(&output.result, "baml.errors.InvalidArgument");
 }
 
 #[tokio::test]
@@ -602,9 +614,7 @@ async fn string_char_at_negative_throws() {
         }
     "#
     );
-    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
+    assert_throw_class(&output.result, "baml.errors.InvalidArgument");
 }
 
 #[tokio::test]
@@ -889,9 +899,7 @@ async fn string_code_point_at_mid_codepoint_throws() {
         }
     "#
     );
-    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
+    assert_throw_class(&output.result, "baml.errors.InvalidArgument");
 }
 
 #[tokio::test]
@@ -905,9 +913,7 @@ async fn string_code_point_at_at_end_throws() {
         }
     "#
     );
-    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
+    assert_throw_class(&output.result, "baml.errors.InvalidArgument");
 }
 
 #[tokio::test]
@@ -919,9 +925,7 @@ async fn string_code_point_at_negative_throws() {
         }
     "#
     );
-    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
+    assert_throw_class(&output.result, "baml.errors.InvalidArgument");
 }
 
 // ─── to_utf8 / from_utf8 ──────────────────────────────────────────────────────
@@ -1005,9 +1009,7 @@ async fn string_from_utf8_invalid_throws() {
         }
     "#
     );
-    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
+    assert_throw_class(&output.result, "baml.errors.InvalidArgument");
 }
 
 #[tokio::test]
@@ -1087,9 +1089,7 @@ async fn string_from_code_points_negative_throws() {
         }
     "#
     );
-    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
+    assert_throw_class(&output.result, "baml.errors.InvalidArgument");
 }
 
 #[tokio::test]
@@ -1102,9 +1102,7 @@ async fn string_from_code_points_surrogate_throws() {
         }
     "#
     );
-    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
+    assert_throw_class(&output.result, "baml.errors.InvalidArgument");
 }
 
 #[tokio::test]
@@ -1117,9 +1115,7 @@ async fn string_from_code_points_too_large_throws() {
         }
     "#
     );
-    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
-        panic!("expected UnhandledThrow, got: {:?}", output.result);
-    };
+    assert_throw_class(&output.result, "baml.errors.InvalidArgument");
 }
 
 // ─── Character-class predicates (BEP-043) ─────────────────────────────────────
@@ -1130,11 +1126,36 @@ async fn string_from_code_points_too_large_throws() {
 // boolean. Every method gets at least one true/false pair plus an empty-string
 // check (the universal-quantifier convention: empty ⇒ true).
 
+/// Escape `s` for embedding inside a BAML double-quoted string literal.
+///
+/// BAML's lexer recognizes `\n`, `\t`, `\r`, `\0`, `\\`, and `\"` as escape
+/// sequences (see `baml_compiler2_ast::unescape_string_literal`). Any other
+/// character is emitted as-is; the file is UTF-8 so non-ASCII codepoints round
+/// trip directly. Without escaping, control characters in `assert_pred!` inputs
+/// (e.g. `"\n\t"`, `"\x00"`) would land in the generated source as raw bytes
+/// rather than as the intended string literal contents.
+fn baml_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            '\0' => out.push_str("\\0"),
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 macro_rules! assert_pred {
     ($method:literal, $input:literal, $expected:expr) => {{
         let src = format!(
             "function main() -> bool {{ \"{}\".{}() }}",
-            $input, $method
+            baml_escape($input),
+            $method
         );
         let output = baml_tests::baml_test!(baml: &src, entry: "main");
         assert_eq!(
