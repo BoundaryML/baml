@@ -46,4 +46,8 @@ pub(crate) struct PyFunction {
     /// functions. Surfaces only in `.pyi` rendering — the `.py` factory
     /// binding is type-erased.
     pub(crate) generic_params: Vec<String>,
+    /// Joined `///` doc-comment lines from the BAML function declaration.
+    /// Surfaced only by `.pyi` rendering as a `"""..."""` body so
+    /// `__doc__` resolves at runtime.
+    pub(crate) docstring: Option<String>,
 }

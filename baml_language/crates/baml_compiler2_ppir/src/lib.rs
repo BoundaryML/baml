@@ -415,6 +415,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         declarative_meta: None,
                         origin: ast::FunctionOrigin::Companion,
                         attributes: vec![],
+                        docstring: func.docstring.clone(),
                         span,
                         name_span,
                     };
@@ -455,6 +456,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         declarative_meta: None,
                         origin: ast::FunctionOrigin::Companion,
                         attributes: vec![],
+                        docstring: func.docstring.clone(),
                         span,
                         name_span,
                     };

@@ -87,7 +87,10 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia in guard arm (block comments) =====
     match (x) {
         /* 1 arm leading */
-        let n: /* 3 colon trailing *//* 4 type leading */int if n > 0 => "positive", /* 14 comma trailing */
+        let n /* 2 name trailing */: /* 3 colon trailing */ /* 4 type leading */ int if n > 0 => {
+            /* 12 body leading */
+            "positive" /* 13 body trailing */
+        }, /* 14 comma trailing */
         _ => "other",
     }
 
@@ -261,7 +264,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia on wrapping arm (block comments) =====
     match (x) {
         /* 1 arm leading */
-        let n: /* 3 colon trailing *//* 4 type leading */int
+        let n /* 2 name trailing */: /* 3 colon trailing */ /* 4 type leading */ int
             if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 => {
             /* 12 body leading */
             "acceptable small positive number that passes all the defined filter conditions" /* 13 body trailing */
@@ -346,7 +349,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     // ===== Trivia inside chain narrows (block comments around `:`) =====
     match (x) {
-        let n: /* c colon trailing *//* d link2 leading */int/* e link2 trailing */: /* f colon2 trailing *//* g link3 leading */int | string => {
+        let n /* b name trailing */: /* c colon trailing */ /* d link2 leading */ int /* e link2 trailing */: /* f colon2 trailing */ /* g link3 leading */ int | string => {
             n + 1
         },
     }
@@ -354,8 +357,8 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia between Or-pattern alternatives (block comments around `|`) =====
     match (x) {
         /* 1 arm leading */
-        (let x: /* 2c colon trailing */int) /* 3 first trailing */
-            |/* 4 pipe trailing *//* 5 second leading */(let x: /* 6c colon trailing */int) =>
+        (let x /* 2b name trailing */: /* 2c colon trailing */ int) /* 3 first trailing */
+            |/* 4 pipe trailing *//* 5 second leading */(let x /* 6b name trailing */: /* 6c colon trailing */ int) =>
         {
             x
         },
@@ -363,21 +366,23 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     // ===== Multi-link chain in arm with comments at every join =====
     match (x) {
-        let n: /* after colon-1 */1/* between */: /* before colon-2 */int/* before colon-3 */: /* after colon-3 */int | string => {
+        let n /* before colon-1 */: /* after colon-1 */ 1 /* between */: /* before colon-2 */ int /* before colon-3 */: /* after colon-3 */ int | string => {
             0
         },
     }
 
     // ===== Nested Or wrapping a chain, with trivia at boundaries =====
     match (x) {
-        (/* outer paren leading */(let x: /* inner1 colon */int) |/* between branches */(let x: /* inner2 colon */int)) => {
+        (/* outer paren leading */(let x /* inner1 name */: /* inner1 colon */ int)
+            |/* between branches */(let x /* inner2 name */: /* inner2 colon */ int)) =>
+        {
             x
         },
     }
 
     // ===== Wildcard chain narrow with trivia =====
     match (x) {
-        _: /* colon trailing */int => 0,
+        _ /* underscore trailing */: /* colon trailing */ int => 0,
     }
 
     // ===== Bare type union arm with trivia between members =====

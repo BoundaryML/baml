@@ -1211,10 +1211,15 @@ impl LoweringContext {
     /// Lower a `FIELD_PATTERN`. Shorthand `{ f }` synthesises a
     /// `Bind { name: f }` so `FieldPat.pat` is always populated.
     fn lower_field_pattern(&mut self, node: &SyntaxNode) -> FieldPat {
-        let field_name = node
+        let field_token = node
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| t.kind() == SyntaxKind::WORD)
+            .find(|t| t.kind() == SyntaxKind::WORD);
+        let field_span = field_token
+            .as_ref()
+            .map(rowan::SyntaxToken::text_range)
+            .unwrap_or_else(|| node.text_range());
+        let field_name = field_token
             .map(|t| Name::new(t.text()))
             .unwrap_or_else(|| Name::new("_"));
 
@@ -1238,6 +1243,7 @@ impl LoweringContext {
 
         FieldPat {
             field: field_name,
+            field_span,
             pat,
         }
     }
@@ -2244,6 +2250,7 @@ impl LoweringContext {
             declarative_meta: None,
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: Vec::new(),
+            docstring: None,
             span: node.text_range(),
             name_span: node.text_range(), // synthetic: use the lambda span
         };
@@ -2693,6 +2700,7 @@ impl LoweringContext {
             declarative_meta: None,
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: vec![],
+            docstring: None,
             span,
             name_span: span,
         };
@@ -2780,6 +2788,7 @@ impl LoweringContext {
             declarative_meta: None,
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: vec![],
+            docstring: None,
             span,
             name_span: span,
         };

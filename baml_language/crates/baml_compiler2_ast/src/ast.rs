@@ -749,6 +749,7 @@ pub enum Pattern {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldPat {
     pub field: Name,
+    pub field_span: text_size::TextRange,
     pub pat: PatId,
 }
 
@@ -810,36 +811,6 @@ impl Pattern {
                     patterns[*first].collect_bound_names(patterns, out);
                 }
             }
-        }
-    }
-
-    /// True iff this pattern is structurally guaranteed to match every value
-    /// at its position. **Pure structural check** — does not consider the
-    /// scrutinee's static type. TIR is responsible for verifying `Type` /
-    /// `Class` / chain assertions against the scrutinee type.
-    ///
-    /// Used by the let-stmt validator to reject patterns that can fail at
-    /// runtime; refutable patterns belong in `match` / `if let` / `let-else`.
-    pub fn is_irrefutable(&self, patterns: &la_arena::Arena<Pattern>) -> bool {
-        match self {
-            Pattern::Wildcard | Pattern::Bind { .. } => true,
-            Pattern::Class { fields, .. } => fields
-                .iter()
-                .all(|f| patterns[f.pat].is_irrefutable(patterns)),
-            // `Type(T)` is structurally fine; whether the value actually is a
-            // `T` is a typing concern, not a pattern concern.
-            Pattern::Type(_) => true,
-            // A chain is structurally as irrefutable as every link. The
-            // pairwise subtype check is a TIR concern.
-            Pattern::Chain(parts) => parts
-                .iter()
-                .all(|id| patterns[*id].is_irrefutable(patterns)),
-            // Or-of-patterns is irrefutable iff EVERY alternative is. That
-            // makes `_ | _` valid in a `let` while keeping refutable cases
-            // (e.g. `1 | 2`) properly rejected.
-            Pattern::Or(parts) => parts
-                .iter()
-                .all(|id| patterns[*id].is_irrefutable(patterns)),
         }
     }
 }
@@ -1015,6 +986,8 @@ pub struct FunctionDef {
     pub declarative_meta: Option<DeclarativeMeta>,
     pub origin: FunctionOrigin,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1076,6 +1049,8 @@ pub struct ClassDef {
     pub fields: Vec<FieldDef>,
     pub methods: Vec<FunctionDef>,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1085,6 +1060,8 @@ pub struct FieldDef {
     pub name: Name,
     pub type_expr: Option<SpannedTypeExpr>,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1094,6 +1071,8 @@ pub struct EnumDef {
     pub name: Name,
     pub variants: Vec<VariantDef>,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1102,6 +1081,8 @@ pub struct EnumDef {
 pub struct VariantDef {
     pub name: Name,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }

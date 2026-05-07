@@ -8,6 +8,9 @@ function user.binding_in_middle_of_chain() -> int  [expr] {
 function user.chain_violates_subtype(v: int) -> int  [expr] {
   {  } match (v) { n: int: string => 1 }
 }
+function user.literal_chain_valid_then_invalid_cases_are_checked() -> int  [expr] {
+  { let ok: 1: 1 | 2: 1 | 2 | 3: int = 1; let bad: int: 1 | 2: 1 = 1 } ok Add bad
+}
 function user.literal_narrow_violates(v: int) -> int  [expr] {
   {  } match (v) { n: "hello": int => 1 }
 }

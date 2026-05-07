@@ -255,6 +255,7 @@ fn lower_function(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Opt
     };
 
     let attributes = lower_attributes_from_node(node);
+    let docstring = crate::docstring::extract_docstring(node);
 
     Some(FunctionDef {
         name,
@@ -266,6 +267,7 @@ fn lower_function(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Opt
         declarative_meta,
         origin: crate::ast::FunctionOrigin::UserDefined,
         attributes,
+        docstring,
         span: node.text_range(),
         name_span,
     })
@@ -768,10 +770,12 @@ fn lower_class(
                     span: te_span,
                 }
             });
+            let field_docstring = crate::docstring::extract_docstring(f.syntax());
             Some(FieldDef {
                 name: Name::new(&field_name_str),
                 type_expr,
                 attributes: hoisted_field_attrs,
+                docstring: field_docstring,
                 span: f.syntax().text_range(),
                 name_span: fname.text_range(),
             })
@@ -793,6 +797,7 @@ fn lower_class(
         fields,
         methods,
         attributes: lower_attributes_from_node(node),
+        docstring: crate::docstring::extract_docstring(node),
         span: node.text_range(),
         name_span: name_token.text_range(),
     })
@@ -848,9 +853,11 @@ fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
                 });
                 return None;
             };
+            let variant_docstring = crate::docstring::extract_docstring(v.syntax());
             Some(VariantDef {
                 name: Name::new(vname.text()),
                 attributes: lower_variant_attributes(&v),
+                docstring: variant_docstring,
                 span: v.syntax().text_range(),
                 name_span: vname.text_range(),
             })
@@ -861,6 +868,7 @@ fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
         name: Name::new(name_token.text()),
         variants,
         attributes: lower_attributes_from_node(node),
+        docstring: crate::docstring::extract_docstring(node),
         span: node.text_range(),
         name_span: name_token.text_range(),
     })
@@ -1111,6 +1119,7 @@ fn synthesize_init_test_function(
         declarative_meta: None,
         origin: crate::ast::FunctionOrigin::Internal,
         attributes: vec![],
+        docstring: None,
         span,
         name_span: span,
     }
@@ -1148,6 +1157,7 @@ fn synthesize_register_call(
                 declarative_meta: None,
                 origin: crate::ast::FunctionOrigin::Internal,
                 attributes: vec![],
+                docstring: None,
                 span,
                 name_span: span,
             };
@@ -1217,6 +1227,7 @@ fn synthesize_register_call(
                 declarative_meta: None,
                 origin: crate::ast::FunctionOrigin::Internal,
                 attributes: vec![],
+                docstring: None,
                 span,
                 name_span: span,
             };
@@ -1907,6 +1918,7 @@ fn synthesize_client_new_companion(
         declarative_meta: None,
         origin: crate::ast::FunctionOrigin::Internal,
         attributes: vec![],
+        docstring: None,
         span,
         name_span: name_token.text_range(),
     }

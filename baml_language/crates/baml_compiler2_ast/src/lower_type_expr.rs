@@ -315,42 +315,33 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
 
     // Check for named/primitive type or map type
     if let Some(name) = parts.dotted_name() {
-        if name == "map" {
-            if let Some(type_args_node) = parts.type_args() {
-                let type_arg_exprs: Vec<_> = type_args_node
-                    .children()
-                    .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
-                    .map(|n| baml_compiler_syntax::ast::TypeExpr::cast(n).unwrap())
-                    .collect();
-
-                if type_arg_exprs.len() == 2 {
-                    let key = lower_type_expr_inner(&type_arg_exprs[0], false);
-                    let value = lower_type_expr_inner(&type_arg_exprs[1], false);
-                    return TypeExpr::Map {
-                        key: Box::new(key),
-                        value: Box::new(value),
-                        attrs: vec![],
-                    };
-                }
-            }
-        }
-
-        // For non-map generic types (e.g. `Foo<int>` in a union `Foo<int> | Foo<string>`),
-        // pick up the TYPE_ARGS child that union_member_parts() placed in child_nodes.
-        let generic_args: Vec<TypeExpr> = if name != "map" {
-            if let Some(type_args_node) = parts.type_args() {
+        let type_arg_exprs: Vec<_> = parts
+            .type_args()
+            .map(|type_args_node| {
                 type_args_node
                     .children()
                     .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
-                    .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
-                    .map(|te| lower_type_expr_inner(&te, false))
+                    .map(|n| baml_compiler_syntax::ast::TypeExpr::cast(n).unwrap())
                     .collect()
-            } else {
-                vec![]
+            })
+            .unwrap_or_default();
+
+        if name == "map" {
+            if type_arg_exprs.len() == 2 {
+                let key = lower_type_expr_inner(&type_arg_exprs[0], false);
+                let value = lower_type_expr_inner(&type_arg_exprs[1], false);
+                return TypeExpr::Map {
+                    key: Box::new(key),
+                    value: Box::new(value),
+                    attrs: vec![],
+                };
             }
-        } else {
-            vec![]
-        };
+        }
+
+        let generic_args: Vec<TypeExpr> = type_arg_exprs
+            .iter()
+            .map(|arg| lower_type_expr_inner(arg, false))
+            .collect();
 
         return match name.as_str() {
             "true" => TypeExpr::Literal {

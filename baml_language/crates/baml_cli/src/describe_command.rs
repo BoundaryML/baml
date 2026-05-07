@@ -342,16 +342,13 @@ pub fn write_description(
 
     let mut lines_used = 1;
 
-    // ── Docstring ────────────────────────────────────────────────────────────
-    if let Some(ref doc) = desc.docstring {
-        writeln!(w)?;
-        for line in doc.lines() {
-            writeln!(w, "/// {line}")?;
-            lines_used += 1;
-        }
-    }
-
     // ── Body ─────────────────────────────────────────────────────────────────
+    // The body slice already includes any leading `///` doc-comments
+    // (the CST parser attaches them as the first children of the item
+    // node, so they fall inside `node.text_range()` and round-trip
+    // through `slice_text`). Rendering `desc.docstring` separately
+    // would just duplicate the same lines, so leave the docstring
+    // surfacing to JSON consumers and let the body show it once.
     let is_local = matches!(
         desc.kind,
         baml_lsp2_actions::DefinitionKind::Parameter | baml_lsp2_actions::DefinitionKind::Binding

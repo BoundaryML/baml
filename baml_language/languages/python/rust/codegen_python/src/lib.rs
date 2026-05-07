@@ -8,6 +8,7 @@ mod emit;
 mod leaf;
 mod routing;
 mod translate_ty;
+mod utils;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -540,6 +541,367 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.contains("import typing\n"));
         assert!(leaf.contains("Foo: typing.TypeAlias = int\n"));
+    }
+
+    // ── /// docstring emission ──────────────────────────────────────────────
+
+    fn class_with_docs(
+        name: Name,
+        docstring: Option<&str>,
+        properties: Vec<ClassProperty>,
+    ) -> Symbol {
+        Symbol::Class(Class {
+            generic_params: Vec::new(),
+            name,
+            docstring: docstring.map(String::from),
+            properties,
+            static_methods: vec![],
+            instance_methods: vec![],
+            origin: origin("x.baml", 0),
+        })
+    }
+
+    #[test]
+    fn class_summary_only_emits_single_line_docstring() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume");
+        pool.insert(
+            n.clone(),
+            class_with_docs(
+                n,
+                Some("Job applicant resume."),
+                vec![ClassProperty {
+                    name: BaseName::new("a"),
+                    docstring: None,
+                    ty: Ty::Int,
+                }],
+            ),
+        );
+
+        let leaf = &to_source_code(&pool, &[])[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains(
+                "class Resume(pydantic.BaseModel):\n    \"\"\"Job applicant resume.\"\"\"\n"
+            ),
+            "got:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn field_doc_folds_into_attributes_section() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume");
+        pool.insert(
+            n.clone(),
+            class_with_docs(
+                n,
+                None,
+                vec![ClassProperty {
+                    name: BaseName::new("a"),
+                    docstring: Some("Identifier".to_string()),
+                    ty: Ty::Int,
+                }],
+            ),
+        );
+
+        let leaf = &to_source_code(&pool, &[])[&PathBuf::from("lorem/__init__.py")];
+        // Field /// goes into the class body docstring as an
+        // Attributes: section — there is no inline `# ` comment.
+        assert!(
+            leaf.contains(
+                "class Resume(pydantic.BaseModel):\n    \"\"\"\n    Attributes:\n        a: Identifier\n    \"\"\"\n"
+            ),
+            "got:\n{leaf}"
+        );
+        assert!(
+            !leaf.contains("# Identifier"),
+            "field /// must not emit inline `# …` comments; got:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn class_summary_plus_field_docs_block_form() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Doc");
+        pool.insert(
+            n.clone(),
+            class_with_docs(
+                n,
+                Some("A document with a title and an optional body."),
+                vec![
+                    ClassProperty {
+                        name: BaseName::new("title"),
+                        docstring: Some("Title shown in lists.".to_string()),
+                        ty: Ty::String,
+                    },
+                    ClassProperty {
+                        name: BaseName::new("body"),
+                        docstring: Some("Free-form body text.".to_string()),
+                        ty: Ty::Optional(Box::new(Ty::String)),
+                    },
+                ],
+            ),
+        );
+
+        let leaf = &to_source_code(&pool, &[])[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains(
+                "class Doc(pydantic.BaseModel):\n    \"\"\"\n    A document with a title and an optional body.\n\n    Attributes:\n        title: Title shown in lists.\n        body: Free-form body text.\n    \"\"\"\n"
+            ),
+            "got:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn class_multiline_summary_uses_block_form() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume");
+        pool.insert(
+            n.clone(),
+            class_with_docs(
+                n,
+                Some("first line\nsecond line"),
+                vec![ClassProperty {
+                    name: BaseName::new("a"),
+                    docstring: None,
+                    ty: Ty::Int,
+                }],
+            ),
+        );
+
+        let leaf = &to_source_code(&pool, &[])[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains("    \"\"\"\n    first line\n    second line\n    \"\"\""),
+            "got:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn enum_doc_folds_variants_into_members_section() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Sentiment");
+        pool.insert(
+            n.clone(),
+            Symbol::Enum(Enum {
+                name: n,
+                docstring: Some("Sentiment scale".to_string()),
+                variants: vec![
+                    EnumVariant {
+                        name: BaseName::new("HAPPY"),
+                        docstring: Some("Smiling".to_string()),
+                        value: "HAPPY".to_string(),
+                    },
+                    EnumVariant {
+                        name: BaseName::new("SAD"),
+                        docstring: None,
+                        value: "SAD".to_string(),
+                    },
+                ],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let leaf = &to_source_code(&pool, &[])[&PathBuf::from("lorem/__init__.py")];
+        // Once at least one variant carries a `///`, the Members: block
+        // appears and lists *every* variant — undocumented ones render
+        // as bare names. No inline `"""…"""` attribute docstrings
+        // remain.
+        assert!(
+            leaf.contains(
+                "class Sentiment(str, enum.Enum):\n    \"\"\"\n    Sentiment scale\n\n    Members:\n        HAPPY: Smiling\n        SAD\n    \"\"\"\n    HAPPY = \"HAPPY\"\n    SAD = \"SAD\"\n"
+            ),
+            "got:\n{leaf}"
+        );
+    }
+
+    /// Enum has a summary but no variant carries a `///` — the
+    /// Members: section is suppressed entirely.
+    #[test]
+    fn enum_summary_only_skips_members_section() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Sentiment");
+        pool.insert(
+            n.clone(),
+            Symbol::Enum(Enum {
+                name: n,
+                docstring: Some("Sentiment scale".to_string()),
+                variants: vec![
+                    EnumVariant {
+                        name: BaseName::new("HAPPY"),
+                        docstring: None,
+                        value: "HAPPY".to_string(),
+                    },
+                    EnumVariant {
+                        name: BaseName::new("SAD"),
+                        docstring: None,
+                        value: "SAD".to_string(),
+                    },
+                ],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let leaf = &to_source_code(&pool, &[])[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains(
+                "class Sentiment(str, enum.Enum):\n    \"\"\"Sentiment scale\"\"\"\n    HAPPY = \"HAPPY\"\n    SAD = \"SAD\"\n"
+            ),
+            "got:\n{leaf}"
+        );
+        assert!(
+            !leaf.contains("Members:"),
+            "Members: section must not appear when no variant is documented; got:\n{leaf}"
+        );
+    }
+
+    /// Class has a summary but no field carries a `///` — the
+    /// Attributes: section is suppressed entirely.
+    #[test]
+    fn class_summary_only_skips_attributes_section() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume");
+        pool.insert(
+            n.clone(),
+            class_with_docs(
+                n,
+                Some("Job applicant resume."),
+                vec![
+                    ClassProperty {
+                        name: BaseName::new("a"),
+                        docstring: None,
+                        ty: Ty::Int,
+                    },
+                    ClassProperty {
+                        name: BaseName::new("b"),
+                        docstring: None,
+                        ty: Ty::Int,
+                    },
+                ],
+            ),
+        );
+
+        let leaf = &to_source_code(&pool, &[])[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            !leaf.contains("Attributes:"),
+            "Attributes: section must not appear when no field is documented; got:\n{leaf}"
+        );
+    }
+
+    /// Once any field carries a `///`, the Attributes: section appears
+    /// and lists *every* field — undocumented ones render as bare
+    /// names.
+    #[test]
+    fn class_partial_field_docs_lists_all_fields_in_attributes() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume");
+        pool.insert(
+            n.clone(),
+            class_with_docs(
+                n,
+                None,
+                vec![
+                    ClassProperty {
+                        name: BaseName::new("a"),
+                        docstring: Some("First.".to_string()),
+                        ty: Ty::Int,
+                    },
+                    ClassProperty {
+                        name: BaseName::new("b"),
+                        docstring: None,
+                        ty: Ty::Int,
+                    },
+                ],
+            ),
+        );
+
+        let leaf = &to_source_code(&pool, &[])[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains(
+                "class Resume(pydantic.BaseModel):\n    \"\"\"\n    Attributes:\n        a: First.\n        b\n    \"\"\"\n"
+            ),
+            "got:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn class_no_docs_unchanged() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume");
+        pool.insert(n.clone(), class(n));
+
+        let leaf = &to_source_code(&pool, &[])[&PathBuf::from("lorem/__init__.py")];
+        assert!(!leaf.contains("\"\"\""));
+        assert!(
+            !leaf.contains("    # "),
+            "unexpected docstring comment in:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn function_docstring_emits_in_pyi_body() {
+        let mut pool: SymbolPool = HashMap::new();
+        let mut f = bare_func("ExtractResume", "x.baml", 0);
+        f.docstring = Some("Extract resume from PDF.".to_string());
+        pool.insert(
+            cg_name("user", &["lorem"], "ExtractResume"),
+            Symbol::Function(f),
+        );
+
+        let leaf = &to_source_code(&pool, &[])[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            leaf.contains(
+                "def ExtractResume(x: int) -> int:\n    \"\"\"Extract resume from PDF.\"\"\"\n"
+            ),
+            "got:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn function_no_docstring_keeps_ellipsis() {
+        let mut pool: SymbolPool = HashMap::new();
+        let f = bare_func("ExtractResume", "x.baml", 0);
+        pool.insert(
+            cg_name("user", &["lorem"], "ExtractResume"),
+            Symbol::Function(f),
+        );
+
+        let leaf = &to_source_code(&pool, &[])[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(leaf.contains("def ExtractResume(x: int) -> int: ..."));
+    }
+
+    #[test]
+    fn instance_method_docstring_emits_in_pyi_body() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Resume");
+        let mut method = bare_func("summarize", "x.baml", 100);
+        method.docstring = Some("Summarize the resume.".to_string());
+        method.arguments = vec![FunctionArgument {
+            name: BaseName::new("self"),
+            docstring: None,
+            ty: Ty::Class(n.clone(), vec![]),
+        }];
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                generic_params: Vec::new(),
+                name: n,
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("a"),
+                    docstring: None,
+                    ty: Ty::Int,
+                }],
+                static_methods: vec![],
+                instance_methods: vec![method],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let leaf = &to_source_code(&pool, &[])[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            leaf.contains(":\n        \"\"\"Summarize the resume.\"\"\"\n"),
+            "got:\n{leaf}"
+        );
     }
 
     #[test]

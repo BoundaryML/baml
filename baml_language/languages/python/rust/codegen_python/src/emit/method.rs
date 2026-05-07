@@ -35,6 +35,10 @@ pub(crate) struct PyMethodBinding {
     /// methods. Surfaces only in `.pyi` rendering — the `.py` factory
     /// binding is type-erased.
     pub(crate) generic_params: Vec<String>,
+    /// Joined `///` doc-comment lines from the BAML method declaration.
+    /// Surfaced only by `.pyi` rendering as a `"""..."""` body, since
+    /// `.py` factory bindings have no meaningful body.
+    pub(crate) docstring: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

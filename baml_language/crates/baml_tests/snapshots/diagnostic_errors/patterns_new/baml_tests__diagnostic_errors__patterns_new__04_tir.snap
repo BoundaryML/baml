@@ -63,10 +63,19 @@ function user.literal_narrow_violates(v: int) -> int throws never {
   }
   !! 2422..2430: type mismatch: expected int, got "hello"
 }
+function user.literal_chain_valid_then_invalid_cases_are_checked() -> int throws never {
+  { : int
+    let ok: 1: 1 | 2: 1 | 2 | 3: int = 1 : 1 -> int
+    let bad: int: 1 | 2: 1 = 1 : 1
+    ok + bad : int
+  }
+  !! 2750..2754: type mismatch: expected 1 | 2, got int
+  !! 2755..2761: type mismatch: expected 1, got 1 | 2
+}
 function user.binding_in_middle_of_chain() -> int throws never {
   { : 1
     let x: 1: int: y = 1 : 1 -> int
     1 : 1
   }
-  !! 2742..2746: type mismatch: expected never, got int
+  !! 3078..3082: type mismatch: expected never, got int
 }

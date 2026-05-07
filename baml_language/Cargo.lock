@@ -6631,6 +6631,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rig_docstrings_etc"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_types",
+ "baml_db",
+ "baml_project",
+ "baml_workspace",
+ "codegen_python",
+]
+
+[[package]]
 name = "rig_llm_functions"
 version = "0.1.0"
 dependencies = [
