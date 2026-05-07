@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, Users, ChevronDown } from "lucide-react";
+import { LogOut, User, Users, Tags, ChevronDown } from "lucide-react";
 
 export default function Home() {
   const { user, userId, isLoading, logout, hasManagementPermissions } = useUser();
@@ -84,10 +84,16 @@ export default function Home() {
                   Your Profile
                 </DropdownMenuItem>
                 {hasManagementPermissions && (
-                  <DropdownMenuItem onClick={() => router.push("/users")}>
-                    <Users className="h-4 w-4 mr-2" />
-                    Manage Users
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem onClick={() => router.push("/users")}>
+                      <Users className="h-4 w-4 mr-2" />
+                      Manage Users
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push("/tags")}>
+                      <Tags className="h-4 w-4 mr-2" />
+                      Manage Tags
+                    </DropdownMenuItem>
+                  </>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>

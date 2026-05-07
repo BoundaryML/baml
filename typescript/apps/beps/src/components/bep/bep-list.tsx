@@ -3,13 +3,22 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
 import { BepCard } from "./bep-card";
 import { BepKanbanCard } from "./bep-kanban-card";
+import { BepTagBadge } from "./bep-tag-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowUpDown, Search, LayoutList, Columns3 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowUpDown, Search, LayoutList, Columns3, X } from "lucide-react";
 
 type BepStatus =
   | "draft"
@@ -45,12 +54,17 @@ const KANBAN_COLUMNS: { status: BepStatus; label: string; color: string }[] = [
 
 export function BepList() {
   const [statusFilter, setStatusFilter] = useState<BepStatus | "all">("all");
+  const [tagFilter, setTagFilter] = useState<Id<"tags"> | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showOldestFirst, setShowOldestFirst] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
 
+  const allTags = useQuery(api.tags.list);
+  const selectedTag = allTags?.find((t) => t._id === tagFilter);
+
   const beps = useQuery(api.beps.list, {
     status: viewMode === "kanban" ? undefined : statusFilter === "all" ? undefined : statusFilter,
+    tagId: tagFilter ?? undefined,
   });
 
   const filteredBeps = beps
@@ -60,7 +74,8 @@ export function BepList() {
       return (
         bep.title.toLowerCase().includes(query) ||
         `bep-${bep.number}`.includes(query) ||
-        bep.shepherdNames.some((name) => name.toLowerCase().includes(query))
+        bep.shepherdNames.some((name) => name.toLowerCase().includes(query)) ||
+        bep.tags?.some((tag) => tag.name.toLowerCase().includes(query))
       );
     })
     .sort((a, b) =>
@@ -69,6 +84,10 @@ export function BepList() {
 
   const getBepsByStatus = (status: BepStatus) => {
     return filteredBeps?.filter((bep) => bep.status === status) || [];
+  };
+
+  const handleClearTagFilter = () => {
+    setTagFilter(null);
   };
 
   return (
@@ -90,7 +109,7 @@ export function BepList() {
               ))}
             </div>
           )}
-          <div className={`flex w-full ${viewMode === "kanban" ? "" : "sm:w-auto"} items-center gap-2`}>
+          <div className={`flex w-full ${viewMode === "kanban" ? "" : "sm:w-auto"} items-center gap-2 flex-wrap`}>
             <div className="relative flex-1 sm:flex-none sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -100,6 +119,27 @@ export function BepList() {
                 className="pl-9"
               />
             </div>
+            {allTags && allTags.length > 0 && (
+              <Select
+                value={tagFilter ?? "all"}
+                onValueChange={(value) => setTagFilter(value === "all" ? null : value as Id<"tags">)}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Filter by tag" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All tags</SelectItem>
+                  {allTags.map((tag) => (
+                    <SelectItem key={tag._id} value={tag._id}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${tag.color}`} />
+                        {tag.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {viewMode === "list" && (
               <Button
                 type="button"
@@ -134,6 +174,17 @@ export function BepList() {
             </div>
           </div>
         </div>
+        {selectedTag && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Filtering by:</span>
+            <BepTagBadge
+              tag={selectedTag}
+              size="sm"
+              removable
+              onRemove={handleClearTagFilter}
+            />
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -168,6 +219,7 @@ export function BepList() {
                         commentCount={bep.commentCount}
                         openIssueCount={bep.openIssueCount}
                         updatedAt={bep.updatedAt}
+                        tags={bep.tags}
                       />
                     ))
                   ) : (
@@ -192,6 +244,7 @@ export function BepList() {
                 commentCount={bep.commentCount}
                 openIssueCount={bep.openIssueCount}
                 updatedAt={bep.updatedAt}
+                tags={bep.tags}
               />
             </div>
           ))}

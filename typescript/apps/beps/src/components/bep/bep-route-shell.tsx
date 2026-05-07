@@ -19,6 +19,7 @@ import { BepTableOfContents } from "@/components/bep/bep-table-of-contents";
 import { BepStatusSelect } from "@/components/bep/bep-status-select";
 import { BepUserStance } from "@/components/bep/bep-user-stance";
 import { BepGoodReferenceToggle } from "@/components/bep/bep-good-reference-toggle";
+import { BepTagSelect, BepTagDisplay } from "@/components/bep/bep-tag-select";
 import { BepVersionSelect } from "@/components/bep/bep-version-select";
 import { BepExportDialog } from "@/components/bep/bep-export-dialog";
 import { BepImportDialog } from "@/components/bep/bep-import-dialog";
@@ -884,23 +885,34 @@ const [copied, setCopied] = useState(false);
               )}
             </div>
           </div>
-          <div className="flex items-center justify-between">
-            <p className="text-muted-foreground">
-              Shepherds: {bep.shepherdNames.join(", ") || "None assigned"}
-              {bep.status === "implemented" && bep.implementedByNames && bep.implementedByNames.length > 0 && (
-                <span className="ml-4">
-                  Implemented by: {bep.implementedByNames.join(", ")}
-                </span>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <p className="text-muted-foreground">
+                Shepherds: {bep.shepherdNames.join(", ") || "None assigned"}
+                {bep.status === "implemented" && bep.implementedByNames && bep.implementedByNames.length > 0 && (
+                  <span className="ml-4">
+                    Implemented by: {bep.implementedByNames.join(", ")}
+                  </span>
+                )}
+              </p>
+              {currentVersionId && (
+                <BepUserStance
+                  bepId={bep._id}
+                  versionId={currentVersionId}
+                  versionNumber={latestVersionNumber ?? 1}
+                  readOnly={isViewingHistorical}
+                />
               )}
-            </p>
-            {currentVersionId && (
-              <BepUserStance
+            </div>
+            {userId && !isViewingHistorical ? (
+              <BepTagSelect
                 bepId={bep._id}
-                versionId={currentVersionId}
-                versionNumber={latestVersionNumber ?? 1}
-                readOnly={isViewingHistorical}
+                currentTags={bep.tags ?? []}
+                userId={userId}
               />
-            )}
+            ) : bep.tags && bep.tags.length > 0 ? (
+              <BepTagDisplay tags={bep.tags} size="sm" />
+            ) : null}
           </div>
         </div>
 

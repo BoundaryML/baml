@@ -51,6 +51,32 @@ export const userRole = v.union(
 
 export default defineSchema({
   // ─────────────────────────────────────────────────────────────────────────
+  // TAGS (for categorizing BEPs)
+  // ─────────────────────────────────────────────────────────────────────────
+  tags: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    color: v.string(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_name", ["name"]),
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // BEP TAGS (many-to-many relationship between BEPs and tags)
+  // ─────────────────────────────────────────────────────────────────────────
+  bepTags: defineTable({
+    bepId: v.id("beps"),
+    tagId: v.id("tags"),
+    addedBy: v.id("users"),
+    addedAt: v.number(),
+  })
+    .index("by_bep", ["bepId"])
+    .index("by_tag", ["tagId"])
+    .index("by_bep_tag", ["bepId", "tagId"]),
+
+  // ─────────────────────────────────────────────────────────────────────────
   // USERS (GitHub OAuth or passkey auth)
   // ─────────────────────────────────────────────────────────────────────────
   users: defineTable({

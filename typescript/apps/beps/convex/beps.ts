@@ -11,27 +11,43 @@ export const list = query({
   args: {
     status: v.optional(bepStatus),
     limit: v.optional(v.number()),
+    tagId: v.optional(v.id("tags")),
   },
   handler: async (ctx, args) => {
     let beps;
+
+    // If filtering by tag, get BEP IDs from bepTags first
+    let tagFilteredBepIds: Set<string> | null = null;
+    if (args.tagId) {
+      const bepTags = await ctx.db
+        .query("bepTags")
+        .withIndex("by_tag", (q) => q.eq("tagId", args.tagId!))
+        .collect();
+      tagFilteredBepIds = new Set(bepTags.map((bt) => bt.bepId));
+    }
 
     if (args.status) {
       beps = await ctx.db
         .query("beps")
         .withIndex("by_status", (q) => q.eq("status", args.status!))
-        .take(args.limit ?? 50);
+        .take(args.limit ?? 100);
     } else {
       beps = await ctx.db
         .query("beps")
         .withIndex("by_updatedAt")
         .order("desc")
-        .take(args.limit ?? 50);
+        .take(args.limit ?? 100);
     }
 
-    // Enrich with counts and shepherd info
+    // Apply tag filter if specified
+    if (tagFilteredBepIds !== null) {
+      beps = beps.filter((bep) => tagFilteredBepIds!.has(bep._id));
+    }
+
+    // Enrich with counts, shepherd info, and tags
     return Promise.all(
       beps.map(async (bep) => {
-        const [commentCount, issueCount, shepherds] = await Promise.all([
+        const [commentCount, issueCount, shepherds, bepTags] = await Promise.all([
           ctx.db
             .query("comments")
             .withIndex("by_bep", (q) => q.eq("bepId", bep._id))
@@ -45,7 +61,20 @@ export const list = query({
             .collect()
             .then((i) => i.length),
           Promise.all(bep.shepherds.map((id) => ctx.db.get(id))),
+          ctx.db
+            .query("bepTags")
+            .withIndex("by_bep", (q) => q.eq("bepId", bep._id))
+            .collect(),
         ]);
+
+        // Fetch tag details
+        const tags = await Promise.all(
+          bepTags.map(async (bt) => {
+            const tag = await ctx.db.get(bt.tagId);
+            return tag;
+          })
+        );
+
         return {
           ...bep,
           commentCount,
@@ -53,6 +82,9 @@ export const list = query({
           shepherdNames: shepherds
             .filter((s) => s !== null)
             .map((s) => s!.name),
+          tags: tags
+            .filter((t) => t !== null)
+            .map((t) => ({ _id: t!._id, name: t!.name, color: t!.color })),
         };
       })
     );
@@ -69,8 +101,8 @@ export const getByNumber = query({
 
     if (!bep) return null;
 
-    // Get pages, comments, decisions, issues, versions, shepherds, and implementers
-    const [pages, comments, decisions, issues, versions, shepherds, implementers] =
+    // Get pages, comments, decisions, issues, versions, shepherds, implementers, and tags
+    const [pages, comments, decisions, issues, versions, shepherds, implementers, bepTags] =
       await Promise.all([
         ctx.db
           .query("bepPages")
@@ -97,7 +129,19 @@ export const getByNumber = query({
         bep.implementedBy
           ? Promise.all(bep.implementedBy.map((id) => ctx.db.get(id)))
           : Promise.resolve([]),
+        ctx.db
+          .query("bepTags")
+          .withIndex("by_bep", (q) => q.eq("bepId", bep._id))
+          .collect(),
       ]);
+
+    // Fetch tag details
+    const tags = await Promise.all(
+      bepTags.map(async (bt) => {
+        const tag = await ctx.db.get(bt.tagId);
+        return tag;
+      })
+    );
 
     return {
       ...bep,
@@ -108,6 +152,9 @@ export const getByNumber = query({
       versions,
       shepherdNames: shepherds.filter((s) => s !== null).map((s) => s!.name),
       implementedByNames: implementers.filter((i) => i !== null).map((i) => i!.name),
+      tags: tags
+        .filter((t) => t !== null)
+        .map((t) => ({ _id: t!._id, name: t!.name, color: t!.color, description: t!.description })),
     };
   },
 });

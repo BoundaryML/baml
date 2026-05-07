@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
+import { BepTagList } from "./bep-tag-badge";
 import { MessageSquare, AlertCircle } from "lucide-react";
+import { Id } from "../../../convex/_generated/dataModel";
 
 type BepStatus =
   | "draft"
@@ -14,6 +16,12 @@ type BepStatus =
   | "rejected"
   | "superseded";
 
+interface Tag {
+  _id: Id<"tags">;
+  name: string;
+  color: string;
+}
+
 interface BepKanbanCardProps {
   number: number;
   title: string;
@@ -22,6 +30,7 @@ interface BepKanbanCardProps {
   commentCount: number;
   openIssueCount: number;
   updatedAt: number;
+  tags?: Tag[];
 }
 
 function formatRelativeTime(timestamp: number, now: number): string {
@@ -44,6 +53,7 @@ export function BepKanbanCard({
   commentCount,
   openIssueCount,
   updatedAt,
+  tags,
 }: BepKanbanCardProps) {
   const [relativeTime, setRelativeTime] = useState<string>("");
 
@@ -64,6 +74,9 @@ export function BepKanbanCard({
                 {title}
               </h4>
             </div>
+            {tags && tags.length > 0 && (
+              <BepTagList tags={tags} size="sm" maxDisplay={2} />
+            )}
             {shepherdNames.length > 0 && (
               <p className="text-xs text-muted-foreground truncate">
                 {shepherdNames.join(", ")}

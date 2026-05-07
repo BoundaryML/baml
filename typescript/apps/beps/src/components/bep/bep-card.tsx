@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BepStatusBadge } from "./bep-status";
+import { BepTagList } from "./bep-tag-badge";
 import { MessageSquare, AlertCircle } from "lucide-react";
+import { Id } from "../../../convex/_generated/dataModel";
 
 type BepStatus =
   | "draft"
@@ -15,6 +17,12 @@ type BepStatus =
   | "rejected"
   | "superseded";
 
+interface Tag {
+  _id: Id<"tags">;
+  name: string;
+  color: string;
+}
+
 interface BepCardProps {
   number: number;
   title: string;
@@ -23,6 +31,7 @@ interface BepCardProps {
   commentCount: number;
   openIssueCount: number;
   updatedAt: number;
+  tags?: Tag[];
 }
 
 function formatRelativeTime(timestamp: number, now: number): string {
@@ -46,6 +55,7 @@ export function BepCard({
   commentCount,
   openIssueCount,
   updatedAt,
+  tags,
 }: BepCardProps) {
   // Use state with effect to avoid hydration mismatch
   const [relativeTime, setRelativeTime] = useState<string>("");
@@ -59,12 +69,19 @@ export function BepCard({
       <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-4">
-            <CardTitle className="text-lg">
-              <span className="text-muted-foreground font-mono">
-                BEP-{String(number).padStart(3, "0")}
-              </span>{" "}
-              {title}
-            </CardTitle>
+            <div className="flex-1">
+              <CardTitle className="text-lg">
+                <span className="text-muted-foreground font-mono">
+                  BEP-{String(number).padStart(3, "0")}
+                </span>{" "}
+                {title}
+              </CardTitle>
+              {tags && tags.length > 0 && (
+                <div className="mt-2">
+                  <BepTagList tags={tags} size="sm" maxDisplay={3} />
+                </div>
+              )}
+            </div>
             <BepStatusBadge status={status} />
           </div>
         </CardHeader>
