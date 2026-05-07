@@ -579,6 +579,30 @@ function Test() -> string {
     }
 
     #[test]
+    fn test_bare_builtin_package_completions() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> string {
+    b<[CURSOR]
+    "done"
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"baml"),
+            "Should contain 'baml' package root, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"reflect"),
+            "Should contain 'reflect' package root, got: {labels:?}"
+        );
+    }
+
+    #[test]
     fn test_log_package_completions() {
         // Test that `log.` shows completions for log functions.
         let test = CursorTest::new(

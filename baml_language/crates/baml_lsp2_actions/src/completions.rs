@@ -14,8 +14,8 @@
 //!   fields, methods, or enum variants.
 //!
 //! - **Value position** (token inside an expression in an
-//!   `EXPR_FUNCTION_BODY`): suggest local variables in scope, then all
-//!   package-level functions and template strings.
+//!   `EXPR_FUNCTION_BODY`): suggest local variables in scope, builtin package
+//!   roots, then all package-level functions and template strings.
 //!
 //! - **Top-level** (token at the source file root): suggest declaration
 //!   keywords (`class`, `function`, `enum`, …).
@@ -1268,6 +1268,15 @@ fn completions_for_value_position(
             );
             sort_prefix += 1;
         }
+    }
+
+    // ── Accessible package roots (`baml`, `reflect`, `log`, etc.) ─────────────
+    for package_name in crate::listing::non_user_package_names(db) {
+        items.push(
+            Completion::new(package_name.as_str(), CompletionKind::Module)
+                .with_detail("package")
+                .with_sort(format!("{:03}_{}", sort_prefix + 500, package_name)),
+        );
     }
 
     // ── Package-level values (functions, template strings, clients) ───────────
