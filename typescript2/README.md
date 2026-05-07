@@ -78,23 +78,10 @@ pnpm --filter app-vscode-webview test:unit:run
   - Browser tests run against Chromium via Playwright.
 - Use unit tests (`*.test.ts,tsx` excluding the above) if you don't need to depend on WASM or other browser APIs. These use `@testing-library/react` which is backed by `jsdom`, a fake browser implementation.
 
-#### HMR Tests
-
-HMR tests verify that WASM hot reload works:
-
-```bash
-pnpm --filter app-vscode-webview test:hmr      # Watch mode
-pnpm --filter app-vscode-webview test:hmr:run  # Single run
-```
-
-Tests are located in `app-vscode-webview/src/**/*.hmr.test.ts`.
-
-These tests spawn a Vite dev server and verify that changes to Rust source files trigger WASM rebuilds and HMR updates.
-
 ### Running All Tests
 
 ```bash
 # From the typescript2 directory
 pnpm --filter app-vscode-ext test:run
-pnpm --filter app-vscode-webview test:run  # Runs unit, browser, and hmr tests
+pnpm --filter app-vscode-webview test:run  # Runs unit and browser tests
 ```

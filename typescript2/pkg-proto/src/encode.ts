@@ -2,10 +2,10 @@ import type {
   InboundValue,
   InboundMapEntry,
   CallFunctionArgs as CallFunctionArgsType,
-} from './generated/baml/cffi/v1/baml_inbound';
+} from './generated/baml_core/cffi/v1/baml_inbound';
 import {
   CallFunctionArgs,
-} from './generated/baml/cffi/v1/baml_inbound';
+} from './generated/baml_core/cffi/v1/baml_inbound';
 import type { BamlSerializable } from './types';
 
 function isBamlSerializable(val: unknown): val is BamlSerializable {

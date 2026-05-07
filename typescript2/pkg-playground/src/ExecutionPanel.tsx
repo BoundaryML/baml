@@ -1006,10 +1006,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   return (
     <>
-      {buildTime != null && (
-        <span data-testid="hot-reload-test" style={{ display: 'none' }}>{buildTime}</span>
-      )}
-
       {/* ──── Status bar ──── */}
       <div className="flex items-center gap-2 px-2.5 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
         {connectionVersion != null && (

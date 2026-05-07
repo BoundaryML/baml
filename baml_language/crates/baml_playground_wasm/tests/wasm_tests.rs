@@ -6,21 +6,12 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_node_experimental);
 
-use baml_playground_wasm::{BamlProject, hot_reload_test_string, version};
+use baml_playground_wasm::{BamlProject, version};
 
 #[wasm_bindgen_test]
 fn test_version_returns_string() {
     let ver = version();
     assert!(!ver.is_empty(), "version should not be empty");
-}
-
-#[wasm_bindgen_test]
-fn test_hot_reload_test_string() {
-    let s = hot_reload_test_string();
-    assert!(
-        s.contains("hot reload test"),
-        "should contain hot reload marker"
-    );
 }
 
 #[wasm_bindgen_test]
