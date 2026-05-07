@@ -829,7 +829,7 @@ class baml.llm.Stream$stream {
   _client: null | baml.llm.PrimitiveClient$stream
   _acc: null | baml.llm.StreamAccumulator$stream
   _sse: null | baml.http.SseStream$stream
-  _cache: null | baml.llm.StreamCache$stream
+  _cache: null | baml.llm.StreamCache$stream<T, S>
 }
 class baml.llm.PrimitiveClient$stream {
   name: null | string

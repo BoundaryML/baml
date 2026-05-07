@@ -234,7 +234,7 @@ class user.Plain$stream {
   name: null | string
 }
 class user.Container$stream {
-  inner: null | user.Box$stream
+  inner: null | user.Box$stream<T>
 }
 class user.Factory$stream {
   data: null | T
@@ -246,7 +246,7 @@ class user.Stack$stream {
   items: T[]
 }
 class user.Foo$stream {
-  value: null | unknown
+  value: null | T
 }
 class user.Todo {
   id: int

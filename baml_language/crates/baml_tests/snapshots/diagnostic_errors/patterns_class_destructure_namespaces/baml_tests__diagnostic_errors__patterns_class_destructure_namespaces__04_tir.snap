@@ -53,7 +53,7 @@ class user.llm.openai.Response {
   score: int
 }
 class user.llm.openai.Box$stream {
-  value: null | unknown
+  value: null | T
 }
 class user.llm.openai.Response$stream {
   score: null | int
