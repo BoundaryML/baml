@@ -462,6 +462,28 @@ async fn generic_class_to_json_concrete() {
 }
 
 #[tokio::test]
+async fn generic_class_to_json_array_typearg() {
+    // `class Box<T> { value: T }; Box<int[]>{value:[1,2,3]}.to_json()` must
+    // produce `{"value":[1,2,3]}`. The TypeVar branch of per-field synthesis
+    // emits `baml.json.to_json(self.value)`, which at runtime must dispatch to
+    // `Array<int>::to_json` since T is bound to `int[]`. Composite-type-arg
+    // analogue of `generic_class_to_json_concrete`.
+    let source = r#"
+        class Box<T> { value T }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let b: Box<int[]> = Box<int[]> { value: [1, 2, 3] };
+            let j: baml.json.json = b.to_json();
+            baml.json.stringify(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(r#"{"value":[1,2,3]}"#.to_string()))
+    );
+}
+
+#[tokio::test]
 async fn generic_class_honors_override_through_typevar() {
     // `class Box<T> { value: T }` instantiated as `Box<Secret>` where Secret
     // has a user `to_json` override returning `"[redacted]"` — the override
