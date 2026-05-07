@@ -52,7 +52,7 @@ fn bridge_error_to_string(err: &BridgeError) -> String {
 }
 
 fn runtime_error_to_string(err: &bex_project::RuntimeError) -> String {
-    use bex_project::RuntimeError;
+    use bex_project::{BexExternalValue, CANCELLED_PANIC_CLASS, RuntimeError};
     match err {
         RuntimeError::InvalidArgument { .. } => {
             format!("BamlError: BamlInvalidArgumentError: {err}")
@@ -63,7 +63,13 @@ fn runtime_error_to_string(err: &bex_project::RuntimeError) -> String {
                 EngineError::FunctionNotFound { .. } => {
                     format!("BamlError: BamlInvalidArgumentError: {engine_err}")
                 }
-                EngineError::Cancelled => {
+                EngineError::UnhandledThrow { value, .. }
+                    if matches!(
+                        value.as_ref(),
+                        BexExternalValue::Instance { class_name, .. }
+                            if class_name == CANCELLED_PANIC_CLASS
+                    ) =>
+                {
                     format!("BamlError: BamlCancelledError: {engine_err}")
                 }
                 _ => format!("BamlError: BamlClientError: {engine_err}"),

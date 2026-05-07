@@ -98,6 +98,7 @@ fn deep_copy_value_recursive(
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
                 Object::RustData(arc) => vm.tlab.alloc(Object::RustData(Arc::clone(&arc))),
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
+                Object::UnscheduledFuture(f) => vm.tlab.alloc(Object::UnscheduledFuture(f)),
                 Object::Collector(c) => vm.tlab.alloc(Object::Collector(c)),
                 Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),
                 // Closures, bound methods, and cells are shallow-copied: the captured
@@ -209,17 +210,19 @@ fn deep_equals_recursive(
                     (Future::Ready(a_val), Future::Ready(b_val)) => {
                         deep_equals_recursive(vm, *a_val, *b_val, visited)
                     }
-                    (Future::Pending(a_pend), Future::Pending(b_pend)) => {
-                        a_pend.operation == b_pend.operation
-                            && a_pend.args.len() == b_pend.args.len()
-                            && a_pend
-                                .args
-                                .iter()
-                                .zip(b_pend.args.iter())
-                                .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
-                    }
+                    (Future::Pending(a_id), Future::Pending(b_id)) => a_id == b_id,
                     _ => false,
                 },
+
+                (Object::UnscheduledFuture(a_fut), Object::UnscheduledFuture(b_fut)) => {
+                    a_fut.operation == b_fut.operation
+                        && a_fut.args.len() == b_fut.args.len()
+                        && a_fut
+                            .args
+                            .iter()
+                            .zip(b_fut.args.iter())
+                            .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
+                }
 
                 _ => false,
             };

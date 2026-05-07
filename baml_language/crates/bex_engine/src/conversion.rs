@@ -4,12 +4,11 @@
 //! between the VM representation (`Value`, `Object`) and the external
 //! representation (`BexValue`, `BexExternalValue`).
 
-use ::bex_vm_types::ObjectType;
+use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
+use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value};
 use baml_type::Literal;
 use bex_external_types::{BexExternalAdt, BexExternalValue, Ty, UnionMetadata};
-use bex_heap::{ActiveHeapPermit, BexValue, PermitProof};
 use bex_vm::BexVm;
-use bex_vm_types::{HeapPtr, Object, Value};
 
 use crate::{BexEngine, EngineError};
 
@@ -194,6 +193,9 @@ impl BexEngine {
             Object::Future(_) => Err(EngineError::CannotConvert {
                 type_name: "future".to_string(),
             }),
+            Object::UnscheduledFuture(_) => Err(EngineError::CannotConvert {
+                type_name: "unscheduled_future".to_string(),
+            }),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
@@ -222,37 +224,43 @@ impl BexEngine {
 
 impl BexEngine {
     /// Convert a `BexExternalValue` result from sys ops back to a VM Value.
-    pub(crate) fn convert_external_to_vm_value(
+    pub(crate) fn convert_external_to_vm_value<T: RootHaver + TlabHolder>(
         &self,
-        vm: &mut ActiveHeapPermit<BexVm>,
+        holder: &mut impl HeapPermit<T>,
         external: BexExternalValue,
     ) -> Value {
         match external {
             BexExternalValue::Handle(handle) => Value::Object(
-                self.resolve_handle(vm.proof(), &handle)
+                self.resolve_handle(holder.proof(), &handle)
                     .expect("Handle should be valid - object was returned to external code"),
             ),
             BexExternalValue::Null => Value::Null,
             BexExternalValue::Int(i) => Value::Int(i),
             BexExternalValue::Float(f) => Value::Float(f),
             BexExternalValue::Bool(b) => Value::Bool(b),
-            BexExternalValue::String(s) => vm.alloc_string(s),
+            BexExternalValue::String(s) => {
+                Value::Object(holder.holder_mut().tlab_mut().alloc_string(s))
+            }
             BexExternalValue::Array { items, .. } => {
                 let values: Vec<Value> = items
                     .into_iter()
-                    .map(|v| self.convert_external_to_vm_value(vm, v))
+                    .map(|v| self.convert_external_to_vm_value(holder, v))
                     .collect();
-                vm.alloc_array(values)
+                Value::Object(holder.holder_mut().tlab_mut().alloc_array(values))
             }
             BexExternalValue::Map { entries, .. } => {
                 let values: indexmap::IndexMap<String, Value> = entries
                     .into_iter()
-                    .map(|(k, v)| (k, self.convert_external_to_vm_value(vm, v)))
+                    .map(|(k, v)| (k, self.convert_external_to_vm_value(holder, v)))
                     .collect();
-                vm.alloc_map(values)
+                Value::Object(holder.holder_mut().tlab_mut().alloc_map(values))
             }
-            BexExternalValue::Uint8Array(bytes) => vm.alloc_uint8array(bytes),
-            BexExternalValue::RustData(data) => vm.alloc_rust_data(data),
+            BexExternalValue::Uint8Array(bytes) => {
+                Value::Object(holder.holder_mut().tlab_mut().alloc_uint8array(bytes))
+            }
+            BexExternalValue::RustData(data) => {
+                Value::Object(holder.holder_mut().tlab_mut().alloc_rust_data(data))
+            }
             // Allocate instance by looking up class and converting fields
             BexExternalValue::Instance { class_name, fields } => {
                 let class_ptr = self
@@ -275,9 +283,14 @@ impl BexEngine {
                     let ext = fields.get(&class_field.name).unwrap_or_else(|| {
                         panic!("missing field '{}' in Instance", class_field.name)
                     });
-                    values.push(self.convert_external_to_vm_value(vm, ext.clone()));
+                    values.push(self.convert_external_to_vm_value(holder, ext.clone()));
                 }
-                vm.alloc_instance(*class_ptr, values)
+                Value::Object(
+                    holder
+                        .holder_mut()
+                        .tlab_mut()
+                        .alloc_instance(*class_ptr, values),
+                )
             }
             BexExternalValue::Variant {
                 enum_name,
@@ -301,24 +314,37 @@ impl BexEngine {
                     .unwrap_or_else(|| {
                         panic!("Variant '{variant_name}' not found in enum '{enum_name}'")
                     });
-                vm.alloc_variant(*enum_ptr, index)
+                Value::Object(
+                    holder
+                        .holder_mut()
+                        .tlab_mut()
+                        .alloc_variant(*enum_ptr, index),
+                )
             }
-            BexExternalValue::Union { value, .. } => self.convert_external_to_vm_value(vm, *value),
-            BexExternalValue::Adt(BexExternalAdt::Collector(c)) => vm.alloc_collector(c),
-            BexExternalValue::Adt(BexExternalAdt::Type(ty)) => vm.alloc_type(ty),
+            BexExternalValue::Union { value, .. } => {
+                self.convert_external_to_vm_value(holder, *value)
+            }
+            BexExternalValue::Adt(BexExternalAdt::Collector(c)) => {
+                Value::Object(holder.holder_mut().tlab_mut().alloc_collector(c))
+            }
+            BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
+                Value::Object(holder.holder_mut().tlab_mut().alloc_type(ty))
+            }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 panic!("PromptAst values cannot be converted to VM values yet")
             }
-            BexExternalValue::Adt(BexExternalAdt::Media(arc)) => vm.alloc_rust_data(arc),
+            BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
+                Value::Object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
+            }
             BexExternalValue::FunctionRef { global_index } => {
                 let idx = bex_vm_types::GlobalIndex::from_raw(global_index);
                 assert!(
-                    (global_index < vm.globals.len()),
+                    (global_index < self.globals.len()),
                     "FunctionRef global_index {} out of bounds (globals len {})",
                     global_index,
-                    vm.globals.len()
+                    self.globals.len()
                 );
-                vm.globals[idx]
+                self.globals[idx]
             }
         }
     }
@@ -612,6 +638,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                 | Object::Class(_)
                 | Object::Enum(_)
                 | Object::Future(_)
+                | Object::UnscheduledFuture(_)
                 | Object::RustData(_)
                 | Object::Collector(_)
                 | Object::Type(_) => None,
@@ -709,6 +736,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                 | Object::Class(_)
                 | Object::Enum(_)
                 | Object::Future(_)
+                | Object::UnscheduledFuture(_)
                 | Object::RustData(_)
                 | Object::Collector(_)
                 | Object::Type(_) => {

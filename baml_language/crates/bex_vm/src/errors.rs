@@ -26,6 +26,9 @@ pub enum VmPanic {
     #[error("unreachable code executed")]
     Unreachable,
 
+    #[error("operation cancelled")]
+    Cancelled,
+
     /// A user-caused panic from `baml.sys.panic`.
     #[error("baml.sys.panic: {message}")]
     UserPanic { message: String },
@@ -132,6 +135,9 @@ pub enum VmInternalError {
 
     #[error("invalid compact opcode byte: {0}")]
     InvalidOpcode(u8),
+
+    #[error("awaited future is in InternalError state")]
+    AwaitedFutureInternalError,
 }
 
 /// Any kind of virtual machine error.

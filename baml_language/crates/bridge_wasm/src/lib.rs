@@ -66,6 +66,24 @@ pub use wasm_lsp::LspNotification;
 
 static LOGGER_INIT: std::sync::Once = std::sync::Once::new();
 
+/// True if `err` is an unhandled `baml.panics.Cancelled` panic.
+fn is_cancelled_engine_error(err: &bex_project::EngineError) -> bool {
+    matches!(
+        err,
+        bex_project::EngineError::UnhandledThrow { value, .. }
+            if matches!(
+                value.as_ref(),
+                bex_project::BexExternalValue::Instance { class_name, .. }
+                    if class_name == bex_project::CANCELLED_PANIC_CLASS
+            )
+    )
+}
+
+/// True if `err` is a runtime error wrapping a cancellation panic.
+fn is_cancelled_error(err: &bex_project::RuntimeError) -> bool {
+    matches!(err, bex_project::RuntimeError::Engine(e) if is_cancelled_engine_error(e))
+}
+
 /// Initialize the WASM module with panic hook (auto-called by wasm-bindgen).
 #[wasm_bindgen(start)]
 pub fn start() {
@@ -300,10 +318,7 @@ impl BamlWasmRuntime {
 
         // Handle cancellation error.
         let result = result.map_err(|e| -> JsValue {
-            if matches!(
-                e,
-                bex_project::RuntimeError::Engine(bex_project::EngineError::Cancelled)
-            ) {
+            if is_cancelled_error(&e) {
                 let err = js_sys::Error::new("Operation cancelled");
                 err.set_name("BamlCancelledError");
                 err.into()
@@ -434,7 +449,7 @@ impl BamlWasmRuntime {
                     .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
                 Ok(baml_value.encode_to_vec())
             }
-            Err(bex_project::EngineError::Cancelled) => {
+            Err(e) if is_cancelled_engine_error(&e) => {
                 let error = js_sys::Error::new("Function call was cancelled");
                 error.set_name("BamlCancelledError");
                 Err(error.into())

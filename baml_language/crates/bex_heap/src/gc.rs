@@ -313,19 +313,25 @@ impl BexHeap {
             Object::Future(fut) => {
                 use bex_vm_types::Future;
                 match fut {
-                    Future::Pending(pending) => {
-                        for value in &pending.args {
-                            if let Value::Object(ptr) = value {
-                                worklist.push(*ptr);
-                            }
-                        }
-                    }
                     Future::Ready(value) => {
                         if let Value::Object(ptr) = value {
                             worklist.push(*ptr);
                         }
                     }
+                    Future::Error(Value::Object(ptr)) => {
+                        worklist.push(*ptr);
+                    }
+                    Future::Pending(_)
+                    | Future::Error(_)
+                    | Future::Cancelled
+                    | Future::InternalError => {}
                 }
+            }
+            Object::UnscheduledFuture(future) => {
+                worklist.extend(future.args.iter().filter_map(|v| match v {
+                    Value::Object(ptr) => Some(*ptr),
+                    _ => None,
+                }));
             }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
@@ -403,14 +409,15 @@ impl BexHeap {
             Object::Future(fut) => {
                 use bex_vm_types::Future;
                 match fut {
-                    Future::Pending(pending) => {
-                        for value in &mut pending.args {
-                            self.fixup_value(value, forwarding);
-                        }
-                    }
-                    Future::Ready(value) => {
+                    Future::Ready(value) | Future::Error(value) => {
                         self.fixup_value(value, forwarding);
                     }
+                    Future::Pending(_) | Future::Cancelled | Future::InternalError => {}
+                }
+            }
+            Object::UnscheduledFuture(future) => {
+                for value in &mut future.args {
+                    self.fixup_value(value, forwarding);
                 }
             }
             // Primitives have no references
@@ -652,23 +659,24 @@ impl BexHeap {
             Object::Future(fut) => {
                 use bex_vm_types::Future;
                 match fut {
-                    Future::Pending(pending) => {
-                        worklist.extend(
-                            pending
-                                .args
-                                .iter()
-                                .filter_map(Value::as_object_ptr)
-                                .filter(|ptr| self.generation_of(*ptr).is_young()),
-                        );
-                    }
-                    Future::Ready(value) => {
+                    Future::Ready(value) | Future::Error(value) => {
                         if let Value::Object(ptr) = value
                             && self.generation_of(*ptr).is_young()
                         {
                             worklist.push(*ptr);
                         }
                     }
+                    Future::Pending(_) | Future::Cancelled | Future::InternalError => {}
                 }
+            }
+            Object::UnscheduledFuture(future) => {
+                worklist.extend(
+                    future
+                        .args
+                        .iter()
+                        .filter_map(Value::as_object_ptr)
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
             }
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
@@ -1760,17 +1768,17 @@ mod tests {
 
     #[test]
     fn test_gc_traces_future_pending_args() {
-        use bex_vm_types::{Future, PendingFuture, SysOp};
+        use bex_vm_types::{SysOp, UnscheduledFuture};
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let arg1 = tlab.alloc_string("arg1".to_string());
         let arg2 = tlab.alloc_string("arg2".to_string());
-        let future_ptr = tlab.alloc(Object::Future(Future::Pending(PendingFuture {
+        let future_ptr = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
             operation: SysOp::BamlEnvGet,
             args: vec![Value::Object(arg1), Value::Object(arg2)],
-        })));
+        }));
 
         let roots = vec![future_ptr];
         let (stats, _new_roots, _) = unsafe { heap.collect_garbage(&roots) };
@@ -2218,7 +2226,7 @@ mod tests {
     fn test_tracing_and_fixup_consistency_all_variants() {
         use baml_type::{Name, TyAttr, TypeName};
         use bex_vm_types::{
-            Class, Enum, Future, PendingFuture, SysOp,
+            Class, Enum, SysOp, UnscheduledFuture,
             types::{Cell, Closure, Instance, Variant},
         };
 
@@ -2256,11 +2264,11 @@ mod tests {
             value: Value::Object(leaf_for_cell),
         }));
 
-        // --- Container: Object::Future (Pending) ---
-        let future_container = tlab.alloc(Object::Future(Future::Pending(PendingFuture {
+        // --- Container: Object::UnscheduledFuture ---
+        let future_container = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
             operation: SysOp::BamlEnvGet,
             args: vec![Value::Object(leaf_for_future)],
-        })));
+        }));
 
         // --- Container: Object::Instance ---
         // Instance requires a class pointer.
@@ -2368,8 +2376,8 @@ mod tests {
         assert_eq!(s, "cell_value");
 
         // Future: args[0] should be the (forwarded) future arg string.
-        let Object::Future(Future::Pending(pending)) = (unsafe { new_roots[4].get() }) else {
-            panic!("new_roots[4] not Future::Pending")
+        let Object::UnscheduledFuture(pending) = (unsafe { new_roots[4].get() }) else {
+            panic!("new_roots[4] not UnscheduledFuture")
         };
         let Value::Object(fut_leaf) = pending.args[0] else {
             panic!("future.args[0] not Object")

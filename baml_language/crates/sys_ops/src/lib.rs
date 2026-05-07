@@ -1456,6 +1456,7 @@ pub type SysOpsBuilder = IoSysOpsBuilder;
 
 #[cfg(test)]
 mod tests {
+    use bex_heap::HeapPermit;
     use bex_vm_types::SysOp;
 
     use super::*;

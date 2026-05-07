@@ -4043,6 +4043,30 @@ function baml.panics.AssertionFailed.to_json(self: null) -> baml.json.json {
     return
 }
 
+function baml.panics.Cancelled.from_json(j: baml.json.json) -> baml.panics.Cancelled {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    alloc_instance baml.panics.Cancelled
+    load_var _2
+    init_field .message
+    return
+}
+
+function baml.panics.Cancelled.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    load_const "message"
+    alloc_map 1
+    return
+}
+
 function baml.panics.DivisionByZero.from_json(j: baml.json.json) -> baml.panics.DivisionByZero {
     load_var j
     load_const "dividend"

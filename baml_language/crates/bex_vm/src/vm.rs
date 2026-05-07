@@ -31,18 +31,22 @@ fn unlikely(b: bool) -> bool {
     b
 }
 
-use ::bex_vm_types::{EarlyYieldCheck, RootHaver, types::ErrorClass};
+use ::bex_heap::TlabHolder;
+use ::bex_vm_types::{
+    EarlyYieldCheck, RootHaver,
+    types::{ErrorClass, FutureId},
+};
 use ::core::any::TypeId;
 #[cfg(not(target_arch = "wasm32"))]
 use ::core::sync::atomic::AtomicBool;
-use bex_heap::{BexHeap, Generation, Tlab};
+use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
     ObjectType, PanicClass, StackIndex, UnaryOp, Value, Variant,
     bytecode::{self, BlockNotification},
     types::{
         BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, Future, FutureType,
-        Instance, PendingFuture, Type,
+        Instance, Type, UnscheduledFuture,
     },
 };
 use indexmap::IndexMap;
@@ -339,10 +343,18 @@ pub struct BexVm {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum VmExecState {
-    /// VM cannot proceed. It is awaiting a pending future to complete.
-    Await(HeapPtr),
+    /// Awaiting a pending future.
+    ///
+    /// - Input: a `FutureId` corresponding to a (probably) pending future
+    /// - Output (success): the future's result on top of the stack
+    /// - Output (failure): an exception/panic passed to the VM
+    /// - Output (internal error): engine error
+    Await(FutureId),
 
     /// VM notifies caller about a future that needs to be scheduled.
+    ///
+    /// - Input: an `UnscheduledFuture` object
+    /// - Output: a `Future` object (may be pending or ready) pushed to the top of the stack
     ///
     /// Bytecode execution continues when control flow is handled back to the
     /// VM.
@@ -534,6 +546,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::BoundMethod(_) => type_tags::FUNCTION,
                 Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
+                Object::UnscheduledFuture(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
                 Object::RustData(_) => type_tags::UNKNOWN,
                 Object::Collector(_) => type_tags::COLLECTOR,
@@ -658,42 +671,6 @@ impl BexVm {
         unsafe { ptr.get_mut() }
     }
 
-    /// Write barrier for field/element/cell writes.
-    ///
-    /// Called *before* the actual field write at each mutation site. If `container_ptr`
-    /// is in an older generation than the object being written (`written_value`), the
-    /// card containing `container_ptr` is marked dirty so partial GC can discover
-    /// the cross-generation reference.
-    ///
-    /// This is a no-op when either side is not a heap object, or when the container
-    /// is in Gen0 (no card table for Gen0).
-    #[inline]
-    pub fn write_barrier(&self, container_ptr: HeapPtr, written_value: Value) {
-        if let Value::Object(ref_ptr) = written_value {
-            let container_gen = self.heap.generation_of(container_ptr);
-            let ref_gen = self.heap.generation_of(ref_ptr);
-            if container_gen > ref_gen {
-                self.heap.mark_card_for_ptr(container_ptr);
-            }
-        }
-    }
-
-    /// Conservative write barrier for mutable accessor paths (builtin dispatch).
-    ///
-    /// Unconditionally marks the card dirty if `container_ptr` is in an older
-    /// generation. Used by `as_array_mut` / `as_map_mut` where the actual written
-    /// value is not yet known (it's supplied by the callee trait method).
-    ///
-    /// This over-marks (any mutable access to an older-gen object dirties the card),
-    /// but it is always safe and the cost is negligible since most objects are Gen0.
-    #[inline]
-    pub(crate) fn conservative_write_barrier(&self, container_ptr: HeapPtr) {
-        let container_gen = self.heap.generation_of(container_ptr);
-        if container_gen > Generation::Gen0 {
-            self.heap.mark_card_for_ptr(container_ptr);
-        }
-    }
-
     /// Collect all `HeapPtr`s stored in call frames.
     /// - For bytecode frames, the function pointer
     /// - For native frames, the continuation pointer as well as all native-held GC roots
@@ -816,7 +793,7 @@ impl BexVm {
         // array may introduce cross-generation references. Used by builtin dispatch
         // (Array.push, Array.pop, etc.) where the actual written values are not
         // visible at this call site.
-        self.conservative_write_barrier(ptr);
+        self.heap.conservative_write_barrier(ptr);
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(ptr), Object::Array(_)) {
             return Err(VmInternalError::TypeError {
@@ -852,7 +829,7 @@ impl BexVm {
         // Conservative write barrier: any mutable access to an older-generation
         // map may introduce cross-generation references. Used by builtin dispatch
         // (Map.set, etc.) where the actual written values are not visible here.
-        self.conservative_write_barrier(index);
+        self.heap.conservative_write_barrier(index);
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(index), Object::Map(_)) {
             return Err(VmInternalError::TypeError {
@@ -967,69 +944,21 @@ impl BexVm {
         self.frames.clear();
     }
 
-    /// Returns a reference to the pending future.
+    /// Returns a reference to the unscheduled future at `future_ptr`.
     ///
-    /// Returns [`VmInternalError::TypeError`] if the future is not pending, or not a future.
-    pub fn pending_future(&self, future_ptr: HeapPtr) -> Result<&PendingFuture, VmInternalError> {
+    /// Returns [`VmInternalError::TypeError`] if the heap object is not an
+    /// `Object::UnscheduledFuture`.
+    pub fn pending_future(
+        &self,
+        future_ptr: HeapPtr,
+    ) -> Result<&UnscheduledFuture, VmInternalError> {
         match self.get_object(future_ptr) {
-            Object::Future(Future::Pending(future)) => Ok(future),
+            Object::UnscheduledFuture(future) => Ok(future),
             other => Err(VmInternalError::TypeError {
-                expected: FutureType::Pending.into(),
+                expected: Type::Object(ObjectType::UnscheduledFuture),
                 got: ObjectType::of(other).into(),
             }),
         }
-    }
-
-    /// Set a future to Ready state without modifying the stack.
-    ///
-    /// Use this for sync operations that complete during `ScheduleFuture` handling,
-    /// before the VM reaches the `Await` instruction. The `Await` instruction will
-    /// extract the value from the Ready future.
-    pub fn set_future_ready(
-        &mut self,
-        future_ptr: HeapPtr,
-        value: Value,
-    ) -> Result<(), VmInternalError> {
-        // Write barrier before mutating the future object.
-        self.write_barrier(future_ptr, value);
-
-        let Object::Future(future) = self.get_object_mut(future_ptr) else {
-            return Err(VmInternalError::TypeError {
-                expected: FutureType::Any.into(),
-                got: ObjectType::of(self.get_object(future_ptr)).into(),
-            });
-        };
-
-        *future = Future::Ready(value);
-        Ok(())
-    }
-
-    /// Fulfill a future and replace the stack top if the VM is awaiting it.
-    ///
-    /// Use this for async operations that complete while the VM is blocked at
-    /// an `Await` instruction. This replaces the future on the stack with the
-    /// ready value so execution can continue.
-    pub fn fulfil_future(
-        &mut self,
-        future_ptr: HeapPtr,
-        value: Value,
-    ) -> Result<(), VmInternalError> {
-        self.set_future_ready(future_ptr, value)?;
-
-        // At any given moment, the VM can only await a single future, because
-        // we can only call the AWAIT instruction on a future on top of the
-        // stack. If that future being await is fulfilled, we need to replace
-        // the future on the stack with the ready value so that the next
-        // instruction that the VM runs can use the value, not the future
-        // object.
-        if let Some(Value::Object(ptr)) = self.stack.last() {
-            if *ptr == future_ptr {
-                self.stack.pop();
-                self.stack.push(value);
-            }
-        }
-
-        Ok(())
     }
 
     /// Allocates an array on the heap and returns it to the caller.
@@ -1046,7 +975,7 @@ impl BexVm {
     }
 
     pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> Value {
-        Value::Object(self.tlab.alloc(Object::Uint8Array(data)))
+        Value::Object(self.tlab.alloc_uint8array(data))
     }
 
     /// TODO: Seems to low level for an embedder, provide an API that takes
@@ -1071,7 +1000,7 @@ impl BexVm {
 
     /// Allocate a collector object on the heap.
     pub fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> Value {
-        Value::Object(self.tlab.alloc(Object::Collector(collector)))
+        Value::Object(self.tlab.alloc_collector(collector))
     }
 
     /// Get collector ref from a Value.
@@ -1094,7 +1023,7 @@ impl BexVm {
     ///
     /// Used by generated `copy::` structs for `$rust_type` fields.
     pub fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> Value {
-        Value::Object(self.tlab.alloc(Object::RustData(data)))
+        Value::Object(self.tlab.alloc_rust_data(data))
     }
 
     /// Downcast a `Value::Object` pointing to `Object::RustData` to `&T`.
@@ -1196,7 +1125,7 @@ impl BexVm {
 
     /// Allocate a type descriptor object on the heap.
     pub fn alloc_type(&mut self, ty: baml_type::Ty) -> Value {
-        Value::Object(self.tlab.alloc(Object::Type(Box::new(ty))))
+        Value::Object(self.tlab.alloc_type(ty))
     }
 
     /// Stops the execution of the current bytecode in favor of the given
@@ -1393,6 +1322,10 @@ impl BexVm {
             VmPanic::Unreachable => {
                 let msg = self.alloc_string("unreachable code executed".to_string());
                 (PanicClass::Unreachable, vec![msg])
+            }
+            VmPanic::Cancelled => {
+                let msg = self.alloc_string("operation cancelled".to_string());
+                (PanicClass::Cancelled, vec![msg])
             }
             VmPanic::UserPanic { message } => {
                 let msg = self.alloc_string(message);
@@ -2094,6 +2027,7 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
+        self.early_yield.reset();
         match self.exec_inner() {
             Err(VmError::InternalError(err)) => {
                 let trace = self.capture_stack_trace();
@@ -2506,7 +2440,7 @@ impl BexVm {
                 );
 
                 // Write barrier: mark card if instance is in an older generation than the value.
-                self.write_barrier(instance_index, new_value);
+                self.heap.write_barrier(instance_index, new_value);
 
                 // Set the new value.
                 if let Object::Instance(instance) = self.get_object_mut(instance_index) {
@@ -2555,7 +2489,7 @@ impl BexVm {
                 );
 
                 // Write barrier: mark card if instance is in an older generation than the value.
-                self.write_barrier(instance_index, new_value);
+                self.heap.write_barrier(instance_index, new_value);
 
                 // Set the new value.
                 if let Object::Instance(instance) = self.get_object_mut(instance_index) {
@@ -3379,7 +3313,7 @@ impl BexVm {
                 );
 
                 // Write barrier: mark card if array is in an older generation than the value.
-                self.write_barrier(array_object_index, new_value);
+                self.heap.write_barrier(array_object_index, new_value);
 
                 // Set the new value.
                 match self.get_object_mut(array_object_index) {
@@ -3452,7 +3386,7 @@ impl BexVm {
                 );
 
                 // Write barrier: mark card if map is in an older generation than the value.
-                self.write_barrier(map_index, new_value);
+                self.heap.write_barrier(map_index, new_value);
 
                 // Set the new value.
                 if let Object::Map(map) = self.get_object_mut(map_index) {
@@ -3608,22 +3542,14 @@ impl BexVm {
                 // Collect function call args and cleanup consumed stack.
                 let future_args: Vec<Value> = self.stack.drain(args_offset..).collect();
 
-                // Create the pending future with the SysOp enum.
-                let pending_future = PendingFuture {
+                // Create the unscheduled future to hand off to the embedder.
+                let pending_future = UnscheduledFuture {
                     operation: sys_op,
                     args: future_args,
                 };
 
-                // Allocate the future.
-                let future_value = self.alloc_future(Future::Pending(pending_future));
-
-                // Extract the index
-                let Value::Object(object_index) = future_value else {
-                    unreachable!("alloc_future returns Value::Object")
-                };
-
-                // Now leave the future on top of the stack.
-                self.stack.push(future_value);
+                // Allocate the unscheduled future.
+                let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
 
                 // Yield control flow back to the embedder.
                 return Ok(Some(VmExecState::ScheduleFuture(object_index)));
@@ -3648,12 +3574,34 @@ impl BexVm {
 
                     match awaiting {
                         // Can't do nothing, handle control flow back to embedder.
-                        Future::Pending(_) => {
-                            return Ok(Some(VmExecState::Await(index)));
+                        &Future::Pending(future_id) => {
+                            let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                                unreachable!("exec loop frame is always Bytecode");
+                            };
+                            bf.instruction_ptr = instruction_ptr; // we will await again when the future completes
+                            return Ok(Some(VmExecState::Await(future_id)));
                         }
 
                         // Return the ready value
                         Future::Ready(value) => *value,
+
+                        // An error occurred while executing the future.
+                        Future::Error(value) => return Err(VmError::Thrown(*value)),
+
+                        // The future was cancelled before completion.
+                        Future::Cancelled => {
+                            return Err(VmError::Thrown(
+                                self.panic_to_exception_value(VmPanic::Cancelled),
+                            ));
+                        }
+
+                        // An unrecoverable internal error occurred while executing the future.
+                        // The engine has already recorded this error on the FutureManager
+                        // SetOnce; reaching this state in the VM means the heap object was
+                        // mutated outside of the normal Pending → engine-await handshake.
+                        Future::InternalError => {
+                            return Err(VmInternalError::AwaitedFutureInternalError.into());
+                        }
                     }
                 };
 
@@ -4413,7 +4361,7 @@ impl BexVm {
                     .into());
                 };
                 // Write barrier before the mutable borrow so we hold only &self.heap.
-                self.write_barrier(cell_ptr, value);
+                self.heap.write_barrier(cell_ptr, value);
                 // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
                 let obj = unsafe { cell_ptr.get_mut() };
                 let Object::Cell(cell) = obj else {
@@ -4495,7 +4443,7 @@ impl BexVm {
                 // Write barrier: mark card if cell is in an older generation than the value.
                 // The shared borrows of `obj`/`closure` have ended, so `write_barrier`
                 // (which borrows `self` immutably via `self.heap`) is safe here.
-                self.write_barrier(cell_ptr, value);
+                self.heap.write_barrier(cell_ptr, value);
                 // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
                 let cell_obj = unsafe { cell_ptr.get_mut() };
                 let Object::Cell(cell) = cell_obj else {
@@ -5250,7 +5198,7 @@ impl BexVm {
                         old_value,
                         new_value,
                     );
-                    self.write_barrier(obj_ptr, new_value);
+                    self.heap.write_barrier(obj_ptr, new_value);
                     let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
                         unreachable!("already type-checked above");
                     };
@@ -5269,7 +5217,7 @@ impl BexVm {
                     let new_value = self.stack.ensure_pop();
                     let instance_value = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
-                    self.write_barrier(obj_ptr, new_value);
+                    self.heap.write_barrier(obj_ptr, new_value);
                     let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Instance.into(),
@@ -5443,16 +5391,11 @@ impl BexVm {
                     )?;
                     let args_offset = StackIndex::from_raw(args_offset);
                     let future_args: Vec<Value> = self.stack.drain(args_offset..).collect();
-                    let pending_future = bex_vm_types::types::PendingFuture {
+                    let pending_future = bex_vm_types::types::UnscheduledFuture {
                         operation: sys_op,
                         args: future_args,
                     };
-                    let future_value =
-                        self.alloc_future(bex_vm_types::types::Future::Pending(pending_future));
-                    let Value::Object(object_index) = future_value else {
-                        unreachable!("alloc_future returns Value::Object")
-                    };
-                    self.stack.push(future_value);
+                    let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
                     return Ok(Some(VmExecState::ScheduleFuture(object_index)));
                 }
 
@@ -5789,10 +5732,23 @@ impl BexVm {
                             .into());
                         };
                         match awaiting {
-                            bex_vm_types::types::Future::Pending(_) => {
-                                return Ok(Some(VmExecState::Await(index)));
+                            &Future::Pending(future_id) => {
+                                // Rewind pc to the Await opcode so the outer loop
+                                // saves a position that re-executes Await once the
+                                // future completes.
+                                *pc -= 1;
+                                return Ok(Some(VmExecState::Await(future_id)));
                             }
-                            bex_vm_types::types::Future::Ready(v) => *v,
+                            Future::Ready(v) => *v,
+                            Future::Error(value) => return Err(VmError::Thrown(*value)),
+                            Future::Cancelled => {
+                                return Err(VmError::Thrown(
+                                    self.panic_to_exception_value(VmPanic::Cancelled),
+                                ));
+                            }
+                            Future::InternalError => {
+                                return Err(VmInternalError::AwaitedFutureInternalError.into());
+                            }
                         }
                     };
                     self.stack.pop();
@@ -6145,7 +6101,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    self.write_barrier(cell_ptr, value);
+                    self.heap.write_barrier(cell_ptr, value);
                     let obj = unsafe { cell_ptr.get_mut() };
                     let Object::Cell(cell) = obj else {
                         return Err(VmInternalError::TypeError {
@@ -6214,7 +6170,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    self.write_barrier(cell_ptr, value);
+                    self.heap.write_barrier(cell_ptr, value);
                     let cell_obj = unsafe { cell_ptr.get_mut() };
                     let Object::Cell(cell) = cell_obj else {
                         return Err(VmInternalError::TypeError {
@@ -6410,7 +6366,7 @@ impl BexVm {
                         old_value,
                         new_value,
                     );
-                    self.write_barrier(array_object_index, new_value);
+                    self.heap.write_barrier(array_object_index, new_value);
                     match self.get_object_mut(array_object_index) {
                         Object::Array(array) => {
                             array[index] = new_value;
@@ -6459,7 +6415,7 @@ impl BexVm {
                         old_value,
                         new_value,
                     );
-                    self.write_barrier(map_index, new_value);
+                    self.heap.write_barrier(map_index, new_value);
                     if let Object::Map(map) = self.get_object_mut(map_index) {
                         map.insert(key, new_value);
                     }
@@ -6826,5 +6782,14 @@ impl ::bex_vm_types::RootHaver for BexVm {
         for frame in &mut self.frames {
             frame.forward_roots(roots);
         }
+    }
+}
+
+impl TlabHolder for BexVm {
+    fn tlab(&self) -> &Tlab {
+        &self.tlab
+    }
+    fn tlab_mut(&mut self) -> &mut Tlab {
+        &mut self.tlab
     }
 }

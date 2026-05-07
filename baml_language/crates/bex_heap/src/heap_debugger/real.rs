@@ -332,15 +332,16 @@ impl BexHeap {
                 );
             }
             Object::Future(fut) => match fut {
-                Future::Pending(pending) => {
-                    for value in &pending.args {
-                        self.debug_assert_valid_value(value);
-                    }
-                }
-                Future::Ready(value) => {
+                Future::Ready(value) | Future::Error(value) => {
                     self.debug_assert_valid_value(value);
                 }
+                Future::Pending(_) | Future::Cancelled | Future::InternalError => {}
             },
+            Object::UnscheduledFuture(future) => {
+                for value in &future.args {
+                    self.debug_assert_valid_value(value);
+                }
+            }
             Object::Closure(closure) => {
                 self.debug_assert_valid_index(closure.function);
                 for value in &closure.captures {

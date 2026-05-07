@@ -2067,6 +2067,9 @@ pub fn generate_io_adapter(
     let resolve_fn = emit_resolve_helper();
 
     let tokens = quote! {
+        // Bring `HeapPermit::proof()` into scope for the adapter impl below.
+        use ::bex_heap::HeapPermit as _;
+
         #resolve_fn
         #adapter_struct
         #adapter_impl

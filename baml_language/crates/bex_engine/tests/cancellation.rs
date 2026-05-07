@@ -9,10 +9,28 @@ mod common;
 use std::sync::Arc;
 
 use bex_engine::{
-    BexEngine, BexExternalValue, CancellationToken, EngineError, FunctionCallContextBuilder,
+    BexEngine, BexExternalValue, CANCELLED_PANIC_CLASS, CancellationToken, EngineError,
+    FunctionCallContextBuilder,
 };
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
+
+/// Asserts the result is an unhandled `baml.panics.Cancelled` panic.
+#[track_caller]
+fn assert_cancelled<T: std::fmt::Debug>(result: &Result<T, EngineError>) {
+    match result {
+        Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
+            BexExternalValue::Instance { class_name, .. } => {
+                assert_eq!(
+                    class_name, CANCELLED_PANIC_CLASS,
+                    "expected {CANCELLED_PANIC_CLASS} panic, got class {class_name}"
+                );
+            }
+            other => panic!("expected panic Instance, got {other:?}"),
+        },
+        other => panic!("expected UnhandledThrow({CANCELLED_PANIC_CLASS}), got {other:?}"),
+    }
+}
 
 // ============================================================================
 // 1. Immediate cancellation — token already cancelled before call starts
@@ -53,10 +71,7 @@ async fn cancel_before_call_returns_cancelled() {
         )
         .await;
 
-    assert!(
-        matches!(result, Err(EngineError::Cancelled)),
-        "Expected EngineError::Cancelled, got: {result:?}"
-    );
+    assert_cancelled(&result);
 }
 
 // ============================================================================
@@ -111,10 +126,7 @@ async fn cancel_during_sleep_returns_promptly() {
     let result = handle.await.expect("task panicked");
     let elapsed = start.elapsed();
 
-    assert!(
-        matches!(result, Err(EngineError::Cancelled)),
-        "Expected EngineError::Cancelled, got: {result:?}"
-    );
+    assert_cancelled(&result);
     // Should return well before the 10s sleep completes.
     assert!(
         elapsed < std::time::Duration::from_secs(2),
@@ -189,10 +201,7 @@ async fn cancel_during_http_returns_promptly() {
     let result = handle.await.expect("task panicked");
     let elapsed = start.elapsed();
 
-    assert!(
-        matches!(result, Err(EngineError::Cancelled)),
-        "Expected EngineError::Cancelled, got: {result:?}"
-    );
+    assert_cancelled(&result);
     assert!(
         elapsed < std::time::Duration::from_secs(2),
         "Cancel took too long: {elapsed:?} (expected < 2s)"
@@ -271,10 +280,7 @@ async fn selective_cancellation_only_affects_target() {
     let result_slow = handle_slow.await.expect("task panicked");
     let result_fast = handle_fast.await.expect("task panicked");
 
-    assert!(
-        matches!(result_slow, Err(EngineError::Cancelled)),
-        "Slow call should be cancelled, got: {result_slow:?}"
-    );
+    assert_cancelled(&result_slow);
     assert_eq!(
         result_fast.expect("fast call failed"),
         BexExternalValue::Int(2),
@@ -337,10 +343,7 @@ async fn cancel_interrupts_sequential_sleeps() {
     let result = handle.await.expect("task panicked");
     let elapsed = start.elapsed();
 
-    assert!(
-        matches!(result, Err(EngineError::Cancelled)),
-        "Expected EngineError::Cancelled, got: {result:?}"
-    );
+    assert_cancelled(&result);
     assert!(
         elapsed < std::time::Duration::from_secs(3),
         "Cancel took too long: {elapsed:?} (expected < 3s)"
@@ -433,5 +436,5 @@ async fn cancel_is_idempotent() {
     cancel.cancel(); // third cancel — still harmless
 
     let result = handle.await.expect("task panicked");
-    assert!(matches!(result, Err(EngineError::Cancelled)));
+    assert_cancelled(&result);
 }

@@ -11,7 +11,7 @@ use std::{collections::HashMap, sync::Arc};
 
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::Bex;
-pub use bex_engine::{EngineError, FunctionCallContextBuilder};
+pub use bex_engine::{CANCELLED_PANIC_CLASS, EngineError, FunctionCallContextBuilder};
 pub use bex_events::EventSink;
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, MediaKind, Ty, TyAttr, try_convert_rust_data,

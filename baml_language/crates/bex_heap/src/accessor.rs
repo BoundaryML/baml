@@ -10,7 +10,7 @@ use bex_vm_types::{HeapPtr, Object, Value};
 
 use crate::{BexHeap, heap_guard::PermitProof};
 
-#[derive(Debug, PartialEq, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error, Clone)]
 pub enum AccessError {
     #[error("Invalid handle: expected {expected}")]
     InvalidHandle { expected: &'static str },
@@ -592,6 +592,7 @@ fn owned_inner(
                 Object::Class(..) => unconvertible("class"),
                 Object::Enum(..) => unconvertible("enum"),
                 Object::Future(..) => unconvertible("future"),
+                Object::UnscheduledFuture(..) => unconvertible("unscheduled_future"),
 
                 Object::String(s) => Ok(BexExternalValue::String(s.clone())),
                 // Deep-copy path for trace payloads: no declared type is available here,

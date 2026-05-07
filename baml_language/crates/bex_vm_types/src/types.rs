@@ -803,6 +803,8 @@ pub enum Object {
     Map(IndexMap<String, Value>),
 
     Future(Future),
+    /// Only used for requesting scheduling of a future, passed from VM to engine.
+    UnscheduledFuture(UnscheduledFuture),
 
     /// Opaque Rust-managed data, accessed via `Arc<dyn Any>` downcast.
     /// Used for `$rust_type` fields in builtin classes (including media classes Pdf, Audio, Video, Image).
@@ -885,10 +887,14 @@ impl std::fmt::Display for Object {
             Object::Type(ty) => write!(f, "<type: {ty}>"),
             Object::Future(future) => match future {
                 Future::Pending(future) => {
-                    write!(f, "<pending: {}>", future.operation)
+                    write!(f, "<pending: future #{}>", future.id)
                 }
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
+                Future::Error(value) => write!(f, "<error: {value}>"),
+                Future::Cancelled => write!(f, "<cancelled>"),
+                Future::InternalError => write!(f, "<internal error>"),
             },
+            Object::UnscheduledFuture(future) => write!(f, "<unscheduled: {}>", future.operation),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
@@ -900,23 +906,54 @@ impl std::fmt::Display for Object {
 pub enum Future {
     /// Pending future.
     ///
-    /// Only LLM calls for now.
-    Pending(PendingFuture),
+    /// In terms of synchronization, this is "pending" from the heap's point of view.
+    /// It will remain pending until set otherwise, but yielding back to the engine *could* see an immediate completion.
+    Pending(FutureId),
 
     /// Ready value for the future.
     Ready(Value),
+
+    /// A BAML error or panic occurred while executing the future.
+    /// If awaited, the error/panic value will be thrown.
+    Error(Value),
+
+    /// The future was cancelled before completion.
+    /// If awaited, this will throw `baml.panics.Cancelled`.
+    Cancelled,
+
+    /// An unrecoverable internal error occurred while executing the future.
+    /// To surface this error, the VM should await the future yielding control back to the engine.
+    InternalError,
 }
 
-/// A pending external operation.
+/// An operation that should be passed to the engine to be scheduled.
 ///
 /// External operations are async functions that run outside the VM, such as
 /// LLM calls, HTTP requests, file I/O, or shell commands.
 #[derive(Clone, Debug)]
-pub struct PendingFuture {
+pub struct UnscheduledFuture {
     /// The system operation to execute.
     pub operation: SysOp,
     /// Arguments to the operation.
     pub args: Vec<Value>,
+}
+
+/// A unique identifier for a future.
+///
+/// Unlike `bex_engine::CallId`, these are created for every scheduled future (sys op or function call),
+/// not just when there is a new call from the host.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FutureId {
+    id: usize,
+}
+impl FutureId {
+    /// # Safety
+    ///
+    /// Should only be used by the engine to create new future ids.
+    #[expect(unsafe_code)]
+    pub unsafe fn from_usize(id: usize) -> Self {
+        Self { id }
+    }
 }
 
 /// Types of values.
@@ -980,6 +1017,7 @@ pub enum ObjectType {
     Enum,
     Variant,
     Future(FutureType),
+    UnscheduledFuture,
     Collector,
     Type,
     RustData,
@@ -1004,6 +1042,7 @@ impl ObjectType {
             Object::Collector(_) => Self::Collector,
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
+            Object::UnscheduledFuture(_) => Self::UnscheduledFuture,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
             // Object::BamlType(_) => Self::Any, // TODO
@@ -1037,6 +1076,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Enum => write!(f, "enum"),
             ObjectType::Variant => write!(f, "variant"),
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
+            ObjectType::UnscheduledFuture => write!(f, "unscheduled_future"),
             ObjectType::String => write!(f, "string"),
             ObjectType::Uint8Array => write!(f, "uint8array"),
             ObjectType::Collector => write!(f, "collector"),
@@ -1080,6 +1120,21 @@ pub enum FutureType {
     Any,
     Pending,
     Ready,
+    Error,
+    Cancelled,
+    InternalError,
+}
+
+impl FutureType {
+    pub fn of(future: &Future) -> Self {
+        match future {
+            Future::Pending(_) => Self::Pending,
+            Future::Ready(_) => Self::Ready,
+            Future::Error(_) => Self::Error,
+            Future::Cancelled => Self::Cancelled,
+            Future::InternalError => Self::InternalError,
+        }
+    }
 }
 
 impl std::fmt::Display for FutureType {
@@ -1088,6 +1143,9 @@ impl std::fmt::Display for FutureType {
             FutureType::Any => write!(f, "any"),
             FutureType::Pending => write!(f, "pending"),
             FutureType::Ready => write!(f, "ready"),
+            FutureType::Error => write!(f, "error"),
+            FutureType::Cancelled => write!(f, "cancelled"),
+            FutureType::InternalError => write!(f, "internal_error"),
         }
     }
 }
@@ -1097,6 +1155,9 @@ impl From<&Future> for FutureType {
         match value {
             Future::Pending(_) => Self::Pending,
             Future::Ready(_) => Self::Ready,
+            Future::Error(_) => Self::Error,
+            Future::Cancelled => Self::Cancelled,
+            Future::InternalError => Self::InternalError,
         }
     }
 }
