@@ -57,3 +57,21 @@ class user.llm.openai.Response {
 function user.llm.openai.DestructureBareInNamespace(response: user.llm.openai.Response) -> int  [expr] {
   { let Response { score: score } = response } score
 }
+function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Response  [expr] {
+  user.llm.openai.Response { text: baml.json.from_json(baml.json.field(j, "text")), score: baml.json.from_json(baml.json.field(j, "score")) }
+}
+function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box  [expr] {
+  user.llm.openai.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
+}
+function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Outer  [expr] {
+  user.llm.openai.Outer { inner: baml.json.from_json(baml.json.field(j, "inner")) }
+}
+function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "value": baml.json.to_json(self.value) }
+}
+function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "text": self.text.to_json(), "score": self.score.to_json() }
+}
+function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "inner": self.inner.to_json() }
+}

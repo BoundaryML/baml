@@ -21,11 +21,15 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "j"
-          COLON ":"
-          TYPE_EXPR "json"
-            WORD "json"
+          PATTERN
+            CHAIN_PATTERN
+              BINDING_PATTERN "let j"
+                KW_LET "let"
+                WORD "j"
+              COLON ":"
+              TYPE_PATTERN
+                TYPE_EXPR "json"
+                  WORD "json"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.json.parse"
@@ -68,11 +72,15 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "j"
-          COLON ":"
-          TYPE_EXPR "json"
-            WORD "json"
+          PATTERN
+            CHAIN_PATTERN
+              BINDING_PATTERN "let j"
+                KW_LET "let"
+                WORD "j"
+              COLON ":"
+              TYPE_PATTERN
+                TYPE_EXPR "json"
+                  WORD "json"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.json.parse"
@@ -115,11 +123,15 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "j"
-          COLON ":"
-          TYPE_EXPR "json"
-            WORD "json"
+          PATTERN
+            CHAIN_PATTERN
+              BINDING_PATTERN "let j"
+                KW_LET "let"
+                WORD "j"
+              COLON ":"
+              TYPE_PATTERN
+                TYPE_EXPR "json"
+                  WORD "json"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.json.parse"
@@ -139,13 +151,17 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN
-              WORD "arr"
-              COLON ":"
-              TYPE_EXPR "json[]"
-                WORD "json"
-                L_BRACKET "["
-                R_BRACKET "]"
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let arr"
+                  KW_LET "let"
+                  WORD "arr"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "json[]"
+                    WORD "json"
+                    L_BRACKET "["
+                    R_BRACKET "]"
             FAT_ARROW "=>"
             CALL_EXPR
               PATH_EXPR "baml.json.stringify"
@@ -159,19 +175,23 @@ SOURCE_FILE
                 WORD "arr"
                 R_PAREN ")"
           MATCH_ARM
-            MATCH_PATTERN
-              WORD "m"
-              COLON ":"
-              TYPE_EXPR
-                WORD "map"
-                TYPE_ARGS
-                  LESS "<"
-                  TYPE_EXPR "string"
-                    WORD "string"
-                  COMMA ","
-                  TYPE_EXPR "json"
-                    WORD "json"
-                  GREATER ">"
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let m"
+                  KW_LET "let"
+                  WORD "m"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    WORD "map"
+                    TYPE_ARGS
+                      LESS "<"
+                      TYPE_EXPR "string"
+                        WORD "string"
+                      COMMA ","
+                      TYPE_EXPR "json"
+                        WORD "json"
+                      GREATER ">"
             FAT_ARROW "=>"
             CALL_EXPR
               PATH_EXPR "baml.json.stringify"
@@ -185,49 +205,67 @@ SOURCE_FILE
                 WORD "m"
                 R_PAREN ")"
           MATCH_ARM
-            MATCH_PATTERN
-              WORD "n"
-              COLON ":"
-              TYPE_EXPR "int"
-                WORD "int"
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let n"
+                  KW_LET "let"
+                  WORD "n"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
             FAT_ARROW "=>"
             STRING_LITERAL "int"
               QUOTE """
               WORD "int"
               QUOTE """
           MATCH_ARM
-            MATCH_PATTERN
-              WORD "f"
-              COLON ":"
-              TYPE_EXPR "float"
-                WORD "float"
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let f"
+                  KW_LET "let"
+                  WORD "f"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "float"
+                    WORD "float"
             FAT_ARROW "=>"
             STRING_LITERAL "float"
               QUOTE """
               WORD "float"
               QUOTE """
           MATCH_ARM
-            MATCH_PATTERN
-              WORD "b"
-              COLON ":"
-              TYPE_EXPR "bool"
-                WORD "bool"
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let b"
+                  KW_LET "let"
+                  WORD "b"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "bool"
+                    WORD "bool"
             FAT_ARROW "=>"
             STRING_LITERAL "bool"
               QUOTE """
               WORD "bool"
               QUOTE """
           MATCH_ARM
-            MATCH_PATTERN
-              WORD "st"
-              COLON ":"
-              TYPE_EXPR "string"
-                WORD "string"
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let st"
+                  KW_LET "let"
+                  WORD "st"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "string"
+                    WORD "string"
             FAT_ARROW "=>"
             WORD "st"
           MATCH_ARM
-            MATCH_PATTERN "null"
-              WORD "null"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "null"
+                  WORD "null"
             FAT_ARROW "=>"
             STRING_LITERAL "null"
               QUOTE """

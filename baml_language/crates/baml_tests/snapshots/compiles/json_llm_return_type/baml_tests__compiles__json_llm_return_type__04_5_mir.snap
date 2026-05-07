@@ -6,10 +6,12 @@ fn user.ExtractAny() -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: map<string, unknown>
+    let _2: type
 
     bb0: {
         _1 = {  };
-        _0 = call const fn baml.llm.call_llm_function(const fn user.TestClient, const "ExtractAny", copy _1) -> [bb1];
+        _2 = load_type(baml.json.json);
+        _0 = call const fn baml.llm.call_llm_function<copy _2>(const fn user.TestClient, const "ExtractAny", copy _1) -> [bb1];
     }
 
     bb1: {

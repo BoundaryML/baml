@@ -172,12 +172,12 @@ async fn match_json_arms_exhaustive() {
         function main(j: json) -> string {
             match (j) {
                 null => "null",
-                b: bool => "bool",
-                i: int => "int",
-                f: float => "float",
-                s: string => "string",
-                arr: json[] => "array",
-                obj: map<string, json> => "map"
+                let b: bool => "bool",
+                let i: int => "int",
+                let f: float => "float",
+                let s: string => "string",
+                let arr: json[] => "array",
+                let obj: map<string, json> => "map"
             }
         }
     "#;

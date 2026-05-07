@@ -1816,6 +1816,21 @@ impl BexVm {
                             }
                         }
 
+                        // Update *frame_idx to point at the new topmost frame.
+                        // Required so the caller's tight inner-dispatch loop
+                        // detects the frame change (the pushed Native
+                        // continuation frame for the outer native that
+                        // yielded) and breaks out to let exec_compact's
+                        // continuation handler run it.  Without this, when the
+                        // recursive callback was itself a Native that returned
+                        // Done synchronously (no frame_idx update from the
+                        // recursion), the inner loop would continue stepping
+                        // the caller's bytecode with a stale Native frame on
+                        // top — eventually reading past the caller's code end.
+                        if !self.frames.is_empty() {
+                            *frame_idx = self.frames.len() - 1;
+                        }
+
                         return result;
                     }
                 }
@@ -2179,12 +2194,8 @@ impl BexVm {
 
                             self.pending_call_type_args = prev_pending;
 
-                            if !callback_type_args.is_empty()
-                                && self.frames.len() > frames_before
-                            {
-                                if let Some(Frame::Bytecode(bf)) =
-                                    self.frames.get_mut(frame_idx)
-                                {
+                            if !callback_type_args.is_empty() && self.frames.len() > frames_before {
+                                if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(frame_idx) {
                                     bf.type_args.extend(callback_type_args);
                                 }
                             }
@@ -4900,6 +4911,7 @@ impl BexVm {
                     NativeCallResult::YieldToCall {
                         callee,
                         args: mut callback_args,
+                        type_args: callback_type_args,
                         continuation,
                     } => {
                         self.frames.push(Frame::Native(NativeFrame {
@@ -4913,13 +4925,31 @@ impl BexVm {
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
 
-                        let ecflo_result = match self.execute_call_from_locals_offset(
+                        // Mirror the Call-instruction's type-arg plumbing for
+                        // continuation-driven YieldToCall.
+                        let prev_pending = std::mem::replace(
+                            &mut self.pending_call_type_args,
+                            callback_type_args.clone(),
+                        );
+                        let frames_before = self.frames.len();
+
+                        let ecflo_outcome = self.execute_call_from_locals_offset(
                             real_callee,
                             cb_locals,
                             arg_count,
                             &mut frame_idx,
                             &mut function,
-                        ) {
+                        );
+
+                        self.pending_call_type_args = prev_pending;
+
+                        if !callback_type_args.is_empty() && self.frames.len() > frames_before {
+                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(frame_idx) {
+                                bf.type_args.extend(callback_type_args);
+                            }
+                        }
+
+                        let ecflo_result = match ecflo_outcome {
                             Ok(result) => result,
                             Err(VmError::Thrown(exception_value)) => {
                                 self.try_unwind_exception(
@@ -5080,6 +5110,8 @@ impl BexVm {
             }
         }
 
+        // Read opcode byte and advance PC past it.
+        // SAFETY: PC is always in bounds (bytecode invariant).
         // Read opcode byte and advance PC past it.
         // SAFETY: PC is always in bounds (bytecode invariant).
         #[allow(unsafe_code)]
@@ -5602,6 +5634,12 @@ impl BexVm {
                     bf.instruction_ptr = *pc;
 
                     let frames_before = self.frames.len();
+                    // Mirror the native YieldToCall plumbing: stash type_args
+                    // into `pending_call_type_args` so a native callee can
+                    // read them via `current_call_type_args()` (e.g.
+                    // `baml.json.from_json<T>` reads its `T` from there).
+                    let prev_pending =
+                        std::mem::replace(&mut self.pending_call_type_args, type_args.clone());
                     let result = self.execute_call_from_locals_offset(
                         callee_ptr,
                         locals_offset,
@@ -5609,6 +5647,7 @@ impl BexVm {
                         frame_idx,
                         function,
                     );
+                    self.pending_call_type_args = prev_pending;
                     if !type_args.is_empty() && self.frames.len() > frames_before {
                         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                             bf.type_args.extend(type_args);

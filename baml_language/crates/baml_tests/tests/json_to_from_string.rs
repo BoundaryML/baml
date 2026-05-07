@@ -487,7 +487,7 @@ async fn from_string_json_passthrough_int() {
         function main() -> bool {
             let j: json = baml.json.from_string<json>("42");
             match (j) {
-                n: int => true
+                let n: int => true
                 _ => false
             }
         }
@@ -502,7 +502,7 @@ async fn from_string_json_passthrough_object() {
         function main() -> int {
             let j: json = baml.json.from_string<json>("{\"x\":7}");
             match (j) {
-                m: map<string, json> => m.length()
+                let m: map<string, json> => m.length()
                 _ => -1
             }
         }

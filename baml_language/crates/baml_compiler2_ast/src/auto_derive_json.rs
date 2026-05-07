@@ -158,6 +158,7 @@ fn synthesize_to_json(class: &ClassDef, span: TextRange) -> FunctionDef {
         declarative_meta: None,
         origin: FunctionOrigin::AutoDerive,
         attributes: vec![],
+        docstring: None,
         span,
         name_span: span,
     }
@@ -194,6 +195,7 @@ fn synthesize_from_json(class: &ClassDef, span: TextRange) -> FunctionDef {
         declarative_meta: None,
         origin: FunctionOrigin::AutoDerive,
         attributes: vec![],
+        docstring: None,
         span,
         name_span: span,
     }

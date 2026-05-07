@@ -18,7 +18,7 @@ function user.foo.Bar.from_json(j: baml.json.json) -> foo.Bar {
 
 function user.foo.Bar.to_json(self: null) -> baml.json.json {
     load_var self
-    load_field .0
+    load_field .y
     call baml.String.to_json
     load_const "y"
     alloc_map 1

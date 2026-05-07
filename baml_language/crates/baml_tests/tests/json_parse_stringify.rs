@@ -47,7 +47,7 @@ async fn parse_then_match_array() {
         function main() -> int {
             let j: json = baml.json.parse("[1, 2, 3]")
             match (j) {
-                arr: json[] => arr.length()
+                let arr: json[] => arr.length()
                 _ => -1
             }
         }
@@ -80,7 +80,7 @@ async fn parse_int_disambiguation() {
     let source = r#"
         function main() -> bool {
             match (baml.json.parse("1")) {
-                n: int => true
+                let n: int => true
                 _ => false
             }
         }
@@ -94,7 +94,7 @@ async fn parse_float_disambiguation() {
     let source = r#"
         function main() -> bool {
             match (baml.json.parse("1.0")) {
-                f: float => true
+                let f: float => true
                 _ => false
             }
         }

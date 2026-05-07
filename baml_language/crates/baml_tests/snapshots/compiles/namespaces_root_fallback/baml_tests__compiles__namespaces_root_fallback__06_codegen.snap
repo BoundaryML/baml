@@ -42,7 +42,7 @@ function user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
 
 function user.llm.Response.to_json(self: null) -> baml.json.json {
     load_var self
-    load_field .0
+    load_field .text
     call baml.String.to_json
     load_const "text"
     alloc_map 1

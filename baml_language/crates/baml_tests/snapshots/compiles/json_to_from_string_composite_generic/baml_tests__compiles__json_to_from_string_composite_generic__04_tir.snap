@@ -29,5 +29,5 @@ class user.User$stream {
   name: null | string
 }
 class user.Container$stream {
-  item: null | unknown
+  item: null | T
 }

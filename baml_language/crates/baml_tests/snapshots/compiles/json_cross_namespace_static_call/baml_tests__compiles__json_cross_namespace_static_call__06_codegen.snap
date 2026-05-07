@@ -33,7 +33,7 @@ function user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> pkg.inner.AutoBo
 
 function user.pkg.inner.AutoBox.to_json(self: null) -> baml.json.json {
     load_var self
-    load_field .0
+    load_field .value
     call baml.json.to_json
     load_const "value"
     alloc_map 1
@@ -58,7 +58,7 @@ function user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<void> 
 
 function user.pkg.inner.Box.to_json(self: null) -> baml.json.json {
     load_var self
-    load_field .0
+    load_field .value
     call baml.json.to_json
     load_const "value"
     alloc_map 1

@@ -185,8 +185,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "null"
-              WORD "null"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "null"
+                  WORD "null"
             FAT_ARROW "=>"
             STRING_LITERAL "null"
               QUOTE """
@@ -194,11 +196,15 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN
-              WORD "b"
-              COLON ":"
-              TYPE_EXPR "bool"
-                WORD "bool"
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let b"
+                  KW_LET "let"
+                  WORD "b"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "bool"
+                    WORD "bool"
             FAT_ARROW "=>"
             STRING_LITERAL "bool"
               QUOTE """
@@ -206,11 +212,15 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN
-              WORD "i"
-              COLON ":"
-              TYPE_EXPR "int"
-                WORD "int"
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let i"
+                  KW_LET "let"
+                  WORD "i"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
             FAT_ARROW "=>"
             STRING_LITERAL "int"
               QUOTE """
@@ -218,11 +228,15 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN
-              WORD "f"
-              COLON ":"
-              TYPE_EXPR "float"
-                WORD "float"
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let f"
+                  KW_LET "let"
+                  WORD "f"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "float"
+                    WORD "float"
             FAT_ARROW "=>"
             STRING_LITERAL "float"
               QUOTE """
@@ -230,11 +244,15 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN
-              WORD "s"
-              COLON ":"
-              TYPE_EXPR "string"
-                WORD "string"
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let s"
+                  KW_LET "let"
+                  WORD "s"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "string"
+                    WORD "string"
             FAT_ARROW "=>"
             STRING_LITERAL "string"
               QUOTE """
@@ -242,13 +260,17 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN
-              WORD "arr"
-              COLON ":"
-              TYPE_EXPR "json[]"
-                WORD "json"
-                L_BRACKET "["
-                R_BRACKET "]"
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let arr"
+                  KW_LET "let"
+                  WORD "arr"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "json[]"
+                    WORD "json"
+                    L_BRACKET "["
+                    R_BRACKET "]"
             FAT_ARROW "=>"
             STRING_LITERAL "array"
               QUOTE """
@@ -256,19 +278,23 @@ SOURCE_FILE
               QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN
-              WORD "obj"
-              COLON ":"
-              TYPE_EXPR
-                WORD "map"
-                TYPE_ARGS
-                  LESS "<"
-                  TYPE_EXPR "string"
-                    WORD "string"
-                  COMMA ","
-                  TYPE_EXPR "json"
-                    WORD "json"
-                  GREATER ">"
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let obj"
+                  KW_LET "let"
+                  WORD "obj"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    WORD "map"
+                    TYPE_ARGS
+                      LESS "<"
+                      TYPE_EXPR "string"
+                        WORD "string"
+                      COMMA ","
+                      TYPE_EXPR "json"
+                        WORD "json"
+                      GREATER ">"
             FAT_ARROW "=>"
             STRING_LITERAL "map"
               QUOTE """

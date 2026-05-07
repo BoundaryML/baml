@@ -707,7 +707,7 @@ async fn optional_class_override_honored_from_json_non_null() {
             let a: A = A.from_json(j);
             match (a.b) {
                 null => -1,
-                inner: B => inner.y,
+                let inner: B => inner.y,
             }
         }
     "#;
@@ -736,7 +736,7 @@ async fn optional_class_override_honored_from_json_null() {
             let a: A = A.from_json(j);
             match (a.b) {
                 null => -1,
-                inner: B => inner.y,
+                let inner: B => inner.y,
             }
         }
     "#;
@@ -758,11 +758,11 @@ async fn optional_primitive_field_from_json() {
             let c2: C = C.from_json(j2);
             let v1: int = match (c1.x) {
                 null => -1,
-                n: int => n,
+                let n: int => n,
             };
             let v2: int = match (c2.x) {
                 null => -1,
-                n: int => n,
+                let n: int => n,
             };
             v1 + v2
         }
@@ -947,7 +947,7 @@ async fn alias_chain_dispatch_to_json() {
             let b: Outer = B { y: 7 };
             let j: baml.json.json = b.to_json();
             match (j) {
-                n: int => n,
+                let n: int => n,
                 _ => -1,
             }
         }
@@ -1002,7 +1002,7 @@ async fn from_json_wrapper_body_fallback() {
             // `value` is unknown so structural decode keeps it as the parsed
             // json int.  Match-narrow to extract.
             match (h.value) {
-                n: int => n,
+                let n: int => n,
                 _ => -1
             }
         }

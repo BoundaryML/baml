@@ -17,12 +17,12 @@ function parse_and_roundtrip_pretty(s: string) -> string {
 function match_parsed(s: string) -> string {
     let j: json = baml.json.parse(s);
     match (j) {
-        arr: json[] => baml.json.stringify(arr),
-        m: map<string, json> => baml.json.stringify(m),
-        n: int => "int",
-        f: float => "float",
-        b: bool => "bool",
-        st: string => st,
+        let arr: json[] => baml.json.stringify(arr),
+        let m: map<string, json> => baml.json.stringify(m),
+        let n: int => "int",
+        let f: float => "float",
+        let b: bool => "bool",
+        let st: string => st,
         null => "null",
     }
 }
