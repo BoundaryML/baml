@@ -136,8 +136,11 @@ pub enum VmInternalError {
     #[error("invalid compact opcode byte: {0}")]
     InvalidOpcode(u8),
 
-    #[error("awaited future is in InternalError state")]
-    AwaitedFutureInternalError,
+    /// `StoreGlobal` was executed outside of an `$init` function. Globals are
+    /// frozen post-`$init` (shared as `Arc<[Value]>` across VMs) and any
+    /// post-init `StoreGlobal` violates that invariant.
+    #[error("StoreGlobal executed outside of $init (globals are frozen post-init)")]
+    StoreGlobalAfterInit,
 }
 
 /// Any kind of virtual machine error.

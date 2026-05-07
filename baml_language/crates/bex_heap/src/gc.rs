@@ -324,7 +324,7 @@ impl BexHeap {
                     Future::Pending(_)
                     | Future::Error(_)
                     | Future::Cancelled
-                    | Future::InternalError => {}
+                    | Future::InternalError(_) => {}
                 }
             }
             Object::UnscheduledFuture(future) => {
@@ -412,7 +412,7 @@ impl BexHeap {
                     Future::Ready(value) | Future::Error(value) => {
                         self.fixup_value(value, forwarding);
                     }
-                    Future::Pending(_) | Future::Cancelled | Future::InternalError => {}
+                    Future::Pending(_) | Future::Cancelled | Future::InternalError(_) => {}
                 }
             }
             Object::UnscheduledFuture(future) => {
@@ -666,7 +666,7 @@ impl BexHeap {
                             worklist.push(*ptr);
                         }
                     }
-                    Future::Pending(_) | Future::Cancelled | Future::InternalError => {}
+                    Future::Pending(_) | Future::Cancelled | Future::InternalError(_) => {}
                 }
             }
             Object::UnscheduledFuture(future) => {

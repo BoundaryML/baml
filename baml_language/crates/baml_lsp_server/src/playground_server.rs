@@ -23,6 +23,7 @@ use axum::{
     routing::get,
 };
 use base64::Engine as _;
+use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
 use futures::{SinkExt, stream::StreamExt};
 use prost::Message;
 use tokio::{net::TcpListener, sync::broadcast};
@@ -31,24 +32,6 @@ use crate::{
     playground_env::PlaygroundEnvState,
     playground_ws::{WsInMessage, WsOutMessage},
 };
-
-/// True if `err` is an unhandled `baml.panics.Cancelled` panic.
-fn is_cancelled_engine_error(err: &bex_project::EngineError) -> bool {
-    matches!(
-        err,
-        bex_project::EngineError::UnhandledThrow { value, .. }
-            if matches!(
-                value.as_ref(),
-                bex_project::BexExternalValue::Instance { class_name, .. }
-                    if class_name == bex_project::CANCELLED_PANIC_CLASS
-            )
-    )
-}
-
-/// True if `err` is a runtime error wrapping a cancellation panic.
-fn is_cancelled_runtime_error(err: &bex_project::RuntimeError) -> bool {
-    matches!(err, bex_project::RuntimeError::Engine(e) if is_cancelled_engine_error(e))
-}
 
 fn to_ws_text(msg: &WsOutMessage) -> Option<AxumWsMsg> {
     match serde_json::to_string(msg) {

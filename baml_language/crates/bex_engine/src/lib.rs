@@ -93,7 +93,9 @@ pub use bex_heap::{
     SharedHeapPermitGuard,
 };
 use bex_vm::{BexVm, SpanNotification, VmExecState};
-use bex_vm_types::{FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SysOp, Value};
+use bex_vm_types::{
+    FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SysOp, Value, VmGlobals,
+};
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
@@ -231,6 +233,23 @@ fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]
 /// Fully-qualified name of the cancellation panic class.
 pub const CANCELLED_PANIC_CLASS: &str = "baml.panics.Cancelled";
 
+/// True iff `err` is an unhandled `baml.panics.Cancelled` panic.
+///
+/// Centralizes the cancellation-classification logic that bridges (`bridge_cffi`,
+/// `bridge_nodejs`, `bridge_python`, `bridge_wasm`) and `baml_lsp_server` need
+/// for mapping `EngineError` → host-specific cancellation indicator.
+pub fn is_cancelled_engine_error(err: &EngineError) -> bool {
+    matches!(
+        err,
+        EngineError::UnhandledThrow { value, .. }
+            if matches!(
+                value.as_ref(),
+                BexExternalValue::Instance { class_name, .. }
+                    if class_name == CANCELLED_PANIC_CLASS
+            )
+    )
+}
+
 /// Synthesize an `EngineError::UnhandledThrow` representing a cancellation.
 ///
 /// Used when the engine produces a cancellation outside an active VM (pre-call
@@ -321,8 +340,12 @@ fn cancelled_unhandled_throw() -> EngineError {
 pub struct BexEngine {
     /// The unified heap (shared across all VM instances)
     heap: Arc<BexHeap>,
-    /// Global variables pool
-    globals: GlobalPool,
+    /// Frozen global variables shared across every post-`$init` VM.
+    ///
+    /// Populated once during `$init` and immutable thereafter; cloning is a
+    /// cheap refcount bump (see `VmGlobals::Shared`). The VM rejects any
+    /// `StoreGlobal` against this view as a `VmInternalError`.
+    globals: Arc<[Value]>,
     /// Resolved function/class/enum names for lookup
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
     /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
@@ -483,7 +506,9 @@ impl BexEngine {
             .into_iter()
             .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
             .collect();
-        let mut globals = GlobalPool::from_vec(globals_vec);
+        // Mutable during `$init` so `StoreGlobal` can populate top-level let
+        // bindings; frozen into `Arc<[Value]>` once `$init` finishes (see below).
+        let mut globals_pool = GlobalPool::from_vec(globals_vec);
 
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
@@ -496,7 +521,7 @@ impl BexEngine {
             if let Some((init_ptr, _kind)) = resolved_function_names.get(init_name.as_str()) {
                 let mut vm = BexVm::new(
                     Arc::clone(&heap),
-                    globals.clone(),
+                    VmGlobals::Owned(globals_pool.clone()),
                     resolved_class_names
                         .iter()
                         .chain(resolved_enum_names.iter())
@@ -515,7 +540,12 @@ impl BexEngine {
                         Ok(VmExecState::Complete(_)) => {
                             // Extract the (potentially mutated) global pool back
                             // so StoreGlobal writes are visible to subsequent calls.
-                            globals = vm.globals;
+                            globals_pool = match vm.globals {
+                                VmGlobals::Owned(pool) => pool,
+                                VmGlobals::Shared(_) => {
+                                    unreachable!("$init VM constructed with Owned globals")
+                                }
+                            };
                             break;
                         }
                         Ok(VmExecState::Notify(_) | VmExecState::SpanNotify(_)) => {
@@ -543,6 +573,12 @@ impl BexEngine {
                 }
             }
         }
+
+        // Freeze the now-populated globals into a shared `Arc<[Value]>`. Every
+        // post-`$init` VM cloned into a `call_function` invocation reads from
+        // this exact `Arc`. `StoreGlobal` against this shared view is rejected
+        // by the VM as `VmInternalError::StoreGlobalAfterInit`.
+        let globals: Arc<[Value]> = Arc::from(globals_pool.0);
 
         // Build SysOpContext by pre-extracting LLM function metadata from the heap.
         // This avoids passing raw HeapPtrs to sys_ops.
@@ -846,10 +882,11 @@ impl BexEngine {
             return Err(cancelled_unhandled_throw());
         }
 
-        // Create VM with shared heap (each VM gets its own TLAB)
+        // Create VM with shared heap (each VM gets its own TLAB).
+        // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
         let vm = BexVm::new(
             Arc::clone(&self.heap),
-            self.globals.clone(),
+            VmGlobals::Shared(Arc::clone(&self.globals)),
             self.resolved_class_names
                 .iter()
                 .chain(self.resolved_enum_names.iter())
@@ -1338,7 +1375,7 @@ impl BexEngine {
                 VmExecState::ScheduleFuture(unscheduled) => {
                     // Extract data from unscheduled future
                     let unscheduled = vm
-                        .pending_future(unscheduled)
+                        .unscheduled_future(unscheduled)
                         .map_err(EngineError::VmInternalError)?;
                     let args: Vec<BexExternalValue> = unscheduled
                         .args
@@ -1367,16 +1404,36 @@ impl BexEngine {
 
                     match sys_op_result {
                         SysOpResult::Ready(result) => {
-                            // Sync operation - set future to Ready without touching stack.
-                            // The VM will continue to the Await instruction which will
-                            // extract the value from the Ready future.
-                            let result = result.map_err(EngineError::from)?;
-                            let value = self.convert_external_to_vm_value(&mut vm, result);
-
                             // We may be blocked by other threads doing futures stuff,
                             // but since we hold our VM permit it should never be blocked by GC.
                             let mut future_permit = self.futures.acquire().await;
-                            future_permit.fulfill_future(future_id, value)?;
+                            // Cancellation safepoint: if cancellation fires between the
+                            // pre-exec early check and the commit, surface it as a Cancelled
+                            // future rather than fulfilling. The VM's next `Await` will throw
+                            // `baml.panics.Cancelled`.
+                            if cancel.is_cancelled() {
+                                future_permit.cancel_future(future_id)?;
+                                drop(future_permit);
+                                continue;
+                            }
+                            match result {
+                                Ok(external) => {
+                                    let value = self
+                                        .convert_external_to_vm_value(&mut future_permit, external);
+                                    future_permit.fulfill_future(future_id, value)?;
+                                }
+                                Err(op_err) => {
+                                    // Route sync sys-op errors through `internal_error_future`
+                                    // so the original error is preserved on the registry's
+                                    // `SetOnce`. The VM's subsequent `Await` yields back to
+                                    // this loop's `Await` branch, where `future_ready` returns
+                                    // the original error to the caller via `?`.
+                                    future_permit.internal_error_future(
+                                        future_id,
+                                        EngineError::from(op_err),
+                                    )?;
+                                }
+                            }
                             drop(future_permit);
                         }
                         SysOpResult::Async(fut) => {

@@ -30,7 +30,7 @@ use std::fmt::Write;
 use bex_vm_types::{
     ConstValue, HeapPtr,
     bytecode::{CompactCode, Instruction, OpCode, read_i8, read_i32, read_u16, read_u32},
-    indexable::{GlobalIndex, GlobalPool, ObjectPool},
+    indexable::{GlobalIndex, ObjectPool},
     types::{Function, Object, Value},
 };
 use colored::{Color, Colorize};
@@ -50,13 +50,13 @@ pub enum BytecodeFormat {
 /// Resolve a global reference (global slot or callee slot) to display metadata.
 fn display_global_ref(
     index: GlobalIndex,
-    globals: &GlobalPool,
+    globals: &[Value],
     objects: Option<&ObjectPool>,
     compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
 ) -> String {
     // Prefer runtime globals.
     if index.raw() < globals.len() {
-        return format!("({})", display_value(&globals[index]));
+        return format!("({})", display_value(&globals[index.raw()]));
     }
 
     // At compile time, resolve from compile-time globals/object pool.
@@ -113,7 +113,7 @@ fn sanitize_operand_text(text: &str) -> String {
 pub(crate) fn display_instruction(
     instruction_ptr: usize,
     function: &Function,
-    globals: &GlobalPool,
+    globals: &[Value],
     objects: Option<&ObjectPool>,
     compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
 ) -> (String, String) {
@@ -446,7 +446,7 @@ impl Col {
 /// symmetric and returns the entire table.
 pub fn display_bytecode(
     function: &Function,
-    globals: &GlobalPool,
+    globals: &[Value],
     objects: Option<&ObjectPool>,
     compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
     use_colors: bool,

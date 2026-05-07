@@ -101,7 +101,7 @@ pub fn bridge_error_to_py(err: bridge_cffi::error::BridgeError) -> PyErr {
 
 /// Convert a `bex_project::RuntimeError` into a Python exception.
 pub fn runtime_error_to_py(err: bex_project::RuntimeError) -> PyErr {
-    use bex_project::{BexExternalValue, CANCELLED_PANIC_CLASS, RuntimeError};
+    use bex_project::RuntimeError;
 
     match &err {
         RuntimeError::InvalidArgument { .. } => {
@@ -113,13 +113,7 @@ pub fn runtime_error_to_py(err: bex_project::RuntimeError) -> PyErr {
                 EngineError::FunctionNotFound { .. } => {
                     PyErr::new::<BamlInvalidArgumentError, _>(err.to_string())
                 }
-                EngineError::UnhandledThrow { value, .. }
-                    if matches!(
-                        value.as_ref(),
-                        BexExternalValue::Instance { class_name, .. }
-                            if class_name == CANCELLED_PANIC_CLASS
-                    ) =>
-                {
+                e if bex_project::is_cancelled_engine_error(e) => {
                     PyErr::new::<BamlCancelledError, _>(err.to_string())
                 }
                 _ => PyErr::new::<BamlClientError, _>(err.to_string()),

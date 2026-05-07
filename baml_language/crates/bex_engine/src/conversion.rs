@@ -337,14 +337,14 @@ impl BexEngine {
                 Value::Object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
             }
             BexExternalValue::FunctionRef { global_index } => {
-                let idx = bex_vm_types::GlobalIndex::from_raw(global_index);
+                let _idx = bex_vm_types::GlobalIndex::from_raw(global_index);
                 assert!(
                     (global_index < self.globals.len()),
                     "FunctionRef global_index {} out of bounds (globals len {})",
                     global_index,
                     self.globals.len()
                 );
-                self.globals[idx]
+                self.globals[global_index]
             }
         }
     }

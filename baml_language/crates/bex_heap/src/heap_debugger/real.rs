@@ -335,7 +335,7 @@ impl BexHeap {
                 Future::Ready(value) | Future::Error(value) => {
                     self.debug_assert_valid_value(value);
                 }
-                Future::Pending(_) | Future::Cancelled | Future::InternalError => {}
+                Future::Pending(_) | Future::Cancelled | Future::InternalError(_) => {}
             },
             Object::UnscheduledFuture(future) => {
                 for value in &future.args {

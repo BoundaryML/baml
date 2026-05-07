@@ -41,8 +41,8 @@ use ::core::any::TypeId;
 use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
-    ObjectType, PanicClass, StackIndex, UnaryOp, Value, Variant,
+    BinOp, CmpOp, FunctionKind, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool, ObjectType,
+    PanicClass, StackIndex, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, BlockNotification},
     types::{
         BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, Future, FutureType,
@@ -277,7 +277,13 @@ pub struct BexVm {
     /// Global variables.
     ///
     /// This stores the functions and globally declared variables.
-    pub globals: GlobalPool,
+    ///
+    /// During `$init`, this is `VmGlobals::Owned` so `StoreGlobal` can
+    /// populate top-level let bindings. After `$init` completes, the engine
+    /// freezes the pool into a shared `Arc<[Value]>` and every subsequent VM
+    /// is constructed with `VmGlobals::Shared`; `StoreGlobal` against the
+    /// shared view is a `VmInternalError`.
+    pub globals: VmGlobals,
 
     /// Resolved class names mapping fully-qualified class names to their heap pointers.
     ///
@@ -573,7 +579,7 @@ impl BexVm {
     /// for contention-free allocation.
     pub fn new(
         heap: Arc<BexHeap>,
-        globals: GlobalPool,
+        globals: VmGlobals,
         resolved_class_names: HashMap<String, HeapPtr>,
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
@@ -873,13 +879,16 @@ impl BexVm {
         // Create heap with compile-time objects
         let heap = BexHeap::new(compile_time_objects);
 
-        // Convert compile-time globals (ConstValue) to runtime globals (Value)
+        // Convert compile-time globals (ConstValue) to runtime globals (Value).
+        // The `from_program` constructor is test-only — we hand the VM an
+        // `Owned` view so that any `$init` bytecode the test happens to drive
+        // can write to globals.
         let globals_vec: Vec<Value> = bytecode
             .globals
             .into_iter()
             .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
             .collect();
-        let globals = GlobalPool::from_vec(globals_vec);
+        let globals = VmGlobals::Owned(bex_vm_types::GlobalPool::from_vec(globals_vec));
 
         // Build resolved_class_names: convert ObjectIndex -> HeapPtr.
         //
@@ -948,7 +957,7 @@ impl BexVm {
     ///
     /// Returns [`VmInternalError::TypeError`] if the heap object is not an
     /// `Object::UnscheduledFuture`.
-    pub fn pending_future(
+    pub fn unscheduled_future(
         &self,
         future_ptr: HeapPtr,
     ) -> Result<&UnscheduledFuture, VmInternalError> {
@@ -1099,7 +1108,7 @@ impl BexVm {
     /// suitable for hot paths; callers that need repeated lookups should cache
     /// the result.
     pub fn find_function_by_name(&self, name: &str) -> Option<HeapPtr> {
-        for v in &self.globals {
+        for v in self.globals.as_slice() {
             if let Value::Object(ptr) = v {
                 if let Object::Function(f) = self.get_object(*ptr) {
                     if f.name == name {
@@ -2189,7 +2198,7 @@ impl BexVm {
                     let (instruction, metadata) = crate::debug::display_instruction(
                         instruction_ptr,
                         function,
-                        &self.globals,
+                        self.globals.as_slice(),
                         None,
                         None,
                     );
@@ -2375,8 +2384,8 @@ impl BexVm {
             }
 
             Instruction::LoadGlobal(index) => {
-                let value = &self.globals[index];
-                self.stack.push(*value);
+                let value = self.globals.get(index);
+                self.stack.push(value);
             }
 
             Instruction::StoreGlobal(index) => {
@@ -2384,7 +2393,10 @@ impl BexVm {
                 let value = self.stack.ensure_pop();
 
                 // No write barrier: globals is a VM-owned root structure, not a heap object.
-                self.globals[index] = value;
+                // Only valid during `$init`; post-init globals are frozen in `Arc<[Value]>`
+                // and a write here is a VM internal error.
+                self.globals
+                    .set(index, value, VmInternalError::StoreGlobalAfterInit)?;
             }
 
             Instruction::LoadField(index) => {
@@ -3595,12 +3607,17 @@ impl BexVm {
                             ));
                         }
 
-                        // An unrecoverable internal error occurred while executing the future.
-                        // The engine has already recorded this error on the FutureManager
-                        // SetOnce; reaching this state in the VM means the heap object was
-                        // mutated outside of the normal Pending → engine-await handshake.
-                        Future::InternalError => {
-                            return Err(VmInternalError::AwaitedFutureInternalError.into());
+                        // An unrecoverable internal error occurred while executing the
+                        // future. Yield back to the engine so it can surface the original
+                        // error from the FutureManager's `SetOnce` (the entry is leaked by
+                        // design for InternalError, so the engine's `future_ready` will
+                        // always find it and propagate the underlying `EngineError`).
+                        &Future::InternalError(future_id) => {
+                            let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                                unreachable!("exec loop frame is always Bytecode");
+                            };
+                            bf.instruction_ptr = instruction_ptr;
+                            return Ok(Some(VmExecState::Await(future_id)));
                         }
                     }
                 };
@@ -5155,7 +5172,10 @@ impl BexVm {
                     let raw = { read_u32_unchecked(code, pc) };
                     let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let value = self.stack.ensure_pop();
-                    self.globals[global_idx] = value;
+                    // Only valid during `$init`; post-init globals are frozen in `Arc<[Value]>`
+                    // and a write here is a VM internal error.
+                    self.globals
+                        .set(global_idx, value, VmInternalError::StoreGlobalAfterInit)?;
                 }
 
                 // ── LoadField / StoreField / InitField ────────────────────────
@@ -5746,8 +5766,12 @@ impl BexVm {
                                     self.panic_to_exception_value(VmPanic::Cancelled),
                                 ));
                             }
-                            Future::InternalError => {
-                                return Err(VmInternalError::AwaitedFutureInternalError.into());
+                            &Future::InternalError(future_id) => {
+                                // Yield back to the engine; it will surface the original
+                                // error from the FutureManager's `SetOnce` (the entry is
+                                // leaked by design for InternalError).
+                                *pc -= 1;
+                                return Ok(Some(VmExecState::Await(future_id)));
                             }
                         }
                     };

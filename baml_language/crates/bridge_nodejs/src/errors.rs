@@ -66,7 +66,7 @@ pub fn bridge_error_to_napi(err: bridge_cffi::error::BridgeError) -> napi::Error
 }
 
 pub fn runtime_error_to_napi(err: bex_project::RuntimeError) -> napi::Error {
-    use bex_project::{BexExternalValue, CANCELLED_PANIC_CLASS, RuntimeError};
+    use bex_project::RuntimeError;
     match &err {
         RuntimeError::InvalidArgument { .. } => napi::Error::new(
             Status::InvalidArg,
@@ -79,18 +79,10 @@ pub fn runtime_error_to_napi(err: bex_project::RuntimeError) -> napi::Error {
                     Status::InvalidArg,
                     format!("BamlError: BamlInvalidArgumentError: {err}"),
                 ),
-                EngineError::UnhandledThrow { value, .. }
-                    if matches!(
-                        value.as_ref(),
-                        BexExternalValue::Instance { class_name, .. }
-                            if class_name == CANCELLED_PANIC_CLASS
-                    ) =>
-                {
-                    napi::Error::new(
-                        Status::Cancelled,
-                        format!("BamlError: BamlCancelledError: {err}"),
-                    )
-                }
+                e if bex_project::is_cancelled_engine_error(e) => napi::Error::new(
+                    Status::Cancelled,
+                    format!("BamlError: BamlCancelledError: {err}"),
+                ),
                 _ => napi::Error::new(
                     Status::GenericFailure,
                     format!("BamlError: BamlClientError: {err}"),

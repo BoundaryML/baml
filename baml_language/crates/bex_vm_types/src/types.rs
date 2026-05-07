@@ -31,6 +31,12 @@ pub struct Program {
     pub objects: ObjectPool,
 
     /// Global variables (converted from `ConstValue` to Value at load time).
+    ///
+    /// # Init-only invariant
+    /// Globals are populated by `$init` (top-level let bindings) at engine
+    /// load time and **not** mutated again. The runtime freezes them into a
+    /// shared `Arc<[Value]>` after `$init` finishes; only `$init` may emit a
+    /// `StoreGlobal` against the still-mutable pool. See `Instruction::StoreGlobal`.
     pub globals: Vec<ConstValue>,
 
     /// Maps function names to their object indices.
@@ -892,7 +898,9 @@ impl std::fmt::Display for Object {
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
                 Future::Error(value) => write!(f, "<error: {value}>"),
                 Future::Cancelled => write!(f, "<cancelled>"),
-                Future::InternalError => write!(f, "<internal error>"),
+                Future::InternalError(future) => {
+                    write!(f, "<internal error: future #{}>", future.id)
+                }
             },
             Object::UnscheduledFuture(future) => write!(f, "<unscheduled: {}>", future.operation),
             #[cfg(feature = "heap_debug")]
@@ -922,8 +930,11 @@ pub enum Future {
     Cancelled,
 
     /// An unrecoverable internal error occurred while executing the future.
-    /// To surface this error, the VM should await the future yielding control back to the engine.
-    InternalError,
+    /// The originating `FutureId` is preserved so the VM can yield control back
+    /// to the engine on `Await`, allowing the engine to surface the underlying
+    /// error from the `FutureManager`'s registry. Such entries are leaked from
+    /// `FutureManager::active_futures` by design.
+    InternalError(FutureId),
 }
 
 /// An operation that should be passed to the engine to be scheduled.
@@ -947,11 +958,22 @@ pub struct FutureId {
     id: usize,
 }
 impl FutureId {
-    /// # Safety
+    /// Construct a [`FutureId`] from a raw `usize`.
     ///
-    /// Should only be used by the engine to create new future ids.
-    #[expect(unsafe_code)]
-    pub unsafe fn from_usize(id: usize) -> Self {
+    /// # Contract
+    ///
+    /// Each `FutureId` constructed for a given engine **must** have a `usize`
+    /// value distinct from every other live `FutureId` in that engine. The
+    /// engine satisfies this by issuing values from a monotonic
+    /// [`AtomicUsize`](::core::sync::atomic::AtomicUsize) counter inside its
+    /// `FutureManager`.
+    ///
+    /// Violating this contract does **not** cause memory unsafety, but it
+    /// causes `FutureManager` lookup collisions (two distinct futures sharing
+    /// the same map key, with all the silent data corruption that implies).
+    /// Outside of the engine and its tests, prefer calls that route through
+    /// `FutureManagerGuard::new_future` instead of constructing ids by hand.
+    pub fn from_usize(id: usize) -> Self {
         Self { id }
     }
 
@@ -1136,7 +1158,7 @@ impl FutureType {
             Future::Ready(_) => Self::Ready,
             Future::Error(_) => Self::Error,
             Future::Cancelled => Self::Cancelled,
-            Future::InternalError => Self::InternalError,
+            Future::InternalError(_) => Self::InternalError,
         }
     }
 }
@@ -1161,7 +1183,7 @@ impl From<&Future> for FutureType {
             Future::Ready(_) => Self::Ready,
             Future::Error(_) => Self::Error,
             Future::Cancelled => Self::Cancelled,
-            Future::InternalError => Self::InternalError,
+            Future::InternalError(_) => Self::InternalError,
         }
     }
 }
