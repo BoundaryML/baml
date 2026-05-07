@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { encodeCallArgs, decodeCallResult, serializeValue, deserializeValue } from '../index';
-import { CallFunctionArgs, BamlHandleType } from '../generated/baml/cffi/v1/baml_inbound';
-import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml/cffi/v1/baml_outbound';
+import { CallFunctionArgs, BamlHandleType } from '../generated/baml_core/cffi/v1/baml_inbound';
+import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml_core/cffi/v1/baml_outbound';
 
 describe('encodeCallArgs', () => {
   it('encodes an unsorted array as function kwargs', () => {
