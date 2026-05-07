@@ -1011,6 +1011,7 @@ mod tests {
         // Instance has 3 fields but class expects 1 — should panic on verify
         let _bad_instance = tlab.alloc(Object::Instance(bex_vm_types::types::Instance {
             class: class_ptr,
+            class_type_args: vec![],
             fields: vec![Value::Int(1), Value::Int(2), Value::Int(3)],
         }));
 
@@ -1690,6 +1691,7 @@ mod tests {
         let closure_ptr = tlab.alloc(Object::Closure(Closure {
             function: func_ptr,
             captures: vec![Value::Object(captured), Value::Int(7)],
+            captured_type_args: vec![],
         }));
 
         let roots = vec![closure_ptr];
@@ -2243,6 +2245,7 @@ mod tests {
         let closure_container = tlab.alloc(Object::Closure(Closure {
             function: leaf_func,
             captures: vec![Value::Object(leaf_for_closure_cap), Value::Int(7)],
+            captured_type_args: vec![],
         }));
 
         // --- Container: Object::Cell ---
@@ -2268,6 +2271,7 @@ mod tests {
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance {
             class: class_ptr,
+            class_type_args: vec![],
             fields: vec![Value::Object(leaf_string)],
         }));
 

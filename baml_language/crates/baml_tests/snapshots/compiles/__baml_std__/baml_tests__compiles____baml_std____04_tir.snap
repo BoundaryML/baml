@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3879
 ---
 === TIR2 ===
 
@@ -460,7 +459,7 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
       ClientType.Primitive =>
         { : never
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
-          let return_type = get_return_type(context.function_name) : type
+          let return_type = reflect.type_of() : type
           let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
           let http_request = primitive.build_request_stream(specialized) : baml.http.Request
@@ -491,7 +490,7 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
             }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3: Stream<T, S> = self.sub_clients[idx].execute_stream(context, active_delay_ms) : baml.llm.Stream<T, S>
+          let result3: Stream<T, S> = <missing>(context, active_delay_ms) : unknown -> baml.llm.Stream<T, S>
           return result3 : baml.llm.Stream<T, S>
         }
   }
@@ -559,7 +558,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
       ClientType.Primitive =>
         { : T
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
-          let return_type = get_return_type(context.function_name) : type
+          let return_type = reflect.type_of() : type
           let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
           let http_request = primitive.build_request(specialized) : baml.http.Request
@@ -568,7 +567,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
             { : T
               let body = http_response.text() : string
               let result: T = : unknown -> T
-                catch (primitive.parse<T>(body, return_type) : T) : unknown
+                catch (primitive.parse<T>(body) : T) : unknown
                   catch (e)
                     _ =>
                       { : never
@@ -619,7 +618,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
             }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3: T = self.sub_clients[idx].execute_oneshot<T>(context, active_delay_ms) : T
+          let result3: T = <missing>(context, active_delay_ms) : unknown -> T
           return result3 : T
         }
   }
@@ -973,6 +972,12 @@ class baml.sys.ShellOutput$stream {
 class baml.String {
 }
 class baml.String$stream {
+}
+
+--- <builtin>/baml/type_class.baml ---
+class baml.TypeValue {
+}
+class baml.TypeValue$stream {
 }
 
 --- <builtin>/baml/uint8array.baml ---

@@ -746,8 +746,18 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn alloc_class_instance(&mut self, _class_name: &str) -> Result<(), Self::Error> {
-        // AllocInstance pushes the object reference.
+    fn alloc_class_instance(
+        &mut self,
+        _class_name: &str,
+        ntypeargs: u16,
+    ) -> Result<(), Self::Error> {
+        // LoadType instructions for type args were already emitted and pushed.
+        // AllocInstance pops ntypeargs type-arg slots and pushes the instance.
+        if ntypeargs > 0 {
+            if !self.sim.pop_n(ntypeargs as usize) {
+                return Err(());
+            }
+        }
         self.sim.push();
         Ok(())
     }
@@ -793,7 +803,7 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn is_type(&mut self, _ty: &baml_type::Ty) -> Result<(), Self::Error> {
+    fn is_type(&mut self, _ty: &baml_type::TyTemplate) -> Result<(), Self::Error> {
         // Emitter consumes operand and pushes boolean result.
         if !self.sim.pop_n(1) {
             return Err(());
@@ -802,13 +812,26 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn make_closure(
+    fn load_type(&mut self, _template: &baml_type::TyTemplate) -> Result<(), Self::Error> {
+        // LoadType pushes one Object::Type value onto the stack. No operands consumed.
+        self.sim.push();
+        Ok(())
+    }
+
+    fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error> {
+        self.make_closure_with_type_args(lambda_idx, capture_count, 0)
+    }
+
+    fn make_closure_with_type_args(
         &mut self,
         _lambda_idx: usize,
         capture_count: usize,
+        ntypeargs: usize,
     ) -> Result<(), Self::Error> {
-        // MakeClosure pops `capture_count` capture values and pushes one closure object.
-        if !self.sim.pop_n(capture_count) {
+        // MakeClosure pops `ntypeargs` type-arg values, `capture_count` capture
+        // values, and pushes one closure object.
+        let total_pops = capture_count + ntypeargs;
+        if !self.sim.pop_n(total_pops) {
             return Err(());
         }
         self.sim.push();

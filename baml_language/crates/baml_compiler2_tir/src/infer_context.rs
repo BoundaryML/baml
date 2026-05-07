@@ -134,6 +134,15 @@ pub enum TirTypeError {
         expected: usize,
         got: usize,
     },
+    /// Wrong number of explicit type arguments at a function call site.
+    ///
+    /// E.g. `f<int>(x)` when `f` declares zero type params, or
+    /// `f<int, string>(x)` when `f<T>` declares only one.
+    WrongTypeArgArity {
+        callee_name: Name,
+        expected: usize,
+        got: usize,
+    },
     /// Type arguments were supplied for a type that is not generic
     /// (enums and type aliases cannot take type parameters).
     TypeIsNotGeneric { type_name: Name, kind: &'static str },
@@ -358,6 +367,16 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "class `{class_name}` expects {expected} type argument(s), got {got}"
+                )
+            }
+            TirTypeError::WrongTypeArgArity {
+                callee_name,
+                expected,
+                got,
+            } => {
+                write!(
+                    f,
+                    "function `{callee_name}` expects {expected} type argument(s), got {got}"
                 )
             }
             TirTypeError::TypeIsNotGeneric { type_name, kind } => {

@@ -30,16 +30,18 @@ function user.f<K, V>(k: K, v: V) -> V throws never {
 }
 function user.GenericCallInArray(k: int, v: string) -> string[] throws never {
   { : string[]
-    [f(k, v)] : string[]
+    [f<int, string>(k, v)] : string[]
   }
 }
 function user.literal_arg() -> string throws never {
-  { : string | "b"
-    f<K, V>("a", "b") : string | "b"
+  { : string
+    f<K, V>("a", "b") : string
   }
+  !! 941..944: type mismatch: expected "assistant", got "a"
+  !! 941..944: type mismatch: expected "assistant", got "a"
 }
 function user.paren_union_arg() -> string throws never {
-  { : string | "b"
-    f<K, V>(0, "b") : string | "b"
+  { : string
+    f<K, V>(0, "b") : string
   }
 }

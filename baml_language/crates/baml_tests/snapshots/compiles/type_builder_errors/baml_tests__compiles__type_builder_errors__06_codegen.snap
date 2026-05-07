@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.TypeBuilderFn(from_text: string) -> Resume {
+    load_type Resume
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o-mini"
     init_field .name
@@ -71,7 +72,7 @@ function user.TypeBuilderFn$parse(json: string) -> Resume {
     return
 }
 
-function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<Resume, null | Resume$stream> {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o-mini"
     init_field .name
@@ -111,7 +112,7 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptA
     return
 }
 
-function user.TypeBuilderFn$stream(from_text: string) -> baml.llm.Stream {
+function user.TypeBuilderFn$stream(from_text: string) -> baml.llm.Stream<Resume, null | Resume$stream> {
     alloc_instance baml.llm.Client
     load_const "openai/gpt-4o-mini"
     init_field .name

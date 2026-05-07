@@ -322,9 +322,15 @@ pub enum Instruction {
 
     /// Builds an instance of a class and allocates it on the heap.
     ///
-    /// Format: `ALLOC_INSTANCE i` where `i` is the index of the class in the
-    /// `Vm::objects` array.
-    AllocInstance(ObjectIndex),
+    /// Format: `ALLOC_INSTANCE { class_obj: i, ntypeargs: n }` where `i` is
+    /// the index of the class in the `Vm::objects` array and `n` type-arg
+    /// `Object::Type` values sit on the stack below any pending field values
+    /// (popped before the instance is created).  `n == 0` for non-generic
+    /// classes.
+    AllocInstance {
+        class_obj: ObjectIndex,
+        ntypeargs: u16,
+    },
 
     /// Builds a variant of an enum and allocates it on the heap.
     ///
@@ -365,11 +371,28 @@ pub enum Instruction {
 
     /// Call a statically-known global function.
     ///
-    /// Format: `CALL g` where `g` is the global index of the callee function.
+    /// Format: `CALL g ntypeargs` where `g` is the global index of the callee
+    /// function and `ntypeargs` is the number of type-argument `Object::Type`
+    /// values that precede the regular arguments on the eval stack.
     ///
-    /// Arguments are pushed onto the eval stack. The callee is read from
-    /// `Vm::globals[g]`, and arity is read from function metadata.
-    Call(GlobalIndex),
+    /// Stack layout (top-of-stack on the right):
+    ///
+    /// ```text
+    /// [type_arg_0, ..., type_arg_{ntypeargs-1}, val_arg_0, ..., val_arg_{nargs-1}]
+    /// ```
+    ///
+    /// The VM pops `ntypeargs` `Object::Type` values into the new frame's
+    /// `type_args` vector, then pops `nargs` regular value arguments.
+    /// `nargs` is inferred from the function's arity metadata.
+    ///
+    /// When no type arguments are threaded, set `ntypeargs = 0`.
+    Call {
+        /// Global index of the callee function.
+        callee: GlobalIndex,
+        /// Number of type-argument `Object::Type` values on the stack
+        /// immediately below the regular value arguments.
+        ntypeargs: u16,
+    },
 
     /// Call a function value from the eval stack.
     ///
@@ -447,6 +470,18 @@ pub enum Instruction {
     /// Pops the value, pushes `Bool` result.
     IsType(usize),
 
+    /// Materialise a `Ty` from a constant-pool `TyTemplate`, substituting
+    /// any `TypeArgRef(n)` leaves with `frame.type_args[n]`.
+    ///
+    /// Pushes `Value::Object(Object::Type(ty))`.
+    ///
+    /// For fully-concrete templates (no `TypeArgRef`), no substitution walk
+    /// is performed — the concrete `Ty` is cloned directly.
+    ///
+    /// Format: `LOAD_TYPE i` where `i` indexes into `Bytecode::constants`
+    /// which must hold a `ConstValue::Type(TyTemplate)` at that slot.
+    LoadType(usize),
+
     /// Remap a sparse type tag to a dense index via perfect hash lookup.
     ///
     /// Pops the type tag (from a preceding `TypeTag` instruction), computes
@@ -481,33 +516,35 @@ pub enum Instruction {
 
     /// Allocate a `Closure` object wrapping a function from the object pool.
     ///
-    /// Capture count is passed on the stack (pushed before captures).
-    /// Pops `capture_count` (as Int), then pops that many capture values
-    /// (left-to-right order, reversed after popping), pairs them with the
-    /// function at `obj_idx`, and pushes the resulting `Object::Closure`.
+    /// Stack layout (top-of-stack on the right):
     ///
-    /// Stack: `[capture_count, cap_0, cap_1, ..., cap_{n-1}]` -> `[closure]`
-    MakeClosure(ObjectIndex),
-
-    /// Never constructed — forces `size_of::<Instruction>() == 24`.
+    /// ```text
+    /// [type_arg_0, ..., type_arg_{ntypeargs-1}, cap_0, cap_1, ..., cap_{capture_count-1}]
+    /// ```
     ///
-    /// Without this, the largest variant payload is a single `usize` (8 bytes),
-    /// giving a 16-byte enum. We benchmarked 16 vs 24 bytes extensively using
-    /// hardware instruction counters (kperf) and wall-clock (divan, lto=fat):
+    /// 1. Pop `capture_count` cell values (left-to-right order, reversed after
+    ///    popping) into `Closure::captures`.
+    /// 2. Pop `ntypeargs` `Object::Type` values into `Closure::captured_type_args`.
+    /// 3. Push the resulting `Object::Closure`.
     ///
-    ///   - 16 bytes: consistently 5-12% slower across all workloads
-    ///   - 24 bytes padded back to 24: performance restored to baseline
+    /// When there are no enclosing type parameters, `ntypeargs = 0` and step 2
+    /// is a no-op (backward-compatible with all existing call sites).
     ///
-    /// The regression is not from cache pressure (L1 misses are negligible at
-    /// both sizes). It's from LLVM generating worse code layout, register
-    /// allocation, and branch structure for the 16-byte enum. The 24-byte size
-    /// happens to produce optimal codegen on AArch64 with the current rustc.
-    ///
-    /// We tried three approaches to reach 16 bytes (u32/i32 fields, u16 capture
-    /// count, moving fields to metadata tables) — all regressed identically,
-    /// confirming it's the enum size itself, not the specific field changes.
-    #[doc(hidden)]
-    _Pad(u8, u8),
+    /// Note: this struct variant carries two `usize` payloads on top of an
+    /// `ObjectIndex`, which keeps `size_of::<Instruction>() == 24` naturally.
+    /// 24 bytes is the optimal enum size on `AArch64`; benchmarks showed 16-byte
+    /// enums regressed perf by 5-12% (worse LLVM codegen, register allocation,
+    /// and branch structure — not cache pressure). `MakeClosure` being the
+    /// largest variant locks the size at 24 without needing a synthetic pad.
+    MakeClosure {
+        /// Index into the object pool for the underlying `Object::Function`.
+        obj_idx: ObjectIndex,
+        /// Number of cell captures to pop from the stack.
+        capture_count: usize,
+        /// Number of `Object::Type` values to pop from the stack into
+        /// `Closure::captured_type_args`.  Zero for non-generic contexts.
+        ntypeargs: usize,
+    },
 
     /// Create a bound method from a global function index and a receiver on the stack.
     ///
@@ -679,6 +716,7 @@ pub enum OpCode {
     VizExit,
     IsType,
     DenseTag,
+    LoadType,
     MakeBoundMethod,
     LoadDeref,
     StoreDeref,
@@ -774,28 +812,32 @@ impl OpCode {
             | Self::Copy
             | Self::AllocArray
             | Self::AllocMap
-            | Self::AllocInstance
             | Self::AllocVariant
             | Self::DispatchFuture
             | Self::Watch
             | Self::Unwatch
             | Self::Notify
-            | Self::Call
             | Self::NotifyBlock
             | Self::VizEnter
             | Self::VizExit
             | Self::IsType
             | Self::DenseTag
+            | Self::LoadType
             | Self::MakeBoundMethod
             | Self::LoadDeref
             | Self::StoreDeref
             | Self::LoadCapture
             | Self::StoreCapture
             | Self::CaptureRef
-            | Self::MakeClosure
             | Self::Jump
             | Self::PopJumpIfFalse
             | Self::JumpIfFalse => 5,
+
+            // 7-byte: opcode + u32 + u16 (type-arg threading)
+            Self::AllocInstance | Self::Call => 7,
+
+            // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
+            Self::MakeClosure => 9,
 
             // 9-byte: opcode + u32 + i32
             Self::JumpTable => 9,
@@ -889,6 +931,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::VizExit as u8 => Ok(Self::VizExit),
             x if x == Self::IsType as u8 => Ok(Self::IsType),
             x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
+            x if x == Self::LoadType as u8 => Ok(Self::LoadType),
             x if x == Self::MakeBoundMethod as u8 => Ok(Self::MakeBoundMethod),
             x if x == Self::LoadDeref as u8 => Ok(Self::LoadDeref),
             x if x == Self::StoreDeref as u8 => Ok(Self::StoreDeref),
@@ -989,6 +1032,7 @@ impl std::fmt::Display for OpCode {
             Self::VizExit => "VIZ_EXIT",
             Self::IsType => "IS_TYPE",
             Self::DenseTag => "DENSE_TAG",
+            Self::LoadType => "LOAD_TYPE",
             Self::MakeBoundMethod => "MAKE_BOUND_METHOD",
             Self::LoadDeref => "LOAD_DEREF",
             Self::StoreDeref => "STORE_DEREF",
@@ -1010,6 +1054,14 @@ impl std::fmt::Display for OpCode {
 pub fn read_u32(code: &[u8], pc: &mut usize) -> u32 {
     let val = u32::from_le_bytes(code[*pc..*pc + 4].try_into().unwrap());
     *pc += 4;
+    val
+}
+
+/// Read a little-endian u16 from `code[*pc..*pc+2]` and advance `*pc` by 2.
+#[inline]
+pub fn read_u16(code: &[u8], pc: &mut usize) -> u16 {
+    let val = u16::from_le_bytes(code[*pc..*pc + 2].try_into().unwrap());
+    *pc += 2;
     val
 }
 
@@ -1214,11 +1266,18 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadMapElement => f.write_str("LOAD_MAP_ELEMENT"),
             Instruction::StoreArrayElement => f.write_str("STORE_ARRAY_ELEMENT"),
             Instruction::StoreMapElement => f.write_str("STORE_MAP_ELEMENT"),
-            Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
+            Instruction::AllocInstance {
+                class_obj,
+                ntypeargs,
+            } => {
+                write!(f, "ALLOC_INSTANCE {class_obj} ntypeargs={ntypeargs}")
+            }
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
             Instruction::DispatchFuture(callee) => write!(f, "DISPATCH_FUTURE {callee}"),
             Instruction::Await => f.write_str("AWAIT"),
-            Instruction::Call(callee) => write!(f, "CALL {callee}"),
+            Instruction::Call { callee, ntypeargs } => {
+                write!(f, "CALL {callee} ntypeargs={ntypeargs}")
+            }
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
             Instruction::Throw => f.write_str("THROW"),
 
@@ -1238,11 +1297,26 @@ impl std::fmt::Display for Instruction {
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
+            Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
-            Instruction::MakeClosure(obj_idx) => {
-                write!(f, "MAKE_CLOSURE {}", obj_idx.raw())
+            Instruction::MakeClosure {
+                obj_idx,
+                capture_count,
+                ntypeargs,
+            } => {
+                if *ntypeargs > 0 {
+                    write!(
+                        f,
+                        "MAKE_CLOSURE {} captures={} ntypeargs={}",
+                        obj_idx.raw(),
+                        capture_count,
+                        ntypeargs
+                    )
+                } else {
+                    write!(f, "MAKE_CLOSURE {} {}", obj_idx.raw(), capture_count)
+                }
             }
             Instruction::MakeBoundMethod(global_idx) => {
                 write!(f, "MAKE_BOUND_METHOD {global_idx}")
@@ -1254,7 +1328,6 @@ impl std::fmt::Display for Instruction {
             Instruction::StoreCapture(idx) => write!(f, "STORE_CAPTURE {idx}"),
             Instruction::CaptureRef(idx) => write!(f, "CAPTURE_REF {idx}"),
             Instruction::SendEvent => f.write_str("SEND_EVENT"),
-            Instruction::_Pad(_, _) => unreachable!(),
         }
     }
 }
@@ -1538,7 +1611,16 @@ impl Bytecode {
         self.resolved_constants = self
             .constants
             .iter()
-            .map(|cv| cv.to_value(&resolve))
+            .map(|cv| match cv {
+                // TyTemplate constants are NOT pre-resolved: `LoadType` reads
+                // them directly from `constants` at execution time.
+                ConstValue::Type(_) => crate::Value::Null,
+                // ClassWithTypeArgs constants are NOT pre-resolved: `IsType`
+                // reads them directly from `constants` at execution time and
+                // resolves `class_obj` to a `HeapPtr` via `idx_to_ptr`.
+                ConstValue::ClassWithTypeArgs { .. } => crate::Value::Null,
+                other => other.to_value(&resolve),
+            })
             .collect();
     }
 
@@ -1615,9 +1697,6 @@ impl Bytecode {
                 | Instruction::CmpIntOp(_)
                 | Instruction::CmpFloatOp(_) => {}
 
-                // ── Padding (never constructed) ─────────────────────
-                Instruction::_Pad(..) => unreachable!(),
-
                 // ── Constant specialization ──────────────────────────
                 Instruction::LoadConst(idx) => {
                     match op {
@@ -1661,6 +1740,7 @@ impl Bytecode {
                 | Instruction::VizExit(v)
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
+                | Instruction::LoadType(v)
                 | Instruction::LoadDeref(v)
                 | Instruction::StoreDeref(v)
                 | Instruction::LoadCapture(v)
@@ -1675,7 +1755,6 @@ impl Bytecode {
                 Instruction::LoadGlobal(g)
                 | Instruction::StoreGlobal(g)
                 | Instruction::DispatchFuture(g)
-                | Instruction::Call(g)
                 | Instruction::MakeBoundMethod(g) => {
                     code.extend_from_slice(
                         &u32::try_from(g.into_raw())
@@ -1684,13 +1763,36 @@ impl Bytecode {
                     );
                 }
 
+                // ── Call: u32 callee + u16 ntypeargs ─────────────────
+                Instruction::Call { callee, ntypeargs } => {
+                    code.extend_from_slice(
+                        &u32::try_from(callee.into_raw())
+                            .expect("global index fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(&ntypeargs.to_le_bytes());
+                }
+
                 // ── ObjectIndex operand → u32 ───────────────────────
-                Instruction::AllocInstance(o) | Instruction::AllocVariant(o) => {
+                Instruction::AllocVariant(o) => {
                     code.extend_from_slice(
                         &u32::try_from(o.into_raw())
                             .expect("object index fits u32")
                             .to_le_bytes(),
                     );
+                }
+
+                // ── AllocInstance: u32 class_obj + u16 ntypeargs ────
+                Instruction::AllocInstance {
+                    class_obj,
+                    ntypeargs,
+                } => {
+                    code.extend_from_slice(
+                        &u32::try_from(class_obj.into_raw())
+                            .expect("object index fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
                 // ── Jump operands: translate to byte offsets ────────
@@ -1727,11 +1829,25 @@ impl Bytecode {
                     code.extend_from_slice(&(byte_delta as i32).to_le_bytes());
                 }
 
-                // ── MakeClosure: u32 object_idx ─
-                Instruction::MakeClosure(obj_idx) => {
+                // ── MakeClosure: u32 obj_idx + u16 capture_count + u16 ntypeargs ─
+                Instruction::MakeClosure {
+                    obj_idx,
+                    capture_count,
+                    ntypeargs,
+                } => {
                     code.extend_from_slice(
                         &u32::try_from(obj_idx.into_raw())
                             .expect("object index fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u16::try_from(*capture_count)
+                            .expect("capture_count fits u16")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u16::try_from(*ntypeargs)
+                            .expect("ntypeargs fits u16")
                             .to_le_bytes(),
                     );
                 }
@@ -1889,18 +2005,19 @@ impl Bytecode {
             Instruction::Copy(_) => OpCode::Copy,
             Instruction::AllocArray(_) => OpCode::AllocArray,
             Instruction::AllocMap(_) => OpCode::AllocMap,
-            Instruction::AllocInstance(_) => OpCode::AllocInstance,
+            Instruction::AllocInstance { .. } => OpCode::AllocInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
             Instruction::DispatchFuture(_) => OpCode::DispatchFuture,
             Instruction::Watch(_) => OpCode::Watch,
             Instruction::Unwatch(_) => OpCode::Unwatch,
             Instruction::Notify(_) => OpCode::Notify,
-            Instruction::Call(_) => OpCode::Call,
+            Instruction::Call { .. } => OpCode::Call,
             Instruction::NotifyBlock(_) => OpCode::NotifyBlock,
             Instruction::VizEnter(_) => OpCode::VizEnter,
             Instruction::VizExit(_) => OpCode::VizExit,
             Instruction::IsType(_) => OpCode::IsType,
             Instruction::DenseTag(_) => OpCode::DenseTag,
+            Instruction::LoadType(_) => OpCode::LoadType,
             Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,
             Instruction::LoadDeref(_) => OpCode::LoadDeref,
             Instruction::StoreDeref(_) => OpCode::StoreDeref,
@@ -1942,10 +2059,7 @@ impl Bytecode {
 
             // Two-operand variants
             Instruction::JumpTable(_) => OpCode::JumpTable,
-            Instruction::MakeClosure(_) => OpCode::MakeClosure,
-
-            // Padding variant (never constructed)
-            Instruction::_Pad(..) => unreachable!(),
+            Instruction::MakeClosure { .. } => OpCode::MakeClosure,
         }
     }
 }

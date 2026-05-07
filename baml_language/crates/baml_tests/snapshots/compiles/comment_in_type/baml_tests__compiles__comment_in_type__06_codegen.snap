@@ -9,6 +9,7 @@ function $init() -> null {
 }
 
 function user.CommentAfterArrow() -> string {
+    load_type string
     load_global user.TestClient
     load_const "CommentAfterArrow"
     alloc_map 0
@@ -39,7 +40,7 @@ function user.CommentAfterArrow$parse(json: string) -> string {
     return
 }
 
-function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> {
     load_var sse
     load_const "CommentAfterArrow"
     load_const null
@@ -55,7 +56,7 @@ function user.CommentAfterArrow$render_prompt() -> baml.llm.PromptAst {
     return
 }
 
-function user.CommentAfterArrow$stream() -> baml.llm.Stream {
+function user.CommentAfterArrow$stream() -> baml.llm.Stream<string, null | string> {
     load_global user.TestClient
     load_const "CommentAfterArrow"
     alloc_map 0
@@ -64,6 +65,7 @@ function user.CommentAfterArrow$stream() -> baml.llm.Stream {
 }
 
 function user.FunctionWithComments(a: string, b: int) -> string {
+    load_type string
     load_global user.TestClient
     load_const "FunctionWithComments"
     load_var a
@@ -106,7 +108,7 @@ function user.FunctionWithComments$parse(json: string) -> string {
     return
 }
 
-function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
+function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<string, null | string> {
     load_var sse
     load_const "FunctionWithComments"
     load_const null
@@ -126,7 +128,7 @@ function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.
     return
 }
 
-function user.FunctionWithComments$stream(a: string, b: int) -> baml.llm.Stream {
+function user.FunctionWithComments$stream(a: string, b: int) -> baml.llm.Stream<string, null | string> {
     load_global user.TestClient
     load_const "FunctionWithComments"
     load_var a

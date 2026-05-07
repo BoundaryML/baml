@@ -64,8 +64,7 @@ function user.sum_array(arr: int[]) -> int {
     load_var total
     load_var sum
     load_var i
-    load_const ?
-    make_closure .<lambda(sum_array, 0)>
+    make_closure .<lambda(sum_array, 0)>, 2
     call baml.Array.push
     pop 1
     load_var __for_idx

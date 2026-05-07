@@ -12,6 +12,9 @@ class user.Container {
 class user.Factory {
   data: user.T
 }
+class user.Foo {
+  value: user.T
+}
 class user.Holder {
   data: string
 }
@@ -39,6 +42,9 @@ class user.Wrapper {
 }
 function user.bad(x: user.T) -> user.T  [expr] {
   {  } x
+}
+function user.bare_in_union_param(f: user.Foo | user.Foo) -> string  [expr] {
+  {  } match (f) { _: user.Foo => "specific", _: user.Foo => "bare" }
 }
 function user.create(value: user.T) -> user.Factory  [expr] {
   {  } user.Factory { data: value }
@@ -128,5 +134,5 @@ class user.Todo {
   userId: int
 }
 function user.GetTodo() -> user.Todo  [expr] {
-  {  } <missing>(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." })
+  {  } baml.fetch_as(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." })
 }

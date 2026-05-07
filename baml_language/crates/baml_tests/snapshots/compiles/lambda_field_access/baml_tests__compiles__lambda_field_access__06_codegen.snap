@@ -6,8 +6,7 @@ function user.test_captured_field_access(obj: Outer) -> string {
     make_cell
     store_var ?1
     load_var obj
-    load_const ?
-    make_closure .<lambda(test_captured_field_access, 0)>
+    make_closure .<lambda(test_captured_field_access, 0)>, 1
     call_indirect
     return
 }
@@ -17,8 +16,7 @@ function user.test_captured_nested_field(obj: Outer) -> int {
     make_cell
     store_var ?1
     load_var obj
-    load_const ?
-    make_closure .<lambda(test_captured_nested_field, 0)>
+    make_closure .<lambda(test_captured_nested_field, 0)>, 1
     call_indirect
     return
 }
@@ -29,8 +27,7 @@ function user.test_lambda_param_and_capture(obj: Outer) -> int {
     store_var ?1
     load_const 10
     load_var obj
-    load_const ?
-    make_closure .<lambda(test_lambda_param_and_capture, 0)>
+    make_closure .<lambda(test_lambda_param_and_capture, 0)>, 1
     call_indirect
     return
 }
@@ -40,8 +37,7 @@ function user.test_nested_lambda_capture(obj: Outer) -> string {
     make_cell
     store_var ?1
     load_var obj
-    load_const ?
-    make_closure .<lambda(test_nested_lambda_capture, 0)>
+    make_closure .<lambda(test_nested_lambda_capture, 0)>, 1
     call_indirect
     return
 }
@@ -51,8 +47,7 @@ function user.test_no_leak_after_lambda(obj: Outer) -> string {
     make_cell
     store_var ?1
     load_var obj
-    load_const ?
-    make_closure .<lambda(test_no_leak_after_lambda, 0)>
+    make_closure .<lambda(test_no_leak_after_lambda, 0)>, 1
     call_indirect
     store_var v
     load_deref ?1
@@ -65,13 +60,11 @@ function user.test_sequential_lambdas(obj: Outer) -> int {
     make_cell
     store_var ?1
     load_var obj
-    load_const ?
-    make_closure .<lambda(test_sequential_lambdas, 0)>
+    make_closure .<lambda(test_sequential_lambdas, 0)>, 1
     call_indirect
     store_var n
     load_var obj
-    load_const ?
-    make_closure .<lambda(test_sequential_lambdas, 1)>
+    make_closure .<lambda(test_sequential_lambdas, 1)>, 1
     call_indirect
     return
 }

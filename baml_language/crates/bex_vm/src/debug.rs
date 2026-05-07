@@ -29,7 +29,7 @@ use std::fmt::Write;
 
 use bex_vm_types::{
     ConstValue, HeapPtr,
-    bytecode::{CompactCode, Instruction, OpCode, read_i8, read_i32, read_u32},
+    bytecode::{CompactCode, Instruction, OpCode, read_i8, read_i32, read_u16, read_u32},
     indexable::{GlobalIndex, GlobalPool, ObjectPool},
     types::{Function, Object, Value},
 };
@@ -145,7 +145,7 @@ pub(crate) fn display_instruction(
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
             display_global_ref(*index, globals, objects, compile_time_globals)
         }
-        Instruction::Call(callee) | Instruction::DispatchFuture(callee) => {
+        Instruction::Call { callee, .. } | Instruction::DispatchFuture(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
         Instruction::LoadVar(index)
@@ -166,7 +166,10 @@ pub(crate) fn display_instruction(
         | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
         }
-        Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
+        Instruction::AllocInstance {
+            class_obj: index, ..
+        }
+        | Instruction::AllocVariant(index) => {
             // Look up the class/enum from the compile-time ObjectPool if available
             if let Some(objs) = objects {
                 format!("({})", display_object_from_pool(index.raw(), objs))
@@ -222,7 +225,7 @@ pub(crate) fn display_instruction(
         | Instruction::IsType(_)
         | Instruction::ThrowIfPanic
         | Instruction::Unreachable
-        | Instruction::MakeClosure(_)
+        | Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
         | Instruction::MakeCell
         | Instruction::LoadDeref(_)
@@ -231,8 +234,8 @@ pub(crate) fn display_instruction(
         | Instruction::StoreCapture(_)
         | Instruction::CaptureRef(_)
         | Instruction::Return
-        | Instruction::SendEvent => String::new(),
-        Instruction::_Pad(..) => unreachable!(),
+        | Instruction::SendEvent
+        | Instruction::LoadType(_) => String::new(),
     };
 
     (instruction.to_string(), metadata)
@@ -266,6 +269,16 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
             } else {
                 format!("<object {}>", idx.raw())
             }
+        }
+        bex_vm_types::ConstValue::Type(template) => format!("<type_template {template}>"),
+        bex_vm_types::ConstValue::ClassWithTypeArgs {
+            class_obj,
+            type_args_templates,
+        } => {
+            format!(
+                "<class_with_type_args obj={} args={type_args_templates:?}>",
+                class_obj.raw()
+            )
         }
     }
 }
@@ -355,12 +368,12 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::JumpIfFalse(_)
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Color::Yellow,
-        Instruction::Call(_) | Instruction::CallIndirect => Color::Magenta,
+        Instruction::Call { .. } | Instruction::CallIndirect => Color::Magenta,
         Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) | Instruction::Throw => {
             Color::Red
         }
         Instruction::AllocMap(_)
-        | Instruction::AllocInstance(_)
+        | Instruction::AllocInstance { .. }
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Color::Cyan,
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
@@ -371,17 +384,17 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
+        | Instruction::LoadType(_)
         | Instruction::ThrowIfPanic => Color::BrightBlue,
         Instruction::Unreachable => Color::BrightRed,
-        Instruction::MakeClosure(_) | Instruction::MakeBoundMethod(_) | Instruction::MakeCell => {
-            Color::Cyan
-        }
+        Instruction::MakeClosure { .. }
+        | Instruction::MakeBoundMethod(_)
+        | Instruction::MakeCell => Color::Cyan,
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
             Color::Blue
         }
         Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Color::Green,
         Instruction::SendEvent => Color::BrightGreen,
-        Instruction::_Pad(..) => unreachable!(),
     }
 }
 
@@ -777,7 +790,17 @@ fn display_instruction_textual(
         // --- Allocation ---
         Instruction::AllocArray(n) => format!("alloc_array {n}"),
         Instruction::AllocMap(n) => format!("alloc_map {n}"),
-        Instruction::AllocInstance(_) => format!("alloc_instance {}", meta_str(&"")),
+        Instruction::AllocInstance {
+            class_obj: _,
+            ntypeargs,
+        } => {
+            let name = meta_str(&"");
+            if *ntypeargs > 0 {
+                format!("alloc_instance<{ntypeargs}> {name}")
+            } else {
+                format!("alloc_instance {name}")
+            }
+        }
         Instruction::AllocVariant(_) => format!("alloc_variant {}", meta_str(&"")),
 
         // --- Array/Map element access ---
@@ -787,7 +810,7 @@ fn display_instruction_textual(
         Instruction::StoreMapElement => "store_map_element".to_string(),
 
         // --- Calls ---
-        Instruction::Call(_) => format!("call {}", meta_str(&"")),
+        Instruction::Call { .. } => format!("call {}", meta_str(&"")),
         Instruction::CallIndirect => "call_indirect".to_string(),
         Instruction::DispatchFuture(_) => format!("dispatch_future {}", meta_str(&"")),
         Instruction::Await => "await".to_string(),
@@ -831,6 +854,10 @@ fn display_instruction_textual(
             let name = meta_str(const_idx);
             format!("is_type {name}")
         }
+        Instruction::LoadType(const_idx) => {
+            let name = meta_str(const_idx);
+            format!("load_type {name}")
+        }
         Instruction::DenseTag(table_idx) => {
             let names = function
                 .bytecode
@@ -843,9 +870,17 @@ fn display_instruction_textual(
         Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 
         // --- Closures and cells ---
-        Instruction::MakeClosure(obj_idx) => {
+        Instruction::MakeClosure {
+            obj_idx,
+            capture_count,
+            ntypeargs,
+        } => {
             let name = meta_str(&obj_idx.raw());
-            format!("make_closure {name}")
+            if *ntypeargs > 0 {
+                format!("make_closure {name}, captures={capture_count}, ntypeargs={ntypeargs}")
+            } else {
+                format!("make_closure {name}, {capture_count}")
+            }
         }
         Instruction::MakeBoundMethod(_) => {
             let name = meta_str(&"");
@@ -864,7 +899,6 @@ fn display_instruction_textual(
         Instruction::StoreCapture(idx) => format!("store_capture {idx}"),
         Instruction::CaptureRef(idx) => format!("capture_ref {idx}"),
         Instruction::SendEvent => "send_event".to_string(),
-        Instruction::_Pad(..) => unreachable!(),
     }
 }
 
@@ -1022,9 +1056,9 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::LoadField(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
-        | Instruction::Call(_)
+        | Instruction::Call { .. }
         | Instruction::DispatchFuture(_)
-        | Instruction::AllocInstance(_)
+        | Instruction::AllocInstance { .. }
         | Instruction::AllocVariant(_)
         | Instruction::Watch(_)
         | Instruction::Unwatch(_)
@@ -1203,18 +1237,17 @@ pub fn display_compact_bytecode(
             | OpCode::Copy
             | OpCode::AllocArray
             | OpCode::AllocMap
-            | OpCode::AllocInstance
             | OpCode::AllocVariant
             | OpCode::DispatchFuture
             | OpCode::Watch
             | OpCode::Unwatch
             | OpCode::Notify
-            | OpCode::Call
             | OpCode::NotifyBlock
             | OpCode::VizEnter
             | OpCode::VizExit
             | OpCode::IsType
             | OpCode::DenseTag
+            | OpCode::LoadType
             | OpCode::MakeBoundMethod
             | OpCode::LoadDeref
             | OpCode::StoreDeref
@@ -1242,11 +1275,26 @@ pub fn display_compact_bytecode(
                 )?;
             }
 
+            OpCode::Call => {
+                let callee = read_u32(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "callee={callee}  ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::AllocInstance => {
+                let class_obj = read_u32(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "class={class_obj}  ntypeargs={ntypeargs}")?;
+            }
+
             OpCode::MakeClosure => {
-                // Compact form has only obj_idx; capture_count is on the stack
-                // (pushed by a preceding LoadConst).
                 let obj_idx = read_u32(code, &mut pc);
-                writeln!(f, "obj={obj_idx}")?;
+                let capture_count = read_u16(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(
+                    f,
+                    "obj={obj_idx}  captures={capture_count}  ntypeargs={ntypeargs}"
+                )?;
             }
         }
     }

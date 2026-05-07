@@ -1059,6 +1059,29 @@ fn emit_class_traits(
     quote! { #(#traits)* }
 }
 
+/// Returns the count of *function-level* generic type parameters for a builtin.
+///
+/// For IO class methods, the `NativeBuiltin.generics` list merges the enclosing
+/// class's generics with the function's own generics.  Only the function-level
+/// ones (those NOT contributed by the class) generate synthetic type-arg value
+/// slots on the operand stack: class-level generics are part of the instance
+/// type and are not threaded as extra stack args.
+///
+/// For free functions (no receiver), every generic is function-level, so this
+/// just returns `generics.len()`.
+fn fn_only_generic_count(builtin: &NativeBuiltin) -> usize {
+    let class_generics: &[String] = builtin
+        .receiver
+        .as_ref()
+        .map(|r| r.class_generics.as_slice())
+        .unwrap_or(&[]);
+    builtin
+        .generics
+        .iter()
+        .filter(|g| !class_generics.contains(g))
+        .count()
+}
+
 fn emit_one_class_trait(
     ns: &str,
     class_name: &str,
@@ -1106,6 +1129,18 @@ fn emit_one_class_trait(
                 })
                 .collect();
 
+            // Synthetic type-arg params appended after value params.
+            // Only function-level generics (those NOT from the enclosing
+            // class) generate type-arg slots — class-level generics are
+            // part of the instance type and are not threaded as stack args.
+            let fn_type_arg_count = fn_only_generic_count(m);
+            let type_arg_params: Vec<TokenStream> = (0..fn_type_arg_count)
+                .map(|i| {
+                    let p_ident = format_ident!("type_arg_{}", i);
+                    quote! { #p_ident: baml_type::Ty }
+                })
+                .collect();
+
             quote! {
                 fn #method_ident(
                     &self,
@@ -1113,6 +1148,7 @@ fn emit_one_class_trait(
                     call_id: CallId,
                     #receiver_param
                     #(#extra_params,)*
+                    #(#type_arg_params,)*
                     ctx: &SysOpContext,
                 ) -> SysOpOutput<#ret_ty>;
             }
@@ -1197,6 +1233,18 @@ fn emit_glue_method(
         .map(|id| quote! { let #id = __args.next().unwrap(); })
         .collect();
 
+    // Synthetic type-arg slots: appended after all value args by the compiler.
+    // Only function-level generics generate these slots; class-level generics
+    // (from the enclosing class definition) do not.
+    let fn_type_arg_count = fn_only_generic_count(builtin);
+    let type_arg_idents: Vec<syn::Ident> = (0..fn_type_arg_count)
+        .map(|i| format_ident!("__type_arg{}", i))
+        .collect();
+    let type_arg_lets: Vec<TokenStream> = type_arg_idents
+        .iter()
+        .map(|id| quote! { let #id = __args.next().unwrap(); })
+        .collect();
+
     let receiver_extraction = if receiver.receiver_type.is_static() {
         None
     } else {
@@ -1220,6 +1268,19 @@ fn emit_glue_method(
         })
         .collect();
 
+    // Extract synthetic type-arg slots as baml_type::Ty.
+    let type_arg_extractions: Vec<TokenStream> = type_arg_idents
+        .iter()
+        .enumerate()
+        .map(|(i, raw_id)| {
+            let extracted_ident = format_ident!("__type_arg_val{}", i);
+            quote! { let #extracted_ident = #raw_id.as_baml_type_owned(heap.as_ref(), permit)?; }
+        })
+        .collect();
+    let type_arg_val_idents: Vec<syn::Ident> = (0..fn_type_arg_count)
+        .map(|i| format_ident!("__type_arg_val{}", i))
+        .collect();
+
     // Tuple elements for Ok return
     let receiver_ident = if receiver.receiver_type.is_static() {
         None
@@ -1239,6 +1300,18 @@ fn emit_glue_method(
         .map(|p| format_ident!("__{}", p.name))
         .collect();
 
+    // Clean method type-arg call params (positional: type_arg_0, type_arg_1, ...)
+    let clean_type_arg_call_idents: Vec<syn::Ident> = (0..fn_type_arg_count)
+        .map(|i| format_ident!("type_arg_{}", i))
+        .collect();
+
+    // Bind extracted type-arg vals to the clean param names inside the match arm.
+    let type_arg_bind_stmts: Vec<TokenStream> = type_arg_val_idents
+        .iter()
+        .zip(clean_type_arg_call_idents.iter())
+        .map(|(val_id, param_id)| quote! { let #param_id = #val_id; })
+        .collect();
+
     quote! {
         fn #glue_ident<'a>(
             &self,
@@ -1251,16 +1324,20 @@ fn emit_glue_method(
             let mut __args = args.into_iter();
             #arg_self
             #(#arg_lets)*
+            // Synthetic type-arg slots (appended by lower_call for generic IO functions).
+            #(#type_arg_lets)*
 
             let __extraction = (|| {
                 #receiver_extraction
                 #(#param_extractions)*
-                Ok::<_, AccessError>((#receiver_ident #(#tuple_idents),*))
+                #(#type_arg_extractions)*
+                Ok::<_, AccessError>((#receiver_ident #(#tuple_idents,)* #(#type_arg_val_idents),*))
             })();
 
             match __extraction {
-                Ok((#receiver_ident #(#tuple_idents),*)) => {
-                    self.#clean_method_ident(heap, call_id, #receiver_ident #(#call_param_idents,)* ctx)
+                Ok((#receiver_ident #(#tuple_idents,)* #(#type_arg_val_idents),*)) => {
+                    #(#type_arg_bind_stmts)*
+                    self.#clean_method_ident(heap, call_id, #receiver_ident #(#call_param_idents,)* #(#clean_type_arg_call_idents,)* ctx)
                         .into_result(SysOp::#variant_ident)
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(
@@ -1329,12 +1406,24 @@ fn emit_one_namespace_trait(
                 })
                 .collect();
 
+            // Synthetic type-arg params appended after value params.
+            let type_arg_params: Vec<TokenStream> = f
+                .generics
+                .iter()
+                .enumerate()
+                .map(|(i, _)| {
+                    let p_ident = format_ident!("type_arg_{}", i);
+                    quote! { #p_ident: baml_type::Ty }
+                })
+                .collect();
+
             quote! {
                 fn #fn_ident(
                     &self,
                     heap: &std::sync::Arc<BexHeap>,
                     call_id: CallId,
                     #(#extra_params,)*
+                    #(#type_arg_params,)*
                     ctx: &SysOpContext,
                 ) -> SysOpOutput<#ret_ty>;
             }
@@ -1470,7 +1559,36 @@ fn emit_free_fn_glue(
     let variant_ident = format_ident!("{}", builtin.sys_op_variant_name());
     let clean_ident = format_ident!("{}", io_method_name(builtin));
 
-    if builtin.params.is_empty() {
+    // Synthetic type-arg slots (appended after value args by the compiler).
+    let type_arg_idents: Vec<syn::Ident> = (0..builtin.generics.len())
+        .map(|i| format_ident!("__type_arg{}", i))
+        .collect();
+    let type_arg_lets: Vec<TokenStream> = type_arg_idents
+        .iter()
+        .map(|id| quote! { let #id = __args.next().unwrap(); })
+        .collect();
+    let type_arg_extractions: Vec<TokenStream> = type_arg_idents
+        .iter()
+        .enumerate()
+        .map(|(i, raw_id)| {
+            let extracted_ident = format_ident!("__type_arg_val{}", i);
+            quote! { let #extracted_ident = #raw_id.as_baml_type_owned(heap.as_ref(), permit)?; }
+        })
+        .collect();
+    let type_arg_val_idents: Vec<syn::Ident> = (0..builtin.generics.len())
+        .map(|i| format_ident!("__type_arg_val{}", i))
+        .collect();
+    // Named params as passed to clean method: type_arg_0, type_arg_1, ...
+    let clean_type_arg_params: Vec<syn::Ident> = (0..builtin.generics.len())
+        .map(|i| format_ident!("type_arg_{}", i))
+        .collect();
+    let type_arg_bind_stmts: Vec<TokenStream> = type_arg_val_idents
+        .iter()
+        .zip(clean_type_arg_params.iter())
+        .map(|(val_id, param_id)| quote! { let #param_id = #val_id; })
+        .collect();
+
+    if builtin.params.is_empty() && builtin.generics.is_empty() {
         let call_expr = quote! {
             #ns_trait_ident::#clean_ident(self, heap, call_id, ctx)
         };
@@ -1521,22 +1639,29 @@ fn emit_free_fn_glue(
         .map(|p| format_ident!("__{}", p.name))
         .collect();
 
-    let ok_pattern = if param_idents.len() == 1 {
-        let id = &param_idents[0];
+    // Build ok_pattern and extraction_return accounting for type args.
+    let all_extracted_idents: Vec<syn::Ident> = param_idents
+        .iter()
+        .chain(type_arg_val_idents.iter())
+        .cloned()
+        .collect();
+
+    let ok_pattern = if all_extracted_idents.len() == 1 {
+        let id = &all_extracted_idents[0];
         quote! { #id }
     } else {
-        quote! { (#(#param_idents),*) }
+        quote! { (#(#all_extracted_idents),*) }
     };
 
-    let extraction_return = if param_idents.len() == 1 {
-        let id = &param_idents[0];
+    let extraction_return = if all_extracted_idents.len() == 1 {
+        let id = &all_extracted_idents[0];
         quote! { Ok::<_, AccessError>(#id) }
     } else {
-        quote! { Ok::<_, AccessError>((#(#param_idents),*)) }
+        quote! { Ok::<_, AccessError>((#(#all_extracted_idents),*)) }
     };
 
     let call_expr = quote! {
-        #ns_trait_ident::#clean_ident(self, heap, call_id, #(#param_idents,)* ctx)
+        #ns_trait_ident::#clean_ident(self, heap, call_id, #(#param_idents,)* #(#clean_type_arg_params,)* ctx)
     };
     let into_result = emit_into_result_call(
         &builtin.return_type,
@@ -1557,14 +1682,18 @@ fn emit_free_fn_glue(
         ) -> SysOpResult {
             let mut __args = args.into_iter();
             #(#arg_lets)*
+            // Synthetic type-arg slots (appended by lower_call for generic IO functions).
+            #(#type_arg_lets)*
 
             let __extraction = (|| {
                 #(#param_extractions)*
+                #(#type_arg_extractions)*
                 #extraction_return
             })();
 
             match __extraction {
                 Ok(#ok_pattern) => {
+                    #(#type_arg_bind_stmts)*
                     #into_result
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(

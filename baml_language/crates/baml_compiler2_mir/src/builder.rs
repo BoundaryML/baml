@@ -317,6 +317,22 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
+        self.call_with_type_args(callee, args, 0, destination, target, unwind);
+    }
+
+    /// Emit a function call with an explicit type-argument count.
+    ///
+    /// The first `ntypeargs` entries of `args` must be `Object::Type` values
+    /// produced by `Rvalue::LoadType`.  Regular value args follow after them.
+    pub(crate) fn call_with_type_args(
+        &mut self,
+        callee: Operand,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "Call destination must be a local place"
@@ -324,6 +340,7 @@ impl MirBuilder {
         self.set_terminator(Terminator::Call {
             callee,
             args,
+            ntypeargs,
             destination,
             target,
             unwind,

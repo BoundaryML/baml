@@ -255,3 +255,23 @@ test IncompleteSyntax {
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
+// Error: unresolved type: Resume
+//     ╭─[ misc_dynamic_types_parser_errors.baml:1:52 ]
+//     │
+//   1 │ ╭─▶ function TypeBuilderFn(from_text: string) -> Resume {
+//     ┆ ┆   
+//  12 │ ├─▶ }
+//     │ │       
+//     │ ╰─────── unresolved type: Resume
+//     │     
+//     │     Note: Error code: E0002
+// ────╯
+// Error: unresolved type: Resume
+//    ╭─[ misc_dynamic_types_parser_errors.baml:1:45 ]
+//    │
+//  1 │ function TypeBuilderFn(from_text: string) -> Resume {
+//    │                                             ───┬───  
+//    │                                                ╰───── unresolved type: Resume
+//    │ 
+//    │ Note: Error code: E0002
+// ───╯

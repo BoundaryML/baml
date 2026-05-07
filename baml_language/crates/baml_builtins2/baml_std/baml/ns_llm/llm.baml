@@ -60,7 +60,7 @@ function parse<T, S>(function_name: string, json: string) -> T {
   let return_type = get_return_type(function_name);
   let stream_return_type = get_stream_return_type(function_name);
   let cache = StreamCache.new(return_type, stream_return_type);
-  __sap_parse_final(json, cache)
+  __sap_parse_final<T, S>(json, cache)
 }
 
 /// UNSAFE: do not call from user code
@@ -75,7 +75,7 @@ function call_llm_function<T>(client: Client, function_name: string, args: map<s
     function_name: function_name,
   };
 
-  let result: T = client.execute_oneshot(context, 0);
+  let result: T = client.execute_oneshot<T>(context, 0);
   result
 }
 
@@ -93,6 +93,6 @@ function stream_llm_function<T, S>(client: Client, function_name: string, args: 
         function_name: function_name,
     };
 
-    let result: Stream<T, S> = client.execute_stream(context, 0);
+    let result: Stream<T, S> = client.execute_stream<T, S>(context, 0);
     result
 }

@@ -6,6 +6,7 @@ namespace baml:
   class Array<T> { methods: [length, at, push, pop, concat, reverse, slice, join, map] }
   class Map<K, V> { methods: [length, has, keys, values, set, get] }
   class String { methods: [length, toLowerCase, toUpperCase, trim, includes, startsWith, endsWith, split, substring, replace, indexOf, charAt, matches, replaceAll, to_bytes] }
+  class TypeValue { methods: [to_string] }
   class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, to_string, sort] }
   function deep_copy<T>
   function deep_equals<T>

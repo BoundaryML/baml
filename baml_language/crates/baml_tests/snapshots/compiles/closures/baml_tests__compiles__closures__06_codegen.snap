@@ -125,8 +125,7 @@ function user.test_bound_in_lambda() -> string {
     init_field .last
     store_deref ?1
     load_var emp
-    load_const ?
-    make_closure .<lambda(test_bound_in_lambda, 0)>
+    make_closure .<lambda(test_bound_in_lambda, 0)>, 1
     call_indirect
     store_var greeter
     load_const "Hello"

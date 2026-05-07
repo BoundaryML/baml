@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 37983
 ---
 === TIR2 ===
-function user.$init_test_25(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_27(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("a" + 1, () -> void { ... }, null) : void
       () -> void { ... } : () -> void throws unknown
@@ -29,12 +28,12 @@ function user.$init_test_25(registry: testing.TestCollector) -> ? throws never {
   !! 106..108: type mismatch: expected string, got 42
   !! 0..0: type mismatch: expected string, got int
 }
-lambda user.$init_test_25 {
+lambda user.$init_test_27 {
 }
-lambda user.$init_test_25 {
+lambda user.$init_test_27 {
 }
-lambda user.$init_test_25 {
+lambda user.$init_test_27 {
   !! 181..186: type mismatch: expected string, got int
 }
-lambda user.$init_test_25 {
+lambda user.$init_test_27 {
 }

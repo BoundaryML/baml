@@ -131,7 +131,7 @@ fn walk_ty(
     use baml_type::Ty;
 
     match ty {
-        Ty::Class(type_name, _) => {
+        Ty::Class(type_name, _, _) => {
             let key = type_name.display_name.clone();
 
             // If this class is already on the ancestry stack, it's a recursive cycle.
@@ -531,7 +531,11 @@ mod tests {
     // ========================================================================
 
     fn ty_class(name: &str) -> baml_type::Ty {
-        baml_type::Ty::Class(baml_type::TypeName::local(name.into()), TyAttr::default())
+        baml_type::Ty::Class(
+            baml_type::TypeName::local(name.into()),
+            Vec::new(),
+            TyAttr::default(),
+        )
     }
     fn ty_enum(name: &str) -> baml_type::Ty {
         baml_type::Ty::Enum(baml_type::TypeName::local(name.into()), TyAttr::default())

@@ -2,10 +2,10 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.test_generic_capture(box: Box) -> string {
+fn user.test_generic_capture(box: Box<User>) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Box // box // param [captured]
+    let _1: Box<User> // box // param [captured]
     let _2: () -> string throws never // get_name
     let _3: () -> string throws never
 
@@ -37,10 +37,10 @@ fn .<lambda(test_generic_capture, 0)>() -> null {
     }
 }
 
-fn user.test_generic_chain(box: Box) -> string {
+fn user.test_generic_chain(box: Box<User>) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Box // box // param
+    let _1: Box<User> // box // param
     let _2: string
 
     bb0: {
@@ -54,10 +54,10 @@ fn user.test_generic_chain(box: Box) -> string {
     }
 }
 
-fn user.test_nested_generic_chain(box: Box) -> string {
+fn user.test_nested_generic_chain(box: Box<Box<User>>) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Box // box // param
+    let _1: Box<Box<User>> // box // param
     let _2: string
 
     bb0: {

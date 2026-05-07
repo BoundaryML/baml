@@ -95,7 +95,7 @@ impl ToBamlTy for MapTy<'_, TypeName> {
 
 impl ToBamlTy for ClassTy<'_, TypeName> {
     fn to_baml_ty(&self) -> baml_type::Ty {
-        baml_type::Ty::Class(self.name.clone(), baml_type::TyAttr::default())
+        baml_type::Ty::Class(self.name.clone(), Vec::new(), baml_type::TyAttr::default())
     }
 }
 

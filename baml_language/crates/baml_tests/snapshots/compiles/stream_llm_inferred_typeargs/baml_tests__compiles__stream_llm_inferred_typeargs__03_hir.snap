@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.TestClient$new() -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: "http://localhost:...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+}
+function user.TestFunc(input: string) -> string  [llm] {
+  baml.llm.call_llm_function(TestClient, "TestFunc", map { "input": input })
+}
+function user.TestFunc$build_request(input: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request(TestClient, "TestFunc", map { "input": input })
+}
+function user.TestFunc$build_request_stream(input: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(TestClient, "TestFunc", map { "input": input })
+}
+function user.TestFunc$parse(json: string) -> string  [expr] {
+  baml.llm.parse("TestFunc", json)
+}
+function user.TestFunc$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(TestClient, "TestFunc", map { "input": input })
+}
+function user.call_stream_inferred() -> baml.llm.Stream  [expr] {
+  {  } baml.llm.stream_llm_function(TestClient, "TestFunc", map { "input": "world" })
+}
