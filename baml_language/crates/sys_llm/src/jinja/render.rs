@@ -4,10 +4,11 @@ use baml_builtins2::{PromptAst, PromptAstSimple};
 use bex_external_types::BexExternalValue;
 use indexmap::IndexMap;
 use minijinja::Environment;
+use sys_jinja::create_environment;
 
 use super::{
-    MAGIC_CHAT_ROLE_DELIMITER, MAGIC_MEDIA_DELIMITER, filters,
-    output_format_object::OutputFormatObject, value_conversion::external_value_to_jinja,
+    MAGIC_CHAT_ROLE_DELIMITER, MAGIC_MEDIA_DELIMITER, output_format_object::OutputFormatObject,
+    value_conversion::external_value_to_jinja,
 };
 use crate::types::OutputFormatContent;
 
@@ -78,37 +79,6 @@ pub fn render_prompt(
 
     // Parse result into PromptAst
     Ok(parse_rendered_output(&rendered, ctx, &media_handles))
-}
-
-fn create_environment() -> Environment<'static> {
-    let mut env = Environment::new();
-
-    // Configure environment
-    env.set_debug(true);
-    env.set_trim_blocks(true);
-    env.set_lstrip_blocks(true);
-
-    // Add filters
-    env.add_filter("regex_match", filters::regex_match);
-    env.add_filter("sum", filters::sum);
-
-    // Enable Python-compatible methods on primitives (e.g. str.format())
-    env.set_unknown_method_callback(minijinja_contrib::pycompat::unknown_method_callback);
-
-    // Custom formatter: replace 'none' with 'null'
-    env.set_formatter(|out, _state, value| {
-        if value.is_none() || value.is_undefined() {
-            write!(out, "null").map_err(|e| {
-                minijinja::Error::new(minijinja::ErrorKind::WriteFailure, e.to_string())
-            })
-        } else {
-            write!(out, "{value}").map_err(|e| {
-                minijinja::Error::new(minijinja::ErrorKind::WriteFailure, e.to_string())
-            })
-        }
-    });
-
-    env
 }
 
 /// Preprocess template: dedent and trim.

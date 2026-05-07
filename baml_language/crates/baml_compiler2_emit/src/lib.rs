@@ -799,7 +799,7 @@ pub fn generate_project_bytecode_with_opt(
             let args = ts_data
                 .params
                 .iter()
-                .map(ToString::to_string)
+                .map(|param| param.name.to_string())
                 .collect::<Vec<_>>()
                 .join(", ");
             if let Some(body) = &ts_data.body {

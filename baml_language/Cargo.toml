@@ -55,6 +55,8 @@ baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
+sys_jinja = { path = "crates/sys_jinja" }
+sys_jinja_types = { path = "crates/sys_jinja_types" }
 sys_llm = { path = "crates/sys_llm", default-features = false }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }

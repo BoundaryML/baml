@@ -20,7 +20,7 @@ type EnvVarsUpdate = EnvVars | ((prev: EnvVars) => EnvVars);
 
 function storage(): Storage | null {
   if (typeof window === 'undefined') return null;
-  return window.sessionStorage;
+  return window.localStorage;
 }
 
 function readStoredEnvVars(): EnvVars {
@@ -28,15 +28,15 @@ function readStoredEnvVars(): EnvVars {
 
   try {
     const store = storage();
-    const sessionRaw = store?.getItem(ENV_VARS_STORAGE_KEY);
-    const legacyRaw = sessionRaw == null
-      ? window.localStorage.getItem(ENV_VARS_STORAGE_KEY)
+    const localRaw = store?.getItem(ENV_VARS_STORAGE_KEY);
+    const sessionRaw = localRaw == null
+      ? window.sessionStorage.getItem(ENV_VARS_STORAGE_KEY)
       : null;
-    const raw = sessionRaw ?? legacyRaw;
-    if (legacyRaw != null) {
-      store?.setItem(ENV_VARS_STORAGE_KEY, legacyRaw);
+    const raw = localRaw ?? sessionRaw;
+    if (sessionRaw != null) {
+      store?.setItem(ENV_VARS_STORAGE_KEY, sessionRaw);
+      window.sessionStorage.removeItem(ENV_VARS_STORAGE_KEY);
     }
-    window.localStorage.removeItem(ENV_VARS_STORAGE_KEY);
     if (!raw) return {};
 
     const parsed = JSON.parse(raw) as unknown;

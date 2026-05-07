@@ -25,6 +25,7 @@ bex_heap = { workspace = true }
 bex_resource_types = { workspace = true }
 bex_sap = { workspace = true }
 bex_vm_types = { workspace = true }
+sys_jinja = { workspace = true }
 sys_types = { workspace = true }
 aws-credential-types = { workspace = true }
 aws-sdk-bedrockruntime = { workspace = true }
@@ -37,7 +38,6 @@ base64 = { workspace = true }
 indexmap = { workspace = true }
 infer = { workspace = true }
 minijinja = { workspace = true }
-minijinja-contrib = { workspace = true }
 percent-encoding = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }

@@ -814,6 +814,23 @@ impl<'a> Parser<'a> {
         true
     }
 
+    fn at_statement_recovery_boundary(&self) -> bool {
+        self.at_top_level_keyword_except_client()
+            || matches!(
+                self.current().map(|t| t.kind),
+                Some(
+                    TokenKind::Watch
+                        | TokenKind::Let
+                        | TokenKind::Return
+                        | TokenKind::While
+                        | TokenKind::For
+                        | TokenKind::Break
+                        | TokenKind::Continue
+                        | TokenKind::Throw
+                )
+            )
+    }
+
     /// Expect a '>' token, but also accept '>>' and consume only one '>'.
     /// This handles nested generics like `map<K, map<K2, V>>` where the lexer
     /// tokenizes '>>' as a single token.
@@ -4528,12 +4545,19 @@ impl<'a> Parser<'a> {
 
             // Parse map entries
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.at_statement_recovery_boundary() {
+                    break;
+                }
+
                 // Check for valid entry start
                 if p.at(TokenKind::Word) || p.at(TokenKind::Quote) || p.at(TokenKind::Hash) {
                     p.parse_map_entry();
 
                     // Handle comma between entries
                     if !p.at(TokenKind::RBrace) {
+                        if p.at_statement_recovery_boundary() {
+                            break;
+                        }
                         if !p.eat(TokenKind::Comma) {
                             // Missing comma - error but try to continue
                             p.error_unexpected_token("',' or '}' after map entry".to_string());
@@ -4636,6 +4660,10 @@ impl<'a> Parser<'a> {
             }
 
             // Value - any expression (including nested maps)
+            if p.at_statement_recovery_boundary() {
+                p.error_unexpected_token("map value".to_string());
+                return;
+            }
             p.parse_expr();
         });
     }
@@ -4646,12 +4674,19 @@ impl<'a> Parser<'a> {
 
         // Parse fields until we hit the closing brace
         while !self.at(TokenKind::RBrace) && !self.at_end() {
+            if self.at_statement_recovery_boundary() {
+                break;
+            }
+
             // Check for spread element: ...expr
             if self.at(TokenKind::DotDotDot) {
                 self.parse_spread_element();
 
                 // Handle comma between elements
                 if !self.at(TokenKind::RBrace) {
+                    if self.at_statement_recovery_boundary() {
+                        break;
+                    }
                     if !self.eat(TokenKind::Comma) {
                         // Missing comma - error but try to continue
                         self.error_unexpected_token("',' or '}' after spread element".to_string());
@@ -4675,6 +4710,9 @@ impl<'a> Parser<'a> {
 
                 // Handle comma between fields
                 if !self.at(TokenKind::RBrace) {
+                    if self.at_statement_recovery_boundary() {
+                        break;
+                    }
                     if !self.eat(TokenKind::Comma) {
                         // Missing comma - error but try to continue
                         self.error_unexpected_token("',' or '}' after object field".to_string());
@@ -4729,6 +4767,10 @@ impl<'a> Parser<'a> {
             }
 
             // Field value - any expression (including nested constructors)
+            if p.at_statement_recovery_boundary() {
+                p.error_unexpected_token("field value".to_string());
+                return;
+            }
             p.parse_expr();
         });
     }
@@ -5617,6 +5659,35 @@ function Demo() -> string {{
                 "raw string should retain marker {marker:?}: {raw_string:?}"
             );
         }
+    }
+
+    #[test]
+    fn incomplete_map_field_value_stops_before_watch_let() {
+        let (root, _errors) = parse_source(
+            r#"
+function GuessGameAgent() -> string {
+  log.info({"famous_person_name":
+  watch let user_input = SimulateHumanGuess(history)
+  user_input
+}
+"#,
+        );
+
+        let map = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::MAP_LITERAL)
+            .expect("map literal should still be parsed");
+        assert!(
+            !map.text().to_string().contains("watch let"),
+            "unterminated map literal swallowed the following watched statement: {}",
+            map.text()
+        );
+
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::WATCH_LET),
+            "`watch let` should recover as its own statement"
+        );
     }
 
     #[test]

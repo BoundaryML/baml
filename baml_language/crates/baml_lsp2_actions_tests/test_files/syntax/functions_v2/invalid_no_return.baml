@@ -22,3 +22,12 @@ function FooBar(arg: int) {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
+// Error: unresolved name: prompt
+//    ╭─[ functions_v2_invalid_no_return.baml:3:3 ]
+//    │
+//  3 │   prompt #""#
+//    │   ───┬──  
+//    │      ╰──── unresolved name: prompt
+//    │ 
+//    │ Note: Error code: E0003
+// ───╯

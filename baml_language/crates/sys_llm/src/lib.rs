@@ -29,6 +29,7 @@ pub use jinja::{
     OutputFormatContent, RenderContext, RenderContextClient, RenderEnum, RenderEnumVariant,
     RenderPromptError, preprocess_template, render_prompt,
 };
+pub use sys_jinja::undeclared_prompt_variables;
 // --- Crate-internal re-exports (used by submodules via `crate::`) ---
 pub(crate) use model_features::{AllowedMetadata, ModelFeatures};
 // Used by sys_types (From<LlmOpError> for OpErrorKind)

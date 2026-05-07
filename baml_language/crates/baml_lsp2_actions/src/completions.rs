@@ -1232,41 +1232,43 @@ fn completions_for_value_position(
     offset: TextSize,
 ) -> Vec<Completion> {
     let mut items: Vec<Completion> = Vec::new();
+    let mut sort_prefix = 0usize;
 
     // ── Locals (innermost scope first) ───────────────────────────────────────
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let scope_id = index.scope_at_offset(offset, None);
+    {
+        let index = baml_compiler2_hir::file_semantic_index(db, file);
+        let scope_id = index.scope_at_offset(offset, None);
 
-    let mut emitted_locals: HashSet<Name> = HashSet::new();
-    let mut sort_prefix = 0usize;
-    for ancestor_id in index.ancestor_scopes(scope_id) {
-        let bindings: &ScopeBindings = &index.scope_bindings[ancestor_id.index() as usize];
+        let mut emitted_locals: HashSet<Name> = HashSet::new();
+        for ancestor_id in index.ancestor_scopes(scope_id) {
+            let bindings: &ScopeBindings = &index.scope_bindings[ancestor_id.index() as usize];
 
-        // Let bindings (reverse source order so most-recent is first).
-        for binding in bindings.bindings.iter().rev() {
-            // Only show bindings that are visible at the cursor position.
-            if index.binding_visible_at(binding, offset)
-                && emitted_locals.insert(binding.name.clone())
-            {
+            // Let bindings (reverse source order so most-recent is first).
+            for binding in bindings.bindings.iter().rev() {
+                // Only show bindings that are visible at the cursor position.
+                if index.binding_visible_at(binding, offset)
+                    && emitted_locals.insert(binding.name.clone())
+                {
+                    items.push(
+                        Completion::new(binding.name.as_str(), CompletionKind::Variable)
+                            .with_sort(format!("{:03}_{}", sort_prefix, binding.name.as_str())),
+                    );
+                    sort_prefix += 1;
+                }
+            }
+
+            // Parameters.
+            for (name, _idx) in &bindings.params {
+                if !emitted_locals.insert(name.clone()) {
+                    continue;
+                }
                 items.push(
-                    Completion::new(binding.name.as_str(), CompletionKind::Variable)
-                        .with_sort(format!("{:03}_{}", sort_prefix, binding.name.as_str())),
+                    Completion::new(name.as_str(), CompletionKind::Variable)
+                        .with_detail("parameter")
+                        .with_sort(format!("{:03}_{}", sort_prefix, name.as_str())),
                 );
                 sort_prefix += 1;
             }
-        }
-
-        // Parameters.
-        for (name, _idx) in &bindings.params {
-            if !emitted_locals.insert(name.clone()) {
-                continue;
-            }
-            items.push(
-                Completion::new(name.as_str(), CompletionKind::Variable)
-                    .with_detail("parameter")
-                    .with_sort(format!("{:03}_{}", sort_prefix, name.as_str())),
-            );
-            sort_prefix += 1;
         }
     }
 

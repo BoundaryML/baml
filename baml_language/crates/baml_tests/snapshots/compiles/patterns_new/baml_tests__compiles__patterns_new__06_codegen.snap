@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18194
 ---
 function user.alias_intersection_in_match_arm(v: int | string) -> int {
     load_var v

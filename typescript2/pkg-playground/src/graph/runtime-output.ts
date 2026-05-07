@@ -79,6 +79,22 @@ function updateRuntime(
   });
 }
 
+function applySuccessfulRunFallback(
+  map: Map<string, GraphNodeRuntime>,
+  graphNodes: GraphNode[],
+) {
+  for (const node of graphNodes) {
+    if (map.has(node.id)) continue;
+
+    const hasSourceBackedRuntimeNode = node.parent == null || node.metadata.sourceExpr != null;
+    if (!hasSourceBackedRuntimeNode) continue;
+
+    updateRuntime(map, node.id, {
+      executionState: 'success',
+    });
+  }
+}
+
 export function collectGraphNodeRuntime(
   graphNodes: GraphNode[],
   runtimeEvents: DeserializedRuntimeEvent[],
@@ -166,6 +182,10 @@ export function collectGraphNodeRuntime(
         errorMessage: runState.error,
       });
     }
+  }
+
+  if (runState?.status === 'success') {
+    applySuccessfulRunFallback(direct, graphNodes);
   }
 
   const withAncestors = new Map(direct);

@@ -705,4 +705,28 @@ function Test(x: int) -> int {
             "Should only complete the local that shadows parameter 'x', got: {completions:?}"
         );
     }
+
+    #[test]
+    fn test_value_completion_after_incomplete_log_call_does_not_reenter_salsa() {
+        let test = CursorTest::new(
+            r#"
+function SimulateHumanGuess(history: string[]) -> string {
+  "guess"
+}
+
+function GuessGameAgent() -> string {
+  let history: string[] = []
+  log.info({"famous_person_name":
+  watch let user_input = SimulateHumanGuess(history)
+  user_input<[CURSOR]
+}
+"#,
+        );
+
+        let completions = completions_at(&test.db, test.cursor.file, test.cursor.offset);
+        assert!(
+            completions.iter().any(|c| c.label == "history"),
+            "expected local completion after malformed log call, got: {completions:?}"
+        );
+    }
 }

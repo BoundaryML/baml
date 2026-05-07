@@ -18,8 +18,14 @@ pub(crate) fn build_request(
 ) -> Result<crate::baml_std::HttpRequest, crate::build_request::BuildRequestError> {
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
-    headers.insert("ai-gateway-protocol-version".to_string(), "0.0.1".to_string());
-    headers.insert("ai-image-model-specification-version".to_string(), "4".to_string());
+    headers.insert(
+        "ai-gateway-protocol-version".to_string(),
+        "0.0.1".to_string(),
+    );
+    headers.insert(
+        "ai-image-model-specification-version".to_string(),
+        "4".to_string(),
+    );
     headers.insert("ai-model-id".to_string(), client.model.clone());
 
     let mut extra = client.extra_body.clone();

@@ -43,4 +43,30 @@ function FunctionName2(arg:string) -> "foo" {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Error parsing jinja template: syntax error: unexpected identifier, expected end of variable block (in FunctionName2:3)
+//     ╭─[ constraints_malformed_expression.baml:19:11 ]
+//     │
+//  19 │     {{ if foo }}
+//     │           ─┬─  
+//     │            ╰─── Error parsing jinja template: syntax error: unexpected identifier, expected end of variable block (in FunctionName2:3)
+//     │ 
+//     │ Note: Error code: E0084
+// ────╯
+// Error: Error parsing jinja template: syntax error: unexpected `)` (in FunctionName:3)
+//     ╭─[ constraints_malformed_expression.baml:10:8 ]
+//     │
+//  10 │     {{ ) }}
+//     │        ┬  
+//     │        ╰── Error parsing jinja template: syntax error: unexpected `)` (in FunctionName:3)
+//     │ 
+//     │ Note: Error code: E0084
+// ────╯
+// Error: Error parsing jinja template: syntax error: unexpected `)` (in <expression>:1)
+//    ╭─[ constraints_malformed_expression.baml:2:33 ]
+//    │
+//  2 │   bar string @check(bar_check, {{ ) }})
+//    │                                 ┬  
+//    │                                 ╰── Error parsing jinja template: syntax error: unexpected `)` (in <expression>:1)
+//    │ 
+//    │ Note: Error code: E0084
+// ───╯

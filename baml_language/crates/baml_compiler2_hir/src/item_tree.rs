@@ -213,10 +213,12 @@ pub struct Generator {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TemplateString {
     pub name: Name,
-    /// Template parameter names.
-    pub params: Vec<Name>,
+    /// Template parameters with optional type annotations and spans.
+    pub params: Vec<FunctionParam>,
     /// Template body text (Jinja template).
     pub body: Option<String>,
+    /// Full source span of the template string declaration.
+    pub span: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -537,7 +539,15 @@ impl ItemTree {
         ts: &ast::TemplateStringDef,
     ) -> LocalItemId<TemplateStringMarker> {
         let id = self.alloc_id(ItemKind::TemplateString, &ts.name);
-        let params = ts.params.iter().map(|p| p.name.clone()).collect();
+        let params = ts
+            .params
+            .iter()
+            .map(|p| FunctionParam {
+                name: p.name.clone(),
+                type_expr: p.type_expr.clone(),
+                span: p.span,
+            })
+            .collect();
         let body = ts.body.as_ref().map(|b| b.text.clone());
         self.template_strings.insert(
             id,
@@ -545,6 +555,7 @@ impl ItemTree {
                 name: ts.name.clone(),
                 params,
                 body,
+                span: ts.span,
             },
         );
         id

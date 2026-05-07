@@ -11,4 +11,12 @@ class Foo {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Warning: Variable `bar` does not exist. Did you mean one of these: `_`, `baml`, `ctx`?
+//    ╭─[ constraints_valid_but_invalid_expressions.baml:2:33 ]
+//    │
+//  2 │   bar string @check(bar_check, {{ bar }})
+//    │                                 ─┬─  
+//    │                                  ╰─── Variable `bar` does not exist. Did you mean one of these: `_`, `baml`, `ctx`?
+//    │ 
+//    │ Note: Error code: E0070
+// ───╯

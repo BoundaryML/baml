@@ -14,6 +14,10 @@ use divan::{Bencher, black_box};
 use sys_native::{CallId, SysOpsExt};
 
 fn main() {
+    if cfg!(debug_assertions) {
+        eprintln!("Skipping runtime_benchmark in debug/test profile.");
+        return;
+    }
     divan::main();
 }
 

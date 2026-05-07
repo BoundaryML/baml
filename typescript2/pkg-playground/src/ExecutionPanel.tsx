@@ -1191,69 +1191,130 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         <span data-testid="hot-reload-test" style={{ display: 'none' }}>{buildTime}</span>
       )}
 
-      {/* ──── Status bar ──── */}
-      <div className="flex items-center gap-2 px-2.5 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
-        {connectionVersion != null && (
-          <code className="text-[10px] font-vsc-mono text-vsc-text-faint">v{connectionVersion}</code>
-        )}
-        {buildTime != null && (() => {
-          const { absolute, relative } = formatBuildTime(buildTime);
-          return (
-            <code className="text-[10px] font-vsc-mono text-vsc-text-faint">
-              {absolute} ({relative})
-            </code>
-          );
-        })()}
-        <div className="flex-1" />
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative h-7 w-7" onClick={() => setShowApiKeysDialog(true)}>
-                <KeyRound size={14} />
-                {hasMissingKeys && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-400" />
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+        className="flex-1 flex flex-col min-h-0 gap-0"
+      >
+        {/* ──── Combined top bar ──── */}
+        <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  onClick={() => setSidebarOpen((prev) => !prev)}
+                >
+                  <PanelLeft className="h-3.5 w-3.5 text-vsc-text-muted" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {selectedFn && !viewingCollection && !viewingTestRun && (
+            <>
+              <span className="text-[11px] font-vsc-mono text-vsc-accent font-semibold whitespace-nowrap">{selectedFn}()</span>
+              <TabsList className="bg-transparent border-b-0 ml-1 h-7">
+                <TabsTrigger value="run" className="py-1 h-7">Run</TabsTrigger>
+                <TabsTrigger value="graph" className="py-1 h-7">Graph</TabsTrigger>
+                {canPreviewPrompt && (
+                  <TabsTrigger value="prompt" className="py-1 h-7">
+                    Prompt
+                    {selectedFnInfo?.capabilities?.clientName && (
+                      <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
+                        {selectedFnInfo.capabilities.clientName}
+                      </span>
+                    )}
+                  </TabsTrigger>
                 )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>API Keys</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
+                {canPreviewCurl && <TabsTrigger value="curl" className="py-1 h-7">cURL</TabsTrigger>}
+              </TabsList>
+            </>
+          )}
 
-      {/* Project selector (shown when multiple projects exist) */}
-      {projectRoots.length > 1 && (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-vsc-border shrink-0 bg-vsc-surface">
-          <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none">PROJECT</span>
-          <ToggleGroup
-            value={selectedProject ?? projectRoots[0]}
-            onValueChange={(v) => setSelectedProject(v)}
-            options={projectRoots.map((root) => ({
-              value: root,
-              label: (
-                <>
-                  {root}
-                  {projectUpdates[root] && !projectUpdates[root].isBexCurrent && (
-                    <span className="ml-0.5 text-vsc-yellow">*</span>
+          <div className="flex-1" />
+
+          {projectRoots.length > 1 && (
+            <ToggleGroup
+              value={selectedProject ?? projectRoots[0]}
+              onValueChange={(v) => setSelectedProject(v)}
+              options={projectRoots.map((root) => ({
+                value: root,
+                label: (
+                  <>
+                    {root}
+                    {projectUpdates[root] && !projectUpdates[root].isBexCurrent && (
+                      <span className="ml-0.5 text-vsc-yellow">*</span>
+                    )}
+                  </>
+                ),
+              }))}
+              size="sm"
+            />
+          )}
+
+          {selectedFn && !viewingCollection && !viewingTestRun && activeTab === 'run' && runs.length > 0 && !isRunning && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[10px] text-vsc-text-muted hover:text-vsc-text"
+              onClick={() => {
+                const runIds = runs.map((r) => r.id);
+                port.postMessage({ type: 'clearHandles', runIds });
+                setRuns([]);
+              }}
+            >
+              Clear
+            </Button>
+          )}
+
+          {selectedFn && !viewingCollection && !viewingTestRun && (
+            <Button
+              variant="success"
+              size="sm"
+              className="h-7 text-[11px] font-semibold"
+              disabled={hasErrors || isRunning || !selectedProject}
+              onClick={onRunFunction}
+            >
+              {isRunning ? 'Running...' : 'Run'}
+            </Button>
+          )}
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative h-7 w-7 shrink-0" onClick={() => setShowApiKeysDialog(true)}>
+                  <KeyRound size={14} />
+                  {hasMissingKeys && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-400" />
                   )}
-                </>
-              ),
-            }))}
-            size="sm"
-          />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex flex-col gap-0.5">
+                  <span>API Keys</span>
+                  {connectionVersion != null && (
+                    <span className="text-[9px] text-vsc-text-faint font-vsc-mono">v{connectionVersion}</span>
+                  )}
+                  {buildTime != null && (() => {
+                    const { absolute, relative } = formatBuildTime(buildTime);
+                    return (
+                      <span className="text-[9px] text-vsc-text-faint font-vsc-mono">{absolute} ({relative})</span>
+                    );
+                  })()}
+                  {projectRoots.length === 1 && (
+                    <span className="text-[9px] text-vsc-text-faint font-vsc-mono">{projectRoots[0]}</span>
+                  )}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-      )}
 
-      {/* Project state info (single project) */}
-      {projectRoots.length === 1 && (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-vsc-border shrink-0 bg-vsc-surface">
-          <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none">PROJECT</span>
-          <span className="text-[10px] font-vsc-mono text-vsc-text-muted">
-            {projectRoots[0]}
-          </span>
-        </div>
-      )}
-
-      {/* WASM Panic banner */}
+        {/* WASM Panic banner */}
       {wasmPanic && (
         <button
           type="button"
@@ -1324,41 +1385,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           )}
         </div>
       )}
-
-      {/* Sidebar toggle */}
-      <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-vsc-border shrink-0 bg-vsc-surface">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => setSidebarOpen((prev) => !prev)}
-              >
-                <PanelLeft className="h-3.5 w-3.5 text-vsc-text-muted" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        {selectedFn && (
-          <span className="text-[11px] font-vsc-mono text-vsc-accent font-semibold">{selectedFn}()</span>
-        )}
-        {selectedFn && (
-          <div className="flex items-center gap-1 ml-auto">
-            <Button
-              variant="success"
-              size="sm"
-              className="text-[11px] font-semibold"
-              disabled={hasErrors || isRunning || !selectedProject}
-              onClick={onRunFunction}
-            >
-              {isRunning ? 'Running...' : 'Run'}
-            </Button>
-          </div>
-        )}
-      </div>
 
       {/* Main layout: sidebar + content */}
       <div className="flex flex-1 min-h-0">
@@ -1592,43 +1618,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               })}
             </div>
           ) : selectedFn ? (
-            <Tabs
-              value={activeTab}
-              onValueChange={(v) => setActiveTab(v as typeof activeTab)}
-              className="flex-1 flex flex-col min-h-0"
-            >
-              <div className="flex items-center px-2.5 shrink-0 bg-vsc-surface">
-                <TabsList className="bg-transparent">
-                  <TabsTrigger value="run">Run</TabsTrigger>
-                  <TabsTrigger value="graph">Graph</TabsTrigger>
-                  {canPreviewPrompt && (
-                    <TabsTrigger value="prompt">
-                      Prompt
-                      {selectedFnInfo?.capabilities?.clientName && (
-                        <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
-                          {selectedFnInfo.capabilities.clientName}
-                        </span>
-                      )}
-                    </TabsTrigger>
-                  )}
-                  {canPreviewCurl && <TabsTrigger value="curl">cURL</TabsTrigger>}
-                </TabsList>
-                {runs.length > 0 && !isRunning && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto text-[10px] text-vsc-text-muted hover:text-vsc-text"
-                    onClick={() => {
-                      const runIds = runs.map((r) => r.id);
-                      port.postMessage({ type: 'clearHandles', runIds });
-                      setRuns([]);
-                    }}
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-
+            <>
               {/* Graph view */}
               <TabsContent value="graph" className="flex-1 min-h-0 mt-0 flex flex-col" style={{ minHeight: 300 }}>
                 {/* "Called from" bar — shown when the current function is called from workflows */}
@@ -2009,7 +1999,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                   })}
                 </div>
               </TabsContent>
-            </Tabs>
+            </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
               {viewingCollection ? 'Collection not yet available — click Refresh' : 'Select a function to run'}
@@ -2017,6 +2007,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           )}
         </div>
       </div>
+      </Tabs>
 
       <ApiKeysDialog
         open={showApiKeysDialog}

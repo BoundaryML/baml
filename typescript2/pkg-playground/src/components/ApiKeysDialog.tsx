@@ -10,6 +10,19 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 
+function apiKeyInputProps(key: string) {
+  return {
+    autoComplete: 'off',
+    autoCorrect: 'off',
+    autoCapitalize: 'off',
+    spellCheck: false,
+    'data-1p-ignore': 'true',
+    'data-lpignore': 'true',
+    'data-form-type': 'other',
+    name: `baml-env-${key}`,
+  } as const;
+}
+
 interface ApiKeysDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -93,11 +106,12 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
                   <span className="font-vsc-mono text-[11px] text-vsc-text truncate">{key}</span>
                 </div>
                 <Input
-                  type={showValues.has(key) ? 'text' : 'password'}
+                  type="text"
                   defaultValue={value}
                   onChange={(e) => handleInlineEdit(key, e.target.value)}
                   placeholder={isMissing ? 'Required' : ''}
-                  className="flex-1 text-[11px] font-vsc-mono"
+                  className={`flex-1 text-[11px] font-vsc-mono ${showValues.has(key) ? '' : '[text-security:disc] [-webkit-text-security:disc]'}`}
+                  {...apiKeyInputProps(key)}
                 />
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleShow(key)}>
                   {showValues.has(key) ? <EyeOff size={12} /> : <Eye size={12} />}
@@ -116,12 +130,15 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
               value={newKey}
               onChange={(e) => setNewKey(e.target.value)}
               className="w-[140px] text-[11px] font-vsc-mono"
+              {...apiKeyInputProps('new-key')}
             />
             <Input
+              type="text"
               placeholder="Value"
               value={newValue}
               onChange={(e) => setNewValue(e.target.value)}
-              className="flex-1 text-[11px] font-vsc-mono"
+              className="[text-security:disc] [-webkit-text-security:disc] flex-1 text-[11px] font-vsc-mono"
+              {...apiKeyInputProps(newKey || 'new-value')}
             />
             <Button variant="default" size="sm" onClick={handleAdd}>
               <Plus size={12} />

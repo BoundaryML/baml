@@ -1030,6 +1030,7 @@ pub struct RawPrompt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Interpolation {
     pub content: std::string::String,
+    /// Span of the full interpolation, including delimiters.
     pub span: TextRange,
 }
 
