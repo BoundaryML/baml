@@ -144,7 +144,7 @@ class Client {
             attempt_delay = inherited_delay_ms
           }
 
-          let result2: Stream<T, S> = self.execute_once_stream(
+          let result2: Stream<T, S> = self.execute_once_stream<T, S>(
             context,
             attempt_delay,
           ) catch (e) {
@@ -157,7 +157,7 @@ class Client {
         throw root.errors.DevOther { message: "All orchestration steps failed" };
       }
       null => {
-        let result: Stream<T, S> = self.execute_once_stream(
+        let result: Stream<T, S> = self.execute_once_stream<T, S>(
           context,
           inherited_delay_ms,
         );
@@ -187,7 +187,7 @@ class Client {
 
       ClientType.Fallback => {
         for (let sub in self.sub_clients) {
-          let result2: Stream<T, S> = sub.execute_stream(
+          let result2: Stream<T, S> = sub.execute_stream<T, S>(
             context,
             active_delay_ms,
           ) catch (e) {
@@ -204,7 +204,7 @@ class Client {
         }
         let idx = self.counter % self.sub_clients.length()
         self.counter += 1
-        let result3: Stream<T, S> = self.sub_clients[idx].execute_stream(
+        let result3: Stream<T, S> = self.sub_clients[idx].execute_stream<T, S>(
           context,
           active_delay_ms,
         );
@@ -248,7 +248,7 @@ class Client {
             attempt_delay = inherited_delay_ms
           }
 
-          let result2: T = self.execute_once_oneshot(
+          let result2: T = self.execute_once_oneshot<T>(
             context,
             attempt_delay,
           ) catch (e) {
@@ -261,7 +261,7 @@ class Client {
         throw root.errors.DevOther { message: "All orchestration steps failed" };
       }
       null => {
-        let result: T = self.execute_once_oneshot(
+        let result: T = self.execute_once_oneshot<T>(
           context,
           inherited_delay_ms,
         );

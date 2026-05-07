@@ -795,28 +795,19 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
 
   L2:
     load_var self
-    load_field .counter
-    store_var _39
-    load_var self
     load_field .sub_clients
     call baml.Array.length
-    store_var _40
+    pop 1
     load_var self
     load_var self
     load_field .counter
     load_const 1
     bin_op +
     store_field .counter
-    load_var self
-    load_field .sub_clients
-    load_var _39
-    load_var _40
-    bin_op %
-    load_array_element
-    load_var context
-    load_var active_delay_ms
-    call baml.llm.Client.execute_stream
-    jump L10
+    load_const "parse error"
+    call baml.sys.panic
+    pop 1
+    jump L11
 
   L3:
     alloc_instance baml.errors.DevOther
@@ -846,6 +837,8 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     throw
 
   L7:
+    load_type #0
+    load_type #1
     load_var _25
     load_var __for_idx
     load_array_element
@@ -897,6 +890,9 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
 
   L10:
     return
+
+  L11:
+    unreachable
 }
 
 function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> void {
@@ -913,6 +909,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     load_const null
     cmp_op ==
     pop_jump_if_false L9
+    load_type #0
     load_var self
     load_var context
     load_var inherited_delay_ms
@@ -990,6 +987,7 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     store_var attempt_delay
 
   L8:
+    load_type #0
     load_var self
     load_var context
     load_var attempt_delay
@@ -1021,6 +1019,8 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
     load_const null
     cmp_op ==
     pop_jump_if_false L9
+    load_type #0
+    load_type #1
     load_var self
     load_var context
     load_var inherited_delay_ms
@@ -1098,6 +1098,8 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
     store_var attempt_delay
 
   L8:
+    load_type #0
+    load_type #1
     load_var self
     load_var context
     load_var attempt_delay
@@ -1541,6 +1543,8 @@ function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: st
     dispatch_future baml.llm.get_jinja_template
     await
     store_var jinja_string
+    load_type #0
+    load_type #1
     load_var client
     alloc_instance baml.llm.ExecutionContext
     load_var jinja_string

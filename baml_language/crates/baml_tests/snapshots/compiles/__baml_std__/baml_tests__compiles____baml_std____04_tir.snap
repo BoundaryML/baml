@@ -490,7 +490,7 @@ function baml.llm.Client.execute_once_stream<T, S>(self: baml.llm.Client, contex
             }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3: Stream<T, S> = self.sub_clients[idx].execute_stream(context, active_delay_ms) : baml.llm.Stream<T, S>
+          let result3: Stream<T, S> = <missing>(context, active_delay_ms) : unknown -> baml.llm.Stream<T, S>
           return result3 : baml.llm.Stream<T, S>
         }
   }

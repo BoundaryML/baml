@@ -489,6 +489,8 @@ fn baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, 
     let _7: string
     let _8: baml.llm.Stream<void, void> // result
     let _9: baml.llm.ExecutionContext
+    let _10: type
+    let _11: type
 
     bb0: {
         _5 = dispatch_future const fn baml.llm.get_jinja_template(copy _2) -> bb1;
@@ -502,7 +504,9 @@ fn baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, 
         _7 = copy _4;
         _6 = baml.llm.ExecutionContext { copy _7, copy _3, copy _2 };
         _9 = copy _6;
-        _8 = call const fn baml.llm.Client.execute_stream(copy _1, copy _9, const 0_i64) -> [bb3];
+        _10 = load_type(#0);
+        _11 = load_type(#1);
+        _8 = call const fn baml.llm.Client.execute_stream<copy _10, copy _11>(copy _1, copy _9, const 0_i64) -> [bb3];
     }
 
     bb3: {
@@ -1270,19 +1274,17 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     let _30: baml.llm.Client // sub
     let _31: baml.llm.Stream<void, void> // result2
     let _32: unknown // e
-    let _33: baml.errors.DevOther
-    let _34: bool
-    let _35: int
-    let _36: (baml.llm.Client[]) -> int throws never
-    let _37: baml.errors.DevOther
-    let _38: int // idx
-    let _39: int
+    let _33: type
+    let _34: type
+    let _35: baml.errors.DevOther
+    let _36: bool
+    let _37: int
+    let _38: (baml.llm.Client[]) -> int throws never
+    let _39: baml.errors.DevOther
     let _40: int
-    let _41: (baml.llm.Client[]) -> int throws never
-    let _42: baml.llm.Stream<void, void> // result3
-    let _43: baml.llm.Client
-    let _44: baml.llm.Client[]
-    let _45: int
+    let _41: int
+    let _42: (baml.llm.Client[]) -> int throws never
+    let _43: null
 
     bb0: {
         _4 = copy _1.1;
@@ -1295,38 +1297,33 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     }
 
     bb2: {
-        _36 = copy _1.2;
-        _35 = call const fn baml.Array.length(copy _36) -> [bb3];
+        _38 = copy _1.2;
+        _37 = call const fn baml.Array.length(copy _38) -> [bb3];
     }
 
     bb3: {
-        _34 = copy _35 == const 0_i64;
-        branch copy _34 -> [bb7, bb4];
+        _36 = copy _37 == const 0_i64;
+        branch copy _36 -> [bb7, bb4];
     }
 
     bb4: {
-        _39 = copy _1.4;
-        _41 = copy _1.2;
-        _40 = call const fn baml.Array.length(copy _41) -> [bb5];
+        _40 = copy _1.4;
+        _42 = copy _1.2;
+        _41 = call const fn baml.Array.length(copy _42) -> [bb5];
     }
 
     bb5: {
-        _38 = copy _39 % copy _40;
         _1.4 = copy _1.4 + const 1_i64;
-        _44 = copy _1.2;
-        _45 = copy _38;
-        _43 = copy _44[_45];
-        _42 = call const fn baml.llm.Client.execute_stream(copy _43, copy _2, copy _3) -> [bb6];
+        _43 = call const fn baml.sys.panic(const "parse error") -> [bb6];
     }
 
     bb6: {
-        _0 = copy _42;
-        goto -> bb27;
+        unreachable;
     }
 
     bb7: {
-        _37 = baml.errors.DevOther { const "RoundRobin client has no sub-clients" };
-        throw copy _37;
+        _39 = baml.errors.DevOther { const "RoundRobin client has no sub-clients" };
+        throw copy _39;
     }
 
     bb8: {
@@ -1409,15 +1406,17 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     }
 
     bb24: {
-        _33 = baml.errors.DevOther { const "All orchestration steps failed" };
-        throw copy _33;
+        _35 = baml.errors.DevOther { const "All orchestration steps failed" };
+        throw copy _35;
     }
 
     bb25: {
         _29 = copy _25[_26];
         fresh_cell(_30);
         _30 = copy _29;
-        _31 = call const fn baml.llm.Client.execute_stream(copy _30, copy _2, copy _3) -> [bb26, unwind: bb21];
+        _33 = load_type(#0);
+        _34 = load_type(#1);
+        _31 = call const fn baml.llm.Client.execute_stream<copy _33, copy _34>(copy _30, copy _2, copy _3) -> [bb26, unwind: bb21];
     }
 
     bb26: {
@@ -1463,9 +1462,11 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
     let _28: void // result2
     let _29: unknown // e
     let _30: int
-    let _31: baml.errors.DevOther
-    let _32: bool
-    let _33: void // result
+    let _31: type
+    let _32: baml.errors.DevOther
+    let _33: bool
+    let _34: void // result
+    let _35: type
 
     bb0: {
         _4 = copy _1.3;
@@ -1474,16 +1475,17 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
     }
 
     bb1: {
-        _32 = copy _4 == const null;
-        branch copy _32 -> [bb2, bb18];
+        _33 = copy _4 == const null;
+        branch copy _33 -> [bb2, bb18];
     }
 
     bb2: {
-        _33 = call const fn baml.llm.Client.execute_once_oneshot(copy _1, copy _2, copy _3) -> [bb3];
+        _35 = load_type(#0);
+        _34 = call const fn baml.llm.Client.execute_once_oneshot<copy _35>(copy _1, copy _2, copy _3) -> [bb3];
     }
 
     bb3: {
-        _0 = copy _33;
+        _0 = copy _34;
         goto -> bb18;
     }
 
@@ -1512,8 +1514,8 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
     }
 
     bb8: {
-        _31 = baml.errors.DevOther { const "All orchestration steps failed" };
-        throw copy _31;
+        _32 = baml.errors.DevOther { const "All orchestration steps failed" };
+        throw copy _32;
     }
 
     bb9: {
@@ -1564,7 +1566,8 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
 
     bb16: {
         _30 = copy _13;
-        _28 = call const fn baml.llm.Client.execute_once_oneshot(copy _1, copy _2, copy _30) -> [bb17, unwind: bb5];
+        _31 = load_type(#0);
+        _28 = call const fn baml.llm.Client.execute_once_oneshot<copy _31>(copy _1, copy _2, copy _30) -> [bb17, unwind: bb5];
     }
 
     bb17: {
@@ -1610,9 +1613,13 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
     let _28: baml.llm.Stream<void, void> // result2
     let _29: unknown // e
     let _30: int
-    let _31: baml.errors.DevOther
-    let _32: bool
-    let _33: baml.llm.Stream<void, void> // result
+    let _31: type
+    let _32: type
+    let _33: baml.errors.DevOther
+    let _34: bool
+    let _35: baml.llm.Stream<void, void> // result
+    let _36: type
+    let _37: type
 
     bb0: {
         _4 = copy _1.3;
@@ -1621,16 +1628,18 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
     }
 
     bb1: {
-        _32 = copy _4 == const null;
-        branch copy _32 -> [bb2, bb18];
+        _34 = copy _4 == const null;
+        branch copy _34 -> [bb2, bb18];
     }
 
     bb2: {
-        _33 = call const fn baml.llm.Client.execute_once_stream(copy _1, copy _2, copy _3) -> [bb3];
+        _36 = load_type(#0);
+        _37 = load_type(#1);
+        _35 = call const fn baml.llm.Client.execute_once_stream<copy _36, copy _37>(copy _1, copy _2, copy _3) -> [bb3];
     }
 
     bb3: {
-        _0 = copy _33;
+        _0 = copy _35;
         goto -> bb18;
     }
 
@@ -1659,8 +1668,8 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
     }
 
     bb8: {
-        _31 = baml.errors.DevOther { const "All orchestration steps failed" };
-        throw copy _31;
+        _33 = baml.errors.DevOther { const "All orchestration steps failed" };
+        throw copy _33;
     }
 
     bb9: {
@@ -1711,7 +1720,9 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
 
     bb16: {
         _30 = copy _13;
-        _28 = call const fn baml.llm.Client.execute_once_stream(copy _1, copy _2, copy _30) -> [bb17, unwind: bb5];
+        _31 = load_type(#0);
+        _32 = load_type(#1);
+        _28 = call const fn baml.llm.Client.execute_once_stream<copy _31, copy _32>(copy _1, copy _2, copy _30) -> [bb17, unwind: bb5];
     }
 
     bb17: {

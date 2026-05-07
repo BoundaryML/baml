@@ -93,6 +93,6 @@ function stream_llm_function<T, S>(client: Client, function_name: string, args: 
         function_name: function_name,
     };
 
-    let result: Stream<T, S> = client.execute_stream(context, 0);
+    let result: Stream<T, S> = client.execute_stream<T, S>(context, 0);
     result
 }
