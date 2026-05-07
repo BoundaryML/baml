@@ -1,5 +1,6 @@
 'use client';
 
+import { AnimatePresence, motion } from 'motion/react';
 import posthog from 'posthog-js';
 import type React from 'react';
 import { useEffect, useState } from 'react';
@@ -79,12 +80,11 @@ const ROTATING_WORDS = [
   'shipping',
   'using',
 ];
-const HOLD_MS = 1400;
-const TRANSITION_MS = 400;
+const HOLD_MS = 5500;
+const TRANSITION_MS = 850;
 
 const RotatingWord = () => {
   const [index, setIndex] = useState(0);
-  const [visible, setVisible] = useState(true);
   const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
@@ -97,17 +97,15 @@ const RotatingWord = () => {
     }
 
     const timer = setInterval(() => {
-      setVisible(false);
-      window.setTimeout(() => {
-        setIndex((current) => (current + 1) % ROTATING_WORDS.length);
-        setVisible(true);
-      }, TRANSITION_MS);
-    }, HOLD_MS + TRANSITION_MS);
+      setIndex((current) => (current + 1) % ROTATING_WORDS.length);
+    }, HOLD_MS);
 
     return () => {
       clearInterval(timer);
     };
   }, [reduced]);
+
+  const transitionS = TRANSITION_MS / 1000;
 
   return (
     <span
@@ -116,28 +114,32 @@ const RotatingWord = () => {
       style={{
         color: '#6D28D9',
         display: 'inline-block',
-        fontFamily: 'var(--font-serif)',
         fontSize: '0.94em',
-        fontStyle: 'italic',
+        fontStyle: 'normal',
         fontWeight: 500,
         lineHeight: 1.12,
         minWidth: '10ch',
+        overflow: 'hidden',
+        position: 'relative',
         verticalAlign: 'baseline',
       }}
     >
-      <span
-        style={{
-          display: 'inline-block',
-          opacity: visible ? 1 : 0,
-          overflow: 'hidden',
-          transition: reduced
-            ? 'none'
-            : `opacity ${TRANSITION_MS}ms cubic-bezier(0.4,0,0.2,1)`,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {ROTATING_WORDS[index]}
-      </span>
+      <AnimatePresence initial={false} mode="wait">
+        <motion.span
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: '-0.9em' }}
+          initial={{ opacity: 0, y: '0.9em' }}
+          key={index}
+          style={{ display: 'inline-block', whiteSpace: 'nowrap' }}
+          transition={
+            reduced
+              ? { duration: 0 }
+              : { duration: transitionS, ease: [0.22, 0.61, 0.36, 1] }
+          }
+        >
+          {ROTATING_WORDS[index]}
+        </motion.span>
+      </AnimatePresence>
     </span>
   );
 };
@@ -297,7 +299,6 @@ const customStyles = {
   } as React.CSSProperties,
   heroLeft: {
     backgroundColor: '#ffffff',
-    borderRight: '1px solid #D9D3C4',
     display: 'flex',
     flexDirection: 'column' as const,
     justifyContent: 'space-between',
@@ -772,7 +773,7 @@ const LegacyCodeWindow = () => (
             <span style={customStyles.fn}>read</span>(t.path);
             {'\n'}{' '}
             <span style={customStyles.cm}>
-              {'// hand rolled JSON schema, hope the LLM emits the right kind'}
+              {'// Zod schema lives elsewhere — kept in sync by hand'}
             </span>
             {'\n'}
             {'}'}
