@@ -134,7 +134,7 @@ export function LanguageFanout() {
           >
             The BAML compiler turns a single{' '}
             <code style={{ fontFamily: MONO, fontSize: 14 }}>.baml</code> file
-            into typed clients for every language your stack speaks.
+            into typed SDKs for every language your stack speaks.
           </p>
         </div>
 

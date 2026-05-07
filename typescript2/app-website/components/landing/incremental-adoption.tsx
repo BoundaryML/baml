@@ -2,14 +2,10 @@
 
 import {
   AnimatePresence,
-  type MotionValue,
-  animate,
   motion,
-  useMotionValue,
   useMotionValueEvent,
   useReducedMotion,
   useScroll,
-  useTransform,
 } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -86,6 +82,8 @@ const STEP_2_PY = `from baml_client import b
 invoice = b.ExtractInvoice(raw_pdf_text)
 print(invoice.total)               # typed float
 print(invoice.line_items[0].name)  # typed string
+
+invoice.
 `;
 
 const STEP_3_BAML = `// pure BAML helpers. no LLM. typed. fast.
@@ -186,10 +184,14 @@ const STEPS: Step[] = [
         annotations: [
           {
             lineNumber: 11,
-            text: 'string prompt.\nJSON.loads and hope.',
+            text: 'string prompt.\nno schema, no types.',
           },
           {
-            lineNumber: 22,
+            lineNumber: 19,
+            text: 'JSON.loads and hope.',
+          },
+          {
+            lineNumber: 21,
             text: 'silent failure when\nJSON is malformed.',
           },
         ],
@@ -243,7 +245,7 @@ const STEPS: Step[] = [
             text: 'literal union return type.\nthe compiler enforces the set.',
           },
           {
-            lineNumber: 8,
+            lineNumber: 13,
             text: 'real for loop.\ntyped maps. typed values.',
           },
         ],
@@ -253,7 +255,7 @@ const STEPS: Step[] = [
   {
     marker: 'Step 04. The whole loop.',
     heading: 'Orchestration in BAML itself.',
-    body: 'Tagged unions, exhaustive match, stdlib for io, fs, shell, http. Tests next to the code. The agent loop is now BAML — Python is gone.',
+    body: 'Typed io, fs, shell, and http built in — no requests, no asyncio, no JSON plumbing. Faster than Python and safe by default.',
     blocks: [
       {
         key: 's4-baml',
@@ -270,7 +272,7 @@ const STEPS: Step[] = [
             text: 'exhaustive match.\nmissing a variant is a compile error.',
           },
           {
-            lineNumber: 28,
+            lineNumber: 27,
             text: 'main() runs on the BAML VM.\nstdlib for io, fs, shell.',
           },
           {
@@ -480,6 +482,93 @@ function CodeBlock({
   );
 }
 
+// ── LSP autocomplete popover ─────────────────────────────────────────────────
+
+const COMPLETION_ITEMS: { name: string; type: string }[] = [
+  { name: 'vendor', type: 'string' },
+  { name: 'total', type: 'float' },
+  { name: 'due_date', type: 'string' },
+  { name: 'line_items', type: 'LineItem[]' },
+];
+
+function AutocompletePopover() {
+  // Anchor: line 8 (`invoice.`), one char past the dot.
+  const top = lineCenterY(8) + LINE_HEIGHT / 2 + 4;
+  const charPx = 8.1;
+  const left = LINE_NUM_WIDTH + CODE_PAD_LEFT + 8 * charPx;
+
+  return (
+    <motion.div
+      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: -4 }}
+      role="listbox"
+      style={{
+        background: '#FFFFFF',
+        border: '1px solid #D8D2C4',
+        borderRadius: 6,
+        boxShadow:
+          '0 1px 0 rgba(0,0,0,0.04), 0 12px 28px -8px rgba(26,22,18,0.22)',
+        fontFamily: MONO,
+        fontSize: 12,
+        left,
+        minWidth: 240,
+        overflow: 'hidden',
+        position: 'absolute',
+        top,
+        zIndex: 5,
+      }}
+      transition={{ delay: 0.35, duration: 0.35 }}
+    >
+      {COMPLETION_ITEMS.map((item, i) => (
+        <div
+          key={item.name}
+          style={{
+            alignItems: 'center',
+            background: i === 0 ? 'rgba(124,58,237,0.10)' : 'transparent',
+            color: INK,
+            display: 'flex',
+            gap: 8,
+            padding: '6px 10px',
+          }}
+        >
+          <span
+            aria-hidden
+            style={{
+              alignItems: 'center',
+              background: '#FBF1D7',
+              border: '1px solid #E8CB8C',
+              borderRadius: 3,
+              color: '#7A5A12',
+              display: 'flex',
+              flexShrink: 0,
+              fontFamily: MONO,
+              fontSize: 9,
+              fontWeight: 700,
+              height: 14,
+              justifyContent: 'center',
+              lineHeight: 1,
+              width: 14,
+            }}
+          >
+            f
+          </span>
+          <span style={{ color: INK, fontWeight: 500 }}>{item.name}</span>
+          <span
+            style={{
+              color: MUTED,
+              flex: 1,
+              fontSize: 11,
+              textAlign: 'right',
+            }}
+          >
+            {item.type}
+          </span>
+        </div>
+      ))}
+    </motion.div>
+  );
+}
+
 // ── Annotated block ──────────────────────────────────────────────────────────
 
 function AnnotatedBlock({
@@ -522,6 +611,7 @@ function AnnotatedBlock({
             transition={{ delay: 0.15 + i * 0.08, duration: 0.35 }}
           />
         ))}
+        {block.key === 's2-py' && <AutocompletePopover />}
       </div>
       <div style={{ position: 'relative' }}>
         {block.annotations.map((a, i) => (
@@ -570,7 +660,8 @@ function MigrationProgress({
   const pct = Math.round((activeStep / (STEPS.length - 1)) * 100);
   const dashOffset = CIRC * (1 - pct / 100);
 
-  const showLamb = activeStep >= 3;
+  const showLamb = activeStep >= 2;
+  const isComplete = activeStep >= 3;
 
   return (
     <div
@@ -624,7 +715,12 @@ function MigrationProgress({
             transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
           />
         </svg>
-        <div
+        <motion.div
+          animate={{
+            boxShadow: isComplete
+              ? '0 0 0 2px rgba(124,58,237,0.45), 0 0 24px rgba(124,58,237,0.55), 0 0 48px rgba(124,58,237,0.35)'
+              : '0 0 0 0 rgba(124,58,237,0)',
+          }}
           style={{
             alignItems: 'center',
             background: BG,
@@ -634,6 +730,7 @@ function MigrationProgress({
             placeItems: 'center',
             position: 'absolute',
           }}
+          transition={{ duration: 0.5, ease: [0.22, 0.61, 0.36, 1] }}
         >
           <AnimatePresence initial={false} mode="wait">
             {showLamb ? (
@@ -664,7 +761,7 @@ function MigrationProgress({
               />
             )}
           </AnimatePresence>
-        </div>
+        </motion.div>
       </div>
 
       <div
@@ -814,41 +911,6 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
   );
 }
 
-// ── Per step body text streamer ──────────────────────────────────────────────
-
-function TypingText({
-  text,
-  progress,
-}: {
-  text: string;
-  progress: MotionValue<number>;
-}) {
-  const [chars, setChars] = useState(0);
-
-  useEffect(() => {
-    const update = () => {
-      const v = progress.get();
-      const next = Math.max(
-        0,
-        Math.min(text.length, Math.round(v * text.length)),
-      );
-      setChars(next);
-    };
-    update();
-    const unsub = progress.on('change', update);
-    return unsub;
-  }, [progress, text.length]);
-
-  return (
-    <>
-      <span>{text.slice(0, chars)}</span>
-      <span aria-hidden style={{ opacity: 0 }}>
-        {text.slice(chars)}
-      </span>
-    </>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function IncrementalAdoption() {
@@ -858,52 +920,6 @@ export function IncrementalAdoption() {
     target: ref,
   });
   const [activeStep, setActiveStep] = useState(0);
-
-  // Per step body typewriter progress.
-  const step0Progress = useTransform(
-    scrollYProgress,
-    [0, 0.04, 0.18, 0.22],
-    [0, 1, 1, 0],
-  );
-  const step1Progress = useTransform(
-    scrollYProgress,
-    [0.22, 0.26, 0.44, 0.48],
-    [0, 1, 1, 0],
-  );
-  const step2Progress = useTransform(
-    scrollYProgress,
-    [0.48, 0.52, 0.7, 0.74],
-    [0, 1, 1, 0],
-  );
-  // Step 4 is the last section, so the user often stops scrolling once they
-  // arrive. A scroll-driven typewriter would stall partway. Drive it on a
-  // timer instead, kicking off when the step becomes active.
-  const step3Progress = useMotionValue(0);
-  const reducedMotion = useReducedMotion();
-
-  useEffect(() => {
-    if (activeStep !== 3) {
-      step3Progress.set(0);
-      return;
-    }
-    if (reducedMotion) {
-      step3Progress.set(1);
-      return;
-    }
-    const controls = animate(step3Progress, 1, {
-      delay: 0.45,
-      duration: 1.6,
-      ease: [0.22, 0.61, 0.36, 1],
-    });
-    return () => controls.stop();
-  }, [activeStep, reducedMotion, step3Progress]);
-
-  const stepProgresses = [
-    step0Progress,
-    step1Progress,
-    step2Progress,
-    step3Progress,
-  ];
 
   useMotionValueEvent(scrollYProgress, 'change', (latest) => {
     let idx = 0;
@@ -950,14 +966,14 @@ export function IncrementalAdoption() {
           </h2>
           {STEPS.map((s, i) => {
             const isActive = i === activeStep;
-            const STACK_TOP_BASE = 80;
+            const STACK_TOP_BASE = 160;
             const STACK_TAB_HEIGHT = 56;
             const stickyTop = STACK_TOP_BASE + i * STACK_TAB_HEIGHT;
             return (
               <section
                 key={`step-text-${i}`}
                 style={{
-                  minHeight: '80vh',
+                  minHeight: '120vh',
                   paddingBottom: 32,
                   paddingLeft: 24,
                 }}
@@ -1033,9 +1049,7 @@ export function IncrementalAdoption() {
                       maxWidth: 440,
                     }}
                   >
-                    <p style={{ margin: 0 }}>
-                      <TypingText progress={stepProgresses[i]} text={s.body} />
-                    </p>
+                    <p style={{ margin: 0 }}>{s.body}</p>
                   </motion.div>
                 </div>
               </section>
