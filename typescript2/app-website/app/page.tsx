@@ -1,14 +1,11 @@
 import { FooterSection } from '@/components/footer-section';
-import { VariantHome } from '@/components/landing/variant-home';
+import { ForceLightTheme } from '@/components/force-light-theme';
 import { IncrementalAdoption } from '@/components/landing/incremental-adoption';
 import { LanguageFanout } from '@/components/landing/language-fanout';
-import { PerspectiveSlider } from '@/components/landing/perspective-slider';
-import { StoryTimeline } from '@/components/landing/story-timeline';
+import { PlaygroundShowcase } from '@/components/landing/playground-showcase';
+import { VariantHome } from '@/components/landing/variant-home';
 import { WhyALanguage } from '@/components/landing/why-a-language';
-import { BuiltForTheFuture } from '@/components/landing/built-for-the-future';
-import { ScrollVideo } from '@/components/landing/scroll-video';
 import { TestimonialSection } from '@/components/testimonial-section';
-import { ForceLightTheme } from '@/components/force-light-theme';
 
 export default async function Page() {
   return (
@@ -34,8 +31,8 @@ export default async function Page() {
       {/* Incremental adoption — sticky scroll explainer */}
       <IncrementalAdoption />
 
-      {/* What you see vs what your agent sees — drag-to-reveal slider */}
-      <PerspectiveSlider />
+      {/* Larger live playground */}
+      <PlaygroundShowcase />
 
       {/* One file → every language fanout */}
       <LanguageFanout />
@@ -47,10 +44,10 @@ export default async function Page() {
       <div
         aria-hidden
         style={{
-          width: '100%',
-          maxWidth: '100rem',
-          margin: '0 auto',
           borderTop: '1px solid #D9D3C4',
+          margin: '0 auto',
+          maxWidth: '100rem',
+          width: '100%',
         }}
       />
 
