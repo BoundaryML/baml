@@ -1329,10 +1329,10 @@ export function CompactPerspectivePanel() {
               width: 6,
             }}
           />
-          agent source
+          what your agent sees
         </span>
         <span style={{ alignItems: 'center', display: 'flex', gap: 8 }}>
-          visual graph
+          what you see
           <span
             aria-hidden
             style={{
