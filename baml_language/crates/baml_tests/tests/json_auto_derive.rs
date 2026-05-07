@@ -492,6 +492,75 @@ async fn generic_class_honors_override_through_typevar() {
     );
 }
 
+#[tokio::test]
+async fn generic_class_with_optional_typevar_field() {
+    // `class Box<T> { value: T? }`. After `?.` short-circuits null away, the
+    // live receiver still has TypeVar type, so the synthesizer must route
+    // through `baml.json.to_json(self.value)` rather than `self.value?.to_json()`
+    // — otherwise MIR's `Ty::Void` erasure on TypeVar receivers panics.
+    let source = r#"
+        class Box<T> { value T? }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let b: Box<int> = Box<int> { value: 42 };
+            let j: baml.json.json = b.to_json();
+            baml.json.stringify(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(r#"{"value":42}"#.to_string()))
+    );
+}
+
+#[tokio::test]
+async fn generic_class_with_optional_typevar_field_null() {
+    // Same shape as above but the nullable field actually carries `null` —
+    // `baml.json.to_json(null)` must produce JSON null inside the object.
+    let source = r#"
+        class Box<T> { value T? }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let b: Box<int> = Box<int> { value: null };
+            let j: baml.json.json = b.to_json();
+            baml.json.stringify(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(r#"{"value":null}"#.to_string()))
+    );
+}
+
+#[tokio::test]
+async fn generic_class_with_optional_typevar_field_honors_override() {
+    // `class Box<T> { value: T? }` with `T = Secret` where Secret has a user
+    // `to_json` override. The non-null branch must still dispatch on the
+    // runtime type and honor the user override.
+    let source = r#"
+        class Secret {
+            data string
+
+            function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                "[redacted]"
+            }
+        }
+        class Box<T> { value T? }
+        function main() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+            let b: Box<Secret> = Box<Secret> { value: Secret { data: "hunter2" } };
+            let j: baml.json.json = b.to_json();
+            baml.json.stringify(j)
+        }
+    "#;
+    let output = baml_test!(source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            r#"{"value":"[redacted]"}"#.to_string()
+        ))
+    );
+}
+
 // ── Phase 5c: per-field auto-derive `from_json` with override-honoring ────────
 
 #[tokio::test]

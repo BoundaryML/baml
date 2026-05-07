@@ -65,13 +65,7 @@ fn media_value_to_json(
     media: &baml_builtins2::MediaValue,
     kind: MediaKind,
 ) -> Value {
-    let kind_str = match kind {
-        MediaKind::Image => "image",
-        MediaKind::Audio => "audio",
-        MediaKind::Video => "video",
-        MediaKind::Pdf => "pdf",
-        MediaKind::Generic => "media",
-    };
+    let kind_str = kind.tag_str();
 
     let (source_str, value_str) = if let Some(url) = media.url() {
         ("url", url)

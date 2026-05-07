@@ -23,6 +23,21 @@ use baml_type::{MediaKind, Ty, TypeName};
 /// avoid dragging the whole `baml_base` crate into `bex_vm` deps.
 const BAML_JSON_JSON: &str = "baml.json.json";
 
+/// Run `f` with `seg` appended to `path`, then restore `path` to its prior
+/// length. Used to track the JSON pointer during recursive (de)serialization
+/// without mutating the buffer's owner contract.
+fn with_path_segment<F, R>(path: &mut String, seg: std::fmt::Arguments<'_>, f: F) -> R
+where
+    F: FnOnce(&mut String) -> R,
+{
+    use std::fmt::Write;
+    let saved_len = path.len();
+    let _ = write!(path, "{seg}");
+    let r = f(path);
+    path.truncate(saved_len);
+    r
+}
+
 /// Build the runtime registration key for a `Ty::Class(qtn, ...)` /
 /// `Ty::Enum(qtn, _)` lookup against `BexVm::resolved_class_names`.
 ///
@@ -411,11 +426,9 @@ fn ty_value_to_serde(
             };
             let mut out = Vec::with_capacity(items.len());
             for (i, item) in items.into_iter().enumerate() {
-                let saved_len = path.len();
-                use std::fmt::Write;
-                write!(path, "[{i}]").ok();
-                let elem_json = ty_value_to_serde(vm, item, elem, path)?;
-                path.truncate(saved_len);
+                let elem_json = with_path_segment(path, format_args!("[{i}]"), |p| {
+                    ty_value_to_serde(vm, item, elem, p)
+                })?;
                 out.push(elem_json);
             }
             Ok(serde_json::Value::Array(out))
@@ -431,11 +444,9 @@ fn ty_value_to_serde(
             };
             let mut out = serde_json::Map::with_capacity(entries.len());
             for (k, v) in entries {
-                let saved_len = path.len();
-                use std::fmt::Write;
-                write!(path, "[{k:?}]").ok();
-                let val_json = ty_value_to_serde(vm, v, vty, path)?;
-                path.truncate(saved_len);
+                let val_json = with_path_segment(path, format_args!("[{k:?}]"), |p| {
+                    ty_value_to_serde(vm, v, vty, p)
+                })?;
                 out.insert(k, val_json);
             }
             Ok(serde_json::Value::Object(out))
@@ -488,8 +499,7 @@ fn ty_value_to_serde(
 
         Ty::Union(_, _) => {
             // Tagged structurally — dispatch on the runtime Value shape rather
-            // than trying each member.  This matches the json-alias union
-            // semantics used in Phase 2.
+            // than trying each member. Matches json-alias union semantics.
             Ok(value_to_serde(vm, value))
         }
 
@@ -605,15 +615,13 @@ fn serialize_class_instance(
                 "class",
             ));
         };
-        let saved_len = path.len();
-        use std::fmt::Write;
-        write!(path, ".{}", cf.name).ok();
         // Substitute class-level type-args into the field's template so
         // generic positions (`item: T` in `Container<T>`) resolve to the
         // concrete type carried on `Instance::class_type_args`.
         let field_ty = cf.field_template.substitute(&class_type_args);
-        let field_json = ty_value_to_serde(vm, field_value, &field_ty, path)?;
-        path.truncate(saved_len);
+        let field_json = with_path_segment(path, format_args!(".{}", cf.name), |p| {
+            ty_value_to_serde(vm, field_value, &field_ty, p)
+        })?;
         out.insert(cf.name.clone(), field_json);
     }
     Ok(serde_json::Value::Object(out))
@@ -626,16 +634,6 @@ fn media_kind_from_fqn(fqn: &str) -> Option<MediaKind> {
         "baml.media.Video" => Some(MediaKind::Video),
         "baml.media.Pdf" => Some(MediaKind::Pdf),
         _ => None,
-    }
-}
-
-fn media_kind_str(kind: MediaKind) -> &'static str {
-    match kind {
-        MediaKind::Image => "image",
-        MediaKind::Audio => "audio",
-        MediaKind::Video => "video",
-        MediaKind::Pdf => "pdf",
-        MediaKind::Generic => "media",
     }
 }
 
@@ -664,7 +662,7 @@ fn serialize_media(
     let mut obj = serde_json::Map::new();
     obj.insert(
         "kind".into(),
-        serde_json::Value::String(media_kind_str(kind).into()),
+        serde_json::Value::String(kind.tag_str().into()),
     );
     obj.insert("source".into(), serde_json::Value::String(source.into()));
     obj.insert("value".into(), serde_json::Value::String(payload));
@@ -770,11 +768,9 @@ fn ty_serde_to_value(
             serde_json::Value::Array(arr) => {
                 let mut items = Vec::with_capacity(arr.len());
                 for (i, item) in arr.iter().enumerate() {
-                    let saved_len = path.len();
-                    use std::fmt::Write;
-                    write!(path, "[{i}]").ok();
-                    let v = ty_serde_to_value(vm, item, elem, path)?;
-                    path.truncate(saved_len);
+                    let v = with_path_segment(path, format_args!("[{i}]"), |p| {
+                        ty_serde_to_value(vm, item, elem, p)
+                    })?;
                     items.push(v);
                 }
                 Ok(Value::Object(vm.tlab.alloc(Object::Array(items))))
@@ -786,11 +782,9 @@ fn ty_serde_to_value(
             serde_json::Value::Object(map) => {
                 let mut entries: IndexMap<String, Value> = IndexMap::with_capacity(map.len());
                 for (k, val) in map {
-                    let saved_len = path.len();
-                    use std::fmt::Write;
-                    write!(path, "[{k:?}]").ok();
-                    let v = ty_serde_to_value(vm, val, vty, path)?;
-                    path.truncate(saved_len);
+                    let v = with_path_segment(path, format_args!("[{k:?}]"), |p| {
+                        ty_serde_to_value(vm, val, vty, p)
+                    })?;
                     entries.insert(k.clone(), v);
                 }
                 Ok(Value::Object(vm.tlab.alloc(Object::Map(entries))))
@@ -932,28 +926,26 @@ fn deserialize_class_instance(
     // `Optional<T>`, may be absent).
     let mut field_values: Vec<Value> = Vec::with_capacity(class_fields.len());
     for cf in &class_fields {
-        let saved_len = path.len();
-        use std::fmt::Write;
-        write!(path, ".{}", cf.name).ok();
         // Substitute class-level type-args into the field's template so a
         // `Container<User>::item` field decodes against `User` rather than
         // the erased `Ty::Void`.
         let field_ty = cf.field_template.substitute(type_args);
-        let field_json_owned;
-        let field_json: &serde_json::Value = if let Some(v) = map.get(cf.name.as_str()) {
-            v
-        } else if matches!(field_ty, Ty::Optional(_, _)) {
-            field_json_owned = serde_json::Value::Null;
-            &field_json_owned
-        } else {
-            return Err(raise_decode(
-                vm,
-                format!("missing required field `{}`", cf.name),
-                path,
-            ));
-        };
-        let v = ty_serde_to_value(vm, field_json, &field_ty, path)?;
-        path.truncate(saved_len);
+        let v = with_path_segment(path, format_args!(".{}", cf.name), |p| {
+            let field_json_owned;
+            let field_json: &serde_json::Value = if let Some(v) = map.get(cf.name.as_str()) {
+                v
+            } else if matches!(field_ty, Ty::Optional(_, _)) {
+                field_json_owned = serde_json::Value::Null;
+                &field_json_owned
+            } else {
+                return Err(raise_decode(
+                    vm,
+                    format!("missing required field `{}`", cf.name),
+                    p,
+                ));
+            };
+            ty_serde_to_value(vm, field_json, &field_ty, p)
+        })?;
         field_values.push(v);
     }
 
@@ -1066,15 +1058,15 @@ fn deserialize_media(
     Ok(vm.alloc_instance(class_ptr, vec![data_val]))
 }
 
-// ─── from_json dispatcher (Phase 5c) ──────────────────────────────────────────
+// ─── from_json dispatcher ────────────────────────────────────────────────────
 
 /// Top-level dispatch for `baml.json.from_json<T>(j)`.
 ///
 /// Produces a `NativeCallResult` so that user `from_json` overrides on user
 /// classes are dispatched via `YieldToCall`. For class fields nested inside
 /// `List<C>` / `Map<string, C>` / `Optional<C>` the walker uses continuation
-/// trampolines (mirroring `Map.to_json`'s 5b.4.2 trampoline) so each element /
-/// value goes through `<fqn>.from_json` to honor user overrides.
+/// trampolines so each element / value goes through `<fqn>.from_json` to
+/// honor user overrides.
 ///
 /// Generic class dispatch: when `T = Ty::Class(qtn, type_args, _)` with
 /// non-empty `type_args`, the dispatched `<fqn>.from_json` frame is seeded
@@ -1100,7 +1092,7 @@ pub fn json_from_json_dispatch(vm: &mut BexVm, j: Value, ty: &Ty) -> NativeCallR
 }
 
 /// Structural decode by converting `j` (a VM `json` value) to
-/// `serde_json::Value` and running Phase 5a's `ty_serde_to_value`. Used as the
+/// `serde_json::Value` and running `ty_serde_to_value`. Used as the
 /// fallback when no override path applies.
 fn structural_decode_value(vm: &mut BexVm, j: Value, ty: &Ty) -> NativeCallResult {
     let serde = value_to_serde(vm, j);

@@ -1500,6 +1500,35 @@ impl<'db> TypeInferenceBuilder<'db> {
                         })
                         .collect();
 
+                    // Guard the fold: every arm must agree on arity and on the
+                    // non-self param types. Otherwise the call site has no
+                    // single signature to typecheck against — drop to the
+                    // not-callable branch below to surface the ambiguity.
+                    let first_non_self: Vec<&Ty> =
+                        fn_components[0].0.iter().skip(1).map(|(_, t)| t).collect();
+                    let arms_compatible = fn_components.iter().all(|(p, _, _)| {
+                        p.len() == fn_components[0].0.len()
+                            && p.iter()
+                                .skip(1)
+                                .zip(&first_non_self)
+                                .all(|((_, t), expected)| t == *expected)
+                    });
+                    if !arms_compatible {
+                        self.context.report_simple(
+                            TirTypeError::NotCallable {
+                                ty: callee_ty.clone(),
+                            },
+                            expr_id,
+                        );
+                        self.infer_args_for_recovery(args, body);
+                        return CheckedCallInner {
+                            result: Ty::Unknown {
+                                attr: TyAttr::default(),
+                            },
+                            bindings_from_inference: false,
+                        };
+                    }
+
                     // Use first arm's params as representative.
                     let first_params = fn_components[0].0.clone();
 

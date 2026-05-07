@@ -232,7 +232,7 @@ function user.MaybeBox.get_or_default(self: user.MaybeBox, default: unknown) -> 
   }
 }
 function user.MaybeBox.to_json(self: user.MaybeBox) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value?.to_json() } : map<string, baml.json.json?>
+  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
 function user.MaybeBox.from_json(j: baml.json.json) -> user.MaybeBox<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   MaybeBox { value: baml.json.from_json<T?>(baml.json.field(j, "value")) } : user.MaybeBox<T>

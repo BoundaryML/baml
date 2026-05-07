@@ -3212,7 +3212,7 @@ impl LoweringContext<'_> {
             return;
         }
 
-        // ── Phase 5: Emit LoadType temps for explicit type arguments ─────────
+        // ── Emit LoadType temps for explicit type arguments ──────────────────
         // When the call carries explicit type args (e.g. `describe<User>()` or
         // `fwd<T>()` where T forwards to `described_type<T>()`), materialise
         // each as a `type` value on the stack before the regular value args.
@@ -3227,7 +3227,7 @@ impl LoweringContext<'_> {
             };
         let explicit_type_arg_operands = self.lower_explicit_type_args(&ast_type_args);
 
-        // ── Phase 8: Prepend receiver's class-level type args ────────────────
+        // ── Prepend receiver's class-level type args ─────────────────────────
         // For `b.describe()` where `b: Box<int>`, the method `describe` is compiled
         // as a direct call `describe(b)` (not via MakeBoundMethod). The VM's
         // BoundMethod path for seeding frame.type_args is bypassed, so we instead
@@ -3532,8 +3532,9 @@ impl LoweringContext<'_> {
     ///
     /// Returns `None` when the callee is not `type_of` **or** when the type
     /// argument contains a `TypeVar` (generic-parameter reference).  The latter
-    /// case is deferred to Phase 5 which will produce `TyTemplate::TypeArgRef`
-    /// leaves; attempting it here would emit a broken `LoadType` instruction.
+    /// case is deferred to template lowering, which produces
+    /// `TyTemplate::TypeArgRef` leaves; attempting it here would emit a broken
+    /// `LoadType` instruction.
     fn check_type_of_intrinsic(
         &self,
         callee: AstExprId,
@@ -3643,7 +3644,7 @@ impl LoweringContext<'_> {
             &mut diags,
         );
 
-        // ── 4. (Phase 5) Build TyTemplate — TypeVar → TypeArgRef(N) ────────────
+        // ── 4. Build TyTemplate — TypeVar → TypeArgRef(N) ─────────────────────
         let template = self.ty_to_template(&tir_ty, &generic_params);
         Some(template)
     }
@@ -3653,9 +3654,6 @@ impl LoweringContext<'_> {
     /// `Tir2Ty::TypeVar("T")` whose name appears at position `N` in
     /// `generic_params` maps to `TyTemplate::TypeArgRef(N)`.  All other types
     /// recurse structurally and bottom out at `TyTemplate::Concrete(...)`.
-    ///
-    /// This is the Phase 5 replacement for the direct `convert_tir2_ty` call
-    /// that Phase 4 used for fully-concrete types.
     fn ty_to_template(&self, ty: &Tir2Ty, generic_params: &[baml_base::Name]) -> TyTemplate {
         match ty {
             Tir2Ty::TypeVar(name, _) => {

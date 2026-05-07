@@ -289,6 +289,28 @@ fn type_expr_is_typevar_reference(
     )
 }
 
+/// Returns `true` if `ty` is a `TypeVar` reference, possibly wrapped in
+/// `Optional` or a nullable `Union`. Once null is short-circuited away by
+/// `?.` or narrowing, the live receiver still has `TypeVar` type — so a
+/// `.to_json()` call would hit the same MIR `Ty::Void` erasure described
+/// on `type_expr_is_typevar_reference`. Detect those cases up front and
+/// route them through `baml.json.to_json(self.<f>)` instead.
+fn type_expr_resolves_to_typevar(
+    ty: &TypeExpr,
+    generic_params: &std::collections::HashSet<&str>,
+) -> bool {
+    if type_expr_is_typevar_reference(ty, generic_params) {
+        return true;
+    }
+    match ty {
+        TypeExpr::Optional { inner, .. } => type_expr_resolves_to_typevar(inner, generic_params),
+        TypeExpr::Union { variants, .. } => variants.iter().any(|v| {
+            !matches!(v, TypeExpr::Null { .. }) && type_expr_resolves_to_typevar(v, generic_params)
+        }),
+        _ => false,
+    }
+}
+
 /// Build the fallback AST for `baml.json.parse(baml.json.to_string<Self>(self))`.
 ///
 /// Used when the class has fields with types that don't support `to_json()` —
@@ -367,8 +389,8 @@ fn build_to_json_wrapper_body(class: &ClassDef, span: TextRange) -> (ExprBody, A
 /// Each `self.<field>.to_json()` dispatches through ordinary BAML method
 /// lookup, so user overrides on field types (nested classes, arrays, maps)
 /// are honored automatically. Every built-in type has a `to_json` method
-/// provided by `baml_builtins2` (Phase 5b.1–5b.4), so this bottoms out for
-/// all reachable field types.
+/// provided by `baml_builtins2`, so this bottoms out for all reachable
+/// field types.
 ///
 /// If any field has a type that doesn't support `to_json()` (e.g., `$rust_type`,
 /// function types, `unknown`), falls back to the wrapper body.
@@ -411,20 +433,21 @@ fn build_to_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSource
             .map(|st| type_expr_is_nullable(&st.expr))
             .unwrap_or(false);
 
-        // Detect whether the field type is a bare reference to a class generic
-        // parameter (e.g., `T` in `class Box<T> { value T }`). MIR's
+        // Detect whether the field type is (or unwraps to) a class generic
+        // parameter — bare `T`, `T?`, or `T | null`. MIR's
         // `lower_member_access` cannot dispatch a method through a TypeVar
         // receiver (the receiver type is erased to `Ty::Void` before reaching
         // MIR, so `field_idx` is `None` and the lowering falls through to a
-        // dynamic-map load that panics on primitive/instance values).  Route
-        // these fields through `baml.json.to_json(self.<f>)` instead — the
+        // dynamic-map load that panics on primitive/instance values). The
+        // `T?` / `T | null` cases hit the same panic after `?.` short-circuits
+        // away null. Route these through `baml.json.to_json(self.<f>)` so the
         // free function dispatches on the runtime value's actual type via
         // `make_to_json_callee`, preserving user `to_json` overrides through
         // the generic boundary.
         let is_typevar = field
             .type_expr
             .as_ref()
-            .map(|st| type_expr_is_typevar_reference(&st.expr, &generic_params))
+            .map(|st| type_expr_resolves_to_typevar(&st.expr, &generic_params))
             .unwrap_or(false);
 
         //   1. `self`
