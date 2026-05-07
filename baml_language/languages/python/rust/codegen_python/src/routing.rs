@@ -58,6 +58,26 @@ pub(crate) fn route(name: &Name, symbol: &Symbol) -> LeafPath {
     route_inner(name, !matches!(symbol, Symbol::Function(_)))
 }
 
+/// Sanitize a path segment so it's a usable Python module identifier.
+/// Today only handles `assert` (the BAML stdlib package whose name
+/// collides with Python's `assert` keyword — `from . import assert` is
+/// a `SyntaxError`); the routed leaf becomes `vendor/assert_/…` and any
+/// cross-leaf type reference renders as `vendor.assert_.…`. The runtime
+/// BAML FQN passed to `_define_function` (e.g. `"assert.is_true"`) is
+/// built from `Name`, not from `LeafPath`, so it is *not* affected.
+///
+/// TODO(reserved-keywords): generalize to all Python keywords and any
+/// other invalid identifiers. User packages or namespaces named after
+/// keywords (`class`, `def`, `pass`, …) would hit the same issue, but
+/// none exist today; broaden this set when one shows up.
+fn sanitize_python_module_segment(seg: &str) -> String {
+    if seg == "assert" {
+        "assert_".to_string()
+    } else {
+        seg.to_string()
+    }
+}
+
 /// Route a `Name` referenced from a type position (`Ty::Class`,
 /// `Ty::Enum`, `Ty::TypeAlias`). Type references always point at
 /// class-like symbols, so the `$stream` suffix routes under
@@ -78,12 +98,12 @@ fn route_inner(name: &Name, honor_stream_suffix: bool) -> LeafPath {
         "baml" => segs.push("baml".to_string()),
         other => {
             segs.push("vendor".to_string());
-            segs.push(other.to_string());
+            segs.push(sanitize_python_module_segment(other));
         }
     }
 
     for seg in &name.namespace_path {
-        segs.push(seg.as_str().to_string());
+        segs.push(sanitize_python_module_segment(seg.as_str()));
     }
 
     LeafPath { segments: segs }
@@ -264,5 +284,28 @@ mod tests {
         let n = name("user", &["lorem"], "Foo");
         let lp = route(&n, &enum_sym(&n));
         assert_eq!(lp.segments, vec!["lorem".to_string()]);
+    }
+
+    #[test]
+    fn assert_package_segment_is_sanitized() {
+        // BAML stdlib `assert` package collides with Python's `assert`
+        // keyword (`from . import assert` is a SyntaxError). The routed
+        // leaf renames the segment to `assert_`; the BAML FQN is
+        // unaffected because it's built from `Name`, not `LeafPath`.
+        let n = name("assert", &[], "is_true");
+        let lp = route(&n, &func_sym());
+        assert_eq!(
+            lp.segments,
+            vec!["vendor".to_string(), "assert_".to_string()]
+        );
+    }
+
+    #[test]
+    fn assert_namespace_segment_is_sanitized() {
+        // Defense: a namespace path segment named `assert` (today
+        // unreachable in user BAML, but cheap to cover) is also renamed.
+        let n = name("user", &["assert"], "Foo");
+        let lp = route(&n, &class_sym(&n));
+        assert_eq!(lp.segments, vec!["assert_".to_string()]);
     }
 }
