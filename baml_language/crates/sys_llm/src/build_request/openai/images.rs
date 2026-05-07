@@ -22,9 +22,14 @@ pub(crate) fn build_request(
     headers.insert("ai-image-model-specification-version".to_string(), "4".to_string());
     headers.insert("ai-model-id".to_string(), client.model.clone());
 
+    let mut extra = client.extra_body.clone();
+    extra
+        .entry("n".to_string())
+        .or_insert_with(|| serde_json::json!(1));
+
     let body = ImagesRequestBody {
         prompt: prompt_to_text(prompt)?,
-        extra: client.extra_body.clone(),
+        extra,
     };
     let body_str = serde_json::to_string(&body)?;
 
@@ -185,5 +190,17 @@ mod tests {
             body["providerOptions"]["blackForestLabs"]["outputFormat"],
             "jpeg"
         );
+    }
+
+    #[test]
+    fn defaults_gateway_image_count_to_one() {
+        let client = client(serde_json::Map::new());
+        let prompt = std::sync::Arc::new(baml_builtins2::PromptAst::Simple(std::sync::Arc::new(
+            baml_builtins2::PromptAstSimple::String("Draw a brass desk lamp".to_string()),
+        )));
+
+        let request = build_request(&client, &prompt).unwrap();
+        let body: serde_json::Value = serde_json::from_str(&request.body).unwrap();
+        assert_eq!(body["n"], 1);
     }
 }
