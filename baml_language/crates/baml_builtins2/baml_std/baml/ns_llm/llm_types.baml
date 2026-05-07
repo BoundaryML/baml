@@ -309,7 +309,7 @@ class Client {
 
       ClientType.Fallback => {
         for (let sub in self.sub_clients) {
-          let result2: T = sub.execute_oneshot(
+          let result2: T = sub.execute_oneshot<T>(
             context,
             active_delay_ms,
           ) catch (e) {
@@ -326,7 +326,7 @@ class Client {
         }
         let idx = self.counter % self.sub_clients.length()
         self.counter += 1
-        let result3: T = self.sub_clients[idx].execute_oneshot(
+        let result3: T = self.sub_clients[idx].execute_oneshot<T>(
           context,
           active_delay_ms,
         );

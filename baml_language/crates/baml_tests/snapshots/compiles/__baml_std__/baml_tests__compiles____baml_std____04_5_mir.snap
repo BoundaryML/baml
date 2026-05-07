@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3933
 ---
 === MIR2 ===
 
@@ -237,6 +236,7 @@ fn baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, ar
     let _7: string
     let _8: void // result
     let _9: baml.llm.ExecutionContext
+    let _10: type
 
     bb0: {
         _5 = dispatch_future const fn baml.llm.get_jinja_template(copy _2) -> bb1;
@@ -250,7 +250,8 @@ fn baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, ar
         _7 = copy _4;
         _6 = baml.llm.ExecutionContext { copy _7, copy _3, copy _2 };
         _9 = copy _6;
-        _8 = call const fn baml.llm.Client.execute_oneshot(copy _1, copy _9, const 0_i64) -> [bb3];
+        _10 = load_type(#0);
+        _8 = call const fn baml.llm.Client.execute_oneshot<copy _10>(copy _1, copy _9, const 0_i64) -> [bb3];
     }
 
     bb3: {
@@ -992,19 +993,16 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     let _48: baml.llm.Client // sub
     let _49: void // result2
     let _50: unknown // e
-    let _51: baml.errors.DevOther
-    let _52: bool
-    let _53: int
-    let _54: (baml.llm.Client[]) -> int throws never
-    let _55: baml.errors.DevOther
-    let _56: int // idx
+    let _51: type
+    let _52: baml.errors.DevOther
+    let _53: bool
+    let _54: int
+    let _55: (baml.llm.Client[]) -> int throws never
+    let _56: baml.errors.DevOther
     let _57: int
     let _58: int
     let _59: (baml.llm.Client[]) -> int throws never
-    let _60: void // result3
-    let _61: baml.llm.Client
-    let _62: baml.llm.Client[]
-    let _63: int
+    let _60: null
 
     bb0: {
         _4 = copy _1.1;
@@ -1017,13 +1015,13 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 
     bb2: {
-        _54 = copy _1.2;
-        _53 = call const fn baml.Array.length(copy _54) -> [bb3];
+        _55 = copy _1.2;
+        _54 = call const fn baml.Array.length(copy _55) -> [bb3];
     }
 
     bb3: {
-        _52 = copy _53 == const 0_i64;
-        branch copy _52 -> [bb7, bb4];
+        _53 = copy _54 == const 0_i64;
+        branch copy _53 -> [bb7, bb4];
     }
 
     bb4: {
@@ -1033,22 +1031,17 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 
     bb5: {
-        _56 = copy _57 % copy _58;
         _1.4 = copy _1.4 + const 1_i64;
-        _62 = copy _1.2;
-        _63 = copy _56;
-        _61 = copy _62[_63];
-        _60 = call const fn baml.llm.Client.execute_oneshot(copy _61, copy _2, copy _3) -> [bb6];
+        _60 = call const fn baml.sys.panic(const "parse error") -> [bb6];
     }
 
     bb6: {
-        _0 = copy _60;
-        goto -> bb47;
+        unreachable;
     }
 
     bb7: {
-        _55 = baml.errors.DevOther { const "RoundRobin client has no sub-clients" };
-        throw copy _55;
+        _56 = baml.errors.DevOther { const "RoundRobin client has no sub-clients" };
+        throw copy _56;
     }
 
     bb8: {
@@ -1220,15 +1213,16 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 
     bb44: {
-        _51 = baml.errors.DevOther { const "All orchestration steps failed" };
-        throw copy _51;
+        _52 = baml.errors.DevOther { const "All orchestration steps failed" };
+        throw copy _52;
     }
 
     bb45: {
         _47 = copy _43[_44];
         fresh_cell(_48);
         _48 = copy _47;
-        _49 = call const fn baml.llm.Client.execute_oneshot(copy _48, copy _2, copy _3) -> [bb46, unwind: bb41];
+        _51 = load_type(#0);
+        _49 = call const fn baml.llm.Client.execute_oneshot<copy _51>(copy _48, copy _2, copy _3) -> [bb46, unwind: bb41];
     }
 
     bb46: {

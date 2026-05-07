@@ -75,7 +75,7 @@ function call_llm_function<T>(client: Client, function_name: string, args: map<s
     function_name: function_name,
   };
 
-  let result: T = client.execute_oneshot(context, 0);
+  let result: T = client.execute_oneshot<T>(context, 0);
   result
 }
 

@@ -618,7 +618,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
             }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3: T = self.sub_clients[idx].execute_oneshot<T>(context, active_delay_ms) : T
+          let result3: T = <missing>(context, active_delay_ms) : unknown -> T
           return result3 : T
         }
   }
