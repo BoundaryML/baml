@@ -224,12 +224,18 @@ impl BexEngine {
 
 impl BexEngine {
     /// Convert a `BexExternalValue` result from sys ops back to a VM Value.
+    ///
+    /// Returns `EngineError::TypeMismatch` for malformed external values
+    /// (unknown class/enum names, missing required fields, …) so that bad
+    /// external input — from `--json-args`, language bindings, or buggy
+    /// sys ops — surfaces as a graceful error instead of crashing the
+    /// process.
     pub(crate) fn convert_external_to_vm_value<T: RootHaver + TlabHolder>(
         &self,
         holder: &mut impl HeapPermit<T>,
         external: BexExternalValue,
-    ) -> Value {
-        match external {
+    ) -> Result<Value, EngineError> {
+        Ok(match external {
             BexExternalValue::Handle(handle) => Value::Object(
                 self.resolve_handle(holder.proof(), &handle)
                     .expect("Handle should be valid - object was returned to external code"),
@@ -242,17 +248,17 @@ impl BexEngine {
                 Value::Object(holder.holder_mut().tlab_mut().alloc_string(s))
             }
             BexExternalValue::Array { items, .. } => {
-                let values: Vec<Value> = items
+                let values = items
                     .into_iter()
                     .map(|v| self.convert_external_to_vm_value(holder, v))
-                    .collect();
+                    .collect::<Result<Vec<_>, _>>()?;
                 Value::Object(holder.holder_mut().tlab_mut().alloc_array(values))
             }
             BexExternalValue::Map { entries, .. } => {
-                let values: indexmap::IndexMap<String, Value> = entries
+                let values = entries
                     .into_iter()
-                    .map(|(k, v)| (k, self.convert_external_to_vm_value(holder, v)))
-                    .collect();
+                    .map(|(k, v)| self.convert_external_to_vm_value(holder, v).map(|v| (k, v)))
+                    .collect::<Result<indexmap::IndexMap<String, Value>, _>>()?;
                 Value::Object(holder.holder_mut().tlab_mut().alloc_map(values))
             }
             BexExternalValue::Uint8Array(bytes) => {
@@ -267,23 +273,34 @@ impl BexEngine {
                     .resolved_class_names
                     .get(&class_name)
                     .or_else(|| resolve_named_object(&self.resolved_class_names, &class_name))
-                    .unwrap_or_else(|| {
-                        panic!("Class '{class_name}' not found in resolved_class_names")
-                    });
+                    .ok_or_else(|| EngineError::TypeMismatch {
+                        message: format!("Unknown class `{class_name}` in external Instance value"),
+                    })?;
 
                 // SAFETY: class_ptr points to a compile-time Class object
                 let class_fields = match unsafe { class_ptr.get() } {
                     Object::Class(class) => &class.fields,
-                    _ => panic!("class_ptr must point to Class"),
+                    _ => {
+                        return Err(EngineError::TypeMismatch {
+                            message: format!(
+                                "Resolved name `{class_name}` does not point to a class"
+                            ),
+                        });
+                    }
                 };
 
                 // Build field values in the order defined by the class
                 let mut values = Vec::with_capacity(class_fields.len());
                 for class_field in class_fields {
-                    let ext = fields.get(&class_field.name).unwrap_or_else(|| {
-                        panic!("missing field '{}' in Instance", class_field.name)
-                    });
-                    values.push(self.convert_external_to_vm_value(holder, ext.clone()));
+                    let ext = fields.get(&class_field.name).ok_or_else(|| {
+                        EngineError::TypeMismatch {
+                            message: format!(
+                                "Missing field `{}` in external Instance for class `{class_name}`",
+                                class_field.name
+                            ),
+                        }
+                    })?;
+                    values.push(self.convert_external_to_vm_value(holder, ext.clone())?);
                 }
                 Value::Object(
                     holder
@@ -300,20 +317,22 @@ impl BexEngine {
                     .resolved_enum_names
                     .get(&enum_name)
                     .or_else(|| resolve_named_object(&self.resolved_enum_names, &enum_name))
-                    .unwrap_or_else(|| {
-                        panic!("Enum '{enum_name}' not found in resolved_enum_names")
-                    });
+                    .ok_or_else(|| EngineError::TypeMismatch {
+                        message: format!("Unknown enum `{enum_name}` in external Variant value"),
+                    })?;
                 #[allow(unsafe_code)]
                 let bex_vm_types::Object::Enum(enum_obj) = (unsafe { enum_ptr.get() }) else {
-                    panic!("Expected Object::Enum for '{enum_name}'");
+                    return Err(EngineError::TypeMismatch {
+                        message: format!("Resolved name `{enum_name}` does not point to an enum"),
+                    });
                 };
                 let index = enum_obj
                     .variants
                     .iter()
                     .position(|v| v.name == variant_name)
-                    .unwrap_or_else(|| {
-                        panic!("Variant '{variant_name}' not found in enum '{enum_name}'")
-                    });
+                    .ok_or_else(|| EngineError::TypeMismatch {
+                        message: format!("Unknown variant `{variant_name}` in enum `{enum_name}`"),
+                    })?;
                 Value::Object(
                     holder
                         .holder_mut()
@@ -322,7 +341,7 @@ impl BexEngine {
                 )
             }
             BexExternalValue::Union { value, .. } => {
-                self.convert_external_to_vm_value(holder, *value)
+                return self.convert_external_to_vm_value(holder, *value);
             }
             BexExternalValue::Adt(BexExternalAdt::Collector(c)) => {
                 Value::Object(holder.holder_mut().tlab_mut().alloc_collector(c))
@@ -331,21 +350,26 @@ impl BexEngine {
                 Value::Object(holder.holder_mut().tlab_mut().alloc_type(ty))
             }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
-                panic!("PromptAst values cannot be converted to VM values yet")
+                return Err(EngineError::CannotConvert {
+                    type_name: "PromptAst".to_string(),
+                });
             }
             BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
                 Value::Object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
             }
             BexExternalValue::FunctionRef { global_index } => {
-                assert!(
-                    (global_index < self.globals.len()),
-                    "FunctionRef global_index {} out of bounds (globals len {})",
-                    global_index,
-                    self.globals.len()
-                );
+                if global_index >= self.globals.len() {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "FunctionRef global_index {} out of bounds (globals len {})",
+                            global_index,
+                            self.globals.len()
+                        ),
+                    });
+                }
                 self.globals[global_index]
             }
-        }
+        })
     }
 }
 

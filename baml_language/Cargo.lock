@@ -1079,6 +1079,7 @@ dependencies = [
  "clap-cargo",
  "codegen_python",
  "ctrlc",
+ "indexmap 2.13.0",
  "insta",
  "regex",
  "serde_json",

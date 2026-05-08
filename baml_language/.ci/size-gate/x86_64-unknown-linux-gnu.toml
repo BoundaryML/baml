@@ -1,11 +1,11 @@
 version = 1
-recorded_at = "2026-03-06T15:49:28Z"
-git_sha = "2d37cdf9c"
+recorded_at = "2026-05-08T19:14:11Z"
+git_sha = "7d6fa7610"
 
 [artifacts.bridge_cffi]
-file_bytes = 15687976
-stripped_bytes = 15687968
-gzip_bytes = 5676327
+file_bytes = 16776008
+stripped_bytes = 16776000
+gzip_bytes = 6244494
 
 [artifacts.bridge_cffi-stripped]
 file_bytes = 15263904

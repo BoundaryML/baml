@@ -13,9 +13,13 @@ use baml_db::{
 };
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
-use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, Ty, UserFunctionInfo};
+use bex_engine::{
+    BexEngine, BexExternalValue, ClassDefinition, FunctionCallContextBuilder, Ty, TypeName,
+    UserFunctionInfo,
+};
 // For --log-file event sink.
 use clap::Args;
+use indexmap::IndexMap;
 use sys_native::{CallId, SysOpsExt};
 
 use crate::project_load::load_project_from;
@@ -330,6 +334,7 @@ impl RunArgs {
             &effective_target_args,
             &func_info.param_names,
             &func_info.param_types,
+            engine.class_definitions(),
         )?;
 
         self.vlog(format_args!(
@@ -864,6 +869,7 @@ impl RunArgs {
         target_args: &[String],
         param_names: &[String],
         param_types: &[Ty],
+        class_defs: &IndexMap<TypeName, ClassDefinition>,
     ) -> Result<Vec<BexExternalValue>> {
         let json_map = match &self.json_args {
             Some(source) => {
@@ -877,7 +883,7 @@ impl RunArgs {
                     // lists/maps marshal correctly. Unknown keys fall through to
                     // untyped conversion and are reported as "unknown argument".
                     let converted = match param_names.iter().position(|n| n == key) {
-                        Some(idx) => json_to_external_with_ty(value, &param_types[idx])
+                        Some(idx) => json_to_external_with_ty(value, &param_types[idx], class_defs)
                             .with_context(|| format!("--json-args: parameter `{key}`"))?,
                         None => json_to_external(value),
                     };
@@ -888,7 +894,7 @@ impl RunArgs {
             None => HashMap::new(),
         };
 
-        let cli_map = parse_auto_cli_args(target_args, param_names, param_types)?;
+        let cli_map = parse_auto_cli_args(target_args, param_names, param_types, class_defs)?;
 
         // CLI args override --json-args values.
         let mut merged = json_map;
@@ -1215,6 +1221,7 @@ fn parse_auto_cli_args(
     tokens: &[String],
     param_names: &[String],
     param_types: &[Ty],
+    class_defs: &IndexMap<TypeName, ClassDefinition>,
 ) -> Result<HashMap<String, BexExternalValue>> {
     if tokens.is_empty() || param_names.is_empty() {
         return Ok(HashMap::new());
@@ -1222,7 +1229,7 @@ fn parse_auto_cli_args(
 
     // Positional sugar: single non-flag token + exactly one param.
     if tokens.len() == 1 && !tokens[0].starts_with("--") && param_names.len() == 1 {
-        let value = parse_cli_value(&tokens[0], &param_types[0])
+        let value = parse_cli_value(&tokens[0], &param_types[0], class_defs)
             .with_context(|| format!("Invalid value for `{}`: {}", param_names[0], tokens[0]))?;
         let mut map = HashMap::new();
         map.insert(param_names[0].clone(), value);
@@ -1251,7 +1258,7 @@ fn parse_auto_cli_args(
         };
 
         let param_idx = find_param_index(key, param_names)?;
-        let value = parse_cli_value(val_str, &param_types[param_idx])
+        let value = parse_cli_value(val_str, &param_types[param_idx], class_defs)
             .with_context(|| format!("Invalid value for `--{key}`: {val_str}"))?;
         args.insert(key.to_string(), value);
         i += 1;
@@ -1294,7 +1301,11 @@ fn extract_flag_keys(tokens: &[String]) -> Vec<String> {
 }
 
 /// Convert a CLI string value to a `BexExternalValue` based on the target type.
-fn parse_cli_value(raw: &str, ty: &Ty) -> Result<BexExternalValue> {
+fn parse_cli_value(
+    raw: &str,
+    ty: &Ty,
+    class_defs: &IndexMap<TypeName, ClassDefinition>,
+) -> Result<BexExternalValue> {
     match ty {
         Ty::String { .. } => Ok(BexExternalValue::String(raw.to_string())),
 
@@ -1330,7 +1341,7 @@ fn parse_cli_value(raw: &str, ty: &Ty) -> Result<BexExternalValue> {
             if raw == "null" {
                 Ok(BexExternalValue::Null)
             } else {
-                parse_cli_value(raw, inner)
+                parse_cli_value(raw, inner, class_defs)
             }
         }
 
@@ -1343,7 +1354,7 @@ fn parse_cli_value(raw: &str, ty: &Ty) -> Result<BexExternalValue> {
         // go through `--json-args`.
         Ty::Class(..) | Ty::Map { .. } | Ty::List(..) | Ty::Union(..) => {
             match serde_json::from_str::<serde_json::Value>(raw) {
-                Ok(json) => json_to_external_with_ty(&json, ty),
+                Ok(json) => json_to_external_with_ty(&json, ty, class_defs),
                 Err(_) => anyhow::bail!(
                     "Parameter type `{ty}` requires JSON.\n\
                      Use `--json-args '{{...}}'` or pass a JSON string for this parameter."
@@ -1375,11 +1386,19 @@ fn load_json_source(source: &str) -> Result<serde_json::Value> {
 }
 
 /// Recursively convert a `serde_json::Value` to `BexExternalValue` with no
-/// type information. Used as a fallback when the target type is unknown
-/// (e.g., unknown `--json-args` keys, or nested class fields whose schema
-/// we don't have at this layer). Prefer [`json_to_external_with_ty`] whenever
-/// the target `Ty` is available.
+/// type information. Used as a fallback when the target type is unknown —
+/// e.g. unknown `--json-args` keys, or types this walker doesn't understand
+/// (`Ty::TypeAlias` like `json`, `Ty::Literal`, generic class fields with
+/// unsubstituted `TypeVar`s).
+///
+/// Objects produce `BexExternalValue::Map`, not `Instance`. The engine
+/// rejects `Instance` with no class name (any object that ends up here did
+/// *not* come from a typed `Ty::Class` branch), and a `Map` is the right
+/// runtime shape for the `json` type alias anyway.
 fn json_to_external(value: &serde_json::Value) -> BexExternalValue {
+    let placeholder_ty = || Ty::String {
+        attr: Default::default(),
+    };
     match value {
         serde_json::Value::Null => BexExternalValue::Null,
         serde_json::Value::Bool(b) => BexExternalValue::Bool(*b),
@@ -1392,14 +1411,13 @@ fn json_to_external(value: &serde_json::Value) -> BexExternalValue {
         }
         serde_json::Value::String(s) => BexExternalValue::String(s.clone()),
         serde_json::Value::Array(items) => BexExternalValue::Array {
-            element_type: Ty::String {
-                attr: Default::default(),
-            },
+            element_type: placeholder_ty(),
             items: items.iter().map(json_to_external).collect(),
         },
-        serde_json::Value::Object(map) => BexExternalValue::Instance {
-            class_name: String::new(),
-            fields: map
+        serde_json::Value::Object(map) => BexExternalValue::Map {
+            key_type: placeholder_ty(),
+            value_type: placeholder_ty(),
+            entries: map
                 .iter()
                 .map(|(k, v)| (k.clone(), json_to_external(v)))
                 .collect(),
@@ -1412,16 +1430,26 @@ fn json_to_external(value: &serde_json::Value) -> BexExternalValue {
 /// object JSON become `Instance { class_name }` with the correct name, and
 /// lists/maps carry the declared element/value types.
 ///
-/// Class field types are not resolved here (we don't have the class schema
-/// at this layer), so nested class fields fall back to [`json_to_external`].
-fn json_to_external_with_ty(value: &serde_json::Value, ty: &Ty) -> Result<BexExternalValue> {
+/// `class_defs` resolves nested class field types so that e.g. a
+/// `map<string,string>` field inside a class still gets `BexExternalValue::Map`
+/// rather than the untyped fallback. An empty map disables that resolution
+/// (used by tests that don't construct class schemas).
+///
+/// The shape rules here mirror `bex_vm::package_baml::json::ty_serde_to_value`,
+/// which is the canonical implementation used by `baml.json.from_string<T>`.
+/// Keep both in sync if the rules change.
+fn json_to_external_with_ty(
+    value: &serde_json::Value,
+    ty: &Ty,
+    class_defs: &IndexMap<TypeName, ClassDefinition>,
+) -> Result<BexExternalValue> {
     use serde_json::Value as J;
     match ty {
         Ty::Optional(inner, _) => {
             if matches!(value, J::Null) {
                 Ok(BexExternalValue::Null)
             } else {
-                json_to_external_with_ty(value, inner)
+                json_to_external_with_ty(value, inner, class_defs)
             }
         }
 
@@ -1475,13 +1503,51 @@ fn json_to_external_with_ty(value: &serde_json::Value, ty: &Ty) -> Result<BexExt
         },
 
         Ty::Class(type_name, _, _) => match value {
-            J::Object(map) => Ok(BexExternalValue::Instance {
-                class_name: type_name.display_name.to_string(),
-                fields: map
-                    .iter()
-                    .map(|(k, v)| (k.clone(), json_to_external(v)))
-                    .collect(),
-            }),
+            J::Object(map) => {
+                // If we know this class's schema, recurse into each field
+                // with its declared type and require that every non-optional
+                // field is present. The required-field check is what lets
+                // `coerce_json_union` discriminate between class variants by
+                // shape — without it, any JSON object matches any class.
+                let class_name = type_name.display_name.to_string();
+                let mut fields: indexmap::IndexMap<String, BexExternalValue> =
+                    indexmap::IndexMap::with_capacity(map.len());
+
+                if let Some(def) = class_defs.get(type_name) {
+                    for field_def in &def.fields {
+                        match map.get(&field_def.name) {
+                            Some(v) => {
+                                let converted =
+                                    json_to_external_with_ty(v, &field_def.field_type, class_defs)
+                                        .with_context(|| {
+                                            format!("field `{}.{}`", class_name, field_def.name)
+                                        })?;
+                                fields.insert(field_def.name.clone(), converted);
+                            }
+                            None => {
+                                if matches!(field_def.field_type, Ty::Optional(..)) {
+                                    fields.insert(field_def.name.clone(), BexExternalValue::Null);
+                                } else {
+                                    anyhow::bail!(
+                                        "Missing required field `{}.{}`",
+                                        class_name,
+                                        field_def.name
+                                    );
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Schema not available — preserve the untyped-field
+                    // behavior so tests and edge cases that don't register
+                    // class schemas still work.
+                    for (k, v) in map {
+                        fields.insert(k.clone(), json_to_external(v));
+                    }
+                }
+
+                Ok(BexExternalValue::Instance { class_name, fields })
+            }
             _ => anyhow::bail!(
                 "Expected object for class `{}`, got `{value}`",
                 type_name.display_name
@@ -1492,7 +1558,7 @@ fn json_to_external_with_ty(value: &serde_json::Value, ty: &Ty) -> Result<BexExt
             J::Array(items) => {
                 let mut converted = Vec::with_capacity(items.len());
                 for item in items {
-                    converted.push(json_to_external_with_ty(item, inner)?);
+                    converted.push(json_to_external_with_ty(item, inner, class_defs)?);
                 }
                 Ok(BexExternalValue::Array {
                     element_type: (**inner).clone(),
@@ -1510,7 +1576,10 @@ fn json_to_external_with_ty(value: &serde_json::Value, ty: &Ty) -> Result<BexExt
             J::Object(map) => {
                 let mut pairs = Vec::with_capacity(map.len());
                 for (k, v) in map {
-                    pairs.push((k.clone(), json_to_external_with_ty(v, value_ty)?));
+                    pairs.push((
+                        k.clone(),
+                        json_to_external_with_ty(v, value_ty, class_defs)?,
+                    ));
                 }
                 Ok(BexExternalValue::Map {
                     key_type: (**key).clone(),
@@ -1521,7 +1590,7 @@ fn json_to_external_with_ty(value: &serde_json::Value, ty: &Ty) -> Result<BexExt
             _ => anyhow::bail!("Expected object for map `{ty}`, got `{value}`"),
         },
 
-        Ty::Union(variants, _) => coerce_json_union(value, variants),
+        Ty::Union(variants, _) => coerce_json_union(value, variants, class_defs),
 
         // Types we don't specifically coerce: fall back to untyped conversion.
         _ => Ok(json_to_external(value)),
@@ -1530,10 +1599,14 @@ fn json_to_external_with_ty(value: &serde_json::Value, ty: &Ty) -> Result<BexExt
 
 /// Best-effort coercion into a union: try each variant and return the first
 /// that succeeds. On failure, surface the last variant's error.
-fn coerce_json_union(value: &serde_json::Value, variants: &[Ty]) -> Result<BexExternalValue> {
+fn coerce_json_union(
+    value: &serde_json::Value,
+    variants: &[Ty],
+    class_defs: &IndexMap<TypeName, ClassDefinition>,
+) -> Result<BexExternalValue> {
     let mut last_err: Option<anyhow::Error> = None;
     for variant in variants {
-        match json_to_external_with_ty(value, variant) {
+        match json_to_external_with_ty(value, variant, class_defs) {
             Ok(v) => return Ok(v),
             Err(e) => last_err = Some(e),
         }
@@ -1723,62 +1796,62 @@ mod tests {
 
     #[test]
     fn test_parse_cli_value_string() {
-        let val = parse_cli_value("hello", &ty_string()).unwrap();
+        let val = parse_cli_value("hello", &ty_string(), &IndexMap::new()).unwrap();
         assert!(matches!(val, BexExternalValue::String(s) if s == "hello"));
     }
 
     #[test]
     fn test_parse_cli_value_int() {
-        let val = parse_cli_value("42", &ty_int()).unwrap();
+        let val = parse_cli_value("42", &ty_int(), &IndexMap::new()).unwrap();
         assert!(matches!(val, BexExternalValue::Int(42)));
     }
 
     #[test]
     fn test_parse_cli_value_int_negative() {
-        let val = parse_cli_value("-7", &ty_int()).unwrap();
+        let val = parse_cli_value("-7", &ty_int(), &IndexMap::new()).unwrap();
         assert!(matches!(val, BexExternalValue::Int(-7)));
     }
 
     #[test]
     fn test_parse_cli_value_int_invalid() {
-        assert!(parse_cli_value("abc", &ty_int()).is_err());
+        assert!(parse_cli_value("abc", &ty_int(), &IndexMap::new()).is_err());
     }
 
     #[test]
     #[allow(clippy::approx_constant)]
     fn test_parse_cli_value_float() {
-        let val = parse_cli_value("3.14", &ty_float()).unwrap();
+        let val = parse_cli_value("3.14", &ty_float(), &IndexMap::new()).unwrap();
         assert!(matches!(val, BexExternalValue::Float(f) if (f - 3.14).abs() < 0.001));
     }
 
     #[test]
     fn test_parse_cli_value_bool_true() {
-        let val = parse_cli_value("true", &ty_bool()).unwrap();
+        let val = parse_cli_value("true", &ty_bool(), &IndexMap::new()).unwrap();
         assert!(matches!(val, BexExternalValue::Bool(true)));
     }
 
     #[test]
     fn test_parse_cli_value_bool_false() {
-        let val = parse_cli_value("false", &ty_bool()).unwrap();
+        let val = parse_cli_value("false", &ty_bool(), &IndexMap::new()).unwrap();
         assert!(matches!(val, BexExternalValue::Bool(false)));
     }
 
     #[test]
     fn test_parse_cli_value_bool_invalid() {
-        assert!(parse_cli_value("yes", &ty_bool()).is_err());
+        assert!(parse_cli_value("yes", &ty_bool(), &IndexMap::new()).is_err());
     }
 
     #[test]
     fn test_parse_cli_value_optional_null() {
         let ty = Ty::Optional(Box::new(ty_int()), Default::default());
-        let val = parse_cli_value("null", &ty).unwrap();
+        let val = parse_cli_value("null", &ty, &IndexMap::new()).unwrap();
         assert!(matches!(val, BexExternalValue::Null));
     }
 
     #[test]
     fn test_parse_cli_value_optional_value() {
         let ty = Ty::Optional(Box::new(ty_int()), Default::default());
-        let val = parse_cli_value("42", &ty).unwrap();
+        let val = parse_cli_value("42", &ty, &IndexMap::new()).unwrap();
         assert!(matches!(val, BexExternalValue::Int(42)));
     }
 
@@ -1790,7 +1863,7 @@ mod tests {
             display_name: "Color".into(),
         };
         let ty = Ty::Enum(tn, Default::default());
-        let val = parse_cli_value("Red", &ty).unwrap();
+        let val = parse_cli_value("Red", &ty, &IndexMap::new()).unwrap();
         match val {
             BexExternalValue::Variant {
                 enum_name,
@@ -1807,7 +1880,7 @@ mod tests {
 
     #[test]
     fn test_auto_cli_empty() {
-        let result = parse_auto_cli_args(&[], &[s("x")], &[ty_int()]).unwrap();
+        let result = parse_auto_cli_args(&[], &[s("x")], &[ty_int()], &IndexMap::new()).unwrap();
         assert!(result.is_empty());
     }
 
@@ -1816,7 +1889,7 @@ mod tests {
         let tokens = vec![s("--a"), s("10"), s("--b"), s("20")];
         let names = vec![s("a"), s("b")];
         let types = vec![ty_int(), ty_int()];
-        let result = parse_auto_cli_args(&tokens, &names, &types).unwrap();
+        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
         assert!(matches!(result.get("a"), Some(BexExternalValue::Int(10))));
         assert!(matches!(result.get("b"), Some(BexExternalValue::Int(20))));
     }
@@ -1826,7 +1899,7 @@ mod tests {
         let tokens = vec![s("--flag=true")];
         let names = vec![s("flag")];
         let types = vec![ty_bool()];
-        let result = parse_auto_cli_args(&tokens, &names, &types).unwrap();
+        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
         assert!(matches!(
             result.get("flag"),
             Some(BexExternalValue::Bool(true))
@@ -1838,7 +1911,7 @@ mod tests {
         let tokens = vec![s("hello")];
         let names = vec![s("name")];
         let types = vec![ty_string()];
-        let result = parse_auto_cli_args(&tokens, &names, &types).unwrap();
+        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
         assert!(matches!(result.get("name"), Some(BexExternalValue::String(s)) if s == "hello"));
     }
 
@@ -1849,7 +1922,7 @@ mod tests {
         let tokens = vec![s("hello")];
         let names = vec![s("a"), s("b")];
         let types = vec![ty_string(), ty_string()];
-        let result = parse_auto_cli_args(&tokens, &names, &types).unwrap();
+        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
         assert!(result.is_empty());
     }
 
@@ -1858,7 +1931,7 @@ mod tests {
         let tokens = vec![s("--unknown"), s("val")];
         let names = vec![s("a")];
         let types = vec![ty_int()];
-        let result = parse_auto_cli_args(&tokens, &names, &types);
+        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new());
         assert!(result.is_err());
     }
 
@@ -1867,7 +1940,7 @@ mod tests {
         let tokens = vec![s("--a")];
         let names = vec![s("a")];
         let types = vec![ty_int()];
-        let result = parse_auto_cli_args(&tokens, &names, &types);
+        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new());
         assert!(result.is_err());
     }
 
@@ -1914,14 +1987,21 @@ mod tests {
     }
 
     #[test]
-    fn test_json_to_external_object() {
+    fn test_json_to_external_object_is_map() {
+        // Untyped objects must become `Map`, not `Instance` with empty
+        // class_name — the engine rejects empty-named instances and a Map
+        // is the right shape for `json`-typed values.
         let val = json_to_external(&serde_json::json!({"a": 1, "b": "two"}));
         match val {
-            BexExternalValue::Instance { fields, .. } => {
-                assert_eq!(fields.len(), 2);
-                assert!(matches!(fields.get("a"), Some(BexExternalValue::Int(1))));
+            BexExternalValue::Map { entries, .. } => {
+                assert_eq!(entries.len(), 2);
+                assert!(matches!(entries.get("a"), Some(BexExternalValue::Int(1))));
+                assert!(matches!(
+                    entries.get("b"),
+                    Some(BexExternalValue::String(s)) if s == "two"
+                ));
             }
-            _ => panic!("Expected Instance"),
+            other => panic!("Expected Map, got {other:?}"),
         }
     }
 
@@ -1938,7 +2018,8 @@ mod tests {
     #[test]
     fn test_typed_enum_becomes_variant() {
         let ty = Ty::Enum(tn("Color"), Default::default());
-        let val = json_to_external_with_ty(&serde_json::json!("Red"), &ty).unwrap();
+        let val =
+            json_to_external_with_ty(&serde_json::json!("Red"), &ty, &IndexMap::new()).unwrap();
         match val {
             BexExternalValue::Variant {
                 enum_name,
@@ -1954,8 +2035,12 @@ mod tests {
     #[test]
     fn test_typed_class_instance_gets_name() {
         let ty = Ty::Class(tn("User"), Vec::new(), Default::default());
-        let val =
-            json_to_external_with_ty(&serde_json::json!({"id": 1, "name": "alice"}), &ty).unwrap();
+        let val = json_to_external_with_ty(
+            &serde_json::json!({"id": 1, "name": "alice"}),
+            &ty,
+            &IndexMap::new(),
+        )
+        .unwrap();
         match val {
             BexExternalValue::Instance { class_name, fields } => {
                 assert_eq!(class_name, "User");
@@ -1969,7 +2054,8 @@ mod tests {
     #[test]
     fn test_typed_list_carries_element_type() {
         let ty = Ty::List(Box::new(ty_int()), Default::default());
-        let val = json_to_external_with_ty(&serde_json::json!([1, 2, 3]), &ty).unwrap();
+        let val =
+            json_to_external_with_ty(&serde_json::json!([1, 2, 3]), &ty, &IndexMap::new()).unwrap();
         match val {
             BexExternalValue::Array {
                 element_type,
@@ -1989,7 +2075,9 @@ mod tests {
             Box::new(Ty::Enum(tn("Color"), Default::default())),
             Default::default(),
         );
-        let val = json_to_external_with_ty(&serde_json::json!(["Red", "Blue"]), &ty).unwrap();
+        let val =
+            json_to_external_with_ty(&serde_json::json!(["Red", "Blue"]), &ty, &IndexMap::new())
+                .unwrap();
         match val {
             BexExternalValue::Array { items, .. } => {
                 assert_eq!(items.len(), 2);
@@ -2015,7 +2103,9 @@ mod tests {
             value: Box::new(ty_int()),
             attr: Default::default(),
         };
-        let val = json_to_external_with_ty(&serde_json::json!({"a": 1, "b": 2}), &ty).unwrap();
+        let val =
+            json_to_external_with_ty(&serde_json::json!({"a": 1, "b": 2}), &ty, &IndexMap::new())
+                .unwrap();
         match val {
             BexExternalValue::Map {
                 value_type,
@@ -2033,21 +2123,175 @@ mod tests {
     #[test]
     fn test_typed_optional_null() {
         let ty = Ty::Optional(Box::new(ty_int()), Default::default());
-        let val = json_to_external_with_ty(&serde_json::json!(null), &ty).unwrap();
+        let val =
+            json_to_external_with_ty(&serde_json::json!(null), &ty, &IndexMap::new()).unwrap();
         assert!(matches!(val, BexExternalValue::Null));
     }
 
     #[test]
     fn test_typed_optional_present() {
         let ty = Ty::Optional(Box::new(ty_int()), Default::default());
-        let val = json_to_external_with_ty(&serde_json::json!(5), &ty).unwrap();
+        let val = json_to_external_with_ty(&serde_json::json!(5), &ty, &IndexMap::new()).unwrap();
         assert!(matches!(val, BexExternalValue::Int(5)));
     }
 
     #[test]
     fn test_typed_type_mismatch_is_error() {
         let ty = ty_int();
-        assert!(json_to_external_with_ty(&serde_json::json!("not-an-int"), &ty).is_err());
+        assert!(
+            json_to_external_with_ty(&serde_json::json!("not-an-int"), &ty, &IndexMap::new())
+                .is_err()
+        );
+    }
+
+    // ── typed JSON with class schema (regressions for compound-field bugs)
+
+    fn class_def(name: &str, fields: Vec<(&str, Ty)>) -> (TypeName, ClassDefinition) {
+        let tn = tn(name);
+        let def = ClassDefinition {
+            name: name.to_string(),
+            description: None,
+            alias: None,
+            fields: fields
+                .into_iter()
+                .map(|(n, ty)| bex_engine::ClassFieldDefinition {
+                    name: n.to_string(),
+                    field_type: ty,
+                    description: None,
+                    alias: None,
+                    skip: false,
+                })
+                .collect(),
+        };
+        (tn, def)
+    }
+
+    /// Repro: class with a `map<string, string>` field. Prior to the fix this
+    /// produced `Instance { class_name: "" }` for the map field via the
+    /// untyped fallback, which then panicked in the engine.
+    #[test]
+    fn test_typed_class_with_map_field_is_typed_map() {
+        let mut defs: IndexMap<TypeName, ClassDefinition> = IndexMap::new();
+        let (areq_name, areq_def) = class_def(
+            "AReq",
+            vec![(
+                "params",
+                Ty::Map {
+                    key: Box::new(ty_string()),
+                    value: Box::new(ty_string()),
+                    attr: Default::default(),
+                },
+            )],
+        );
+        defs.insert(areq_name.clone(), areq_def);
+
+        let ty = Ty::Class(areq_name, Vec::new(), Default::default());
+        let val = json_to_external_with_ty(&serde_json::json!({"params": {"k": "v"}}), &ty, &defs)
+            .unwrap();
+        match val {
+            BexExternalValue::Instance { class_name, fields } => {
+                assert_eq!(class_name, "AReq");
+                match fields.get("params") {
+                    Some(BexExternalValue::Map { entries, .. }) => {
+                        assert!(matches!(
+                            entries.get("k"),
+                            Some(BexExternalValue::String(s)) if s == "v"
+                        ));
+                    }
+                    other => panic!("Expected Map for `params`, got {other:?}"),
+                }
+            }
+            other => panic!("Expected Instance, got {other:?}"),
+        }
+    }
+
+    /// Repro: union of classes — second variant must win when its required
+    /// fields are present and the first variant's are not.
+    #[test]
+    fn test_typed_union_of_classes_discriminates_by_fields() {
+        let mut defs: IndexMap<TypeName, ClassDefinition> = IndexMap::new();
+        let (success_name, success_def) = class_def("Success", vec![("value", ty_string())]);
+        let (failure_name, failure_def) = class_def("Failure", vec![("reason", ty_string())]);
+        defs.insert(success_name.clone(), success_def);
+        defs.insert(failure_name.clone(), failure_def);
+
+        let union = Ty::Union(
+            vec![
+                Ty::Class(success_name, Vec::new(), Default::default()),
+                Ty::Class(failure_name, Vec::new(), Default::default()),
+            ],
+            Default::default(),
+        );
+
+        // Success branch.
+        let v =
+            json_to_external_with_ty(&serde_json::json!({"value": "hi"}), &union, &defs).unwrap();
+        match v {
+            BexExternalValue::Instance { class_name, .. } => assert_eq!(class_name, "Success"),
+            other => panic!("Expected Success Instance, got {other:?}"),
+        }
+
+        // Failure branch — would previously be misclassified as Success
+        // because `Ty::Class` accepted any object. With required-field
+        // validation, Success rejects `{"reason": ...}` and Failure wins.
+        let v =
+            json_to_external_with_ty(&serde_json::json!({"reason": "bad"}), &union, &defs).unwrap();
+        match v {
+            BexExternalValue::Instance { class_name, fields } => {
+                assert_eq!(class_name, "Failure");
+                assert!(matches!(
+                    fields.get("reason"),
+                    Some(BexExternalValue::String(s)) if s == "bad"
+                ));
+            }
+            other => panic!("Expected Failure Instance, got {other:?}"),
+        }
+    }
+
+    /// A class with an optional field accepts JSON that omits it.
+    #[test]
+    fn test_typed_class_optional_field_can_be_omitted() {
+        let mut defs: IndexMap<TypeName, ClassDefinition> = IndexMap::new();
+        let (name, def) = class_def(
+            "User",
+            vec![
+                ("id", ty_int()),
+                (
+                    "nickname",
+                    Ty::Optional(Box::new(ty_string()), Default::default()),
+                ),
+            ],
+        );
+        defs.insert(name.clone(), def);
+
+        let ty = Ty::Class(name, Vec::new(), Default::default());
+        let val = json_to_external_with_ty(&serde_json::json!({"id": 1}), &ty, &defs).unwrap();
+        match val {
+            BexExternalValue::Instance { fields, .. } => {
+                assert!(matches!(fields.get("id"), Some(BexExternalValue::Int(1))));
+                assert!(matches!(
+                    fields.get("nickname"),
+                    Some(BexExternalValue::Null)
+                ));
+            }
+            other => panic!("Expected Instance, got {other:?}"),
+        }
+    }
+
+    /// Missing required field is a clear error, not a panic.
+    #[test]
+    fn test_typed_class_missing_required_field_errors() {
+        let mut defs: IndexMap<TypeName, ClassDefinition> = IndexMap::new();
+        let (name, def) = class_def("User", vec![("id", ty_int()), ("name", ty_string())]);
+        defs.insert(name.clone(), def);
+
+        let ty = Ty::Class(name, Vec::new(), Default::default());
+        let err = json_to_external_with_ty(&serde_json::json!({"id": 1}), &ty, &defs).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("name"),
+            "error should name the missing field: {msg}"
+        );
     }
 
     // ── external_to_json ───────────────────────────────────────────
@@ -2328,7 +2572,12 @@ mod tests {
         let mut args = run_args();
         args.json_args = Some(s(r#"{"text": "hello", "max_words": 30}"#));
         let ordered = args
-            .build_args_from(&[], &[s("text"), s("max_words")], &[ty_string(), ty_int()])
+            .build_args_from(
+                &[],
+                &[s("text"), s("max_words")],
+                &[ty_string(), ty_int()],
+                &IndexMap::new(),
+            )
             .unwrap();
         assert!(matches!(&ordered[0], BexExternalValue::String(s) if s == "hello"));
         assert!(matches!(&ordered[1], BexExternalValue::Int(30)));
@@ -2343,6 +2592,7 @@ mod tests {
                 &[s("--text"), s("hi"), s("--max_words"), s("5")],
                 &[s("text"), s("max_words")],
                 &[ty_string(), ty_int()],
+                &IndexMap::new(),
             )
             .unwrap();
         assert!(matches!(&ordered[0], BexExternalValue::String(s) if s == "hi"));
@@ -2359,6 +2609,7 @@ mod tests {
                 &[s("--max_words"), s("99")],
                 &[s("text"), s("max_words")],
                 &[ty_string(), ty_int()],
+                &IndexMap::new(),
             )
             .unwrap();
         // text from JSON; max_words overridden by CLI.
@@ -2372,7 +2623,7 @@ mod tests {
     fn test_bep_build_args_missing_required_is_error() {
         let args = run_args();
         let err = args
-            .build_args_from(&[], &[s("text")], &[ty_string()])
+            .build_args_from(&[], &[s("text")], &[ty_string()], &IndexMap::new())
             .unwrap_err();
         let msg = format!("{err}");
         assert!(
@@ -2387,7 +2638,7 @@ mod tests {
     fn test_bep_build_args_unknown_is_non_fatal() {
         let mut args = run_args();
         args.json_args = Some(s(r#"{"text": "hi", "unknown_key": 1}"#));
-        let result = args.build_args_from(&[], &[s("text")], &[ty_string()]);
+        let result = args.build_args_from(&[], &[s("text")], &[ty_string()], &IndexMap::new());
         assert!(
             result.is_ok(),
             "unknown JSON keys should warn, not fail: {result:?}"
@@ -2405,6 +2656,7 @@ mod tests {
                 &[],
                 &[s("style")],
                 &[Ty::Enum(tn("SummaryStyle"), Default::default())],
+                &IndexMap::new(),
             )
             .unwrap();
         match &ordered[0] {
@@ -2428,6 +2680,7 @@ mod tests {
                 &[s("--style"), s("Concise")],
                 &[s("style")],
                 &[Ty::Enum(tn("SummaryStyle"), Default::default())],
+                &IndexMap::new(),
             )
             .unwrap();
         match &ordered[0] {
@@ -2449,7 +2702,12 @@ mod tests {
         let mut args = run_args();
         args.json_args = Some(format!("@{}", path.display()));
         let ordered = args
-            .build_args_from(&[], &[s("text"), s("max_words")], &[ty_string(), ty_int()])
+            .build_args_from(
+                &[],
+                &[s("text"), s("max_words")],
+                &[ty_string(), ty_int()],
+                &IndexMap::new(),
+            )
             .unwrap();
         assert!(matches!(&ordered[0], BexExternalValue::String(s) if s == "filed"));
         assert!(matches!(&ordered[1], BexExternalValue::Int(7)));
@@ -2464,7 +2722,7 @@ mod tests {
         let mut args = run_args();
         args.json_args = Some(s(r#"[1, 2, 3]"#));
         let err = args
-            .build_args_from(&[], &[s("text")], &[ty_string()])
+            .build_args_from(&[], &[s("text")], &[ty_string()], &IndexMap::new())
             .unwrap_err();
         assert!(format!("{err}").contains("JSON object"));
     }
@@ -2477,11 +2735,14 @@ mod tests {
     fn test_bep_auto_cli_verbatim_names_no_kebab() {
         let tokens = vec![s("--start_date"), s("2024-01-01")];
         let names = vec![s("start_date")];
-        let result = parse_auto_cli_args(&tokens, &names, &[ty_string()]).unwrap();
+        let result =
+            parse_auto_cli_args(&tokens, &names, &[ty_string()], &IndexMap::new()).unwrap();
         assert!(result.contains_key("start_date"));
         // The kebab-form must NOT be accepted.
         let tokens_kebab = vec![s("--start-date"), s("2024-01-01")];
-        assert!(parse_auto_cli_args(&tokens_kebab, &names, &[ty_string()]).is_err());
+        assert!(
+            parse_auto_cli_args(&tokens_kebab, &names, &[ty_string()], &IndexMap::new()).is_err()
+        );
     }
 
     /// BEP-027: "Booleans use --flag=true / --flag=false, not --flag /
@@ -2492,14 +2753,14 @@ mod tests {
         let types = vec![ty_bool()];
 
         let tokens_true = vec![s("--verbose=true")];
-        let r = parse_auto_cli_args(&tokens_true, &names, &types).unwrap();
+        let r = parse_auto_cli_args(&tokens_true, &names, &types, &IndexMap::new()).unwrap();
         assert!(matches!(
             r.get("verbose"),
             Some(BexExternalValue::Bool(true))
         ));
 
         let tokens_false = vec![s("--verbose=false")];
-        let r = parse_auto_cli_args(&tokens_false, &names, &types).unwrap();
+        let r = parse_auto_cli_args(&tokens_false, &names, &types, &IndexMap::new()).unwrap();
         assert!(matches!(
             r.get("verbose"),
             Some(BexExternalValue::Bool(false))
@@ -2519,7 +2780,7 @@ mod tests {
         ];
         let names = vec![s("start_date"), s("end_date"), s("dry_run")];
         let types = vec![ty_string(), ty_string(), ty_bool()];
-        let r = parse_auto_cli_args(&tokens, &names, &types).unwrap();
+        let r = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
         assert!(
             matches!(r.get("start_date"), Some(BexExternalValue::String(s)) if s == "2024-01-01")
         );
@@ -2539,7 +2800,7 @@ mod tests {
         let tokens = vec![s("the text to summarize")];
         let names = vec![s("text")];
         let types = vec![ty_string()];
-        let r = parse_auto_cli_args(&tokens, &names, &types).unwrap();
+        let r = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
         assert!(
             matches!(r.get("text"), Some(BexExternalValue::String(s)) if s == "the text to summarize")
         );
@@ -2552,7 +2813,7 @@ mod tests {
         let tokens = vec![s("--text"), s("hi"), s("extra"), s("data")];
         let names = vec![s("text")];
         let types = vec![ty_string()];
-        let r = parse_auto_cli_args(&tokens, &names, &types).unwrap();
+        let r = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
         assert!(matches!(r.get("text"), Some(BexExternalValue::String(s)) if s == "hi"));
         assert_eq!(r.len(), 1, "bare tokens should not produce entries");
     }
@@ -2571,7 +2832,7 @@ mod tests {
         ];
         let names = vec![s("a"), s("b")];
         let types = vec![ty_int(), ty_int()];
-        let r = parse_auto_cli_args(&tokens, &names, &types).unwrap();
+        let r = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
         assert!(matches!(r.get("a"), Some(BexExternalValue::Int(1))));
         assert!(matches!(r.get("b"), Some(BexExternalValue::Int(2))));
         assert_eq!(r.len(), 2);
@@ -2628,16 +2889,16 @@ mod tests {
             attr: Default::default(),
         };
         assert!(matches!(
-            parse_cli_value("null", &ty).unwrap(),
+            parse_cli_value("null", &ty, &IndexMap::new()).unwrap(),
             BexExternalValue::Null
         ));
-        assert!(parse_cli_value("nope", &ty).is_err());
+        assert!(parse_cli_value("nope", &ty, &IndexMap::new()).is_err());
     }
 
     #[test]
     fn test_parse_cli_value_list_via_json() {
         let ty = Ty::List(Box::new(ty_int()), Default::default());
-        let val = parse_cli_value("[1,2,3]", &ty).unwrap();
+        let val = parse_cli_value("[1,2,3]", &ty, &IndexMap::new()).unwrap();
         match val {
             BexExternalValue::Array {
                 element_type,
@@ -2657,7 +2918,7 @@ mod tests {
             value: Box::new(ty_int()),
             attr: Default::default(),
         };
-        let val = parse_cli_value(r#"{"a":1,"b":2}"#, &ty).unwrap();
+        let val = parse_cli_value(r#"{"a":1,"b":2}"#, &ty, &IndexMap::new()).unwrap();
         match val {
             BexExternalValue::Map {
                 value_type,
@@ -2674,7 +2935,7 @@ mod tests {
     #[test]
     fn test_parse_cli_value_class_via_json_has_class_name() {
         let ty = Ty::Class(tn("User"), Vec::new(), Default::default());
-        let val = parse_cli_value(r#"{"id":1}"#, &ty).unwrap();
+        let val = parse_cli_value(r#"{"id":1}"#, &ty, &IndexMap::new()).unwrap();
         match val {
             BexExternalValue::Instance { class_name, .. } => {
                 assert_eq!(class_name, "User");
@@ -2686,7 +2947,7 @@ mod tests {
     #[test]
     fn test_parse_cli_value_list_invalid_json_errors() {
         let ty = Ty::List(Box::new(ty_int()), Default::default());
-        assert!(parse_cli_value("not-json", &ty).is_err());
+        assert!(parse_cli_value("not-json", &ty, &IndexMap::new()).is_err());
     }
 
     // ── format_value — user-facing debug rendering ─────────────────
