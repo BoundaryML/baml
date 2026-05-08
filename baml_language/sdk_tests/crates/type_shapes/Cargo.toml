@@ -1,4 +1,4 @@
-# Rig crate covering BEP-030 Ty exhaustiveness: every type variant and
+# Sdk-test crate covering BEP-030 Ty exhaustiveness: every type variant and
 # every name-routing case from `bridge-python/18a-type-exhaustiveness.md`.
 # The generated `baml_sdk/` is checked into version control so reviewers
 # can diff codegen output directly without running the build.
@@ -14,6 +14,9 @@ baml_codegen_types = { path = "../../../crates/baml_codegen_types" }
 baml_db = { path = "../../../crates/baml_db" }
 baml_project = { path = "../../../crates/baml_project" }
 baml_workspace = { path = "../../../crates/baml_workspace" }
+
+[dev-dependencies]
+sdk_test_build = { path = "../../build" }
 
 [package.metadata.ci]
 wasm_support = false

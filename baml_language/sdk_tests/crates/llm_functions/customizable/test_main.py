@@ -8,7 +8,7 @@ Scope (subset of 09a-codegen-example-scenario.md):
 - user.lorem.Resume + ExtractResume (with auto-generated companions)
 - user.lorem.StreamingDoc + StreamingExtract (pins the always-different
   `$stream` companion branch; folded in from the former
-  `python_llm_functions` rig crate)
+  `python_llm_functions` crate)
 - user.ipsum.Sentiment (enum) + ClassifySentiment
 - stream_types/lorem leaf presence
 """
@@ -128,15 +128,21 @@ def test_classify_sentiment_factory_bindings():
 def test_inlinedbaml_files_present():
     # baml/_inlinedbaml.py captures the user .baml source; the runtime
     # uses it to bootstrap without re-reading from disk.
+    from pathlib import Path
     from baml_sdk.baml import _inlinedbaml
 
     assert "FILES" in dir(_inlinedbaml)
-    paths = set(_inlinedbaml.FILES.keys())
-    # Paths are relative to baml_src/.
-    assert "ns_lorem/types.baml" in paths
-    assert "ns_lorem/functions.baml" in paths
-    assert "ns_ipsum/types.baml" in paths
-    assert "ns_ipsum/functions.baml" in paths
+    # Paths are relative to baml_src/. Compare via pathlib.Path so the
+    # native separator on Windows (`ns_lorem\\types.baml`) matches the
+    # forward-slash form we write here.
+    actual_paths = {Path(p) for p in _inlinedbaml.FILES.keys()}
+    expected_paths = {
+        Path("ns_lorem/types.baml"),
+        Path("ns_lorem/functions.baml"),
+        Path("ns_ipsum/types.baml"),
+        Path("ns_ipsum/functions.baml"),
+    }
+    assert actual_paths == expected_paths
 
 
 def test_runtime_init_called_at_import():

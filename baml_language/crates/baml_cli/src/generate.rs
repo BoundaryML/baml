@@ -7,11 +7,17 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{
-    baml_compiler_diagnostics::{Severity, render},
-    baml_compiler2_hir::{self, file_package, item_tree::GeneratorConfigItem},
+    Span,
+    baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, render},
+    baml_compiler2_hir::{
+        self, file_package,
+        ids::{GeneratorMarker, LocalItemId},
+        item_tree::{Generator, GeneratorConfigItem, ItemTreeSourceMap},
+    },
 };
 use baml_project::ProjectDatabase;
 use clap::Args;
+use codegen_python::{NamingConvention, OutputType};
 
 use crate::project_load::load_project_from;
 
@@ -29,9 +35,12 @@ pub struct GenerateArgs {
 /// A parsed generator definition from a BAML source file.
 struct GeneratorDef {
     name: String,
-    output_type: String,
+    output_type: OutputType,
     /// Resolved output directory (absolute).
     output_dir: PathBuf,
+    /// Required `naming_convention` from the generator block. No default
+    /// is permitted — generators must spell out the policy explicitly.
+    naming_convention: NamingConvention,
 }
 
 impl GenerateArgs {
@@ -71,8 +80,28 @@ impl GenerateArgs {
             return Ok(crate::ExitCode::Other);
         }
 
-        // Discover generator definitions from the BAML source.
-        let generators = discover_generators(&db, &from);
+        // Discover generator definitions and validate per-target rules
+        // (e.g. python requires `naming_convention`). Validation runs here
+        // — not during HIR lowering — so non-codegen tooling (LSP, formatter)
+        // doesn't have to care about codegen-specific generator rules.
+        let (generators, gen_diags) = discover_generators(&db, &from);
+        if !gen_diags.is_empty() {
+            let mut sources = HashMap::new();
+            let mut file_paths = HashMap::new();
+            for sf in &source_files {
+                let file_id = sf.file_id(&db);
+                sources.insert(file_id, sf.text(&db).to_string());
+                file_paths.insert(file_id, sf.path(&db));
+            }
+            let rendered = render::render_diagnostics(
+                &gen_diags,
+                &sources,
+                &file_paths,
+                &render::RenderConfig::cli(),
+            );
+            eprintln!("{rendered}");
+            return Ok(crate::ExitCode::Other);
+        }
 
         if generators.is_empty() {
             eprintln!("No generator blocks found in BAML sources.");
@@ -100,16 +129,13 @@ impl GenerateArgs {
                 .clone()
                 .unwrap_or_else(|| generator.output_dir.clone());
 
-            let generated = match generator.output_type.as_str() {
-                "python/pydantic" | "python/pydantic/v1" => {
-                    codegen_python::to_source_code(&pool, &user_baml_files)
-                }
-                other => {
-                    eprintln!(
-                        "Skipping generator '{}': unsupported output_type '{other}'",
-                        generator.name
-                    );
-                    continue;
+            let generated = match generator.output_type {
+                OutputType::PythonPydantic | OutputType::PythonPydanticV1 => {
+                    codegen_python::to_source_code(
+                        &pool,
+                        &user_baml_files,
+                        generator.naming_convention,
+                    )
                 }
             };
 
@@ -149,9 +175,16 @@ impl GenerateArgs {
     }
 }
 
-/// Walk the HIR item trees to discover all `generator` blocks and their config.
-fn discover_generators(db: &ProjectDatabase, baml_src: &std::path::Path) -> Vec<GeneratorDef> {
+/// Walk the HIR item trees to discover all `generator` blocks and their
+/// config, and run per-target validation (e.g. Python requires
+/// `naming_convention`). Returns the validated `GeneratorDef`s plus any
+/// diagnostics collected during validation.
+fn discover_generators(
+    db: &ProjectDatabase,
+    baml_src: &std::path::Path,
+) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
     let mut generators = Vec::new();
+    let mut diags = Vec::new();
 
     for source_file in db.get_source_files() {
         let pkg_info = file_package::file_package(db, source_file);
@@ -160,35 +193,134 @@ fn discover_generators(db: &ProjectDatabase, baml_src: &std::path::Path) -> Vec<
         }
 
         let item_tree = baml_compiler2_hir::file_item_tree(db, source_file);
+        let source_map = baml_compiler2_hir::file_item_tree_source_map(db, source_file);
+        let file_id = source_file.file_id(db);
 
-        for generator_item in item_tree.generators.values() {
-            let config = &generator_item.config_items;
-            let output_type = get_config(config, "output_type").unwrap_or_default();
-            if output_type.is_empty() {
-                eprintln!(
-                    "Warning: generator '{}' missing 'output_type', skipping",
-                    generator_item.name
-                );
-                continue;
-            }
+        for (id, generator_item) in &item_tree.generators {
+            // Run both validators unconditionally so that a block missing
+            // multiple required properties surfaces all of its issues at once.
+            let output_type = parse_required_property::<OutputType>(
+                *id,
+                generator_item,
+                "output_type",
+                r#"one of: "python/pydantic", "python/pydantic/v1""#,
+                &source_map,
+                file_id,
+                &mut diags,
+            );
+            let naming_convention = parse_required_property::<NamingConvention>(
+                *id,
+                generator_item,
+                "naming_convention",
+                r#""preserve-case" or "language""#,
+                &source_map,
+                file_id,
+                &mut diags,
+            );
 
             // output_dir is relative to baml_src, defaults to "../"
-            let raw_output_dir =
-                get_config(config, "output_dir").unwrap_or_else(|| "..".to_string());
+            let raw_output_dir = get_config(&generator_item.config_items, "output_dir")
+                .unwrap_or_else(|| "..".to_string());
             // Strip surrounding quotes if present (config values may be quoted strings)
             let raw_output_dir = raw_output_dir.trim_matches('"').trim_matches('\'');
 
             let output_dir = baml_src.join(raw_output_dir).join("baml_sdk");
 
+            // Skip codegen for generators that failed validation; their
+            // diagnostics will block the run upstream.
+            let (Some(output_type), Some(naming_convention)) = (output_type, naming_convention)
+            else {
+                continue;
+            };
+
             generators.push(GeneratorDef {
                 name: generator_item.name.to_string(),
                 output_type,
                 output_dir,
+                naming_convention,
             });
         }
     }
 
-    generators
+    (generators, diags)
+}
+
+/// Look up `property` on a generator block and parse it as `T` via strum.
+/// Pushes a `MissingGeneratorProperty` diagnostic if absent and an
+/// `InvalidGeneratorPropertyValue` diagnostic if present-but-unparseable;
+/// returns `None` in either case so the caller can keep going (and surface
+/// any other issues on the same block in one pass).
+fn parse_required_property<T: std::str::FromStr>(
+    id: LocalItemId<GeneratorMarker>,
+    generator: &Generator,
+    property: &str,
+    expected: &str,
+    source_map: &ItemTreeSourceMap,
+    file_id: baml_db::FileId,
+    diags: &mut Vec<Diagnostic>,
+) -> Option<T> {
+    let block_range = source_map
+        .generator_block_spans
+        .get(&id)
+        .copied()
+        .unwrap_or_default();
+
+    let Some(item_idx) = generator
+        .config_items
+        .iter()
+        .position(|c| c.key.as_str() == property)
+    else {
+        diags.push(
+            Diagnostic::error(
+                DiagnosticId::MissingGeneratorProperty,
+                format!(
+                    "generator `{}` is missing required property `{property}` \
+                     (expected {expected})",
+                    generator.name
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: block_range,
+                },
+                "missing required property",
+            )
+            .with_phase(DiagnosticPhase::Validation),
+        );
+        return None;
+    };
+
+    let value = &generator.config_items[item_idx].value;
+    match value.parse::<T>() {
+        Ok(parsed) => Some(parsed),
+        Err(_) => {
+            let item_range = source_map
+                .generator_config_item_spans
+                .get(&id)
+                .and_then(|spans| spans.get(item_idx).copied())
+                .unwrap_or(block_range);
+            diags.push(
+                Diagnostic::error(
+                    DiagnosticId::InvalidGeneratorPropertyValue,
+                    format!(
+                        "invalid value `{value}` for `{property}` on generator \
+                         `{}` (expected {expected})",
+                        generator.name
+                    ),
+                )
+                .with_primary(
+                    Span {
+                        file_id,
+                        range: item_range,
+                    },
+                    "invalid value",
+                )
+                .with_phase(DiagnosticPhase::Validation),
+            );
+            None
+        }
+    }
 }
 
 /// Look up a config key in a generator's config items.

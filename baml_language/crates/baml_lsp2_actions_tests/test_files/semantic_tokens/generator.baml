@@ -2,6 +2,7 @@ generator lang_python {
   output_type "python/pydantic"
   output_dir "../python"
   version "0.68.0"
+  naming_convention "preserve-case"
 }
 
 //----
@@ -30,3 +31,7 @@ generator lang_python {
 // generator.baml:4:16 (string) len=1 "."
 // generator.baml:4:17 (string) len=1 "0"
 // generator.baml:4:18 (string) len=1 "\""
+// generator.baml:5:3 (property) len=17 "naming_convention"
+// generator.baml:5:21 (string) len=1 "\""
+// generator.baml:5:22 (string) len=13 "preserve-case"
+// generator.baml:5:35 (string) len=1 "\""

@@ -15,6 +15,7 @@ use ::std::{
     collections::HashMap,
     sync::{Arc, Weak},
 };
+use ::tokio::sync::Mutex;
 
 /// The lesser of [`u32::MAX`] and [`tokio::sync::Semaphore::MAX_PERMITS`] (depends on compilation target pointer width).
 const MAX_PERMITS: u32 = {
@@ -31,6 +32,24 @@ const MAX_PERMITS: u32 = {
         tokio::sync::Semaphore::MAX_PERMITS as u32
     }
 };
+
+pub trait HeapPermit<T: RootHaver> {
+    /// Get a reference to the root holder (for example, the active VM)
+    ///
+    /// Callers can also use [`Deref`] which will return the same value.
+    fn holder(&self) -> &T;
+    /// Get a mutable reference to the root holder (for example, the active VM)
+    ///
+    /// Callers can also use [`DerefMut`] which will return the same value.
+    fn holder_mut(&mut self) -> &mut T;
+    /// Get a type-erased [`PermitProof`] tied to this active permit's lifetime.
+    ///
+    /// This lets the GC-exclusion proof flow through APIs (e.g. the sys-op
+    /// dispatch glue) that cannot name the concrete `T`. The returned proof
+    /// is `Copy`, `Send`, and `Sync` and carries no runtime data — the
+    /// guarantee comes purely from the lifetime, which cannot outlive `self`.
+    fn proof(&self) -> PermitProof<'_>;
+}
 
 /// An active heap permit.
 ///
@@ -71,33 +90,17 @@ impl<T: RootHaver> ActiveHeapPermit<T> {
     pub async fn renew(self) -> Self {
         self.release().acquire().await
     }
-
-    /// Get a reference to the root holder (for example, the active VM)
-    ///
-    /// Callers can also use [`Deref`] which will return the same value.
-    #[inline]
-    pub fn holder(&self) -> &T {
+}
+impl<T: RootHaver> HeapPermit<T> for ActiveHeapPermit<T> {
+    fn holder(&self) -> &T {
         // SAFETY: we have a permit to access the heap so we can access the root holder.
         unsafe { self.state.holder() }
     }
-
-    /// Get a mutable reference to the root holder (for example, the active VM)
-    ///
-    /// Callers can also use [`DerefMut`] which will return the same value.
-    #[inline]
-    pub fn holder_mut(&mut self) -> &mut T {
+    fn holder_mut(&mut self) -> &mut T {
         // SAFETY: we have a permit to access the heap so we can access the root holder.
         unsafe { self.state.holder_mut() }
     }
-
-    /// Get a type-erased [`PermitProof`] tied to this active permit's lifetime.
-    ///
-    /// This lets the GC-exclusion proof flow through APIs (e.g. the sys-op
-    /// dispatch glue) that cannot name the concrete `T`. The returned proof
-    /// is `Copy`, `Send`, and `Sync` and carries no runtime data — the
-    /// guarantee comes purely from the lifetime, which cannot outlive `self`.
-    #[inline]
-    pub fn proof(&self) -> PermitProof<'_> {
+    fn proof(&self) -> PermitProof<'_> {
         PermitProof {
             _marker: PhantomData,
         }
@@ -171,6 +174,76 @@ impl<T: RootHaver> InactiveHeapPermit<T> {
         // SAFETY: caller upholds the fn-level contract — the permit is active
         // and `&mut self` proves exclusive access on this thread.
         unsafe { &mut *ptr }
+    }
+}
+
+/// For use when multiple threads need to share a single permit.
+///
+/// Ensures only one thread can use the permit at a time,
+/// and yields to exclusive access whenever the permit is released.
+pub struct SharedHeapPermit<T: RootHaver> {
+    inner: Mutex<InactiveHeapPermit<T>>,
+}
+impl<T: RootHaver> SharedHeapPermit<T> {
+    pub fn new(inner: InactiveHeapPermit<T>) -> Self {
+        Self {
+            inner: Mutex::new(inner),
+        }
+    }
+    pub async fn acquire(&self) -> SharedHeapPermitGuard<'_, T> {
+        let state = self.inner.lock().await;
+        let permit = Arc::clone(&state.active)
+            .acquire_owned()
+            .await
+            .unwrap_or_else(|_| unreachable!("Semaphore should never be closed"));
+        SharedHeapPermitGuard {
+            state,
+            _permit: permit,
+            _marker: PhantomData,
+        }
+    }
+}
+
+pub struct SharedHeapPermitGuard<'a, T: RootHaver> {
+    state: tokio::sync::MutexGuard<'a, InactiveHeapPermit<T>>,
+    _permit: tokio::sync::OwnedSemaphorePermit,
+    /// Ties the auto `Send`/`Sync` of `SharedHeapPermitGuard` to `T`.
+    ///
+    /// Without this marker, every field of this struct is unconditionally
+    /// `Sync` (notably because [`PermitCell<T>`] has a manual unconditional
+    /// `unsafe impl Sync` — which is itself load-bearing, so that
+    /// `Weak<PermitCell<dyn RootHaver>>` can live in the manager's shared
+    /// `Mutex<Vec<…>>`). That would let the compiler auto-derive
+    /// `SharedHeapPermitGuard<T>: Sync` even when `T: !Sync`, and two threads
+    /// sharing `&SharedHeapPermitGuard<T>` could each call [`Self::holder`]
+    /// to observe `&T` at the same time — UB when `T: !Sync`.
+    _marker: PhantomData<T>,
+}
+impl<'a, T: RootHaver> HeapPermit<T> for SharedHeapPermitGuard<'a, T> {
+    fn holder(&self) -> &T {
+        // SAFETY: we have a permit to access the heap so we can access the root holder.
+        unsafe { self.state.holder() }
+    }
+    fn holder_mut(&mut self) -> &mut T {
+        // SAFETY: we have a permit to access the heap so we can access the root holder.
+        unsafe { self.state.holder_mut() }
+    }
+    fn proof(&self) -> PermitProof<'_> {
+        PermitProof {
+            _marker: PhantomData,
+        }
+    }
+}
+impl<'a, T: RootHaver> Deref for SharedHeapPermitGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.holder()
+    }
+}
+impl<'a, T: RootHaver> DerefMut for SharedHeapPermitGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.holder_mut()
     }
 }
 

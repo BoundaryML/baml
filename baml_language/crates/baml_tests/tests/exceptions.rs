@@ -3013,7 +3013,7 @@ async fn panic_alias_catches_any_panic() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function divides() -> int {
         load_const 1
         load_const 0
@@ -3026,7 +3026,7 @@ async fn panic_alias_catches_any_panic() {
         jump L2
         load_var e
         type_tag
-        jump_table [L1, L1, L1, _, _, L1, _, _, _, L1, L1, _, L1, L1], default L0
+        jump_table [L1, L1, L1, L1, _, _, L1, _, _, _, L1, L1, _, L1, L1], default L0
 
       L0:
         load_var e
@@ -3067,7 +3067,7 @@ async fn panic_alias_plus_wildcard_dispatch() {
         jump L2
         load_var e
         type_tag
-        jump_table [L1, L1, L1, _, _, L1, _, _, _, L1, L1, _, L1, L1], default L0
+        jump_table [L1, L1, L1, L1, _, _, L1, _, _, _, L1, L1, _, L1, L1], default L0
 
       L0:
         load_var e

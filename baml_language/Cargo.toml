@@ -2,6 +2,7 @@
 members = [
   "crates/*",
   "sdks/python/rust/*",
+  "sdk_tests/build",
   "sdk_tests/crates/*",
 ]
 exclude = [

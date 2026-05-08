@@ -114,6 +114,7 @@ namespace baml.net:
 namespace baml.panics:
   class AllocFailure { methods: [to_json, from_json] }
   class AssertionFailed { methods: [to_json, from_json] }
+  class Cancelled { methods: [to_json, from_json] }
   class DivisionByZero { methods: [to_json, from_json] }
   class IndexOutOfBounds { methods: [to_json, from_json] }
   class MapKeyNotFound { methods: [to_json, from_json] }

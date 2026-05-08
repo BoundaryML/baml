@@ -11,7 +11,9 @@ use std::{collections::HashMap, sync::Arc};
 
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::Bex;
-pub use bex_engine::{EngineError, FunctionCallContextBuilder};
+pub use bex_engine::{
+    CANCELLED_PANIC_CLASS, EngineError, FunctionCallContextBuilder, is_cancelled_engine_error,
+};
 pub use bex_events::EventSink;
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, MediaKind, Ty, TyAttr, try_convert_rust_data,
@@ -56,6 +58,14 @@ pub enum RuntimeError {
 
     #[error("Failed to convert result to owned value: {0}")]
     Access(#[from] bex_heap::AccessError),
+}
+
+/// True iff `err` wraps an engine cancellation panic.
+///
+/// Centralizes the cancellation-classification logic that bridges and the
+/// LSP server need to distinguish cancellation from other runtime errors.
+pub fn is_cancelled_runtime_error(err: &RuntimeError) -> bool {
+    matches!(err, RuntimeError::Engine(e) if is_cancelled_engine_error(e))
 }
 
 /// Keep pass-by-value so the returned `Arc<impl Bex>` does not capture caller locals;

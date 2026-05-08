@@ -354,6 +354,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
             | Object::Variant(_)
             | Object::Function(_)
             | Object::Future(_)
+            | Object::UnscheduledFuture(_)
             | Object::Collector(_)
             | Object::Type(_)
             | Object::Uint8Array(_)

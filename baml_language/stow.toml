@@ -38,7 +38,7 @@
 # ===========================================================================
 
 # Ignore crates that don't follow the namespace convention
-# - sdk_test_*: SDK test rig crates
+# - sdk_test_*: SDK test crates
 ignore_crates = ["sdk_test_*"]
 
 # Graph visualization settings

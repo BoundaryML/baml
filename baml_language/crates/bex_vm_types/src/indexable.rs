@@ -11,7 +11,7 @@
 //! This module provides a vector wrapper that needs specific types to index
 //! into it, thus solving the problem mentioned above at compile time.
 
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
 use crate::{Object, Value};
 
@@ -241,6 +241,95 @@ impl<'a, T, K> std::iter::IntoIterator for &'a mut Pool<T, K> {
 
 pub type GlobalPool = Pool<Value, GlobalKind>;
 pub type ObjectPool = Pool<Object, ObjectKind>;
+
+/// The view of globals available to a [`crate::Object`]-aware VM.
+///
+/// **Invariant**: only `$init` functions emit [`crate::Instruction::StoreGlobal`].
+/// The compiler enforces this by emitting `StoreGlobal` solely from
+/// `compile_init_function`. The runtime enforces it via the [`VmGlobals::Owned`]
+/// vs [`VmGlobals::Shared`] split: post-`$init` VMs hold a [`VmGlobals::Shared`]
+/// reference into the engine's frozen globals, and a `StoreGlobal` against a
+/// `Shared` view must be turned into a `VmInternalError` by the VM.
+///
+/// # Variants
+/// - [`VmGlobals::Owned`]: a mutable [`GlobalPool`] used during `$init` execution.
+/// - [`VmGlobals::Shared`]: a frozen `Arc<[Value]>` shared by every post-`$init` VM.
+///   Cloning is a refcount bump; reads are direct slice indexing.
+#[derive(Clone, Debug)]
+pub enum VmGlobals {
+    /// Mutable globals pool, used during `$init`.
+    Owned(GlobalPool),
+    /// Frozen globals shared across all post-`$init` VMs.
+    Shared(Arc<[Value]>),
+}
+
+impl VmGlobals {
+    /// Number of globals in the view.
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Owned(pool) => pool.len(),
+            Self::Shared(slice) => slice.len(),
+        }
+    }
+
+    /// Whether the view is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Read a global by index. `Value` is `Copy` so this returns by value.
+    ///
+    /// # Panics
+    /// Panics if `index` is out of bounds — same contract as slice indexing.
+    pub fn get(&self, index: GlobalIndex) -> Value {
+        match self {
+            Self::Owned(pool) => pool[index],
+            Self::Shared(slice) => slice[index.into_raw()],
+        }
+    }
+
+    /// Mutably set a global. Only succeeds for [`VmGlobals::Owned`]; returns the
+    /// caller-supplied error for [`VmGlobals::Shared`] (post-`$init` writes
+    /// violate the invariant and the VM should treat them as internal errors).
+    pub fn set<E>(&mut self, index: GlobalIndex, value: Value, on_shared: E) -> Result<(), E> {
+        match self {
+            Self::Owned(pool) => {
+                pool[index] = value;
+                Ok(())
+            }
+            Self::Shared(_) => Err(on_shared),
+        }
+    }
+
+    /// Freeze this view into a shared `Arc<[Value]>`. For [`VmGlobals::Owned`],
+    /// this consumes the underlying `Vec`; for [`VmGlobals::Shared`], it clones
+    /// the existing `Arc`.
+    pub fn freeze(self) -> Arc<[Value]> {
+        match self {
+            Self::Owned(pool) => Arc::from(pool.0),
+            Self::Shared(slice) => slice,
+        }
+    }
+
+    /// View the globals as a slice. Both variants support O(1) slice access.
+    pub fn as_slice(&self) -> &[Value] {
+        match self {
+            Self::Owned(pool) => &pool.0,
+            Self::Shared(slice) => slice,
+        }
+    }
+}
+
+impl std::ops::Index<GlobalIndex> for VmGlobals {
+    type Output = Value;
+
+    fn index(&self, index: GlobalIndex) -> &Self::Output {
+        match self {
+            Self::Owned(pool) => &pool[index],
+            Self::Shared(slice) => &slice[index.into_raw()],
+        }
+    }
+}
 
 pub type StackIndex = Index<StackKind>;
 pub type GlobalIndex = Index<GlobalKind>;

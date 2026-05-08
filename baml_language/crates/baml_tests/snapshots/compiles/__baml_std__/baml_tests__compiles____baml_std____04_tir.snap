@@ -1244,6 +1244,15 @@ function baml.panics.Unreachable.to_json(self: baml.panics.Unreachable) -> baml.
 function baml.panics.Unreachable.from_json(j: baml.json.json) -> baml.panics.Unreachable throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Unreachable { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.panics.Unreachable
 }
+class baml.panics.Cancelled {
+  message: string
+}
+function baml.panics.Cancelled.to_json(self: baml.panics.Cancelled) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "message": self.message.to_json() } : map<string, baml.json.json>
+}
+function baml.panics.Cancelled.from_json(j: baml.json.json) -> baml.panics.Cancelled throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Cancelled { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.panics.Cancelled
+}
 class baml.panics.UserPanic {
   message: string
 }
@@ -1262,7 +1271,7 @@ function baml.panics.AllocFailure.to_json(self: baml.panics.AllocFailure) -> bam
 function baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFailure throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AllocFailure { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.panics.AllocFailure
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.UserPanic | baml.panics.AllocFailure
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.AllocFailure
 class baml.panics.DivisionByZero$stream {
   dividend: null | int
 }
@@ -1282,13 +1291,16 @@ class baml.panics.AssertionFailed$stream {
 class baml.panics.Unreachable$stream {
   message: null | string
 }
+class baml.panics.Cancelled$stream {
+  message: null | string
+}
 class baml.panics.UserPanic$stream {
   message: null | string
 }
 class baml.panics.AllocFailure$stream {
   message: null | string
 }
-type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.UserPanic$stream | baml.panics.AllocFailure$stream
+type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.AllocFailure$stream
 
 --- <builtin>/baml/ns_stream/stream.baml ---
 class baml.stream.StreamFinished {

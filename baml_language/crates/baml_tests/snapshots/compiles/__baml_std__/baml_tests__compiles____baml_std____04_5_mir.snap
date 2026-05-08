@@ -5964,9 +5964,9 @@ fn baml.panics.StackOverflow.from_json(j: baml.json.json) -> baml.panics.StackOv
     }
 }
 
-fn baml.panics.UserPanic.from_json(j: baml.json.json) -> baml.panics.UserPanic {
+fn baml.panics.Cancelled.from_json(j: baml.json.json) -> baml.panics.Cancelled {
     // Locals:
-    let _0: baml.panics.UserPanic // _0 // return
+    let _0: baml.panics.Cancelled // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
     let _3: baml.json.json
@@ -5982,7 +5982,7 @@ fn baml.panics.UserPanic.from_json(j: baml.json.json) -> baml.panics.UserPanic {
     }
 
     bb2: {
-        _0 = baml.panics.UserPanic { copy _2 };
+        _0 = baml.panics.Cancelled { copy _2 };
         goto -> bb3;
     }
 
@@ -6057,9 +6057,9 @@ fn baml.panics.AssertionFailed.from_json(j: baml.json.json) -> baml.panics.Asser
     }
 }
 
-fn baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFailure {
+fn baml.panics.UserPanic.from_json(j: baml.json.json) -> baml.panics.UserPanic {
     // Locals:
-    let _0: baml.panics.AllocFailure // _0 // return
+    let _0: baml.panics.UserPanic // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
     let _3: baml.json.json
@@ -6075,7 +6075,7 @@ fn baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFai
     }
 
     bb2: {
-        _0 = baml.panics.AllocFailure { copy _2 };
+        _0 = baml.panics.UserPanic { copy _2 };
         goto -> bb3;
     }
 
@@ -6138,6 +6138,57 @@ fn baml.panics.Unreachable.from_json(j: baml.json.json) -> baml.panics.Unreachab
     }
 }
 
+fn baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFailure {
+    // Locals:
+    let _0: baml.panics.AllocFailure // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.panics.AllocFailure { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.panics.AllocFailure.to_json(self: baml.panics.AllocFailure) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.AllocFailure // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: baml.panics.AllocFailure
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "message": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.panics.DivisionByZero.to_json(self: baml.panics.DivisionByZero) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
@@ -6186,13 +6237,13 @@ fn baml.panics.StackOverflow.to_json(self: baml.panics.StackOverflow) -> baml.js
     }
 }
 
-fn baml.panics.UserPanic.to_json(self: baml.panics.UserPanic) -> baml.json.json {
+fn baml.panics.Cancelled.to_json(self: baml.panics.Cancelled) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.panics.UserPanic // self // param
+    let _1: baml.panics.Cancelled // self // param
     let _2: baml.json.json
     let _3: string
-    let _4: baml.panics.UserPanic
+    let _4: baml.panics.Cancelled
 
     bb0: {
         _4 = copy _1;
@@ -6267,13 +6318,13 @@ fn baml.panics.AssertionFailed.to_json(self: baml.panics.AssertionFailed) -> bam
     }
 }
 
-fn baml.panics.AllocFailure.to_json(self: baml.panics.AllocFailure) -> baml.json.json {
+fn baml.panics.UserPanic.to_json(self: baml.panics.UserPanic) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.panics.AllocFailure // self // param
+    let _1: baml.panics.UserPanic // self // param
     let _2: baml.json.json
     let _3: string
-    let _4: baml.panics.AllocFailure
+    let _4: baml.panics.UserPanic
 
     bb0: {
         _4 = copy _1;
