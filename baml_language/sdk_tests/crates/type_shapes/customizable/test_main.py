@@ -1,8 +1,9 @@
-"""Smoke tests for the type_shapes rig crate.
+"""Smoke tests for the type_shapes sdk-test crate.
 
 The actual type-shape verification happens in `pyright baml_sdk` (run by
-test.sh). These pytest cases just confirm each generated namespace
-imports cleanly and that the symbols listed in 18a are reachable.
+the `pyright` test in `tests/sdk_test.rs`). These pytest cases just
+confirm each generated namespace imports cleanly and that the symbols
+listed in 18a are reachable.
 """
 
 

@@ -1,44 +1,6 @@
-// Hand-written; same shape as the generated rig harnesses.
+//! Sdk-test crate. The harness — four `#[test]`s wrapping `uv sync`
+//! and `uv run {ruff,pyright,pytest}` — is generated below by
+//! `sdk_test_build::sdk_test_suite!`. See `sdk_tests/build/src/lib.rs`
+//! for what the macro expands to and why `sync_only` exists.
 #[cfg(test)]
-mod tests {
-    use std::{path::PathBuf, process::Command};
-
-    #[test]
-    fn test_generated_code() {
-        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("generated");
-
-        // Use appropriate test script based on platform
-        #[cfg(windows)]
-        let (script_name, command, arg) = ("test.ps1", "powershell", "-File");
-
-        #[cfg(not(windows))]
-        let (script_name, command, arg) = ("test.sh", "bash", "");
-
-        let test_script = dir.join(script_name);
-
-        assert!(
-            test_script.exists(),
-            "{} not found in generated directory",
-            script_name
-        );
-
-        // Run the test script
-        let mut cmd = Command::new(command);
-        if !arg.is_empty() {
-            cmd.arg(arg);
-        }
-        let output = cmd
-            .arg(&test_script)
-            .current_dir(&dir)
-            .output()
-            .unwrap_or_else(|_| panic!("Failed to run {}", script_name));
-
-        assert!(
-            output.status.success(),
-            "{} failed:\nstdout: {}\nstderr: {}",
-            script_name,
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-}
+sdk_test_build::sdk_test_suite!();
