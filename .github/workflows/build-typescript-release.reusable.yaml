@@ -97,7 +97,7 @@ jobs:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # Check GLIBC version for Linux targets (skip musl targets)
       - name: Check GLIBC version
@@ -139,7 +139,7 @@ jobs:
         working-directory: engine/language_client_typescript
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bindings-${{ matrix._.target }}
           path: engine/language_client_typescript/*.node
