@@ -187,16 +187,6 @@ function deserializeValue<T>(
         ? deserializeValue(holder.value.unionVariantValue.value, wrapHandle)
         : null;
 
-    case 'checkedValue':
-      return holder.value.checkedValue.value
-        ? deserializeValue(holder.value.checkedValue.value, wrapHandle)
-        : null;
-
-    case 'streamingStateValue':
-      return holder.value.streamingStateValue.value
-        ? deserializeValue(holder.value.streamingStateValue.value, wrapHandle)
-        : null;
-
     case 'handleValue': {
       const handle = holder.value.handleValue;
       const key =
