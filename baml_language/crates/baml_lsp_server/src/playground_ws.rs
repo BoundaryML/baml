@@ -44,6 +44,13 @@ pub enum WsInMessage {
         value: Option<String>,
         variable: Option<String>,
     },
+    #[serde(rename = "inputResponse")]
+    InputResponse {
+        id: u64,
+        value: String,
+        #[serde(rename = "callId")]
+        call_id: u64,
+    },
     #[serde(rename = "requestState")]
     RequestState,
     #[serde(rename = "requestCollectTests")]
@@ -102,6 +109,21 @@ pub enum WsOutMessage {
     /// An env var was resolved from the server's process environment.
     #[serde(rename = "envVarFromShell")]
     EnvVarFromShell { variable: String, value: String },
+    /// Server asks the playground UI to prompt the user for input.
+    #[serde(rename = "inputRequest")]
+    InputRequest {
+        id: u64,
+        prompt: Option<String>,
+        #[serde(rename = "callId")]
+        call_id: u64,
+    },
+    /// Notifies all clients that an input request was already resolved.
+    #[serde(rename = "inputResolved")]
+    InputResolved {
+        id: u64,
+        #[serde(rename = "callId")]
+        call_id: u64,
+    },
     /// Env var names referenced in BAML source code (from compilation).
     #[serde(rename = "knownEnvVarNames")]
     KnownEnvVarNames { names: Vec<String> },

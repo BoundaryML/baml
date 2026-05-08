@@ -30,6 +30,7 @@ use tokio::{net::TcpListener, sync::broadcast};
 
 use crate::{
     playground_env::PlaygroundEnvState,
+    playground_io::PlaygroundIoState,
     playground_ws::{WsInMessage, WsOutMessage},
 };
 
@@ -69,6 +70,7 @@ struct WsState {
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
+    io_state: Arc<PlaygroundIoState>,
 }
 
 /// Start the playground server on the given listener.
@@ -77,8 +79,9 @@ pub async fn run(
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
+    io_state: Arc<PlaygroundIoState>,
 ) -> anyhow::Result<()> {
-    let app = build_router(bex, broadcast_tx, env_state)?;
+    let app = build_router(bex, broadcast_tx, env_state, io_state)?;
 
     tracing::info!(
         "Playground: http://localhost:{}",
@@ -94,11 +97,13 @@ fn build_router(
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
+    io_state: Arc<PlaygroundIoState>,
 ) -> anyhow::Result<Router> {
     let ws_state = WsState {
         bex,
         broadcast_tx,
         env_state,
+        io_state,
     };
 
     let api = Router::new()
@@ -398,6 +403,10 @@ async fn handle_ws_in_message(
 
         WsInMessage::EnvVarResponse { id, value, .. } => {
             state.env_state.resolve(id, value);
+        }
+
+        WsInMessage::InputResponse { id, value, call_id } => {
+            state.io_state.resolve(id, call_id, value);
         }
 
         WsInMessage::RequestState => {

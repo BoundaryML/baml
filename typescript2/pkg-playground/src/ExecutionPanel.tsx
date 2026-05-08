@@ -823,6 +823,18 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
         }
 
+        case 'inputResolved': {
+          const { id, callId } = data;
+          setPendingInputs((prev) => {
+            const next = new Map(prev);
+            const arr = (next.get(callId) ?? []).filter((r) => r.id !== id);
+            if (arr.length === 0) next.delete(callId);
+            else next.set(callId, arr);
+            return next;
+          });
+          break;
+        }
+
         case "ready":
           break;
 
@@ -985,7 +997,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   }, [port, selectedProject]);
 
   const submitInput = useCallback((id: number, value: string, callId: number) => {
-    port.postMessage({ type: 'inputResponse', id, value });
+    port.postMessage({ type: 'inputResponse', id, value, callId });
     setPendingInputs((prev) => {
       const next = new Map(prev);
       const arr = (next.get(callId) ?? []).filter((r) => r.id !== id);
