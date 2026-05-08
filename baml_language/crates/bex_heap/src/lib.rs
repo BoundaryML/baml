@@ -74,6 +74,7 @@ pub use gc::{CollectionLevel, GcStats};
 pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, Generation, HeapStats};
 pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};
 pub use heap_guard::{
-    ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit, PermitProof,
+    ActiveHeapPermit, HeapGuard, HeapPermit, HeapPermitManager, InactiveHeapPermit, PermitProof,
+    SharedHeapPermit, SharedHeapPermitGuard,
 };
-pub use tlab::Tlab;
+pub use tlab::{Tlab, TlabHolder};

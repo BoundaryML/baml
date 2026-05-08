@@ -104,9 +104,10 @@ class            panics.MapKeyNotFound            <builtin>/baml/ns_panics/panic
 class            panics.StackOverflow             <builtin>/baml/ns_panics/panics.baml:14
 class            panics.AssertionFailed           <builtin>/baml/ns_panics/panics.baml:18
 class            panics.Unreachable               <builtin>/baml/ns_panics/panics.baml:22
-class            panics.UserPanic                 <builtin>/baml/ns_panics/panics.baml:27
-class            panics.AllocFailure              <builtin>/baml/ns_panics/panics.baml:34
-type             panics.Panic                     <builtin>/baml/ns_panics/panics.baml:38
+class            panics.Cancelled                 <builtin>/baml/ns_panics/panics.baml:27
+class            panics.UserPanic                 <builtin>/baml/ns_panics/panics.baml:32
+class            panics.AllocFailure              <builtin>/baml/ns_panics/panics.baml:39
+type             panics.Panic                     <builtin>/baml/ns_panics/panics.baml:43
 class            stream.StreamFinished            <builtin>/baml/ns_stream/stream.baml:4
 class            stream.StreamNoYield             <builtin>/baml/ns_stream/stream.baml:9
 class            sys.ProcessOptions               <builtin>/baml/ns_sys/sys.baml:1

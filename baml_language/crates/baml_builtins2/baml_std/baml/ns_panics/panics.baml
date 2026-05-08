@@ -23,6 +23,11 @@ class Unreachable {
   message string
 }
 
+/// A cancellation was requested.
+class Cancelled {
+  message string
+}
+
 /// A user-caused panic from `baml.sys.panic`.
 class UserPanic {
   message string
@@ -35,4 +40,4 @@ class AllocFailure {
   message string
 }
 
-type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | UserPanic | AllocFailure
+type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | AllocFailure

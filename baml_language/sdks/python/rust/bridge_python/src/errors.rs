@@ -113,7 +113,9 @@ pub fn runtime_error_to_py(err: bex_project::RuntimeError) -> PyErr {
                 EngineError::FunctionNotFound { .. } => {
                     PyErr::new::<BamlInvalidArgumentError, _>(err.to_string())
                 }
-                EngineError::Cancelled => PyErr::new::<BamlCancelledError, _>(err.to_string()),
+                e if bex_project::is_cancelled_engine_error(e) => {
+                    PyErr::new::<BamlCancelledError, _>(err.to_string())
+                }
                 _ => PyErr::new::<BamlClientError, _>(err.to_string()),
             }
         }

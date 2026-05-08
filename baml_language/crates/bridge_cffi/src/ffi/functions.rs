@@ -63,7 +63,7 @@ fn runtime_error_to_string(err: &bex_project::RuntimeError) -> String {
                 EngineError::FunctionNotFound { .. } => {
                     format!("BamlError: BamlInvalidArgumentError: {engine_err}")
                 }
-                EngineError::Cancelled => {
+                e if bex_project::is_cancelled_engine_error(e) => {
                     format!("BamlError: BamlCancelledError: {engine_err}")
                 }
                 _ => format!("BamlError: BamlClientError: {engine_err}"),
