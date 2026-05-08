@@ -30,7 +30,7 @@ const TESTS: TestCase[] = [
 
 type Phase = 'pending' | 'running' | 'passing';
 
-const PHASE_DURATION = 1100;
+const PHASE_DURATION = 950;
 const SUMMARY_DELAY = 800;
 const RESET_HOLD = 1800;
 

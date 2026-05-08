@@ -48,7 +48,7 @@ export function TypedErrorsAnimation({ tint }: { tint: string }) {
   useEffect(() => {
     const interval = setInterval(() => {
       setIdx((i) => (i + 1) % SCENARIOS.length);
-    }, 3200);
+    }, 2800);
     return () => clearInterval(interval);
   }, []);
 

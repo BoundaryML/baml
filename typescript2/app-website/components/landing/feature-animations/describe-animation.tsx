@@ -11,7 +11,7 @@ export function DescribeAnimation({ tint }: { tint: string }) {
   useEffect(() => {
     const interval = setInterval(() => {
       setCycle((c) => c + 1);
-    }, 10500);
+    }, 9000);
     return () => clearInterval(interval);
   }, []);
 
@@ -64,7 +64,7 @@ export function DescribeAnimation({ tint }: { tint: string }) {
           className="whitespace-pre-wrap break-words"
           initial={{ opacity: 0, y: 4 }}
           transition={{
-            delay: 0.7,
+            delay: 0.6,
             duration: 0.28,
             ease: [0.22, 0.61, 0.36, 1],
           }}
@@ -81,7 +81,7 @@ export function DescribeAnimation({ tint }: { tint: string }) {
           className="flex items-baseline gap-1.5"
           initial={{ opacity: 0, x: -6 }}
           transition={{
-            delay: 1.9,
+            delay: 1.6,
             duration: 0.3,
             ease: [0.22, 0.61, 0.36, 1],
           }}
@@ -102,7 +102,7 @@ export function DescribeAnimation({ tint }: { tint: string }) {
           initial={{ opacity: 0, x: -4 }}
           style={{ borderLeftColor: `${tint}66` }}
           transition={{
-            delay: 2.7,
+            delay: 2.3,
             duration: 0.32,
             ease: [0.22, 0.61, 0.36, 1],
           }}
@@ -120,7 +120,7 @@ export function DescribeAnimation({ tint }: { tint: string }) {
           className="flex items-center"
           initial={{ opacity: 0, y: 4 }}
           transition={{
-            delay: 4.0,
+            delay: 3.4,
             duration: 0.28,
             ease: [0.22, 0.61, 0.36, 1],
           }}
@@ -135,13 +135,13 @@ export function DescribeAnimation({ tint }: { tint: string }) {
             <Zap aria-hidden size={9} strokeWidth={2.4} />
             tool
           </span>
-          <span className="text-[#9B8E80]">$ </span>
-          <span className="text-[#E8DFCF]">baml describe</span>{' '}
+          <span className="text-[#9B8E80]">$&nbsp;</span>
+          <span className="text-[#E8DFCF]">baml describe&nbsp;</span>
           <span className="text-[#7FD3C4]">ExtractReceipt</span>
         </motion.div>
 
         {/* Describe output */}
-        <DescribeOutput delay={4.7} tint={tint} />
+        <DescribeOutput delay={4.0} tint={tint} />
 
         {/* Claude final */}
         <motion.div
@@ -149,7 +149,7 @@ export function DescribeAnimation({ tint }: { tint: string }) {
           className="flex items-baseline gap-1.5"
           initial={{ opacity: 0, x: -6 }}
           transition={{
-            delay: 7.6,
+            delay: 6.4,
             duration: 0.3,
             ease: [0.22, 0.61, 0.36, 1],
           }}
