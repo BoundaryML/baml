@@ -167,7 +167,11 @@ pub(crate) fn lower_runner_element(
 ) -> ExprId {
     let span = element.text_range();
     match element {
-        rowan::NodeOrToken::Node(node) => ctx.inner.lower_expr(node),
+        rowan::NodeOrToken::Node(node) => {
+            let expr_id = ctx.inner.lower_expr(node);
+            ctx.set_expr_span_if_default(expr_id, span);
+            expr_id
+        }
         rowan::NodeOrToken::Token(token) => {
             let expr = lower_bare_token_expr(token.kind(), token.text());
             ctx.inner.alloc_expr(expr, span)
@@ -214,6 +218,21 @@ impl InitTestContext {
 
     pub(crate) fn alloc_expr(&mut self, expr: Expr, span: text_size::TextRange) -> ExprId {
         self.inner.alloc_expr(expr, span)
+    }
+
+    fn set_expr_span_if_default(&mut self, id: ExprId, span: text_size::TextRange) {
+        let raw: u32 = id.into_raw().into_u32();
+        if let Some((_, current)) = self
+            .inner
+            .source_map
+            .expr_spans
+            .iter_mut()
+            .nth(raw as usize)
+            && current.is_empty()
+            && !span.is_empty()
+        {
+            *current = span;
+        }
     }
 
     pub(crate) fn alloc_stmt(

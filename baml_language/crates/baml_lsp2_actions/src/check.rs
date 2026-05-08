@@ -414,4 +414,26 @@ function demo() -> int throws string {
             ]
         );
     }
+
+    #[test]
+    fn check_file_places_function_body_diagnostic_on_expression() {
+        let test = CursorTest::new(
+            r#"function demo() -> int {
+  return missing_value
+}
+<[CURSOR]"#,
+        );
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        let diag = diagnostics
+            .iter()
+            .find(|diag| diag.id == DiagnosticId::UnknownVariable)
+            .expect("unresolved name diagnostic");
+        let span = diag.primary_span().expect("primary span");
+        let text = test.cursor.file.text(&test.db);
+        let start: usize = span.range.start().into();
+        let end: usize = span.range.end().into();
+
+        assert_eq!(&text[start..end], "missing_value");
+    }
 }

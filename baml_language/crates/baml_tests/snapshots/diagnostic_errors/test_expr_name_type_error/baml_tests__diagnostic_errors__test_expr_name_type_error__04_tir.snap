@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 44394
 ---
 === TIR2 ===
 function user.$init_test_32(registry: testing.TestCollector) -> ? throws never {
@@ -26,7 +27,7 @@ function user.$init_test_32(registry: testing.TestCollector) -> ? throws never {
     null : null
   }
   !! 106..108: type mismatch: expected string, got 42
-  !! 0..0: type mismatch: expected string, got int
+  !! 80..88: type mismatch: expected string, got int
 }
 lambda user.$init_test_32 {
 }

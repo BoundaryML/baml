@@ -1138,13 +1138,13 @@ fn synthesize_register_call(
     ctx: &mut lower_expr_body::InitTestContext,
     diags: &mut Vec<LoweringDiagnostic>,
 ) -> ExprId {
-    let span = text_size::TextRange::default();
     match reg {
         TestRegistrationItem::Test {
             name_element,
             body_node,
             runner_element,
         } => {
+            let span = name_element.text_range();
             // Lower the test block body into a fresh ExprBody (lambda body)
             let (lambda_body, lambda_source_map, lambda_diags) =
                 lower_expr_body::lower_block_node(body_node, &[Name::new("registry")]);
@@ -1196,6 +1196,7 @@ fn synthesize_register_call(
             body_node,
             runner_element,
         } => {
+            let span = name_element.text_range();
             // Lower the testset body into a collector lambda using the full testset lowering.
             let (collector_exprs, collector_source_map, collector_diags) =
                 lower_expr_body::lower_testset_block_node(
