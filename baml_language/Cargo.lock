@@ -6996,6 +6996,18 @@ dependencies = [
  "baml_project",
  "baml_workspace",
  "codegen_python",
+ "sdk_test_build",
+]
+
+[[package]]
+name = "sdk_test_build"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_types",
+ "baml_db",
+ "baml_project",
+ "baml_workspace",
+ "codegen_python",
 ]
 
 [[package]]
@@ -7007,6 +7019,7 @@ dependencies = [
  "baml_project",
  "baml_workspace",
  "codegen_python",
+ "sdk_test_build",
 ]
 
 [[package]]
@@ -7018,6 +7031,7 @@ dependencies = [
  "baml_project",
  "baml_workspace",
  "codegen_python",
+ "sdk_test_build",
 ]
 
 [[package]]
@@ -7029,6 +7043,7 @@ dependencies = [
  "baml_project",
  "baml_workspace",
  "codegen_python",
+ "sdk_test_build",
 ]
 
 [[package]]

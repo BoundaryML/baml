@@ -27,7 +27,7 @@ function ExtractResume(text: string) -> Resume {
 
 // Paired with `StreamingDoc` to exercise the always-different
 // `$stream` companion branch (previously covered by the standalone
-// `python_llm_functions` rig crate).
+// `python_llm_functions` crate).
 function StreamingExtract(text: string) -> StreamingDoc {
   client Stub
   prompt #"

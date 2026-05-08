@@ -19,7 +19,7 @@ jobs:
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -34,47 +34,21 @@ jobs:
           # Share cache across similar Linux jobs for better hit rates
           shared-key: "linux-cargo-32gb"
 
-      - name: "Setup Python 3.10+"
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
-
-      - name: "Install uv"
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
       - name: "Build tests with --timings"
         run: cargo test --no-run --all-features --timings
         working-directory: baml_language
 
       # Snapshot tests live in `baml_tests` and are exercised end-to-end by
-      # the dedicated `snapshot-tests` job; skip the package here so the
-      # per-platform jobs stay focused on cross-platform behavior.
+      # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
+      # and run in the dedicated `sdk-tests` matrix below. Skip both here.
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests)'
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
         working-directory: baml_language
-
-      - name: "Run language test suites"
-        run: |
-          found=0
-          for dir in baml_language/sdks/*/; do
-            lang=$(basename "$dir")
-            if [ -f "$dir/test.sh" ]; then
-              echo "==> Running $lang test suite"
-              bash "$dir/test.sh"
-              found=$((found + 1))
-            else
-              echo "::error::sdks/$lang/ exists but has no test.sh"
-              exit 1
-            fi
-          done
-          if [ "$found" -eq 0 ]; then
-            echo "::warning::No language test suites found in sdks/*/"
-          fi
 
       - name: "Upload test results on failure"
         if: failure()
@@ -98,7 +72,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -113,46 +87,21 @@ jobs:
           # Share cache across similar macOS jobs for better hit rates
           shared-key: "macos-cargo"
 
-      - name: "Setup Python 3.10+"
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
-
-      - name: "Install uv"
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
       - name: "Build tests with --timings"
         run: cargo test --no-run --all-features --timings
         working-directory: baml_language
 
       # Snapshot tests live in `baml_tests` and are covered by the dedicated
-      # `snapshot-tests` job; skip the package here.
+      # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
+      # dedicated `sdk-tests` matrix below. Skip both here.
       - name: "Run tests"
-        run: cargo nextest run --all-features -E 'not package(baml_tests)'
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
         working-directory: baml_language
-
-      - name: "Run language test suites"
-        run: |
-          found=0
-          for dir in baml_language/sdks/*/; do
-            lang=$(basename "$dir")
-            if [ -f "$dir/test.sh" ]; then
-              echo "==> Running $lang test suite"
-              bash "$dir/test.sh"
-              found=$((found + 1))
-            else
-              echo "::error::sdks/$lang/ exists but has no test.sh"
-              exit 1
-            fi
-          done
-          if [ "$found" -eq 0 ]; then
-            echo "::warning::No language test suites found in sdks/*/"
-          fi
 
       - name: "Upload cargo timings"
         if: always()
@@ -169,7 +118,7 @@ jobs:
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -184,6 +133,78 @@ jobs:
           # Share cache across similar Windows jobs for better hit rates
           shared-key: "windows-cargo"
 
+      - name: "Install cargo nextest"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings
+        working-directory: baml_language
+
+      # Snapshot tests live in `baml_tests` and are covered by the dedicated
+      # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
+      # dedicated `sdk-tests` matrix below. Skip both here.
+      - name: "Run tests"
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        working-directory: baml_language
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-test-windows
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
+  # SDK tests (codegen end-to-end). The `sdk_test_*` crates each emit a
+  # generated Python project from `.baml` sources via build.rs and then
+  # run ruff / pyright / pytest against it through `uv sync` + `uv run`.
+  # They share a single editable install of `baml_core` (the local
+  # Python SDK) anchored at `baml_language/target/uv-cache`, so multiple
+  # tests racing on `uv sync` contend on uv's editable-build lock and
+  # — on Windows — on wheel-extraction file locks. We pre-warm by
+  # running the per-crate `sync_only` test serially (so the editable
+  # build of `baml_core` and the wheel cache populate exactly once),
+  # then fan out ruff/pyright/pytest in parallel against the warm
+  # cache.
+  sdk-tests:
+    name: "sdk tests (${{ matrix.os-label }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os-label: linux
+            runs-on: blacksmith-16vcpu-ubuntu-2404
+            rust-cache-key: linux-cargo-32gb
+            timeout: 30
+          - os-label: macos
+            runs-on: macos-latest
+            rust-cache-key: macos-cargo
+            timeout: 40
+          - os-label: windows
+            runs-on: blacksmith-4vcpu-windows-2025
+            rust-cache-key: windows-cargo
+            timeout: 60
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: ${{ matrix.timeout }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Reuse the matching cargo-test-* shared-key so the Rust target/
+          # dir benefits from the cache populated by those jobs.
+          shared-key: ${{ matrix.rust-cache-key }}
+
       - name: "Setup Python 3.10+"
         uses: actions/setup-python@v5
         with:
@@ -195,42 +216,41 @@ jobs:
           tool: cargo-nextest
 
       - name: "Install uv"
-        run: irm https://astral.sh/uv/install.ps1 | iex
-        shell: powershell
+        uses: astral-sh/setup-uv@v5
 
       - name: "Build tests with --timings"
         run: cargo test --no-run --all-features --timings
         working-directory: baml_language
 
-      # Snapshot tests live in `baml_tests` and are covered by the dedicated
-      # `snapshot-tests` job; skip the package here.
-      - name: "Run tests"
-        run: cargo nextest run --all-features -E 'not package(baml_tests)'
+      # Pre-warm: run only the `sync_only` test from each sdk_test crate,
+      # serialized via `--test-threads=1`. The first sync builds the
+      # editable `baml_core` and extracts wheels into the shared
+      # `target/uv-cache`; subsequent syncs hardlink from cache into each
+      # crate's own `generated/.venv`. After this, the parallel test step
+      # below only does cheap cache reads + per-venv hardlinks.
+      - name: "Pre-warm uv cache (sync_only, serial)"
+        run: cargo nextest run --all-features --test-threads=1 -E 'package(/^sdk_test_/) and test(=sync_only)'
         working-directory: baml_language
 
-      - name: "Run language test suites"
-        run: |
-          found=0
-          for dir in baml_language/sdks/*/; do
-            lang=$(basename "$dir")
-            if [ -f "$dir/test.sh" ]; then
-              echo "==> Running $lang test suite"
-              bash "$dir/test.sh"
-              found=$((found + 1))
-            else
-              echo "::error::sdks/$lang/ exists but has no test.sh"
-              exit 1
-            fi
-          done
-          if [ "$found" -eq 0 ]; then
-            echo "::warning::No language test suites found in sdks/*/"
-          fi
+      - name: "Run sdk tests"
+        run: cargo nextest run --all-features -E 'package(/^sdk_test_/) and not test(=sync_only)'
+        working-directory: baml_language
+
+      - name: "Upload test results on failure"
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-test-failures-${{ matrix.os-label }}
+          path: |
+            baml_language/sdk_tests/crates/*/generated/
+            baml_language/target/nextest/
+          if-no-files-found: ignore
 
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cargo-timings-test-windows
+          name: cargo-timings-sdk-tests-${{ matrix.os-label }}
           path: baml_language/target/cargo-timings/
           if-no-files-found: ignore
 
@@ -239,7 +259,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -282,7 +302,7 @@ jobs:
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -330,7 +350,7 @@ jobs:
     # bypass later doesn't accidentally start blocking required CI.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -353,7 +373,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -392,7 +412,7 @@ jobs:
       # mise installs handles its own Python via `uv run`).
       MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -464,6 +484,7 @@ jobs:
       - cargo-test-linux
       - cargo-test-macos
       - cargo-test-windows
+      - sdk-tests
       - cargo-test-wasm
       - cargo-build-msrv
       - cargo-doc
