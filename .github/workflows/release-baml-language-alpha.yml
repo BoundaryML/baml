@@ -123,7 +123,7 @@ jobs:
 
       - name: Checkout
         if: steps.gate.outputs.should_run == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ steps.gate.outputs.checkout_ref }}
           fetch-depth: 0
@@ -189,7 +189,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           persist-credentials: false
@@ -266,7 +266,7 @@ jobs:
           PY
 
       - name: Upload archive artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: baml-language-archive-${{ matrix.target }}
           path: |
@@ -293,7 +293,7 @@ jobs:
       DISPATCH_HOMEBREW: ${{ needs.prepare.outputs.dispatch_homebrew }}
     steps:
       - name: Download archives
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: baml-language-archive-*
           merge-multiple: true

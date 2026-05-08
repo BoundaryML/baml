@@ -23,10 +23,10 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v8.1.0
       - run: ./tools/bctl oncall check
 
       - name: Scope check - schedule-file-only PR?
@@ -62,8 +62,8 @@ jobs:
     env:
       SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
       - name: Validate schedule
         run: ./tools/bctl oncall check
       - name: Post weekly handoff
@@ -74,8 +74,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: boundary-tools-prod
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
       - run: ./tools/bctl oncall fill-schedule
       - uses: peter-evans/create-pull-request@v6
         with:
