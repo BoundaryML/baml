@@ -262,8 +262,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Linux jobs for better hit rates
-          shared-key: "linux-cargo-32gb"
+          # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.
+          save-if: false
+          shared-key: "linux-cargo"
 
       - name: "Install cargo-binstall"
         run: |
@@ -416,6 +417,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
+          # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.
+          save-if: false
           shared-key: "linux-cargo"
 
       - name: "Install pnpm"
@@ -482,7 +485,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Linux jobs for better hit rates
+          # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.
+          save-if: false
           shared-key: "linux-cargo"
 
       - name: "Install codspeed"

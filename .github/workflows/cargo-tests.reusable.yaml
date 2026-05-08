@@ -1,7 +1,87 @@
+# Cache strategy
+# ==============
+#
+# GHA caching has two quirks we have to dance around:
+#
+#   - an per-repo cache limit (ours is set to 30GiB) for *all* PRs, and
+#   - a rule that only the default branch's cache can be shared by
+#     different branches
+#
+# It's therefore important that we keep the `canary` cache populated, and
+# because GHA caches are immutable, the daily `canary-cache-refresh.yml`
+# workflow purges canary's rust-cache entries and then re-invokes this
+# workflow so the savers below repopulate fresh content. (That purge lives
+# in a separate workflow specifically so `actions: write` is never granted
+# on the `workflow_call` path from `ci.yaml`, which would expose it to
+# PR-controlled cargo build code. See the comment in
+# `canary-cache-refresh.yml`.) The low storage limit means we also try to
+# reuse `shared-key`s:
+#
+# 1. Only canary writes (`save-if: ${{ github.ref == 'refs/heads/canary' }}`).
+#    PR / merge_group / feature-branch runs read from canary's cache
+#    scope but don't save their own — keeps the 30 GiB budget from
+#    fragmenting one entry per ref. `canary-cache-refresh.yml`'s daily
+#    purge + repopulate cycle keeps canary's entries fresh past the 7-day
+#    inactivity TTL during quiet periods.
+#
+# 2. One designated saver per `shared-key`. Every other job that uses
+#    the same key passes `save-if: false` and is read-only. Two jobs
+#    saving under the same key would overwrite each other with
+#    different `target/` snapshots, burning budget without adding
+#    coverage.
+#
+# Saver/reader map
+# ----------------
+#
+# | shared-key      | saver (canary-only)   | readers (`save-if: false`)                      |
+# | --------------- | --------------------- | ----------------------------------------------- |
+# | `linux-cargo`   | `cargo-test-linux`    | `sdk-tests/linux`, `cargo-doc`,                 |
+# |                 |                       | `snapshot-tests`, `ci.yaml::prek`,              |
+# |                 |                       | `ci.yaml::bridge-nodejs-sync`,                  |
+# |                 |                       | `ci.yaml::benchmarks-instrumented`              |
+# | `linux-wasm`    | `cargo-test-wasm`     | —                                               |
+# | `linux-msrv`    | `cargo-build-msrv`    | —                                               |
+# | `macos-cargo`   | `cargo-test-macos`    | `sdk-tests/macos`                               |
+# | `windows-cargo` | `cargo-test-windows`  | `sdk-tests/windows`                             |
+#
+# `cargo-test-linux` is the saver for `linux-cargo` because it builds
+# the broadest target/ tree (`cargo test --no-run --all-features`
+# across the whole workspace) — that's the most useful seed for the
+# subcommand variants the readers run (`cargo doc`, narrower
+# snapshot tests, codspeed builds, the bridge_nodejs build, prek's
+# checks). Per-OS cargo-test jobs are the savers on macos/windows
+# for the same reason.
+#
+# Every rust-cache invocation also passes `cache-all-crates: true`
+# and `cache-workspace-crates: true`. By default rust-cache only
+# caches registry-resolved deps and strips workspace-crate artifacts
+# out of `target/` before saving. We override both: `cache-all-crates`
+# pulls in `~/.cargo/git/` (most importantly our aws-sdk-rust fork,
+# which is otherwise re-downloaded on every Windows run), and
+# `cache-workspace-crates` keeps the compiled workspace `target/` so
+# PRs reading from canary's cache restart with the workspace crates
+# already built. Cache size grows accordingly; the daily refresh in
+# `canary-cache-refresh.yml` bounds it.
+#
+# TODO: in our current setup, any PR that touches Cargo.lock — dependency bump,
+# new crate, anything that re-resolves — will therefore be unable to restore
+# from canary's build cache.  Swatinem/rust-cache@v2 hashes Cargo.lock (and
+# Cargo.toml, rust-toolchain.toml) into every cache key, so any such PRs will
+# have a new hash (and the action provides no mechanism to bypass this).
+# rust-cache's `restore-keys` salvage a deps-only partial restore by prefix,
+# but the entire workspace recompiles.
 name: Cargo Tests (Reusable)
 
 on:
   workflow_call: {}
+
+# Read-only by design: the daily cache refresh runs in
+# `canary-cache-refresh.yml`, which is the only place `actions: write`
+# is granted. Keeping this workflow read-only means callers (ci.yaml,
+# canary-cache-refresh.yml) never have to grant elevated scope to PR
+# runs that go through the workflow_call path.
+permissions:
+  contents: read
 
 defaults:
   run:
@@ -31,8 +111,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Linux jobs for better hit rates
-          shared-key: "linux-cargo-32gb"
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-cargo"
 
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
@@ -84,7 +167,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar macOS jobs for better hit rates
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
           shared-key: "macos-cargo"
 
       - name: "Install cargo nextest"
@@ -130,7 +216,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Windows jobs for better hit rates
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
           shared-key: "windows-cargo"
 
       - name: "Install cargo nextest"
@@ -176,7 +265,7 @@ jobs:
         include:
           - os-label: linux
             runs-on: blacksmith-16vcpu-ubuntu-2404
-            rust-cache-key: linux-cargo-32gb
+            rust-cache-key: linux-cargo
             timeout: 30
           - os-label: macos
             runs-on: macos-latest
@@ -201,8 +290,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Reuse the matching cargo-test-* shared-key so the Rust target/
-          # dir benefits from the cache populated by those jobs.
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: false
           shared-key: ${{ matrix.rust-cache-key }}
 
       - name: "Setup Python 3.10+"
@@ -273,7 +364,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Linux WASM jobs for better hit rates
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
           shared-key: "linux-wasm"
 
       - name: "Build for WASM"
@@ -324,8 +418,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across Linux MSRV jobs (32gb runner)
-          shared-key: "linux-msrv-32gb"
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-msrv"
 
       - name: "Build with MSRV"
         env:
@@ -384,7 +481,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Linux jobs for better hit rates
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: false
           shared-key: "linux-cargo"
 
       - name: "Generate documentation"
@@ -424,7 +524,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Linux jobs for better hit rates
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: false
           shared-key: "linux-cargo"
 
       - name: "Install cargo insta and nextest"
