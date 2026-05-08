@@ -1235,6 +1235,9 @@ impl BexVm {
                 ErrorClass::InvalidArgument,
                 vec![self.alloc_string(message)],
             ),
+            VmBamlError::ParseError { message } => {
+                (ErrorClass::ParseError, vec![self.alloc_string(message)])
+            }
             VmBamlError::Io { message } => (ErrorClass::Io, vec![self.alloc_string(message)]),
             VmBamlError::Timeout {
                 message,
@@ -1341,6 +1344,11 @@ impl BexVm {
             VmPanic::AllocFailure { message } => {
                 let msg = self.alloc_string(message);
                 (PanicClass::AllocFailure, vec![msg])
+            }
+            VmPanic::HostUnavailable { resource, message } => {
+                let resource = self.alloc_string(resource);
+                let message = self.alloc_string(message);
+                (PanicClass::HostUnavailable, vec![resource, message])
             }
         };
         self.alloc_panic_value(class, fields)

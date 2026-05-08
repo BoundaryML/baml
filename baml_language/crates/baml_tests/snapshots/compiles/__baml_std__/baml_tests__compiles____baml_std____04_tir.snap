@@ -35,6 +35,21 @@ class baml.Map$stream {
 --- <builtin>/baml/float.baml ---
 class baml.Float {
 }
+function baml.Float.is_finite(self: baml.Float) -> bool throws never {
+  { : bool
+    Not self.is_nan() && Not self.is_infinite() : bool
+  }
+}
+function baml.Float.to_radians(self: baml.Float) -> float throws never {
+  { : float
+    self * float.pi() / 180.0 : float
+  }
+}
+function baml.Float.to_degrees(self: baml.Float) -> float throws never {
+  { : float
+    self * 180.0 / float.pi() : float
+  }
+}
 function baml.Float.from_json(j: baml.json.json) -> baml.Float throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Float {  } : baml.Float
 }
@@ -43,6 +58,16 @@ class baml.Float$stream {
 
 --- <builtin>/baml/int.baml ---
 class baml.Int {
+}
+function baml.Int.max_value() -> int throws never {
+  { : 9223372036854775807
+    9223372036854775807 : 9223372036854775807
+  }
+}
+function baml.Int.min_value() -> int throws never {
+  { : -9223372036854775808
+    Neg 9223372036854775807 - 1 : -9223372036854775808
+  }
 }
 function baml.Int.from_json(j: baml.json.json) -> baml.Int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Int {  } : baml.Int
@@ -66,6 +91,15 @@ function baml.errors.InvalidArgument.to_json(self: baml.errors.InvalidArgument) 
 }
 function baml.errors.InvalidArgument.from_json(j: baml.json.json) -> baml.errors.InvalidArgument throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   InvalidArgument { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.errors.InvalidArgument
+}
+class baml.errors.ParseError {
+  message: string
+}
+function baml.errors.ParseError.to_json(self: baml.errors.ParseError) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "message": self.message.to_json() } : map<string, baml.json.json>
+}
+function baml.errors.ParseError.from_json(j: baml.json.json) -> baml.errors.ParseError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  ParseError { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.errors.ParseError
 }
 class baml.errors.Io {
   message: string
@@ -150,6 +184,9 @@ function baml.errors.HostPanic.from_json(j: baml.json.json) -> baml.errors.HostP
   HostPanic { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.errors.HostPanic
 }
 class baml.errors.InvalidArgument$stream {
+  message: null | string
+}
+class baml.errors.ParseError$stream {
   message: null | string
 }
 class baml.errors.Io$stream {
@@ -1269,7 +1306,17 @@ function baml.panics.AllocFailure.to_json(self: baml.panics.AllocFailure) -> bam
 function baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFailure throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AllocFailure { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.panics.AllocFailure
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.AllocFailure
+class baml.panics.HostUnavailable {
+  resource: string
+  message: string
+}
+function baml.panics.HostUnavailable.to_json(self: baml.panics.HostUnavailable) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "resource": self.resource.to_json(), "message": self.message.to_json() } : map<string, baml.json.json>
+}
+function baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  HostUnavailable { resource: baml.json.from_json<string>(baml.json.field(j, "resource")), message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.panics.HostUnavailable
+}
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.AllocFailure | baml.panics.HostUnavailable
 class baml.panics.DivisionByZero$stream {
   dividend: null | int
 }
@@ -1298,7 +1345,11 @@ class baml.panics.UserPanic$stream {
 class baml.panics.AllocFailure$stream {
   message: null | string
 }
-type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.AllocFailure$stream
+class baml.panics.HostUnavailable$stream {
+  resource: null | string
+  message: null | string
+}
+type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream
 
 --- <builtin>/baml/ns_stream/stream.baml ---
 class baml.stream.StreamFinished {

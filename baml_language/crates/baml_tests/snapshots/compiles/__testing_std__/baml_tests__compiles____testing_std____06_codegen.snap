@@ -345,7 +345,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     load_var t
     load_field .name
     load_var hash_prefix
-    call baml.String.startsWith
+    call baml.String.starts_with
 
   L10:
     pop_jump_if_false L11
@@ -464,7 +464,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     load_var ts
     load_field .name
     load_var hash_prefix
-    call baml.String.startsWith
+    call baml.String.starts_with
 
   L10:
     pop_jump_if_false L11
@@ -599,7 +599,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     load_var k
     load_const "/"
     bin_op +
-    call baml.String.startsWith
+    call baml.String.starts_with
     pop_jump_if_false L5
     jump L6
 
@@ -772,7 +772,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     load_var k
     load_const "/"
     bin_op +
-    call baml.String.startsWith
+    call baml.String.starts_with
     pop_jump_if_false L5
     jump L6
 

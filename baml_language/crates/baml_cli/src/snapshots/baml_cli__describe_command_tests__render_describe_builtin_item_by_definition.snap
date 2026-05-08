@@ -10,25 +10,25 @@ class String {
     $rust_function
   }
 
-  function length(self) -> int {
-    $rust_function
-  }
-
-  function toLowerCase(self) -> string {
-    $rust_function
-  }
-
-  ... skipped 40 lines ...
-  function matches(self, pattern: string) -> bool {
-    $rust_function
-  }
-
-  function replaceAll(self, search: string, replacement: string) -> string {
-    $rust_function
-  }
-
-  /// Encodes the string as UTF-8 bytes.
-  function to_bytes(self) -> uint8array {
+  /// Returns the length of the string in **UTF-8 bytes**.
+  ///
+  /// This is `O(1)`. For ASCII text the byte length equals the character
+  /// count, but for any string containing multi-byte characters the two
+  /// differ — e.g. `"héllo".length() == 6` because `é` is two bytes.
+  ///
+  /// To count Unicode code points (`O(n)`), use `char_count()`.
+  ///
+  ... skipped 443 lines ...
+  ///
+  /// # Examples
+  /// ```
+  /// string.from_code_points([104, 105])         // "hi"
+  /// string.from_code_points([233])              // "é"
+  /// string.from_code_points([128017])           // "🐑"
+  /// string.from_code_points([-1])               // throws — out of range
+  /// string.from_code_points([55296])            // throws — surrogate (U+D800)
+  /// ```
+  function from_code_points(unicode: int[]) -> string throws root.errors.InvalidArgument {
     $rust_function
   }
 }

@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use bex_vm_types::{HeapPtr, types::Value};
 use indexmap::IndexMap;
 
-use super::{BamlClassMap, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee};
+use super::{
+    BamlClassMap, Continuation, NativeCallResult, NativeFunctionResult, PackageBamlImpl,
+    make_to_json_callee,
+};
 use crate::BexVm;
 
 // ─── Map.to_json continuation ────────────────────────────────────────────────
@@ -106,23 +109,33 @@ impl BamlClassMap for PackageBamlImpl {
         map.values().copied().collect()
     }
 
-    fn __glue_set(vm: &mut BexVm, args: &[Value]) -> super::NativeCallResult {
-        let __result: super::NativeFunctionResult = (|| {
-            let key = &args[1];
-            let value = &args[2];
-            let key_as_string = vm.as_string(key)?.clone();
+    // ── set ──────────────────────────────────────────────────────────────────
+    //
+    // `set` (and the other mut-self methods below) need a custom glue so the
+    // immutable VM borrow used to extract the string key is dropped before the
+    // mutable `as_map_mut` borrow. The trait method bodies are unreachable —
+    // the glue dispatches to the actual logic.
+
+    fn __glue_set(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        let result: NativeFunctionResult = (|| {
+            let key_as_string = vm.as_string(&args[1])?.clone();
+            let value = args[2];
             let map = vm.as_map_mut(&args[0])?;
-            map.insert(key_as_string, *value);
-            Ok(Value::Null)
+            // `IndexMap::insert` returns `Some(prev)` if the key already
+            // existed, `None` otherwise — exactly the V? semantics we want.
+            Ok(match map.insert(key_as_string, value) {
+                Some(prev) => prev,
+                None => Value::Null,
+            })
         })();
-        match __result {
-            Ok(v) => super::NativeCallResult::Done(v),
-            Err(e) => super::NativeCallResult::Error(e),
+        match result {
+            Ok(v) => NativeCallResult::Done(v),
+            Err(e) => NativeCallResult::Error(e),
         }
     }
 
-    fn set(_map: &mut IndexMap<String, Value>, _key: &Value, _value: &Value) {
-        panic!("Should be called via __glue_set");
+    fn set(_map: &mut IndexMap<String, Value>, _key: &Value, _value: &Value) -> Option<Value> {
+        unreachable!("Map.set: should be dispatched via __glue_set")
     }
 
     fn get(vm: &BexVm, map: &IndexMap<String, Value>, key: &Value) -> Option<Value> {
@@ -158,5 +171,55 @@ impl BamlClassMap for PackageBamlImpl {
                 results: IndexMap::with_capacity(capacity),
             }),
         }
+    }
+
+    // ── delete ────────────────────────────────────────────────────────────────
+
+    fn __glue_delete(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        let result: NativeFunctionResult = (|| {
+            let key_as_string = vm.as_string(&args[1])?.clone();
+            let map = vm.as_map_mut(&args[0])?;
+            // `shift_remove` preserves the order of remaining entries (matching
+            // insertion order) — important since `keys()` / `values()` return
+            // entries in insertion order.
+            Ok(match map.shift_remove(&key_as_string) {
+                Some(prev) => prev,
+                None => Value::Null,
+            })
+        })();
+        match result {
+            Ok(v) => NativeCallResult::Done(v),
+            Err(e) => NativeCallResult::Error(e),
+        }
+    }
+
+    fn delete(_map: &mut IndexMap<String, Value>, _key: &Value) -> Option<Value> {
+        unreachable!("Map.delete: should be dispatched via __glue_delete")
+    }
+
+    // ── get_or_insert ─────────────────────────────────────────────────────────
+
+    fn __glue_get_or_insert(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        let result: NativeFunctionResult = (|| {
+            let key_as_string = vm.as_string(&args[1])?.clone();
+            let default = args[2];
+            let map = vm.as_map_mut(&args[0])?;
+            Ok(*map.entry(key_as_string).or_insert(default))
+        })();
+        match result {
+            Ok(v) => NativeCallResult::Done(v),
+            Err(e) => NativeCallResult::Error(e),
+        }
+    }
+
+    fn get_or_insert(_map: &mut IndexMap<String, Value>, _key: &Value, _default: &Value) -> Value {
+        unreachable!("Map.get_or_insert: should be dispatched via __glue_get_or_insert")
+    }
+
+    // ── clear ─────────────────────────────────────────────────────────────────
+
+    #[allow(clippy::unused_unit)]
+    fn clear(map: &mut IndexMap<String, Value>) -> () {
+        map.clear();
     }
 }
