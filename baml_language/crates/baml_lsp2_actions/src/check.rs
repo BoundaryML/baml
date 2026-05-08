@@ -21,7 +21,7 @@
 
 use std::collections::HashSet;
 
-use baml_base::{FileId, SourceFile, Span};
+use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic};
 use baml_compiler2_hir::{body::FunctionBody, file_semantic_index};
 use baml_compiler2_tir::inference::render_scope_diagnostics;
@@ -141,8 +141,11 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // type checker so prompt diagnostics match runtime template semantics.
     let source_text = file.text(db);
     diagnostics.extend(check_jinja_templates(
+        db,
         file_id,
         &item_tree,
+        pkg_items,
+        &pkg_info.namespace_path,
         &ast_items,
         source_text,
     ));
@@ -252,19 +255,24 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
 }
 
 fn check_jinja_templates(
+    db: &dyn Db,
     file_id: FileId,
     item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
     ast_items: &[baml_compiler2_ast::Item],
     source_text: &str,
 ) -> Vec<Diagnostic> {
-    let base_types = build_jinja_types(item_tree);
+    let base_types = build_jinja_types(db, pkg_items, namespace_path);
     let mut diagnostics = Vec::new();
 
     for func_data in item_tree.functions.values() {
         diagnostics.extend(check_llm_prompt_template(
+            db,
             file_id,
             func_data,
-            item_tree,
+            pkg_items,
+            namespace_path,
             &base_types,
             source_text,
         ));
@@ -281,7 +289,9 @@ fn check_jinja_templates(
             let ty = param
                 .type_expr
                 .as_ref()
-                .map(|type_expr| jinja_type_from_type_expr(&type_expr.expr, item_tree))
+                .map(|type_expr| {
+                    jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, namespace_path)
+                })
                 .unwrap_or(sys_jinja_types::Type::Unknown);
             types.add_variable(param.name.as_str(), ty);
         }
@@ -297,8 +307,10 @@ fn check_jinja_templates(
     }
 
     diagnostics.extend(check_jinja_constraints(
+        db,
         file_id,
-        item_tree,
+        pkg_items,
+        namespace_path,
         ast_items,
         &base_types,
     ));
@@ -307,8 +319,10 @@ fn check_jinja_templates(
 }
 
 fn check_jinja_constraints(
+    db: &dyn Db,
     file_id: FileId,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
     ast_items: &[baml_compiler2_ast::Item],
     base_types: &sys_jinja_types::PredefinedTypes,
 ) -> Vec<Diagnostic> {
@@ -327,13 +341,20 @@ fn check_jinja_constraints(
 
                 for field in &class_data.fields {
                     if let Some(type_expr) = &field.type_expr {
-                        let this_ty = jinja_type_from_type_expr(&type_expr.expr, item_tree);
+                        let this_ty = jinja_type_from_type_expr(
+                            db,
+                            &type_expr.expr,
+                            pkg_items,
+                            namespace_path,
+                        );
                         diagnostics.extend(check_ast_type_constraint_attrs(
+                            db,
                             file_id,
                             &type_expr.expr,
                             base_types,
                             &this_ty,
-                            item_tree,
+                            pkg_items,
+                            namespace_path,
                         ));
                     }
                 }
@@ -341,37 +362,50 @@ fn check_jinja_constraints(
             baml_compiler2_ast::Item::Function(func_data) => {
                 for param in &func_data.params {
                     if let Some(type_expr) = &param.type_expr {
-                        let this_ty = jinja_type_from_type_expr(&type_expr.expr, item_tree);
+                        let this_ty = jinja_type_from_type_expr(
+                            db,
+                            &type_expr.expr,
+                            pkg_items,
+                            namespace_path,
+                        );
                         diagnostics.extend(check_ast_type_constraint_attrs(
+                            db,
                             file_id,
                             &type_expr.expr,
                             base_types,
                             &this_ty,
-                            item_tree,
+                            pkg_items,
+                            namespace_path,
                         ));
                     }
                 }
 
                 if let Some(type_expr) = &func_data.return_type {
-                    let this_ty = jinja_type_from_type_expr(&type_expr.expr, item_tree);
+                    let this_ty =
+                        jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, namespace_path);
                     diagnostics.extend(check_ast_type_constraint_attrs(
+                        db,
                         file_id,
                         &type_expr.expr,
                         base_types,
                         &this_ty,
-                        item_tree,
+                        pkg_items,
+                        namespace_path,
                     ));
                 }
             }
             baml_compiler2_ast::Item::TypeAlias(alias_data) => {
                 if let Some(type_expr) = &alias_data.type_expr {
-                    let this_ty = jinja_type_from_type_expr(&type_expr.expr, item_tree);
+                    let this_ty =
+                        jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, namespace_path);
                     diagnostics.extend(check_ast_type_constraint_attrs(
+                        db,
                         file_id,
                         &type_expr.expr,
                         base_types,
                         &this_ty,
-                        item_tree,
+                        pkg_items,
+                        namespace_path,
                     ));
                 }
             }
@@ -403,11 +437,13 @@ fn check_ast_constraint_attrs(
 }
 
 fn check_ast_type_constraint_attrs(
+    db: &dyn Db,
     file_id: FileId,
     type_expr: &baml_compiler2_ast::TypeExpr,
     base_types: &sys_jinja_types::PredefinedTypes,
     this_ty: &sys_jinja_types::Type,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
 ) -> Vec<Diagnostic> {
     let mut diagnostics = type_expr
         .attrs()
@@ -427,37 +463,45 @@ fn check_ast_type_constraint_attrs(
         baml_compiler2_ast::TypeExpr::Optional { inner, .. }
         | baml_compiler2_ast::TypeExpr::List { inner, .. } => {
             diagnostics.extend(check_ast_type_constraint_attrs(
+                db,
                 file_id,
                 inner,
                 base_types,
-                &jinja_type_from_type_expr(inner, item_tree),
-                item_tree,
+                &jinja_type_from_type_expr(db, inner, pkg_items, namespace_path),
+                pkg_items,
+                namespace_path,
             ));
         }
         baml_compiler2_ast::TypeExpr::Map { key, value, .. } => {
             diagnostics.extend(check_ast_type_constraint_attrs(
+                db,
                 file_id,
                 key,
                 base_types,
-                &jinja_type_from_type_expr(key, item_tree),
-                item_tree,
+                &jinja_type_from_type_expr(db, key, pkg_items, namespace_path),
+                pkg_items,
+                namespace_path,
             ));
             diagnostics.extend(check_ast_type_constraint_attrs(
+                db,
                 file_id,
                 value,
                 base_types,
-                &jinja_type_from_type_expr(value, item_tree),
-                item_tree,
+                &jinja_type_from_type_expr(db, value, pkg_items, namespace_path),
+                pkg_items,
+                namespace_path,
             ));
         }
         baml_compiler2_ast::TypeExpr::Union { variants, .. } => {
             for variant in variants {
                 diagnostics.extend(check_ast_type_constraint_attrs(
+                    db,
                     file_id,
                     variant,
                     base_types,
-                    &jinja_type_from_type_expr(variant, item_tree),
-                    item_tree,
+                    &jinja_type_from_type_expr(db, variant, pkg_items, namespace_path),
+                    pkg_items,
+                    namespace_path,
                 ));
             }
         }
@@ -469,38 +513,46 @@ fn check_ast_type_constraint_attrs(
         } => {
             for param in params {
                 diagnostics.extend(check_ast_type_constraint_attrs(
+                    db,
                     file_id,
                     &param.ty,
                     base_types,
-                    &jinja_type_from_type_expr(&param.ty, item_tree),
-                    item_tree,
+                    &jinja_type_from_type_expr(db, &param.ty, pkg_items, namespace_path),
+                    pkg_items,
+                    namespace_path,
                 ));
             }
             diagnostics.extend(check_ast_type_constraint_attrs(
+                db,
                 file_id,
                 ret,
                 base_types,
-                &jinja_type_from_type_expr(ret, item_tree),
-                item_tree,
+                &jinja_type_from_type_expr(db, ret, pkg_items, namespace_path),
+                pkg_items,
+                namespace_path,
             ));
             if let Some(throws) = throws {
                 diagnostics.extend(check_ast_type_constraint_attrs(
+                    db,
                     file_id,
                     throws,
                     base_types,
-                    &jinja_type_from_type_expr(throws, item_tree),
-                    item_tree,
+                    &jinja_type_from_type_expr(db, throws, pkg_items, namespace_path),
+                    pkg_items,
+                    namespace_path,
                 ));
             }
         }
         baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => {
             for generic_arg in generic_args {
                 diagnostics.extend(check_ast_type_constraint_attrs(
+                    db,
                     file_id,
                     generic_arg,
                     base_types,
-                    &jinja_type_from_type_expr(generic_arg, item_tree),
-                    item_tree,
+                    &jinja_type_from_type_expr(db, generic_arg, pkg_items, namespace_path),
+                    pkg_items,
+                    namespace_path,
                 ));
             }
         }
@@ -577,7 +629,9 @@ fn normalize_regex_like_string_escapes(expr: &str) -> String {
             out.push(ch);
             if ch == '\\' {
                 if let Some(&next) = chars.peek() {
-                    if !matches!(next, '\\' | '"' | '\'' | 'n' | 'r' | 't' | '0') {
+                    if matches!(next, '\\' | '"' | '\'' | 'n' | 'r' | 't' | '0') {
+                        out.push(chars.next().expect("peeked character must exist"));
+                    } else {
                         out.push('\\');
                     }
                 }
@@ -596,9 +650,11 @@ fn normalize_regex_like_string_escapes(expr: &str) -> String {
 }
 
 fn check_llm_prompt_template(
+    db: &dyn Db,
     file_id: FileId,
     func_data: &baml_compiler2_hir::item_tree::Function,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
     base_types: &sys_jinja_types::PredefinedTypes,
     source_text: &str,
 ) -> Vec<Diagnostic> {
@@ -615,7 +671,9 @@ fn check_llm_prompt_template(
         let ty = param
             .type_expr
             .as_ref()
-            .map(|type_expr| jinja_type_from_type_expr(&type_expr.expr, item_tree))
+            .map(|type_expr| {
+                jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, namespace_path)
+            })
             .unwrap_or(sys_jinja_types::Type::Unknown);
         types.add_variable(param.name.as_str(), ty);
     }
@@ -630,12 +688,29 @@ fn check_llm_prompt_template(
 }
 
 fn build_jinja_types(
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    db: &dyn Db,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
 ) -> sys_jinja_types::PredefinedTypes {
+    use baml_compiler2_hir::contributions::Definition;
+
     let mut types =
         sys_jinja_types::PredefinedTypes::default(sys_jinja_types::JinjaContext::Prompt);
     types.add_variable("baml", sys_jinja_types::Type::Unknown);
-    for class_data in item_tree.classes.values() {
+
+    let Some(ns_items) = pkg_items.namespaces.get(namespace_path) else {
+        return types;
+    };
+
+    for def in ns_items.types.values() {
+        let Definition::Class(class_loc) = *def else {
+            continue;
+        };
+        let file = class_loc.file(db);
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let class_data = &item_tree[class_loc.id(db)];
+        let class_namespace =
+            baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
         let fields = class_data
             .fields
             .iter()
@@ -643,7 +718,9 @@ fn build_jinja_types(
                 let ty = field
                     .type_expr
                     .as_ref()
-                    .map(|type_expr| jinja_type_from_type_expr(&type_expr.expr, item_tree))
+                    .map(|type_expr| {
+                        jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, &class_namespace)
+                    })
                     .unwrap_or(sys_jinja_types::Type::Unknown);
                 (field.name.to_string(), ty)
             })
@@ -651,7 +728,12 @@ fn build_jinja_types(
         types.add_class(class_data.name.as_str(), fields);
     }
 
-    for enum_data in item_tree.enums.values() {
+    for def in ns_items.types.values() {
+        let Definition::Enum(enum_loc) = *def else {
+            continue;
+        };
+        let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
+        let enum_data = &item_tree[enum_loc.id(db)];
         types.add_enum(
             enum_data.name.as_str(),
             enum_data
@@ -662,16 +744,32 @@ fn build_jinja_types(
         );
     }
 
-    for alias_data in item_tree.type_aliases.values() {
+    for def in ns_items.types.values() {
+        let Definition::TypeAlias(alias_loc) = *def else {
+            continue;
+        };
+        let file = alias_loc.file(db);
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let alias_data = &item_tree[alias_loc.id(db)];
         if let Some(type_expr) = &alias_data.type_expr {
+            let alias_namespace =
+                baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
             types.add_alias(
                 alias_data.name.as_str(),
-                jinja_type_from_type_expr(&type_expr.expr, item_tree),
+                jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, &alias_namespace),
             );
         }
     }
 
-    for template in item_tree.template_strings.values() {
+    for def in ns_items.values.values() {
+        let Definition::TemplateString(template_loc) = *def else {
+            continue;
+        };
+        let file = template_loc.file(db);
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let template = &item_tree[template_loc.id(db)];
+        let template_namespace =
+            baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
         let args = template
             .params
             .iter()
@@ -679,7 +777,14 @@ fn build_jinja_types(
                 let ty = param
                     .type_expr
                     .as_ref()
-                    .map(|type_expr| jinja_type_from_type_expr(&type_expr.expr, item_tree))
+                    .map(|type_expr| {
+                        jinja_type_from_type_expr(
+                            db,
+                            &type_expr.expr,
+                            pkg_items,
+                            &template_namespace,
+                        )
+                    })
                     .unwrap_or(sys_jinja_types::Type::Unknown);
                 (param.name.to_string(), ty)
             })
@@ -691,18 +796,29 @@ fn build_jinja_types(
 }
 
 fn jinja_type_from_type_expr(
+    db: &dyn Db,
     type_expr: &baml_compiler2_ast::TypeExpr,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
 ) -> sys_jinja_types::Type {
-    jinja_type_from_type_expr_inner(type_expr, item_tree, &mut HashSet::new())
+    jinja_type_from_type_expr_inner(
+        db,
+        type_expr,
+        pkg_items,
+        namespace_path,
+        &mut HashSet::new(),
+    )
 }
 
 fn jinja_type_from_type_expr_inner(
+    db: &dyn Db,
     type_expr: &baml_compiler2_ast::TypeExpr,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
     resolving_aliases: &mut HashSet<String>,
 ) -> sys_jinja_types::Type {
     use baml_compiler2_ast::TypeExpr;
+    use baml_compiler2_hir::contributions::Definition;
     use sys_jinja_types::Type;
 
     match type_expr {
@@ -719,63 +835,85 @@ fn jinja_type_from_type_expr_inner(
         TypeExpr::Literal { value, .. } => Type::Literal(value.clone()),
         TypeExpr::Optional { inner, .. } => Type::merge([
             Type::None,
-            jinja_type_from_type_expr_inner(inner, item_tree, resolving_aliases),
+            jinja_type_from_type_expr_inner(
+                db,
+                inner,
+                pkg_items,
+                namespace_path,
+                resolving_aliases,
+            ),
         ]),
         TypeExpr::List { inner, .. } => Type::List(Box::new(jinja_type_from_type_expr_inner(
+            db,
             inner,
-            item_tree,
+            pkg_items,
+            namespace_path,
             resolving_aliases,
         ))),
         TypeExpr::Map { value, .. } => Type::Map(
             Box::new(Type::String),
             Box::new(jinja_type_from_type_expr_inner(
+                db,
                 value,
-                item_tree,
+                pkg_items,
+                namespace_path,
                 resolving_aliases,
             )),
         ),
-        TypeExpr::Union { variants, .. } => {
-            Type::merge(variants.iter().map(|variant| {
-                jinja_type_from_type_expr_inner(variant, item_tree, resolving_aliases)
-            }))
-        }
-        TypeExpr::Path { segments, .. } if segments.len() == 1 => {
-            let name = segments[0].as_str();
-            if item_tree
-                .classes
-                .values()
-                .any(|class_data| class_data.name.as_str() == name)
-            {
-                Type::ClassRef(name.to_string())
-            } else if item_tree
-                .enums
-                .values()
-                .any(|enum_data| enum_data.name.as_str() == name)
-            {
-                Type::EnumTypeRef(name.to_string())
-            } else if let Some(alias) = item_tree
-                .type_aliases
-                .values()
-                .find(|alias_data| alias_data.name.as_str() == name)
-            {
-                if !resolving_aliases.insert(name.to_string()) {
-                    return Type::RecursiveTypeAlias(name.to_string());
+        TypeExpr::Union { variants, .. } => Type::merge(variants.iter().map(|variant| {
+            jinja_type_from_type_expr_inner(
+                db,
+                variant,
+                pkg_items,
+                namespace_path,
+                resolving_aliases,
+            )
+        })),
+        TypeExpr::Path { segments, .. } if !segments.is_empty() => {
+            let (lookup_namespace, name) = jinja_lookup_path(namespace_path, segments);
+            let key = format!(
+                "{}::{}",
+                lookup_namespace
+                    .iter()
+                    .map(Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join("::"),
+                name
+            );
+            let name_obj = Name::new(name.as_str());
+            match pkg_items.lookup_type(&lookup_namespace, &name_obj) {
+                Some(Definition::Class(_)) => Type::ClassRef(name),
+                Some(Definition::Enum(_)) => Type::EnumTypeRef(name),
+                Some(Definition::TypeAlias(alias_loc)) => {
+                    if !resolving_aliases.insert(key.clone()) {
+                        return Type::RecursiveTypeAlias(name);
+                    }
+                    let file = alias_loc.file(db);
+                    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+                    let alias = &item_tree[alias_loc.id(db)];
+                    let alias_namespace =
+                        baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
+                    let resolved = alias
+                        .type_expr
+                        .as_ref()
+                        .map(|spanned| {
+                            jinja_type_from_type_expr_inner(
+                                db,
+                                &spanned.expr,
+                                pkg_items,
+                                &alias_namespace,
+                                resolving_aliases,
+                            )
+                        })
+                        .unwrap_or(Type::Unknown);
+                    resolving_aliases.remove(&key);
+                    Type::Alias {
+                        name,
+                        target: Box::new(resolved.clone()),
+                        resolved: Box::new(resolved),
+                    }
                 }
-                let resolved = alias
-                    .type_expr
-                    .as_ref()
-                    .map(|spanned| {
-                        jinja_type_from_type_expr_inner(&spanned.expr, item_tree, resolving_aliases)
-                    })
-                    .unwrap_or(Type::Unknown);
-                resolving_aliases.remove(name);
-                Type::Alias {
-                    name: name.to_string(),
-                    target: Box::new(resolved.clone()),
-                    resolved: Box::new(resolved),
-                }
-            } else {
-                Type::Unknown
+                _ => Type::Unknown,
             }
         }
         TypeExpr::Function { .. } => Type::Unknown,
@@ -788,6 +926,17 @@ fn jinja_type_from_type_expr_inner(
         | TypeExpr::Error { .. }
         | TypeExpr::Unknown { .. }
         | TypeExpr::Path { .. } => Type::Unknown,
+    }
+}
+
+fn jinja_lookup_path(current_namespace: &[Name], segments: &[Name]) -> (Vec<Name>, String) {
+    let (name, namespace) = segments
+        .split_last()
+        .expect("caller guarantees at least one segment");
+    if namespace.is_empty() {
+        (current_namespace.to_vec(), name.to_string())
+    } else {
+        (namespace.to_vec(), name.to_string())
     }
 }
 
@@ -1264,6 +1413,49 @@ template_string BadCall2() #"
     }
 
     #[test]
+    fn check_file_resolves_cross_file_jinja_template_strings() {
+        let mut builder = CursorTest::builder();
+        builder.source(
+            "shared.baml",
+            r##"class Person {
+  name string
+}
+
+template_string PersonHeader(person: Person) #"
+  {{ person.name }}
+"#
+"##,
+        );
+        builder.source(
+            "main.baml",
+            r##"client GPT4o {
+  provider openai
+  options {
+    model "gpt-5"
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+function TakeGuess(person: Person) -> string {
+  client GPT4o
+  prompt #"
+    {{ PersonHeader(person) }}
+  "#
+}
+<[CURSOR]"##,
+        );
+        let test = builder.build();
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diag| diag.id != DiagnosticId::JinjaUnresolvedVariable),
+            "cross-file template string calls should resolve in prompts: {diagnostics:#?}"
+        );
+    }
+
+    #[test]
     fn check_file_reports_constraint_jinja_errors() {
         let test = CursorTest::new(
             r#"class Foo {
@@ -1304,6 +1496,14 @@ template_string BadCall2() #"
                 .all(|diag| !(diag.id == DiagnosticId::JinjaUnresolvedVariable
                     && diag.message.contains("`null`"))),
             "{diagnostics:#?}"
+        );
+    }
+
+    #[test]
+    fn normalizes_regex_escapes_after_escaped_quotes() {
+        assert_eq!(
+            normalize_regex_like_string_escapes(r#"this.matches("^\"\d\"$")"#),
+            r#"this.matches("^\"\\d\"$")"#,
         );
     }
 }

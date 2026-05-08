@@ -436,8 +436,8 @@ function Test(s: string) -> string {
         let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
 
         assert!(
-            labels.contains(&"toLowerCase"),
-            "Should contain stdlib string method 'toLowerCase', got: {labels:?}"
+            labels.contains(&"to_lower_case"),
+            "Should contain stdlib string method 'to_lower_case', got: {labels:?}"
         );
         assert!(
             !labels.contains(&"lower"),
