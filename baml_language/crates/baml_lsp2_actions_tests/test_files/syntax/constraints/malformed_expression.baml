@@ -62,11 +62,11 @@ function FunctionName2(arg:string) -> "foo" {
 //     │ Note: Error code: E0084
 // ────╯
 // Error: Error parsing jinja template: syntax error: unexpected `)` (in <expression>:1)
-//    ╭─[ constraints_malformed_expression.baml:2:33 ]
+//    ╭─[ constraints_malformed_expression.baml:2:34 ]
 //    │
 //  2 │   bar string @check(bar_check, {{ ) }})
-//    │                                 ┬  
-//    │                                 ╰── Error parsing jinja template: syntax error: unexpected `)` (in <expression>:1)
+//    │                                  ┬  
+//    │                                  ╰── Error parsing jinja template: syntax error: unexpected `)` (in <expression>:1)
 //    │ 
 //    │ Note: Error code: E0084
 // ───╯
