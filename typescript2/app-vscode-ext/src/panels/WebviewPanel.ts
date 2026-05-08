@@ -3,6 +3,8 @@ import {
   Position,
   Range,
   Selection,
+  type TextEditor,
+  type TextEditorSelectionChangeEvent,
   TextEditorRevealType,
   Uri,
   ViewColumn,
@@ -22,29 +24,61 @@ type SourceNavigationTarget = {
   | { fileId: number; filePath?: string }
 );
 
+interface CursorPosition {
+  file: string;
+  line: number;
+  column: number;
+}
+
+interface OpenPlaygroundTarget {
+  project: string;
+  functionName?: string;
+}
+
+function isBamlEditor(editor: TextEditor): boolean {
+  return editor.document.languageId === 'baml' || editor.document.uri.fsPath.endsWith('.baml');
+}
+
 export class WebviewPanel {
   public static currentPanel: WebviewPanel | undefined;
   private readonly _panel: VSCodeWebviewPanel;
   private _disposables: Disposable[] = [];
+  private _openTarget: OpenPlaygroundTarget;
 
-  private constructor(panel: VSCodeWebviewPanel) {
+  private constructor(panel: VSCodeWebviewPanel, openTarget: OpenPlaygroundTarget) {
     this._panel = panel;
+    this._openTarget = openTarget;
 
     // Dispose listener
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this._panel.webview.onDidReceiveMessage(
       (message: { type?: string; source?: SourceNavigationTarget }) => {
-        if (message.type !== 'navigateToSource' || !message.source) return;
-        void this.navigateToSource(message.source);
+        if (message.type === 'webviewReady') {
+          this.forwardOpenPlayground();
+          this.forwardActiveEditorCursorPosition();
+          return;
+        }
+        if (message.type === 'navigateToSource' && message.source) {
+          void this.navigateToSource(message.source);
+        }
       },
       null,
       this._disposables,
     );
+
+    const selectionDisposable = window.onDidChangeTextEditorSelection((event) => {
+      this.forwardCursorPosition(event);
+    });
+    this._disposables.push(selectionDisposable);
+    this.forwardActiveEditorCursorPosition();
   }
 
-  public static async render(extensionUri: Uri, port: number) {
+  public static async render(extensionUri: Uri, port: number, openTarget: OpenPlaygroundTarget) {
     if (WebviewPanel.currentPanel) {
+      WebviewPanel.currentPanel._openTarget = openTarget;
       WebviewPanel.currentPanel._panel.reveal(ViewColumn.Beside, true);
+      WebviewPanel.currentPanel.forwardOpenPlayground();
+      WebviewPanel.currentPanel.forwardActiveEditorCursorPosition();
       return;
     }
 
@@ -60,7 +94,7 @@ export class WebviewPanel {
       }
     );
 
-    WebviewPanel.currentPanel = new WebviewPanel(panel);
+    WebviewPanel.currentPanel = new WebviewPanel(panel, openTarget);
 
     // Show a loading message while we fetch the real HTML from the server.
     panel.webview.html = `<!DOCTYPE html>
@@ -70,6 +104,8 @@ export class WebviewPanel {
 
     try {
       panel.webview.html = await getPlaygroundHtml(port);
+      WebviewPanel.currentPanel.forwardOpenPlayground();
+      WebviewPanel.currentPanel.forwardActiveEditorCursorPosition();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       panel.webview.html = `<!DOCTYPE html>
@@ -77,6 +113,36 @@ export class WebviewPanel {
 <p>Failed to load playground: ${msg}</p>
 </body></html>`;
     }
+  }
+
+  private forwardOpenPlayground(): void {
+    void this._panel.webview.postMessage({
+      type: 'openPlayground',
+      target: this._openTarget,
+    });
+  }
+
+  private forwardCursorPosition(event: TextEditorSelectionChangeEvent): void {
+    this.forwardEditorCursorPosition(event.textEditor);
+  }
+
+  private forwardActiveEditorCursorPosition(): void {
+    const editor = window.activeTextEditor;
+    if (editor) {
+      this.forwardEditorCursorPosition(editor);
+    }
+  }
+
+  private forwardEditorCursorPosition(editor: TextEditor): void {
+    if (!isBamlEditor(editor)) return;
+
+    const active = editor.selection.active;
+    const position: CursorPosition = {
+      file: editor.document.uri.fsPath,
+      line: active.line,
+      column: active.character,
+    };
+    void this._panel.webview.postMessage({ type: 'cursorPosition', position });
   }
 
   public dispose() {

@@ -479,17 +479,47 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     return null;
   }
 
-  /** Find a graph node whose label starts with `funcName(` — used when candidate
-   *  matching fails because the cursor is on a callee Path expression but the
-   *  graph stores the Call expression. */
+  function functionNameAliases(functionName: string): string[] {
+    const shortName = functionName.split('.').pop();
+    return shortName && shortName !== functionName ? [functionName, shortName] : [functionName];
+  }
+
+  function labelCalleeName(label: string): string {
+    const trimmed = label.trim();
+    const optionalCallStart = trimmed.indexOf('?.(');
+    if (optionalCallStart >= 0) return trimmed.slice(0, optionalCallStart).trim();
+
+    const callStart = trimmed.indexOf('(');
+    if (callStart >= 0) return trimmed.slice(0, callStart).trim();
+
+    return trimmed;
+  }
+
+  function nodeLabelMatchesFunctionName(label: string, functionName: string): boolean {
+    const calleeName = labelCalleeName(label);
+    return functionNameAliases(functionName).some((name) => calleeName === name);
+  }
+
+  function nodeMatchesFunctionName(
+    node: ControlFlowGraph['nodes'][string],
+    functionName: string,
+  ): boolean {
+    const aliases = functionNameAliases(functionName);
+    if (node.calleeName && aliases.includes(node.calleeName)) return true;
+    return nodeLabelMatchesFunctionName(node.label, functionName);
+  }
+
+  /** Find a graph node for `funcName` — used when candidate matching fails
+   *  because the cursor is on a callee Path expression but the graph stores
+   *  the full Call expression. Prefer runtime-provided callee metadata, with
+   *  label matching only as a compatibility fallback for older graph payloads. */
   function resolveNodeByFunctionName(
     graph: ControlFlowGraph | null,
     funcName: string,
   ): number | null {
     if (!graph || !funcName) return null;
-    const prefix = `${funcName}(`;
     for (const [, node] of Object.entries(graph.nodes)) {
-      if (node.label.startsWith(prefix)) return node.id;
+      if (nodeMatchesFunctionName(node, funcName)) return node.id;
     }
     return null;
   }
@@ -542,9 +572,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     const sourceExprFunctionName = ctx.sourceExprFunctionName ?? ctx.functionName;
     const nodeId = resolveCandidatesToNodeId(cachedGraph, candidates, sourceExprFunctionName)
       ?? (ctx.sourceExprId != null ? resolveNodeByFunctionName(cachedGraph, ctx.functionName) : null);
+    const isCallSite = sourceExprFunctionName !== ctx.functionName;
 
     // Rule 1: cursor is on a node in the currently-displayed workflow
-    if (nodeId != null && ctx.functionName === currentFn) {
+    if (nodeId != null && sourceExprFunctionName === currentFn) {
       setHighlightedNodeId(nodeId);
       return;
     }
@@ -555,12 +586,24 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       return;
     }
 
-    // Rule 3: navigate to the function the cursor is on.
-    // Always show THAT function's own graph — never auto-redirect to a
-    // workflow. If the function is called from workflows, expose them via
-    // the "called from" picker so the user can opt in.
+    // Rule 3: cursor is on a call expression. Keep/show the function body
+    // that owns the call so the top-level workflow remains the primary view.
+    if (isCallSite) {
+      if (sourceExprFunctionName !== currentFn) {
+        setSelectedFn(sourceExprFunctionName);
+        setViewingCollection(false);
+        setViewingTestRun(false);
+        setHighlightedNodeId(null);
+      }
+      setWorkflowContext(null);
+      return;
+    }
+
+    // Rule 4: navigate to the function definition/reference the cursor is on.
     if (ctx.functionName !== currentFn) {
       setSelectedFn(ctx.functionName);
+      setViewingCollection(false);
+      setViewingTestRun(false);
       setHighlightedNodeId(null);
     }
     // Update "called from" context (shown as a picker above the graph).
@@ -639,7 +682,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             }
             case 'openPlayground':
               setSelectedProject(n.project);
-              if (n.functionName) setSelectedFn(n.functionName);
+              if (n.functionName) {
+                setWorkflowContext(null);
+                setSelectedFn(n.functionName);
+                setViewingCollection(false);
+                setViewingTestRun(false);
+              }
               break;
             case 'controlFlowGraphResult':
               if (n.graph) setControlFlowGraph(n.graph);

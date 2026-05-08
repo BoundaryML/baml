@@ -24,6 +24,7 @@ export interface GraphNode {
     sourceSpan?: SourceNavigationTarget;
     isContainer: boolean;
     llmClient?: string;
+    calleeName?: string;
   };
 }
 

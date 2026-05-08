@@ -191,7 +191,10 @@ export async function activate(context: vscode.ExtensionContext) {
   client.onNotification(
     'baml/openPlayground',
     async (params: { port: number; projectPath: string; functionName?: string }) => {
-      await WebviewPanel.render(context.extensionUri, params.port);
+      await WebviewPanel.render(context.extensionUri, params.port, {
+        project: params.projectPath,
+        ...(params.functionName ? { functionName: params.functionName } : {}),
+      });
     },
   );
 

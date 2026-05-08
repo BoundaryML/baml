@@ -615,6 +615,7 @@ mod tests {
             source_expr: None,
             node_type,
             llm_client: None,
+            callee_name: None,
             source_span: None,
             is_container: false,
         }

@@ -97,6 +97,8 @@ pub struct Node {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub llm_client: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub callee_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source_span: Option<SourceSpan>,
     #[serde(default)]
     pub is_container: bool,
@@ -119,6 +121,7 @@ impl Node {
             source_expr,
             node_type,
             llm_client: None,
+            callee_name: None,
             source_span: None,
             is_container: false,
         }
@@ -138,6 +141,12 @@ impl Node {
     #[must_use]
     pub fn with_llm_client(mut self, client_name: impl Into<String>) -> Self {
         self.llm_client = Some(client_name.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_callee_name(mut self, callee_name: impl Into<String>) -> Self {
+        self.callee_name = Some(callee_name.into());
         self
     }
 }

@@ -19,6 +19,7 @@ export function cfgToGraphNodes(cfg: ControlFlowGraph): { nodes: GraphNode[]; ed
         sourceSpan: node.sourceSpan,
         isContainer: node.isContainer,
         llmClient: node.llmClient,
+        calleeName: node.calleeName,
       },
     });
   }

@@ -152,6 +152,10 @@ export class WebSocketRuntimePort implements RuntimePort {
     };
   }
 
+  dispatchLocalMessage(msg: WorkerOutMessage): void {
+    this.deliver(msg);
+  }
+
   dispose(): void {
     this.disposed = true;
     if (this.reconnectTimer) {

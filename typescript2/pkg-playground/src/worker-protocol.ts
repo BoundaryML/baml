@@ -128,6 +128,7 @@ export interface CfgNode {
   sourceSpan?: SourceNavigationTarget;
   nodeType: CfgNodeType;
   llmClient?: string;
+  calleeName?: string;
   isContainer: boolean;
 }
 
