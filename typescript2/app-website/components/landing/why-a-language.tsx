@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import {
   Braces,
   Bug,
@@ -11,7 +11,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { FeatureAnimation } from './feature-animations';
 
 type Feature = {
@@ -138,34 +138,64 @@ function LanguagePanel({
   activeTint: string;
   onActiveFeatureChange: (id: string) => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+
+  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [-10, 12]), {
+    damping: 22,
+    mass: 0.6,
+    stiffness: 180,
+  });
+  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-14, 14]), {
+    damping: 22,
+    mass: 0.6,
+    stiffness: 180,
+  });
+
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    const node = ref.current;
+    if (!node) {
+      return;
+    }
+    const rect = node.getBoundingClientRect();
+    const px = (event.clientX - rect.left) / rect.width - 0.5;
+    const py = (event.clientY - rect.top) / rect.height - 0.5;
+    mouseX.set(px);
+    mouseY.set(py);
+  };
+
+  const handleMouseLeave = () => {
+    mouseX.set(0);
+    mouseY.set(0);
+  };
+
   return (
-    <div style={{ perspective: '1600px' }}>
+    <div
+      onMouseLeave={handleMouseLeave}
+      onMouseMove={handleMouseMove}
+      ref={ref}
+      style={{ perspective: '1600px' }}
+    >
       <motion.div
-        animate={{
-          rotateX: 8,
-          rotateY: 5,
-          y: [0, -4, 0],
-        }}
         className="h-full"
         style={{
+          rotateX,
+          rotateY,
           transformOrigin: '50% 70%',
           transformStyle: 'preserve-3d',
         }}
-        transition={{
-          rotateX: { duration: 0.6, ease: [0.22, 0.61, 0.36, 1] },
-          rotateY: { duration: 0.6, ease: [0.22, 0.61, 0.36, 1] },
-          y: {
+      >
+        <motion.div
+          animate={{ y: [0, -4, 0] }}
+          className="h-full"
+          style={{ transformStyle: 'preserve-3d' }}
+          transition={{
             duration: 5.6,
             ease: 'easeInOut',
             repeat: Number.POSITIVE_INFINITY,
-          },
-        }}
-        whileHover={{
-          rotateX: 3,
-          rotateY: 2,
-          transition: { duration: 0.4 },
-        }}
-      >
+          }}
+        >
         <motion.div
           animate={{
             borderColor: `${activeTint}55`,
@@ -219,6 +249,7 @@ function LanguagePanel({
               />
             ))}
           </div>
+        </motion.div>
         </motion.div>
       </motion.div>
     </div>

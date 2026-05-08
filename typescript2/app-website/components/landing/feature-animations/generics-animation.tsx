@@ -37,7 +37,7 @@ export function GenericsAnimation({ tint }: { tint: string }) {
   useEffect(() => {
     const interval = setInterval(() => {
       setIdx((i) => (i + 1) % SUBSTITUTIONS.length);
-    }, 2200);
+    }, 1900);
     return () => clearInterval(interval);
   }, []);
 

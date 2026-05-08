@@ -68,7 +68,7 @@ export function StreamingAnimation({ tint }: { tint: string }) {
   useEffect(() => {
     const interval = setInterval(() => {
       setTickIdx((i) => (i + 1) % (SCHEDULE.length + 4));
-    }, 480);
+    }, 420);
     return () => clearInterval(interval);
   }, []);
 
