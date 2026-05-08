@@ -240,6 +240,9 @@ pub struct FileSemanticIndex<'db> {
     /// Package-item resolution (namespace, split point) is deferred to TIR
     /// since it requires cross-file `package_items` queries.
     pub path_resolutions: Vec<(ExprId, PathResolution)>,
+
+    /// Environment variable references (`env.X`) found in this file's expression bodies.
+    pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
 // ── salsa::Update impl ────────────────────────────────────────────────────────

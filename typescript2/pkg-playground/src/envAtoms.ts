@@ -105,6 +105,24 @@ export const envVarsAtom = atom(
  */
 export const knownRequiredKeysAtom = atom<Set<string>>(new Set<string>());
 
+/**
+ * Original process env vars from the server (set once on init, never mutated).
+ * Used to display shell-sourced vars and support "revert to shell" functionality.
+ */
+export const shellEnvVarsAtom = atom<EnvVars>({});
+
+/**
+ * Shell env keys that the user has manually overridden or deleted.
+ * A key present here means the user changed or removed the value in the dialog.
+ */
+export const shellOverriddenKeysAtom = atom<Set<string>>(new Set<string>());
+
+/**
+ * Shell env keys that the user has deleted.
+ * These are still shown in the dialog so the user can revert them.
+ */
+export const shellDeletedKeysAtom = atom<Set<string>>(new Set<string>());
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -112,10 +130,22 @@ export const knownRequiredKeysAtom = atom<Set<string>>(new Set<string>());
 export interface UseEnvVars {
   envVars: Record<string, string>;
   knownRequiredKeys: Set<string>;
+  /** Original process env vars from the server's shell. */
+  shellEnvVars: Record<string, string>;
+  /** Shell keys that the user has manually overridden or deleted. */
+  shellOverriddenKeys: Set<string>;
+  /** Shell keys that the user has deleted. */
+  shellDeletedKeys: Set<string>;
   addEnvVar: (key: string, value: string) => void;
   removeEnvVar: (key: string) => void;
   importEnvVars: (vars: Record<string, string>) => void;
   addRequiredKey: (key: string) => void;
+  /** Import a single shell-provided env var. Does NOT overwrite user-entered values. */
+  addShellEnvVar: (key: string, value: string) => void;
+  /** Bulk import process env vars on init. Stores originals and merges into env vars. */
+  importShellEnvVars: (vars: Record<string, string>) => void;
+  /** Revert a key to its original shell value (clears the user override). */
+  revertToShell: (key: string) => void;
 }
 
 /**
@@ -132,9 +162,18 @@ export function useEnvVars(port: RuntimePort): UseEnvVars {
   const lastHydratedPortRef = useRef<RuntimePort | null>(null);
   const envVarsRef = useRef(envVars);
 
+  const [shellEnvVars, setShellEnvVars] = useAtom(shellEnvVarsAtom);
+  const [shellOverriddenKeys, setShellOverriddenKeys] = useAtom(shellOverriddenKeysAtom);
+  const [shellDeletedKeys, setShellDeletedKeys] = useAtom(shellDeletedKeysAtom);
+  const shellEnvVarsRef = useRef(shellEnvVars);
+
   useEffect(() => {
     envVarsRef.current = envVars;
   }, [envVars]);
+
+  useEffect(() => {
+    shellEnvVarsRef.current = shellEnvVars;
+  }, [shellEnvVars]);
 
   useEffect(() => {
     setRuntimePort(port);
@@ -159,29 +198,119 @@ export function useEnvVars(port: RuntimePort): UseEnvVars {
   }, [setEnvVars, port]);
 
   const addEnvVar = useCallback((key: string, value: string) => {
-    setEnvVars((prev) => {
-      const next = { ...prev, [key]: value };
-      return next;
-    });
-  }, [setEnvVars]);
+    setEnvVars((prev) => ({ ...prev, [key]: value }));
+    // If this key came from the shell and the value differs, mark as overridden.
+    const shellVal = shellEnvVarsRef.current[key];
+    if (shellVal !== undefined && shellVal !== value) {
+      setShellOverriddenKeys((prev) => {
+        if (prev.has(key)) return prev;
+        return new Set([...prev, key]);
+      });
+    } else if (shellVal === value) {
+      // Value matches shell — no longer overridden.
+      setShellOverriddenKeys((prev) => {
+        if (!prev.has(key)) return prev;
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  }, [setEnvVars, setShellOverriddenKeys]);
 
   const removeEnvVar = useCallback((key: string) => {
     setEnvVars((prev: EnvVars) => {
       const { [key]: _, ...rest } = prev;
       return rest;
     });
-  }, [setEnvVars]);
+    // If this was a shell key, track it as deleted (so the UI can offer revert).
+    if (shellEnvVarsRef.current[key] !== undefined) {
+      setShellDeletedKeys((prev) => {
+        if (prev.has(key)) return prev;
+        return new Set([...prev, key]);
+      });
+      setShellOverriddenKeys((prev) => {
+        if (prev.has(key)) return prev;
+        return new Set([...prev, key]);
+      });
+    } else {
+      setShellOverriddenKeys((prev) => {
+        if (!prev.has(key)) return prev;
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  }, [setEnvVars, setShellOverriddenKeys, setShellDeletedKeys]);
 
   const importEnvVars = useCallback((vars: EnvVars) => {
-    setEnvVars((prev) => {
-      const next = { ...prev, ...vars };
-      return next;
-    });
+    setEnvVars((prev) => ({ ...prev, ...vars }));
   }, [setEnvVars]);
 
   const addRequiredKey = useCallback((key: string) => {
     setRequiredKeys((prev) => prev.has(key) ? prev : new Set([...prev, key]));
   }, [setRequiredKeys]);
 
-  return { envVars, knownRequiredKeys: requiredKeys, addEnvVar, removeEnvVar, importEnvVars, addRequiredKey };
+  const addShellEnvVar = useCallback((key: string, value: string) => {
+    // Store as shell original.
+    setShellEnvVars((prev) => prev[key] === value ? prev : { ...prev, [key]: value });
+    // Only import into env vars if user hasn't already set a value.
+    setEnvVars((prev) => {
+      if (key in prev) return prev;
+      return { ...prev, [key]: value };
+    });
+  }, [setEnvVars, setShellEnvVars]);
+
+  const importShellEnvVars = useCallback((vars: EnvVars) => {
+    // Store all originals.
+    setShellEnvVars(vars);
+    // Merge into env vars, but don't overwrite existing user entries.
+    setEnvVars((prev) => {
+      const merged = { ...prev };
+      let changed = false;
+      for (const [key, value] of Object.entries(vars)) {
+        if (!(key in merged)) {
+          merged[key] = value;
+          changed = true;
+        }
+      }
+      return changed ? merged : prev;
+    });
+  }, [setEnvVars, setShellEnvVars]);
+
+  const revertToShell = useCallback((key: string) => {
+    const shellVal = shellEnvVarsRef.current[key];
+    if (shellVal === undefined) return;
+    // Restore the shell value.
+    setEnvVars((prev) => ({ ...prev, [key]: shellVal }));
+    // Clear override and deleted flags.
+    setShellOverriddenKeys((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+    setShellDeletedKeys((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+    // Tell the server to remove the override so it falls back to process env.
+    port.postMessage({ type: 'deleteEnvVar', key });
+  }, [setEnvVars, setShellOverriddenKeys, setShellDeletedKeys, port]);
+
+  return {
+    envVars,
+    knownRequiredKeys: requiredKeys,
+    shellEnvVars,
+    shellOverriddenKeys,
+    shellDeletedKeys,
+    addEnvVar,
+    removeEnvVar,
+    importEnvVars,
+    addRequiredKey,
+    addShellEnvVar,
+    importShellEnvVars,
+    revertToShell,
+  };
 }

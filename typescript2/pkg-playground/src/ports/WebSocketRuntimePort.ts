@@ -25,6 +25,9 @@ type WsOutMessage =
   | { type: 'callFunctionResult'; id: number; result: string }
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'envVarRequest'; id: number; variable: string }
+  | { type: 'processEnvVars'; vars: Record<string, string> }
+  | { type: 'envVarFromShell'; variable: string; value: string }
+  | { type: 'knownEnvVarNames'; names: string[] }
   | { type: 'inputRequest'; id: number; prompt: string | undefined; callId: number }
   | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
   | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string; responseHeaders?: Record<string, string> }
@@ -40,6 +43,8 @@ type WsInMessage =
   | { type: 'expandTestSet'; project: string; generation: number; testsetName: string }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
   | { type: 'inputResponse'; id: number; value: string }
+  | { type: 'setEnvVar'; key: string; value: string }
+  | { type: 'deleteEnvVar'; key: string }
   | { type: 'requestState' }
   | { type: 'requestCollectTests'; project: string }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
@@ -188,9 +193,9 @@ export class WebSocketRuntimePort implements RuntimePort {
           variable: msg.variable,
         };
       case 'setEnvVar':
-        return null; // UI cache only — not sent to server
+        return { type: 'setEnvVar', key: msg.key, value: msg.value };
       case 'deleteEnvVar':
-        return null; // UI cache only — not sent to server
+        return { type: 'deleteEnvVar', key: msg.key };
       case 'selectProject':
         return null; // handled locally for now
       case 'filesChanged':
@@ -274,6 +279,12 @@ export class WebSocketRuntimePort implements RuntimePort {
         return { type: 'callFunctionError', id: raw.id, error: raw.error, cancelled: raw.cancelled };
       case 'envVarRequest':
         return { type: 'envVarRequest', id: raw.id, variable: raw.variable };
+      case 'processEnvVars':
+        return { type: 'processEnvVars', vars: raw.vars };
+      case 'envVarFromShell':
+        return { type: 'envVarFromShell', variable: raw.variable, value: raw.value };
+      case 'knownEnvVarNames':
+        return { type: 'knownEnvVarNames', names: raw.names };
       case 'inputRequest':
         return { type: 'inputRequest', id: raw.id, prompt: raw.prompt, callId: raw.callId };
       case 'fetchLogNew':

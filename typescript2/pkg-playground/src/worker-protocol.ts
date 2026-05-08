@@ -218,6 +218,9 @@ export type WorkerOutMessage =
   | { type: 'runtimeEventNew'; event: DeserializedRuntimeEvent; callId: number | null }
   | { type: 'runtimeEventError'; error: string }
   | { type: 'envVarRequest'; id: number; variable: string }
+  | { type: 'processEnvVars'; vars: Record<string, string> }
+  | { type: 'envVarFromShell'; variable: string; value: string }
+  | { type: 'knownEnvVarNames'; names: string[] }
   | { type: 'inputRequest'; id: number; prompt: string | undefined; callId: number }
   | { type: 'vfsFileChanged'; path: string; content: string }
   | { type: 'vfsFileDeleted'; path: string }

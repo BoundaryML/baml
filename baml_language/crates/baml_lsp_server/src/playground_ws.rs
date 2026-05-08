@@ -60,6 +60,12 @@ pub enum WsInMessage {
         line: u32,
         column: u32,
     },
+    /// User set/overrode an env var in the UI.
+    #[serde(rename = "setEnvVar")]
+    SetEnvVar { key: String, value: String },
+    /// User deleted an env var override in the UI.
+    #[serde(rename = "deleteEnvVar")]
+    DeleteEnvVar { key: String },
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +94,17 @@ pub enum WsOutMessage {
     },
     #[serde(rename = "envVarRequest")]
     EnvVarRequest { id: u64, variable: String },
+    /// Bulk send of all process env vars on session init.
+    #[serde(rename = "processEnvVars")]
+    ProcessEnvVars {
+        vars: std::collections::HashMap<String, String>,
+    },
+    /// An env var was resolved from the server's process environment.
+    #[serde(rename = "envVarFromShell")]
+    EnvVarFromShell { variable: String, value: String },
+    /// Env var names referenced in BAML source code (from compilation).
+    #[serde(rename = "knownEnvVarNames")]
+    KnownEnvVarNames { names: Vec<String> },
     #[serde(rename = "fetchLogNew")]
     FetchLogNew {
         #[serde(rename = "callId")]

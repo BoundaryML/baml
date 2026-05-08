@@ -19,12 +19,13 @@
 //!    and type alias bodies, via `resolve_class_fields` and `resolve_type_alias`
 //!    (both Salsa-cached per item).
 
+use std::collections::HashSet;
+
 use baml_base::{FileId, SourceFile, Span};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic};
 use baml_compiler2_hir::{body::FunctionBody, file_semantic_index};
 use baml_compiler2_tir::inference::render_scope_diagnostics;
 use indexmap::IndexMap;
-use std::collections::HashSet;
 use text_size::{TextRange, TextSize};
 
 use crate::Db;
@@ -129,7 +130,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
     let ast_items = {
         let tree = baml_compiler_parser::syntax_tree(db, file);
-        let (items, _) = baml_compiler2_ast::lower_file_with_file_id(&tree, file_id);
+        let (items, _, _) = baml_compiler2_ast::lower_file_with_file_id(&tree, file_id);
         items
     };
 
@@ -331,7 +332,7 @@ fn check_jinja_constraints(
                             file_id,
                             &type_expr.expr,
                             base_types,
-                            this_ty,
+                            &this_ty,
                             item_tree,
                         ));
                     }
@@ -345,7 +346,7 @@ fn check_jinja_constraints(
                             file_id,
                             &type_expr.expr,
                             base_types,
-                            this_ty,
+                            &this_ty,
                             item_tree,
                         ));
                     }
@@ -357,7 +358,7 @@ fn check_jinja_constraints(
                         file_id,
                         &type_expr.expr,
                         base_types,
-                        this_ty,
+                        &this_ty,
                         item_tree,
                     ));
                 }
@@ -369,7 +370,7 @@ fn check_jinja_constraints(
                         file_id,
                         &type_expr.expr,
                         base_types,
-                        this_ty,
+                        &this_ty,
                         item_tree,
                     ));
                 }
@@ -405,7 +406,7 @@ fn check_ast_type_constraint_attrs(
     file_id: FileId,
     type_expr: &baml_compiler2_ast::TypeExpr,
     base_types: &sys_jinja_types::PredefinedTypes,
-    this_ty: sys_jinja_types::Type,
+    this_ty: &sys_jinja_types::Type,
     item_tree: &baml_compiler2_hir::item_tree::ItemTree,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = type_expr
@@ -429,7 +430,7 @@ fn check_ast_type_constraint_attrs(
                 file_id,
                 inner,
                 base_types,
-                jinja_type_from_type_expr(inner, item_tree),
+                &jinja_type_from_type_expr(inner, item_tree),
                 item_tree,
             ));
         }
@@ -438,14 +439,14 @@ fn check_ast_type_constraint_attrs(
                 file_id,
                 key,
                 base_types,
-                jinja_type_from_type_expr(key, item_tree),
+                &jinja_type_from_type_expr(key, item_tree),
                 item_tree,
             ));
             diagnostics.extend(check_ast_type_constraint_attrs(
                 file_id,
                 value,
                 base_types,
-                jinja_type_from_type_expr(value, item_tree),
+                &jinja_type_from_type_expr(value, item_tree),
                 item_tree,
             ));
         }
@@ -455,7 +456,7 @@ fn check_ast_type_constraint_attrs(
                     file_id,
                     variant,
                     base_types,
-                    jinja_type_from_type_expr(variant, item_tree),
+                    &jinja_type_from_type_expr(variant, item_tree),
                     item_tree,
                 ));
             }
@@ -471,7 +472,7 @@ fn check_ast_type_constraint_attrs(
                     file_id,
                     &param.ty,
                     base_types,
-                    jinja_type_from_type_expr(&param.ty, item_tree),
+                    &jinja_type_from_type_expr(&param.ty, item_tree),
                     item_tree,
                 ));
             }
@@ -479,7 +480,7 @@ fn check_ast_type_constraint_attrs(
                 file_id,
                 ret,
                 base_types,
-                jinja_type_from_type_expr(ret, item_tree),
+                &jinja_type_from_type_expr(ret, item_tree),
                 item_tree,
             ));
             if let Some(throws) = throws {
@@ -487,7 +488,7 @@ fn check_ast_type_constraint_attrs(
                     file_id,
                     throws,
                     base_types,
-                    jinja_type_from_type_expr(throws, item_tree),
+                    &jinja_type_from_type_expr(throws, item_tree),
                     item_tree,
                 ));
             }
@@ -498,7 +499,7 @@ fn check_ast_type_constraint_attrs(
                     file_id,
                     generic_arg,
                     base_types,
-                    jinja_type_from_type_expr(generic_arg, item_tree),
+                    &jinja_type_from_type_expr(generic_arg, item_tree),
                     item_tree,
                 ));
             }

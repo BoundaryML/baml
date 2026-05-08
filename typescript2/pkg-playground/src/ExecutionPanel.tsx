@@ -392,7 +392,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
   const [wasmPanic, setWasmPanic] = useState<{ message: string; stack?: string } | null>(null);
-  const { envVars, knownRequiredKeys, addEnvVar, removeEnvVar, importEnvVars, addRequiredKey } = useEnvVars(port);
+  const { envVars, knownRequiredKeys, shellEnvVars, shellOverriddenKeys, shellDeletedKeys, addEnvVar, removeEnvVar, importEnvVars, addRequiredKey, addShellEnvVar, importShellEnvVars, revertToShell } = useEnvVars(port);
   // In-flight worker requests waiting for a value: id → variable name. Ref because it doesn't drive renders.
   const pendingEnvRequestsRef = useRef<Map<number, string>>(new Map());
 
@@ -725,6 +725,24 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               if (!prev || prev.id !== data.callId) return prev;
               return { ...prev, runtimeEvents: [...prev.runtimeEvents, eventEntry] };
             });
+          }
+          break;
+        }
+
+        case 'processEnvVars': {
+          importShellEnvVars(data.vars);
+          break;
+        }
+
+        case 'envVarFromShell': {
+          addRequiredKey(data.variable);
+          addShellEnvVar(data.variable, data.value);
+          break;
+        }
+
+        case 'knownEnvVarNames': {
+          for (const name of data.names) {
+            addRequiredKey(name);
           }
           break;
         }
@@ -2012,6 +2030,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         open={showApiKeysDialog}
         envVars={envVars}
         requiredKeys={knownRequiredKeys}
+        shellEnvVars={shellEnvVars}
+        shellOverriddenKeys={shellOverriddenKeys}
+        shellDeletedKeys={shellDeletedKeys}
         onOpenChange={(open) => {
           setShowApiKeysDialog(open);
           showApiKeysDialogRef.current = open;
@@ -2028,6 +2049,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         onSetEnvVar={addEnvVar}
         onDeleteEnvVar={removeEnvVar}
         onImportEnvVars={importEnvVars}
+        onRevertToShell={revertToShell}
       />
     </>
   );

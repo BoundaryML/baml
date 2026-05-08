@@ -219,6 +219,9 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     /// the WASM bridge which cannot access the sender directly.
     fn request_cursor_context(&self, file_path: &str, line: u32, column: u32);
 
+    /// Collect all unique env var names referenced in BAML source across all projects.
+    fn all_env_var_names(&self) -> Vec<String>;
+
     fn request_collect_tests(&self, project: &str);
 
     /// Run a specific test by name. Request-response — returns the serialized

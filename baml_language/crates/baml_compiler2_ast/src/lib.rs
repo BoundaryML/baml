@@ -25,6 +25,7 @@ pub use lower_cst::{
     lower_file, lower_file_with_file_id, synthesize_llm_builtin_call,
     synthesize_llm_make_stream_call,
 };
+pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;
 
 /// Decode common escape sequences in a quoted string literal body.
@@ -297,7 +298,7 @@ mod tests {
     /// Parse BAML source and lower to AST items.
     fn parse_and_lower(source: &str) -> Vec<Item> {
         let root = parse(source);
-        let (items, diags) = lower_file(&root);
+        let (items, diags, _env_var_refs) = lower_file(&root);
         assert!(diags.is_empty(), "expected no diagnostics, got: {diags:#?}");
         items
     }
@@ -1340,7 +1341,7 @@ class Foo {
         source: &str,
     ) -> (Vec<Item>, Vec<(std::string::String, text_size::TextRange)>) {
         let root = parse(source);
-        let (items, diags) = lower_file(&root);
+        let (items, diags, _env_var_refs) = lower_file(&root);
         // Separate out field-attr-in-type-position diagnostics from other diagnostics.
         let mut field_attr_errors = Vec::new();
         let mut other_diags = Vec::new();

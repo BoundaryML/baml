@@ -146,6 +146,26 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
         return;
     }
 
+    // Send all process env vars so the UI can display them immediately.
+    {
+        let vars: std::collections::HashMap<String, String> = std::env::vars().collect();
+        if let Some(msg) = to_ws_text(&WsOutMessage::ProcessEnvVars { vars })
+            && sink.send(msg).await.is_err()
+        {
+            return;
+        }
+    }
+
+    // Send env var names referenced in BAML source code.
+    {
+        let names = state.bex.all_env_var_names();
+        if let Some(msg) = to_ws_text(&WsOutMessage::KnownEnvVarNames { names })
+            && sink.send(msg).await.is_err()
+        {
+            return;
+        }
+    }
+
     // Send current playground state.
     state.bex.request_playground_state();
 
@@ -417,6 +437,14 @@ async fn handle_ws_in_message(
             {
                 tracing::warn!("Failed to send cursor context");
             }
+        }
+
+        WsInMessage::SetEnvVar { key, value } => {
+            state.env_state.set_override(key, value);
+        }
+
+        WsInMessage::DeleteEnvVar { key } => {
+            state.env_state.remove_override(&key);
         }
     }
 }

@@ -64,7 +64,7 @@ pub fn validate_compiler2_stdlib() -> Result<(), String> {
         }
 
         let root = baml_compiler_syntax::SyntaxNode::new_root(green);
-        let (_items, diags) = baml_compiler2_ast::lower_file(&root);
+        let (_items, diags, _) = baml_compiler2_ast::lower_file(&root);
         if !diags.is_empty() {
             return Err(format!(
                 "failed to lower compiler2 builtin {}: {diags:#?}",
