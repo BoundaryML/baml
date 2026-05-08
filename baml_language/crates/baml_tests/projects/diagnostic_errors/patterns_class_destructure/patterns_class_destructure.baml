@@ -142,8 +142,13 @@ function generic_class_type_pattern_in_chain_requires_type_args(boxed: Box<int>)
     }
 }
 
+function generic_class_destructure_requires_type_args(boxed: Box<int>) -> int {
+    let Box { value } = boxed;
+    value
+}
+
 function class_destructure_chain_middle_binding_aliases_value(boxed: Box<int>) -> int {
-    let Box { value }: let alias: Box<int> = boxed;
+    let Box<int> { value }: let alias = boxed;
     value + alias.value
 }
 
@@ -215,7 +220,7 @@ function let_optional_class_field_narrower_than_field_is_refutable() -> int {
 
 function let_generic_class_field_type_narrower_than_substituted_field_is_refutable() -> int {
     let boxed: Box<string> = Box { value: "ready" };
-    let Box { value: int } = boxed;
+    let Box<string> { value: int } = boxed;
     1
 }
 
@@ -241,7 +246,7 @@ function class_destructure_or_pattern_same_binding_conflicting_types(v: Person |
 
 function generic_class_destructure_or_pattern_same_binding_conflicting_types(v: Box<int> | Box<string>) -> int {
     match (v) {
-        (Box { value: let value }: Box<int>) | (Box { value: let value }: Box<string>) => 1
+        Box<int> { value: let value } | Box<string> { value: let value } => 1
     }
 }
 
@@ -249,9 +254,9 @@ function nested_generic_class_destructure_duplicate_binding_name() -> int {
     let boxed: Box<SameNameInner> = Box {
         value: SameNameInner { field: 1 }
     };
-    let Box {
+    let Box<SameNameInner> {
         value: let value: SameNameInner { field: let value }
-    }: Box<SameNameInner> = boxed;
+    } = boxed;
     0
 }
 

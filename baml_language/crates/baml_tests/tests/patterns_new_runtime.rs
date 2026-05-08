@@ -1,6 +1,6 @@
 //! Runtime tests for new pattern features (chains, unions, etc.)
 
-use baml_tests::baml_test;
+use baml_tests::{baml_test, engine::compile_source};
 use bex_engine::BexExternalValue;
 
 // ============================================================================
@@ -600,7 +600,7 @@ async fn let_generic_class_destructure_substitutes_field_types() {
 
         function main() -> int {
             let boxed: Box<int> = Box { value: 42 };
-            let Box { value } = boxed;
+            let Box<int> { value } = boxed;
             value + 1
         }
     "#
@@ -618,21 +618,21 @@ async fn empty_generic_class_destructure_uses_contextual_type() {
 
         function classify_int(boxed: Box<int>) -> int {
             match (boxed) {
-                Box {} => 1
+                Box<int> {} => 1
             }
         }
 
         function classify_string(boxed: Box<string>) -> int {
             match (boxed) {
-                Box {} => 20
+                Box<string> {} => 20
             }
         }
 
         function main() -> int {
             let int_box: Box<int> = Box { value: 7 };
             let string_box: Box<string> = Box { value: "ready" };
-            let Box {} = int_box;
-            let Box {} = string_box;
+            let Box<int> {} = int_box;
+            let Box<string> {} = string_box;
             classify_int(int_box) + classify_string(string_box)
         }
     "#
@@ -675,8 +675,8 @@ async fn match_generic_class_destructure_union_tests_substituted_field_type() {
 
         function classify(box: Box<int> | Box<string>) -> int {
             match (box) {
-                (Box { value: let value: int }: Box<int>) => value,
-                (Box { value: let value: string }: Box<string>) => value.length()
+                Box<int> { value: let value: int } => value,
+                Box<string> { value: let value: string } => value.length()
             }
         }
 
@@ -690,6 +690,36 @@ async fn match_generic_class_destructure_union_tests_substituted_field_type() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(59)));
 }
 
+#[test]
+fn generic_class_destructure_rejects_trailing_type_chain_substitution() {
+    let err = std::panic::catch_unwind(|| {
+        compile_source(
+            r#"
+            class Box<T> {
+                value T
+            }
+
+            function main() -> int {
+                let boxed: Box<int> = Box { value: 42 };
+                let Box { value }: Box<int> = boxed;
+                value
+            }
+        "#,
+        );
+    })
+    .expect_err("expected generic class destructure without type args to fail");
+
+    let message = err
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| err.downcast_ref::<&str>().copied())
+        .unwrap_or("");
+    assert!(
+        message.contains("generic class destructure `Box { ... }` must specify type arguments"),
+        "unexpected panic message: {message}"
+    );
+}
+
 #[tokio::test]
 async fn generic_class_destructure_backfills_through_wrapped_flow_types() {
     let output = baml_test!(
@@ -700,21 +730,21 @@ async fn generic_class_destructure_backfills_through_wrapped_flow_types() {
 
         function from_optional(box: Box<int>?) -> int {
             match (box) {
-                (Box { value: let value: int }: Box<int>?) => value,
+                Box<int> { value: let value: int } => value,
                 null => 0
             }
         }
 
         function from_union(box: Box<int> | null) -> int {
             match (box) {
-                (Box { value: let value: int }: Box<int> | null) => value,
+                Box<int> { value: let value: int } => value,
                 null => 0
             }
         }
 
         function from_array(boxes: Box<int>[]) -> int {
             let total = 0;
-            for (let Box { value: let value: int }: Box<int> in boxes) {
+            for (let Box<int> { value: let value: int } in boxes) {
                 total += value;
             }
             total
@@ -769,8 +799,8 @@ async fn deep_generic_class_destructure_substitutes_through_nested_fields() {
             let outer: Outer<int> = Outer {
                 inner: Box<int> { value: 123 }
             };
-            let Outer {
-                inner: Box { value }
+            let Outer<int> {
+                inner: Box<int> { value }
             } = outer;
             value
         }
@@ -1035,6 +1065,291 @@ async fn match_array_destructure_rest_subpattern_array_shapes() {
     "#
     );
     assert_eq!(output.result, Ok(BexExternalValue::Int(23400)));
+}
+
+#[tokio::test]
+async fn match_array_destructure_rest_subpattern_array_with_class_destructure() {
+    let output = baml_test!(
+        r#"
+        class Box {
+            value int
+        }
+
+        function score(xs: Box[]) -> int {
+            match (xs) {
+                [..[Box { value: let first }, Box { value: let second }]] =>
+                    first * 10 + second,
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            score([Box { value: 3 }, Box { value: 4 }])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(34)));
+}
+
+#[tokio::test]
+async fn match_array_destructure_rest_subpattern_deep_class_array_nesting() {
+    let output = baml_test!(
+        r#"
+        class Leaf {
+            value int
+        }
+
+        class Node {
+            rows Leaf[][]
+        }
+
+        function score(xs: Node[]) -> int {
+            match (xs) {
+                [..[Node {
+                    rows: [
+                        [Leaf { value: let first }, ..[Leaf { value: let second }]],
+                        ..[[Leaf { value: let third }]]
+                    ]
+                }]] => first * 100 + second * 10 + third,
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            score([
+                Node {
+                    rows: [
+                        [Leaf { value: 1 }, Leaf { value: 2 }],
+                        [Leaf { value: 3 }]
+                    ]
+                }
+            ])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(123)));
+}
+
+#[tokio::test]
+async fn let_array_destructure_nested_rest_only_is_irrefutable() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let [..[..[..[..]]]] = [1, 2, 3];
+            1
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn match_array_destructure_empty_rest_slice_vs_irrefutable_rest_slice() {
+    let output = baml_test!(
+        r#"
+        function empty_only(xs: int[]) -> int {
+            match (xs) {
+                [..[]] => 1,
+                _ => 2
+            }
+        }
+
+        function rest_only(xs: int[]) -> int {
+            match (xs) {
+                [..[..]] => 3
+            }
+        }
+
+        function main() -> int {
+            empty_only([]) * 100 + empty_only([1]) * 10 + rest_only([1, 2])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(123)));
+}
+
+#[tokio::test]
+async fn match_array_destructure_nested_rest_with_fixed_edges() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            match ([9, 1, 2, 3, 8]) {
+                [let head, ..[let a, ..let middle, let b], let tail] =>
+                    head * 10000 + a * 1000 + middle.length() * 100 + b * 10 + tail
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(91138)));
+}
+
+#[tokio::test]
+async fn match_array_destructure_entire_alphabet_of_bindings() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            match ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+                    11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+                    21, 22, 23, 24, 25, 26]) {
+                [let a, let b, let c, let d, let e, let f, let g, let h,
+                 let i, let j, let k, let l, let m, let n, let o, let p,
+                 let q, let r, let s, let t, let u, let v, let w, let x,
+                 let y, let z] =>
+                    a + b + c + d + e + f + g + h + i + j + k + l + m +
+                    n + o + p + q + r + s + t + u + v + w + x + y + z
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(351)));
+}
+
+#[tokio::test]
+async fn match_or_binding_from_class_field_or_nested_array_position() {
+    let output = baml_test!(
+        r#"
+        class A {
+            x int
+        }
+
+        class B {
+            y int[]
+        }
+
+        function score(input: A | B) -> int {
+            match (input) {
+                A { x: let value } | B { y: [_, let value] } => value
+            }
+        }
+
+        function main() -> int {
+            score(A { x: 4 }) * 10 + score(B { y: [9, 7] })
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(47)));
+}
+
+#[tokio::test]
+async fn match_or_binding_from_nested_rest_or_prefix_array() {
+    let output = baml_test!(
+        r#"
+        function score(xs: int[]) -> int {
+            match (xs) {
+                [..[let value]] | [let value, ..] => value
+            }
+        }
+
+        function main() -> int {
+            score([4]) * 10 + score([7, 8])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(47)));
+}
+
+#[tokio::test]
+async fn match_wildcard_inside_chained_binding_type_array_pattern() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let xs: [.._]: int[] = [4, 5, 6];
+            xs.length()
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+}
+
+#[tokio::test]
+async fn match_or_binding_from_class_array_field_or_array_rest_subpattern() {
+    let output = baml_test!(
+        r#"
+        class User {
+            scores int[]
+        }
+
+        function score(input: User | int[]) -> int {
+            match (input) {
+                User { scores: [let value, ..] } | [..[let value]] => value
+            }
+        }
+
+        function main() -> int {
+            score(User { scores: [4, 5] }) * 10 + score([7])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(47)));
+}
+
+#[tokio::test]
+async fn match_class_nested_array_literals_and_bindings() {
+    let output = baml_test!(
+        r#"
+        class User {
+            rows int[][]
+        }
+
+        function main() -> int {
+            match (User { rows: [[1, 2, 7], [9]] }) {
+                User { rows: [[1, ..[2, let value]], ..] } => value
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
+}
+
+#[tokio::test]
+async fn match_rest_with_typed_empty_slice_pattern() {
+    let output = baml_test!(
+        r#"
+        function score(xs: int[]) -> int {
+            match (xs) {
+                [..[]: int[]] => 1,
+                _ => 2
+            }
+        }
+
+        function main() -> int {
+            score([]) * 10 + score([1])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(12)));
+}
+
+#[tokio::test]
+async fn match_array_destructure_shadows_outer_local_only_inside_arm() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let x = 1;
+            let inner = match ([4, 5]) {
+                [let x, ..] => x
+            };
+            x * 10 + inner
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(14)));
+}
+
+#[tokio::test]
+async fn for_array_destructure_nested_rest_only_is_irrefutable() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let total = 0;
+            for (let [..[..[..]]] in [[1], [2, 3], []]) {
+                total += 1;
+            }
+            total
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
 #[tokio::test]
@@ -1953,6 +2268,104 @@ async fn match_or_mixed_array_class_binding_class_field_or_array_rest() {
 }
 
 #[tokio::test]
+async fn let_or_mixed_class_field_or_whole_array_rest_is_irrefutable() {
+    let output = baml_test!(
+        r#"
+        class Class {
+            field int[][]
+        }
+
+        function pick(v: Class | int[][]) -> int {
+            let Class { field } | [..let field] = v;
+            field.length() * 100 + field[0][0] * 10 + field[field.length() - 1][0]
+        }
+
+        function main() -> int {
+            pick(Class { field: [[1], [2]] }) +
+            pick([[3], [4], [5]])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(547)));
+}
+
+#[tokio::test]
+async fn match_or_mixed_written_class_and_structural_array_binding() {
+    let output = baml_test!(
+        r#"
+        class Class {
+            field int[]
+        }
+
+        function pick(v: Class | int[][]) -> int {
+            match (v) {
+                Class { field } | [[..let field]] => field[0] * 100 + field[1] * 10 + field[2],
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            pick(Class { field: [1, 2, 3] }) + pick([[4, 5, 6]])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(579)));
+}
+
+#[tokio::test]
+async fn match_or_mixed_structural_array_first_and_written_class_second() {
+    let output = baml_test!(
+        r#"
+        class Class {
+            field int[]
+        }
+
+        function pick(v: Class | int[][]) -> int {
+            match (v) {
+                [[..let field]] | Class { field } => field[0] * 100 + field[1] * 10 + field[2],
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            pick([[1, 2, 3]]) + pick(Class { field: [4, 5, 6] })
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(579)));
+}
+
+#[tokio::test]
+async fn match_or_mixed_multiple_written_and_structural_alternatives() {
+    let output = baml_test!(
+        r#"
+        class ClassA {
+            field int[]
+        }
+
+        class ClassB {
+            field int[]
+        }
+
+        function pick(v: ClassA | ClassB | int[][]) -> int {
+            match (v) {
+                ClassA { field } | [[..let field]] | ClassB { field } =>
+                    field[0] * 100 + field[1] * 10 + field[2],
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            pick(ClassA { field: [1, 2, 3] }) +
+            pick([[4, 5, 6]]) +
+            pick(ClassB { field: [7, 8, 9] })
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1368)));
+}
+
+#[tokio::test]
 async fn match_or_mixed_array_class_binding_array_rest_inside_class_or_class_inside_array() {
     let output = baml_test!(
         r#"
@@ -2050,4 +2463,108 @@ async fn match_or_mixed_suffix_class_binding_and_prefix_array_rest_binding() {
     "#
     );
     assert_eq!(output.result, Ok(BexExternalValue::Int(3456)));
+}
+
+#[tokio::test]
+async fn match_class_field_pattern_should_refine_parent_union_scrutinee() {
+    let output = baml_test!(
+        r#"
+        class A {
+            field int
+        }
+
+        class B {
+            field string
+        }
+
+        function score(v: A | B) -> int {
+            match (v) {
+                A { field: int } => v.field
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            score(A { field: 42 })
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+async fn match_array_element_pattern_should_refine_parent_union_scrutinee() {
+    let output = baml_test!(
+        r#"
+        function score(v: int[] | string[]) -> int {
+            match (v) {
+                [let x: int] => v[0] + x
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            score([21])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+async fn match_or_class_patterns_should_refine_parent_union_scrutinee() {
+    let output = baml_test!(
+        r#"
+        class A {
+            field int
+        }
+
+        class B {
+            field int
+        }
+
+        class C {
+            field int
+        }
+
+        class D {
+            field int
+        }
+
+        class E {
+            field string
+        }
+
+        function score(v: A | B | C | D | E) -> int {
+            match (v) {
+                A { field: int } | B { field: int } | C { field: int } | D { field: int } => v.field
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            score(D { field: 42 })
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+async fn match_or_array_patterns_should_refine_parent_union_scrutinee() {
+    let output = baml_test!(
+        r#"
+        function score(v: int[] | string[]) -> int {
+            match (v) {
+                [let x: int] | [let x: int, ..] => v[0] + x
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            score([21])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
 }

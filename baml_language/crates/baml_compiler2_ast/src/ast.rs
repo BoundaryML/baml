@@ -723,6 +723,7 @@ pub enum Pattern {
     /// dotted path as segments (single-element vec for unqualified names).
     Class {
         class: Vec<Name>,
+        generic_args: Vec<TypeExpr>,
         fields: Vec<FieldPat>,
     },
     /// `[prefix..., ..rest?, suffix...]` — array destructure. Each element is

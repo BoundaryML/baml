@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 17821
 ---
 function DestructureQualifiedLet() -> int {
     let response = root.llm.openai.Response { text: "ok", score: 41 };
@@ -65,14 +64,14 @@ function TypePatternNamespaceQualifiedMatch() -> int {
 function GenericDestructureQualifiedLet() -> int {
     let boxed: root.llm.openai.Box<int> = root.llm.openai.Box<int> { value: 49 };
 
-    let root.llm.openai.Box { value }: root.llm.openai.Box<int> = boxed;
+    let root.llm.openai.Box<int> { value } = boxed;
     value
 }
 
 function GenericDestructureNamespaceQualifiedLet() -> int {
     let boxed: llm.openai.Box<string> = llm.openai.Box<string> { value: "ok" };
 
-    let llm.openai.Box { value }: llm.openai.Box<string> = boxed;
+    let llm.openai.Box<string> { value } = boxed;
     value.length()
 }
 
@@ -97,13 +96,13 @@ function GenericTypePatternNamespaceQualifiedMatch() -> int {
 function DeepGenericDestructureQualifiedLet() -> int {
     let outer: root.llm.openai.Outer<int> = root.llm.openai.Outer<int> { inner: root.llm.openai.Box<int> { value: 52 } };
 
-    let root.llm.openai.Outer { inner: root.llm.openai.Box { value } }: root.llm.openai.Outer<int> = outer;
+    let root.llm.openai.Outer<int> { inner: root.llm.openai.Box<int> { value } } = outer;
     value
 }
 
 function DeepGenericDestructureNamespaceQualifiedLet() -> int {
     let outer: llm.openai.Outer<string> = llm.openai.Outer<string> { inner: llm.openai.Box<string> { value: "done" } };
 
-    let llm.openai.Outer { inner: llm.openai.Box { value } }: llm.openai.Outer<string> = outer;
+    let llm.openai.Outer<string> { inner: llm.openai.Box<string> { value } } = outer;
     value.length()
 }

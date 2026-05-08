@@ -813,6 +813,42 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
+    WORD "generic_class_destructure_requires_type_args"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "boxed"
+        COLON ":"
+        TYPE_EXPR
+          WORD "Box"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            DESTRUCTURE_PATTERN
+              KW_LET "let"
+              WORD "Box"
+              L_BRACE "{"
+              FIELD_PATTERN "value"
+                WORD "value"
+              R_BRACE "}"
+          EQUALS "="
+          WORD "boxed"
+          SEMICOLON ";"
+        WORD "value"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
     WORD "class_destructure_chain_middle_binding_aliases_value"
     PARAMETER_LIST
       L_PAREN "("
@@ -839,6 +875,11 @@ SOURCE_FILE
               DESTRUCTURE_PATTERN
                 KW_LET "let"
                 WORD "Box"
+                GENERIC_ARGS
+                  LESS "<"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                  GREATER ">"
                 L_BRACE "{"
                 FIELD_PATTERN "value"
                   WORD "value"
@@ -847,15 +888,6 @@ SOURCE_FILE
               BINDING_PATTERN "let alias"
                 KW_LET "let"
                 WORD "alias"
-              COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "Box"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "int"
-                      WORD "int"
-                    GREATER ">"
           EQUALS "="
           WORD "boxed"
           SEMICOLON ";"
@@ -1299,6 +1331,11 @@ SOURCE_FILE
             DESTRUCTURE_PATTERN
               KW_LET "let"
               WORD "Box"
+              GENERIC_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                GREATER ">"
               L_BRACE "{"
               FIELD_PATTERN
                 WORD "value"
@@ -1447,57 +1484,39 @@ SOURCE_FILE
           MATCH_ARM
             PATTERN
               UNION_PATTERN
-                PAREN_PATTERN
-                  L_PAREN "("
-                  PATTERN
-                    CHAIN_PATTERN
-                      DESTRUCTURE_PATTERN
-                        WORD "Box"
-                        L_BRACE "{"
-                        FIELD_PATTERN
-                          WORD "value"
-                          COLON ":"
-                          PATTERN
-                            BINDING_PATTERN "let value"
-                              KW_LET "let"
-                              WORD "value"
-                        R_BRACE "}"
-                      COLON ":"
-                      TYPE_PATTERN
-                        TYPE_EXPR
-                          WORD "Box"
-                          TYPE_ARGS
-                            LESS "<"
-                            TYPE_EXPR "int"
-                              WORD "int"
-                            GREATER ">"
-                  R_PAREN ")"
+                DESTRUCTURE_PATTERN
+                  WORD "Box"
+                  GENERIC_ARGS
+                    LESS "<"
+                    TYPE_EXPR "int"
+                      WORD "int"
+                    GREATER ">"
+                  L_BRACE "{"
+                  FIELD_PATTERN
+                    WORD "value"
+                    COLON ":"
+                    PATTERN
+                      BINDING_PATTERN "let value"
+                        KW_LET "let"
+                        WORD "value"
+                  R_BRACE "}"
                 PIPE "|"
-                PAREN_PATTERN
-                  L_PAREN "("
-                  PATTERN
-                    CHAIN_PATTERN
-                      DESTRUCTURE_PATTERN
-                        WORD "Box"
-                        L_BRACE "{"
-                        FIELD_PATTERN
-                          WORD "value"
-                          COLON ":"
-                          PATTERN
-                            BINDING_PATTERN "let value"
-                              KW_LET "let"
-                              WORD "value"
-                        R_BRACE "}"
-                      COLON ":"
-                      TYPE_PATTERN
-                        TYPE_EXPR
-                          WORD "Box"
-                          TYPE_ARGS
-                            LESS "<"
-                            TYPE_EXPR "string"
-                              WORD "string"
-                            GREATER ">"
-                  R_PAREN ")"
+                DESTRUCTURE_PATTERN
+                  WORD "Box"
+                  GENERIC_ARGS
+                    LESS "<"
+                    TYPE_EXPR "string"
+                      WORD "string"
+                    GREATER ">"
+                  L_BRACE "{"
+                  FIELD_PATTERN
+                    WORD "value"
+                    COLON ":"
+                    PATTERN
+                      BINDING_PATTERN "let value"
+                        KW_LET "let"
+                        WORD "value"
+                  R_BRACE "}"
             FAT_ARROW "=>"
             INTEGER_LITERAL "1"
           R_BRACE "}"
@@ -1548,41 +1567,36 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              DESTRUCTURE_PATTERN
-                KW_LET "let"
-                WORD "Box"
-                L_BRACE "{"
-                FIELD_PATTERN
-                  WORD "value"
-                  COLON ":"
-                  PATTERN
-                    CHAIN_PATTERN
-                      BINDING_PATTERN "let value"
-                        KW_LET "let"
-                        WORD "value"
-                      COLON ":"
-                      DESTRUCTURE_PATTERN
-                        WORD "SameNameInner"
-                        L_BRACE "{"
-                        FIELD_PATTERN
-                          WORD "field"
-                          COLON ":"
-                          PATTERN
-                            BINDING_PATTERN "let value"
-                              KW_LET "let"
-                              WORD "value"
-                        R_BRACE "}"
-                R_BRACE "}"
-              COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "Box"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "SameNameInner"
+            DESTRUCTURE_PATTERN
+              KW_LET "let"
+              WORD "Box"
+              GENERIC_ARGS
+                LESS "<"
+                TYPE_EXPR "SameNameInner"
+                  WORD "SameNameInner"
+                GREATER ">"
+              L_BRACE "{"
+              FIELD_PATTERN
+                WORD "value"
+                COLON ":"
+                PATTERN
+                  CHAIN_PATTERN
+                    BINDING_PATTERN "let value"
+                      KW_LET "let"
+                      WORD "value"
+                    COLON ":"
+                    DESTRUCTURE_PATTERN
                       WORD "SameNameInner"
-                    GREATER ">"
+                      L_BRACE "{"
+                      FIELD_PATTERN
+                        WORD "field"
+                        COLON ":"
+                        PATTERN
+                          BINDING_PATTERN "let value"
+                            KW_LET "let"
+                            WORD "value"
+                      R_BRACE "}"
+              R_BRACE "}"
           EQUALS "="
           WORD "boxed"
           SEMICOLON ";"

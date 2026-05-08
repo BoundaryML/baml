@@ -622,7 +622,7 @@ fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBo
         Pattern::Wildcard => "_".to_string(),
         Pattern::Bind { name } => name.to_string(),
         Pattern::Type(ty) => hir2_type_expr_to_string(ty),
-        Pattern::Class { class, fields } => {
+        Pattern::Class { class, fields, .. } => {
             let class_path: Vec<_> = class.iter().map(|s| s.as_str()).collect();
             let field_strs: Vec<_> = fields
                 .iter()
@@ -1941,7 +1941,7 @@ impl CompilerRunner {
                 Pattern::Wildcard => "_".to_string(),
                 Pattern::Bind { name } => name.to_string(),
                 Pattern::Type(ty) => hir2_type_expr_to_string(ty),
-                Pattern::Class { class, fields } => {
+                Pattern::Class { class, fields, .. } => {
                     let class_path: Vec<_> = class.iter().map(|s| s.as_str()).collect();
                     let field_strs: Vec<_> = fields
                         .iter()

@@ -2149,6 +2149,14 @@ impl<'db> LoweringContext<'db> {
                     }
                 }
             }
+            if self.locals.contains_key(&segments[0])
+                || self
+                    .capture_index_for_name_at(expr_id, &segments[0])
+                    .is_some()
+            {
+                self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
+                return;
+            }
             // Check for enum variant (e.g. Status.Active lowered to Path(["Status","Active"]))
             if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) = self
                 .expr_types
@@ -2275,7 +2283,9 @@ impl<'db> LoweringContext<'db> {
                 return;
             };
 
-        for seg in &segments[1..] {
+        for (offset, seg) in segments[1..].iter().enumerate() {
+            let seg_idx = offset + 1;
+            let is_last = seg_idx + 1 == segments.len();
             if let Ty::Class(ref tn, _, _) = current_ty.clone() {
                 if let Some(fields) = self.class_fields.get(tn) {
                     if let Some(&idx) = fields.get(seg.as_str()) {
@@ -2289,6 +2299,41 @@ impl<'db> LoweringContext<'db> {
                     }
                 }
             }
+
+            let target_ty =
+                self.path_segment_ty(expr_id, seg_idx)
+                    .unwrap_or_else(|| Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    });
+            let target_place = if is_last {
+                dest.clone()
+            } else {
+                Place::local(self.builder.temp(target_ty.clone()))
+            };
+            let base_local = match current_place.clone() {
+                Place::Local(local) => local,
+                place => {
+                    let local = self.builder.temp(current_ty.clone());
+                    self.builder
+                        .assign(Place::local(local), Rvalue::Use(Operand::Copy(place)));
+                    local
+                }
+            };
+            if self.lower_union_class_field_access(
+                expr_id,
+                base_local,
+                &current_ty,
+                seg,
+                &target_place,
+            ) {
+                if is_last {
+                    return;
+                }
+                current_place = target_place;
+                current_ty = target_ty;
+                continue;
+            }
+
             // Dynamic map key fallback
             let key_local = self.builder.temp(Ty::String {
                 attr: TyAttr::default(),
@@ -4125,6 +4170,13 @@ impl LoweringContext<'_> {
                     field: idx,
                 })),
             );
+        } else if self.lower_union_class_field_access(
+            expr_id,
+            base_local,
+            unwrapped_ty,
+            field,
+            &dest,
+        ) {
         } else {
             if let Ty::Class(tn, _, _) = unwrapped_ty {
                 self.emit_panic_call(
@@ -4155,6 +4207,94 @@ impl LoweringContext<'_> {
                 })),
             );
         }
+    }
+
+    fn lower_union_class_field_access(
+        &mut self,
+        _expr_id: AstExprId,
+        base_local: Local,
+        base_ty: &Ty,
+        field: &Name,
+        dest: &Place,
+    ) -> bool {
+        let Some(candidates) = self.class_union_field_candidates(base_ty, field) else {
+            return false;
+        };
+
+        let bb_entry = self.builder.current_block();
+        let bb_join = self.builder.create_block();
+        let bb_otherwise = self.builder.create_block();
+
+        let tag_local = self.builder.temp(Ty::Int {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(
+            Place::local(tag_local),
+            Rvalue::TypeTag(Place::local(base_local)),
+        );
+
+        let mut arms = Vec::with_capacity(candidates.len());
+        let mut arm_names = Vec::with_capacity(candidates.len());
+        for (tag, class_name, field_idx) in candidates {
+            let bb_body = self.builder.create_block();
+            arms.push((tag, bb_body));
+            arm_names.push((tag, class_name.name.to_string()));
+
+            self.builder.set_current_block(bb_body);
+            self.builder.assign(
+                dest.clone(),
+                Rvalue::Use(Operand::Copy(Place::Field {
+                    base: Box::new(Place::Local(base_local)),
+                    field: field_idx,
+                })),
+            );
+            self.builder.goto(bb_join);
+        }
+
+        self.builder.set_current_block(bb_otherwise);
+        self.builder.unreachable();
+
+        self.builder.set_current_block(bb_entry);
+        self.builder.switch(
+            Operand::Copy(Place::Local(tag_local)),
+            arms,
+            bb_otherwise,
+            true,
+            arm_names,
+        );
+        self.builder.set_current_block(bb_join);
+        true
+    }
+
+    fn class_union_field_candidates(
+        &self,
+        ty: &Ty,
+        field: &Name,
+    ) -> Option<Vec<(i64, TypeName, usize)>> {
+        let Ty::Union(members, _) = ty else {
+            return None;
+        };
+
+        let mut candidates = Vec::new();
+        for member in members {
+            let Ty::Class(class_name, _, _) = member else {
+                return None;
+            };
+            let field_idx = self
+                .class_fields
+                .get(class_name)
+                .and_then(|fields| fields.get(field.as_str()))
+                .copied()?;
+            let tag = self.class_type_tags.get(class_name).copied()?;
+            if !candidates
+                .iter()
+                .any(|(existing_tag, _, _)| *existing_tag == tag)
+            {
+                candidates.push((tag, class_name.clone(), field_idx));
+            }
+        }
+
+        (!candidates.is_empty()).then_some(candidates)
     }
 
     fn lower_index(&mut self, _expr_id: AstExprId, base: AstExprId, index: AstExprId, dest: Place) {
@@ -6079,8 +6219,11 @@ impl LoweringContext<'_> {
                 };
                 if let AstPattern::Type(ty) = &self.body.patterns[sub_pat] {
                     let ty = ty.clone();
-                    if let Some(tir_ty) =
-                        self.pat_types.get(&(self.current_scope, sub_pat)).cloned()
+                    if let Some(tir_ty) = self
+                        .pat_types
+                        .get(&(self.current_scope, sub_pat))
+                        .filter(|ty| !matches!(ty, Tir2Ty::Never { .. }))
+                        .cloned()
                     {
                         self.emit_is_tir_type_branch(scrutinee, &tir_ty, next, failure);
                     } else {
@@ -6171,7 +6314,11 @@ impl LoweringContext<'_> {
                         .branch(Operand::Copy(Place::Local(test_local)), success, failure);
                 }
                 _ => {
-                    if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned()
+                    if let Some(tir_ty) = self
+                        .pat_types
+                        .get(&(self.current_scope, pat_id))
+                        .filter(|ty| !matches!(ty, Tir2Ty::Never { .. }))
+                        .cloned()
                     {
                         self.emit_is_tir_type_branch(scrutinee, &tir_ty, success, failure);
                     } else {
@@ -6424,18 +6571,13 @@ impl LoweringContext<'_> {
                 }
             }
             AstPattern::Or(parts) => {
-                // HIR ensures each Or branch binds the same name set; pick
-                // the first branch's bindings (every branch agrees).
-                if let Some(first) = parts.first() {
-                    self.bind_pattern_inner(
-                        scrutinee,
-                        *first,
-                        root,
-                        narrow_root,
-                        fresh_cell,
-                        is_watched,
-                    );
+                let mut bindings = Vec::new();
+                self.collect_pattern_bindings(pat_id, &mut bindings);
+                if bindings.is_empty() {
+                    return;
                 }
+                self.declare_or_pattern_bindings(pat_id, root, fresh_cell, is_watched);
+                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root);
             }
             AstPattern::Class { fields, .. } => {
                 for f in fields {
@@ -6493,6 +6635,178 @@ impl LoweringContext<'_> {
             AstPattern::Wildcard | AstPattern::Type(_) => {}
         }
     }
+
+    fn collect_pattern_bindings(&self, pat_id: AstPatId, out: &mut Vec<(Name, AstPatId)>) {
+        match self.body.patterns[pat_id].clone() {
+            AstPattern::Bind { name } => out.push((name, pat_id)),
+            AstPattern::Chain(parts) => {
+                for part in parts {
+                    self.collect_pattern_bindings(part, out);
+                }
+            }
+            AstPattern::Or(parts) => {
+                if let Some(first) = parts.first() {
+                    self.collect_pattern_bindings(*first, out);
+                }
+            }
+            AstPattern::Class { fields, .. } => {
+                for field in fields {
+                    self.collect_pattern_bindings(field.pat, out);
+                }
+            }
+            AstPattern::Array {
+                prefix,
+                rest,
+                suffix,
+            } => {
+                for part in prefix {
+                    self.collect_pattern_bindings(part, out);
+                }
+                if let Some(rest) = rest
+                    && let Some(rest_pat) = rest.pat
+                {
+                    self.collect_pattern_bindings(rest_pat, out);
+                }
+                for part in suffix {
+                    self.collect_pattern_bindings(part, out);
+                }
+            }
+            AstPattern::Wildcard | AstPattern::Type(_) => {}
+        }
+    }
+
+    fn declare_or_pattern_bindings(
+        &mut self,
+        pat_id: AstPatId,
+        root: AstPatId,
+        fresh_cell: bool,
+        is_watched: bool,
+    ) {
+        let mut bindings = Vec::new();
+        self.collect_pattern_bindings(pat_id, &mut bindings);
+        for (name, bind_pat) in bindings {
+            let local = self.builder.declare_local(
+                Some(name.clone()),
+                self.pat_ty(bind_pat),
+                None,
+                is_watched,
+            );
+            if fresh_cell {
+                self.builder.fresh_cell(local);
+            }
+            self.record_pattern_binding_local(root, &name, local);
+            self.locals.insert(name, local);
+        }
+    }
+
+    fn lower_or_pattern_assign_existing(
+        &mut self,
+        scrutinee: Local,
+        parts: &[AstPatId],
+        root: AstPatId,
+        narrow_root: AstPatId,
+    ) {
+        if parts.is_empty() {
+            self.builder.unreachable();
+            return;
+        }
+
+        let join = self.builder.create_block();
+        let failure = self.builder.create_block();
+
+        for (idx, part) in parts.iter().copied().enumerate() {
+            let body = self.builder.create_block();
+            let next = if idx + 1 == parts.len() {
+                failure
+            } else {
+                self.builder.create_block()
+            };
+            self.lower_pattern_test(scrutinee, part, body, next);
+
+            self.builder.set_current_block(body);
+            self.assign_pattern_to_existing(scrutinee, part, root, narrow_root);
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(join);
+            }
+
+            if idx + 1 < parts.len() {
+                self.builder.set_current_block(next);
+            }
+        }
+
+        self.builder.set_current_block(failure);
+        self.builder.unreachable();
+        self.builder.set_current_block(join);
+    }
+
+    fn assign_pattern_to_existing(
+        &mut self,
+        scrutinee: Local,
+        pat_id: AstPatId,
+        root: AstPatId,
+        narrow_root: AstPatId,
+    ) {
+        match self.body.patterns[pat_id].clone() {
+            AstPattern::Bind { name } => {
+                if let Some(&local) = self.locals.get(&name) {
+                    self.builder.assign(
+                        Place::local(local),
+                        Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
+                    );
+                    self.record_pattern_binding_local(root, &name, local);
+                }
+            }
+            AstPattern::Chain(parts) => {
+                for part in parts {
+                    self.assign_pattern_to_existing(scrutinee, part, root, pat_id);
+                }
+            }
+            AstPattern::Or(parts) => {
+                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root);
+            }
+            AstPattern::Class { fields, .. } => {
+                for field in fields {
+                    if let Some(field_local) =
+                        self.project_class_pattern_field(scrutinee, pat_id, field.pat, &field.field)
+                    {
+                        self.assign_pattern_to_existing(field_local, field.pat, root, field.pat);
+                    }
+                }
+            }
+            AstPattern::Array {
+                prefix,
+                rest,
+                suffix,
+            } => {
+                for (idx, elem_pat) in prefix.iter().copied().enumerate() {
+                    let elem_local =
+                        self.project_array_pattern_element_from_start(scrutinee, elem_pat, idx);
+                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat);
+                }
+                if let Some(rest) = rest
+                    && let Some(rest_pat) = rest.pat
+                {
+                    let rest_local = self.project_array_pattern_rest(
+                        scrutinee,
+                        rest_pat,
+                        prefix.len(),
+                        suffix.len(),
+                    );
+                    self.assign_pattern_to_existing(rest_local, rest_pat, root, rest_pat);
+                }
+                for (suffix_idx, elem_pat) in suffix.iter().copied().enumerate() {
+                    let absolute_idx_from_end = suffix.len() - suffix_idx;
+                    let elem_local = self.project_array_pattern_element_from_end(
+                        scrutinee,
+                        elem_pat,
+                        absolute_idx_from_end,
+                    );
+                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat);
+                }
+            }
+            AstPattern::Wildcard | AstPattern::Type(_) => {}
+        }
+    }
 }
 
 // ─── Type tag classification (shared by match/catch switch dispatch) ──────────
@@ -6520,9 +6834,17 @@ impl LoweringContext<'_> {
                 .rev()
                 .find(|&&p| matches!(self.body.patterns[p], AstPattern::Type(_)))
                 .copied()?;
-            let tir_ty = self.pat_types.get(&(self.current_scope, narrow_id))?;
-            let resolved = self.resolved_aliases.convert(tir_ty);
-            return self.ty_to_type_tags(&resolved);
+            if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, narrow_id)) {
+                let resolved = self.resolved_aliases.convert(tir_ty);
+                if let Some(tags) = self.ty_to_type_tags(&resolved) {
+                    return Some(tags);
+                }
+            }
+            if let AstPattern::Type(ty_expr) = &self.body.patterns[narrow_id] {
+                let resolved = self.resolve_type_annotation(ty_expr);
+                return self.ty_to_type_tags(&resolved);
+            }
+            return None;
         }
         match pat {
             AstPattern::Wildcard => None,
@@ -6532,9 +6854,17 @@ impl LoweringContext<'_> {
                 self.ty_to_type_tags(&resolved)
             }
             AstPattern::Type(_) => {
-                let tir_ty = self.pat_types.get(&(self.current_scope, pat_id))?;
-                let resolved = self.resolved_aliases.convert(tir_ty);
-                self.ty_to_type_tags(&resolved)
+                if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)) {
+                    let resolved = self.resolved_aliases.convert(tir_ty);
+                    if let Some(tags) = self.ty_to_type_tags(&resolved) {
+                        return Some(tags);
+                    }
+                }
+                if let AstPattern::Type(ty_expr) = pat {
+                    let resolved = self.resolve_type_annotation(ty_expr);
+                    return self.ty_to_type_tags(&resolved);
+                }
+                None
             }
             _ => None,
         }

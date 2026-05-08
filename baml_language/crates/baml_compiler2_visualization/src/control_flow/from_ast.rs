@@ -669,13 +669,34 @@ impl<'a> AstGraphBuilder<'a> {
             // (the new grammar requires the keyword for bindings).
             ast::Pattern::Bind { name } => format!("let {name}"),
             ast::Pattern::Type(ty) => ty.to_string(),
-            ast::Pattern::Class { class, fields } => {
+            ast::Pattern::Class {
+                class,
+                generic_args,
+                fields,
+            } => {
                 let class_path: Vec<_> = class.iter().map(baml_base::Name::as_str).collect();
+                let generic_args = if generic_args.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "<{}>",
+                        generic_args
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
                 let field_strs: Vec<_> = fields
                     .iter()
                     .map(|f| format!("{}: {}", f.field, self.format_pattern(f.pat)))
                     .collect();
-                format!("{} {{ {} }}", class_path.join("."), field_strs.join(", "))
+                format!(
+                    "{}{} {{ {} }}",
+                    class_path.join("."),
+                    generic_args,
+                    field_strs.join(", ")
+                )
             }
             ast::Pattern::Array {
                 prefix,

@@ -65,65 +65,36 @@ struct ThrowPatternMatches {
     definitely_handled: BTreeSet<Ty>,
 }
 
-#[derive(Debug, Clone)]
-struct PatternShape {
-    ty: Ty,
-    constraint: PatternConstraint,
-    cases: BTreeSet<String>,
-    contains_class: bool,
-    contains_array: bool,
-    summary_may_drop_coverage: bool,
-}
-
-#[derive(Debug, Clone)]
-enum PatternConstraint {
-    None,
-    Structural(Ty),
-    Written(Ty),
-}
-
-impl PatternConstraint {
-    fn ty(&self) -> Option<&Ty> {
-        match self {
-            Self::None => None,
-            Self::Structural(ty) | Self::Written(ty) => Some(ty),
-        }
-    }
-
-    fn cloned_ty(&self) -> Option<Ty> {
-        self.ty().cloned()
-    }
-
-    fn written_ty(&self) -> Option<&Ty> {
-        match self {
-            Self::Written(ty) => Some(ty),
-            Self::None | Self::Structural(_) => None,
-        }
-    }
-
-    fn has_written(&self) -> bool {
-        matches!(self, Self::Written(_))
-    }
-}
-
-#[derive(Debug, Clone)]
-struct PatternAnalysis {
-    root: PatternShape,
-    shapes: FxHashMap<PatId, PatternShape>,
-}
-
 struct IrrefutablePatternContext {
     context: &'static str,
     fallback_expr: Option<ExprId>,
 }
 
-struct PatternInput<'a> {
-    pattern: PatId,
-    analysis: &'a PatternAnalysis,
-    subject_ty: &'a Ty,
-    test_ty: &'a Ty,
-    declared: Option<Ty>,
-    irrefutable: Option<IrrefutablePatternContext>,
+#[derive(Debug, Clone)]
+enum PatternExpectedTy {
+    Full(Ty),
+    Partial(Ty),
+}
+
+impl PatternExpectedTy {
+    fn ty(&self) -> &Ty {
+        match self {
+            Self::Full(ty) | Self::Partial(ty) => ty,
+        }
+    }
+
+    fn into_ty(self) -> Ty {
+        match self {
+            Self::Full(ty) | Self::Partial(ty) => ty,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PatternAnalysisCtx<'a> {
+    body: &'a ExprBody,
+    at_expr: ExprId,
+    report_impossible_chain: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -135,26 +106,90 @@ struct PatternBindingFlow {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 struct PatternFlow {
-    covers_flow: bool,
-    irrefutable_for_flow: bool,
+    matched_ty: Ty,
+    is_irrefutable_for_incoming: bool,
+    total_on_matched: bool,
+    cases: BTreeSet<String>,
+    contains_class: bool,
+    contains_array: bool,
+    has_pattern_error: bool,
+    summary_may_drop_coverage: bool,
     pattern_types: FxHashMap<PatId, Ty>,
     bindings: Vec<PatternBindingFlow>,
+    chain_alias_binds: Vec<PatId>,
 }
 
 impl PatternFlow {
-    fn new(covers_flow: bool, irrefutable_for_flow: bool, pat_id: PatId, ty: Ty) -> Self {
+    fn new(
+        pat_id: PatId,
+        ty: Ty,
+        is_irrefutable_for_incoming: bool,
+        total_on_matched: bool,
+    ) -> Self {
         Self {
-            covers_flow,
-            irrefutable_for_flow,
+            matched_ty: ty.clone(),
+            is_irrefutable_for_incoming,
+            total_on_matched,
+            cases: BTreeSet::new(),
+            contains_class: false,
+            contains_array: false,
+            has_pattern_error: false,
+            summary_may_drop_coverage: false,
             pattern_types: FxHashMap::from_iter([(pat_id, ty)]),
             bindings: Vec::new(),
+            chain_alias_binds: Vec::new(),
         }
     }
 
-    fn extend(&mut self, other: PatternFlow) {
+    fn empty() -> Self {
+        Self {
+            matched_ty: Ty::Never {
+                attr: TyAttr::default(),
+            },
+            is_irrefutable_for_incoming: true,
+            total_on_matched: true,
+            cases: BTreeSet::new(),
+            contains_class: false,
+            contains_array: false,
+            has_pattern_error: false,
+            summary_may_drop_coverage: false,
+            pattern_types: FxHashMap::default(),
+            bindings: Vec::new(),
+            chain_alias_binds: Vec::new(),
+        }
+    }
+
+    fn extend_projected(&mut self, other: PatternFlow) {
         self.pattern_types.extend(other.pattern_types);
         self.bindings.extend(other.bindings);
+        self.cases.extend(other.cases);
+        self.contains_class |= other.contains_class;
+        self.contains_array |= other.contains_array;
+        self.has_pattern_error |= other.has_pattern_error;
+        self.summary_may_drop_coverage |= other.summary_may_drop_coverage;
+    }
+
+    fn absorb_projected_child(&mut self, child: PatternFlow) {
+        self.is_irrefutable_for_incoming &= child.is_irrefutable_for_incoming;
+        self.total_on_matched &= child.total_on_matched;
+        self.extend_projected(child);
+    }
+
+    fn extend_chain_part(&mut self, other: PatternFlow) {
+        self.chain_alias_binds
+            .extend(other.chain_alias_binds.clone());
+        self.extend_projected(other);
+    }
+
+    fn set_bind_pat_type(&mut self, pat_id: PatId, ty: &Ty) {
+        self.pattern_types.insert(pat_id, ty.clone());
+        for binding in &mut self.bindings {
+            if binding.pat_id == pat_id {
+                binding.ty = ty.clone();
+            }
+        }
     }
 }
 
@@ -2445,26 +2480,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                 initializer,
                 ..
             } => {
-                let (init_result_ty, pattern_subject_ty, declared_for_scope, pat_analysis) =
+                let (init_result_ty, pattern_subject_ty, declared_for_scope) =
                     if let Some(init) = *initializer {
-                        // Compute the pattern's natural shape. This validates
-                        // chain links pairwise and emits diagnostics for invalid
-                        // chains. The most-specific narrow (leftmost link of the
-                        // chain) is the user's annotation, if any.
-                        let pat_analysis = self.pattern_natural_type(*pattern, body, init);
-                        let pat_ty = pat_analysis.root.ty.clone();
-                        let has_annotation = pat_analysis.root.constraint.has_written()
-                            && !matches!(
-                                body.patterns[*pattern],
-                                ast::Pattern::Class { .. } | ast::Pattern::Array { .. }
-                            )
-                            && !Self::is_unfilled_generic_class_type(&pat_ty);
-                        let ty = if !has_annotation || matches!(pat_ty, Ty::Void { .. }) {
-                            // No annotation, or annotation is void (already
-                            // reported by AST). Just infer.
-                            self.infer_expr(init, body)
+                        let expected = self.pattern_expected_ty(*pattern, body, init);
+                        let is_structural_pattern =
+                            Self::pattern_contains_structural_syntax(*pattern, body);
+                        let expected_for_check = match expected {
+                            Some(PatternExpectedTy::Full(ty)) if !is_structural_pattern => Some(ty),
+                            Some(PatternExpectedTy::Partial(ty))
+                                if Self::expr_accepts_partial_pattern_expected(init, body) =>
+                            {
+                                Some(ty)
+                            }
+                            Some(PatternExpectedTy::Full(_) | PatternExpectedTy::Partial(_))
+                            | None => None,
+                        };
+                        let ty = if let Some(expected) = expected_for_check.as_ref()
+                            && !matches!(expected, Ty::Void { .. })
+                        {
+                            self.check_expr(init, body, expected)
                         } else {
-                            self.check_expr(init, body, &pat_ty)
+                            self.infer_expr(init, body)
                         };
                         if matches!(ty, Ty::Void { .. }) {
                             let err = if matches!(
@@ -2477,54 +2513,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                             };
                             self.context.report_simple(err, init);
                         }
-                        if has_annotation {
-                            // Use the user's declared type as the binding's
-                            // flow type — the annotation is a contract, not a
-                            // floor. `let result: Res = Failure { .. }` keeps
-                            // `result: Res` so subsequent matches/uses see the
-                            // wider type the user wrote, not the init's inferred
-                            // narrow shape. Keep the init's real result type
-                            // around separately for the divergence check below
-                            // — `let x: T = throw ...` must still mark the
-                            // surrounding block divergent.
-                            (
-                                Some(ty),
-                                Some(pat_ty.clone()),
-                                Some(pat_ty),
-                                Some(pat_analysis),
-                            )
+                        if let Some(expected) = expected_for_check {
+                            (Some(ty), Some(expected.clone()), Some(expected))
                         } else {
-                            // Unannotated lets get widened/evolving types and
-                            // record no "declared type" — the contract is purely
-                            // the inferred shape.
                             let flow_ty = ty.clone().widen_fresh().make_evolving();
-                            (Some(ty), Some(flow_ty), None, Some(pat_analysis))
+                            (Some(ty), Some(flow_ty), None)
                         }
                     } else {
-                        (None, None, None, None)
+                        (None, None, None)
                     };
 
                 let diverges = matches!(init_result_ty, Some(Ty::Never { .. }));
-                if !diverges
-                    && let (Some(flow_ty), Some(pat_analysis)) = (pattern_subject_ty, pat_analysis)
-                {
-                    let irrefutability_ty = init_result_ty
-                        .as_ref()
-                        .filter(|ty| !matches!(ty, Ty::Never { .. }))
-                        .unwrap_or(&flow_ty);
-                    self.apply_pattern_input(
-                        PatternInput {
-                            pattern: *pattern,
-                            analysis: &pat_analysis,
-                            subject_ty: &flow_ty,
-                            test_ty: irrefutability_ty,
-                            declared: declared_for_scope,
-                            irrefutable: Some(IrrefutablePatternContext {
-                                context: "let",
-                                fallback_expr: *initializer,
-                            }),
-                        },
+                if !diverges && let Some(flow_ty) = pattern_subject_ty {
+                    let flow = self.analyze_pattern(
+                        *pattern,
+                        &flow_ty,
+                        declared_for_scope,
                         body,
+                        initializer.unwrap(),
+                    );
+                    self.apply_pattern_result(
+                        *pattern,
+                        flow,
+                        Some(IrrefutablePatternContext {
+                            context: "let",
+                            fallback_expr: *initializer,
+                        }),
                     );
                 }
                 diverges
@@ -2598,26 +2612,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
 
                 // 3. Validate the binding pattern against the element type.
-                // `pattern_natural_type` walks the chain rules and returns the user's
-                // declared type (or `never` if unannotated). When annotated,
-                // require `elem_ty <: pat_ty` so each iteration's element is
-                // representable by the binding — `for (let n: int in
-                // int_or_string_xs)` would silently bind a string as `int`
-                // without this check.
-                let pat_analysis = self.pattern_natural_type(*binding, body, *for_body);
-                let pat_ty = pat_analysis.root.ty.clone();
-                let has_annotation = pat_analysis.root.constraint.has_written()
-                    && !matches!(
-                        body.patterns[*binding],
-                        ast::Pattern::Class { .. } | ast::Pattern::Array { .. }
-                    )
-                    && !Self::is_unfilled_generic_class_type(&pat_ty);
-                let (flow_ty, declared_for_scope) = if has_annotation {
-                    if !self.is_subtype(&elem_ty, &pat_ty) {
+                let expected = self.pattern_expected_ty(*binding, body, *for_body);
+                let is_structural_pattern =
+                    Self::pattern_contains_structural_syntax(*binding, body);
+                let (flow_ty, declared_for_scope) = if let Some(PatternExpectedTy::Full(expected)) =
+                    expected
+                    && !is_structural_pattern
+                {
+                    if !self.is_subtype(&elem_ty, &expected) {
                         // Anchor the diagnostic to the binding pattern: the
                         // bad annotation is what's wrong, not the iterable.
                         let err = TirTypeError::TypeMismatch {
-                            expected: pat_ty.clone(),
+                            expected: expected.clone(),
                             got: elem_ty,
                         };
                         if let Some(sm) = self.body_source_map.as_ref() {
@@ -2626,7 +2632,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             self.context.report_simple(err, *collection);
                         }
                     }
-                    (pat_ty.clone(), Some(pat_ty))
+                    (expected.clone(), Some(expected))
                 } else {
                     (elem_ty, None)
                 };
@@ -2634,19 +2640,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // 4. Bind every Pattern::Bind reachable in the loop binding
                 // pattern to the validated flow type.
                 let snapshot = self.snapshot_scoped_locals();
-                self.apply_pattern_input(
-                    PatternInput {
-                        pattern: *binding,
-                        analysis: &pat_analysis,
-                        subject_ty: &flow_ty,
-                        test_ty: &flow_ty,
-                        declared: declared_for_scope,
-                        irrefutable: Some(IrrefutablePatternContext {
-                            context: "for-let",
-                            fallback_expr: Some(*collection),
-                        }),
-                    },
-                    body,
+                let flow =
+                    self.analyze_pattern(*binding, &flow_ty, declared_for_scope, body, *for_body);
+                self.apply_pattern_result(
+                    *binding,
+                    flow,
+                    Some(IrrefutablePatternContext {
+                        context: "for-let",
+                        fallback_expr: Some(*collection),
+                    }),
                 );
 
                 // 5. Check the body
@@ -2730,6 +2732,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::Break | Stmt::Continue => true, // break/continue diverge
             Stmt::Missing | Stmt::HeaderComment { .. } => false,
         }
+    }
+
+    fn expr_accepts_partial_pattern_expected(expr_id: ExprId, body: &ExprBody) -> bool {
+        matches!(
+            body.exprs[expr_id],
+            Expr::Call { .. } | Expr::OptionalCall { .. }
+        )
     }
 
     // ── Early-return narrowing ────────────────────────────────────────────────
@@ -2876,26 +2885,17 @@ impl<'db> TypeInferenceBuilder<'db> {
             let arm = &body.match_arms[*arm_id];
             let pattern_id = arm.pattern;
 
-            let pat_analysis = self.pattern_natural_type(pattern_id, body, arm.body);
-            let pattern_contains_structural =
-                pat_analysis.root.contains_class || pat_analysis.root.contains_array;
-            let pattern_summary_may_drop_coverage = pat_analysis.root.summary_may_drop_coverage;
-            let pat_ty = pat_analysis.root.ty.clone();
-            let pat_cases = pat_analysis.root.cases.clone();
-            // Narrow the scrutinee for the arm body to the intersection of
-            // its current type and the pattern's natural type — only the
-            // values that satisfy both can reach this arm. Using `pat_ty`
-            // directly would over-widen when the pattern names cases the
-            // scrutinee can't actually produce (e.g. pattern `int | string |
-            // bool` matched against scrutinee `int | string`).
-            let narrowed = if let Some(constraint) = pat_analysis.root.constraint.ty() {
-                self.intersect_types(&scrutinee_ty, constraint)
+            let pattern_flow =
+                self.analyze_pattern(pattern_id, &scrutinee_ty, None, body, arm.body);
+            let pat_cases = if pattern_flow.total_on_matched
+                && !matches!(pattern_flow.matched_ty, Ty::Never { .. })
+            {
+                pattern_flow.cases.clone()
             } else {
-                // Bind/Wildcard and purely structural array destructures:
-                // no type narrowing. The flow pass still applies structural
-                // length and element checks against the scrutinee type.
-                scrutinee_ty.clone()
+                BTreeSet::new()
             };
+            let narrowed = pattern_flow.matched_ty.clone();
+            let covers_all = pattern_flow.is_irrefutable_for_incoming;
 
             // Route arm-pattern bindings through the standard
             // snapshot/declare_scoped_local/restore flow. A prior
@@ -2915,33 +2915,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.narrow_local(name.clone(), narrowed.clone());
             }
 
-            // Register every Pattern::Bind reachable in the arm pattern while
-            // also computing whether the pattern covers the original scrutinee.
-            let pattern_flow = self.apply_pattern_input(
-                PatternInput {
-                    pattern: pattern_id,
-                    analysis: &pat_analysis,
-                    subject_ty: &narrowed,
-                    test_ty: &scrutinee_ty,
-                    declared: None,
-                    irrefutable: None,
-                },
-                body,
-            );
-            // Refutability and single-arm exhaustiveness ask the same
-            // coverage question, but non-class type/literal patterns already
-            // have a precise type-level answer. Use the structural flow result
-            // only when class destructuring is involved.
-            let scrutinee_is_error = matches!(scrutinee_ty, Ty::Unknown { .. } | Ty::Error { .. });
-            let pat_is_error = matches!(pat_ty, Ty::Unknown { .. } | Ty::Error { .. });
-            let covers_all = matches!(pat_ty, Ty::Never { .. })
-                || (!scrutinee_is_error
-                    && !pat_is_error
-                    && if pattern_contains_structural || pattern_summary_may_drop_coverage {
-                        pattern_flow.covers_flow
-                    } else {
-                        self.is_subtype(&scrutinee_ty, &pat_ty)
-                    });
+            self.apply_pattern_result(pattern_id, pattern_flow, None);
 
             let mut unreachable = catch_all_seen;
             if !unreachable && arm.guard.is_none() {
@@ -3076,29 +3050,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // clause. A prior raw `self.locals.insert` had no paired
                 // snapshot/restore at all and leaked the binding into the
                 // rest of the function.
-                let st_analysis = self.pattern_natural_type(st_binding, body, base_expr_id);
-                self.apply_pattern_input(
-                    PatternInput {
-                        pattern: st_binding,
-                        analysis: &st_analysis,
-                        subject_ty: &st_ty,
-                        test_ty: &st_ty,
-                        declared: None,
-                        irrefutable: None,
-                    },
-                    body,
-                );
+                let st_flow = self.analyze_pattern(st_binding, &st_ty, None, body, base_expr_id);
+                self.apply_pattern_result(st_binding, st_flow, None);
             }
 
             // The clause may carry an annotation: `catch (e: SomeError)`.
-            // In the new pattern model that's a `Chain` link in the binding
-            // pattern; `analyze_pattern_shape` returns the resolved annotation. The
-            // is-banned check rejects catch-anything bindings (`unknown`,
-            // `any`).
-            let clause_analysis = self.pattern_natural_type(clause.binding, body, base_expr_id);
-            if let Some(clause_constraint) = clause_analysis.root.constraint.written_ty()
+            // Reject catch-anything bindings (`unknown`, `any`) before per-arm
+            // flow analysis records the actual narrowed binding type.
+            if let Some(clause_constraint) =
+                self.pattern_expected_ty(clause.binding, body, base_expr_id)
                 && let Some(banned) =
-                    crate::throw_inference::is_banned_catch_binding_type(clause_constraint)
+                    crate::throw_inference::is_banned_catch_binding_type(clause_constraint.ty())
             {
                 self.context.report_simple(
                     TirTypeError::InvalidCatchBindingType {
@@ -3110,13 +3072,32 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             for &arm_id in &clause.arms {
                 let arm = &body.catch_arms[arm_id];
-                let arm_analysis = self.pattern_natural_type(arm.pattern, body, arm.body);
-                let narrowed_ty = arm_analysis
-                    .root
-                    .constraint
-                    .ty()
-                    .cloned()
-                    .unwrap_or_else(|| clause_binding_ty.clone());
+                let arm_expected_ty = self
+                    .pattern_expected_ty(arm.pattern, body, arm.body)
+                    .map(PatternExpectedTy::into_ty);
+                let arm_probe = self.analyze_pattern_without_impossible_chain_diagnostics(
+                    arm.pattern,
+                    &clause_binding_ty,
+                    None,
+                    body,
+                    arm.body,
+                );
+                let mut narrowed_ty = arm_probe.matched_ty.clone();
+                let written_arm_ty = arm_expected_ty
+                    .clone()
+                    .unwrap_or_else(|| narrowed_ty.clone());
+
+                let panic_subset_ty = arm_expected_ty
+                    .as_ref()
+                    .and_then(|ty| self.ty_panic_subset(ty))
+                    .or_else(|| self.ty_panic_subset(&narrowed_ty));
+                if let Some(panic_subset_ty) = panic_subset_ty.clone() {
+                    narrowed_ty = if matches!(narrowed_ty, Ty::Never { .. }) {
+                        panic_subset_ty
+                    } else {
+                        Self::join_all(&[narrowed_ty, panic_subset_ty])
+                    };
+                }
 
                 let throw_matches = Self::throw_matches_from_ty(&narrowed_ty, &residual);
                 let panic_subset_ty = self.ty_panic_subset(&narrowed_ty);
@@ -3136,13 +3117,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     };
                 }
 
-                let is_multi = self.ty_has_multiple_variants(&narrowed_ty);
                 let catch_binding_ty = |fallback: Ty| -> Ty {
-                    if is_multi {
-                        Ty::Error {
-                            attr: TyAttr::default(),
-                        }
-                    } else if matches!(narrowed_binding_ty, Ty::Never { .. }) {
+                    if matches!(narrowed_binding_ty, Ty::Never { .. }) {
                         fallback
                     } else {
                         narrowed_binding_ty.clone()
@@ -3156,31 +3132,15 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // Register clause-level binding with the runtime-narrowed
                 // type for this arm, then arm-level bindings (if any).
-                let clause_flow = catch_binding_ty(clause_binding_ty.clone());
-                self.apply_pattern_input(
-                    PatternInput {
-                        pattern: clause.binding,
-                        analysis: &clause_analysis,
-                        subject_ty: &clause_flow,
-                        test_ty: &clause_flow,
-                        declared: None,
-                        irrefutable: None,
-                    },
-                    body,
-                );
+                let clause_flow = catch_binding_ty(written_arm_ty.clone());
+                let clause_binding_flow =
+                    self.analyze_pattern(clause.binding, &clause_flow, None, body, arm.body);
+                self.apply_pattern_result(clause.binding, clause_binding_flow, None);
 
-                let arm_flow = catch_binding_ty(narrowed_ty);
-                self.apply_pattern_input(
-                    PatternInput {
-                        pattern: arm.pattern,
-                        analysis: &arm_analysis,
-                        subject_ty: &arm_flow,
-                        test_ty: &arm_flow,
-                        declared: None,
-                        irrefutable: None,
-                    },
-                    body,
-                );
+                let arm_flow = catch_binding_ty(written_arm_ty);
+                let arm_binding_flow =
+                    self.analyze_pattern(arm.pattern, &arm_flow, None, body, arm.body);
+                self.apply_pattern_result(arm.pattern, arm_binding_flow, None);
 
                 let arm_ty = self.infer_expr(arm.body, body);
                 result_members.push(arm_ty);
@@ -3188,7 +3148,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.restore_scoped_locals(&arm_snapshot);
                 // `restore_scoped_locals` rolls back `locals`, but
                 // `pattern_types` is global state that the per-arm
-                // `apply_pattern_input(clause.binding, ...)` mutated.
+                // `apply_pattern_result(clause.binding, ...)` mutated.
                 // Without this re-insertion, MIR/LSP would see whichever arm
                 // ran last as the clause header binding's type, even though
                 // the clause-level binding outlives any single arm.
@@ -3284,30 +3244,47 @@ impl<'db> TypeInferenceBuilder<'db> {
     // Pattern type-checking primitives
     // ====================================================================
     //
-    // The new `Pattern` enum has six variants — `Wildcard`, `Bind`, `Type`,
-    // `Class`, `Or`, `Chain`. Two recursive passes handle everything:
-    //
-    //   * `pattern_natural_type(pat)` — natural type, case coverage, and structural
-    //     validations that do not depend on the incoming value type. It caches
-    //     those shapes per PatId for the flow pass.
-    //   * `apply_pattern_input(input)` — evaluates the effective
-    //     type for every PatId under the root, checks flow coverage/refutability,
-    //     and writes self.pattern_types + scoped bindings.
-    //
-    // `Pattern::Bind` and `Pattern::Wildcard` have natural type `never`. This
-    // is the chain-rule subtype-check type, NOT a claim about what values the
-    // binding accepts: a Bind in a chain is always satisfied, since
-    // `never <: T` holds for every `T`.
-    //
-    // `analyze_pattern_shape` is responsible for emitting:
-    //   * `TypeMismatch` for invalid pairwise chain links
-    //   * `UnresolvedName` for class destructure paths that don't resolve
-    //
-    // Class-field validation happens while computing the pattern shape. Flow
-    // application projects each field's declared type into the nested field
-    // pattern and records the resulting effective type for every PatId.
+    // Pattern analysis is contextual. `pattern_expected_ty` extracts the
+    // informative type pieces for bidirectional checking, then
+    // `analyze_pattern` walks once with the incoming value type to compute
+    // matched type, bindings, coverage, and PatId -> Ty output.
 
-    fn resolve_class_pattern_type(&mut self, class: &[Name], at_expr: Option<ExprId>) -> Ty {
+    fn resolve_class_pattern_type(
+        &mut self,
+        class: &[Name],
+        generic_args: &[TypeExpr],
+        at_expr: Option<ExprId>,
+    ) -> Ty {
+        if !generic_args.is_empty() {
+            let ty_expr = TypeExpr::Path {
+                segments: class.to_vec(),
+                generic_args: generic_args.to_vec(),
+                attrs: Vec::new(),
+            };
+            let ty = if let Some(at_expr) = at_expr {
+                self.resolve_type_expr(&ty_expr, at_expr)
+            } else {
+                self.resolve_type_expr_silent(&ty_expr)
+            };
+            if matches!(ty, Ty::Class(..) | Ty::Unknown { .. } | Ty::Error { .. }) {
+                return ty;
+            }
+            if let Some(at_expr) = at_expr {
+                self.context.report_simple(
+                    TirTypeError::TypeMismatch {
+                        expected: Ty::Type {
+                            attr: TyAttr::default(),
+                        },
+                        got: ty,
+                    },
+                    at_expr,
+                );
+            }
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
+
         if let Some((_source, ty @ Ty::Class(..))) =
             self.res_ctx
                 .resolve_type(self.context.db(), class, &self.ns_context)
@@ -3325,6 +3302,28 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    fn class_pattern_missing_generic_args(&self, class_ty: &Ty, generic_args: &[TypeExpr]) -> bool {
+        let Ty::Class(qn, args, _) = class_ty else {
+            return false;
+        };
+        if !generic_args.is_empty() {
+            return false;
+        }
+        if !qn.generic_params.is_empty() || args.iter().any(crate::generics::contains_typevar) {
+            return true;
+        }
+        let Some(pkg_items) = self.resolve_class_pkg_items(qn.package()) else {
+            return false;
+        };
+        let Some(Definition::Class(class_loc)) = pkg_items.lookup_type(qn.namespace(), qn.name())
+        else {
+            return false;
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+        !item_tree[class_loc.id(db)].generic_params.is_empty()
+    }
+
     fn unknown_ty() -> Ty {
         Ty::Unknown {
             attr: TyAttr::default(),
@@ -3337,8 +3336,115 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn is_unfilled_generic_class_type(ty: &Ty) -> bool {
-        matches!(ty, Ty::Class(qn, type_args, _) if type_args.is_empty() && !qn.generic_params.is_empty())
+    fn ty_contains_recovery_unknown(ty: &Ty) -> bool {
+        match ty {
+            Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. } => true,
+            Ty::Class(_, args, _) | Ty::Union(args, _) => {
+                args.iter().any(Self::ty_contains_recovery_unknown)
+            }
+            Ty::List(elem, _) | Ty::EvolvingList(elem, _) | Ty::Optional(elem, _) => {
+                Self::ty_contains_recovery_unknown(elem)
+            }
+            Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
+                Self::ty_contains_recovery_unknown(key) || Self::ty_contains_recovery_unknown(value)
+            }
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                params
+                    .iter()
+                    .any(|(_, ty)| Self::ty_contains_recovery_unknown(ty))
+                    || Self::ty_contains_recovery_unknown(ret)
+                    || Self::ty_contains_recovery_unknown(throws)
+            }
+            Ty::Enum(..)
+            | Ty::EnumVariant(..)
+            | Ty::TypeAlias(..)
+            | Ty::Primitive(..)
+            | Ty::Literal(..)
+            | Ty::TypeVar(..)
+            | Ty::Never { .. }
+            | Ty::Void { .. }
+            | Ty::RustType { .. }
+            | Ty::Type { .. } => false,
+        }
+    }
+
+    fn ty_contains_error_recovery_unknown(ty: &Ty) -> bool {
+        match ty {
+            Ty::Unknown { .. } | Ty::Error { .. } => true,
+            Ty::BuiltinUnknown { .. } => false,
+            Ty::Class(_, args, _) | Ty::Union(args, _) => {
+                args.iter().any(Self::ty_contains_error_recovery_unknown)
+            }
+            Ty::List(elem, _) | Ty::EvolvingList(elem, _) | Ty::Optional(elem, _) => {
+                Self::ty_contains_error_recovery_unknown(elem)
+            }
+            Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
+                Self::ty_contains_error_recovery_unknown(key)
+                    || Self::ty_contains_error_recovery_unknown(value)
+            }
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                params
+                    .iter()
+                    .any(|(_, ty)| Self::ty_contains_error_recovery_unknown(ty))
+                    || Self::ty_contains_error_recovery_unknown(ret)
+                    || Self::ty_contains_error_recovery_unknown(throws)
+            }
+            _ => false,
+        }
+    }
+
+    fn ty_contains_unfilled_generic_class(ty: &Ty) -> bool {
+        match ty {
+            Ty::Class(qn, type_args, _) => {
+                type_args.is_empty() && !qn.generic_params.is_empty()
+                    || type_args
+                        .iter()
+                        .any(Self::ty_contains_unfilled_generic_class)
+            }
+            Ty::Union(args, _) => args.iter().any(Self::ty_contains_unfilled_generic_class),
+            Ty::List(elem, _) | Ty::EvolvingList(elem, _) | Ty::Optional(elem, _) => {
+                Self::ty_contains_unfilled_generic_class(elem)
+            }
+            Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
+                Self::ty_contains_unfilled_generic_class(key)
+                    || Self::ty_contains_unfilled_generic_class(value)
+            }
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                params
+                    .iter()
+                    .any(|(_, ty)| Self::ty_contains_unfilled_generic_class(ty))
+                    || Self::ty_contains_unfilled_generic_class(ret)
+                    || Self::ty_contains_unfilled_generic_class(throws)
+            }
+            Ty::Enum(..)
+            | Ty::EnumVariant(..)
+            | Ty::TypeAlias(..)
+            | Ty::Primitive(..)
+            | Ty::Literal(..)
+            | Ty::TypeVar(..)
+            | Ty::Unknown { .. }
+            | Ty::BuiltinUnknown { .. }
+            | Ty::Never { .. }
+            | Ty::Void { .. }
+            | Ty::Error { .. }
+            | Ty::RustType { .. }
+            | Ty::Type { .. } => false,
+        }
     }
 
     fn class_pattern_type_for_flow(class_ty: Ty, flow_ty: &Ty) -> Ty {
@@ -3396,16 +3502,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn class_pattern_type_and_fields_for_flow(
-        &self,
-        natural_class_ty: &Ty,
-        flow_ty: &Ty,
-    ) -> (Ty, FxHashMap<Name, Ty>) {
-        let class_ty = Self::class_pattern_type_for_flow(natural_class_ty.clone(), flow_ty);
-        let fields = self.field_types_for_class_pattern_type(&class_ty);
-        (class_ty, fields)
-    }
-
     fn field_types_for_class_pattern_type(&self, class_ty: &Ty) -> FxHashMap<Name, Ty> {
         match class_ty {
             Ty::Class(qn, type_args, _) => self.lookup_class_fields(qn, type_args),
@@ -3413,12 +3509,60 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn class_chain_link_type(pat: &ast::Pattern, left_ty: Ty, right_ty: &Ty) -> Ty {
-        if matches!(pat, ast::Pattern::Class { .. }) {
-            Self::class_pattern_type_for_flow(left_ty, right_ty)
-        } else {
-            left_ty
+    fn filter_union_members_or_self(&self, ty: &Ty, mut keep: impl FnMut(&Ty) -> bool) -> Ty {
+        let expanded = self.expand_alias_chains(ty.clone());
+        match expanded {
+            Ty::Union(members, _) => {
+                let kept = members
+                    .into_iter()
+                    .filter(|member| Self::ty_contains_recovery_unknown(member) || keep(member))
+                    .collect::<Vec<_>>();
+                Self::join_all(&kept)
+            }
+            other if Self::ty_contains_recovery_unknown(&other) || keep(&other) => other,
+            _ => Ty::Never {
+                attr: TyAttr::default(),
+            },
         }
+    }
+
+    fn pattern_tys_overlap(&self, a: &Ty, b: &Ty) -> bool {
+        if Self::ty_contains_recovery_unknown(a)
+            || Self::ty_contains_recovery_unknown(b)
+            || crate::generics::contains_typevar(a)
+            || crate::generics::contains_typevar(b)
+        {
+            return true;
+        }
+        !matches!(self.intersect_pattern_flow_types(a, b), Ty::Never { .. })
+    }
+
+    fn refine_class_by_field_pattern(
+        &self,
+        parent_ty: &Ty,
+        field: &Name,
+        child_matched_ty: &Ty,
+    ) -> Ty {
+        self.filter_union_members_or_self(parent_ty, |member| {
+            match self.expand_alias_chains(member.clone()) {
+                Ty::Class(qn, type_args, _) => self
+                    .lookup_class_fields(&qn, &type_args)
+                    .get(field)
+                    .is_some_and(|field_ty| self.pattern_tys_overlap(field_ty, child_matched_ty)),
+                _ => false,
+            }
+        })
+    }
+
+    fn refine_array_by_element_pattern(&self, parent_ty: &Ty, child_matched_ty: &Ty) -> Ty {
+        self.filter_union_members_or_self(parent_ty, |member| {
+            match self.expand_alias_chains(member.clone()) {
+                Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
+                    self.pattern_tys_overlap(&elem, child_matched_ty)
+                }
+                _ => false,
+            }
+        })
     }
 
     fn intersect_pattern_flow_types(&self, incoming: &Ty, constraint: &Ty) -> Ty {
@@ -3431,391 +3575,167 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.intersect_types(incoming, constraint)
     }
 
-    fn narrow_pattern_flow_ty(
-        &self,
-        pat_id: PatId,
-        shapes_by_pat: &FxHashMap<PatId, PatternShape>,
-        incoming: &Ty,
-    ) -> Ty {
-        let Some(constraint) = shapes_by_pat
-            .get(&pat_id)
-            .and_then(|shape| shape.constraint.ty())
-        else {
-            return incoming.clone();
-        };
-        let constraint = match constraint {
-            Ty::Class(..) => Self::class_pattern_type_for_flow(constraint.clone(), incoming),
-            _ => constraint.clone(),
-        };
-        self.intersect_pattern_flow_types(incoming, &constraint)
-    }
-
-    fn pattern_natural_type(
+    fn pattern_expected_ty(
         &mut self,
         pat_id: PatId,
         body: &ExprBody,
         at_expr: ExprId,
-    ) -> PatternAnalysis {
-        let mut shapes = FxHashMap::default();
-        let root = self.analyze_pattern_shape(pat_id, body, at_expr, &mut shapes);
-        PatternAnalysis { root, shapes }
-    }
-
-    /// Compute and cache a pattern's natural/asserted shape. Pure-structural —
-    /// the scrutinee/init type is NOT a parameter; it only matters at the call
-    /// site (for narrowing or initializer checking).
-    fn analyze_pattern_shape(
-        &mut self,
-        pat_id: PatId,
-        body: &ExprBody,
-        at_expr: ExprId,
-        shapes_by_pat: &mut FxHashMap<PatId, PatternShape>,
-    ) -> PatternShape {
-        let shape = match &body.patterns[pat_id] {
-            ast::Pattern::Wildcard | ast::Pattern::Bind { .. } => PatternShape {
-                ty: Self::builtin_unknown_ty(),
-                constraint: PatternConstraint::None,
-                cases: BTreeSet::new(),
-                contains_class: false,
-                contains_array: false,
-                summary_may_drop_coverage: false,
-            },
-
-            ast::Pattern::Type(t) => {
-                let t = t.clone();
-                let ty = self.resolve_type_expr(&t, at_expr);
-                PatternShape {
-                    cases: self.cases_for_ty(&ty),
-                    constraint: PatternConstraint::Written(ty.clone()),
-                    ty,
-                    contains_class: false,
-                    contains_array: false,
-                    summary_may_drop_coverage: false,
-                }
-            }
-
-            ast::Pattern::Class { class, fields } => {
-                let class = class.clone();
-                let fields = fields.clone();
-                let class_ty = self.resolve_class_pattern_type(&class, Some(at_expr));
-                let class_fields = self.field_types_for_class_pattern_type(&class_ty);
-
-                for f in fields {
-                    let field_shape =
-                        self.analyze_pattern_shape(f.pat, body, at_expr, shapes_by_pat);
-                    let Some(field_ty) = class_fields.get(&f.field) else {
-                        if !matches!(class_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
-                            let err = TirTypeError::UnresolvedMember {
-                                base_type: class_ty.clone(),
-                                member: f.field.clone(),
-                            };
-                            self.context.report_at_span(err, f.field_span);
-                        }
-                        continue;
-                    };
-                    if let Some(field_constraint) = field_shape.constraint.cloned_ty()
-                        && !matches!(&field_constraint, Ty::Unknown { .. } | Ty::Error { .. })
-                        && !Self::is_unfilled_generic_class_type(&class_ty)
-                        && !crate::generics::contains_typevar(field_ty)
-                        && !matches!(field_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                        && !self.is_subtype(&field_constraint, field_ty)
-                        && !self.is_subtype(field_ty, &field_constraint)
-                    {
-                        let err = TirTypeError::TypeMismatch {
-                            expected: field_ty.clone(),
-                            got: field_constraint,
-                        };
-                        if let Some(sm) = self.body_source_map.as_ref() {
-                            self.context.report_at_span(err, sm.pattern_span(f.pat));
-                        } else {
-                            self.context.report_simple(err, at_expr);
-                        }
+    ) -> Option<PatternExpectedTy> {
+        if let ast::Pattern::Or(parts) = &body.patterns[pat_id] {
+            let mut tys = Vec::new();
+            let mut is_full = true;
+            for part in parts {
+                match self.pattern_expected_ty(*part, body, at_expr) {
+                    Some(PatternExpectedTy::Full(ty)) => tys.push(ty),
+                    Some(PatternExpectedTy::Partial(ty)) => {
+                        is_full = false;
+                        tys.push(ty);
+                    }
+                    None => {
+                        is_full = false;
                     }
                 }
-                PatternShape {
-                    cases: self.cases_for_ty(&class_ty),
-                    constraint: PatternConstraint::Written(class_ty.clone()),
-                    ty: class_ty,
-                    contains_class: true,
-                    contains_array: false,
-                    summary_may_drop_coverage: false,
-                }
             }
 
+            let ty = (!tys.is_empty()).then(|| Self::join_all(&tys))?;
+            return Some(if is_full {
+                PatternExpectedTy::Full(ty)
+            } else {
+                PatternExpectedTy::Partial(ty)
+            });
+        }
+
+        let ty = self.pattern_required_ty(pat_id, body, at_expr)?;
+        if Self::ty_contains_recovery_unknown(&ty) || Self::ty_contains_unfilled_generic_class(&ty)
+        {
+            None
+        } else {
+            Some(PatternExpectedTy::Full(ty))
+        }
+    }
+
+    fn pattern_contains_structural_syntax(pat_id: PatId, body: &ExprBody) -> bool {
+        match &body.patterns[pat_id] {
+            ast::Pattern::Class { .. } | ast::Pattern::Array { .. } => true,
+            ast::Pattern::Chain(parts) | ast::Pattern::Or(parts) => parts
+                .iter()
+                .any(|part| Self::pattern_contains_structural_syntax(*part, body)),
+            ast::Pattern::Wildcard | ast::Pattern::Bind { .. } | ast::Pattern::Type(_) => false,
+        }
+    }
+
+    fn pattern_required_ty(
+        &mut self,
+        pat_id: PatId,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> Option<Ty> {
+        match &body.patterns[pat_id] {
+            ast::Pattern::Wildcard | ast::Pattern::Bind { .. } => None,
+            ast::Pattern::Type(t) => Some(self.resolve_type_expr_silent(t)),
+            ast::Pattern::Class {
+                class,
+                generic_args,
+                ..
+            } => {
+                let class_ty = self.resolve_class_pattern_type(class, generic_args, None);
+                if self.class_pattern_missing_generic_args(&class_ty, generic_args) {
+                    None
+                } else {
+                    Some(class_ty)
+                }
+            }
             ast::Pattern::Array {
                 prefix,
                 rest,
                 suffix,
             } => {
-                let prefix = prefix.clone();
-                let rest = rest.clone();
-                let suffix = suffix.clone();
-                let mut elem_shapes = Vec::new();
+                let mut elem_tys = Vec::new();
                 for p in prefix.iter().chain(suffix.iter()) {
-                    elem_shapes.push(self.analyze_pattern_shape(*p, body, at_expr, shapes_by_pat));
+                    if let Some(ty) = self.pattern_required_ty(*p, body, at_expr) {
+                        elem_tys.push(ty);
+                    }
                 }
-                let mut rest_shape = None;
-                if let Some(rest) = rest.as_ref()
-                    && let Some(p) = rest.pat
+                if let Some(rest) = rest
+                    && let Some(rest_pat) = rest.pat
+                    && let Some(ty) = self.pattern_required_ty(rest_pat, body, at_expr)
                 {
-                    rest_shape = Some(self.analyze_pattern_shape(p, body, at_expr, shapes_by_pat));
-                }
-                let mut elem_constraint_tys: Vec<Ty> = elem_shapes
-                    .iter()
-                    .filter_map(|shape| shape.constraint.cloned_ty())
-                    .collect();
-                let mut has_written = elem_shapes
-                    .iter()
-                    .any(|shape| shape.constraint.has_written());
-                if let Some(shape) = rest_shape.as_ref() {
-                    has_written |= shape.constraint.has_written();
-                    match shape.constraint.ty() {
-                        Some(Ty::List(elem, _) | Ty::EvolvingList(elem, _)) => {
-                            elem_constraint_tys.push(elem.as_ref().clone());
-                        }
-                        Some(ty) => elem_constraint_tys.push(ty.clone()),
-                        None => {}
+                    match ty {
+                        Ty::List(elem, _) | Ty::EvolvingList(elem, _) => elem_tys.push(*elem),
+                        _ => {}
                     }
                 }
-                let elem_ty = elem_constraint_tys
-                    .first()
-                    .map(|_| Self::join_all(&elem_constraint_tys))
-                    .unwrap_or_else(Self::builtin_unknown_ty);
-                let type_constraint = Ty::List(Box::new(elem_ty.clone()), TyAttr::default());
-                let constraint = if has_written {
-                    PatternConstraint::Written(type_constraint)
-                } else {
-                    PatternConstraint::Structural(type_constraint)
-                };
-                PatternShape {
-                    ty: Ty::List(Box::new(elem_ty), TyAttr::default()),
-                    constraint,
-                    cases: BTreeSet::new(),
-                    contains_class: elem_shapes.iter().any(|shape| shape.contains_class)
-                        || rest_shape
-                            .as_ref()
-                            .is_some_and(|shape| shape.contains_class),
-                    contains_array: true,
-                    summary_may_drop_coverage: false,
-                }
+                let elem_ty = (!elem_tys.is_empty()).then(|| Self::join_all(&elem_tys))?;
+                Some(Ty::List(Box::new(elem_ty), TyAttr::default()))
             }
-
-            ast::Pattern::Chain(parts) => {
-                let parts = parts.clone();
-                let shapes: Vec<PatternShape> = parts
-                    .iter()
-                    .map(|p| self.analyze_pattern_shape(*p, body, at_expr, shapes_by_pat))
-                    .collect();
-                let constraint_links = parts
-                    .iter()
-                    .zip(shapes.iter())
-                    .filter_map(|(part, shape)| {
-                        shape
-                            .constraint
-                            .ty()
-                            .map(|constraint| (*part, constraint, shape.constraint.has_written()))
-                    })
-                    .collect::<Vec<_>>();
-                for pair in constraint_links.windows(2) {
-                    let (left_pat, left_constraint, left_written) = pair[0];
-                    let (_, right_constraint, right_written) = pair[1];
-                    let left = Self::class_chain_link_type(
-                        &body.patterns[left_pat],
-                        left_constraint.clone(),
-                        right_constraint,
-                    );
-                    let ok = if left_written && right_written {
-                        self.is_subtype(&left, right_constraint)
-                    } else {
-                        self.is_subtype(&left, right_constraint)
-                            || self.is_subtype(right_constraint, &left)
-                    };
-                    if !ok {
-                        let err = TirTypeError::TypeMismatch {
-                            expected: right_constraint.clone(),
-                            got: left,
-                        };
-                        // Point at the offending (left) chain link's pattern
-                        // span so the diagnostic underlines the value-side of
-                        // the bad chain rather than the arm body.
-                        if let Some(sm) = self.body_source_map.as_ref() {
-                            self.context.report_at_span(err, sm.pattern_span(left_pat));
-                        } else {
-                            self.context.report_simple(err, at_expr);
-                        }
-                    }
-                }
-                // Chain's effective type is the RIGHTMOST CONCRETE narrow —
-                // the user's broadest declared type. Each link is at most as
-                // specific as the next per the `left <: right` rule, so the
-                // rightmost is the widest. `let x: 1: int = 1` gives x: int;
-                // `let x: int: int|string = 1` gives x: int|string. Bind /
-                // Wildcard links produce no constraint and are skipped — they
-                // don't assert anything about the value. If every link is a
-                // binding (e.g. `let x: let y = 1`), call sites infer the
-                // real flow type.
-                let constraint = shapes
-                    .iter()
-                    .rev()
-                    .find_map(|shape| match &shape.constraint {
-                        PatternConstraint::Written(ty) => {
-                            Some(PatternConstraint::Written(ty.clone()))
-                        }
-                        PatternConstraint::None | PatternConstraint::Structural(_) => None,
-                    })
-                    .or_else(|| {
-                        shapes
-                            .iter()
-                            .rev()
-                            .find_map(|shape| match &shape.constraint {
-                                PatternConstraint::Structural(ty) => {
-                                    Some(PatternConstraint::Structural(ty.clone()))
-                                }
-                                PatternConstraint::None | PatternConstraint::Written(_) => None,
-                            })
-                    });
-                let constraint = constraint.unwrap_or(PatternConstraint::None);
-                let ty = constraint
-                    .cloned_ty()
-                    .unwrap_or_else(Self::builtin_unknown_ty);
-                let cases = shapes
-                    .iter()
-                    .find_map(|shape| (!shape.cases.is_empty()).then(|| shape.cases.clone()))
-                    .unwrap_or_default();
-                PatternShape {
-                    ty,
-                    constraint,
-                    cases,
-                    contains_class: shapes.iter().any(|shape| shape.contains_class),
-                    contains_array: shapes.iter().any(|shape| shape.contains_array),
-                    summary_may_drop_coverage: shapes
-                        .iter()
-                        .any(|shape| shape.summary_may_drop_coverage),
-                }
-            }
-
-            ast::Pattern::Or(parts) => {
-                let parts = parts.clone();
-                let shapes: Vec<PatternShape> = parts
-                    .iter()
-                    .map(|p| self.analyze_pattern_shape(*p, body, at_expr, shapes_by_pat))
-                    .collect();
-                // Cross-branch binding-type consistency: every bound name
-                // must have mutual-subtype types across all branches. HIR
-                // already verified the name SETS match, so each branch
-                // contributes a `name -> effective_type` map; we compare
-                // per-name. One recursive walk per branch (not per name)
-                // keeps this O(N·P) instead of O(N·M·P).
-                if parts.len() > 1 {
-                    let mut first_pairs: Vec<(Name, Ty)> = Vec::new();
-                    self.collect_branch_binding_types(
-                        parts[0],
-                        body,
-                        shapes_by_pat,
-                        &mut first_pairs,
-                        &shapes[0].ty,
-                    );
-                    let other_maps: Vec<FxHashMap<Name, Ty>> = parts
-                        .iter()
-                        .zip(shapes.iter())
-                        .skip(1)
-                        .map(|(p, branch_shape)| {
-                            let mut pairs = Vec::new();
-                            self.collect_branch_binding_types(
-                                *p,
-                                body,
-                                shapes_by_pat,
-                                &mut pairs,
-                                &branch_shape.ty,
-                            );
-                            pairs.into_iter().collect()
-                        })
-                        .collect();
-                    for (name, first_ty) in &first_pairs {
-                        for (idx_off, branch_map) in other_maps.iter().enumerate() {
-                            let idx = idx_off + 1;
-                            // Skip branches that don't bind this name —
-                            // HIR's name-uniformity check fires there and
-                            // we'd double-fire on `(let x: int) | (let y)`.
-                            let Some(other_ty) = branch_map.get(name) else {
-                                continue;
-                            };
-                            if !self.is_subtype(first_ty, other_ty)
-                                || !self.is_subtype(other_ty, first_ty)
-                            {
-                                let err = TirTypeError::OrPatternBindingTypeMismatch {
-                                    name: name.clone(),
-                                    first_type: first_ty.clone(),
-                                    other_type: other_ty.clone(),
-                                };
-                                if let Some(sm) = self.body_source_map.as_ref() {
-                                    self.context
-                                        .report_at_span(err, sm.pattern_span(parts[idx]));
-                                } else {
-                                    self.context.report_simple(err, at_expr);
-                                }
-                            }
-                        }
-                    }
-                }
-                let mut cases = BTreeSet::new();
-                for shape in &shapes {
-                    cases.extend(shape.cases.iter().cloned());
-                }
-                PatternShape {
-                    ty: Self::join_all(
-                        &shapes
-                            .iter()
-                            .map(|shape| shape.ty.clone())
-                            .collect::<Vec<_>>(),
-                    ),
-                    constraint: {
-                        let written = shapes
-                            .iter()
-                            .filter_map(|shape| match &shape.constraint {
-                                PatternConstraint::Written(ty) => Some(ty.clone()),
-                                PatternConstraint::None | PatternConstraint::Structural(_) => None,
-                            })
-                            .collect::<Vec<_>>();
-                        if !written.is_empty() {
-                            PatternConstraint::Written(Self::join_all(&written))
-                        } else {
-                            let structural = shapes
-                                .iter()
-                                .filter_map(|shape| match &shape.constraint {
-                                    PatternConstraint::Structural(ty) => Some(ty.clone()),
-                                    PatternConstraint::None | PatternConstraint::Written(_) => None,
-                                })
-                                .collect::<Vec<_>>();
-                            if structural.is_empty() {
-                                PatternConstraint::None
-                            } else {
-                                PatternConstraint::Structural(Self::join_all(&structural))
-                            }
-                        }
-                    },
-                    cases,
-                    contains_class: shapes.iter().any(|shape| shape.contains_class),
-                    contains_array: shapes.iter().any(|shape| shape.contains_array),
-                    summary_may_drop_coverage: shapes.iter().any(|shape| {
-                        shape.summary_may_drop_coverage || matches!(shape.ty, Ty::Never { .. })
-                    }),
-                }
-            }
-        };
-        shapes_by_pat.insert(pat_id, shape.clone());
-        shape
+            ast::Pattern::Chain(parts) => parts
+                .iter()
+                .filter_map(|part| self.pattern_required_ty(*part, body, at_expr))
+                .next_back(),
+            ast::Pattern::Or(parts) => parts
+                .iter()
+                .filter_map(|part| {
+                    self.pattern_expected_ty(*part, body, at_expr)
+                        .map(PatternExpectedTy::into_ty)
+                })
+                .reduce(|a, b| Self::join_all(&[a, b])),
+        }
     }
 
-    fn apply_pattern_input(&mut self, input: PatternInput<'_>, body: &ExprBody) -> PatternFlow {
-        let flow = self.analyze_pattern_flow(
-            input.pattern,
-            &input.analysis.shapes,
-            input.subject_ty,
-            input.test_ty,
-            input.declared,
-            body,
-        );
+    fn chain_constraint_ty(
+        &mut self,
+        pat_id: PatId,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> Option<Ty> {
+        if let Some(ty) = self.pattern_required_ty(pat_id, body, at_expr) {
+            return Some(ty);
+        }
+        match &body.patterns[pat_id] {
+            ast::Pattern::Array { .. } => Some(Ty::List(
+                Box::new(Self::builtin_unknown_ty()),
+                TyAttr::default(),
+            )),
+            ast::Pattern::Chain(parts) => parts
+                .iter()
+                .filter_map(|part| self.chain_constraint_ty(*part, body, at_expr))
+                .next_back(),
+            ast::Pattern::Or(parts) => parts
+                .iter()
+                .filter_map(|part| self.chain_constraint_ty(*part, body, at_expr))
+                .reduce(|a, b| Self::join_all(&[a, b])),
+            _ => None,
+        }
+    }
+
+    fn is_untyped_array_constraint(ty: &Ty) -> bool {
+        match ty {
+            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
+                matches!(elem.as_ref(), Ty::BuiltinUnknown { .. })
+            }
+            _ => false,
+        }
+    }
+
+    fn chain_constraints_compatible(&self, prev: &Ty, next: &Ty) -> bool {
+        if Self::ty_contains_error_recovery_unknown(prev)
+            || Self::ty_contains_error_recovery_unknown(next)
+            || crate::generics::contains_typevar(prev)
+            || crate::generics::contains_typevar(next)
+        {
+            return true;
+        }
+        self.is_subtype(prev, next)
+            || (Self::is_untyped_array_constraint(prev)
+                && matches!(next, Ty::List(..) | Ty::EvolvingList(..)))
+    }
+
+    fn apply_pattern_result(
+        &mut self,
+        pattern: PatId,
+        flow: PatternFlow,
+        irrefutable: Option<IrrefutablePatternContext>,
+    ) -> PatternFlow {
         for (pat_id, ty) in &flow.pattern_types {
             self.pattern_types.insert(*pat_id, ty.clone());
         }
@@ -3827,12 +3747,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 binding.declared.clone(),
             );
         }
-        if let Some(irrefutable) = input.irrefutable
-            && (input.analysis.root.contains_class || input.analysis.root.contains_array)
-            && !flow.irrefutable_for_flow
+        // Type annotations get their own check_expr diagnostic for nicer let errors.
+        if let Some(irrefutable) = irrefutable
+            && (flow.contains_class || flow.contains_array)
+            && !flow.has_pattern_error
+            && !flow.is_irrefutable_for_incoming
         {
             self.report_refutable_pattern_in_irrefutable_context(
-                input.pattern,
+                pattern,
                 irrefutable.fallback_expr,
                 irrefutable.context,
             );
@@ -3840,241 +3762,535 @@ impl<'db> TypeInferenceBuilder<'db> {
         flow
     }
 
-    /// Analyze how an already-shaped pattern interacts with the concrete type
-    /// flowing into it. This is the single pass that decides effective types
-    /// for every `PatId` beneath the root.
-    fn analyze_pattern_flow(
-        &self,
+    fn analyze_pattern(
+        &mut self,
         pat_id: PatId,
-        shapes_by_pat: &FxHashMap<PatId, PatternShape>,
-        subject_ty: &Ty,
-        test_ty: &Ty,
+        incoming_ty: &Ty,
         declared: Option<Ty>,
         body: &ExprBody,
+        at_expr: ExprId,
     ) -> PatternFlow {
-        let subject_ty = self.narrow_pattern_flow_ty(pat_id, shapes_by_pat, subject_ty);
-        let test_ty = test_ty.clone();
-        let error_recovery_test = matches!(test_ty, Ty::Unknown { .. } | Ty::Error { .. });
-        match &body.patterns[pat_id] {
-            ast::Pattern::Wildcard => PatternFlow::new(true, true, pat_id, subject_ty),
+        let ctx = PatternAnalysisCtx {
+            body,
+            at_expr,
+            report_impossible_chain: true,
+        };
+        self.analyze_pattern_with_ctx(pat_id, incoming_ty, declared, ctx)
+    }
 
+    fn analyze_pattern_without_impossible_chain_diagnostics(
+        &mut self,
+        pat_id: PatId,
+        incoming_ty: &Ty,
+        declared: Option<Ty>,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> PatternFlow {
+        let ctx = PatternAnalysisCtx {
+            body,
+            at_expr,
+            report_impossible_chain: false,
+        };
+        self.analyze_pattern_with_ctx(pat_id, incoming_ty, declared, ctx)
+    }
+
+    fn analyze_pattern_with_ctx(
+        &mut self,
+        pat_id: PatId,
+        incoming_ty: &Ty,
+        declared: Option<Ty>,
+        ctx: PatternAnalysisCtx<'_>,
+    ) -> PatternFlow {
+        let body = ctx.body;
+        let at_expr = ctx.at_expr;
+        match body.patterns[pat_id].clone() {
+            ast::Pattern::Wildcard => PatternFlow::new(pat_id, incoming_ty.clone(), true, true),
             ast::Pattern::Bind { name } => {
-                let mut flow = PatternFlow::new(true, true, pat_id, subject_ty.clone());
-                flow.bindings.push(PatternBindingFlow {
-                    name: name.clone(),
-                    pat_id,
-                    ty: subject_ty,
-                    declared,
-                });
-                flow
+                Self::analyze_bind_pattern(pat_id, name, incoming_ty, declared)
             }
-
-            // For `Type` patterns we override the just-inserted entry with
-            // the *natural* type (from the TypeExpr) — MIR uses that to
-            // know what to runtime-test the scrutinee against (e.g., int
-            // literal `1` vs. structural `int`). Mirror `resolve_type_expr`'s
-            // bare-primitive sugar check so `int`/`string`/`image`/etc. land
-            // as their `Ty::Primitive` rather than going through the package
-            // lookup path and falling back to `Ty::Unknown`.
-            ast::Pattern::Type(_) => {
-                let resolved = shapes_by_pat
-                    .get(&pat_id)
-                    .map(|shape| shape.ty.clone())
-                    .unwrap_or_else(Self::unknown_ty);
-                let resolved_is_error = matches!(resolved, Ty::Unknown { .. } | Ty::Error { .. });
-                PatternFlow::new(
-                    !resolved_is_error && self.is_subtype(&test_ty, &resolved),
-                    error_recovery_test
-                        || resolved_is_error
-                        || self.is_subtype(&test_ty, &resolved),
-                    pat_id,
-                    resolved,
-                )
+            ast::Pattern::Type(t) => self.analyze_type_pattern(pat_id, &t, incoming_ty, at_expr),
+            ast::Pattern::Class {
+                class,
+                generic_args,
+                fields,
+            } => {
+                self.analyze_class_pattern(pat_id, &class, &generic_args, &fields, incoming_ty, ctx)
             }
-
-            ast::Pattern::Class { fields, .. } => {
-                let natural_class_ty = shapes_by_pat
-                    .get(&pat_id)
-                    .map(|shape| shape.ty.clone())
-                    .unwrap_or_else(Self::unknown_ty);
-                let (class_ty, field_types) =
-                    self.class_pattern_type_and_fields_for_flow(&natural_class_ty, &subject_ty);
-                let (test_class_ty, test_field_types) =
-                    self.class_pattern_type_and_fields_for_flow(&natural_class_ty, &test_ty);
-                let class_is_error = matches!(class_ty, Ty::Unknown { .. } | Ty::Error { .. });
-                let test_class_is_error =
-                    matches!(test_class_ty, Ty::Unknown { .. } | Ty::Error { .. });
-                let class_matches_test = !test_class_is_error
-                    && !error_recovery_test
-                    && self.is_subtype(&test_ty, &test_class_ty);
-                let mut flow = PatternFlow::new(
-                    class_matches_test,
-                    error_recovery_test
-                        || test_class_is_error
-                        || self.is_subtype(&test_ty, &test_class_ty),
-                    pat_id,
-                    if class_is_error { subject_ty } else { class_ty },
-                );
-                let fields = fields.clone();
-                for f in fields {
-                    let field_ty = field_types
-                        .get(&f.field)
-                        .cloned()
-                        .unwrap_or_else(Self::unknown_ty);
-                    let test_field_ty = test_field_types
-                        .get(&f.field)
-                        .cloned()
-                        .unwrap_or_else(Self::unknown_ty);
-                    let has_test_field = test_field_types.contains_key(&f.field);
-                    let field_flow = self.analyze_pattern_flow(
-                        f.pat,
-                        shapes_by_pat,
-                        &field_ty,
-                        &test_field_ty,
-                        None,
-                        body,
-                    );
-                    flow.covers_flow &= has_test_field && field_flow.covers_flow;
-                    // Preserve the existing recovery behavior: a missing
-                    // field gets its own diagnostic from shape analysis, but
-                    // does not additionally make a let/for pattern refutable.
-                    if has_test_field {
-                        flow.irrefutable_for_flow &= field_flow.irrefutable_for_flow;
-                    }
-                    flow.extend(field_flow);
-                }
-                flow
-            }
-
             ast::Pattern::Array {
                 prefix,
                 rest,
                 suffix,
-            } => {
-                let elem_ty = match &subject_ty {
-                    Ty::List(elem, _) | Ty::EvolvingList(elem, _) => elem.as_ref().clone(),
-                    Ty::Unknown { .. } | Ty::Error { .. } => Self::unknown_ty(),
-                    _ => Self::unknown_ty(),
-                };
-                let test_elem_ty = match &test_ty {
-                    Ty::List(elem, _) | Ty::EvolvingList(elem, _) => elem.as_ref().clone(),
-                    Ty::Unknown { .. } | Ty::Error { .. } => Self::unknown_ty(),
-                    _ => Self::unknown_ty(),
-                };
-                let subject_is_array = matches!(subject_ty, Ty::List(..) | Ty::EvolvingList(..))
-                    || matches!(subject_ty, Ty::Unknown { .. } | Ty::Error { .. });
-                let test_is_array =
-                    matches!(test_ty, Ty::List(..) | Ty::EvolvingList(..)) || error_recovery_test;
-                let mut flow = PatternFlow::new(
-                    test_is_array && rest.is_some() && prefix.is_empty() && suffix.is_empty(),
-                    test_is_array && rest.is_some() && prefix.is_empty() && suffix.is_empty(),
-                    pat_id,
-                    subject_ty,
-                );
-                flow.covers_flow &= subject_is_array;
-                flow.irrefutable_for_flow &= subject_is_array;
-
-                for p in prefix.iter().chain(suffix.iter()) {
-                    let elem_flow = self.analyze_pattern_flow(
-                        *p,
-                        shapes_by_pat,
-                        &elem_ty,
-                        &test_elem_ty,
-                        None,
-                        body,
-                    );
-                    flow.covers_flow &= elem_flow.covers_flow;
-                    flow.irrefutable_for_flow &= elem_flow.irrefutable_for_flow;
-                    flow.extend(elem_flow);
-                }
-
-                if let Some(rest) = rest
-                    && let Some(rest_pat) = rest.pat
-                {
-                    let rest_ty = Ty::List(Box::new(elem_ty), TyAttr::default());
-                    let test_rest_ty = Ty::List(Box::new(test_elem_ty), TyAttr::default());
-                    let rest_flow = self.analyze_pattern_flow(
-                        rest_pat,
-                        shapes_by_pat,
-                        &rest_ty,
-                        &test_rest_ty,
-                        None,
-                        body,
-                    );
-                    flow.covers_flow &= rest_flow.covers_flow;
-                    flow.irrefutable_for_flow &= rest_flow.irrefutable_for_flow;
-                    flow.extend(rest_flow);
-                }
-                flow
+            } => self.analyze_array_pattern(pat_id, &prefix, rest, &suffix, incoming_ty, ctx),
+            ast::Pattern::Chain(parts) => {
+                self.analyze_chain_pattern(pat_id, &parts, incoming_ty, declared.as_ref(), ctx)
             }
-
-            ast::Pattern::Chain(parts) | ast::Pattern::Or(parts) => {
-                let parts = parts.clone();
-                let is_or = matches!(&body.patterns[pat_id], ast::Pattern::Or(_));
-                let mut flow = PatternFlow::new(
-                    is_or && parts.is_empty(),
-                    is_or && parts.is_empty(),
-                    pat_id,
-                    subject_ty.clone(),
-                );
-                if !is_or {
-                    flow.covers_flow = true;
-                    flow.irrefutable_for_flow = true;
-                }
-                for p in parts {
-                    let part_flow = self.analyze_pattern_flow(
-                        p,
-                        shapes_by_pat,
-                        &subject_ty,
-                        &test_ty,
-                        declared.clone(),
-                        body,
-                    );
-                    if is_or {
-                        flow.covers_flow |= part_flow.covers_flow;
-                        flow.irrefutable_for_flow |= part_flow.irrefutable_for_flow;
-                    } else {
-                        flow.covers_flow &= part_flow.covers_flow;
-                        flow.irrefutable_for_flow &= part_flow.irrefutable_for_flow;
-                    }
-                    flow.extend(part_flow);
-                }
-                flow
+            ast::Pattern::Or(parts) => {
+                self.analyze_or_pattern(pat_id, &parts, incoming_ty, declared.as_ref(), ctx)
             }
         }
     }
 
-    /// Walk a single Or branch and collect every `(name, effective_type)`
-    /// pair. `branch_ty` is the branch's already-computed pattern shape type —
-    /// for a Chain branch that's the chain's rightmost concrete narrow, for
-    /// a `Bind` branch it's `never`, etc. — and serves as the ambient type
-    /// for every Bind in the branch. One pass per branch keeps the
-    /// cross-branch mismatch check O(N·P) rather than O(N·M·P).
-    fn collect_branch_binding_types(
-        &self,
+    fn analyze_bind_pattern(
         pat_id: PatId,
-        body: &ExprBody,
-        shapes_by_pat: &FxHashMap<PatId, PatternShape>,
-        out: &mut Vec<(Name, Ty)>,
-        branch_ty: &Ty,
-    ) {
-        if let ast::Pattern::Or(parts) = &body.patterns[pat_id] {
-            // Nested Or's own consistency check runs separately via
-            // `analyze_pattern_shape`; pick the first alt as representative
-            // since HIR guarantees same-name-set across alternatives.
-            if let Some(first) = parts.first() {
-                self.collect_branch_binding_types(*first, body, shapes_by_pat, out, branch_ty);
+        name: Name,
+        incoming_ty: &Ty,
+        declared: Option<Ty>,
+    ) -> PatternFlow {
+        let mut flow = PatternFlow::new(pat_id, incoming_ty.clone(), true, true);
+        flow.bindings.push(PatternBindingFlow {
+            name,
+            pat_id,
+            ty: incoming_ty.clone(),
+            declared,
+        });
+        flow.chain_alias_binds.push(pat_id);
+        flow
+    }
+
+    fn analyze_type_pattern(
+        &mut self,
+        pat_id: PatId,
+        t: &TypeExpr,
+        incoming_ty: &Ty,
+        at_expr: ExprId,
+    ) -> PatternFlow {
+        let resolved = self.resolve_type_expr(t, at_expr);
+        let matched = self.intersect_pattern_flow_types(incoming_ty, &resolved);
+        let resolved_is_error = matches!(resolved, Ty::Unknown { .. } | Ty::Error { .. });
+        let is_irrefutable_for_incoming =
+            resolved_is_error || self.is_subtype(incoming_ty, &resolved);
+        let mut flow = PatternFlow::new(pat_id, matched, is_irrefutable_for_incoming, true);
+        flow.cases = self.cases_for_ty(&resolved);
+        flow
+    }
+
+    fn analyze_class_pattern(
+        &mut self,
+        pat_id: PatId,
+        class: &[Name],
+        generic_args: &[TypeExpr],
+        fields: &[baml_compiler2_ast::FieldPat],
+        incoming_ty: &Ty,
+        ctx: PatternAnalysisCtx<'_>,
+    ) -> PatternFlow {
+        let natural_class_ty =
+            self.resolve_class_pattern_type(class, generic_args, Some(ctx.at_expr));
+        let mut has_pattern_error = false;
+        if !fields.is_empty()
+            && self.class_pattern_missing_generic_args(&natural_class_ty, generic_args)
+        {
+            let err = TirTypeError::GenericClassDestructureRequiresTypeArgs {
+                class_name: class.last().cloned().unwrap_or_else(|| Name::new("_")),
+            };
+            if let Some(sm) = self.body_source_map.as_ref() {
+                self.context.report_at_span(err, sm.pattern_span(pat_id));
+            } else {
+                self.context.report_simple(err, ctx.at_expr);
             }
-            return;
+            has_pattern_error = true;
         }
 
-        let flow =
-            self.analyze_pattern_flow(pat_id, shapes_by_pat, branch_ty, branch_ty, None, body);
-        out.extend(
-            flow.bindings
-                .into_iter()
-                .map(|binding| (binding.name, binding.ty)),
-        );
+        let class_ty = Self::class_pattern_type_for_flow(natural_class_ty, incoming_ty);
+        let matched = self.intersect_pattern_flow_types(incoming_ty, &class_ty);
+        let is_irrefutable_for_incoming = matches!(class_ty, Ty::Unknown { .. } | Ty::Error { .. })
+            || self.is_subtype(incoming_ty, &class_ty);
+        let mut flow = PatternFlow::new(pat_id, matched, is_irrefutable_for_incoming, true);
+        flow.contains_class = true;
+        flow.has_pattern_error = has_pattern_error;
+        flow.cases = self.cases_for_ty(&class_ty);
+
+        for f in fields {
+            if matches!(flow.matched_ty, Ty::Never { .. }) {
+                break;
+            }
+            let field_types = self.field_types_for_class_pattern_type(&flow.matched_ty);
+            let Some(field_ty) = field_types.get(&f.field).cloned() else {
+                if !matches!(flow.matched_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+                    self.context.report_at_span(
+                        TirTypeError::UnresolvedMember {
+                            base_type: flow.matched_ty.clone(),
+                            member: f.field.clone(),
+                        },
+                        f.field_span,
+                    );
+                    flow.has_pattern_error = true;
+                    let field_flow =
+                        self.analyze_pattern_with_ctx(f.pat, &Self::unknown_ty(), None, ctx);
+                    flow.absorb_projected_child(field_flow);
+                    flow.matched_ty = Ty::Never {
+                        attr: TyAttr::default(),
+                    };
+                    flow.is_irrefutable_for_incoming = false;
+                    flow.total_on_matched = false;
+                    flow.cases.clear();
+                    flow.pattern_types.insert(pat_id, flow.matched_ty.clone());
+                }
+                continue;
+            };
+
+            self.check_field_pattern_expected_type(f, &field_ty, ctx.body, ctx.at_expr);
+            let field_flow = self.analyze_pattern_with_ctx(f.pat, &field_ty, None, ctx);
+            let refined = self.refine_class_by_field_pattern(
+                &flow.matched_ty,
+                &f.field,
+                &field_flow.matched_ty,
+            );
+            flow.total_on_matched &= field_flow.is_irrefutable_for_incoming;
+            flow.absorb_projected_child(field_flow);
+            flow.matched_ty = refined;
+            flow.pattern_types.insert(pat_id, flow.matched_ty.clone());
+        }
+        flow
+    }
+
+    fn check_field_pattern_expected_type(
+        &mut self,
+        field: &baml_compiler2_ast::FieldPat,
+        field_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) {
+        if let Some(expected) = self.pattern_expected_ty(field.pat, body, at_expr)
+            && !matches!(field_ty, Ty::Unknown { .. } | Ty::Error { .. })
+            && !crate::generics::contains_typevar(field_ty)
+            && !self.is_subtype(expected.ty(), field_ty)
+            && !self.is_subtype(field_ty, expected.ty())
+        {
+            let expected = expected.into_ty();
+            let err = TirTypeError::TypeMismatch {
+                expected: field_ty.clone(),
+                got: expected,
+            };
+            if let Some(sm) = self.body_source_map.as_ref() {
+                self.context.report_at_span(err, sm.pattern_span(field.pat));
+            } else {
+                self.context.report_simple(err, at_expr);
+            }
+        }
+    }
+
+    fn check_array_rest_pattern_expected_type(
+        &mut self,
+        rest_pat: PatId,
+        rest_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) {
+        if let Some(expected) = self.pattern_expected_ty(rest_pat, body, at_expr)
+            && !Self::ty_contains_recovery_unknown(rest_ty)
+            && !crate::generics::contains_typevar(rest_ty)
+            && !self.is_subtype(expected.ty(), rest_ty)
+        {
+            let expected = expected.into_ty();
+            let err = TirTypeError::TypeMismatch {
+                expected: rest_ty.clone(),
+                got: expected,
+            };
+            if let Some(sm) = self.body_source_map.as_ref() {
+                self.context.report_at_span(err, sm.pattern_span(rest_pat));
+            } else {
+                self.context.report_simple(err, at_expr);
+            }
+        }
+    }
+
+    fn analyze_array_pattern(
+        &mut self,
+        pat_id: PatId,
+        prefix: &[PatId],
+        rest: Option<baml_compiler2_ast::ArrayRestPat>,
+        suffix: &[PatId],
+        incoming_ty: &Ty,
+        ctx: PatternAnalysisCtx<'_>,
+    ) -> PatternFlow {
+        let matched = self.array_pattern_matched_ty(incoming_ty);
+        let is_array = self.ty_is_array_like_or_recovery(incoming_ty);
+        let whole_rest = rest.is_some() && prefix.is_empty() && suffix.is_empty();
+        let mut flow = PatternFlow::new(pat_id, matched, is_array && whole_rest, whole_rest);
+        flow.contains_array = true;
+
+        for p in prefix.iter().chain(suffix.iter()).copied() {
+            let elem_ty = self.array_element_ty(&flow.matched_ty);
+            let elem_flow = self.analyze_pattern_with_ctx(p, &elem_ty, None, ctx);
+            let refined =
+                self.refine_array_by_element_pattern(&flow.matched_ty, &elem_flow.matched_ty);
+            flow.absorb_projected_child(elem_flow);
+            flow.matched_ty = refined;
+            flow.pattern_types.insert(pat_id, flow.matched_ty.clone());
+        }
+
+        if let Some(rest) = rest
+            && let Some(rest_pat) = rest.pat
+        {
+            self.check_array_rest_pattern_expected_type(
+                rest_pat,
+                &flow.matched_ty,
+                ctx.body,
+                ctx.at_expr,
+            );
+            let rest_flow = self.analyze_pattern_with_ctx(rest_pat, &flow.matched_ty, None, ctx);
+            let refined =
+                self.intersect_pattern_flow_types(&flow.matched_ty, &rest_flow.matched_ty);
+            flow.absorb_projected_child(rest_flow);
+            flow.matched_ty = refined;
+            flow.pattern_types.insert(pat_id, flow.matched_ty.clone());
+        }
+        flow
+    }
+
+    fn analyze_chain_pattern(
+        &mut self,
+        pat_id: PatId,
+        parts: &[PatId],
+        incoming_ty: &Ty,
+        declared: Option<&Ty>,
+        ctx: PatternAnalysisCtx<'_>,
+    ) -> PatternFlow {
+        let mut current = incoming_ty.clone();
+        let mut flow = PatternFlow::empty();
+        let mut previous_constraint: Option<Ty> = None;
+        for part in parts {
+            let incoming_to_part = current.clone();
+            let written_ty = self.pattern_required_ty(*part, ctx.body, ctx.at_expr);
+            let chain_constraint = self.chain_constraint_ty(*part, ctx.body, ctx.at_expr);
+            let part_flow = self.analyze_pattern_with_ctx(*part, &current, declared.cloned(), ctx);
+
+            if let Some(next_constraint) = chain_constraint.clone() {
+                if ctx.report_impossible_chain
+                    && let Some(prev_constraint) = previous_constraint.as_ref()
+                    && !self.chain_constraints_compatible(prev_constraint, &next_constraint)
+                {
+                    let err = TirTypeError::TypeMismatch {
+                        expected: next_constraint.clone(),
+                        got: prev_constraint.clone(),
+                    };
+                    if let Some(sm) = self.body_source_map.as_ref() {
+                        self.context.report_at_span(err, sm.pattern_span(*part));
+                    } else {
+                        self.context.report_simple(err, ctx.at_expr);
+                    }
+                }
+                previous_constraint = Some(next_constraint);
+            }
+
+            current = match (matches!(part_flow.matched_ty, Ty::Never { .. }), written_ty) {
+                (true, _) => part_flow.matched_ty.clone(),
+                (false, Some(expected)) if self.is_subtype(&incoming_to_part, &expected) => {
+                    expected
+                }
+                _ => part_flow.matched_ty.clone(),
+            };
+            flow.is_irrefutable_for_incoming &= part_flow.is_irrefutable_for_incoming;
+            flow.total_on_matched &= part_flow.total_on_matched;
+            flow.extend_chain_part(part_flow);
+            for bind_pat in flow.chain_alias_binds.clone() {
+                flow.set_bind_pat_type(bind_pat, &current);
+            }
+        }
+        let covers_incoming = Self::ty_contains_recovery_unknown(incoming_ty)
+            || Self::ty_contains_recovery_unknown(&current)
+            || self.is_subtype(incoming_ty, &current);
+        flow.is_irrefutable_for_incoming &= covers_incoming;
+        flow.matched_ty = current.clone();
+        flow.pattern_types.insert(pat_id, current);
+        flow
+    }
+
+    fn analyze_or_pattern(
+        &mut self,
+        pat_id: PatId,
+        parts: &[PatId],
+        incoming_ty: &Ty,
+        declared: Option<&Ty>,
+        ctx: PatternAnalysisCtx<'_>,
+    ) -> PatternFlow {
+        let branches = parts
+            .iter()
+            .map(|part| {
+                (
+                    *part,
+                    self.analyze_pattern_with_ctx(*part, incoming_ty, declared.cloned(), ctx),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let matched_tys = branches
+            .iter()
+            .map(|(_, flow)| flow.matched_ty.clone())
+            .collect::<Vec<_>>();
+        let matched = Self::join_all(&matched_tys);
+        let is_irrefutable_for_incoming =
+            self.or_pattern_is_irrefutable_for_incoming(incoming_ty, &branches);
+        let mut flow = PatternFlow::new(pat_id, matched, is_irrefutable_for_incoming, true);
+
+        let bindings_by_name = Self::collect_or_bindings_by_name(&branches, &mut flow);
+        let joined_bindings = self.join_or_binding_types(&bindings_by_name);
+        self.check_or_binding_type_compatibility(&bindings_by_name, ctx.at_expr);
+        Self::merge_or_branches(branches, &joined_bindings, flow)
+    }
+
+    fn collect_or_bindings_by_name(
+        branches: &[(PatId, PatternFlow)],
+        flow: &mut PatternFlow,
+    ) -> FxHashMap<Name, Vec<(PatId, Ty)>> {
+        let mut bindings_by_name: FxHashMap<Name, Vec<(PatId, Ty)>> = FxHashMap::default();
+        for (_, branch) in branches {
+            flow.cases.extend(branch.cases.iter().cloned());
+            flow.contains_class |= branch.contains_class;
+            flow.contains_array |= branch.contains_array;
+            flow.has_pattern_error |= branch.has_pattern_error;
+            flow.total_on_matched &= branch.total_on_matched;
+            flow.summary_may_drop_coverage |= branch.summary_may_drop_coverage;
+            for binding in &branch.bindings {
+                bindings_by_name
+                    .entry(binding.name.clone())
+                    .or_default()
+                    .push((binding.pat_id, binding.ty.clone()));
+            }
+        }
+        bindings_by_name
+    }
+
+    fn join_or_binding_types(
+        &self,
+        bindings_by_name: &FxHashMap<Name, Vec<(PatId, Ty)>>,
+    ) -> FxHashMap<Name, Ty> {
+        bindings_by_name
+            .iter()
+            .map(|(name, entries)| {
+                if let Some((_, first_ty)) = entries.first()
+                    && entries.iter().skip(1).any(|(_, other_ty)| {
+                        !Self::ty_contains_recovery_unknown(first_ty)
+                            && !Self::ty_contains_recovery_unknown(other_ty)
+                            && (!self.is_subtype(first_ty, other_ty)
+                                || !self.is_subtype(other_ty, first_ty))
+                    })
+                {
+                    return (name.clone(), Self::unknown_ty());
+                }
+                let tys = entries.iter().map(|(_, ty)| ty.clone()).collect::<Vec<_>>();
+                (name.clone(), Self::join_all(&tys))
+            })
+            .collect()
+    }
+
+    fn check_or_binding_type_compatibility(
+        &mut self,
+        bindings_by_name: &FxHashMap<Name, Vec<(PatId, Ty)>>,
+        at_expr: ExprId,
+    ) {
+        for (name, entries) in bindings_by_name {
+            let Some((_, first_ty)) = entries.first() else {
+                continue;
+            };
+            for (pat, other_ty) in entries.iter().skip(1) {
+                if Self::ty_contains_recovery_unknown(first_ty)
+                    || Self::ty_contains_recovery_unknown(other_ty)
+                {
+                    continue;
+                }
+                if !self.is_subtype(first_ty, other_ty) || !self.is_subtype(other_ty, first_ty) {
+                    let err = TirTypeError::OrPatternBindingTypeMismatch {
+                        name: name.clone(),
+                        first_type: first_ty.clone(),
+                        other_type: other_ty.clone(),
+                    };
+                    if let Some(sm) = self.body_source_map.as_ref() {
+                        self.context.report_at_span(err, sm.pattern_span(*pat));
+                    } else {
+                        self.context.report_simple(err, at_expr);
+                    }
+                }
+            }
+        }
+    }
+
+    fn merge_or_branches(
+        branches: Vec<(PatId, PatternFlow)>,
+        joined_bindings: &FxHashMap<Name, Ty>,
+        mut flow: PatternFlow,
+    ) -> PatternFlow {
+        for (_, branch) in branches {
+            for (pat, ty) in branch.pattern_types {
+                flow.pattern_types.insert(pat, ty);
+            }
+            for mut binding in branch.bindings {
+                if let Some(joined) = joined_bindings.get(&binding.name) {
+                    binding.ty = joined.clone();
+                    flow.pattern_types.insert(binding.pat_id, joined.clone());
+                }
+                flow.chain_alias_binds.push(binding.pat_id);
+                flow.bindings.push(binding);
+            }
+        }
+        flow
+    }
+
+    fn array_pattern_matched_ty(&self, incoming_ty: &Ty) -> Ty {
+        match self.expand_alias_chains(incoming_ty.clone()) {
+            Ty::List(..) | Ty::EvolvingList(..) => incoming_ty.clone(),
+            Ty::Union(members, _) => {
+                let arrays = members
+                    .iter()
+                    .map(|member| self.array_pattern_matched_ty(member))
+                    .filter(|ty| !matches!(ty, Ty::Never { .. }))
+                    .collect::<Vec<_>>();
+                Self::join_all(&arrays)
+            }
+            Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. } => {
+                Ty::List(Box::new(Self::unknown_ty()), TyAttr::default())
+            }
+            _ => Ty::Never {
+                attr: TyAttr::default(),
+            },
+        }
+    }
+
+    fn array_element_ty(&self, array_ty: &Ty) -> Ty {
+        match self.expand_alias_chains(array_ty.clone()) {
+            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => *elem,
+            Ty::Union(members, _) => {
+                let elems = members
+                    .iter()
+                    .map(|member| self.array_element_ty(member))
+                    .collect::<Vec<_>>();
+                Self::join_all(&elems)
+            }
+            Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. } => Self::unknown_ty(),
+            _ => Self::unknown_ty(),
+        }
+    }
+
+    fn ty_is_array_like_or_recovery(&self, ty: &Ty) -> bool {
+        match self.expand_alias_chains(ty.clone()) {
+            Ty::List(..) | Ty::EvolvingList(..) => true,
+            Ty::Union(members, _) => members
+                .iter()
+                .all(|member| self.ty_is_array_like_or_recovery(member)),
+            Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn union_members_or_self(ty: &Ty) -> Vec<Ty> {
+        match ty {
+            Ty::Union(members, _) => members.clone(),
+            _ => vec![ty.clone()],
+        }
+    }
+
+    fn or_pattern_is_irrefutable_for_incoming(
+        &self,
+        incoming_ty: &Ty,
+        branches: &[(PatId, PatternFlow)],
+    ) -> bool {
+        Self::union_members_or_self(&self.expand_alias_chains(incoming_ty.clone()))
+            .iter()
+            .all(|member| {
+                branches.iter().any(|(_, branch)| {
+                    self.is_subtype(member, &branch.matched_ty) && branch.total_on_matched
+                })
+            })
     }
 
     /// Cases this `Ty` covers when used as a pattern. Different from
@@ -4116,6 +4332,25 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
         self.lower_pattern_type_expr(ty, at_expr)
+    }
+
+    fn resolve_type_expr_silent(&self, ty: &TypeExpr) -> Ty {
+        if let TypeExpr::Path { segments, .. } = ty {
+            if segments.len() == 1 {
+                if let Some(resolved) = bare_type_sugar_to_ty(&segments[0]) {
+                    return resolved;
+                }
+            }
+        }
+        let mut diags = Vec::new();
+        crate::lower_type_expr::lower_type_expr_in_ns(
+            self.context.db(),
+            ty,
+            self.package_items,
+            &self.ns_context,
+            &self.generic_params,
+            &mut diags,
+        )
     }
 
     fn lower_pattern_type_expr(&mut self, expr: &TypeExpr, at_expr: ExprId) -> Ty {
@@ -4167,19 +4402,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             _ => None,
-        }
-    }
-
-    fn ty_has_multiple_variants(&self, ty: &Ty) -> bool {
-        match ty {
-            Ty::Union(members, _) => {
-                members.len() > 1 || members.iter().any(|ty| self.ty_has_multiple_variants(ty))
-            }
-            Ty::TypeAlias(qtn, _) => self
-                .aliases
-                .get(qtn)
-                .is_some_and(|expanded| self.ty_has_multiple_variants(expanded)),
-            _ => false,
         }
     }
 

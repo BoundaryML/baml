@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 33751
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: unreachable arm
@@ -155,16 +154,6 @@ assertion_line: 33751
      │ ╰─────────── non-exhaustive match on `bool`; missing: false, true
      │     
      │     Note: Error code: E0062
-─────╯
-
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:746:15 ]
-     │
- 746 │         42 => "wrong type"
-     │               ──────┬─────  
-     │                     ╰─────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: unreachable arm

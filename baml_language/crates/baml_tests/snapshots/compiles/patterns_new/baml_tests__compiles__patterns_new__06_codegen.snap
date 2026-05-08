@@ -5,23 +5,17 @@ function user.alias_intersection_in_match_arm(v: int | string) -> int {
     load_var v
     is_type string
     pop_jump_if_false L0
-    jump L2
+    jump L1
 
   L0:
-    load_var v
-    is_type bool
-    pop_jump_if_false L1
+    load_const 0
     jump L2
 
   L1:
-    load_const 0
-    jump L3
-
-  L2:
     load_var v
     call baml.String.length
 
-  L3:
+  L2:
     return
 }
 
@@ -407,18 +401,12 @@ function user.for_let_with_narrow(items: int[]) -> int {
 function user.int_widens_to_alias(v: int | float) -> int {
     load_var v
     is_type int
-    pop_jump_if_false L1
+    pop_jump_if_false L0
     load_var v
     is_type int
     pop_jump_if_false L0
-    jump L1
 
   L0:
-    load_var v
-    is_type float
-    pop_jump_if_false L1
-
-  L1:
     load_const 1
     return
 }
@@ -426,22 +414,13 @@ function user.int_widens_to_alias(v: int | float) -> int {
 function user.int_widens_to_optional(v: int?) -> int? {
     load_var v
     is_type int
-    pop_jump_if_false L2
-    load_var v
-    load_const null
-    cmp_op ==
     pop_jump_if_false L0
-    jump L1
-
-  L0:
     load_var v
     is_type int
-    pop_jump_if_false L2
-
-  L1:
+    pop_jump_if_false L0
     load_var v
 
-  L2:
+  L0:
     return
 }
 
@@ -522,7 +501,7 @@ function user.literal_widens_to_int(v: int) -> int {
     is_type 1
     pop_jump_if_false L0
     load_var v
-    is_type int
+    is_type 1
     pop_jump_if_false L0
     load_var v
 
@@ -922,15 +901,25 @@ function user.paren_union_outer_chain(v: int) -> int {
   L0:
     load_var v
     is_type int
-    pop_jump_if_false L2
+    pop_jump_if_false L4
 
   L1:
     load_var v
     is_type int
-    pop_jump_if_false L2
+    pop_jump_if_false L4
     load_var v
+    is_type int
+    pop_jump_if_false L2
+    jump L3
 
   L2:
+    load_var v
+    jump L4
+
+  L3:
+    load_var v
+
+  L4:
     return
 }
 

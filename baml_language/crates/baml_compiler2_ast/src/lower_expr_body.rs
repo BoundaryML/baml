@@ -1198,21 +1198,34 @@ impl LoweringContext {
         self.alloc_pattern(Pattern::Type(ty), node.text_range())
     }
 
-    /// Lower a `DESTRUCTURE_PATTERN` (`(let)? PATH '{' field_list '}'`).
+    /// Lower a `DESTRUCTURE_PATTERN` (`(let)? PATH ('<' types '>')? '{' field_list '}'`).
     fn lower_destructure_pattern(&mut self, node: &SyntaxNode) -> PatId {
-        // Path tokens live between (the optional) `KW_LET` and `L_BRACE`.
+        // Path tokens live between (the optional) `KW_LET` and either
+        // `GENERIC_ARGS` or `L_BRACE`.
         // Collect WORD tokens in that range, ignoring DOTs.
         let mut class: Vec<Name> = Vec::new();
         for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(t) => match t.kind() {
                     SyntaxKind::WORD => class.push(Name::new(t.text())),
+                    SyntaxKind::LESS => break,
                     SyntaxKind::L_BRACE => break,
                     _ => {}
                 },
+                rowan::NodeOrToken::Node(n) if n.kind() == SyntaxKind::GENERIC_ARGS => break,
                 rowan::NodeOrToken::Node(_) => {}
             }
         }
+
+        let generic_args: Vec<TypeExpr> = node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+            .into_iter()
+            .flat_map(|args_node| args_node.children())
+            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+            .collect();
 
         let fields: Vec<FieldPat> = node
             .children()
@@ -1220,7 +1233,14 @@ impl LoweringContext {
             .map(|f| self.lower_field_pattern(&f))
             .collect();
 
-        self.alloc_pattern(Pattern::Class { class, fields }, node.text_range())
+        self.alloc_pattern(
+            Pattern::Class {
+                class,
+                generic_args,
+                fields,
+            },
+            node.text_range(),
+        )
     }
 
     /// Lower a `FIELD_PATTERN`. Shorthand `{ f }` synthesises a

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 33696
 ---
 === TIR2 ===
 class user.Success {
@@ -661,7 +660,6 @@ function user.WrongLiteralTypeBoolWithInt(b: bool) -> string throws never {
       42 =>
         "wrong type" : "wrong type"
   }
-  !! 22000..22012: unreachable arm
   !! 21969..22018: non-exhaustive match on `bool`; missing: false, true
 }
 function user.WrongLiteralTypeIntWithString(x: int) -> string throws never {

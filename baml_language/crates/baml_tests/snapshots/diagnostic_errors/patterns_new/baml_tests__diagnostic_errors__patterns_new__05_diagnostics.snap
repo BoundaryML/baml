@@ -47,8 +47,8 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[ patterns_new.baml:41:25 ]
     │
  41 │         (let x: int) | (let x: string) => 1
-    │                         ──────┬──────  
-    │                               ╰──────── Or-pattern alternatives bind `x` with conflicting types: `int` vs `string`
+    │                         ──┬──  
+    │                           ╰──── Or-pattern alternatives bind `x` with conflicting types: `int` vs `string`
     │ 
     │ Note: Error code: E0001
 ────╯
@@ -57,89 +57,88 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[ patterns_new.baml:53:32 ]
     │
  53 │         (let a: let b: int) | (let a: let b: string) => 1
-    │                                ──────────┬─────────  
-    │                                          ╰─────────── Or-pattern alternatives bind `a` with conflicting types: `int` vs `string`
+    │                                ──┬──  
+    │                                  ╰──── Or-pattern alternatives bind `a` with conflicting types: `int` vs `string`
     │ 
     │ Note: Error code: E0001
 ────╯
 
   [type] Error: Or-pattern alternatives bind `b` with conflicting types: `int` vs `string`
-    ╭─[ patterns_new.baml:53:32 ]
+    ╭─[ patterns_new.baml:53:38 ]
     │
  53 │         (let a: let b: int) | (let a: let b: string) => 1
-    │                                ──────────┬─────────  
-    │                                          ╰─────────── Or-pattern alternatives bind `b` with conflicting types: `int` vs `string`
+    │                                      ───┬──  
+    │                                         ╰──── Or-pattern alternatives bind `b` with conflicting types: `int` vs `string`
     │ 
     │ Note: Error code: E0001
 ────╯
 
   [type] Error: type mismatch: expected string, got int
-    ╭─[ patterns_new.baml:64:15 ]
+    ╭─[ patterns_new.baml:64:20 ]
     │
  64 │         let n: int: string => 1
-    │               ──┬─  
-    │                 ╰─── type mismatch: expected string, got int
+    │                    ───┬───  
+    │                       ╰───── type mismatch: expected string, got int
     │ 
     │ Note: Error code: E0001
 ────╯
 
   [type] Error: type mismatch: expected int, got "hello"
-    ╭─[ patterns_new.baml:71:15 ]
+    ╭─[ patterns_new.baml:71:24 ]
     │
  71 │         let n: "hello": int => 1
-    │               ────┬───  
-    │                   ╰───── type mismatch: expected int, got "hello"
+    │                        ──┬─  
+    │                          ╰─── type mismatch: expected int, got "hello"
     │ 
     │ Note: Error code: E0001
 ────╯
 
   [type] Error: type mismatch: expected 1 | 2, got int
-    ╭─[ patterns_new.baml:80:13 ]
+    ╭─[ patterns_new.baml:80:18 ]
     │
  80 │     let bad: int: 1 | 2: 1 = 1;
-    │             ──┬─  
-    │               ╰─── type mismatch: expected 1 | 2, got int
+    │                  ───┬──  
+    │                     ╰──── type mismatch: expected 1 | 2, got int
     │ 
     │ Note: Error code: E0001
 ────╯
 
   [type] Error: type mismatch: expected 1, got 1 | 2
-    ╭─[ patterns_new.baml:80:18 ]
+    ╭─[ patterns_new.baml:80:25 ]
     │
  80 │     let bad: int: 1 | 2: 1 = 1;
-    │                  ───┬──  
-    │                     ╰──── type mismatch: expected 1, got 1 | 2
+    │                         ─┬  
+    │                          ╰── type mismatch: expected 1, got 1 | 2
     │ 
     │ Note: Error code: E0001
 ────╯
 
   [type] Error: type mismatch: expected int, got unknown[]
-    ╭─[ patterns_new.baml:86:16 ]
+    ╭─[ patterns_new.baml:87:14 ]
     │
- 86 │ ╭─▶     match (v) {
- 87 │ ├─▶         [..]: int => 1,
-    │ │                             
-    │ ╰───────────────────────────── type mismatch: expected int, got unknown[]
-    │     
-    │     Note: Error code: E0001
+ 87 │         [..]: int => 1,
+    │              ──┬─  
+    │                ╰─── type mismatch: expected int, got unknown[]
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [type] Error: type mismatch: expected string[], got int[]
-    ╭─[ patterns_new.baml:96:17 ]
+    ╭─[ patterns_new.baml:96:24 ]
     │
  96 │         [let x]: int[]: string[] => x,
-    │                 ───┬──  
-    │                    ╰──── type mismatch: expected string[], got int[]
+    │                        ────┬────  
+    │                            ╰────── type mismatch: expected string[], got int[]
     │ 
     │ Note: Error code: E0001
 ────╯
 
   [type] Error: Or-pattern alternatives bind `field` with conflicting types: `int[]` vs `string[]`
-     ╭─[ patterns_new.baml:109:30 ]
+     ╭─[ patterns_new.baml:109:35 ]
      │
  109 │         NumberBag { field } | [[..let field]: string[]] => field.length()
-     │                              ─────────────┬────────────  
-     │                                           ╰────────────── Or-pattern alternatives bind `field` with conflicting types: `int[]` vs `string[]`
+     │                                   ────┬────  
+     │                                       ╰────── Or-pattern alternatives bind `field` with conflicting types: `int[]` vs `string[]`
      │ 
      │ Note: Error code: E0001
 ─────╯

@@ -641,35 +641,24 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              DESTRUCTURE_PATTERN
-                KW_LET "let"
-                WORD "root"
-                DOT "."
-                WORD "llm"
-                DOT "."
-                WORD "openai"
-                DOT "."
-                WORD "Box"
-                L_BRACE "{"
-                FIELD_PATTERN "value"
-                  WORD "value"
-                R_BRACE "}"
-              COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "root"
-                  DOT "."
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Box"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "int"
-                      WORD "int"
-                    GREATER ">"
+            DESTRUCTURE_PATTERN
+              KW_LET "let"
+              WORD "root"
+              DOT "."
+              WORD "llm"
+              DOT "."
+              WORD "openai"
+              DOT "."
+              WORD "Box"
+              GENERIC_ARGS
+                LESS "<"
+                TYPE_EXPR "int"
+                  WORD "int"
+                GREATER ">"
+              L_BRACE "{"
+              FIELD_PATTERN "value"
+                WORD "value"
+              R_BRACE "}"
           EQUALS "="
           WORD "boxed"
           SEMICOLON ";"
@@ -732,31 +721,22 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              DESTRUCTURE_PATTERN
-                KW_LET "let"
-                WORD "llm"
-                DOT "."
-                WORD "openai"
-                DOT "."
-                WORD "Box"
-                L_BRACE "{"
-                FIELD_PATTERN "value"
-                  WORD "value"
-                R_BRACE "}"
-              COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Box"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "string"
-                      WORD "string"
-                    GREATER ">"
+            DESTRUCTURE_PATTERN
+              KW_LET "let"
+              WORD "llm"
+              DOT "."
+              WORD "openai"
+              DOT "."
+              WORD "Box"
+              GENERIC_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                GREATER ">"
+              L_BRACE "{"
+              FIELD_PATTERN "value"
+                WORD "value"
+              R_BRACE "}"
           EQUALS "="
           WORD "boxed"
           SEMICOLON ";"
@@ -1074,49 +1054,43 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              DESTRUCTURE_PATTERN
-                KW_LET "let"
-                WORD "root"
-                DOT "."
-                WORD "llm"
-                DOT "."
-                WORD "openai"
-                DOT "."
-                WORD "Outer"
-                L_BRACE "{"
-                FIELD_PATTERN
-                  WORD "inner"
-                  COLON ":"
-                  PATTERN
-                    DESTRUCTURE_PATTERN
-                      WORD "root"
-                      DOT "."
-                      WORD "llm"
-                      DOT "."
-                      WORD "openai"
-                      DOT "."
-                      WORD "Box"
-                      L_BRACE "{"
-                      FIELD_PATTERN "value"
-                        WORD "value"
-                      R_BRACE "}"
-                R_BRACE "}"
-              COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "root"
-                  DOT "."
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Outer"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "int"
-                      WORD "int"
-                    GREATER ">"
+            DESTRUCTURE_PATTERN
+              KW_LET "let"
+              WORD "root"
+              DOT "."
+              WORD "llm"
+              DOT "."
+              WORD "openai"
+              DOT "."
+              WORD "Outer"
+              GENERIC_ARGS
+                LESS "<"
+                TYPE_EXPR "int"
+                  WORD "int"
+                GREATER ">"
+              L_BRACE "{"
+              FIELD_PATTERN
+                WORD "inner"
+                COLON ":"
+                PATTERN
+                  DESTRUCTURE_PATTERN
+                    WORD "root"
+                    DOT "."
+                    WORD "llm"
+                    DOT "."
+                    WORD "openai"
+                    DOT "."
+                    WORD "Box"
+                    GENERIC_ARGS
+                      LESS "<"
+                      TYPE_EXPR "int"
+                        WORD "int"
+                      GREATER ">"
+                    L_BRACE "{"
+                    FIELD_PATTERN "value"
+                      WORD "value"
+                    R_BRACE "}"
+              R_BRACE "}"
           EQUALS "="
           WORD "outer"
           SEMICOLON ";"
@@ -1197,43 +1171,39 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              DESTRUCTURE_PATTERN
-                KW_LET "let"
-                WORD "llm"
-                DOT "."
-                WORD "openai"
-                DOT "."
-                WORD "Outer"
-                L_BRACE "{"
-                FIELD_PATTERN
-                  WORD "inner"
-                  COLON ":"
-                  PATTERN
-                    DESTRUCTURE_PATTERN
-                      WORD "llm"
-                      DOT "."
-                      WORD "openai"
-                      DOT "."
-                      WORD "Box"
-                      L_BRACE "{"
-                      FIELD_PATTERN "value"
-                        WORD "value"
-                      R_BRACE "}"
-                R_BRACE "}"
-              COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Outer"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "string"
-                      WORD "string"
-                    GREATER ">"
+            DESTRUCTURE_PATTERN
+              KW_LET "let"
+              WORD "llm"
+              DOT "."
+              WORD "openai"
+              DOT "."
+              WORD "Outer"
+              GENERIC_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                GREATER ">"
+              L_BRACE "{"
+              FIELD_PATTERN
+                WORD "inner"
+                COLON ":"
+                PATTERN
+                  DESTRUCTURE_PATTERN
+                    WORD "llm"
+                    DOT "."
+                    WORD "openai"
+                    DOT "."
+                    WORD "Box"
+                    GENERIC_ARGS
+                      LESS "<"
+                      TYPE_EXPR "string"
+                        WORD "string"
+                      GREATER ">"
+                    L_BRACE "{"
+                    FIELD_PATTERN "value"
+                      WORD "value"
+                    R_BRACE "}"
+              R_BRACE "}"
           EQUALS "="
           WORD "outer"
           SEMICOLON ";"

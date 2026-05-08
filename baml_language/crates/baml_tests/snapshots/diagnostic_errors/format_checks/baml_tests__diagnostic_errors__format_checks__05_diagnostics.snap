@@ -520,6 +520,26 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0004
 ─────╯
 
+  [type] Error: unreachable arm
+     ╭─[ match_exprs.baml:313:14 ]
+     │
+ 313 │         _ => "nonzero"
+     │              ────┬────  
+     │                  ╰────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: operator `Add` cannot be applied to `int | string` and `1`
+     ╭─[ match_exprs.baml:377:48 ]
+     │
+ 377 │         int | string /* h link3 trailing */ => n + 1
+     │                                                ──┬──  
+     │                                                  ╰──── operator `Add` cannot be applied to `int | string` and `1`
+     │ 
+     │ Note: Error code: E0004
+─────╯
+
   [type] Error: type mismatch: expected string, got 0
      ╭─[ match_exprs.baml:450:6 ]
      │

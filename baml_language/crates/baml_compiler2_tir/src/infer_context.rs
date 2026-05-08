@@ -106,6 +106,9 @@ pub enum TirTypeError {
         first_type: Ty,
         other_type: Ty,
     },
+    /// A generic class destructure with fields must write its type arguments
+    /// directly on the class pattern, e.g. `Box<int> { value }`.
+    GenericClassDestructureRequiresTypeArgs { class_name: Name },
     /// A `let` statement or `for-let` binding uses a pattern that can fail
     /// for values of the type flowing into it.
     RefutablePatternInLet { context: &'static str },
@@ -304,6 +307,10 @@ impl fmt::Display for TirTypeError {
                 name,
                 humanize_ty(first_type),
                 humanize_ty(other_type)
+            ),
+            TirTypeError::GenericClassDestructureRequiresTypeArgs { class_name } => write!(
+                f,
+                "generic class destructure `{class_name} {{ ... }}` must specify type arguments"
             ),
             TirTypeError::RefutablePatternInLet { context } => write!(
                 f,

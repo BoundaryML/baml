@@ -206,7 +206,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
 }
 function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -> testing.TestReport throws never {
   { : testing.TestReport
-    let base_run: TestReportThunk = : () -> testing.TestReport throws never
+    let base_run: TestReportThunk = : () -> testing.TestReport throws never -> testing.TestReportThunk
       () -> TestReport { ... } : () -> testing.TestReport throws never
         {
           let start = baml.sys.now_ms()
@@ -219,7 +219,7 @@ function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -
         base_run() : testing.TestReport
       r: TestRunner =>
         { : testing.TestReport
-          let wrapped: TestReportThunk = r(base_run) : testing.TestReportThunk -> () -> testing.TestReport throws never
+          let wrapped: TestReportThunk = r(base_run) : testing.TestReportThunk
           wrapped() : testing.TestReport
         }
   }
@@ -233,7 +233,7 @@ function testing.run_testset(run_children: testing.TestSetReportThunk, runner: t
         run_children() : testing.TestSetReport
       r: TestSetRunner =>
         { : testing.TestSetReport
-          let wrapped: TestSetReportThunk = r(run_children) : testing.TestSetReportThunk -> () -> testing.TestSetReport throws never
+          let wrapped: TestSetReportThunk = r(run_children) : testing.TestSetReportThunk
           wrapped() : testing.TestSetReport
         }
   }

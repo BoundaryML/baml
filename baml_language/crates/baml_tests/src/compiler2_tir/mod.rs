@@ -49,18 +49,34 @@ pub(crate) mod support {
         match pat {
             Pattern::Wildcard => "_".to_string(),
             Pattern::Bind { name } => name.to_string(),
-            Pattern::Class { class, fields } => {
+            Pattern::Class {
+                class,
+                generic_args,
+                fields,
+            } => {
                 let class_path = class
                     .iter()
                     .map(|n| n.as_str())
                     .collect::<Vec<_>>()
                     .join(".");
+                let generic_args = if generic_args.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "<{}>",
+                        generic_args
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
                 let fs = fields
                     .iter()
                     .map(|f| format!("{}: {}", f.field, pat_desc(f.pat, body)))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("{class_path} {{ {fs} }}")
+                format!("{class_path}{generic_args} {{ {fs} }}")
             }
             Pattern::Array {
                 prefix,
@@ -1262,12 +1278,28 @@ pub(crate) mod support {
                     .collect::<Vec<_>>()
                     .join(": "),
                 Pattern::Type(ty) => type_expr_to_string_hir(ty, prefix, local_type_names),
-                Pattern::Class { class, fields } => {
+                Pattern::Class {
+                    class,
+                    generic_args,
+                    fields,
+                } => {
                     let class_path = class
                         .iter()
                         .map(|n| n.as_str())
                         .collect::<Vec<_>>()
                         .join(".");
+                    let generic_args = if generic_args.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            "<{}>",
+                            generic_args
+                                .iter()
+                                .map(|ty| type_expr_to_string_hir(ty, prefix, local_type_names))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    };
                     let field_strs: Vec<_> = fields
                         .iter()
                         .map(|f| {
@@ -1278,7 +1310,7 @@ pub(crate) mod support {
                             )
                         })
                         .collect();
-                    format!("{class_path} {{ {} }}", field_strs.join(", "))
+                    format!("{class_path}{generic_args} {{ {} }}", field_strs.join(", "))
                 }
                 Pattern::Array {
                     prefix: prefix_pats,

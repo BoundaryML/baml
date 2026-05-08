@@ -3143,8 +3143,9 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        // A bare WORD may start a destructure (`Class { ... }`) or a type/path
-        // pattern. Look ahead through dotted segments for a `{`.
+        // A bare WORD may start a destructure (`Class { ... }`,
+        // `Class<int> { ... }`) or a type/path pattern. Look ahead through
+        // dotted segments and optional trailing generic args for a `{`.
         if self.at(TokenKind::Word) && self.looks_like_destructure_pattern() {
             self.parse_destructure_pattern(false);
             return;
@@ -3265,8 +3266,8 @@ impl<'a> Parser<'a> {
     /// any dotted path segments. Returns true if the next non-trivia token is
     /// `{`, signalling a class destructure pattern.
     fn looks_like_destructure_pattern(&self) -> bool {
-        // We're at a WORD. Walk forward over `(WORD)('.' WORD)*` and check for
-        // `{` at the end.
+        // We're at a WORD. Walk forward over `(WORD)('.' WORD)*`, optional
+        // trailing generic args, and check for `{` at the end.
         let Some(mut idx) = self.current_non_trivia_index() else {
             return false;
         };
@@ -3286,9 +3287,72 @@ impl<'a> Parser<'a> {
                     }
                 }
                 TokenKind::LBrace => return true,
+                TokenKind::Less if self.looks_like_generic_args_from(idx) => {
+                    let Some(close) = self.find_matching_generic_args_close_from(idx) else {
+                        return false;
+                    };
+                    idx = self.skip_trivia_and_comments_from(close + 1);
+                    if idx < self.tokens.len() && self.tokens[idx].kind == TokenKind::LBrace {
+                        return true;
+                    }
+                    return false;
+                }
                 _ => return false,
             }
         }
+    }
+
+    fn looks_like_generic_args_from(&self, start: usize) -> bool {
+        if self.tokens.get(start).map(|t| t.kind) != Some(TokenKind::Less) {
+            return false;
+        }
+        let Some(close) = self.find_matching_generic_args_close_from(start) else {
+            return false;
+        };
+        let follow = self.skip_trivia_and_comments_from(close + 1);
+        Self::is_generic_args_follow(self.tokens.get(follow).map(|t| t.kind))
+    }
+
+    fn find_matching_generic_args_close_from(&self, start: usize) -> Option<usize> {
+        let mut depth: i32 = 1;
+        let mut i = self.skip_trivia_and_comments_from(start + 1);
+        while i < self.tokens.len() {
+            match self.tokens[i].kind {
+                TokenKind::Less => depth += 1,
+                TokenKind::Greater => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(i);
+                    }
+                }
+                TokenKind::GreaterGreater => {
+                    if depth < 2 {
+                        return None;
+                    }
+                    depth -= 2;
+                    if depth == 0 {
+                        return Some(i);
+                    }
+                }
+                TokenKind::Word
+                | TokenKind::Dot
+                | TokenKind::Comma
+                | TokenKind::LBracket
+                | TokenKind::RBracket
+                | TokenKind::Question
+                | TokenKind::Pipe
+                | TokenKind::IntegerLiteral
+                | TokenKind::FloatLiteral
+                | TokenKind::Minus
+                | TokenKind::Quote
+                | TokenKind::Hash
+                | TokenKind::LParen
+                | TokenKind::RParen => {}
+                _ => return None,
+            }
+            i = self.skip_trivia_and_comments_from(i + 1);
+        }
+        None
     }
 
     /// Parse a `let`-prefixed pattern. Either:
@@ -3319,6 +3383,9 @@ impl<'a> Parser<'a> {
         // (`let Class { ... }`) by peeking past dotted segments for `{`.
         if self.looks_like_destructure_pattern() {
             self.parse_path();
+            if self.at(TokenKind::Less) && self.looks_like_generic_args() {
+                self.parse_generic_args();
+            }
             self.parse_destructure_field_list();
             self.wrap_events_in_node(start, SyntaxKind::DESTRUCTURE_PATTERN);
             self.finish_node();
@@ -3345,6 +3412,9 @@ impl<'a> Parser<'a> {
     fn parse_destructure_pattern(&mut self, _has_let: bool) {
         self.with_node(SyntaxKind::DESTRUCTURE_PATTERN, |p| {
             p.parse_path();
+            if p.at(TokenKind::Less) && p.looks_like_generic_args() {
+                p.parse_generic_args();
+            }
             p.parse_destructure_field_list();
         });
     }

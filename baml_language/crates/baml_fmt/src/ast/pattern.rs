@@ -21,7 +21,9 @@ use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
 use crate::{
-    ast::{FromCST, KnownKind, StrongAstError, SyntaxNodeIter, Token, Type, tokens as t},
+    ast::{
+        FromCST, GenericArgs, KnownKind, StrongAstError, SyntaxNodeIter, Token, Type, tokens as t,
+    },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::{EmittableTrivia, TriviaSliceExt},
 };
@@ -267,6 +269,7 @@ pub struct DestructurePattern {
     pub let_keyword: Option<t::Let>,
     pub first: t::Word,
     pub rest: Vec<(t::Dot, t::Word)>,
+    pub generic_args: Option<GenericArgs>,
     pub open_brace: t::LBrace,
     pub fields: Vec<(FieldPattern, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
@@ -286,6 +289,10 @@ impl DestructurePattern {
             let word = it.expect_parse()?;
             rest.push((dot, word));
         }
+        let generic_args = it
+            .next_if_kind(SyntaxKind::GENERIC_ARGS)
+            .map(GenericArgs::from_cst)
+            .transpose()?;
         let open_brace = it.expect_parse()?;
         let mut fields = Vec::new();
         let close_brace = loop {
@@ -307,6 +314,7 @@ impl DestructurePattern {
             let_keyword,
             first,
             rest,
+            generic_args,
             open_brace,
             fields,
             close_brace,
@@ -322,6 +330,9 @@ impl DestructurePattern {
         for (dot, word) in &self.rest {
             printer.print_raw_token(dot);
             printer.print_raw_token(word);
+        }
+        if let Some(generic_args) = &self.generic_args {
+            printer.print(generic_args, Shape::unlimited_single_line());
         }
     }
 
