@@ -243,11 +243,7 @@ fn extract_from_class(
             VmUsage::None
         };
 
-        let throws = if pipeline == BuiltinPipeline::Io {
-            extract_throws(method)
-        } else {
-            vec![]
-        };
+        let throws = extract_throws(method);
 
         // Always set receiver for class methods — even static methods (no `self`)
         // need it for dispatch routing. The runtime path is
@@ -407,11 +403,7 @@ fn extract_from_free_function(
         VmUsage::None
     };
 
-    let throws = if pipeline == BuiltinPipeline::Io {
-        extract_throws(func_def)
-    } else {
-        vec![]
-    };
+    let throws = extract_throws(func_def);
 
     let params: Vec<Param> = func_def
         .params
@@ -886,10 +878,12 @@ mod tests {
             vm_builtins.len()
         );
 
-        // All VM builtins should have pipeline == Vm
+        // All VM builtins should have pipeline == Vm. They MAY declare a `throws`
+        // clause (e.g. `Array.map<U, E>(... throws E)` carries `E` through, and
+        // `Uint8Array.from_hex` throws `InvalidArgument`). Codegen consumes the
+        // declared throws to decide whether the trait method returns a `Result`.
         for b in &vm_builtins {
             assert_eq!(b.pipeline, BuiltinPipeline::Vm, "{} should be Vm", b.path);
-            assert!(b.throws.is_empty(), "{} should have no throws", b.path);
         }
 
         let array_length = vm_builtins
@@ -899,6 +893,27 @@ mod tests {
         assert_eq!(array_length.fn_name, "baml_array_length");
         assert!(array_length.receiver.is_some());
         assert_eq!(array_length.params.len(), 0);
+        // Non-throwing builtin must have empty throws (otherwise codegen would
+        // wrap it in a spurious `Result`).
+        assert!(array_length.throws.is_empty());
+
+        // Concrete-error throws: `Uint8Array.from_hex` rejects malformed input
+        // with `InvalidArgument`. Pin this so a regression in throws extraction
+        // (or in the .baml signature) trips this test instead of silently
+        // dropping the `Result` wrapper from the generated trait method.
+        let from_hex = vm_builtins
+            .iter()
+            .find(|b| b.path == "baml.Uint8Array.from_hex")
+            .expect("missing Uint8Array.from_hex");
+        assert_eq!(from_hex.throws, vec!["InvalidArgument"]);
+
+        // Generic-throws: `Array.map<U, E>(... throws E)` carries the callback's
+        // error type through. The extractor records the generic name verbatim.
+        let array_map = vm_builtins
+            .iter()
+            .find(|b| b.path == "baml.Array.map")
+            .expect("missing Array.map");
+        assert_eq!(array_map.throws, vec!["E"]);
 
         let deep_copy = vm_builtins
             .iter()

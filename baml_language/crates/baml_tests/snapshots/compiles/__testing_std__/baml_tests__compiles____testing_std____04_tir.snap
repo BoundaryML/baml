@@ -57,7 +57,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     let hash_prefix = full_name + "#" : string
     for t in self.tests
       { : void
-        if (t.name == full_name || t.name.startsWith(hash_prefix) : bool) : void
+        if (t.name == full_name || t.name.starts_with(hash_prefix) : bool) : void
           { : void
             count Add= 1 : int
           }
@@ -93,7 +93,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     let hash_prefix = full_name + "#" : string
     for ts in self.testsets
       { : void
-        if (ts.name == full_name || ts.name.startsWith(hash_prefix) : bool) : void
+        if (ts.name == full_name || ts.name.starts_with(hash_prefix) : bool) : void
           { : void
             count Add= 1 : int
           }
@@ -204,7 +204,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     for k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
-        if (name.startsWith(k + "/") : bool) : void
+        if (name.starts_with(k + "/") : bool) : void
           { : never
             return sub.run_test(name) : testing.TestReport
           }
@@ -223,14 +223,14 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
             ts.collector(sub_collector) : void
             let elapsed = baml.sys.now_ms() - start : int
             let sub_registry = TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed } : testing.TestRegistry
-            self.expansions.set(name, sub_registry) : null
+            self.expansions.set(name, sub_registry) : testing.TestRegistry?
             return self.serialize() : testing.SerializedTestDef[]
           }
       }
     for k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
-        if (name.startsWith(k + "/") : bool) : void
+        if (name.starts_with(k + "/") : bool) : void
           { : never
             return sub.expand_set(name) : testing.SerializedTestDef[]
           }

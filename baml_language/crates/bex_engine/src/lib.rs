@@ -96,7 +96,7 @@ use bex_vm_types::{
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
-pub use sys_types::CallId;
+pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
@@ -1007,7 +1007,7 @@ impl BexEngine {
         let vm_args: Vec<Value> = args
             .into_iter()
             .map(|arg| self.convert_external_to_vm_value(&mut vm, arg))
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         vm.set_entry_point(function_index, &vm_args);
 
@@ -1182,6 +1182,20 @@ impl BexEngine {
             Object::Function(func) => func.throws_type.clone(),
             _ => None,
         }
+    }
+
+    /// All class field schemas known to the engine, keyed by `TypeName`.
+    ///
+    /// Used by callers that walk a `Ty` tree and need to resolve nested
+    /// class field types — e.g. the CLI parsing `--json-args` for a function
+    /// whose parameter is a class with `map<…>` or class-typed fields.
+    pub fn class_definitions(&self) -> &indexmap::IndexMap<TypeName, ClassDefinition> {
+        &self.sys_op_ctx.class_definitions
+    }
+
+    /// Look up the field schema for a class by its `TypeName`.
+    pub fn class_definition(&self, name: &TypeName) -> Option<&ClassDefinition> {
+        self.sys_op_ctx.class_definitions.get(name)
     }
 
     /// Get parameter names and types for a function by dereferencing its heap object.
@@ -1568,9 +1582,17 @@ impl BexEngine {
                             }
                             match result {
                                 Ok(external) => {
-                                    let value = self
-                                        .convert_external_to_vm_value(&mut future_permit, external);
-                                    future_permit.fulfill_future(future_id, value)?;
+                                    match self
+                                        .convert_external_to_vm_value(&mut future_permit, external)
+                                    {
+                                        Ok(value) => {
+                                            future_permit.fulfill_future(future_id, value)?;
+                                        }
+                                        Err(conv_err) => {
+                                            future_permit
+                                                .internal_error_future(future_id, conv_err)?;
+                                        }
+                                    }
                                 }
                                 Err(op_err) => {
                                     // Route sync sys-op errors through `internal_error_future`
@@ -1841,8 +1863,14 @@ impl BexEngine {
                 future_guard.cancel_future(future_id)?;
             }
             Outcome::Result(Ok(value)) => {
-                let value = self.convert_external_to_vm_value(&mut future_guard, value);
-                future_guard.fulfill_future(future_id, value)?;
+                match self.convert_external_to_vm_value(&mut future_guard, value) {
+                    Ok(value) => {
+                        future_guard.fulfill_future(future_id, value)?;
+                    }
+                    Err(conv_err) => {
+                        future_guard.internal_error_future(future_id, conv_err)?;
+                    }
+                }
             }
             Outcome::Result(Err(err)) => {
                 future_guard.internal_error_future(future_id, err.into())?;

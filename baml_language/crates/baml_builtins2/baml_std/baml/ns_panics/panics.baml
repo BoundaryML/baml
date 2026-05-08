@@ -40,4 +40,12 @@ class AllocFailure {
   message string
 }
 
-type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | AllocFailure
+/// A required host resource is unavailable — e.g. the system entropy source
+/// (`getrandom`) is not accessible in a sandboxed/isolated environment.
+/// `resource` identifies which subsystem is unavailable (`"entropy"`, etc.).
+class HostUnavailable {
+  resource string
+  message string
+}
+
+type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | AllocFailure | HostUnavailable

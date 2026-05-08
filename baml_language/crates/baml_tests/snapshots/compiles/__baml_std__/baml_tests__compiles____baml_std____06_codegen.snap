@@ -4,7 +4,28 @@ source: crates/baml_tests/src/generated_tests.rs
 function baml.Array.at(self: null, index: int) -> void? {
 }
 
+function baml.Array.clear(self: null) -> null {
+}
+
 function baml.Array.concat(self: null, other: void[]) -> void[] {
+}
+
+function baml.Array.every(self: null, predicate: (void) -> bool throws never) -> bool {
+}
+
+function baml.Array.find(self: null, predicate: (void) -> bool throws never) -> void? {
+}
+
+function baml.Array.find_index(self: null, predicate: (void) -> bool throws never) -> int? {
+}
+
+function baml.Array.find_last(self: null, predicate: (void) -> bool throws never) -> void? {
+}
+
+function baml.Array.find_last_index(self: null, predicate: (void) -> bool throws never) -> int? {
+}
+
+function baml.Array.flat_map(self: null, f: (void) -> void[] throws never) -> void[] {
 }
 
 function baml.Array.from_json(j: baml.json.json) -> baml.Array<void> {
@@ -13,7 +34,19 @@ function baml.Array.from_json(j: baml.json.json) -> baml.Array<void> {
     return
 }
 
+function baml.Array.includes(self: null, item: void) -> bool {
+}
+
+function baml.Array.index_of(self: null, item: void) -> int? {
+}
+
+function baml.Array.insert(self: null, item: void, idx: int) -> int {
+}
+
 function baml.Array.join(self: null, separator: string) -> string {
+}
+
+function baml.Array.last_index_of(self: null, item: void) -> int? {
 }
 
 function baml.Array.length(self: null) -> int {
@@ -28,13 +61,28 @@ function baml.Array.pop(self: null) -> void? {
 function baml.Array.push(self: null, item: void) -> int {
 }
 
+function baml.Array.reduce(self: null, reducer: (void, void) -> void throws never, initial: void) -> void {
+}
+
 function baml.Array.reverse(self: null) -> void[] {
+}
+
+function baml.Array.shift(self: null) -> void? {
 }
 
 function baml.Array.slice(self: null, start: int, end: int) -> void[] {
 }
 
+function baml.Array.some(self: null, predicate: (void) -> bool throws never) -> bool {
+}
+
+function baml.Array.splice(self: null, start: int, count: int, replace: void[]) -> null {
+}
+
 function baml.Array.to_json(self: null) -> baml.json.json {
+}
+
+function baml.Array.unshift(self: null, item: void) -> int {
 }
 
 function baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
@@ -45,12 +93,177 @@ function baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
 function baml.Bool.to_json(self: null) -> baml.json.json {
 }
 
+function baml.Float.abs(self: null) -> float {
+}
+
+function baml.Float.acos(self: null) -> float {
+}
+
+function baml.Float.acosh(self: null) -> float {
+}
+
+function baml.Float.asin(self: null) -> float {
+}
+
+function baml.Float.asinh(self: null) -> float {
+}
+
+function baml.Float.atan(self: null) -> float {
+}
+
+function baml.Float.atan2(self: null, other: float) -> float {
+}
+
+function baml.Float.atanh(self: null) -> float {
+}
+
+function baml.Float.ceil(self: null) -> float {
+}
+
+function baml.Float.clamp(self: null, min: float, max: float) -> float {
+}
+
+function baml.Float.cos(self: null) -> float {
+}
+
+function baml.Float.cosh(self: null) -> float {
+}
+
+function baml.Float.e() -> float {
+}
+
+function baml.Float.floor(self: null) -> float {
+}
+
+function baml.Float.fract(self: null) -> float {
+}
+
 function baml.Float.from_json(j: baml.json.json) -> baml.Float {
     alloc_instance baml.Float
     return
 }
 
+function baml.Float.golden_ratio() -> float {
+}
+
+function baml.Float.hypot(self: null, other: float) -> float {
+}
+
+function baml.Float.iceil(self: null) -> int {
+}
+
+function baml.Float.ifloor(self: null) -> int {
+}
+
+function baml.Float.inf() -> float {
+}
+
+function baml.Float.iround(self: null) -> int {
+}
+
+function baml.Float.is_finite(self: null) -> bool {
+    load_var self
+    call baml.Float.is_nan
+    unary_op !
+    jump_if_false L0
+    pop 1
+    load_var self
+    call baml.Float.is_infinite
+    unary_op !
+
+  L0:
+    return
+}
+
+function baml.Float.is_infinite(self: null) -> bool {
+}
+
+function baml.Float.is_nan(self: null) -> bool {
+}
+
+function baml.Float.itrunc(self: null) -> int {
+}
+
+function baml.Float.log(self: null, base: float) -> float {
+}
+
+function baml.Float.max(self: null, other: float) -> float {
+}
+
+function baml.Float.min(self: null, other: float) -> float {
+}
+
+function baml.Float.nan() -> float {
+}
+
+function baml.Float.parse(text: string) -> float {
+}
+
+function baml.Float.pi() -> float {
+}
+
+function baml.Float.pow(self: null, exp: float) -> float {
+}
+
+function baml.Float.random() -> float {
+}
+
+function baml.Float.round(self: null) -> float {
+}
+
+function baml.Float.sin(self: null) -> float {
+}
+
+function baml.Float.sinh(self: null) -> float {
+}
+
+function baml.Float.sqrt(self: null) -> float {
+}
+
+function baml.Float.tan(self: null) -> float {
+}
+
+function baml.Float.tanh(self: null) -> float {
+}
+
+function baml.Float.to_degrees(self: null) -> float {
+    call baml.Float.pi
+    store_var _3
+    load_var self
+    load_const 180.0
+    bin_op *
+    load_var _3
+    bin_op /
+    return
+}
+
 function baml.Float.to_json(self: null) -> baml.json.json {
+}
+
+function baml.Float.to_radians(self: null) -> float {
+    call baml.Float.pi
+    store_var _3
+    load_var self
+    load_var _3
+    bin_op *
+    load_const 180.0
+    bin_op /
+    return
+}
+
+function baml.Float.trunc(self: null) -> float {
+}
+
+function baml.Int.abs(self: null) -> int {
+}
+
+function baml.Int.clamp(self: null, min: int, max: int) -> int {
+}
+
+function baml.Int.count_ones(self: null) -> int {
+}
+
+function baml.Int.count_zeros(self: null) -> int {
 }
 
 function baml.Int.from_json(j: baml.json.json) -> baml.Int {
@@ -58,7 +271,56 @@ function baml.Int.from_json(j: baml.json.json) -> baml.Int {
     return
 }
 
+function baml.Int.ilog(self: null, base: int) -> int {
+}
+
+function baml.Int.isqrt(self: null) -> int {
+}
+
+function baml.Int.leading_ones(self: null) -> int {
+}
+
+function baml.Int.leading_zeros(self: null) -> int {
+}
+
+function baml.Int.max(self: null, other: int) -> int {
+}
+
+function baml.Int.max_value() -> int {
+    load_const 9223372036854775807
+    return
+}
+
+function baml.Int.min(self: null, other: int) -> int {
+}
+
+function baml.Int.min_value() -> int {
+    load_const -9223372036854775808
+    return
+}
+
+function baml.Int.parse(text: string) -> int {
+}
+
+function baml.Int.pow(self: null, exp: int) -> int {
+}
+
+function baml.Int.random(lower: int, upper: int) -> int {
+}
+
 function baml.Int.to_json(self: null) -> baml.json.json {
+}
+
+function baml.Int.trailing_ones(self: null) -> int {
+}
+
+function baml.Int.trailing_zeros(self: null) -> int {
+}
+
+function baml.Map.clear(self: null) -> null {
+}
+
+function baml.Map.delete(self: null, key: void) -> void? {
 }
 
 function baml.Map.from_json(j: baml.json.json) -> baml.Map<void, void> {
@@ -71,6 +333,9 @@ function baml.Map.from_json(j: baml.json.json) -> baml.Map<void, void> {
 function baml.Map.get(self: null, key: void) -> void? {
 }
 
+function baml.Map.get_or_insert(self: null, key: void, default: void) -> void {
+}
+
 function baml.Map.has(self: null, key: void) -> bool {
 }
 
@@ -80,7 +345,7 @@ function baml.Map.keys(self: null) -> void[] {
 function baml.Map.length(self: null) -> int {
 }
 
-function baml.Map.set(self: null, key: void, value: void) -> null {
+function baml.Map.set(self: null, key: void, value: void) -> void? {
 }
 
 function baml.Map.to_json(self: null) -> baml.json.json {
@@ -97,10 +362,19 @@ function baml.Null.from_json(j: baml.json.json) -> baml.Null {
 function baml.Null.to_json(self: null) -> baml.json.json {
 }
 
-function baml.String.charAt(self: null, index: int) -> string {
+function baml.String.char_at(self: null, index: int) -> string {
 }
 
-function baml.String.endsWith(self: null, suffix: string) -> bool {
+function baml.String.char_count(self: null) -> int {
+}
+
+function baml.String.code_point_at(self: null, index: int) -> int {
+}
+
+function baml.String.ends_with(self: null, suffix: string) -> bool {
+}
+
+function baml.String.from_code_points(unicode: int[]) -> string {
 }
 
 function baml.String.from_json(j: baml.json.json) -> baml.String {
@@ -108,13 +382,73 @@ function baml.String.from_json(j: baml.json.json) -> baml.String {
     return
 }
 
+function baml.String.from_utf8(utf8: uint8array) -> string {
+}
+
 function baml.String.includes(self: null, search: string) -> bool {
 }
 
-function baml.String.indexOf(self: null, search: string) -> int {
+function baml.String.index_of(self: null, search: string) -> int {
+}
+
+function baml.String.is_alphabetic(self: null) -> bool {
+}
+
+function baml.String.is_alphanumeric(self: null) -> bool {
+}
+
+function baml.String.is_ascii(self: null) -> bool {
+}
+
+function baml.String.is_ascii_alphabetic(self: null) -> bool {
+}
+
+function baml.String.is_ascii_alphanumeric(self: null) -> bool {
+}
+
+function baml.String.is_ascii_control(self: null) -> bool {
+}
+
+function baml.String.is_ascii_graphic(self: null) -> bool {
+}
+
+function baml.String.is_ascii_hex(self: null) -> bool {
+}
+
+function baml.String.is_ascii_lowercase(self: null) -> bool {
+}
+
+function baml.String.is_ascii_numeric(self: null) -> bool {
+}
+
+function baml.String.is_ascii_uppercase(self: null) -> bool {
+}
+
+function baml.String.is_ascii_whitespace(self: null) -> bool {
+}
+
+function baml.String.is_control(self: null) -> bool {
+}
+
+function baml.String.is_graphic(self: null) -> bool {
+}
+
+function baml.String.is_lowercase(self: null) -> bool {
+}
+
+function baml.String.is_numeric(self: null) -> bool {
+}
+
+function baml.String.is_uppercase(self: null) -> bool {
+}
+
+function baml.String.is_whitespace(self: null) -> bool {
 }
 
 function baml.String.length(self: null) -> int {
+}
+
+function baml.String.lines(self: null) -> string[] {
 }
 
 function baml.String.matches(self: null, pattern: string) -> bool {
@@ -123,31 +457,37 @@ function baml.String.matches(self: null, pattern: string) -> bool {
 function baml.String.replace(self: null, search: string, replacement: string) -> string {
 }
 
-function baml.String.replaceAll(self: null, search: string, replacement: string) -> string {
+function baml.String.replace_all(self: null, search: string, replacement: string) -> string {
 }
 
 function baml.String.split(self: null, delimiter: string) -> string[] {
 }
 
-function baml.String.startsWith(self: null, prefix: string) -> bool {
+function baml.String.starts_with(self: null, prefix: string) -> bool {
 }
 
 function baml.String.substring(self: null, start: int, end: int) -> string {
 }
 
-function baml.String.toLowerCase(self: null) -> string {
-}
-
-function baml.String.toUpperCase(self: null) -> string {
-}
-
-function baml.String.to_bytes(self: null) -> uint8array {
-}
-
 function baml.String.to_json(self: null) -> baml.json.json {
 }
 
+function baml.String.to_lower_case(self: null) -> string {
+}
+
+function baml.String.to_upper_case(self: null) -> string {
+}
+
+function baml.String.to_utf8(self: null) -> uint8array {
+}
+
 function baml.String.trim(self: null) -> string {
+}
+
+function baml.String.trim_end(self: null) -> string {
+}
+
+function baml.String.trim_start(self: null) -> string {
 }
 
 function baml.TypeValue.from_json(j: baml.json.json) -> baml.TypeValue {
@@ -410,6 +750,30 @@ function baml.errors.NotImplemented.from_json(j: baml.json.json) -> baml.errors.
 }
 
 function baml.errors.NotImplemented.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    load_const "message"
+    alloc_map 1
+    return
+}
+
+function baml.errors.ParseError.from_json(j: baml.json.json) -> baml.errors.ParseError {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    alloc_instance baml.errors.ParseError
+    load_var _2
+    init_field .message
+    return
+}
+
+function baml.errors.ParseError.to_json(self: null) -> baml.json.json {
     load_var self
     load_field .message
     call baml.String.to_json
@@ -4104,6 +4468,48 @@ function baml.panics.DivisionByZero.to_json(self: null) -> baml.json.json {
     call baml.Int.to_json
     load_const "dividend"
     alloc_map 1
+    return
+}
+
+function baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable {
+    load_var j
+    load_const "resource"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    alloc_instance baml.panics.HostUnavailable
+    load_var _2
+    init_field .resource
+    load_var _5
+    init_field .message
+    return
+}
+
+function baml.panics.HostUnavailable.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .resource
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "resource"
+    load_const "message"
+    alloc_map 2
     return
 }
 
