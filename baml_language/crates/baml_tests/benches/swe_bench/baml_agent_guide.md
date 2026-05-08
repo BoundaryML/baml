@@ -8,24 +8,102 @@ Use the tools as part of the edit loop:
 
 ```bash
 baml run --list                 # compile and list callable functions
-baml describe --symbols         # list project symbols
-baml describe baml.json.decode  # inspect stdlib/project APIs before guessing
+baml describe --symbols         # list project-local symbols (note: builtins aren't listed)
+baml describe String            # full method list for the String class
+baml describe Array             # full method list for Array<T>
+baml describe Map               # full method list for Map<K, V>
 baml test --list
 baml test -i "suite::case"
 baml run --function Main --json-args @args.json --output json
 baml run -e 'SomeHelper("sample")'
+baml run -e '"hello".replaceAll("l", "L")'   # quick stdlib probe
 baml fmt baml_src/main.baml
 baml generate                  # regenerate host-language client code
 ```
 
+**How `baml describe` actually resolves symbols (read this first):**
+
+- It accepts **top-level type names** (`String`, `Array`, `Map`, …) and project-local **function names** (`Main`, `Score`, …).
+- It **does not** accept dotted runtime paths (`baml.fs.read`, `baml.json.decode`) — those are valid in code but return "No symbol found" via the CLI.
+- It **does not** accept method names (`replaceAll`, `length`, `at`) — methods belong to a class. To find them, describe the class instead: `baml describe String`.
+- `--symbols` only lists project-local symbols, not builtins. Use `baml describe String / Array / Map` plus the lists below to discover the stdlib.
+
 Rules for agents:
 
-- Run `baml describe` instead of inventing stdlib names.
+- To find a method, run `baml describe <ClassName>` first (e.g. `baml describe String` for any string operation). Don't run `baml describe <methodName>` — it returns "No symbol found" because methods aren't top-level symbols.
+- For non-class stdlib (filesystem, json, http), the CLI can't enumerate them — reach for the inline lists in this guide and confirm with `baml run -e 'expr'` if uncertain.
 - Keep the entire project compiling; `run -e` still compiles all `.baml` files.
 - Use `--json-args` for classes, arrays, maps, optionals, unions, and nested input.
 - Use `--output json` when a host program or bridge reads BAML output.
 - Format touched `.baml` files before finishing.
 - Run `baml generate` after changing BAML functions/types that application code imports.
+
+## Stdlib Quick Reference
+
+The cheapest way to *not* burn turns guessing method names. Confirmed against `baml describe String / Array / Map` on the runtime; cross-check with `baml run -e 'expr'` if a name looks suspicious.
+
+**`String` methods.** Verified against `baml describe String --budget 5000`. Method-style on any `string` value (`s.length()`, `s.trim()`, …):
+
+```
+length()                             -> int        # codepoint count, NOT byte count
+trim()                               -> string
+toLowerCase()                        -> string     # Unicode-aware
+toUpperCase()                        -> string
+replace(search, replacement)         -> string     # single replacement
+replaceAll(search, replacement)      -> string
+split(delim: string)                 -> string[]   # substring split, no regex
+includes(needle: string)             -> bool       # NB: not "contains"
+startsWith(prefix: string)           -> bool
+endsWith(suffix: string)             -> bool
+matches(pattern: string)             -> bool       # exact-equality, not regex
+substring(start: int, end: int)      -> string
+indexOf(search: string)              -> int        # -1 if absent
+charAt(index: int)                   -> string
+to_bytes()                           -> uint8array # UTF-8 serialization
+```
+
+There is **no** `count`, `split_whitespace`, regex, padStart/padEnd, repeat, or trimStart/trimEnd on `string`. To count substring occurrences, use `s.split(needle).length() - 1`. To split on whitespace, do `s.replaceAll("\t", " ").replaceAll("\n", " ").split(" ")` then filter out empty strings. To get byte length (not codepoints), use `s.to_bytes().length()`.
+
+**`Array<T>` methods.** From `baml describe Array --budget 5000`:
+
+```
+length()                       -> int
+at(index: int)                 -> T?       # safe; null on OOB
+push(item: T)                  -> int      # returns new length
+pop()                          -> T?
+concat(other: T[])             -> T[]
+reverse()                      -> T[]
+slice(start: int, end: int)    -> T[]
+join(separator: string)        -> string   # T must be string
+map<U, E>(f: (T) -> U)         -> U[]      # may throw E
+```
+
+There is **no** `filter`, `find`, `some`, `every`, `reduce`, `forEach`, or `flatMap` on `Array`. Use `.map(f).filter` patterns are not built-in — implement filter manually with a `for` loop pushing to a fresh array.
+
+**`Map<K, V>` methods.** From `baml describe Map --budget 5000`:
+
+```
+length()                  -> int
+get(key: K)               -> V?
+set(key: K, value: V)     -> null     # mutates in place
+has(key: K)               -> bool
+keys()                    -> K[]
+values()                  -> V[]
+```
+
+There is **no** `delete`/`remove`, `entries`, or `clear`.
+
+**Runtime helpers (CAN'T be queried via `baml describe` — use them as written):**
+
+- **Filesystem:** `baml.fs.{open, exists, read, write, write_bytes, size, remove, read_dir}`
+- **JSON:** `baml.json.{parse, stringify, stringify_pretty, encode, decode, decode_str}`
+- **Stdio:** `baml.io.input(prompt)` (read a line). There is no general stdout-print builtin.
+- **Shell:** `baml.sys.{shell, exec}` (run external commands; use sparingly).
+- **HTTP:** `baml.http.fetch(url) -> Response`.
+- **Env:** `baml.env.{get, get_or_panic}`.
+- **Conversion:** `baml.unstable.string(value)` for `int|float|bool -> string`.
+
+If a name *should* exist but isn't here, run `baml run -e 'baml.SOMENS.SOMENAME(args)' 2>&1` once to see whether it resolves. Don't iterate through `baml describe` — describe doesn't index `baml.*`.
 
 ## Project Shape
 
@@ -186,7 +264,7 @@ function CountByPriority(tickets: Ticket[]) -> map<string, int> {
 
 Prefer `array.at(i)` and `map.get(key)` when absence is normal. Use direct indexing only when an out-of-bounds index or missing key should panic.
 
-Use `baml.unstable.string(value)` for string conversion unless `baml describe` shows a newer stable API. Do not assume regex, numeric parsing, byte length, UUID, base64, crypto, or date/time helpers exist; check `baml describe`.
+Use `baml.unstable.string(value)` for string conversion unless a newer stable API has shipped. Do not assume regex, numeric parsing, byte length, UUID, base64, crypto, or date/time helpers exist — confirm with a one-line `baml run -e 'expr'` probe before you commit to one. (`baml describe` cannot enumerate `baml.*` runtime helpers; only class methods are inspectable, via `baml describe ClassName`.)
 
 ## JSON Pattern
 
