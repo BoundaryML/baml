@@ -29,6 +29,7 @@ type WsOutMessage =
   | { type: 'envVarFromShell'; variable: string; value: string }
   | { type: 'knownEnvVarNames'; names: string[] }
   | { type: 'inputRequest'; id: number; prompt: string | undefined; callId: number }
+  | { type: 'inputResolved'; id: number; callId: number }
   | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
   | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string; responseHeaders?: Record<string, string> }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: unknown | null }
@@ -42,7 +43,7 @@ type WsInMessage =
   | { type: 'callTestFunction'; id: number; project: string; generation: number; testName: string }
   | { type: 'expandTestSet'; project: string; generation: number; testsetName: string }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
-  | { type: 'inputResponse'; id: number; value: string }
+  | { type: 'inputResponse'; id: number; value: string; callId: number }
   | { type: 'setEnvVar'; key: string; value: string }
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'requestState' }
@@ -238,7 +239,7 @@ export class WebSocketRuntimePort implements RuntimePort {
           testsetName: msg.testsetName,
         };
       case 'inputResponse':
-        return { type: 'inputResponse', id: msg.id, value: msg.value };
+        return { type: 'inputResponse', id: msg.id, value: msg.value, callId: msg.callId };
       case 'clearHandles':
         return null; // handles live in the Rust process; no TS-side cleanup needed
       case 'dispose':
@@ -291,6 +292,8 @@ export class WebSocketRuntimePort implements RuntimePort {
         return { type: 'knownEnvVarNames', names: raw.names };
       case 'inputRequest':
         return { type: 'inputRequest', id: raw.id, prompt: raw.prompt, callId: raw.callId };
+      case 'inputResolved':
+        return { type: 'inputResolved', id: raw.id, callId: raw.callId };
       case 'fetchLogNew':
         return {
           type: 'fetchLogNew',

@@ -223,6 +223,7 @@ export type WorkerOutMessage =
   | { type: 'envVarFromShell'; variable: string; value: string }
   | { type: 'knownEnvVarNames'; names: string[] }
   | { type: 'inputRequest'; id: number; prompt: string | undefined; callId: number }
+  | { type: 'inputResolved'; id: number; callId: number }
   | { type: 'vfsFileChanged'; path: string; content: string }
   | { type: 'vfsFileDeleted'; path: string }
   | { type: 'buildTime'; value: string }
@@ -241,7 +242,7 @@ export type WorkerInMessage =
   | { type: 'cancelCall'; id: number; project: string }
   | { type: 'clearHandles'; runIds: number[] }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
-  | { type: 'inputResponse'; id: number; value: string }
+  | { type: 'inputResponse'; id: number; value: string; callId: number }
   | { type: 'setEnvVar'; key: string; value: string }
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'selectProject'; root: string }
