@@ -71,7 +71,7 @@ fn event_kind_to_proto(
                 name: end.name.clone(),
                 result: Some(result),
                 duration_ms,
-                error: end.error.clone().unwrap_or_default(),
+                error: end.error.clone(),
             })
         }
         EventKind::SetTags(tags) => {
@@ -257,7 +257,7 @@ mod tests {
         {
             assert_eq!(end.name, "my_func");
             assert_eq!(end.duration_ms, 150);
-            assert_eq!(end.error, "");
+            assert_eq!(end.error, None);
             assert!(end.result.is_some());
         } else {
             panic!("Expected FunctionEnd event");

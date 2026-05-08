@@ -125,10 +125,13 @@ fn find_class_definition<'a>(
     type_name: &baml_type::TypeName,
 ) -> Option<&'a ::sys_types::ClassDefinition> {
     ctx.class_definitions.get(type_name).or_else(|| {
-        ctx.class_definitions
+        let mut matches = ctx
+            .class_definitions
             .iter()
-            .find(|(name, _)| name.display_name == type_name.display_name)
-            .map(|(_, def)| def)
+            .filter(|(name, _)| name.display_name == type_name.display_name)
+            .map(|(_, def)| def);
+        let first = matches.next()?;
+        matches.next().is_none().then_some(first)
     })
 }
 
@@ -137,10 +140,13 @@ fn find_enum_definition<'a>(
     type_name: &baml_type::TypeName,
 ) -> Option<&'a ::sys_types::EnumDefinition> {
     ctx.enum_definitions.get(type_name).or_else(|| {
-        ctx.enum_definitions
+        let mut matches = ctx
+            .enum_definitions
             .iter()
-            .find(|(name, _)| name.display_name == type_name.display_name)
-            .map(|(_, def)| def)
+            .filter(|(name, _)| name.display_name == type_name.display_name)
+            .map(|(_, def)| def);
+        let first = matches.next()?;
+        matches.next().is_none().then_some(first)
     })
 }
 
@@ -149,10 +155,13 @@ fn find_type_alias_definition<'a>(
     type_name: &baml_type::TypeName,
 ) -> Option<&'a baml_type::Ty> {
     ctx.type_alias_definitions.get(type_name).or_else(|| {
-        ctx.type_alias_definitions
+        let mut matches = ctx
+            .type_alias_definitions
             .iter()
-            .find(|(name, _)| name.display_name == type_name.display_name)
-            .map(|(_, ty)| ty)
+            .filter(|(name, _)| name.display_name == type_name.display_name)
+            .map(|(_, ty)| ty);
+        let first = matches.next()?;
+        matches.next().is_none().then_some(first)
     })
 }
 
@@ -420,7 +429,10 @@ fn enable_openai_responses_image_generation(
         tools.push(serde_json::json!({ "type": "image_generation" }));
     }
 
-    if mode == ImageGenerationMode::Required {
+    if matches!(
+        mode,
+        ImageGenerationMode::Required | ImageGenerationMode::Available
+    ) {
         obj.insert(
             "tool_choice".to_string(),
             serde_json::json!({ "type": "image_generation" }),
@@ -572,6 +584,7 @@ fn parse_llm_output_for_target(
             if media.is_empty() {
                 return Ok(None);
             }
+            reject_mixed_media_only_output(output, *kind)?;
             if media.len() != 1 {
                 return Err(LlmOpError::ParseResponseError(format!(
                     "Expected exactly one {kind} output, got {}. Use {kind}[] for multiple outputs.",
@@ -585,6 +598,7 @@ fn parse_llm_output_for_target(
             if media.is_empty() {
                 return Ok(None);
             }
+            reject_mixed_media_only_output(output, baml_base::MediaKind::Image)?;
             Ok(Some(BexExternalValue::Array {
                 element_type: *inner.clone(),
                 items: media.into_iter().map(media_to_external).collect(),
@@ -602,6 +616,9 @@ fn parse_llm_output_for_target(
         }
         target if nullable_media_kind(target).is_some() => {
             parse_nullable_media_output(target, output)
+        }
+        target if nullable_list_inner(target).is_some() => {
+            parse_nullable_list_output(target, output)
         }
         baml_type::Ty::Optional(inner, _) if types::is_text_or_image_union(inner) => {
             let items = mixed_text_image_parts(output, inner);
@@ -626,6 +643,7 @@ fn parse_nullable_media_output(
     if media.is_empty() {
         return Ok(None);
     }
+    reject_mixed_media_only_output(output, kind)?;
     if media.len() != 1 {
         return Err(LlmOpError::ParseResponseError(format!(
             "Expected zero or one {kind} output for {target}, got {}. Use {kind}[] for multiple outputs.",
@@ -655,6 +673,54 @@ fn parse_nullable_media_output(
     }
 }
 
+fn parse_nullable_list_output(
+    target: &baml_type::Ty,
+    output: &parse_response::LlmOutput,
+) -> Result<Option<BexExternalValue>, LlmOpError> {
+    let Some(list_ty) = nullable_list_inner(target) else {
+        return Ok(None);
+    };
+    let baml_type::Ty::List(element_type, _) = list_ty else {
+        return Ok(None);
+    };
+
+    let array = if is_media_type(element_type, baml_base::MediaKind::Image) {
+        let media = media_parts(output, baml_base::MediaKind::Image);
+        if media.is_empty() {
+            return Ok(None);
+        }
+        reject_mixed_media_only_output(output, baml_base::MediaKind::Image)?;
+        BexExternalValue::Array {
+            element_type: *element_type.clone(),
+            items: media.into_iter().map(media_to_external).collect(),
+        }
+    } else if types::is_text_or_image_union(element_type) {
+        let items = mixed_text_image_parts(output, element_type);
+        if items.is_empty() {
+            return Ok(None);
+        }
+        BexExternalValue::Array {
+            element_type: *element_type.clone(),
+            items,
+        }
+    } else {
+        return Ok(None);
+    };
+
+    match target {
+        baml_type::Ty::Optional(inner, _) => Ok(Some(BexExternalValue::optional(
+            array,
+            inner.as_ref().clone(),
+        ))),
+        baml_type::Ty::Union(members, _) => Ok(Some(BexExternalValue::union(
+            array,
+            members.clone(),
+            list_ty.clone(),
+        ))),
+        _ => Ok(Some(array)),
+    }
+}
+
 fn media_parts(
     output: &parse_response::LlmOutput,
     kind: baml_base::MediaKind,
@@ -669,6 +735,28 @@ fn media_parts(
             _ => None,
         })
         .collect()
+}
+
+fn reject_mixed_media_only_output(
+    output: &parse_response::LlmOutput,
+    kind: baml_base::MediaKind,
+) -> Result<(), LlmOpError> {
+    let unexpected = output
+        .parts
+        .iter()
+        .filter(|part| match part {
+            parse_response::LlmOutputPart::Media { media, .. } => media.kind != kind,
+            parse_response::LlmOutputPart::Text { text } => !text.trim().is_empty(),
+        })
+        .count();
+
+    if unexpected == 0 {
+        return Ok(());
+    }
+
+    Err(LlmOpError::ParseResponseError(format!(
+        "Expected only {kind} output parts, got {unexpected} non-{kind} part(s). Use a text/image union return type to preserve mixed outputs."
+    )))
 }
 
 fn mixed_text_image_parts(
@@ -801,6 +889,33 @@ fn nullable_media_kind(target: &baml_type::Ty) -> Option<baml_base::MediaKind> {
             }
 
             if has_null { kind } else { None }
+        }
+        _ => None,
+    }
+}
+
+fn nullable_list_inner(target: &baml_type::Ty) -> Option<&baml_type::Ty> {
+    match target {
+        baml_type::Ty::Optional(inner, _)
+            if matches!(inner.as_ref(), baml_type::Ty::List(_, _)) =>
+        {
+            Some(inner.as_ref())
+        }
+        baml_type::Ty::Union(members, _) => {
+            let mut list = None;
+            let mut has_null = false;
+            for member in members {
+                match member {
+                    baml_type::Ty::List(_, _) => {
+                        if list.replace(member).is_some() {
+                            return None;
+                        }
+                    }
+                    baml_type::Ty::Null { .. } => has_null = true,
+                    _ => return None,
+                }
+            }
+            if has_null { list } else { None }
         }
         _ => None,
     }
@@ -1273,7 +1388,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn openai_responses_mixed_text_image_return_enables_tool_without_forcing_choice() {
+    async fn openai_responses_mixed_text_image_return_enables_tool_and_choice() {
         let client = make_openai_responses_client(baml_std::PrimitiveClientOptions::default());
         let request = execute_build_request_from_owned(
             &client,
@@ -1289,7 +1404,10 @@ mod tests {
             body["tools"],
             serde_json::json!([{ "type": "image_generation" }])
         );
-        assert!(body.get("tool_choice").is_none());
+        assert_eq!(
+            body["tool_choice"],
+            serde_json::json!({ "type": "image_generation" })
+        );
     }
 
     #[tokio::test]
@@ -1346,7 +1464,7 @@ mod tests {
                 "index": 0,
                 "message": {
                     "role": "assistant",
-                    "content": "Generated image",
+                    "content": "",
                     "images": [{
                         "type": "image_url",
                         "image_url": {
@@ -1414,6 +1532,59 @@ mod tests {
             value.as_ref(),
             BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(_))
         ));
+    }
+
+    #[test]
+    fn nullable_image_list_targets_parse_native_media_parts() {
+        let mut output = super::parse_response::LlmOutput::default();
+        output.push_media(
+            Arc::new(MediaValue::new(
+                baml_base::MediaKind::Image,
+                MediaContent::Base64 {
+                    base64_data: "aW1hZ2U=".into(),
+                },
+                Some("image/png".into()),
+            )),
+            None,
+            serde_json::Value::Null,
+        );
+
+        let image_list = baml_type::Ty::List(Box::new(ty_image()), TyAttr::default());
+        let result = super::parse_llm_output_for_target(&ty_optional(image_list.clone()), &output)
+            .unwrap()
+            .expect("expected optional image list");
+        let BexExternalValue::Union { value, metadata } = result else {
+            panic!("expected optional union");
+        };
+        assert_eq!(metadata.selected_option, image_list);
+        let BexExternalValue::Array { items, .. } = value.as_ref() else {
+            panic!("expected image array");
+        };
+        assert_eq!(items.len(), 1);
+    }
+
+    #[test]
+    fn media_only_targets_reject_mixed_output_parts() {
+        let mut output = super::parse_response::LlmOutput::default();
+        output.push_text("caption".into());
+        output.push_media(
+            Arc::new(MediaValue::new(
+                baml_base::MediaKind::Image,
+                MediaContent::Base64 {
+                    base64_data: "aW1hZ2U=".into(),
+                },
+                Some("image/png".into()),
+            )),
+            None,
+            serde_json::Value::Null,
+        );
+
+        let error = super::parse_llm_output_for_target(&ty_image(), &output).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Expected only image output parts")
+        );
     }
 
     // ========================================================================

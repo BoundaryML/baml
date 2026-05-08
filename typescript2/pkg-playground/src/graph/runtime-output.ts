@@ -194,11 +194,14 @@ export function collectGraphNodeRuntime(
     while (parentId != null) {
       const prev = withAncestors.get(parentId);
       withAncestors.set(parentId, {
-        result: prev?.result,
-        hasResult: prev?.hasResult,
-        imageOutputs: prev?.imageOutputs ?? [],
+        result: runtime.result ?? prev?.result,
+        hasResult: Boolean(prev?.hasResult || runtime.hasResult),
+        imageOutputs: [
+          ...(prev?.imageOutputs ?? []),
+          ...(runtime.imageOutputs ?? []),
+        ],
         executionState: mergeState(prev?.executionState, runtime.executionState),
-        errorMessage: prev?.errorMessage ?? runtime.errorMessage,
+        errorMessage: runtime.errorMessage ?? prev?.errorMessage,
       });
       parentId = parentById.get(parentId);
     }

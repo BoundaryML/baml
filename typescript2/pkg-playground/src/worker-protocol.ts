@@ -41,9 +41,7 @@ export interface LogDecoration {
   count: number;
 }
 
-export interface SourceNavigationTarget {
-  fileId?: number;
-  filePath?: string;
+interface SourceNavigationTargetBase {
   line: number;
   column: number;
   endLine?: number;
@@ -51,6 +49,11 @@ export interface SourceNavigationTarget {
   startOffset?: number;
   endOffset?: number;
 }
+
+export type SourceNavigationTarget = SourceNavigationTargetBase & (
+  | { fileId: number; filePath?: string }
+  | { filePath: string; fileId?: number }
+);
 
 // ---------------------------------------------------------------------------
 // Shared domain types

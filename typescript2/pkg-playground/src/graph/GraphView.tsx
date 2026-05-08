@@ -269,7 +269,7 @@ function GraphViewInner({
         .react-flow__node.selectable:focus,
         .react-flow__node.selectable:focus-visible {
           outline: none !important;
-          box-shadow: none !important;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.55) !important;
         }
         .react-flow.dark {
           --xy-controls-button-background-color-default: rgba(24, 24, 27, 0.92);
@@ -300,9 +300,9 @@ function GraphViewInner({
         edgeTypes={kEdgeTypes}
         onNodeClick={handleNodeClick}
         nodesDraggable={false}
-        nodesFocusable={false}
+        nodesFocusable
         edgesFocusable={false}
-        elementsSelectable={false}
+        elementsSelectable
         selectNodesOnDrag={false}
         elevateNodesOnSelect={false}
         elevateEdgesOnSelect={false}

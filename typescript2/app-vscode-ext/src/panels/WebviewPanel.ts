@@ -12,13 +12,15 @@ import {
 } from 'vscode';
 import { getPlaygroundHtml } from './getWebviewHtml';
 
-interface SourceNavigationTarget {
-  filePath?: string;
+type SourceNavigationTarget = {
   line: number;
   column: number;
   endLine?: number;
   endColumn?: number;
-}
+} & (
+  | { filePath: string; fileId?: number }
+  | { fileId: number; filePath?: string }
+);
 
 export class WebviewPanel {
   public static currentPanel: WebviewPanel | undefined;
@@ -90,10 +92,14 @@ export class WebviewPanel {
   }
 
   private async navigateToSource(source: SourceNavigationTarget): Promise<void> {
-    const targetUri = source.filePath
-      ? Uri.file(source.filePath)
-      : window.activeTextEditor?.document.uri;
-    if (!targetUri) return;
+    if (!source.filePath) {
+      void window.showErrorMessage(
+        `Cannot navigate to source for file id ${source.fileId}: no file path was provided.`,
+      );
+      return;
+    }
+
+    const targetUri = Uri.file(source.filePath);
 
     const visibleEditor = window.visibleTextEditors.find(
       (editor) => editor.document.uri.toString() === targetUri.toString(),

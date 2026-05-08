@@ -2423,7 +2423,7 @@ impl<'a> Parser<'a> {
                 p.start_node(SyntaxKind::PARAMETER_LIST);
                 p.finish_node();
                 // Parse the body
-                p.parse_function_body(true);
+                p.parse_function_body(false);
                 return;
             }
 

@@ -43,7 +43,12 @@ pub(crate) fn build_request(
         method: "POST".to_string(),
         url: format!(
             "{}/image-model",
-            client.options.base_url.as_deref().unwrap_or_default()
+            client
+                .options
+                .base_url
+                .as_deref()
+                .unwrap_or_default()
+                .trim_end_matches('/')
         ),
         headers,
         body: body_str,

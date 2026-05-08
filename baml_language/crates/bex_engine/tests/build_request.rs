@@ -635,7 +635,7 @@ function get_body() -> string {
 }
 
 #[tokio::test]
-async fn test_responses_api_mixed_text_image_output_enables_tool_without_forcing_choice() {
+async fn test_responses_api_mixed_text_image_output_enables_tool_and_choice() {
     let source = [
         OPENAI_RESPONSES_CLIENT,
         r##"
@@ -655,7 +655,10 @@ function get_body() -> string {
         body["tools"],
         serde_json::json!([{ "type": "image_generation" }])
     );
-    assert!(body.get("tool_choice").is_none());
+    assert_eq!(
+        body["tool_choice"],
+        serde_json::json!({ "type": "image_generation" })
+    );
 }
 
 // ============================================================================

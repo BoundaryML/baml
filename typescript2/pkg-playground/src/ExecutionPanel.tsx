@@ -515,7 +515,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   function handleCursorContext(ctx: CursorContext) {
     // Update cursor offset for event highlighting (cursor ↔ event matching)
-    console.log('[DEBUG] CursorContext:', { cursorOffset: ctx.cursorOffset, functionName: ctx.functionName });
     setCursorOffset(ctx.cursorOffset ?? null);
 
     const graphNavigation = graphNavigationRef.current;

@@ -426,7 +426,11 @@ fn check_ast_type_constraint_attrs(
         baml_compiler2_ast::TypeExpr::Optional { inner, .. }
         | baml_compiler2_ast::TypeExpr::List { inner, .. } => {
             diagnostics.extend(check_ast_type_constraint_attrs(
-                file_id, inner, base_types, this_ty, item_tree,
+                file_id,
+                inner,
+                base_types,
+                jinja_type_from_type_expr(inner, item_tree),
+                item_tree,
             ));
         }
         baml_compiler2_ast::TypeExpr::Map { key, value, .. } => {
@@ -513,16 +517,20 @@ fn constraint_expression_arg<'a>(
         return None;
     }
 
-    args.into_iter()
-        .find_map(|(value, span)| strip_jinja_expression(value).map(|expr| (expr, span)))
+    args.into_iter().find_map(|(value, span)| {
+        strip_jinja_expression(value).map(|(expr, offset)| {
+            let start = span.start() + TextSize::from(u32::try_from(offset).unwrap_or(u32::MAX));
+            (expr, TextRange::new(start, span.end()))
+        })
+    })
 }
 
-fn strip_jinja_expression(value: &str) -> Option<&str> {
+fn strip_jinja_expression(value: &str) -> Option<(&str, usize)> {
+    let outer_start = value.len() - value.trim_start().len();
     let trimmed = value.trim();
-    trimmed
-        .strip_prefix("{{")
-        .and_then(|expr| expr.strip_suffix("}}"))
-        .map(str::trim)
+    let inner = trimmed.strip_prefix("{{")?.strip_suffix("}}")?;
+    let inner_start = inner.len() - inner.trim_start().len();
+    Some((inner.trim(), outer_start + 2 + inner_start))
 }
 
 fn check_jinja_constraint_expr(
@@ -896,9 +904,8 @@ fn jinja_expression_offset_range(
     start_offset: usize,
     end_offset: usize,
 ) -> TextRange {
-    // Attribute expression args include the surrounding `{{`/`}}`; the checker
-    // receives the trimmed inner expression.
-    let expression_start = attr_arg_span.start() + TextSize::from(2);
+    // The span starts at the trimmed inner expression passed to the checker.
+    let expression_start = attr_arg_span.start();
     TextRange::new(
         expression_start + TextSize::from(u32::try_from(start_offset).unwrap_or(u32::MAX)),
         expression_start
