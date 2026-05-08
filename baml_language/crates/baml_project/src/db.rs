@@ -952,6 +952,7 @@ impl ProjectDatabase {
                 FunctionOrigin::UserDefined => 0,
                 FunctionOrigin::Companion => 1,
                 FunctionOrigin::Internal => 2,
+                FunctionOrigin::AutoDerive => 3,
             })?;
 
         let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
@@ -1060,6 +1061,7 @@ impl ProjectDatabase {
                 FunctionOrigin::UserDefined => 0,
                 FunctionOrigin::Companion => 1,
                 FunctionOrigin::Internal => 2,
+                FunctionOrigin::AutoDerive => 3,
             })
         {
             let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);

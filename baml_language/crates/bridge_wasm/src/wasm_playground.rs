@@ -31,6 +31,7 @@ pub enum FunctionOrigin {
     UserDefined,
     Companion,
     Internal,
+    AutoDerive,
 }
 
 #[derive(Tsify, Serialize)]
@@ -130,6 +131,9 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                                     }
                                     bex_project::FunctionOrigin::Internal => {
                                         FunctionOrigin::Internal
+                                    }
+                                    bex_project::FunctionOrigin::AutoDerive => {
+                                        FunctionOrigin::AutoDerive
                                     }
                                 },
                                 capabilities: f.capabilities.map(|c| LlmCapabilities {

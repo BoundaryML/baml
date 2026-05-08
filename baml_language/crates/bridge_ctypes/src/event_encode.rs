@@ -307,10 +307,10 @@ mod tests {
         };
         let result = end.result.expect("expected function result");
         match result.value {
-            Some(crate::baml::cffi::baml_outbound_value::Value::MediaValue(media)) => {
+            Some(crate::baml_core::cffi::baml_outbound_value::Value::MediaValue(media)) => {
                 assert_eq!(
                     media.value,
-                    Some(crate::baml::cffi::baml_value_media::Value::Base64(
+                    Some(crate::baml_core::cffi::baml_value_media::Value::Base64(
                         "aW1hZ2U=".into()
                     ))
                 );

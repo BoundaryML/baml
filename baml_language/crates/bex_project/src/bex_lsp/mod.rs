@@ -86,6 +86,7 @@ pub enum FunctionOrigin {
     UserDefined,
     Companion,
     Internal,
+    AutoDerive,
 }
 
 impl From<baml_project::FunctionOrigin> for FunctionOrigin {
@@ -94,6 +95,7 @@ impl From<baml_project::FunctionOrigin> for FunctionOrigin {
             baml_project::FunctionOrigin::UserDefined => Self::UserDefined,
             baml_project::FunctionOrigin::Companion => Self::Companion,
             baml_project::FunctionOrigin::Internal => Self::Internal,
+            baml_project::FunctionOrigin::AutoDerive => Self::AutoDerive,
         }
     }
 }
