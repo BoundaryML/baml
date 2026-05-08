@@ -66,7 +66,11 @@ fn main() {
         .collect();
 
     // 4. Codegen.
-    let output = codegen_python::to_source_code(&pool, &user_baml_files);
+    let output = codegen_python::to_source_code(
+        &pool,
+        &user_baml_files,
+        codegen_python::NamingConvention::PreserveCase,
+    );
     for (path, content) in output {
         let file_path = baml_sdk_dir.join(&path);
         if let Some(parent) = file_path.parent() {

@@ -259,6 +259,11 @@ pub struct ItemTreeSourceMap {
     pub enum_variant_spans: FxHashMap<LocalItemId<EnumMarker>, Vec<TextRange>>,
     /// `name_span` for each function.
     pub function_name_spans: FxHashMap<LocalItemId<FunctionMarker>, TextRange>,
+    /// Whole-block span for each generator (the `generator … { … }` node).
+    pub generator_block_spans: FxHashMap<LocalItemId<GeneratorMarker>, TextRange>,
+    /// Per-config-item span for each generator, parallel to
+    /// `Generator::config_items`.
+    pub generator_config_item_spans: FxHashMap<LocalItemId<GeneratorMarker>, Vec<TextRange>>,
 }
 
 // ── ItemTree ─────────────────────────────────────────────────────────────────
@@ -530,6 +535,21 @@ impl ItemTree {
             },
         );
         id
+    }
+
+    /// Populate source map spans for a generator that was allocated via
+    /// `alloc_generator`. Mirrors `collect_class_spans` / `collect_enum_spans`.
+    pub fn collect_generator_spans(
+        source_map: &mut ItemTreeSourceMap,
+        id: LocalItemId<GeneratorMarker>,
+        gen_def: &ast::GeneratorDef,
+    ) {
+        source_map.generator_block_spans.insert(id, gen_def.span);
+        let item_spans: Vec<TextRange> =
+            gen_def.config_items.iter().map(|item| item.span).collect();
+        source_map
+            .generator_config_item_spans
+            .insert(id, item_spans);
     }
 
     pub fn alloc_template_string(

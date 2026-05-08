@@ -1,18 +1,21 @@
 generator lang_python_1 {
   output_type "python/pydantic"
   output_dir "../"
+  naming_convention "preserve-case"
 }
 
 generator lang_python_2 {
   output_type "python/pydantic"
   default_client_mode "async"
   output_dir "../"
+  naming_convention "preserve-case"
 }
 
 generator lang_python_3 {
   output_type "python/pydantic"
   default_client_mode "sync"
   output_dir "../"
+  naming_convention "preserve-case"
 }
 
 generator lang_typescript_1 {
