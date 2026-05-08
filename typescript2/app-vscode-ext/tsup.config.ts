@@ -8,6 +8,7 @@ export default defineConfig({
   format: ['cjs'],
   external: ['vscode'],
   bundle: true,
+  noExternal: [/^(?!vscode$)/],
   sourcemap: true,
   clean: true,
   platform: 'node',

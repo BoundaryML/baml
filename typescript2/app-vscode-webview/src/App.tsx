@@ -142,14 +142,14 @@ const App: React.FC = () => {
 
   if (!port) {
     return (
-      <main className="playground-root w-screen h-screen overflow-hidden flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
+      <main className="playground-root h-full w-full overflow-hidden flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
         <p>Connecting to playground server...</p>
       </main>
     );
   }
 
   return (
-    <div className="playground-root flex h-screen min-h-0 w-screen flex-col overflow-hidden">
+    <div className="playground-root flex h-full min-h-0 w-full flex-col overflow-hidden">
       <ExecutionPanel
         port={port}
         onNavigateToSource={(source: SourceNavigationTarget) => {

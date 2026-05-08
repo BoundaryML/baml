@@ -80,7 +80,7 @@
         "baml.cliPath": {
           "type": ["string", "null"],
           "default": null,
-          "description": "Path to baml-cli binary. If not set, looks for 'baml-cli' on PATH.",
+          "description": "Path to baml-cli binary. If not set, uses the bundled CLI when available, then falls back to 'baml-cli' on PATH.",
           "scope": "machine-overridable"
         },
         "baml.trace.server": {

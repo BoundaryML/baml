@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import {
   LanguageClient,
   type LanguageClientOptions,
@@ -80,18 +81,50 @@ function refreshTooltip() {
   }
 }
 
+function getBundledCliPath(context: vscode.ExtensionContext): string | undefined {
+  const binaryName = process.platform === 'win32' ? 'baml-cli.exe' : 'baml-cli';
+  const bundledPath = vscode.Uri.joinPath(context.extensionUri, 'dist', 'baml-cli', binaryName).fsPath;
+
+  if (!fs.existsSync(bundledPath)) {
+    return undefined;
+  }
+
+  if (process.platform !== 'win32') {
+    try {
+      fs.chmodSync(bundledPath, 0o755);
+    } catch {
+      // Best effort: VS Code usually preserves the executable bit from the VSIX.
+    }
+  }
+
+  return bundledPath;
+}
+
+function getPlaygroundDir(context: vscode.ExtensionContext): string | undefined {
+  const playgroundDir = vscode.Uri.joinPath(context.extensionUri, 'dist', 'playground').fsPath;
+  return fs.existsSync(playgroundDir) ? playgroundDir : undefined;
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration('baml');
+  const playgroundDir = getPlaygroundDir(context);
 
-  // Priority: BAML_CLI_PATH env var (for debug) → setting → PATH lookup
+  // Priority: BAML_CLI_PATH env var (for debug) -> setting -> bundled CLI -> PATH lookup.
   const cliPath =
     process.env.BAML_CLI_PATH ??
     config.get<string | null>('cliPath') ??
+    getBundledCliPath(context) ??
     'baml-cli';
 
   const serverOptions: ServerOptions = {
     command: cliPath,
     args: ['lsp'],
+    options: {
+      env: {
+        ...process.env,
+        ...(playgroundDir ? { BAML_PLAYGROUND_DIR: playgroundDir } : {}),
+      },
+    },
   };
 
   const clientOptions: LanguageClientOptions = {

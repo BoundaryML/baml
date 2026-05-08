@@ -88,6 +88,9 @@ export class WebviewPanel {
       { viewColumn: ViewColumn.Beside, preserveFocus: true },
       {
         enableScripts: true,
+        localResourceRoots: [
+          Uri.joinPath(extensionUri, 'dist', 'playground'),
+        ],
         retainContextWhenHidden: true,
         // Map the playground server port so scripts/WS can reach it.
         portMapping: [{ webviewPort: port, extensionHostPort: port }],
@@ -96,14 +99,14 @@ export class WebviewPanel {
 
     WebviewPanel.currentPanel = new WebviewPanel(panel, openTarget);
 
-    // Show a loading message while we fetch the real HTML from the server.
+    // Show a loading message while we load the packaged playground shell.
     panel.webview.html = `<!DOCTYPE html>
 <html><body style="display:flex;align-items:center;justify-content:center;height:100vh;color:#888;font-family:sans-serif;">
 <p>Loading playground\u2026</p>
 </body></html>`;
 
     try {
-      panel.webview.html = await getPlaygroundHtml(port);
+      panel.webview.html = await getPlaygroundHtml(panel.webview, extensionUri, port);
       WebviewPanel.currentPanel.forwardOpenPlayground();
       WebviewPanel.currentPanel.forwardActiveEditorCursorPosition();
     } catch (e) {
