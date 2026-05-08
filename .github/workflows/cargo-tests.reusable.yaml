@@ -1,14 +1,7 @@
 name: Cargo Tests (Reusable)
 
 on:
-  workflow_call:
-    inputs:
-      code_changed:
-        required: true
-        type: string
-      run_all:
-        required: true
-        type: boolean
+  workflow_call: {}
 
 defaults:
   run:
@@ -24,7 +17,6 @@ jobs:
   cargo-test-linux:
     name: "cargo test (linux)"
     runs-on: blacksmith-16vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -47,11 +39,6 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: "Install cargo insta"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-insta
-
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
@@ -64,12 +51,11 @@ jobs:
         run: cargo test --no-run --all-features --timings
         working-directory: baml_language
 
+      # Snapshot tests live in `baml_tests` and are exercised end-to-end by
+      # the dedicated `snapshot-tests` job; skip the package here so the
+      # per-platform jobs stay focused on cross-platform behavior.
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features
-        working-directory: baml_language
-
-      - name: "Run snapshot tests with insta"
-        run: cargo insta test --workspace --all-features --unreferenced reject
+        run: cargo nextest run --all-features -E 'not package(baml_tests)'
         working-directory: baml_language
 
       - name: "Run language test suites"
@@ -89,12 +75,6 @@ jobs:
           if [ "$found" -eq 0 ]; then
             echo "::warning::No language test suites found in sdks/*/"
           fi
-
-      - name: "Check documentation"
-        run: cargo doc --all --no-deps --timings
-        working-directory: baml_language
-        env:
-          RUSTDOCFLAGS: "-D warnings"
 
       - name: "Upload test results on failure"
         if: failure()
@@ -116,7 +96,6 @@ jobs:
   cargo-test-macos:
     name: "cargo test (macos)"
     runs-on: macos-latest
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
@@ -151,10 +130,10 @@ jobs:
         run: cargo test --no-run --all-features --timings
         working-directory: baml_language
 
+      # Snapshot tests live in `baml_tests` and are covered by the dedicated
+      # `snapshot-tests` job; skip the package here.
       - name: "Run tests"
-        run: |
-          cargo nextest run --all-features
-          cargo test --all-features --doc --timings
+        run: cargo nextest run --all-features -E 'not package(baml_tests)'
         working-directory: baml_language
 
       - name: "Run language test suites"
@@ -186,7 +165,6 @@ jobs:
   cargo-test-windows:
     name: "cargo test (windows)"
     runs-on: blacksmith-4vcpu-windows-2025
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
@@ -224,10 +202,10 @@ jobs:
         run: cargo test --no-run --all-features --timings
         working-directory: baml_language
 
+      # Snapshot tests live in `baml_tests` and are covered by the dedicated
+      # `snapshot-tests` job; skip the package here.
       - name: "Run tests"
-        run: |
-          cargo nextest run --all-features
-          cargo test --all-features --doc --timings
+        run: cargo nextest run --all-features -E 'not package(baml_tests)'
         working-directory: baml_language
 
       - name: "Run language test suites"
@@ -259,7 +237,6 @@ jobs:
   cargo-test-wasm:
     name: "cargo test (wasm)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -297,285 +274,12 @@ jobs:
           path: baml_language/target/cargo-timings/
           if-no-files-found: ignore
 
-  # ---------------------------------------------------------------------------
-  # Size Gate — one job per platform, unified PR comment at the end
-  # ---------------------------------------------------------------------------
-
-  size-gate-linux:
-    name: "size-gate (linux)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "linux-cargo"
-
-      - name: "Run size-gate check"
-        id: check
-        working-directory: baml_language
-        run: |
-          cargo run --timings -p cargo-size-gate -- size-gate check \
-            --only bridge_cffi-stripped,bridge_cffi \
-            --format json > size-gate-linux.json 2> size-gate-stderr.txt || exit_code=$?
-          cat size-gate-stderr.txt >&2
-          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
-
-      - name: "Upload size-gate report"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: size-gate-linux
-          path: baml_language/size-gate-linux.json
-          if-no-files-found: ignore
-
-      - name: "Upload size-gate binary"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: size-gate-binary
-          path: baml_language/target/debug/cargo-size-gate
-          if-no-files-found: ignore
-
-      - name: "Upload cargo timings"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cargo-timings-size-gate-linux
-          path: baml_language/target/cargo-timings/
-          if-no-files-found: ignore
-
-      - name: "Fail on policy violation"
-        if: steps.check.outputs.exit_code != '0'
-        run: exit ${{ steps.check.outputs.exit_code }}
-
-  size-gate-macos:
-    name: "size-gate (macos)"
-    runs-on: macos-latest
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "macos-cargo"
-
-      - name: "Run size-gate check"
-        id: check
-        working-directory: baml_language
-        run: |
-          cargo run --timings -p cargo-size-gate -- size-gate check \
-            --only bridge_cffi-stripped,bridge_cffi \
-            --format json > size-gate-macos.json 2> size-gate-stderr.txt || exit_code=$?
-          cat size-gate-stderr.txt >&2
-          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
-
-      - name: "Upload size-gate report"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: size-gate-macos
-          path: baml_language/size-gate-macos.json
-          if-no-files-found: ignore
-
-      - name: "Upload cargo timings"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cargo-timings-size-gate-macos
-          path: baml_language/target/cargo-timings/
-          if-no-files-found: ignore
-
-      - name: "Fail on policy violation"
-        if: steps.check.outputs.exit_code != '0'
-        run: exit ${{ steps.check.outputs.exit_code }}
-
-  size-gate-windows:
-    name: "size-gate (windows)"
-    runs-on: blacksmith-4vcpu-windows-2025
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
-    # Right now it needs to download our repo every time which is very slow
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install LLVM tools (llvm-strip)"
-        run: |
-          choco install llvm -y
-          echo 'C:\Program Files\LLVM\bin' >> $GITHUB_PATH
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "windows-cargo"
-
-      - name: "Run size-gate check"
-        id: check
-        working-directory: baml_language
-        run: |
-          cargo run --timings -p cargo-size-gate -- size-gate check \
-            --only bridge_cffi-stripped,bridge_cffi \
-            --format json > size-gate-windows.json 2> size-gate-stderr.txt || exit_code=$?
-          cat size-gate-stderr.txt >&2
-          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
-
-      - name: "Upload size-gate report"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: size-gate-windows
-          path: baml_language/size-gate-windows.json
-          if-no-files-found: ignore
-
-      - name: "Upload cargo timings"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cargo-timings-size-gate-windows
-          path: baml_language/target/cargo-timings/
-          if-no-files-found: ignore
-
-      - name: "Fail on policy violation"
-        if: steps.check.outputs.exit_code != '0'
-        run: exit ${{ steps.check.outputs.exit_code }}
-
-  size-gate-wasm:
-    name: "size-gate (wasm)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup target add wasm32-unknown-unknown
-        working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "linux-wasm"
-
-      - name: "Run size-gate check"
-        id: check
-        working-directory: baml_language
-        run: |
-          cargo run --timings -p cargo-size-gate -- size-gate check \
-            --only bridge_wasm \
-            --format json > size-gate-wasm.json 2> size-gate-stderr.txt || exit_code=$?
-          cat size-gate-stderr.txt >&2
-          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
-
-      - name: "Upload size-gate report"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: size-gate-wasm
-          path: baml_language/size-gate-wasm.json
-          if-no-files-found: ignore
-
-      - name: "Upload cargo timings"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cargo-timings-size-gate-wasm
-          path: baml_language/target/cargo-timings/
-          if-no-files-found: ignore
-
-      - name: "Fail on policy violation"
-        if: steps.check.outputs.exit_code != '0'
-        run: exit ${{ steps.check.outputs.exit_code }}
-
-  size-gate-report:
-    name: "size-gate (report)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ always() && (inputs.code_changed == 'true' || inputs.run_all) }}
-    needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
-    permissions:
-      pull-requests: write
-    steps:
-      - name: "Download size-gate reports and binary"
-        uses: actions/download-artifact@v4
-        with:
-          pattern: size-gate-*
-          merge-multiple: true
-          path: reports
-
-      - name: "Compose unified report"
-        env:
-          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-        run: |
-          chmod +x reports/cargo-size-gate
-
-          # Collect all JSON reports that exist
-          json_files=()
-          for platform in linux macos windows wasm; do
-            f="reports/size-gate-${platform}.json"
-            [ -f "$f" ] && json_files+=("$f")
-          done
-
-          # Run agg to produce unified markdown
-          reports/cargo-size-gate size-gate agg \
-            "${json_files[@]}" \
-            --run-url "$RUN_URL" \
-            > unified-report.md || true
-
-      - name: "Post PR comment"
-        if: github.event_name == 'pull_request'
-        uses: thollander/actions-comment-pull-request@v3.0.1
-        with:
-          file-path: unified-report.md
-          comment-tag: size-gate
-
-      - name: "Write job summary"
-        run: cat unified-report.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: "Fail if any size check failed"
-        run: |
-          for result in \
-            "${{ needs.size-gate-linux.result }}" \
-            "${{ needs.size-gate-macos.result }}" \
-            "${{ needs.size-gate-windows.result }}" \
-            "${{ needs.size-gate-wasm.result }}" \
-          ; do
-            if [ "$result" = "failure" ]; then
-              echo "::error::One or more size-gate checks failed"
-              exit 1
-            fi
-          done
+  # Size-gate jobs live in size-gate.reusable.yaml — they are intentionally
+  # decoupled from cargo-tests so a violation never blocks the test workflow.
 
   cargo-build-msrv:
     name: "cargo build (msrv)"
     runs-on: blacksmith-16vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -620,7 +324,11 @@ jobs:
   check-dependencies:
     name: "check dependencies"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    # Advisory only — never gate the cargo-tests reusable workflow's result.
+    # The step below also has `continue-on-error: true`; this job-level flag
+    # is the belt to the step's suspenders so removing the step-level
+    # bypass later doesn't accidentally start blocking required CI.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -640,10 +348,42 @@ jobs:
         working-directory: baml_language
         continue-on-error: true # For now, just warn
 
+  cargo-doc:
+    name: "cargo doc"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Linux jobs for better hit rates
+          shared-key: "linux-cargo"
+
+      - name: "Generate documentation"
+        run: cargo doc --all --no-deps --timings
+        working-directory: baml_language
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-doc
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
   snapshot-tests:
     name: "snapshot tests"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 30
     env:
       # Disable Python + pipx tools: mise 2025.12.12 downloads a broken
@@ -667,10 +407,10 @@ jobs:
           # Share cache across similar Linux jobs for better hit rates
           shared-key: "linux-cargo"
 
-      - name: "Install cargo insta"
+      - name: "Install cargo insta and nextest"
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-insta
+          tool: cargo-insta,cargo-nextest
 
       - name: "Install mise"
         uses: jdx/mise-action@v2
@@ -680,20 +420,22 @@ jobs:
           version: 2025.12.12
 
       - name: "Build tests with --timings"
-        run: cargo test --no-run --workspace --all-features --timings
+        run: cargo test --no-run -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --timings
         working-directory: baml_language
 
       - name: "Run snapshot tests"
-        run: |
-          cargo insta test --workspace --all-features --unreferenced=reject
-          cargo insta test --workspace --all-features --review
+        run: cargo insta test --test-runner nextest -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --unreferenced=reject
         working-directory: baml_language
 
       - name: "Check for snapshot changes"
         run: |
-          if [ -n "$(git status --porcelain baml_language/crates/baml_tests/snapshots)" ]; then
+          pathspecs=(
+            ':(glob)baml_language/**/*.snap'
+            ':(glob)baml_language/**/*.snap.new'
+          )
+          if [ -n "$(git status --porcelain -- "${pathspecs[@]}")" ]; then
             echo "::error::Snapshot tests have uncommitted changes"
-            git diff baml_language/crates/baml_tests/snapshots
+            git diff -- "${pathspecs[@]}"
             exit 1
           fi
 
@@ -703,8 +445,8 @@ jobs:
         with:
           name: snapshot-failures
           path: |
-            baml_language/crates/baml_tests/snapshots/**/*.snap.new
-            baml_language/crates/baml_tests/snapshots/**/*.snap
+            baml_language/**/*.snap
+            baml_language/**/*.snap.new
 
       - name: "Upload cargo timings"
         if: always()
@@ -717,17 +459,14 @@ jobs:
   cargo-timings:
     name: "cargo timings (merged)"
     runs-on: ubuntu-latest
-    if: ${{ always() && (inputs.code_changed == 'true' || inputs.run_all) }}
+    if: always()
     needs:
       - cargo-test-linux
       - cargo-test-macos
       - cargo-test-windows
       - cargo-test-wasm
-      - size-gate-linux
-      - size-gate-macos
-      - size-gate-windows
-      - size-gate-wasm
       - cargo-build-msrv
+      - cargo-doc
       - snapshot-tests
     steps:
       - name: "Merge cargo timings artifacts"

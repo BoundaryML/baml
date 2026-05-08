@@ -1,0 +1,354 @@
+name: Size Gate (Reusable)
+
+on:
+  workflow_call: {}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+
+# Individual size-gate jobs are intentionally never allowed to fail.
+# Each platform job has `continue-on-error: true` so a violation, runner
+# death, or build hiccup does not fail the calling workflow. The
+# size-gate-report job aggregates all available reports and is the one
+# place where a real failure (policy violation or a missing platform
+# report) can block CI.
+
+jobs:
+  size-gate-linux:
+    name: "size-gate (linux)"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "linux-cargo"
+
+      - name: "Run size-gate check"
+        id: check
+        working-directory: baml_language
+        run: |
+          cargo run --timings -p cargo-size-gate -- size-gate check \
+            --only bridge_cffi-stripped,bridge_cffi \
+            --format json > size-gate-linux.json 2> size-gate-stderr.txt || exit_code=$?
+          cat size-gate-stderr.txt >&2
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: "Upload size-gate report"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-gate-linux
+          path: baml_language/size-gate-linux.json
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-size-gate-linux
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
+  size-gate-macos:
+    name: "size-gate (macos)"
+    runs-on: macos-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "macos-cargo"
+
+      - name: "Run size-gate check"
+        id: check
+        working-directory: baml_language
+        run: |
+          cargo run --timings -p cargo-size-gate -- size-gate check \
+            --only bridge_cffi-stripped,bridge_cffi \
+            --format json > size-gate-macos.json 2> size-gate-stderr.txt || exit_code=$?
+          cat size-gate-stderr.txt >&2
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: "Upload size-gate report"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-gate-macos
+          path: baml_language/size-gate-macos.json
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-size-gate-macos
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
+  size-gate-windows:
+    name: "size-gate (windows)"
+    runs-on: blacksmith-4vcpu-windows-2025
+    # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
+    # Right now it needs to download our repo every time which is very slow
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: "Install LLVM tools (llvm-strip)"
+        run: |
+          choco install llvm -y
+          echo 'C:\Program Files\LLVM\bin' >> $GITHUB_PATH
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "windows-cargo"
+
+      - name: "Run size-gate check"
+        id: check
+        working-directory: baml_language
+        run: |
+          cargo run --timings -p cargo-size-gate -- size-gate check \
+            --only bridge_cffi-stripped,bridge_cffi \
+            --format json > size-gate-windows.json 2> size-gate-stderr.txt || exit_code=$?
+          cat size-gate-stderr.txt >&2
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: "Upload size-gate report"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-gate-windows
+          path: baml_language/size-gate-windows.json
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-size-gate-windows
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
+  size-gate-wasm:
+    name: "size-gate (wasm)"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "linux-wasm"
+
+      - name: "Run size-gate check"
+        id: check
+        working-directory: baml_language
+        run: |
+          cargo run --timings -p cargo-size-gate -- size-gate check \
+            --only bridge_wasm \
+            --format json > size-gate-wasm.json 2> size-gate-stderr.txt || exit_code=$?
+          cat size-gate-stderr.txt >&2
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: "Upload size-gate report"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-gate-wasm
+          path: baml_language/size-gate-wasm.json
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-size-gate-wasm
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
+  size-gate-report:
+    name: "size-gate (report)"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    if: always()
+    needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: "Download size-gate reports"
+        uses: actions/download-artifact@v4
+        with:
+          pattern: size-gate-*
+          merge-multiple: true
+          path: reports
+
+      # Build cargo-size-gate from source. We share the linux size-gate
+      # job's rust-cache (same shared-key, same runner OS), so this is a
+      # near-instant cache hit in the common case — no upload/download of
+      # the binary required.
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "linux-cargo"
+          # The linux size-gate job already populated this cache; we just
+          # consume it here.
+          save-if: false
+
+      - name: "Build cargo-size-gate"
+        run: cargo build -p cargo-size-gate
+        working-directory: baml_language
+
+      - name: "Compose unified report"
+        env:
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BIN: baml_language/target/debug/cargo-size-gate
+          RESULT_LINUX: ${{ needs.size-gate-linux.result }}
+          RESULT_MACOS: ${{ needs.size-gate-macos.result }}
+          RESULT_WINDOWS: ${{ needs.size-gate-windows.result }}
+          RESULT_WASM: ${{ needs.size-gate-wasm.result }}
+        run: |
+          # Track which expected platforms produced a JSON report.
+          missing=()
+          json_files=()
+
+          declare -A platform_results=(
+            [linux]="$RESULT_LINUX"
+            [macos]="$RESULT_MACOS"
+            [windows]="$RESULT_WINDOWS"
+            [wasm]="$RESULT_WASM"
+          )
+
+          for platform in linux macos windows wasm; do
+            f="reports/size-gate-${platform}.json"
+            if [ -f "$f" ]; then
+              json_files+=("$f")
+            else
+              missing+=("$platform (job result: ${platform_results[$platform]:-unknown})")
+            fi
+          done
+
+          # Aggregate the JSONs we did receive.
+          "$BIN" size-gate agg \
+            "${json_files[@]}" \
+            --run-url "$RUN_URL" \
+            > unified-report.md || true
+
+          # Prepend a "Missing platforms" callout if any expected platform
+          # didn't produce a report. This fires whether the platform's job
+          # was cancelled, errored before writing JSON, or never ran.
+          if [ "${#missing[@]}" -gt 0 ]; then
+            {
+              echo "> ⚠️ **Missing size-gate report(s):**"
+              for entry in "${missing[@]}"; do
+                echo "> - \`${entry}\`"
+              done
+              echo ">"
+              echo "> The unified report below only reflects platforms that produced output."
+              echo ""
+              cat unified-report.md
+            } > unified-report.with-missing.md
+            mv unified-report.with-missing.md unified-report.md
+          fi
+
+          # Persist for the failure step to consult. Gate the write on
+          # the array length: `printf '%s\n' "${missing[@]}"` with zero
+          # arguments still emits one trailing newline, which would make
+          # the file non-empty (1 byte) and trip the `[ -s ... ]` check
+          # in the failure step even when nothing is missing.
+          : > missing-platforms.txt
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '%s\n' "${missing[@]}" > missing-platforms.txt
+          fi
+
+      - name: "Post PR comment"
+        if: github.event_name == 'pull_request'
+        uses: thollander/actions-comment-pull-request@v3.0.1
+        with:
+          file-path: unified-report.md
+          comment-tag: size-gate
+
+      - name: "Write job summary"
+        run: cat unified-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Fail if any platform is missing or any check failed"
+        env:
+          RESULT_LINUX: ${{ needs.size-gate-linux.result }}
+          RESULT_MACOS: ${{ needs.size-gate-macos.result }}
+          RESULT_WINDOWS: ${{ needs.size-gate-windows.result }}
+          RESULT_WASM: ${{ needs.size-gate-wasm.result }}
+        run: |
+          fail=0
+
+          if [ -s missing-platforms.txt ]; then
+            echo "::error::Missing size-gate report(s):"
+            while IFS= read -r entry; do
+              [ -n "$entry" ] && echo "::error::  - ${entry}"
+            done < missing-platforms.txt
+            fail=1
+          fi
+
+          # Each platform's job is `continue-on-error: true`, so a job-level
+          # 'failure' here means the job died before producing a report
+          # (covered above) OR the job succeeded but uploaded a JSON marked
+          # as a violation. Re-check the JSONs for the latter.
+          for platform in linux macos windows wasm; do
+            f="reports/size-gate-${platform}.json"
+            if [ -f "$f" ] && jq -e '.ok == false' "$f" > /dev/null 2>&1; then
+              echo "::error::size-gate (${platform}) reported a policy violation"
+              fail=1
+            fi
+          done
+
+          exit "$fail"
