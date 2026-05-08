@@ -42,7 +42,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="playground-root h-screen w-screen overflow-hidden">
+    <div className="playground-root flex h-screen min-h-0 w-screen flex-col overflow-hidden">
       <ExecutionPanel
         port={port}
         onNavigateToSource={(source: SourceNavigationTarget) => {
