@@ -298,7 +298,7 @@ fn resolve_mise_uv() -> io::Result<PathBuf> {
         return Err(io::Error::new(
             ErrorKind::NotFound,
             format!(
-                "`uv` is not on PATH and `mise which uv` failed:\n{}",
+                "`uv` is not on PATH and `mise which uv` failed:\n{}.",
                 String::from_utf8_lossy(&output.stderr)
             ),
         ));
