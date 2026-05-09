@@ -7624,6 +7624,498 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
     // Salsa-cached query if profiling shows it matters.
 }
 
+// ── New pattern lowering walk ────────────────────────────────────────────────
+//
+// `analyze_and_lower` is the per-pattern recursion that produces a
+// `PatternResult` (DPat for the matrix + matched_ty + required_ty +
+// bindings). Replaces the `analyze_pattern_*` family — the old code stays
+// for now and gets deleted in a follow-up commit once call sites are
+// switched.
+
+#[allow(dead_code)]
+impl TypeInferenceBuilder<'_> {
+    /// Recursively lower a source pattern to a [`PatternResult`].
+    ///
+    /// Bidirectional inference: `scrut_ty` flows DOWN; `required_ty` flows
+    /// UP for the surrounding context to validate or refine its scrutinee
+    /// expectation; `matched_ty` is the narrowed type for the pattern's
+    /// arm body (downward flow into the body's expression inference).
+    pub(crate) fn analyze_and_lower(
+        &mut self,
+        pat_id: PatId,
+        scrut_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> crate::pattern_lowering::PatternResult {
+        match &body.patterns[pat_id].clone() {
+            ast::Pattern::Wildcard => Self::lower_wildcard_pat(scrut_ty),
+            ast::Pattern::Bind { name } => Self::lower_bind_pat(pat_id, name.clone(), scrut_ty),
+            ast::Pattern::Type(t) => self.lower_type_pat(t, scrut_ty, at_expr),
+            ast::Pattern::Class {
+                class,
+                generic_args,
+                fields,
+            } => self.lower_class_pat(class, generic_args, fields, scrut_ty, body, at_expr),
+            ast::Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+            } => self.lower_array_pat(prefix, rest.as_ref(), suffix, scrut_ty, body, at_expr),
+            ast::Pattern::Or(parts) => self.lower_or_pat(parts, scrut_ty, body, at_expr),
+            ast::Pattern::Chain(parts) => self.lower_chain_pat(parts, scrut_ty, body, at_expr),
+        }
+    }
+
+    fn lower_wildcard_pat(scrut_ty: &Ty) -> crate::pattern_lowering::PatternResult {
+        crate::pattern_lowering::PatternResult {
+            dpat: crate::exhaustiveness::DPat::wildcard(scrut_ty.clone()),
+            required_ty: None,
+            matched_ty: scrut_ty.clone(),
+            bindings: Vec::new(),
+        }
+    }
+
+    fn lower_bind_pat(
+        pat_id: PatId,
+        name: Name,
+        scrut_ty: &Ty,
+    ) -> crate::pattern_lowering::PatternResult {
+        crate::pattern_lowering::PatternResult {
+            dpat: crate::exhaustiveness::DPat::wildcard(scrut_ty.clone()),
+            required_ty: None,
+            matched_ty: scrut_ty.clone(),
+            bindings: vec![crate::pattern_lowering::PatternBinding {
+                name,
+                pat_id,
+                ty: scrut_ty.clone(),
+            }],
+        }
+    }
+
+    fn lower_type_pat(
+        &mut self,
+        ty_expr: &TypeExpr,
+        scrut_ty: &Ty,
+        at_expr: ExprId,
+    ) -> crate::pattern_lowering::PatternResult {
+        let resolved = self.resolve_type_expr(ty_expr, at_expr);
+        let dpat = self.dpat_for_type(&resolved, scrut_ty);
+        let matched = self.intersect_pattern_flow_types(scrut_ty, &resolved);
+        crate::pattern_lowering::PatternResult {
+            dpat,
+            required_ty: Some(resolved),
+            matched_ty: matched,
+            bindings: Vec::new(),
+        }
+    }
+
+    /// Build a `DPat` that matches every value of `t`. Used by `Type(t)`
+    /// patterns. Three regimes:
+    ///
+    /// - Singleton types (`Literal`, `EnumVariant`, `null`) →
+    ///   `DPat::single(t, scrut_ty)`.
+    /// - Finite-alphabet types (`bool`, `Enum`, finite literal unions,
+    ///   `Optional<T>`, unions of finites) → `DPat::or` of the
+    ///   singletons; the algorithm explodes Or rows during specialization.
+    /// - Class types → `DPat::class(qtn, [Wildcard for each field])`.
+    /// - Opaque alphabets (raw int/string/float, generics, lists, maps,
+    ///   functions) → `DPat::wildcard`. **Limitation:** when the
+    ///   scrutinee is broader than `t` (e.g. `Type(int)` against
+    ///   `int | null`), the wildcard incorrectly covers values outside
+    ///   `t`. The matrix would mark a subsequent `null` arm unreachable.
+    ///   Surfaces only for opaque-typed unions; a future refinement is to
+    ///   add a "type tag" ctor.
+    fn dpat_for_type(&self, t: &Ty, scrut_ty: &Ty) -> crate::exhaustiveness::DPat {
+        use crate::exhaustiveness::DPat;
+        let expanded = self.expand_alias_chains(t.clone());
+        match &expanded {
+            // Singletons.
+            Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => {
+                DPat::single(expanded.clone(), scrut_ty.clone())
+            }
+            Ty::Primitive(PrimitiveType::Null, _) => {
+                DPat::single(expanded.clone(), scrut_ty.clone())
+            }
+            // Finite enumerations: build an Or of singletons.
+            Ty::Primitive(PrimitiveType::Bool, _) => Self::or_of_singletons(
+                vec![
+                    Ty::Literal(
+                        baml_base::Literal::Bool(true),
+                        Freshness::Regular,
+                        TyAttr::default(),
+                    ),
+                    Ty::Literal(
+                        baml_base::Literal::Bool(false),
+                        Freshness::Regular,
+                        TyAttr::default(),
+                    ),
+                ],
+                scrut_ty,
+            ),
+            Ty::Enum(qtn, _) => {
+                let variants: Vec<Ty> = self
+                    .lookup_enum_variants(qtn)
+                    .into_iter()
+                    .map(|v| Ty::EnumVariant(qtn.clone(), v, TyAttr::default()))
+                    .collect();
+                Self::or_of_singletons(variants, scrut_ty)
+            }
+            Ty::Optional(inner, _) => {
+                let inner_dpat = self.dpat_for_type(inner, scrut_ty);
+                let null_dpat = DPat::single(
+                    Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                    scrut_ty.clone(),
+                );
+                Self::or_combine(vec![inner_dpat, null_dpat], scrut_ty)
+            }
+            Ty::Union(members, _) => {
+                let alts: Vec<DPat> = members
+                    .iter()
+                    .map(|m| self.dpat_for_type(m, scrut_ty))
+                    .collect();
+                Self::or_combine(alts, scrut_ty)
+            }
+            // Classes: structural ctor with all fields wildcarded.
+            Ty::Class(qtn, args, _) => {
+                let field_tys = self.class_field_types_ordered(qtn, args);
+                let fields = field_tys.into_iter().map(DPat::wildcard).collect();
+                DPat::class(qtn.clone(), fields, scrut_ty.clone())
+            }
+            // Opaque alphabets — best-effort: wildcard. Imprecise when
+            // the scrutinee is a union containing this type plus other
+            // members; documented above.
+            _ => DPat::wildcard(scrut_ty.clone()),
+        }
+    }
+
+    /// Build a `DPat::or(...)` of `Single(ty)` ctors over a list of
+    /// types. Single-element lists collapse to a plain `DPat::single`.
+    fn or_of_singletons(tys: Vec<Ty>, scrut_ty: &Ty) -> crate::exhaustiveness::DPat {
+        use crate::exhaustiveness::DPat;
+        match tys.len() {
+            0 => DPat::wildcard(scrut_ty.clone()),
+            1 => DPat::single(tys.into_iter().next().unwrap(), scrut_ty.clone()),
+            _ => {
+                let alts: Vec<DPat> = tys
+                    .into_iter()
+                    .map(|t| DPat::single(t, scrut_ty.clone()))
+                    .collect();
+                DPat::or(alts, scrut_ty.clone())
+            }
+        }
+    }
+
+    /// Combine a set of `DPats` into one. Single → as-is; multiple → Or;
+    /// empty → wildcard.
+    fn or_combine(
+        alts: Vec<crate::exhaustiveness::DPat>,
+        scrut_ty: &Ty,
+    ) -> crate::exhaustiveness::DPat {
+        use crate::exhaustiveness::DPat;
+        match alts.len() {
+            0 => DPat::wildcard(scrut_ty.clone()),
+            1 => alts.into_iter().next().unwrap(),
+            _ => DPat::or(alts, scrut_ty.clone()),
+        }
+    }
+
+    fn lower_class_pat(
+        &mut self,
+        class: &[Name],
+        generic_args: &[TypeExpr],
+        fields: &[ast::FieldPat],
+        scrut_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> crate::pattern_lowering::PatternResult {
+        use crate::{
+            exhaustiveness::DPat,
+            pattern_lowering::{PatternBinding, PatternResult},
+        };
+
+        let class_ty = self.resolve_class_pattern_type(class, generic_args, Some(at_expr));
+        if !matches!(class_ty, Ty::Class(..)) {
+            // Resolution failed; bail out with a wildcard so downstream
+            // can keep going. Diagnostics already emitted by resolver.
+            return PatternResult {
+                dpat: DPat::wildcard(scrut_ty.clone()),
+                required_ty: Some(class_ty.clone()),
+                matched_ty: class_ty,
+                bindings: Vec::new(),
+            };
+        }
+        if self.class_pattern_missing_generic_args(&class_ty, generic_args) {
+            return PatternResult {
+                dpat: DPat::wildcard(scrut_ty.clone()),
+                required_ty: Some(class_ty.clone()),
+                matched_ty: class_ty,
+                bindings: Vec::new(),
+            };
+        }
+
+        let (qtn, args) = match &class_ty {
+            Ty::Class(qtn, args, _) => (qtn.clone(), args.clone()),
+            _ => unreachable!("class_ty is Class by check above"),
+        };
+
+        // Build a name → source-FieldPat lookup so we can walk in
+        // declaration order.
+        let mut by_name: FxHashMap<Name, &ast::FieldPat> = FxHashMap::default();
+        for fp in fields {
+            by_name.insert(fp.field.clone(), fp);
+        }
+
+        // Walk the class definition's fields in declaration order.
+        let field_tys_ordered = self.class_field_types_ordered(&qtn, &args);
+        let field_names_ordered = self.class_field_names_ordered(&qtn);
+
+        let mut sub_dpats: Vec<DPat> = Vec::with_capacity(field_tys_ordered.len());
+        let mut bindings: Vec<PatternBinding> = Vec::new();
+        for (i, field_name) in field_names_ordered.iter().enumerate() {
+            let field_ty = field_tys_ordered.get(i).cloned().unwrap_or(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+            match by_name.get(field_name) {
+                Some(fp) => {
+                    let r = self.analyze_and_lower(fp.pat, &field_ty, body, at_expr);
+                    sub_dpats.push(r.dpat);
+                    bindings.extend(r.bindings);
+                }
+                None => {
+                    // Elided field: implicitly wildcard.
+                    sub_dpats.push(DPat::wildcard(field_ty));
+                }
+            }
+        }
+
+        PatternResult {
+            dpat: DPat::class(qtn, sub_dpats, scrut_ty.clone()),
+            required_ty: Some(class_ty.clone()),
+            matched_ty: class_ty,
+            bindings,
+        }
+    }
+
+    /// Class field NAMES in declaration order. Companion to
+    /// `class_field_types_ordered`.
+    fn class_field_names_ordered(&self, qtn: &crate::ty::QualifiedTypeName) -> Vec<Name> {
+        let Some(items) = self.resolve_class_pkg_items(qtn.package()) else {
+            return Vec::new();
+        };
+        let Some(Definition::Class(class_loc)) = items.lookup_type(qtn.namespace(), qtn.name())
+        else {
+            return Vec::new();
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+        let class_data = &item_tree[class_loc.id(db)];
+        class_data.fields.iter().map(|f| f.name.clone()).collect()
+    }
+
+    fn lower_array_pat(
+        &mut self,
+        prefix: &[PatId],
+        rest: Option<&ast::ArrayRestPat>,
+        suffix: &[PatId],
+        scrut_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> crate::pattern_lowering::PatternResult {
+        use crate::{
+            exhaustiveness::{DPat, SliceShape},
+            pattern_lowering::{PatternBinding, PatternResult},
+        };
+
+        // Determine element type from the scrutinee.
+        let elem_ty = match self.expand_alias_chains(scrut_ty.clone()) {
+            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => *elem,
+            _ => Ty::Unknown {
+                attr: TyAttr::default(),
+            },
+        };
+
+        let mut sub_dpats: Vec<DPat> = Vec::with_capacity(prefix.len() + suffix.len());
+        let mut bindings: Vec<PatternBinding> = Vec::new();
+        let mut element_required_tys: Vec<Ty> = Vec::new();
+
+        for &p in prefix {
+            let r = self.analyze_and_lower(p, &elem_ty, body, at_expr);
+            sub_dpats.push(r.dpat);
+            bindings.extend(r.bindings);
+            if let Some(req) = r.required_ty {
+                element_required_tys.push(req);
+            }
+        }
+        for &p in suffix {
+            let r = self.analyze_and_lower(p, &elem_ty, body, at_expr);
+            sub_dpats.push(r.dpat);
+            bindings.extend(r.bindings);
+            if let Some(req) = r.required_ty {
+                element_required_tys.push(req);
+            }
+        }
+        // Rest binding: contributes a binding (typed at List<elem_ty>) but
+        // doesn't consume a slot in the slice shape.
+        if let Some(rp) = rest
+            && let Some(rest_pat) = rp.pat
+        {
+            let rest_ty = Ty::List(Box::new(elem_ty.clone()), TyAttr::default());
+            let r = self.analyze_and_lower(rest_pat, &rest_ty, body, at_expr);
+            bindings.extend(r.bindings);
+        }
+
+        let shape = match rest {
+            Some(_) => SliceShape::Variable {
+                prefix: prefix.len(),
+                suffix: suffix.len(),
+            },
+            None => SliceShape::Fixed(prefix.len() + suffix.len()),
+        };
+
+        // Required type: List<join of element required tys>, or List<elem>
+        // if no element constrained the type.
+        let required = if element_required_tys.is_empty() {
+            None
+        } else {
+            let joined = Self::join_all(&element_required_tys);
+            Some(Ty::List(Box::new(joined), TyAttr::default()))
+        };
+
+        PatternResult {
+            dpat: DPat::slice(shape, sub_dpats, scrut_ty.clone()),
+            required_ty: required,
+            matched_ty: scrut_ty.clone(),
+            bindings,
+        }
+    }
+
+    fn lower_or_pat(
+        &mut self,
+        parts: &[PatId],
+        scrut_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> crate::pattern_lowering::PatternResult {
+        use crate::{
+            exhaustiveness::DPat,
+            pattern_lowering::{PatternBinding, PatternResult},
+        };
+
+        let mut alts: Vec<DPat> = Vec::with_capacity(parts.len());
+        let mut required_tys: Vec<Ty> = Vec::new();
+        let mut matched_tys: Vec<Ty> = Vec::new();
+        // Keep ALL per-branch bindings — each PatId is a distinct source
+        // location and downstream consumers (LSP/codegen) look up types
+        // per PatId via `pattern_types: FxHashMap<PatId, Ty>`. Scope
+        // registration collapses by name on its own (`locals` is a map).
+        let mut bindings: Vec<PatternBinding> = Vec::new();
+        // Group by name solely for the cross-branch type-equality check.
+        // HIR already ensures every branch binds the same set of names,
+        // so this map's job is purely "do the types match across branches?"
+        let mut bindings_by_name: FxHashMap<Name, Vec<(PatId, Ty)>> = FxHashMap::default();
+
+        for &p in parts {
+            let r = self.analyze_and_lower(p, scrut_ty, body, at_expr);
+            alts.push(r.dpat);
+            for b in r.bindings {
+                bindings_by_name
+                    .entry(b.name.clone())
+                    .or_default()
+                    .push((b.pat_id, b.ty.clone()));
+                bindings.push(b);
+            }
+            if let Some(req) = r.required_ty {
+                required_tys.push(req);
+            }
+            matched_tys.push(r.matched_ty);
+        }
+
+        // Emit `OrPatternBindingTypeMismatch` per offending branch if a
+        // bound name has different types across alternatives.
+        self.check_or_binding_type_compatibility(&bindings_by_name, at_expr);
+
+        let required = if required_tys.is_empty() {
+            None
+        } else {
+            Some(Self::join_all(&required_tys))
+        };
+        let matched = Self::join_all(&matched_tys);
+
+        let dpat = if alts.len() == 1 {
+            alts.into_iter().next().unwrap()
+        } else {
+            DPat::or(alts, scrut_ty.clone())
+        };
+
+        PatternResult {
+            dpat,
+            required_ty: required,
+            matched_ty: matched,
+            bindings,
+        }
+    }
+
+    fn lower_chain_pat(
+        &mut self,
+        parts: &[PatId],
+        scrut_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> crate::pattern_lowering::PatternResult {
+        use crate::{
+            exhaustiveness::DPat,
+            pattern_lowering::{PatternBinding, PatternResult},
+        };
+
+        // Thread `current_ty` left-to-right through chain parts. Bindings
+        // accumulated along the way get retyped to the final widened type.
+        // Type-ascription parts narrow `current_ty`. Only one structural
+        // (Class/Array) part is meaningful per chain — the rightmost one
+        // wins as the chain's DPat.
+        let mut current_ty = scrut_ty.clone();
+        let mut chain_bindings: Vec<PatternBinding> = Vec::new();
+        let mut structural_dpat: Option<DPat> = None;
+        let mut last_required: Option<Ty> = None;
+
+        for &part in parts {
+            let r = self.analyze_and_lower(part, &current_ty, body, at_expr);
+            // Update `current_ty` to the part's matched_ty, so subsequent
+            // parts narrow against the latest view of the value's type.
+            current_ty = r.matched_ty.clone();
+            chain_bindings.extend(r.bindings);
+            // Track the most recent required_ty (rightmost = widest).
+            if r.required_ty.is_some() {
+                last_required.clone_from(&r.required_ty);
+            }
+            // Structural patterns dominate the chain's DPat.
+            if matches!(
+                &body.patterns[part],
+                ast::Pattern::Class { .. } | ast::Pattern::Array { .. }
+            ) {
+                structural_dpat = Some(r.dpat);
+            } else if structural_dpat.is_none() {
+                // For non-structural parts, accumulate the most-recent
+                // DPat as a fallback (the leftmost narrowing's DPat).
+                structural_dpat = Some(r.dpat);
+            }
+        }
+
+        // Retype every accumulated binding to the final widened type.
+        for b in &mut chain_bindings {
+            b.ty = current_ty.clone();
+        }
+
+        let dpat = structural_dpat.unwrap_or_else(|| DPat::wildcard(scrut_ty.clone()));
+
+        PatternResult {
+            dpat,
+            required_ty: last_required,
+            matched_ty: current_ty,
+            bindings: chain_bindings,
+        }
+    }
+}
+
 /// Map a bare type sugar name to a `Ty` for primitive and media types.
 ///
 /// Returns `Some(Ty)` for names like `int`, `string`, `image`, etc.
