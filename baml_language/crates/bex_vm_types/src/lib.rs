@@ -21,7 +21,9 @@ pub use bytecode::{
     VizNodeMeta, VizNodeType,
 };
 pub use heap_ptr::HeapPtr;
-pub use indexable::{GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex, VmGlobals};
+pub use indexable::{
+    GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
+};
 pub use roots::{RootHaver, WriteBarrier};
 pub use types::{
     Class, ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum,

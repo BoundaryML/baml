@@ -367,7 +367,7 @@ impl BexEngine {
                         ),
                     });
                 }
-                self.globals[global_index]
+                self.globals.as_slice()[global_index]
             }
         })
     }

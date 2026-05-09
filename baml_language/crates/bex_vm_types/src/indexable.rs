@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 //! The VM has 3 different "indexable" pools.
 //!
 //! One of them is the object pool, the other one is the globals pool, and
@@ -11,9 +12,9 @@
 //! This module provides a vector wrapper that needs specific types to index
 //! into it, thus solving the problem mentioned above at compile time.
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{cell::UnsafeCell, collections::HashMap, marker::PhantomData, sync::Arc};
 
-use crate::{Object, Value};
+use crate::{HeapPtr, Object, RootHaver, Value};
 
 // Marker types for different pool kinds
 
@@ -242,6 +243,150 @@ impl<'a, T, K> std::iter::IntoIterator for &'a mut Pool<T, K> {
 pub type GlobalPool = Pool<Value, GlobalKind>;
 pub type ObjectPool = Pool<Object, ObjectKind>;
 
+/// The frozen globals pool shared by every post-`$init` VM.
+///
+/// Wraps an `Arc<UnsafeCell<Box<[Value]>>>` so every VM holds a cheap
+/// refcounted view, and so the GC can rewrite `Value::Object(HeapPtr)`
+/// entries in place after an object move (via `RootHaver::forward_roots`)
+/// without re-broadcasting a new `Arc` to every VM.
+///
+/// # Why this exists
+///
+/// Pre-fix, the engine stored `globals: Arc<[Value]>`. The frozen `Arc<[Value]>`
+/// was *not* registered with [`HeapPermitManager`](crate)
+/// (it isn't a `RootHaver`), so any `Value::Object(HeapPtr)` populated during
+/// `$init` (e.g. a top-level `let` bound to a heap-allocated literal) was
+/// invisible to GC — the object could be reclaimed and the stale pointer left
+/// in the globals pool. `SharedGlobals` fixes this: the engine wraps the
+/// frozen pool, registers a clone with the permit manager, and the GC
+/// traces / forwards the entries.
+///
+/// # Concurrency
+///
+/// - Reads ([`Self::get`], [`Self::as_slice`]) require the caller to hold an
+///   active heap permit. While any permit is active, GC cannot park, so
+///   `forward_roots` cannot be running.
+/// - [`RootHaver::collect_roots`] / [`RootHaver::forward_roots`] are only
+///   called by the GC while every permit is parked — so the `&mut` view they
+///   take through the [`UnsafeCell`] cannot alias any reader.
+pub struct SharedGlobals {
+    inner: Arc<SharedGlobalsInner>,
+}
+
+struct SharedGlobalsInner {
+    /// Heap-allocated `Box<[Value]>` whose contents are read concurrently
+    /// by VMs (under their permits) and rewritten by GC `forward_roots`
+    /// (with all permits parked). `UnsafeCell` is the right primitive
+    /// because the `Send`/`Sync` invariant is enforced by the permit
+    /// manager, not by the type system.
+    values: UnsafeCell<Box<[Value]>>,
+}
+
+// SAFETY: concurrent access to `values` is gated externally by the
+// `HeapPermitManager` semaphore + holders mutex. See module docs.
+unsafe impl Send for SharedGlobalsInner {}
+unsafe impl Sync for SharedGlobalsInner {}
+
+impl Clone for SharedGlobals {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+impl std::fmt::Debug for SharedGlobals {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // SAFETY: same as `Self::as_slice` — read-only access via UnsafeCell;
+        // the caller of `Debug::fmt` is expected to be holding a permit (or
+        // running outside the GC). In practice this is only used for
+        // diagnostics.
+        let slice = unsafe { &*self.inner.values.get() };
+        f.debug_struct("SharedGlobals")
+            .field("len", &slice.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl SharedGlobals {
+    /// Build a `SharedGlobals` from the freshly-frozen globals vector
+    /// produced by `$init`.
+    pub fn from_vec(values: Vec<Value>) -> Self {
+        Self {
+            inner: Arc::new(SharedGlobalsInner {
+                values: UnsafeCell::new(values.into_boxed_slice()),
+            }),
+        }
+    }
+
+    /// Number of globals in the pool.
+    pub fn len(&self) -> usize {
+        // SAFETY: reads the boxed slice's length through the UnsafeCell.
+        // Length is set at construction and never changes, so this is
+        // synchronized regardless of GC state. Explicit `&*` produces a
+        // `&Box<[Value]>` so `.len()` doesn't autoref a raw pointer.
+        unsafe { (&*self.inner.values.get()).len() }
+    }
+
+    /// Whether the pool is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Read a global by index.
+    ///
+    /// Caller must hold an active heap permit. `Value` is `Copy`, so the
+    /// returned value is decoupled from any aliasing of the underlying
+    /// `UnsafeCell`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds — same contract as slice indexing.
+    pub fn get(&self, index: GlobalIndex) -> Value {
+        // SAFETY: caller holds an active heap permit, so GC's `forward_roots`
+        // is excluded for the duration of this read. Explicit `&*` produces
+        // a `&[Value]` (no autoref through the raw-pointer indexing path).
+        unsafe { (&*self.inner.values.get())[index.into_raw()] }
+    }
+
+    /// Borrow the underlying globals as a slice.
+    ///
+    /// Caller must hold an active heap permit (excludes any concurrent
+    /// `forward_roots` mutation). The borrow must not outlive the
+    /// permit's active lifetime.
+    pub fn as_slice(&self) -> &[Value] {
+        // SAFETY: caller holds an active heap permit.
+        unsafe { &*self.inner.values.get() }
+    }
+}
+
+impl RootHaver for SharedGlobals {
+    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        // SAFETY: GC parks every active permit before calling this, so no
+        // reader is observing the slice concurrently.
+        let slice = unsafe { &*self.inner.values.get() };
+        for value in slice {
+            if let Value::Object(ptr) = value {
+                roots.push(*ptr);
+            }
+        }
+    }
+
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        // SAFETY: GC parks every active permit before calling this; `&mut self`
+        // additionally proves there is no concurrent reader of the
+        // `SharedGlobals` permit-cell value on this thread.
+        let slice = unsafe { &mut *self.inner.values.get() };
+        for value in slice.iter_mut() {
+            if let Value::Object(ptr) = value
+                && let Some(&new) = roots.get(ptr)
+            {
+                *ptr = new;
+            }
+        }
+    }
+}
+
 /// The view of globals available to a [`crate::Object`]-aware VM.
 ///
 /// **Invariant**: only `$init` functions emit [`crate::Instruction::StoreGlobal`].
@@ -253,14 +398,17 @@ pub type ObjectPool = Pool<Object, ObjectKind>;
 ///
 /// # Variants
 /// - [`VmGlobals::Owned`]: a mutable [`GlobalPool`] used during `$init` execution.
-/// - [`VmGlobals::Shared`]: a frozen `Arc<[Value]>` shared by every post-`$init` VM.
-///   Cloning is a refcount bump; reads are direct slice indexing.
+/// - [`VmGlobals::Shared`]: a frozen [`SharedGlobals`] shared by every
+///   post-`$init` VM. The underlying `Arc` clone is a refcount bump; reads
+///   require an active heap permit (which excludes the GC's `forward_roots`
+///   mutation pass).
 #[derive(Clone, Debug)]
 pub enum VmGlobals {
     /// Mutable globals pool, used during `$init`.
     Owned(GlobalPool),
-    /// Frozen globals shared across all post-`$init` VMs.
-    Shared(Arc<[Value]>),
+    /// Frozen globals shared across all post-`$init` VMs and rooted by the
+    /// engine's [`SharedGlobals`] permit holder.
+    Shared(SharedGlobals),
 }
 
 impl VmGlobals {
@@ -268,7 +416,7 @@ impl VmGlobals {
     pub fn len(&self) -> usize {
         match self {
             Self::Owned(pool) => pool.len(),
-            Self::Shared(slice) => slice.len(),
+            Self::Shared(globals) => globals.len(),
         }
     }
 
@@ -284,7 +432,7 @@ impl VmGlobals {
     pub fn get(&self, index: GlobalIndex) -> Value {
         match self {
             Self::Owned(pool) => pool[index],
-            Self::Shared(slice) => slice[index.into_raw()],
+            Self::Shared(globals) => globals.get(index),
         }
     }
 
@@ -301,21 +449,15 @@ impl VmGlobals {
         }
     }
 
-    /// Freeze this view into a shared `Arc<[Value]>`. For [`VmGlobals::Owned`],
-    /// this consumes the underlying `Vec`; for [`VmGlobals::Shared`], it clones
-    /// the existing `Arc`.
-    pub fn freeze(self) -> Arc<[Value]> {
-        match self {
-            Self::Owned(pool) => Arc::from(pool.0),
-            Self::Shared(slice) => slice,
-        }
-    }
-
     /// View the globals as a slice. Both variants support O(1) slice access.
+    ///
+    /// For [`VmGlobals::Shared`] the caller must hold an active heap permit
+    /// (no concurrent `forward_roots` mutation). See
+    /// [`SharedGlobals::as_slice`].
     pub fn as_slice(&self) -> &[Value] {
         match self {
             Self::Owned(pool) => &pool.0,
-            Self::Shared(slice) => slice,
+            Self::Shared(globals) => globals.as_slice(),
         }
     }
 }
@@ -326,7 +468,11 @@ impl std::ops::Index<GlobalIndex> for VmGlobals {
     fn index(&self, index: GlobalIndex) -> &Self::Output {
         match self {
             Self::Owned(pool) => &pool[index],
-            Self::Shared(slice) => &slice[index.into_raw()],
+            // SAFETY of underlying read: caller holds an active heap permit
+            // for the lifetime of the returned reference (the same contract
+            // already governs every other use of `&Value` from the engine
+            // hot path).
+            Self::Shared(globals) => &globals.as_slice()[index.into_raw()],
         }
     }
 }
@@ -416,5 +562,96 @@ impl Index<ObjectKind> {
 
     pub fn epoch(self) -> u32 {
         0
+    }
+}
+
+#[cfg(test)]
+mod shared_globals_tests {
+    use super::*;
+    use crate::HeapPtr;
+
+    fn fake_ptr(addr: usize) -> HeapPtr {
+        // SAFETY: tests never deref the pointer; we only inspect it as a
+        // raw `HeapPtr` through `RootHaver::collect_roots` /
+        // `forward_roots`. The address need not be a valid heap slot.
+        #[cfg(feature = "heap_debug")]
+        unsafe {
+            HeapPtr::from_ptr(addr as *mut crate::Object, 0)
+        }
+        #[cfg(not(feature = "heap_debug"))]
+        unsafe {
+            HeapPtr::from_ptr(addr as *mut crate::Object)
+        }
+    }
+
+    #[test]
+    fn collect_roots_returns_only_object_values() {
+        let p1 = fake_ptr(0x1000);
+        let p2 = fake_ptr(0x2000);
+        let globals = SharedGlobals::from_vec(vec![
+            Value::Int(1),
+            Value::Object(p1),
+            Value::Float(3.14),
+            Value::Object(p2),
+            Value::Null,
+        ]);
+
+        let mut roots = Vec::new();
+        globals.collect_roots(&mut roots);
+
+        assert_eq!(roots.len(), 2);
+        assert!(roots.contains(&p1));
+        assert!(roots.contains(&p2));
+    }
+
+    #[test]
+    fn forward_roots_rewrites_in_place_through_unsafecell() {
+        let old1 = fake_ptr(0x1000);
+        let new1 = fake_ptr(0x9000);
+        let old2 = fake_ptr(0x2000);
+        let new2 = fake_ptr(0xA000);
+        // Pointer NOT in the forwarding map should pass through unchanged
+        // (it represents a compile-time pointer or one that wasn't moved).
+        let stable = fake_ptr(0x3000);
+
+        let mut globals = SharedGlobals::from_vec(vec![
+            Value::Object(old1),
+            Value::Int(42),
+            Value::Object(old2),
+            Value::Object(stable),
+        ]);
+
+        let mut forwarding = HashMap::new();
+        forwarding.insert(old1, new1);
+        forwarding.insert(old2, new2);
+        globals.forward_roots(&forwarding);
+
+        // Take a fresh `as_slice()` view; the in-place rewrite must be
+        // visible through the *same* `Arc<UnsafeCell<...>>` that any
+        // existing `SharedGlobals` clone observes.
+        let slice = globals.as_slice();
+        assert_eq!(slice[0], Value::Object(new1));
+        assert_eq!(slice[1], Value::Int(42));
+        assert_eq!(slice[2], Value::Object(new2));
+        assert_eq!(slice[3], Value::Object(stable));
+    }
+
+    #[test]
+    fn clone_shares_underlying_storage_with_engine() {
+        // The engine wires this up so that `SharedGlobals` registered with
+        // the heap permit manager and `SharedGlobals` cloned into VMs
+        // share the same `Arc<UnsafeCell<Box<[Value]>>>`. Verify the clone
+        // observes a `forward_roots` mutation made through another clone.
+        let old = fake_ptr(0x1000);
+        let new = fake_ptr(0x9000);
+        let original = SharedGlobals::from_vec(vec![Value::Object(old)]);
+        let mut held_by_holder = original.clone();
+
+        let mut forwarding = HashMap::new();
+        forwarding.insert(old, new);
+        held_by_holder.forward_roots(&forwarding);
+
+        // The engine-side clone (`original`) must see the rewrite.
+        assert_eq!(original.get(GlobalIndex::from_raw(0)), Value::Object(new));
     }
 }
