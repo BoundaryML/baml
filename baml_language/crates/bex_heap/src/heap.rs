@@ -23,7 +23,7 @@ use std::{
 
 use ::bex_vm_types::Value;
 use bex_external_types::{Handle, WeakHeapRef};
-use bex_vm_types::{HeapPtr, Object, ObjectIndex};
+use bex_vm_types::{HeapPtr, Object, ObjectIndex, WriteBarrier};
 
 use crate::{
     HeapDebuggerConfig, HeapDebuggerState, card_table::CardTable, chunked_vec::ChunkedVec,
@@ -219,6 +219,17 @@ pub struct BexHeap {
 // - growth_lock: Mutex is thread-safe
 unsafe impl Send for BexHeap {}
 unsafe impl Sync for BexHeap {}
+
+// Forward `bex_vm_types::WriteBarrier` to the inherent `BexHeap::write_barrier`
+// so heap-mutation sites in upstream crates (e.g. `Future::set_ready` in
+// `bex_vm_types`, which can't name `BexHeap` directly because of dep
+// direction) can fire the barrier through a small trait.
+impl WriteBarrier for BexHeap {
+    #[inline]
+    fn write_barrier(&self, container: HeapPtr, value: Value) {
+        BexHeap::write_barrier(self, container, value);
+    }
+}
 
 // Implement WeakHeapRef trait from bex_external_types
 impl WeakHeapRef for BexHeap {

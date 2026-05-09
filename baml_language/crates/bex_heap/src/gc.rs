@@ -1794,10 +1794,14 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let result = tlab.alloc_string("result".to_string());
-        let future = Future::pending(FutureId::from_usize(0));
-        // SAFETY: single-writer; this Future is local and not yet visible.
-        unsafe { future.set_ready(Value::Object(result)) };
-        let future_ptr = tlab.alloc(Object::Future(future));
+        // Allocate the Future in `Pending` state first so we have a real
+        // `HeapPtr` to pass to `set_ready` for its write-barrier hook.
+        let future_ptr = tlab.alloc(Object::Future(Future::pending(FutureId::from_usize(0))));
+        let Object::Future(future) = (unsafe { future_ptr.get() }) else {
+            panic!("expected Object::Future");
+        };
+        // SAFETY: single-writer; the heap object was just allocated locally.
+        unsafe { future.set_ready(heap.as_ref(), future_ptr, Value::Object(result)) };
 
         let roots = vec![future_ptr];
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&roots) };
@@ -1822,10 +1826,14 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let future = Future::pending(FutureId::from_usize(0));
-        // SAFETY: single-writer; this Future is local and not yet visible.
-        unsafe { future.set_ready(Value::Int(99)) };
-        let future_ptr = tlab.alloc(Object::Future(future));
+        // Allocate the Future in `Pending` state first so we have a real
+        // `HeapPtr` to pass to `set_ready`.
+        let future_ptr = tlab.alloc(Object::Future(Future::pending(FutureId::from_usize(0))));
+        let Object::Future(future) = (unsafe { future_ptr.get() }) else {
+            panic!("expected Object::Future");
+        };
+        // SAFETY: single-writer; the heap object was just allocated locally.
+        unsafe { future.set_ready(heap.as_ref(), future_ptr, Value::Int(99)) };
         let roots = vec![future_ptr];
         let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
 
