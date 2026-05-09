@@ -2,4 +2,69 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-No errors found.
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ patterns_new.baml:120:48 ]
+     │
+ 120 │ ╭─▶ function literal_widens_to_int(v: int) -> int {
+     ┆ ┆   
+ 123 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_new.baml:276:45 ]
+     │
+ 276 │ ╭─▶ function let_literal_to_primitive() -> int {
+ 277 │ ├─▶     let x: 1: int = 1;
+     │ │                            
+     │ ╰──────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_new.baml:282:41 ]
+     │
+ 282 │ ╭─▶ function let_three_step_widen() -> int {
+ 283 │ ├─▶     let x: 1: int: int | string = 1;
+     │ │                                          
+     │ ╰────────────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_new.baml:288:40 ]
+     │
+ 288 │ ╭─▶ function let_four_step_widen() -> int {
+ 289 │ ├─▶     let x: 1: int: int | string: int | string | float = 1;
+     │ │                                                                
+     │ ╰──────────────────────────────────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_new.baml:300:48 ]
+     │
+ 300 │ ╭─▶ function let_string_literal_widening() -> int {
+ 301 │ ├─▶     let s: "hello": string: string | int = "hello";
+     │ │                                                         
+     │ ╰───────────────────────────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯
+
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[ patterns_new.baml:328:44 ]
+     │
+ 328 │ ╭─▶ function let_literal_to_nullable() -> int {
+ 329 │ ├─▶     let x: 0: int: int? = 0;
+     │ │                                  
+     │ ╰────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+     │     
+     │     Note: Error code: E0111
+─────╯

@@ -27,6 +27,7 @@ function user.namespaced_generic_class_type_pattern_rejects_extra_type_args(boxe
         0 : 0
   }
   !! 515..516: class `Box` expects 1 type argument(s), got 2
+  !! 531..532: unreachable arm
 }
 function user.namespaced_non_generic_class_type_pattern_rejects_type_args(response: user.llm.openai.Response) -> int throws never {
   { : 1
@@ -44,7 +45,7 @@ function user.namespaced_class_destructure_unknown_field(response: user.llm.open
       _ =>
         0 : 0
   }
-  !! 886..893: type `user.llm.openai.Response` has no member `missing`
+  !! 915..916: unreachable arm
 }
 class user.llm.openai.Box {
   value: T

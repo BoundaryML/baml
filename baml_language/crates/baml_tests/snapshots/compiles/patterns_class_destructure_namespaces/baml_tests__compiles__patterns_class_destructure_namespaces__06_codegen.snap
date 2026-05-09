@@ -57,16 +57,6 @@ function user.DestructureNamespaceQualifiedMatch() -> int {
 
   L0:
     load_var response
-    is_type llm.openai.Response
-    pop_jump_if_false L2
-    load_var response
-    load_field .score
-    is_type int
-    pop_jump_if_false L2
-    load_var response
-    is_type llm.openai.Response
-    pop_jump_if_false L2
-    load_var response
     load_field .score
     jump L2
 
@@ -105,16 +95,6 @@ function user.DestructureQualifiedMatch() -> int {
     jump L1
 
   L0:
-    load_var response
-    is_type llm.openai.Response
-    pop_jump_if_false L2
-    load_var response
-    load_field .score
-    is_type int
-    pop_jump_if_false L2
-    load_var response
-    is_type llm.openai.Response
-    pop_jump_if_false L2
     load_var response
     load_field .score
     jump L2
@@ -160,13 +140,6 @@ function user.GenericTypePatternNamespaceQualifiedMatch() -> int {
     jump L1
 
   L0:
-    load_var boxed
-    is_type llm.openai.Box<...>
-    pop_jump_if_false L2
-    load_var boxed
-    load_field .0
-    is_type string
-    pop_jump_if_false L2
     load_const 51
     jump L2
 
@@ -192,13 +165,6 @@ function user.GenericTypePatternQualifiedMatch() -> int {
     jump L1
 
   L0:
-    load_var boxed
-    is_type llm.openai.Box<...>
-    pop_jump_if_false L2
-    load_var boxed
-    load_field .0
-    is_type int
-    pop_jump_if_false L2
     load_const 50
     jump L2
 
@@ -225,14 +191,7 @@ function user.TypePatternNamespaceQualifiedMatch() -> int {
     init_field .text
     load_const 48
     init_field .score
-    store_var response
-    load_var response
-    is_type llm.openai.Response
-    pop_jump_if_false L0
-    load_var response
     load_field .score
-
-  L0:
     return
 }
 
@@ -252,14 +211,7 @@ function user.TypePatternQualifiedMatch() -> int {
     init_field .text
     load_const 44
     init_field .score
-    store_var response
-    load_var response
-    is_type llm.openai.Response
-    pop_jump_if_false L0
-    load_var response
     load_field .score
-
-  L0:
     return
 }
 

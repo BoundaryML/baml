@@ -117,17 +117,18 @@ lambda user.call_with_callback {
 lambda user.call_with_callback {
 }
 function user.literal_widens_to_int(v: int) -> int throws never {
-  { : int
-    match (v : int) : int
+  { : 1
+    match (v : int) : 1
       n: 1: int =>
-        n : int
+        n : 1
   }
+  !! 4068..4118: non-exhaustive match on `int`; missing: _
 }
 function user.int_widens_to_optional(v: int?) -> int? throws never {
-  { : int?
-    match (v : int?) : int?
+  { : int
+    match (v : int?) : int
       n: int: int? =>
-        n : int?
+        n : int
   }
 }
 function user.int_widens_to_union(v: int | string) -> int throws never {
@@ -266,64 +267,69 @@ function user.catch_widening_chain(mode: int) -> int throws never {
   }
 }
 function user.let_literal_to_primitive() -> int throws never {
-  { : int
-    let x: 1: int = 1 : 1 -> int
-    x : int
+  { : 1
+    let x: 1: int = 1 : 1
+    x : 1
   }
+  !! 8410..8428: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.let_three_step_widen() -> int throws never {
   { : 1
-    let x: 1: int: int | string = 1 : 1 -> int | string
+    let x: 1: int: int | string = 1 : 1
     1 : 1
   }
+  !! 8537..8569: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.let_four_step_widen() -> int throws never {
   { : 1
-    let x: 1: int: int | string: int | string | float = 1 : 1 -> int | string | float
+    let x: 1: int: int | string: int | string | float = 1 : 1
     1 : 1
   }
+  !! 8690..8744: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.let_widen_to_nullable_union() -> int throws never {
   { : 1
-    let x: int: int?: int | string | null = 1 : 1 -> int | string | null
+    let x: int: int?: int | string | null = 1 : 1 -> int
     1 : 1
   }
 }
 function user.let_string_literal_widening() -> int throws never {
   { : 1
-    let s: "hello": string: string | int = "hello" : "hello" -> string | int
+    let s: "hello": string: string | int = "hello" : "hello"
     1 : 1
   }
+  !! 9060..9101: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.let_fn_return_widen() -> int | string throws never {
-  { : int | string
-    let f: (int) -> int: (int) -> int | string = : (x: int) -> int throws never -> (int) -> int | string throws never
+  { : int
+    let f: (int) -> int: (int) -> int | string = : (x: int) -> int throws never -> (int) -> int throws never
       (x: int) -> int { ... } : (x: int) -> int throws never
         {
           x
         }
-    f(0) : int | string
+    f(0) : int
   }
 }
 lambda user.let_fn_return_widen {
 }
 function user.let_list_widen(items: int[]) -> int throws never {
   { : int
-    let xs: int[]: (int | string)[] = items : int[] -> (int | string)[]
+    let xs: int[]: (int | string)[] = items : int[]
     xs.length() : int
   }
 }
 function user.let_wildcard_chain() -> int throws never {
   { : 1
-    let _: int: int | string = 1 : 1 -> int | string
+    let _: int: int | string = 1 : 1 -> int
     1 : 1
   }
 }
 function user.let_literal_to_nullable() -> int throws never {
   { : 1
-    let x: 0: int: int? = 0 : 0 -> int?
+    let x: 0: int: int? = 0 : 0
     1 : 1
   }
+  !! 10028..10052: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.nested_paren_union_array_one(items: (int | string)[]) -> int throws never {
   { : int
@@ -349,7 +355,7 @@ function user.nested_paren_union_array_optional(v: (int | string)[]?) -> int thr
 }
 function user.let_nested_paren_union_chain(items: (int | string)[]) -> int throws never {
   { : 1
-    let xs: (int | string)[]: (int | string)[]? = items : (int | string)[] -> (int | string)[]?
+    let xs: (int | string)[]: (int | string)[]? = items : (int | string)[]
     1 : 1
   }
 }

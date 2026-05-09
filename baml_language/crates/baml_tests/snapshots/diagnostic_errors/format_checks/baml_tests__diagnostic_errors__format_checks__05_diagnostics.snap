@@ -520,24 +520,76 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0004
 ─────╯
 
-  [type] Error: unreachable arm
-     ╭─[ match_exprs.baml:313:14 ]
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ match_exprs.baml:388:6 ]
      │
- 313 │         _ => "nonzero"
-     │              ────┬────  
-     │                  ╰────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
+ 388 │ ╭─▶     }
+     ┆ ┆   
+ 395 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: operator `Add` cannot be applied to `int | string` and `1`
-     ╭─[ match_exprs.baml:377:48 ]
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ match_exprs.baml:420:6 ]
      │
- 377 │         int | string /* h link3 trailing */ => n + 1
-     │                                                ──┬──  
-     │                                                  ╰──── operator `Add` cannot be applied to `int | string` and `1`
-     │ 
-     │ Note: Error code: E0004
+ 420 │ ╭─▶     }
+     ┆ ┆   
+ 425 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ match_exprs.baml:425:6 ]
+     │
+ 425 │ ╭─▶     }
+     ┆ ┆   
+ 430 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ match_exprs.baml:430:6 ]
+     │
+ 430 │ ╭─▶     }
+     ┆ ┆   
+ 435 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ match_exprs.baml:435:6 ]
+     │
+ 435 │ ╭─▶     }
+     ┆ ┆   
+ 440 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ match_exprs.baml:450:6 ]
+     │
+ 450 │ ╭─▶     }
+     ┆ ┆   
+ 455 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
 ─────╯
 
   [type] Error: type mismatch: expected string, got 0

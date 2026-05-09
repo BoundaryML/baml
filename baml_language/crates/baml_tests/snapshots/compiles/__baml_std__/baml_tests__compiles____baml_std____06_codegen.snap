@@ -470,10 +470,6 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: baml.l
     jump L1
 
   L0:
-    load_var _3
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L4
     load_var self
     load_var planner_state
     call baml.llm.Client.build_attempt_with_state
@@ -905,10 +901,6 @@ function baml.llm.Client.execute_oneshot(self: null, context: baml.llm.Execution
     jump L1
 
   L0:
-    load_var _4
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L9
     load_type #0
     load_var self
     load_var context
@@ -1015,10 +1007,6 @@ function baml.llm.Client.execute_stream(self: null, context: baml.llm.ExecutionC
     jump L1
 
   L0:
-    load_var _4
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L9
     load_type #0
     load_type #1
     load_var self
@@ -1232,28 +1220,22 @@ function baml.llm.Stream.final(self: null) -> void {
     dispatch_future baml.llm.StreamAccumulator.is_done
     await
     unary_op !
-    pop_jump_if_false L3
+    pop_jump_if_false L2
     load_var self
     load_field ._sse
     dispatch_future baml.http.SseStream.next
     await
     store_var _7
     load_var _7
-    is_type null
+    load_const null
+    cmp_op ==
     pop_jump_if_false L1
-    jump L3
+    jump L2
 
   L1:
-    load_var _7
-    is_type string
-    pop_jump_if_false L2
-    load_var _7
-    store_var next
-
-  L2:
     load_var self
     load_field ._acc
-    load_var next
+    load_var _7
     dispatch_future baml.llm.StreamAccumulator.add_events
     await
     pop 1
@@ -1268,30 +1250,25 @@ function baml.llm.Stream.final(self: null) -> void {
     await
     pop 1
 
-  L3:
+  L2:
     load_var self
     load_field ._acc
     dispatch_future baml.llm.StreamAccumulator.finish_reason
     await
-    store_var _24
-    load_var _24
+    store_var _23
+    load_var _23
     load_const null
     cmp_op ==
-    pop_jump_if_false L4
-    jump L6
+    pop_jump_if_false L3
+    jump L4
 
-  L4:
-    load_var _24
-    is_type string
-    pop_jump_if_false L5
+  L3:
     load_var self
     load_field ._client
-    load_var _24
+    load_var _23
     dispatch_future baml.llm.PrimitiveClient.validate_finish_reason
     await
     pop 1
-
-  L5:
     load_var self
     load_field ._acc
     dispatch_future baml.llm.StreamAccumulator.content
@@ -1304,7 +1281,7 @@ function baml.llm.Stream.final(self: null) -> void {
     await
     return
 
-  L6:
+  L4:
     load_const null /* unknown class: root.errors.LlmClientError */
     load_const "Streaming finished without finish_reason"
     init_field .0
@@ -1320,7 +1297,7 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
   L1:
     load_const "Unreachable"
     call baml.sys.panic
-    jump L9
+    jump L8
 
   L2:
     load_var self
@@ -1329,21 +1306,15 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
     await
     store_var _3
     load_var _3
-    is_type null
+    load_const null
+    cmp_op ==
     pop_jump_if_false L3
-    jump L8
+    jump L7
 
   L3:
-    load_var _3
-    is_type string
-    pop_jump_if_false L4
-    load_var _3
-    store_var next
-
-  L4:
     load_var self
     load_field ._acc
-    load_var next
+    load_var _3
     dispatch_future baml.llm.StreamAccumulator.add_events
     await
     pop 1
@@ -1351,10 +1322,10 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
     load_field ._acc
     dispatch_future baml.llm.StreamAccumulator.is_done
     await
-    pop_jump_if_false L5
-    jump L7
+    pop_jump_if_false L4
+    jump L6
 
-  L5:
+  L4:
     load_var self
     load_field ._acc
     dispatch_future baml.llm.StreamAccumulator.content
@@ -1368,30 +1339,26 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
     store_var parsed
     load_var parsed
     is_type baml.stream.StreamNoYield
-    pop_jump_if_false L6
+    pop_jump_if_false L5
     jump L0
 
-  L6:
+  L5:
     load_var parsed
-    pop 1
-    load_const false
-    pop_jump_if_false L0
-    load_var parsed
-    jump L9
+    jump L8
 
-  L7:
+  L6:
     load_var self
     load_field ._sse
     dispatch_future baml.http.SseStream.close
     await
     pop 1
     alloc_instance baml.stream.StreamFinished
-    jump L9
+    jump L8
 
-  L8:
+  L7:
     alloc_instance baml.stream.StreamFinished
 
-  L9:
+  L8:
     return
 }
 

@@ -59,9 +59,10 @@ function user.test_list(function_name: string) -> string throws never {
 }
 function user.test_union(function_name: string) -> string throws never {
   { : never
-    let t: type | string = "hello" : "hello" -> type | string
+    let t: type | string = "hello" : "hello" -> string
     return "ok" : "ok"
   }
+  !! 763..788: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.test_map(function_name: string) -> string throws never {
   { : never

@@ -3013,7 +3013,7 @@ async fn panic_alias_catches_any_panic() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function divides() -> int {
         load_const 1
         load_const 0
@@ -3025,14 +3025,15 @@ async fn panic_alias_catches_any_panic() {
         call user.divides
         jump L2
         load_var e
-        type_tag
-        jump_table [L1, L1, L1, _, _, L1, _, _, _, L1, L1, _, L1, L1], default L0
+        is_type baml.panics.AllocFailure
+        pop_jump_if_false L0
+        jump L1
 
       L0:
         load_var e
         throw
 
-      L1: Unreachable
+      L1:
         load_const 1
         unary_op -
 
@@ -3066,8 +3067,9 @@ async fn panic_alias_plus_wildcard_dispatch() {
         call user.risky
         jump L2
         load_var e
-        type_tag
-        jump_table [L1, L1, L1, _, _, L1, _, _, _, L1, L1, _, L1, L1], default L0
+        is_type baml.panics.AllocFailure
+        pop_jump_if_false L0
+        jump L1
 
       L0:
         load_var e
@@ -3075,7 +3077,7 @@ async fn panic_alias_plus_wildcard_dispatch() {
         load_const 2
         jump L2
 
-      L1: Unreachable
+      L1:
         load_const 1
 
       L2:

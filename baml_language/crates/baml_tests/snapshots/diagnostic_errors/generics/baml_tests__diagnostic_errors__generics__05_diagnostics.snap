@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 32310
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: unresolved type: B
@@ -95,6 +94,16 @@ assertion_line: 32310
      │                                              ╰─────── class `Plain` expects 0 type argument(s), got 1
      │ 
      │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ classes.baml:197:24 ]
+     │
+ 197 │             _: null => default,
+     │                        ───┬───  
+     │                           ╰───── unreachable arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: class `Foo` expects 1 type argument(s), got 0

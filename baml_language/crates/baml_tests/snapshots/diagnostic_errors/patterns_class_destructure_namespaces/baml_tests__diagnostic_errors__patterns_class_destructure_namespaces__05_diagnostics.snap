@@ -32,6 +32,16 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
+  [type] Error: unreachable arm
+    ╭─[ main.baml:16:14 ]
+    │
+ 16 │         _ => 0
+    │              ┬  
+    │              ╰── unreachable arm
+    │ 
+    │ Note: Error code: E0063
+────╯
+
   [type] Error: class `Response` expects 0 type argument(s), got 1
     ╭─[ main.baml:22:42 ]
     │
@@ -42,12 +52,12 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type `user.llm.openai.Response` has no member `missing`
-    ╭─[ main.baml:28:36 ]
+  [type] Error: unreachable arm
+    ╭─[ main.baml:29:14 ]
     │
- 28 │         root.llm.openai.Response { missing } => 1,
-    │                                    ───┬───  
-    │                                       ╰───── type `user.llm.openai.Response` has no member `missing`
+ 29 │         _ => 0
+    │              ┬  
+    │              ╰── unreachable arm
     │ 
-    │ Note: Error code: E0007
+    │ Note: Error code: E0063
 ────╯

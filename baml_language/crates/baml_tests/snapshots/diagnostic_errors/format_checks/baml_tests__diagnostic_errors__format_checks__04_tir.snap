@@ -1715,9 +1715,9 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
         "zero" : "zero"
       _ =>
         "other" : "other"
-    match (x : int) : unknown
+    match (x : int) : int
       n: int: int | string =>
-        n + 1 : unknown
+        n + 1 : int
     match (x : int) : int
       x: int | x: int =>
         x : int
@@ -1762,8 +1762,12 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
   !! 8474..8479: operator `Mul` cannot be applied to `bool` and `bool`
   !! 8486..8491: operator `Mul` cannot be applied to `int` and `bool`
   !! 8498..8503: operator `Mul` cannot be applied to `bool` and `int`
-  !! 8556..8565: unreachable arm
-  !! 10368..10373: operator `Add` cannot be applied to `int | string` and `1`
+  !! 10821..11102: non-exhaustive match on `int`; missing: _
+  !! 11904..12027: non-exhaustive match on `int`; missing: _
+  !! 12027..12151: non-exhaustive match on `int`; missing: _
+  !! 12151..12271: non-exhaustive match on `int`; missing: _
+  !! 12271..12392: non-exhaustive match on `int`; missing: _
+  !! 12788..12952: non-exhaustive match on `int`; missing: _
   !! 12788..12952: type mismatch: expected string, got 0
 }
 function user.ArrayPatternTrivia(xs: int[][], v: user.ArrayPatternTriviaBox | int[][]) -> int throws never {

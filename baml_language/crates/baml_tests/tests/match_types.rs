@@ -106,9 +106,6 @@ async fn match_typed_pattern_second_arm() {
         jump L1
 
       L0:
-        load_var result
-        is_type Failure
-        pop_jump_if_false L2
         load_const "failure: "
         load_var result
         load_field .reason
@@ -308,9 +305,6 @@ async fn match_guard_true() {
         jump L2
 
       L1:
-        load_var s
-        is_type Score
-        pop_jump_if_false L4
         load_const "needs work"
         jump L4
 
@@ -379,9 +373,6 @@ async fn match_guard_fallthrough() {
         jump L2
 
       L1:
-        load_var s
-        is_type Score
-        pop_jump_if_false L4
         load_const "needs work"
         jump L4
 
@@ -450,9 +441,6 @@ async fn match_guard_all_fail() {
         jump L2
 
       L1:
-        load_var s
-        is_type Score
-        pop_jump_if_false L4
         load_const "needs work"
         jump L4
 
@@ -752,9 +740,6 @@ async fn match_mixed_literal_typed_guard() {
         jump L2
 
       L1:
-        load_var x
-        is_type int
-        pop_jump_if_false L4
         load_const "other int"
         jump L4
 
@@ -818,9 +803,6 @@ async fn match_mixed_literal_typed_guard_fallthrough() {
         jump L2
 
       L1:
-        load_var x
-        is_type int
-        pop_jump_if_false L4
         load_const "other int"
         jump L4
 
@@ -889,9 +871,6 @@ async fn match_guard_on_typed_pattern_field_access() {
         jump L2
 
       L1:
-        load_var result
-        is_type Failure
-        pop_jump_if_false L4
         load_const "failure"
         jump L4
 
@@ -961,9 +940,6 @@ async fn match_guard_on_typed_pattern_field_access_fails() {
         jump L2
 
       L1:
-        load_var result
-        is_type Failure
-        pop_jump_if_false L4
         load_const "failure"
         jump L4
 
@@ -1384,9 +1360,6 @@ async fn match_class_types_exhaustive_first() {
         jump L2
 
       L1:
-        load_var animal
-        is_type Bird
-        pop_jump_if_false L4
         load_const "bird: "
         load_var animal
         load_field .name
@@ -1460,9 +1433,6 @@ async fn match_class_types_exhaustive_last() {
         jump L2
 
       L1:
-        load_var animal
-        is_type Bird
-        pop_jump_if_false L4
         load_const "bird: "
         load_var animal
         load_field .name
@@ -1751,9 +1721,6 @@ async fn match_multiple_typed_patterns_with_guards() {
         jump L3
 
       L2:
-        load_var result
-        is_type Failure
-        pop_jump_if_false L6
         load_const "failure"
         jump L6
 
@@ -1904,9 +1871,6 @@ async fn match_class_type_is_type_chain() {
         jump L1
 
       L0:
-        load_var animal
-        is_type Dog
-        pop_jump_if_false L2
         load_const "dog"
         jump L2
 
@@ -2134,9 +2098,6 @@ async fn match_null_with_class_types_type_tag() {
         jump L2
 
       L1:
-        load_var x
-        is_type null
-        pop_jump_if_false L4
         load_const "nothing"
         jump L4
 

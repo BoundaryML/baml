@@ -176,6 +176,7 @@ function user.MaybeBox.get_or_default(self: user.MaybeBox, default: unknown) -> 
       _: null =>
         default : T
   }
+  !! 4807..4814: unreachable arm
 }
 function user.use_maybe_box() -> int throws never {
   { : int

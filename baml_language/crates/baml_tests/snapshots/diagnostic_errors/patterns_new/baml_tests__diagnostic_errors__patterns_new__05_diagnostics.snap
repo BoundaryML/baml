@@ -73,65 +73,40 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected string, got int
-    ╭─[ patterns_new.baml:64:20 ]
+  [type] Error: non-exhaustive match on `int`; missing: _
+    ╭─[ patterns_new.baml:69:50 ]
     │
- 64 │         let n: int: string => 1
-    │                    ───┬───  
-    │                       ╰───── type mismatch: expected string, got int
-    │ 
-    │ Note: Error code: E0001
+ 69 │ ╭─▶ function literal_narrow_violates(v: int) -> int {
+    ┆ ┆   
+ 72 │ ├─▶     }
+    │ │           
+    │ ╰─────────── non-exhaustive match on `int`; missing: _
+    │     
+    │     Note: Error code: E0062
 ────╯
 
-  [type] Error: type mismatch: expected int, got "hello"
-    ╭─[ patterns_new.baml:71:24 ]
+  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
+    ╭─[ patterns_new.baml:78:71 ]
     │
- 71 │         let n: "hello": int => 1
-    │                        ──┬─  
-    │                          ╰─── type mismatch: expected int, got "hello"
-    │ 
-    │ Note: Error code: E0001
+ 78 │ ╭─▶ function literal_chain_valid_then_invalid_cases_are_checked() -> int {
+ 79 │ ├─▶     let ok: 1: 1 | 2: 1 | 2 | 3: int = 1;
+    │ │                                               
+    │ ╰─────────────────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
+    │     
+    │     Note: Error code: E0111
 ────╯
 
-  [type] Error: type mismatch: expected 1 | 2, got int
-    ╭─[ patterns_new.baml:80:18 ]
-    │
- 80 │     let bad: int: 1 | 2: 1 = 1;
-    │                  ───┬──  
-    │                     ╰──── type mismatch: expected 1 | 2, got int
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [type] Error: type mismatch: expected 1, got 1 | 2
-    ╭─[ patterns_new.baml:80:25 ]
-    │
- 80 │     let bad: int: 1 | 2: 1 = 1;
-    │                         ─┬  
-    │                          ╰── type mismatch: expected 1, got 1 | 2
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [type] Error: type mismatch: expected int, got unknown[]
-    ╭─[ patterns_new.baml:87:14 ]
-    │
- 87 │         [..]: int => 1,
-    │              ──┬─  
-    │                ╰─── type mismatch: expected int, got unknown[]
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [type] Error: type mismatch: expected string[], got int[]
-    ╭─[ patterns_new.baml:96:24 ]
-    │
- 96 │         [let x]: int[]: string[] => x,
-    │                        ────┬────  
-    │                            ╰────── type mismatch: expected string[], got int[]
-    │ 
-    │ Note: Error code: E0001
-────╯
+  [type] Error: non-exhaustive match on `user.NumberBag | string[][]`; missing: [], [_, _, ..]
+     ╭─[ patterns_new.baml:107:88 ]
+     │
+ 107 │ ╭─▶ function mixed_class_array_or_binding_type_mismatch(v: NumberBag | string[][]) -> int {
+     ┆ ┆   
+ 110 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.NumberBag | string[][]`; missing: [], [_, _, ..]
+     │     
+     │     Note: Error code: E0062
+─────╯
 
   [type] Error: Or-pattern alternatives bind `field` with conflicting types: `int[]` vs `string[]`
      ╭─[ patterns_new.baml:109:35 ]

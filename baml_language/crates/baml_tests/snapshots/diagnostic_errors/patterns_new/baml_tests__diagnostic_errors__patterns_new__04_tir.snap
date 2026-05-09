@@ -53,7 +53,6 @@ function user.chain_violates_subtype(v: int) -> int throws never {
       n: int: string =>
         1 : 1
   }
-  !! 2260..2267: type mismatch: expected string, got int
 }
 function user.literal_narrow_violates(v: int) -> int throws never {
   { : 1
@@ -61,16 +60,15 @@ function user.literal_narrow_violates(v: int) -> int throws never {
       n: "hello": int =>
         1 : 1
   }
-  !! 2431..2435: type mismatch: expected int, got "hello"
+  !! 2391..2446: non-exhaustive match on `int`; missing: _
 }
 function user.literal_chain_valid_then_invalid_cases_are_checked() -> int throws never {
-  { : int
-    let ok: 1: 1 | 2: 1 | 2 | 3: int = 1 : 1 -> int
+  { : 2
+    let ok: 1: 1 | 2: 1 | 2 | 3: int = 1 : 1
     let bad: int: 1 | 2: 1 = 1 : 1
-    ok + bad : int
+    ok + bad : 2
   }
-  !! 2755..2761: type mismatch: expected 1 | 2, got int
-  !! 2762..2764: type mismatch: expected 1, got 1 | 2
+  !! 2695..2732: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.structural_array_chain_conflicts_with_scalar(v: int) -> int throws never {
   { : 1 | 0
@@ -80,7 +78,6 @@ function user.structural_array_chain_conflicts_with_scalar(v: int) -> int throws
       _ =>
         0 : 0
   }
-  !! 2950..2954: type mismatch: expected int, got unknown[]
 }
 function user.typed_array_chain_conflicts_with_other_array_type(v: int[]) -> int throws never {
   { : int | 0
@@ -90,18 +87,18 @@ function user.typed_array_chain_conflicts_with_other_array_type(v: int[]) -> int
       _ =>
         0 : 0
   }
-  !! 3199..3208: type mismatch: expected string[], got int[]
 }
 class user.NumberBag {
   field: int[]
 }
 function user.mixed_class_array_or_binding_type_mismatch(v: user.NumberBag | string[][]) -> int throws never {
-  { : unknown
-    match (v : user.NumberBag | string[][]) : unknown
+  { : int
+    match (v : user.NumberBag | string[][]) : int
       NumberBag { field: field } | [[..field]: string[]] =>
-        field.length() : unknown
+        field.length() : int
   }
   !! 3549..3558: Or-pattern alternatives bind `field` with conflicting types: `int[]` vs `string[]`
+  !! 3498..3594: non-exhaustive match on `user.NumberBag | string[][]`; missing: [], [_, _, ..]
 }
 class user.Team {
   scores: int[]
