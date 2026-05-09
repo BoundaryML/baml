@@ -13,6 +13,7 @@ option go_package = "./cffi";
 //   - baml.media.{Image,Audio,Video,Pdf}     -> ADT_MEDIA_*
 //   - baml.llm.PromptAst                     -> ADT_PROMPT_AST
 //   - baml.llm.Collector                     -> ADT_COLLECTOR
+//   - baml.llm.Stream                        -> ADT_STREAM
 //
 // Stdlib symbols TODO (decode to bare BamlPyHandle today):
 //   - baml.io.File, baml.net.Socket, baml.http.{Response,SseStream}
@@ -33,6 +34,7 @@ enum BamlHandleType {
   ADT_PROMPT_AST = 11;
   ADT_COLLECTOR = 12;
   ADT_TYPE = 13;
+  ADT_STREAM = 14;
 }
 
 message BamlHandle {

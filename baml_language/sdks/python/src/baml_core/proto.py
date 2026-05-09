@@ -26,6 +26,7 @@ from .baml_py import (
     BamlPyHandle,
     BamlVideo,
 )
+from ._stream import BamlStream
 from .errors import BamlError
 
 def _is_pydantic_model(value: Any) -> bool:
@@ -196,6 +197,17 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
             baml_inbound_pb2.BamlHandleType, ht
         )
         return
+
+    # `BamlStream` (21b §"Phase 4"): lifted to a bare `handle_value` on
+    # the wire — the engine intercepts the outer Stream class at
+    # `convert_heap_ptr_to_external_with_type` and reconstructs the heap
+    # pointer in `convert_external_to_vm_value`'s `Adt(Stream)` arm. So
+    # encode as `handle_value(ADT_STREAM)` rather than the media-style
+    # `class_value(name, _data: handle_value)` wrap.
+    if isinstance(value, BamlStream):
+        return _set_inbound_value(
+            inbound_value, value._to_pyhandle(), kwarg_name=kwarg_name
+        )
 
     # Media PyO3 types — wrap into an `InboundClassValue` per 15b. The
     # only field is `_data`, recursively encoded; the recursion lands on
@@ -458,6 +470,8 @@ def _decode_handle(handle) -> Any:
         return BamlVideo._from_pyhandle(pyhandle)
     if ht == HT.ADT_MEDIA_PDF:
         return BamlPdf._from_pyhandle(pyhandle)
+    if ht == HT.ADT_STREAM:
+        return BamlStream._from_pyhandle(pyhandle)
     if ht == HT.HANDLE_UNSPECIFIED:
         raise BamlError("BEX emitted HANDLE_UNSPECIFIED (Rust-side bug)")
 

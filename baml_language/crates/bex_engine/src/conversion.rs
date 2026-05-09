@@ -127,6 +127,16 @@ impl BexEngine {
                     panic!("Instance.class should point to a Class object")
                 };
 
+                // Lift `baml.llm.Stream` to an opaque ADT handle.  The four
+                // child fields (_client/_acc/_sse/_cache) stay on the heap
+                // behind the GC-rooted handle so the BAML interpreter can
+                // walk them when running `Stream.next` / `Stream.final`
+                // bodies on subsequent calls.  See plan 21b §"Phase 1a".
+                if class.name.display_name.as_str() == "baml.llm.Stream" {
+                    let handle = self.heap.create_handle(ptr);
+                    return Ok(BexExternalValue::Adt(BexExternalAdt::Stream(handle)));
+                }
+
                 debug_assert_eq!(
                     class.fields.len(),
                     instance.fields.len(),
@@ -362,6 +372,10 @@ impl BexEngine {
             BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
                 Value::Object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
             }
+            BexExternalValue::Adt(BexExternalAdt::Stream(handle)) => Value::Object(
+                self.resolve_handle(holder.proof(), &handle)
+                    .expect("Stream handle should be valid - object was returned to external code"),
+            ),
             BexExternalValue::FunctionRef { global_index } => {
                 // `convert_external_to_vm_value` runs while `holder`'s
                 // active heap permit is held, so we route through the

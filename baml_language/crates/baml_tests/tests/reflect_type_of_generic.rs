@@ -379,13 +379,20 @@ async fn type_of_depth3_path_in_method() {
         }
         class Holder {
             box Box<int>
+            box2 Box<int>
         }
         function main() -> string {
-            let h: Holder = Holder { box: Box<int> { value: 42 } };
+            let b = Box<int> { value: 42 };
+            let h: Holder = Holder { box: b, box2: b };
             h.box.describe()
         }
     "#
     );
+    use insta::assert_snapshot;
+    assert_snapshot!(output.bytecode, @r"
+    function main() -> string {
+    }
+    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("int".to_string()))

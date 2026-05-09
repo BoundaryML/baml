@@ -90,6 +90,12 @@ pub enum BexExternalAdt {
     PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
     Media(std::sync::Arc<baml_builtins2::MediaValue>),
+    /// Opaque GC-rooted reference to a `baml.llm.Stream` instance on the
+    /// engine heap. Carries only a `Handle` because the four-field
+    /// (_client/_acc/_sse/_cache) representation has to stay on the heap
+    /// so the BAML interpreter can keep walking it during `Stream.next`
+    /// / `Stream.final` calls.
+    Stream(crate::Handle),
 }
 
 /// A deep-copied value tree with no heap references.
@@ -324,6 +330,7 @@ impl BexExternalAdt {
             BexExternalAdt::Type(_) => "type",
             BexExternalAdt::PromptAst(_) => "prompt_ast",
             BexExternalAdt::Media(_) => "media",
+            BexExternalAdt::Stream(_) => "stream",
         }
     }
 }

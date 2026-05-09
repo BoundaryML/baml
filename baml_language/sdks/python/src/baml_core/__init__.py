@@ -29,6 +29,7 @@ from .baml_py import (
     BamlError,
     BamlInvalidArgumentError,
 )
+from ._stream import BamlStream
 from .ctx_manager import CtxManager as BamlCtxManager
 from .proto import decode_call_result, encode_call_args
 
@@ -319,6 +320,7 @@ __all__ = [
     "AbortController",
     "BamlPyHandle",
     "BamlRuntime",
+    "BamlStream",
     "Collector",
     "FunctionLog",
     "FunctionResult",
