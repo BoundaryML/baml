@@ -208,6 +208,19 @@ impl BexHeap {
         // Poison or clear the inactive space (now holds old-space debris).
         self.finalize_inactive_space();
 
+        // Bug H, check 2 (heap_debug only): after a Major GC, every live
+        // object lives in compile_time or Gen2 (Gen0 and Gen1 were just
+        // cleared). Walk every Gen2 object's outgoing references and
+        // assert each lands in compile_time or Gen2 — anything else means
+        // a write barrier was missed when the reference was originally
+        // installed, so `value_mut_for_fixup` / dirty-card scan didn't
+        // patch it and it now points into a cleared region.
+        #[cfg(feature = "heap_debug")]
+        // SAFETY: GC safepoint, all permits parked.
+        unsafe {
+            self.debug_assert_post_major_no_dead_refs();
+        }
+
         // Remap each root to its new location (or keep it if it was compile-time).
         let remapped_roots: Vec<HeapPtr> = roots
             .iter()
@@ -341,6 +354,41 @@ impl BexHeap {
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Type(_) => {}
+        }
+    }
+
+    /// Bug H, check 2 (heap_debug only): after a Major GC, every Gen2
+    /// object's outgoing heap references must land in compile_time or
+    /// Gen2. Anything else means the reference was installed without
+    /// firing a write barrier (so dirty-card scan didn't surface it),
+    /// and now points into the cleared Gen0/Gen1.
+    ///
+    /// # Safety
+    /// Must be called only at a GC safepoint (all permits parked).
+    #[cfg(feature = "heap_debug")]
+    unsafe fn debug_assert_post_major_no_dead_refs(&self) {
+        // SAFETY: caller is at a GC safepoint.
+        unsafe {
+            let gen2 = &*self.gen2.get();
+            let mut refs = Vec::new();
+            for runtime_idx in 0..gen2.len() {
+                let obj = gen2.get(runtime_idx);
+                refs.clear();
+                self.add_references_to_worklist(obj, &mut refs);
+                for &ref_ptr in &refs {
+                    let generation = self.generation_of(ref_ptr);
+                    assert!(
+                        matches!(
+                            generation,
+                            crate::heap::Generation::CompileTime | crate::heap::Generation::Gen2
+                        ),
+                        "heap_debug: post-Major Gen2 object at runtime_idx={runtime_idx} \
+                         (variant {:?}) holds a reference to {ref_ptr:?} in {generation:?} — \
+                         a write barrier was missed when this reference was stored",
+                        bex_vm_types::ObjectType::of(obj),
+                    );
+                }
+            }
         }
     }
 

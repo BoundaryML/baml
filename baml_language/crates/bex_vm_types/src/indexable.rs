@@ -591,7 +591,7 @@ mod shared_globals_tests {
         let globals = SharedGlobals::from_vec(vec![
             Value::Int(1),
             Value::Object(p1),
-            Value::Float(3.14),
+            Value::Float(1.234),
             Value::Object(p2),
             Value::Null,
         ]);

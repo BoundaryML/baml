@@ -930,10 +930,44 @@ impl BexEngine {
         // Run GC — always returns the forwarding map so we can update parked VM stacks.
         let (stats, _remapped_roots, forwarding) =
             unsafe { self.heap.collect_garbage_generational(&all_roots, level) };
+
+        // Bug H, check 1 (heap_debug only): every pointer the GC was told
+        // about (`all_roots`) must end up in the forwarding map. If a
+        // holder's `collect_roots` produces a pointer the GC's BFS does
+        // not reach, the subsequent `forward_roots` will leave a stale
+        // reference behind. This assertion turns that silent class of
+        // bug into an immediate panic during stress tests.
+        #[cfg(feature = "heap_debug")]
+        for &ptr in &all_roots {
+            assert!(
+                forwarding.contains_key(&ptr),
+                "heap_debug: post-GC integrity sweep — root {ptr:?} was not \
+                 reached by the GC BFS (collect_roots produced it but it is \
+                 not in the forwarding map)"
+            );
+        }
+
         // Update all parked VM stacks with forwarding pointers and invalidate TLABs
         // SAFETY: VMs are still parked (gc_complete not yet notified), we have
         // exclusive access via the parked_vms lock we're still holding
         heap_guard.forward_roots(&forwarding);
+
+        // Bug H, check 3 (heap_debug only): after `forward_roots`, no
+        // holder root should still point into the inactive (former
+        // active) space. If any does, `forward_roots` missed it — the
+        // stale pointer would dereference into freed/poisoned memory.
+        #[cfg(feature = "heap_debug")]
+        {
+            let mut roots_after = self.heap.collect_handle_roots();
+            heap_guard.collect_roots(&mut roots_after);
+            for &ptr in &roots_after {
+                assert!(
+                    !self.heap.debug_ptr_in_inactive(ptr),
+                    "heap_debug: post-forward_roots — root {ptr:?} still points \
+                     into the inactive space (forward_roots missed it)"
+                );
+            }
+        }
 
         self.heap.verify_quick();
 

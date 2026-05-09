@@ -929,8 +929,7 @@ mod tests {
         ] {
             assert!(
                 roots.contains(&needed),
-                "collect_roots missing pointer that forward_roots would patch: {:?}",
-                needed
+                "collect_roots missing pointer that forward_roots would patch: {needed:?}"
             );
         }
     }
