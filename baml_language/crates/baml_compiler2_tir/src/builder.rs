@@ -5951,6 +5951,38 @@ impl<'db> TypeInferenceBuilder<'db> {
         result
     }
 
+    /// Class field types in **declaration order** with generic substitution
+    /// applied. Used by the `PatCtx` impl for the exhaustiveness algorithm,
+    /// which expects positional sub-pattern slots aligned to the class's
+    /// declared field order.
+    fn class_field_types_ordered(
+        &self,
+        class_name: &crate::ty::QualifiedTypeName,
+        class_type_args: &[Ty],
+    ) -> Vec<Ty> {
+        let by_name = self.lookup_class_fields(class_name, class_type_args);
+        let Some(items) = self.resolve_class_pkg_items(class_name.package()) else {
+            return Vec::new();
+        };
+        let Some(Definition::Class(class_loc)) =
+            items.lookup_type(class_name.namespace(), class_name.name())
+        else {
+            return Vec::new();
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+        let class_data = &item_tree[class_loc.id(db)];
+        class_data
+            .fields
+            .iter()
+            .map(|f| {
+                by_name.get(&f.name).cloned().unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                })
+            })
+            .collect()
+    }
+
     /// Check whether a class has a field or method with the given name.
     ///
     /// Unlike `lookup_class_fields`, this does NOT call `lower_type_expr_in_ns`
@@ -7493,6 +7525,103 @@ impl<'db> TypeInferenceBuilder<'db> {
             lambda_effective_throws,
         )
     }
+}
+
+// ── PatCtx integration ────────────────────────────────────────────────────────
+//
+// The exhaustiveness algorithm in `crate::exhaustiveness` is parameterized
+// over a `PatCtx` trait that asks the type system four questions:
+// "what ctors inhabit this type", "what field types does this class have",
+// "what's the element type of this list", "is this type inhabited".
+//
+// The natural place to answer those questions is the builder, since it
+// already holds the alias map, package items, and Salsa db. We just impl
+// the trait directly.
+
+impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
+    fn enumerate_ctors(&self, ty: &Ty) -> Vec<crate::exhaustiveness::Ctor> {
+        use crate::exhaustiveness::Ctor;
+        // Always peel aliases first — the algorithm shouldn't see
+        // `Ty::TypeAlias` as an opaque ctor when the alias has a target.
+        let ty = self.expand_alias_chains(ty.clone());
+        match &ty {
+            Ty::Primitive(PrimitiveType::Bool, _) => vec![
+                Ctor::Single(Ty::Literal(
+                    baml_base::Literal::Bool(true),
+                    Freshness::Regular,
+                    TyAttr::default(),
+                )),
+                Ctor::Single(Ty::Literal(
+                    baml_base::Literal::Bool(false),
+                    Freshness::Regular,
+                    TyAttr::default(),
+                )),
+            ],
+            Ty::Primitive(PrimitiveType::Null, _) => vec![Ctor::Single(ty.clone())],
+            // Infinite-alphabet / opaque primitives and types — all
+            // require a wildcard arm for exhaustiveness.
+            Ty::Primitive(_, _)
+            | Ty::Map(..)
+            | Ty::EvolvingMap(..)
+            | Ty::Function { .. }
+            | Ty::Type { .. }
+            | Ty::RustType { .. }
+            | Ty::Void { .. }
+            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
+            | Ty::Error { .. }
+            | Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
+            Ty::Never { .. } => vec![],
+            Ty::Optional(inner, _) => {
+                let mut out = self.enumerate_ctors(inner);
+                out.push(Ctor::Single(Ty::Primitive(
+                    PrimitiveType::Null,
+                    TyAttr::default(),
+                )));
+                out
+            }
+            Ty::Union(members, _) => members
+                .iter()
+                .flat_map(|m| self.enumerate_ctors(m))
+                .collect(),
+            Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => vec![Ctor::Single(ty.clone())],
+            Ty::Enum(qtn, _) => self
+                .lookup_enum_variants(qtn)
+                .into_iter()
+                .map(|variant| {
+                    Ctor::Single(Ty::EnumVariant(qtn.clone(), variant, TyAttr::default()))
+                })
+                .collect(),
+            Ty::Class(qtn, _, _) => vec![Ctor::Class(qtn.clone())],
+            // Slice path in `split_ctors` enumerates length classes from
+            // the matrix; this branch is only reached if the algorithm
+            // calls into us with a List directly, in which case empty
+            // means "let the slice path handle it."
+            Ty::List(_, _) | Ty::EvolvingList(_, _) => vec![],
+            // After expand_alias_chains, no remaining `TypeAlias` should
+            // appear; if it does (cycle), treat as opaque.
+            Ty::TypeAlias(_, _) => vec![Ctor::NonExhaustive],
+        }
+    }
+
+    fn class_field_types(&self, qtn: &crate::ty::QualifiedTypeName, ty: &Ty) -> Vec<Ty> {
+        let args = match ty {
+            Ty::Class(_, args, _) => args.clone(),
+            _ => Vec::new(),
+        };
+        self.class_field_types_ordered(qtn, &args)
+    }
+
+    fn list_element_type(&self, ty: &Ty) -> Ty {
+        match self.expand_alias_chains(ty.clone()) {
+            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => *elem,
+            other => other,
+        }
+    }
+
+    // is_inhabited uses the trait's default impl (recursive walk over
+    // class fields with cycle protection). Override later with a
+    // Salsa-cached query if profiling shows it matters.
 }
 
 /// Map a bare type sugar name to a `Ty` for primitive and media types.
