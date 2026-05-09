@@ -180,7 +180,8 @@ async fn match_chain_trailing_binding_after_array_type_aliases_value() {
         r#"
         function main() -> int {
             match ([[9]]) {
-                let rows: [[let x]]: int[][]: let again => rows[0][0] * 100 + x * 10 + again[0][0]
+                let rows: [[let x]]: int[][]: let again => rows[0][0] * 100 + x * 10 + again[0][0],
+                _ => 0
             }
         }
     "#
@@ -769,7 +770,7 @@ async fn empty_generic_class_destructure_covers_union_of_same_class_instantiatio
 
         function classify(box: Box<int> | Box<string>) -> int {
             match (box) {
-                Box {} => 7
+                Box<int> {} | Box<string> {} => 7
             }
         }
 
@@ -840,8 +841,7 @@ async fn match_class_destructure_tests_union_field_type() {
         function main() -> int {
             match (Box { value: "ready" }) {
                 Box { value: int } => 1,
-                Box { value: string } => 2,
-                _ => 3
+                Box { value: string } => 2
             }
         }
     "#
@@ -971,7 +971,8 @@ async fn match_array_destructure_binds_rest_copy() {
         r#"
         function main() -> int {
             match ([1, 2, 3]) {
-                [let first, ..let rest] => first * 10 + rest.length()
+                [let first, ..let rest] => first * 10 + rest.length(),
+                [] => 0
             }
         }
     "#
@@ -985,7 +986,8 @@ async fn match_array_destructure_suffix_rest() {
         r#"
         function main() -> int {
             match ([1, 2, 9]) {
-                [..let rest, let last] => rest.length() * 10 + last
+                [..let rest, let last] => rest.length() * 10 + last,
+                _ => 0
             }
         }
     "#
@@ -1031,7 +1033,8 @@ async fn match_array_destructure_rest_chain_applies_to_rest_slice() {
         function score(xs: int[][]) -> int {
             match (xs) {
                 [..let rest: int[][], let second_last: int[], let last: int[]] =>
-                    rest.length() * 100 + second_last[0] * 10 + last[0]
+                    rest.length() * 100 + second_last[0] * 10 + last[0],
+                _ => 0
             }
         }
 
@@ -1175,7 +1178,8 @@ async fn match_array_destructure_nested_rest_with_fixed_edges() {
         function main() -> int {
             match ([9, 1, 2, 3, 8]) {
                 [let head, ..[let a, ..let middle, let b], let tail] =>
-                    head * 10000 + a * 1000 + middle.length() * 100 + b * 10 + tail
+                    head * 10000 + a * 1000 + middle.length() * 100 + b * 10 + tail,
+                _ => 0
             }
         }
     "#
@@ -1196,7 +1200,8 @@ async fn match_array_destructure_entire_alphabet_of_bindings() {
                  let q, let r, let s, let t, let u, let v, let w, let x,
                  let y, let z] =>
                     a + b + c + d + e + f + g + h + i + j + k + l + m +
-                    n + o + p + q + r + s + t + u + v + w + x + y + z
+                    n + o + p + q + r + s + t + u + v + w + x + y + z,
+                _ => 0
             }
         }
     "#
@@ -1218,7 +1223,8 @@ async fn match_or_binding_from_class_field_or_nested_array_position() {
 
         function score(input: A | B) -> int {
             match (input) {
-                A { x: let value } | B { y: [_, let value] } => value
+                A { x: let value } | B { y: [_, let value] } => value,
+                _ => 0
             }
         }
 
@@ -1236,7 +1242,8 @@ async fn match_or_binding_from_nested_rest_or_prefix_array() {
         r#"
         function score(xs: int[]) -> int {
             match (xs) {
-                [..[let value]] | [let value, ..] => value
+                [..[let value]] | [let value, ..] => value,
+                _ => 0
             }
         }
 
@@ -1271,7 +1278,8 @@ async fn match_or_binding_from_class_array_field_or_array_rest_subpattern() {
 
         function score(input: User | int[]) -> int {
             match (input) {
-                User { scores: [let value, ..] } | [..[let value]] => value
+                User { scores: [let value, ..] } | [..[let value]] => value,
+                _ => 0
             }
         }
 
@@ -1293,7 +1301,8 @@ async fn match_class_nested_array_literals_and_bindings() {
 
         function main() -> int {
             match (User { rows: [[1, 2, 7], [9]] }) {
-                User { rows: [[1, ..[2, let value]], ..] } => value
+                User { rows: [[1, ..[2, let value]], ..] } => value,
+                _ => 0
             }
         }
     "#
@@ -1327,7 +1336,8 @@ async fn match_array_destructure_shadows_outer_local_only_inside_arm() {
         function main() -> int {
             let x = 1;
             let inner = match ([4, 5]) {
-                [let x, ..] => x
+                [let x, ..] => x,
+                _ => 0
             };
             x * 10 + inner
         }
@@ -1385,7 +1395,8 @@ async fn match_array_destructure_or_patterns_share_bindings() {
         r#"
         function score(xs: int[]) -> int {
             match (xs) {
-                [let x] | [let x, ..] => x
+                [let x] | [let x, ..] => x,
+                _ => 0
             }
         }
 
@@ -1403,7 +1414,8 @@ async fn match_array_destructure_or_patterns_nested_arrays_share_bindings() {
         r#"
         function score(rows: int[][]) -> int {
             match (rows) {
-                [[let x, ..]] | [[let x, ..], ..] => x
+                [[let x, ..]] | [[let x, ..], ..] => x,
+                _ => 0
             }
         }
 
@@ -1421,7 +1433,8 @@ async fn match_array_destructure_nested_array_binding_projects_inner_element() {
         r#"
         function main() -> int {
             match ([[4]]) {
-                [[let x]] => x
+                [[let x]] => x,
+                [..] => 0
             }
         }
     "#
@@ -1440,7 +1453,8 @@ async fn match_array_destructure_or_patterns_nested_class_array_fields() {
         function score(teams: Team[]) -> int {
             match (teams) {
                 [Team { scores: [let x, ..] }] |
-                [Team { scores: [_, let x, ..] }, ..] => x
+                [Team { scores: [_, let x, ..] }, ..] => x,
+                _ => 0
             }
         }
 
@@ -1463,7 +1477,8 @@ async fn match_array_destructure_outer_chain_applies_to_whole_array() {
         function score(xs: int[][]) -> int {
             match (xs) {
                 [..let rest, let second_last, let last]: int[][] =>
-                    rest.length() * 100 + second_last[0] * 10 + last[0]
+                    rest.length() * 100 + second_last[0] * 10 + last[0],
+                _ => 0
             }
         }
 
@@ -1692,7 +1707,8 @@ async fn match_array_destructure_deep_class_array_class_array_class() {
                         },
                         ..let extra_boxes
                     ]
-                } => first * 1000 + middle.length() * 100 + last * 10 + extra_boxes.length()
+                } => first * 1000 + middle.length() * 100 + last * 10 + extra_boxes.length(),
+                _ => 0
             }
         }
 
@@ -1759,7 +1775,8 @@ async fn match_array_destructure_quad_nested_array_class_suffixes() {
                             ..
                         ]
                     }
-                ] => skipped_buckets.length() * 1000 + penultimate * 100 + last * 10 + tail
+                ] => skipped_buckets.length() * 1000 + penultimate * 100 + last * 10 + tail,
+                _ => 0
             }
         }
 
@@ -1963,7 +1980,8 @@ async fn match_or_deep_class_destructure_chain_binds_when_second_alt_matches() {
                     User { address: Address { coordinate: Coordinate { zip: let zip: int, plus4: 1 }: Coordinate }: Address }: User
                 ) | (
                     User { address: Address { coordinate: Coordinate { zip: let zip: int, plus4: 2 }: Coordinate }: Address }: User
-                ) => zip
+                ) => zip,
+                _ => 0
             }
         }
     "#
@@ -2182,7 +2200,8 @@ async fn match_array_of_class_destructure_trailing_let_aliases_at_many_levels() 
                     rest_users.length() +
                     rest_alias.length() +
                     all_users.length()
-                }
+                },
+                _ => 0
             }
         }
     "#
@@ -2202,7 +2221,8 @@ async fn match_or_nested_array_destructure_with_trailing_let_aliases() {
                     [_, [let first, ..let rest]: int[]: let row]: int[][]: let rows
                 ) => {
                     first * 1000 + rows.length() * 100 + row.length() * 10 + rest[1]
-                }
+                },
+                _ => 0
             }
         }
     "#
@@ -2253,11 +2273,13 @@ async fn match_or_mixed_array_class_binding_class_field_or_array_rest() {
             let from_array: Class | int[][] = [[7, 8, 9]];
 
             let a = match (from_class) {
-                Class { field } | [[..let field]: int[]] => field[0] * 100 + field[1] * 10 + field[2]
+                Class { field } | [[..let field]: int[]] => field[0] * 100 + field[1] * 10 + field[2],
+                _ => 0
             };
 
             let b = match (from_array) {
-                Class { field } | [[..let field]: int[]] => field[0] * 100 + field[1] * 10 + field[2]
+                Class { field } | [[..let field]: int[]] => field[0] * 100 + field[1] * 10 + field[2],
+                _ => 0
             };
 
             a + b
@@ -2383,12 +2405,14 @@ async fn match_or_mixed_array_class_binding_array_rest_inside_class_or_class_ins
 
             let a = match (from_wrapper) {
                 Wrapper { matrix: [[..let x]: int[]] } | [[Class { field: let x }]] =>
-                    x[0] * 100 + x[1] * 10 + x.length()
+                    x[0] * 100 + x[1] * 10 + x.length(),
+                _ => 0
             };
 
             let b = match (from_array) {
                 Wrapper { matrix: [[..let x]: int[]] } | [[Class { field: let x }]] =>
-                    x[0] * 100 + x[1] * 10 + x.length()
+                    x[0] * 100 + x[1] * 10 + x.length(),
+                _ => 0
             };
 
             a + b
@@ -2416,12 +2440,14 @@ async fn match_or_mixed_array_class_binding_deep_triple_array_and_nested_class()
 
             let a = match (from_nodes) {
                 [[Node { leaf: Leaf { xs: [..let x]: int[] } }]] | [[[Leaf { xs: let x }]]] =>
-                    x[0] * 100 + x[1] * 10 + x[2]
+                    x[0] * 100 + x[1] * 10 + x[2],
+                _ => 0
             };
 
             let b = match (from_leaves) {
                 [[Node { leaf: Leaf { xs: [..let x]: int[] } }]] | [[[Leaf { xs: let x }]]] =>
-                    x[0] * 100 + x[1] * 10 + x[2]
+                    x[0] * 100 + x[1] * 10 + x[2],
+                _ => 0
             };
 
             a + b

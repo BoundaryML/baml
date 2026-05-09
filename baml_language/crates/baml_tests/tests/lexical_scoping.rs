@@ -266,9 +266,10 @@ async fn match_and_catch_pattern_bindings_restore_outer_locals() {
 
         function match_later_arm_uses_outer() -> int {
             let x = 20
-            match ("value") {
-                let x: int => 0,
-                _: string => x
+            let v: string = "value"
+            match (v) {
+                let x: "specific" => 0,
+                _ => x
             }
         }
 

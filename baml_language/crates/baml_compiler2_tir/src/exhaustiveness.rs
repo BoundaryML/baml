@@ -55,6 +55,16 @@ pub enum Ctor {
     /// with generic substitution applied.
     Class(QualifiedTypeName),
 
+    /// "Which member of a union" tag, with arity 1. Sub-pattern's type is
+    /// the member type carried by the ctor. Specialising on `UnionMember(M)`
+    /// projects the column from `Union<...>` down to `M`, after which the
+    /// algorithm recurses normally — slice splitting, class destructuring,
+    /// etc. apply at that depth. Mirrors rustc's `Variant` ctor for enum
+    /// variants. Without this, list/class members of a union can't be
+    /// distinguished by the matrix and combined slice patterns aren't
+    /// recognised as exhaustive on the list branch.
+    UnionMember(Ty),
+
     /// Or-pattern: alternatives stored in `DPat::fields`. The arity (=
     /// number of alternatives) lives on the `DPat`, not on the ctor.
     /// Specialization on `Or` explodes the row into one row per alternative,
@@ -77,11 +87,12 @@ pub enum Ctor {
 
 impl PartialEq for Ctor {
     fn eq(&self, other: &Self) -> bool {
-        use Ctor::{Class, Missing, NonExhaustive, Or, Single, Slice, Wildcard};
+        use Ctor::{Class, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard};
         match (self, other) {
             (Single(a), Single(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Slice(a), Slice(b)) => a == b,
             (Class(a), Class(b)) => a == b,
+            (UnionMember(a), UnionMember(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Or, Or)
             | (Wildcard, Wildcard)
             | (NonExhaustive, NonExhaustive)
@@ -94,12 +105,13 @@ impl Eq for Ctor {}
 
 impl std::hash::Hash for Ctor {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        use Ctor::{Class, Missing, NonExhaustive, Or, Single, Slice, Wildcard};
+        use Ctor::{Class, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard};
         std::mem::discriminant(self).hash(state);
         match self {
             Single(ty) => ty_ctor_identity(ty).hash(state),
             Slice(s) => s.hash(state),
             Class(qtn) => qtn.hash(state),
+            UnionMember(ty) => ty_ctor_identity(ty).hash(state),
             Or | Wildcard | NonExhaustive | Missing => {}
         }
     }
@@ -135,6 +147,7 @@ impl Ctor {
     pub fn arity(&self, ty: &Ty, cx: &dyn PatCtx) -> usize {
         match self {
             Ctor::Single(_) | Ctor::Wildcard | Ctor::NonExhaustive | Ctor::Missing | Ctor::Or => 0,
+            Ctor::UnionMember(_) => 1,
             Ctor::Slice(shape) => shape.arity(),
             Ctor::Class(qtn) => cx.class_field_types(qtn, ty).len(),
         }
@@ -146,13 +159,14 @@ impl Ctor {
     /// not handled here — Or rows are handled by matrix-level expansion
     /// before any normal cover check runs.
     pub fn covers(&self, other: &Ctor) -> bool {
-        use Ctor::{Class, Missing, NonExhaustive, Or, Single, Slice, Wildcard};
+        use Ctor::{Class, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard};
         match (self, other) {
             (Wildcard, _) => true,
             (_, Wildcard) => false,
             (Single(a), Single(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Class(a), Class(b)) => a == b,
             (Slice(a), Slice(b)) => slice_covers(a, b),
+            (UnionMember(a), UnionMember(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (NonExhaustive, NonExhaustive) => true,
             (Missing, Missing) => true,
             (Or, Or) => true,
@@ -263,7 +277,24 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
         Ty::Error { .. } => out.push_str("Err"),
         Ty::RustType { .. } => out.push_str("Rust"),
         Ty::Type { .. } => out.push_str("Type"),
-        Ty::Function { .. } => out.push_str("Fn"),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            out.push_str("Fn(");
+            for (i, (_, p)) in params.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_ty_identity(out, p);
+            }
+            out.push_str(")->");
+            write_ty_identity(out, ret);
+            out.push('!');
+            write_ty_identity(out, throws);
+        }
     }
 }
 
@@ -350,6 +381,17 @@ impl DPat {
             ty,
         }
     }
+    /// Union-member tag: marks the pattern as targeting one specific
+    /// member of a union scrutinee. The single sub-pat is the
+    /// pattern as it would have been against the member type directly.
+    pub fn union_member(member_ty: Ty, inner: DPat, scrut_ty: Ty) -> Self {
+        Self {
+            ctor: Ctor::UnionMember(member_ty),
+            arity: 1,
+            fields: vec![inner],
+            ty: scrut_ty,
+        }
+    }
 }
 
 // ── Witness pattern ──────────────────────────────────────────────────────────
@@ -384,6 +426,16 @@ impl fmt::Display for WitnessPat {
             // Or never appears in witnesses (apply for Or is a no-op).
             // Render defensively as `_` if ever produced.
             Ctor::Or => write!(f, "_"),
+            // UnionMember is a "which branch" tag — render its inner pat
+            // directly. The type info is carried by the inner pat (e.g.
+            // `Single(Ty::Class(...))`) or by surrounding context in the
+            // diagnostic. If the inner is a wildcard, we lose the type
+            // tag in rendering; LSP/diagnostic layer can supply it via
+            // the witness's `ty` field if needed.
+            Ctor::UnionMember(_) => match self.fields.first() {
+                Some(inner) => write!(f, "{inner}"),
+                None => write!(f, "_"),
+            },
             Ctor::Single(ty) => write_single_witness(f, ty),
             Ctor::Class(qtn) => {
                 write!(f, "{qtn} {{")?;
@@ -941,6 +993,20 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> (Vec<Ctor>,
         if !cx.is_inhabited(col_ty) {
             return (vec![], vec![]);
         }
+        // Lists: a single open-ended `[..]` witness covers "any list".
+        // Check this *before* `enumerate_ctors` because List's `enumerate`
+        // returns empty (slice splitting normally handles it). Without
+        // this short-circuit, the empty result would incorrectly mark the
+        // list as vacuously exhaustive.
+        if matches!(col_ty, Ty::List(_, _) | Ty::EvolvingList(_, _)) {
+            return (
+                vec![Ctor::Missing],
+                vec![Ctor::Slice(SliceShape::Variable {
+                    prefix: 0,
+                    suffix: 0,
+                })],
+            );
+        }
         let all = cx.enumerate_ctors(col_ty);
         if all.is_empty() {
             // Vacuously exhaustive (e.g. `Ty::Never` directly).
@@ -948,12 +1014,6 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> (Vec<Ctor>,
         }
         let missing = if all.iter().any(|c| matches!(c, Ctor::NonExhaustive)) {
             vec![Ctor::NonExhaustive]
-        } else if matches!(col_ty, Ty::List(_, _) | Ty::EvolvingList(_, _)) {
-            // Lists: a single open-ended `[..]` witness covers "any list".
-            vec![Ctor::Slice(SliceShape::Variable {
-                prefix: 0,
-                suffix: 0,
-            })]
         } else {
             dedup_ctors(all)
         };
@@ -1064,27 +1124,23 @@ fn split_slice_ctors(present: &[Ctor], _has_wildcard: bool) -> (Vec<Ctor>, Vec<C
     }
     let max_arity = max_prefix + max_suffix;
 
-    // Output: Fixed(n) for each n in [start..max_arity), then one Variable.
-    // `start` is the smallest variable's arity (lengths below it can't be
-    // covered by any variable — they need fixed coverage).
-    let start = min_var_arity.unwrap_or(0);
-
+    // Output: only push *seen* lengths into `split` directly; lengths that
+    // aren't seen go into `missing` and are surfaced via the synthetic
+    // `Ctor::Missing` (whose `apply_missing` step wraps each missing ctor
+    // with one witness). Pushing a length into both `split` AND `missing`
+    // would produce duplicate witnesses — once via direct specialization
+    // through the unseen ctor (sub-matrix empty → unit witness wrapped),
+    // and once via `Missing → apply_missing`.
     let mut split: Vec<Ctor> = Vec::new();
     let mut missing: Vec<Ctor> = Vec::new();
 
     for n in 0..max_arity {
-        if n < start && !seen_fixed.contains(&n) {
-            // Length below any variable's reach and not in fixed_lens —
-            // fully missing.
-            let c = Ctor::Slice(SliceShape::Fixed(n));
-            missing.push(c);
-            continue;
-        }
-        let ctor = Ctor::Slice(SliceShape::Fixed(n));
-        split.push(ctor.clone());
         let seen = seen_fixed.contains(&n) || min_var_arity.is_some_and(|m| m <= n);
-        if !seen {
-            missing.push(ctor);
+        let c = Ctor::Slice(SliceShape::Fixed(n));
+        if seen {
+            split.push(c);
+        } else {
+            missing.push(c);
         }
     }
 
@@ -1092,9 +1148,10 @@ fn split_slice_ctors(present: &[Ctor], _has_wildcard: bool) -> (Vec<Ctor>, Vec<C
         prefix: max_prefix,
         suffix: max_suffix,
     });
-    split.push(tail.clone());
     let tail_seen = min_var_arity.is_some_and(|m| m <= max_arity);
-    if !tail_seen {
+    if tail_seen {
+        split.push(tail);
+    } else {
         missing.push(tail);
     }
 
@@ -1141,6 +1198,9 @@ fn ctor_sub_tys(cx: &dyn PatCtx, ctor: &Ctor, col_ty: &Ty) -> Vec<Ty> {
     match ctor {
         Ctor::Class(qtn) => cx.class_field_types(qtn, col_ty),
         Ctor::Slice(shape) => cx.slice_field_types(shape, col_ty),
+        // UnionMember projects a column from the union type down to the
+        // member type. Specialise recurses with that single sub-column.
+        Ctor::UnionMember(member_ty) => vec![member_ty.clone()],
         _ => vec![],
     }
 }
@@ -3757,6 +3817,232 @@ mod tests {
             vec![ArmId(0)],
             "wildcard arm over uninhabited scrutinee must be unreachable"
         );
+    }
+
+    // ── UnionMember ctor: discriminate union branches ───────────────────
+
+    /// Helper: a `TortureCtx`-style ctx that enumerates Union members as
+    /// `UnionMember` ctors. Mirrors what the real builder does.
+    struct UnionCtx {
+        classes: std::collections::HashMap<QualifiedTypeName, Vec<Ty>>,
+    }
+    impl UnionCtx {
+        fn new() -> Self {
+            Self {
+                classes: std::collections::HashMap::new(),
+            }
+        }
+        fn register(&mut self, qtn: QualifiedTypeName, fields: Vec<Ty>) {
+            self.classes.insert(qtn, fields);
+        }
+    }
+    impl PatCtx for UnionCtx {
+        fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
+            match ty {
+                Ty::Primitive(PrimitiveType::Bool, _) => {
+                    vec![Ctor::Single(bool_lit(true)), Ctor::Single(bool_lit(false))]
+                }
+                Ty::Primitive(PrimitiveType::Int, _)
+                | Ty::Primitive(PrimitiveType::Float, _)
+                | Ty::Primitive(PrimitiveType::String, _) => vec![Ctor::NonExhaustive],
+                Ty::Primitive(PrimitiveType::Null, _) => vec![Ctor::Single(ty.clone())],
+                Ty::Optional(inner, _) => {
+                    let mut out = self.enumerate_ctors(inner);
+                    out.push(Ctor::Single(Ty::Primitive(
+                        PrimitiveType::Null,
+                        Default::default(),
+                    )));
+                    out
+                }
+                // Key change: each union member becomes a UnionMember ctor.
+                Ty::Union(members, _) => members
+                    .iter()
+                    .map(|m| Ctor::UnionMember(m.clone()))
+                    .collect(),
+                Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => {
+                    vec![Ctor::Single(ty.clone())]
+                }
+                Ty::Class(qtn, _, _) => vec![Ctor::Class(qtn.clone())],
+                Ty::List(_, _) | Ty::EvolvingList(_, _) => vec![],
+                Ty::Never { .. } => vec![],
+                Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
+                _ => vec![Ctor::NonExhaustive],
+            }
+        }
+        fn class_field_types(&self, qtn: &QualifiedTypeName, _ty: &Ty) -> Vec<Ty> {
+            self.classes.get(qtn).cloned().unwrap_or_default()
+        }
+        fn list_element_type(&self, ty: &Ty) -> Ty {
+            match ty {
+                Ty::List(e, _) | Ty::EvolvingList(e, _) => (**e).clone(),
+                _ => ty.clone(),
+            }
+        }
+    }
+
+    /// `match val: Class | int[] { Class{} | [..] => ... }` — the slice
+    /// arm covers the entire list branch (Variable{0,0} covers everything).
+    /// With the `UnionMember` ctor, specialising on `UnionMember(int[])`
+    /// recurses into a column of type `int[]`, where slice-splitting fires
+    /// and recognises `[..]` as exhaustive.
+    #[test]
+    fn torture_47_union_member_slice_wildcard_exhaustive() {
+        let mut cx = UnionCtx::new();
+        let cls = qtn("Cls");
+        cx.register(cls.clone(), vec![]);
+        let cls_ty = class_ty(&cls);
+        let arr = list_of(int_ty());
+        let scrut = union_of(vec![cls_ty.clone(), arr.clone()]);
+
+        let class_arm = DPat::union_member(
+            cls_ty.clone(),
+            DPat::class(cls.clone(), vec![], cls_ty.clone()),
+            scrut.clone(),
+        );
+        let slice_arm = DPat::union_member(
+            arr.clone(),
+            DPat::slice(
+                SliceShape::Variable {
+                    prefix: 0,
+                    suffix: 0,
+                },
+                vec![],
+                arr.clone(),
+            ),
+            scrut.clone(),
+        );
+
+        let report = compute_match_usefulness(&cx, &[class_arm, slice_arm], scrut);
+        assert!(
+            report.missing.is_empty(),
+            "expected exhaustive: {:?}",
+            report
+                .missing
+                .iter()
+                .map(|w| w.to_string())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    /// `match val: Class | int[] { Class{} | [length-1-only] => ... }` —
+    /// the slice arm covers length-1 only. Lengths 0 and 2+ remain
+    /// missing on the list branch. Algorithm should report
+    /// non-exhaustive (matching rustc behaviour for partial slice
+    /// coverage inside an enum variant).
+    #[test]
+    fn torture_48_union_member_partial_slice_non_exhaustive() {
+        let mut cx = UnionCtx::new();
+        let cls = qtn("Cls");
+        cx.register(cls.clone(), vec![]);
+        let cls_ty = class_ty(&cls);
+        let arr = list_of(int_ty());
+        let scrut = union_of(vec![cls_ty.clone(), arr.clone()]);
+
+        let class_arm = DPat::union_member(
+            cls_ty.clone(),
+            DPat::class(cls.clone(), vec![], cls_ty.clone()),
+            scrut.clone(),
+        );
+        let slice_arm = DPat::union_member(
+            arr.clone(),
+            DPat::slice(
+                SliceShape::Fixed(1),
+                vec![DPat::wildcard(int_ty())],
+                arr.clone(),
+            ),
+            scrut.clone(),
+        );
+
+        let report = compute_match_usefulness(&cx, &[class_arm, slice_arm], scrut);
+        assert!(
+            !report.missing.is_empty(),
+            "expected non-exhaustive: only length-1 covered on list branch"
+        );
+    }
+
+    /// `match val: Class | int[] { Class{} | [] | [_, ..] => ... }` —
+    /// the combined slice arms `[]` + `[_, ..]` cover all lengths on the
+    /// list branch via slice-splitting at the `UnionMember(int[])`
+    /// recursion depth. This is the test case rustc handles natively
+    /// thanks to specialise-then-recurse; we now do the same.
+    #[test]
+    fn torture_49_union_member_combined_slices_exhaustive() {
+        let mut cx = UnionCtx::new();
+        let cls = qtn("Cls");
+        cx.register(cls.clone(), vec![]);
+        let cls_ty = class_ty(&cls);
+        let arr = list_of(int_ty());
+        let scrut = union_of(vec![cls_ty.clone(), arr.clone()]);
+
+        let class_arm = DPat::union_member(
+            cls_ty.clone(),
+            DPat::class(cls.clone(), vec![], cls_ty.clone()),
+            scrut.clone(),
+        );
+        let empty_arm = DPat::union_member(
+            arr.clone(),
+            DPat::slice(SliceShape::Fixed(0), vec![], arr.clone()),
+            scrut.clone(),
+        );
+        let nonempty_arm = DPat::union_member(
+            arr.clone(),
+            DPat::slice(
+                SliceShape::Variable {
+                    prefix: 1,
+                    suffix: 0,
+                },
+                vec![DPat::wildcard(int_ty())],
+                arr.clone(),
+            ),
+            scrut.clone(),
+        );
+
+        let report = compute_match_usefulness(&cx, &[class_arm, empty_arm, nonempty_arm], scrut);
+        assert!(
+            report.missing.is_empty(),
+            "expected exhaustive (Class + len-0 + len-≥1 covers all): {:?}",
+            report
+                .missing
+                .iter()
+                .map(|w| w.to_string())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    /// Missing one branch entirely: `match val: Class | int[] { Class{} => ... }`.
+    /// The list branch is not covered. Algorithm reports a missing
+    /// `UnionMember(int[])` witness.
+    #[test]
+    fn torture_50_union_member_missing_branch() {
+        let mut cx = UnionCtx::new();
+        let cls = qtn("Cls");
+        cx.register(cls.clone(), vec![]);
+        let cls_ty = class_ty(&cls);
+        let arr = list_of(int_ty());
+        let scrut = union_of(vec![cls_ty.clone(), arr.clone()]);
+
+        let class_arm = DPat::union_member(
+            cls_ty.clone(),
+            DPat::class(cls.clone(), vec![], cls_ty.clone()),
+            scrut.clone(),
+        );
+
+        let report = compute_match_usefulness(&cx, &[class_arm], scrut);
+        assert!(!report.missing.is_empty());
+    }
+
+    /// Wildcard arm covers any union member: exhaustive.
+    #[test]
+    fn torture_51_union_member_wildcard_covers_all() {
+        let mut cx = UnionCtx::new();
+        let cls = qtn("Cls");
+        cx.register(cls.clone(), vec![]);
+        let cls_ty = class_ty(&cls);
+        let arr = list_of(int_ty());
+        let scrut = union_of(vec![cls_ty, arr]);
+
+        let report = compute_match_usefulness(&cx, &[DPat::wildcard(scrut.clone())], scrut);
+        assert!(report.missing.is_empty());
     }
 
     /// Recursive class with no escape (`class A { x: A }`) is uninhabited,

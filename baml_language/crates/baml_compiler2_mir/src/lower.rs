@@ -5879,11 +5879,50 @@ impl LoweringContext<'_> {
 
                 visited.remove(&key);
             }
+            // Singleton-valued types pin a specific runtime value, so emit
+            // equality checks rather than type-tag tests. `is_type` on a
+            // literal type like `Ty::Literal("specific")` checks the value's
+            // *type* (string) rather than its content — which is too permissive
+            // and would let `let x: "specific" => …` fire on any string.
+            Tir2Ty::Literal(lit, _, _) => {
+                let constant = Self::lower_literal(lit);
+                self.emit_value_eq_branch(scrutinee, Operand::Constant(constant), success, failure);
+            }
+            Tir2Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::Null, _) => {
+                self.emit_value_eq_branch(
+                    scrutinee,
+                    Operand::Constant(Constant::Null),
+                    success,
+                    failure,
+                );
+            }
             _ => {
                 let resolved = self.resolved_aliases.convert(ty);
                 self.emit_is_type_branch(scrutinee, resolved, success, failure);
             }
         }
+    }
+
+    /// Branch on `scrutinee == rhs` (value equality). Used for singleton-typed
+    /// patterns where the type pins a specific value.
+    fn emit_value_eq_branch(
+        &mut self,
+        scrutinee: Local,
+        rhs: Operand,
+        success: BlockId,
+        failure: BlockId,
+    ) {
+        let test = Rvalue::BinaryOp {
+            op: BinOp::Eq,
+            left: Operand::Copy(Place::Local(scrutinee)),
+            right: rhs,
+        };
+        let test_local = self.builder.temp(Ty::Bool {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(Place::local(test_local), test);
+        self.builder
+            .branch(Operand::Copy(Place::Local(test_local)), success, failure);
     }
 
     fn lookup_tir_class_fields(
