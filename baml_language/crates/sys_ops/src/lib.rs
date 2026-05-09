@@ -594,12 +594,33 @@ impl<T> io::IoNamespaceLlm for T {
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         shorthand: String,
-        _ctx: &SysOpContext,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::PrimitiveClient> {
-        match shorthand_to_primitive_client(&shorthand) {
-            Ok(client) => SysOpOutput::ok(client),
-            Err(e) => SysOpOutput::err(e),
-        }
+        // Shorthand has no syntactic api_key binding to populate at lower
+        // time, so for the two providers whose env-var convention is
+        // ubiquitous enough to be safe to assume — `OPENAI_API_KEY` for
+        // openai and `ANTHROPIC_API_KEY` for anthropic — pull the key
+        // from the environment here. Other providers (vertex, bedrock,
+        // azure, …) need explicit configuration and stay untouched.
+        let mut client = match shorthand_to_primitive_client(&shorthand) {
+            Ok(c) => c,
+            Err(e) => return SysOpOutput::err(e),
+        };
+        let env_var: Option<&'static str> = match client.provider.as_str() {
+            "openai" | "openai-responses" => Some("OPENAI_API_KEY"),
+            "anthropic" => Some("ANTHROPIC_API_KEY"),
+            _ => None,
+        };
+        let Some(env_var) = env_var else {
+            return SysOpOutput::ok(client);
+        };
+        let io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            if let Ok(Some(val)) = io.env_get(env_var.to_string()).await {
+                client.options.api_key = Some(val);
+            }
+            Ok(client)
+        })
     }
 
     fn __sap_parse_final(
