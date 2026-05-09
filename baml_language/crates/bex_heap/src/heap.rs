@@ -558,10 +558,11 @@ impl BexHeap {
     /// or while holding exclusive access to the space being scanned.
     #[inline]
     unsafe fn ptr_in_chunked_vec(vec: &ChunkedVec<Object>, raw_ptr: *const Object) -> bool {
-        // SAFETY: `num_chunks` and `chunk_start_ptr` require the chunks `Vec`
-        // to not be growing concurrently; the caller of `ptr_in_chunked_vec`
-        // upholds that (only called for Gen1/Gen2, which grow at safepoints).
-        let num_chunks = unsafe { vec.num_chunks() };
+        // `num_chunks` and `chunk_start_ptr` now serialize on the
+        // ChunkedVec's internal RwLock, so the brief window is safe even
+        // under a concurrent grower. `chunk_start_ptr` is still `unsafe`
+        // for the bounds precondition.
+        let num_chunks = vec.num_chunks();
         for chunk_idx in 0..num_chunks {
             // SAFETY: `chunk_idx < num_chunks` by loop bound.
             let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
@@ -612,9 +613,9 @@ impl BexHeap {
         vec: &ChunkedVec<Object>,
         raw_ptr: *const Object,
     ) -> Option<(usize, usize)> {
-        // SAFETY: Caller of `locate_in_chunked_vec` ensures the chunks `Vec`
-        // is not being grown concurrently (safepoint-only / exclusive access).
-        let num_chunks = unsafe { vec.num_chunks() };
+        // `num_chunks` and `chunk_start_ptr` now serialize on the
+        // ChunkedVec's internal RwLock; concurrent growers are excluded.
+        let num_chunks = vec.num_chunks();
         for chunk_idx in 0..num_chunks {
             // SAFETY: `chunk_idx < num_chunks` by loop bound.
             let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
@@ -744,27 +745,33 @@ impl BexHeap {
         let runtime_end = runtime_start + self.tlab_size;
         let reserve_end = runtime_end + canary_slots;
 
-        // Lock only for growth (serializes chunk allocation)
+        // The chunk-allocation policy mutex still serializes the
+        // fetch_add → resize → canary-write critical section as a unit.
+        // (`ChunkedVec::resize_with` now self-synchronizes against
+        // concurrent `set` callers, so this is no longer load-bearing for
+        // memory safety — but keeping it preserves the existing "one
+        // grower at a time" policy and keeps the canary write paired with
+        // the resize that produced its slot.)
         let _guard = self.growth_lock.lock().unwrap();
 
         let ct_len = self.compile_time.len();
-        // SAFETY: We hold the growth_lock, so no other thread is resizing.
-        // ChunkedVec's resize_with never moves existing elements, and takes &self
-        // so we don't need a mutable reference - which avoids the data race.
+        // SAFETY: `&*self.gen0.get()` produces a `&ChunkedVec<Object>`.
+        // The ChunkedVec's own RwLock now gates outer-Vec mutation, so this
+        // shared reference is sound to hold concurrently with other readers
+        // and growers; per-element exclusivity is gated separately by
+        // `UnsafeCell` + caller-side TLAB regions.
         let gen0 = unsafe { &*self.gen0.get() };
         if gen0.len() < reserve_end {
-            // SAFETY: We hold the growth_lock, ensuring only one thread resizes at a time.
-            unsafe {
-                gen0.resize_with(reserve_end, || {
-                    // Placeholder object - will be overwritten by TLAB alloc
-                    self.placeholder_object()
-                });
-            }
+            gen0.resize_with(reserve_end, || {
+                // Placeholder object - will be overwritten by TLAB alloc
+                self.placeholder_object()
+            });
         }
         if use_canary {
             let chunk_start = ct_len + runtime_start;
             let chunk_end = ct_len + runtime_end;
-            // SAFETY: We hold the growth_lock, index is within bounds
+            // SAFETY: `runtime_end` is within the freshly-grown range; the
+            // canary slot is exclusive to this chunk reservation.
             unsafe {
                 gen0.set(runtime_end, self.tlab_canary_object(chunk_start, chunk_end));
             }
