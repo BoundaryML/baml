@@ -20,6 +20,7 @@ pub mod analysis;
 pub mod builder;
 pub mod callable;
 pub mod cycle_detector;
+pub mod exhaustiveness;
 pub mod generics;
 pub mod infer_context;
 pub mod inference;
