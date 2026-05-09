@@ -587,7 +587,13 @@ impl BexVm {
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
     ) -> Self {
-        let tlab = Tlab::new(Arc::clone(&heap));
+        // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
+        // which the engine reaches only after the VM has been registered as a
+        // permit holder via `HeapPermitManager::new_permit` and a permit is
+        // active. Eagerly calling `Tlab::new` here would reserve a chunk
+        // *before* registration, leaving the cursor stale across any GC that
+        // fires in the engine's pre-permit window.
+        let tlab = Tlab::new_empty(Arc::clone(&heap));
 
         // Pre-resolve error class pointers indexed by Error discriminant.
         let error_class_ptrs: Vec<HeapPtr> = ErrorClass::ALL
