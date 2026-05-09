@@ -201,6 +201,8 @@ jobs:
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':typescript2/app-vscode-webview/**' \
             ':typescript2/pkg-playground/**' \
+            ':typescript2/pkg-proto/**' \
+            ':baml_language/crates/bridge_ctypes/types/**' \
             ':baml_language/crates/baml_playground_wasm/**' \
             ':.github/workflows/webview-tests.reusable.yaml' \
           ; then
