@@ -769,7 +769,7 @@ async fn array_some_propagates_error() {
             [1, 2, 3].some((x: int) -> bool throws string {
                 if (x == 2) { throw "boom" } else { false }
             }) catch (e) {
-                _: string => true
+                string => true
             }
         }
     "#

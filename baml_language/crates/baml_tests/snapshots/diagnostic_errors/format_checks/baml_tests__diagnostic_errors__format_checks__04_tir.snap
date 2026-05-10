@@ -1759,6 +1759,12 @@ function user.MatchFailure.from_json(j: baml.json.json) -> user.MatchFailure thr
 class user.ArrayPatternTriviaBox {
   values: int[]
 }
+function user.ArrayPatternTriviaBox.to_json(self: user.ArrayPatternTriviaBox) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "values": self.values.to_json() } : map<string, baml.json.json>
+}
+function user.ArrayPatternTriviaBox.from_json(j: baml.json.json) -> user.ArrayPatternTriviaBox throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  ArrayPatternTriviaBox { values: baml.json.from_json<int[]>(baml.json.field(j, "values")) } : user.ArrayPatternTriviaBox
+}
 enum user.MatchStatus
 type user.MatchResult = user.MatchSuccess | user.MatchFailure
 function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bool) -> string throws never {

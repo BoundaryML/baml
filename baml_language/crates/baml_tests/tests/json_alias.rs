@@ -225,9 +225,6 @@ async fn match_json_arms_exhaustive() {
         jump L6
 
       L5:
-        load_var j
-        is_type map<string, baml.json.json>
-        pop_jump_if_false L12
         load_const "map"
         jump L12
 

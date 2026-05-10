@@ -251,8 +251,20 @@ function user.match_nested_paren_union(v: (int | string)[]) -> int throws never 
 class user.PatternBucket {
   values: int[]
 }
+function user.PatternBucket.to_json(self: user.PatternBucket) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "values": self.values.to_json() } : map<string, baml.json.json>
+}
+function user.PatternBucket.from_json(j: baml.json.json) -> user.PatternBucket throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  PatternBucket { values: baml.json.from_json<int[]>(baml.json.field(j, "values")) } : user.PatternBucket
+}
 class user.PatternMatrix {
   rows: int[][]
+}
+function user.PatternMatrix.to_json(self: user.PatternMatrix) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "rows": self.rows.to_json() } : map<string, baml.json.json>
+}
+function user.PatternMatrix.from_json(j: baml.json.json) -> user.PatternMatrix throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  PatternMatrix { rows: baml.json.from_json<int[][]>(baml.json.field(j, "rows")) } : user.PatternMatrix
 }
 type user.Number$stream = int | float
 class user.AppError$stream {

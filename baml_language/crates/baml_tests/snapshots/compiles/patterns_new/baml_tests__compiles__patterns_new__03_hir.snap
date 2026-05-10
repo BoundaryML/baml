@@ -57,8 +57,14 @@ function user.for_let_fn_narrow(items: (int) -> int[]) -> int  [expr] {
 function user.for_let_with_narrow(items: int[]) -> int  [expr] {
   { let sum = 0; for n: int in items { sum Add= n } } sum
 }
+function user.from_json(j: baml.json.json) -> user.PatternBucket  [expr] {
+  user.PatternBucket { values: baml.json.from_json(baml.json.field(j, "values")) }
+}
 function user.from_json(j: baml.json.json) -> user.AppError  [expr] {
   user.AppError { code: baml.json.from_json(baml.json.field(j, "code")) }
+}
+function user.from_json(j: baml.json.json) -> user.PatternMatrix  [expr] {
+  user.PatternMatrix { rows: baml.json.from_json(baml.json.field(j, "rows")) }
 }
 function user.int_widens_to_alias(v: user.Number) -> int  [expr] {
   {  } match (v) { n: user.Number => 1 }
@@ -94,7 +100,13 @@ function user.risky_error(mode: int) -> int  [expr] {
   { if (mode Eq 0) { throw user.AppError { code: 1 } }; throw "boom" }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "values": self.values.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "code": self.code.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "rows": self.rows.to_json() }
 }
 function user.unwrap_curried(f: (int) -> (int) -> (int) -> int | (string) -> (string) -> string) -> int  [expr] {
   {  } match (f) { triple: (int) -> (int) -> (int) -> int => triple(1)(2)(3), pair: (string) -> (string) -> string => 0 }

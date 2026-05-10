@@ -841,11 +841,17 @@ function user.from_json(j: baml.json.json) -> user.MatchSuccess  [expr] {
 function user.from_json(j: baml.json.json) -> user.MatchFailure  [expr] {
   user.MatchFailure { reason: baml.json.from_json(baml.json.field(j, "reason")) }
 }
+function user.from_json(j: baml.json.json) -> user.ArrayPatternTriviaBox  [expr] {
+  user.ArrayPatternTriviaBox { values: baml.json.from_json(baml.json.field(j, "values")) }
+}
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "reason": self.reason.to_json() }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "data": self.data.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "values": self.values.to_json() }
 }
 class user.OtherPoint {
   x: int

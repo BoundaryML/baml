@@ -7575,6 +7575,36 @@ impl TypeInferenceBuilder<'_> {
                 };
             }
         }
+        // Opaque scrutinee (`unknown` / `BuiltinUnknown`) with a pattern
+        // that has a strict-narrower natural type: dispatch onto a virtual
+        // single-member union. Without this, `let n: int` against scrut
+        // `unknown` would lower to a column-wide wildcard and shadow any
+        // sibling `_ => …` arm — which is wrong, because at runtime the
+        // arm only fires when the value's type tag is `int`. Wrapping in
+        // `UnionMember(int)` lets the matrix split this row from a
+        // sibling wildcard via the same `NonExhaustive`-vs-concrete-ctor
+        // mechanism it uses for `int` literals.
+        if matches!(scrut_ty, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. }) {
+            let natural = self.pattern_natural_type(pat_id, body);
+            if !matches!(
+                natural,
+                Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. } | Ty::TypeVar(..)
+            ) {
+                let inner = self.analyze_and_lower_inner(pat_id, &natural, body, at_expr);
+                let wrapped = crate::exhaustiveness::DPat::union_member(
+                    natural.clone(),
+                    inner.dpat,
+                    scrut_ty.clone(),
+                );
+                self.pattern_types.insert(pat_id, inner.matched_ty.clone());
+                return crate::pattern_lowering::PatternResult {
+                    dpat: wrapped,
+                    required_ty: inner.required_ty,
+                    matched_ty: inner.matched_ty,
+                    bindings: inner.bindings,
+                };
+            }
+        }
         self.analyze_and_lower_inner(pat_id, scrut_ty, body, at_expr)
     }
 
