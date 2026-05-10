@@ -620,9 +620,12 @@ fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBo
     let pat = &body.patterns[pat_id];
     match pat {
         Pattern::Wildcard => "_".to_string(),
-        Pattern::Bind { name } => name.to_string(),
+        Pattern::Bind { name, subpat } => match subpat {
+            Some(sp) => format!("{name}: {}", pat_desc(*sp, body)),
+            None => name.to_string(),
+        },
         Pattern::Type(ty) => hir2_type_expr_to_string(ty),
-        Pattern::Class { class, fields } => {
+        Pattern::Class { class, fields, .. } => {
             let class_path: Vec<_> = class.iter().map(|s| s.as_str()).collect();
             let field_strs: Vec<_> = fields
                 .iter()
@@ -630,16 +633,34 @@ fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBo
                 .collect();
             format!("{} {{ {} }}", class_path.join("."), field_strs.join(", "))
         }
+        Pattern::Array {
+            prefix,
+            rest,
+            suffix,
+            ascription,
+        } => {
+            let mut parts = prefix
+                .iter()
+                .map(|p| pat_desc(*p, body))
+                .collect::<Vec<_>>();
+            if let Some(rest) = rest {
+                parts.push(match rest.pat {
+                    Some(p) => format!("..{}", pat_desc(p, body)),
+                    None => "..".to_string(),
+                });
+            }
+            parts.extend(suffix.iter().map(|p| pat_desc(*p, body)));
+            let arr = format!("[{}]", parts.join(", "));
+            match ascription {
+                Some(t) => format!("{arr}: {}", hir2_type_expr_to_string(t)),
+                None => arr,
+            }
+        }
         Pattern::Or(pats) => pats
             .iter()
             .map(|p| pat_desc(*p, body))
             .collect::<Vec<_>>()
             .join(" | "),
-        Pattern::Chain(pats) => pats
-            .iter()
-            .map(|p| pat_desc(*p, body))
-            .collect::<Vec<_>>()
-            .join(" : "),
     }
 }
 
@@ -1921,9 +1942,12 @@ impl CompilerRunner {
             let pat = &body.patterns[pat_id];
             match pat {
                 Pattern::Wildcard => "_".to_string(),
-                Pattern::Bind { name } => name.to_string(),
+                Pattern::Bind { name, subpat } => match subpat {
+                    Some(sp) => format!("{name}: {}", pat_desc(*sp, body)),
+                    None => name.to_string(),
+                },
                 Pattern::Type(ty) => hir2_type_expr_to_string(ty),
-                Pattern::Class { class, fields } => {
+                Pattern::Class { class, fields, .. } => {
                     let class_path: Vec<_> = class.iter().map(|s| s.as_str()).collect();
                     let field_strs: Vec<_> = fields
                         .iter()
@@ -1931,16 +1955,34 @@ impl CompilerRunner {
                         .collect();
                     format!("{} {{ {} }}", class_path.join("."), field_strs.join(", "))
                 }
+                Pattern::Array {
+                    prefix,
+                    rest,
+                    suffix,
+                    ascription,
+                } => {
+                    let mut parts = prefix
+                        .iter()
+                        .map(|p| pat_desc(*p, body))
+                        .collect::<Vec<_>>();
+                    if let Some(rest) = rest {
+                        parts.push(match rest.pat {
+                            Some(p) => format!("..{}", pat_desc(p, body)),
+                            None => "..".to_string(),
+                        });
+                    }
+                    parts.extend(suffix.iter().map(|p| pat_desc(*p, body)));
+                    let arr = format!("[{}]", parts.join(", "));
+                    match ascription {
+                        Some(t) => format!("{arr}: {}", hir2_type_expr_to_string(t)),
+                        None => arr,
+                    }
+                }
                 Pattern::Or(pats) => pats
                     .iter()
                     .map(|p| pat_desc(*p, body))
                     .collect::<Vec<_>>()
                     .join(" | "),
-                Pattern::Chain(pats) => pats
-                    .iter()
-                    .map(|p| pat_desc(*p, body))
-                    .collect::<Vec<_>>()
-                    .join(" : "),
             }
         }
 

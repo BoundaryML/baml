@@ -950,10 +950,6 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     jump L6
 
   L5:
-    load_var expanded
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L7
     load_var items
     alloc_instance testing.SerializedTest
     load_const "lazyTestSet"
@@ -1228,9 +1224,6 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
     jump L1
 
   L0:
-    load_var runner
-    is_type (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never
-    pop_jump_if_false L2
     load_var base_run
     load_var runner
     call_indirect
@@ -1253,9 +1246,6 @@ function testing.run_testset(run_children: () -> testing.TestSetReport throws ne
     jump L1
 
   L0:
-    load_var runner
-    is_type (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never
-    pop_jump_if_false L2
     load_var run_children
     load_var runner
     call_indirect
@@ -1510,9 +1500,6 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
 
   L0:
     load_var input
-    is_type ErrorInfo
-    pop_jump_if_false L2
-    load_var input
     load_field .message
     store_var name
     jump L2
@@ -1529,9 +1516,6 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     jump L4
 
   L3:
-    load_var input
-    is_type ErrorInfo
-    pop_jump_if_false L5
     load_var input
     load_field .code
     unary_op -
@@ -1550,9 +1534,6 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     jump L7
 
   L6:
-    load_var input
-    is_type ErrorInfo
-    pop_jump_if_false L12
     load_var threshold
     store_var role_mult
     jump L12

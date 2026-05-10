@@ -25,27 +25,51 @@ function user.AppError.to_json(self: null) -> baml.json.json {
     return
 }
 
-function user.alias_intersection_in_match_arm(v: int | string) -> int {
-    load_var v
-    is_type string
-    pop_jump_if_false L0
-    jump L2
+function user.PatternBucket.from_json(j: baml.json.json) -> PatternBucket {
+    load_var j
+    load_const "values"
+    call baml.json.field
+    store_var _3
+    load_type int[]
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    alloc_instance user.PatternBucket
+    load_var _2
+    init_field .values
+    return
+}
 
-  L0:
-    load_var v
-    is_type bool
-    pop_jump_if_false L1
-    jump L2
+function user.PatternBucket.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .values
+    call baml.Array.to_json
+    load_const "values"
+    alloc_map 1
+    return
+}
 
-  L1:
-    load_const 0
-    jump L3
+function user.PatternMatrix.from_json(j: baml.json.json) -> PatternMatrix {
+    load_var j
+    load_const "rows"
+    call baml.json.field
+    store_var _3
+    load_type int[][]
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    alloc_instance user.PatternMatrix
+    load_var _2
+    init_field .rows
+    return
+}
 
-  L2:
-    load_var v
-    call baml.String.length
-
-  L3:
+function user.PatternMatrix.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .rows
+    call baml.Array.to_json
+    load_const "rows"
+    alloc_map 1
     return
 }
 
@@ -56,9 +80,6 @@ function user.bare_type_arm(v: int | string) -> int {
     jump L1
 
   L0:
-    load_var v
-    is_type string
-    pop_jump_if_false L2
     load_const 2
     jump L2
 
@@ -76,9 +97,6 @@ function user.call_either_int_caller(cb: (int) -> int throws never | (bool) -> i
     jump L1
 
   L0:
-    load_var cb
-    is_type (bool) -> int throws never
-    pop_jump_if_false L2
     load_const 2
     jump L2
 
@@ -90,14 +108,9 @@ function user.call_either_int_caller(cb: (int) -> int throws never | (bool) -> i
 }
 
 function user.call_int_callback(cb: (int) -> int throws never) -> int {
-    load_var cb
-    is_type (int) -> int throws never
-    pop_jump_if_false L0
     load_const 10
     load_var cb
     call_indirect
-
-  L0:
     return
 }
 
@@ -108,9 +121,6 @@ function user.call_with_callback(runner: ((int) -> int throws never) -> int thro
     jump L1
 
   L0:
-    load_var runner
-    is_type ((string) -> int throws never) -> int throws never
-    pop_jump_if_false L2
     make_closure .<lambda(call_with_callback, 1)>, 0
     load_var runner
     call_indirect
@@ -224,16 +234,6 @@ function user.chain_narrow_then_wildcard(v: int | string | bool) -> int {
     return
 }
 
-function user.deeply_parenthesized_binding(v: int) -> int {
-    load_var v
-    is_type int
-    pop_jump_if_false L0
-    load_var v
-
-  L0:
-    return
-}
-
 function user.dispatch_callback(cb: (int) -> int throws never | (string) -> string throws never) -> int {
     load_var cb
     is_type (int) -> int throws never
@@ -241,9 +241,6 @@ function user.dispatch_callback(cb: (int) -> int throws never | (string) -> stri
     jump L1
 
   L0:
-    load_var cb
-    is_type (string) -> string throws never
-    pop_jump_if_false L2
     load_const 0
     jump L2
 
@@ -273,10 +270,14 @@ function user.dispatch_with_wildcard(cb: (int) -> int throws never | (string) ->
     return
 }
 
-function user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
+function user.fn_pattern(cb: (int) -> int throws never) -> int {
+    load_const 0
     load_var cb
-    is_type (int) -> int throws never
-    pop_jump_if_false L1
+    call_indirect
+    return
+}
+
+function user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
     load_var cb
     is_type (int) -> int throws never
     pop_jump_if_false L0
@@ -285,14 +286,18 @@ function user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
   L0:
     load_var cb
     is_type string
-    pop_jump_if_false L1
+    pop_jump_if_false L2
+    load_const 1
+    jump L2
 
   L1:
     load_const 1
+
+  L2:
     return
 }
 
-function user.for_let_chain_widening(items: int[]) -> int {
+function user.for_let_ascription(items: int[]) -> int {
     load_const 0
     store_var sum
     load_const 0
@@ -362,40 +367,6 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     jump L0
 }
 
-function user.for_let_multi_chain(items: (int | string | bool)[]) -> int {
-    load_const 0
-    store_var count
-    load_const 0
-    store_var __for_idx
-
-  L0:
-    load_var __for_idx
-    load_var items
-    call baml.Array.length
-    cmp_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var count
-    return
-
-  L2:
-    load_var items
-    load_var __for_idx
-    load_array_element
-    store_var v
-    load_var count
-    load_const 1
-    add_int
-    store_var count
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
-    jump L0
-}
-
 function user.for_let_with_narrow(items: int[]) -> int {
     load_const 0
     store_var sum
@@ -429,151 +400,17 @@ function user.for_let_with_narrow(items: int[]) -> int {
 }
 
 function user.int_widens_to_alias(v: int | float) -> int {
-    load_var v
-    is_type int
-    pop_jump_if_false L1
-    load_var v
-    is_type int
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var v
-    is_type float
-    pop_jump_if_false L1
-
-  L1:
-    load_const 1
-    return
-}
-
-function user.int_widens_to_optional(v: int?) -> int? {
-    load_var v
-    is_type int
-    pop_jump_if_false L2
-    load_var v
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var v
-    is_type int
-    pop_jump_if_false L2
-
-  L1:
-    load_var v
-
-  L2:
-    return
-}
-
-function user.int_widens_to_union(v: int | string) -> int {
-    load_var v
-    is_type int
-    pop_jump_if_false L1
-    load_var v
-    is_type int
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var v
-    is_type string
-    pop_jump_if_false L1
-
-  L1:
-    load_const 1
-    return
-}
-
-function user.let_fn_return_widen() -> int | string {
-    load_const 0
-    make_closure .<lambda(let_fn_return_widen, 0)>, 0
-    call_indirect
-    return
-}
-
-function user.let_four_step_widen() -> int {
-    load_const 1
-    return
-}
-
-function user.let_list_widen(items: int[]) -> int {
-    load_var items
-    call baml.Array.length
-    return
-}
-
-function user.let_literal_to_nullable() -> int {
-    load_const 1
-    return
-}
-
-function user.let_literal_to_primitive() -> int {
-    load_const 1
-    return
-}
-
-function user.let_nested_paren_union_chain(items: (int | string)[]) -> int {
-    load_const 1
-    return
-}
-
-function user.let_string_literal_widening() -> int {
-    load_const 1
-    return
-}
-
-function user.let_three_step_widen() -> int {
-    load_const 1
-    return
-}
-
-function user.let_widen_to_nullable_union() -> int {
-    load_const 1
-    return
-}
-
-function user.let_wildcard_chain() -> int {
     load_const 1
     return
 }
 
 function user.literal_widens_to_int(v: int) -> int {
     load_var v
-    is_type 1
-    pop_jump_if_false L0
-    load_var v
-    is_type int
-    pop_jump_if_false L0
-    load_var v
-
-  L0:
     return
 }
 
 function user.match_nested_paren_union(v: (int | string)[]) -> int {
-    load_var v
-    is_type (int | string)[]
-    pop_jump_if_false L0
-
-  L0:
     load_const 1
-    return
-}
-
-function user.multi_narrow_chain(v: int) -> int {
-    load_var v
-    is_type int
-    pop_jump_if_false L0
-    load_var v
-    is_type int
-    pop_jump_if_false L0
-    load_var v
-
-  L0:
     return
 }
 
@@ -584,18 +421,6 @@ function user.nested_paren_union_array_one(items: (int | string)[]) -> int {
 }
 
 function user.nested_paren_union_array_optional(v: (int | string)[]?) -> int {
-    load_var v
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var v
-    is_type (int | string)[]
-    pop_jump_if_false L1
-
-  L1:
     load_const 1
     return
 }
@@ -669,16 +494,6 @@ function user.or_with_repeated_typed_binding(v: int | string) -> int {
     return
 }
 
-function user.paren_atom_outer_chain(v: int) -> int {
-    load_var v
-    is_type int
-    pop_jump_if_false L0
-    load_var v
-
-  L0:
-    return
-}
-
 function user.paren_chains_in_or(v: int) -> int {
     load_var v
     is_type int
@@ -694,42 +509,6 @@ function user.paren_chains_in_or(v: int) -> int {
 
   L1:
     load_const 1
-
-  L2:
-    return
-}
-
-function user.paren_fn_pattern_with_chain(cb: (int) -> int throws never) -> int {
-    load_var cb
-    is_type (int) -> int throws never
-    pop_jump_if_false L0
-    load_var cb
-    is_type (int) -> int throws never
-    pop_jump_if_false L0
-    load_const 0
-    load_var cb
-    call_indirect
-
-  L0:
-    return
-}
-
-function user.paren_union_outer_chain(v: int) -> int {
-    load_var v
-    is_type int
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var v
-    is_type int
-    pop_jump_if_false L2
-
-  L1:
-    load_var v
-    is_type int
-    pop_jump_if_false L2
-    load_var v
 
   L2:
     return
@@ -760,9 +539,6 @@ function user.unwrap_curried(f: (int) -> ((int) -> ((int) -> int throws never) t
     jump L1
 
   L0:
-    load_var f
-    is_type (string) -> ((string) -> string throws never) throws never
-    pop_jump_if_false L2
     load_const 0
     jump L2
 
@@ -790,9 +566,6 @@ function user.unwrap_typed(cb: (int) -> void throws never | (string) -> void thr
     jump L1
 
   L0:
-    load_var cb
-    is_type (string) -> void throws never
-    pop_jump_if_false L2
     load_const ""
     load_var cb
     call_indirect

@@ -131,3 +131,45 @@ mod lambda_format_tests {
         assert_eq!(formatted, second, "formatter should be idempotent");
     }
 }
+
+#[cfg(test)]
+mod pattern_format_tests {
+    use super::*;
+
+    /// Regression: an empty array pattern with a `: T` ascription used to
+    /// drop the ascription because the empty-array fast path in
+    /// `ArrayPattern::try_print_single_line` returned before the ascription
+    /// branch ran. See PR #3509 review feedback.
+    #[test]
+    fn test_empty_array_pattern_with_ascription_preserves_ty() {
+        let source = "function f(xs: int[]) -> int {\n    let []: int[] = xs;\n    0\n}\n";
+        let options = FormatOptions::default();
+        let formatted =
+            format(source, &options).expect("formatter should succeed on empty array ascription");
+        assert!(
+            formatted.contains("[]: int[]"),
+            "formatter dropped the `: int[]` ascription on an empty array pattern; got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// Regression: trailing trivia after the statement-level `let` keyword
+    /// (e.g. a comment between `let` and the pattern) used to be dropped
+    /// because the printer normalized `let_keyword` to a literal space
+    /// instead of emitting its trailing trivia. See PR #3509 review
+    /// feedback.
+    #[test]
+    fn test_let_keyword_trailing_trivia_preserved() {
+        let source = "function f(xs: int[]) -> int {\n    let /*keep*/ [x] = xs;\n    x\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options)
+            .expect("formatter should succeed on let with trailing comment");
+        assert!(
+            formatted.contains("/*keep*/"),
+            "formatter dropped the `/*keep*/` comment between `let` and the pattern; got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}

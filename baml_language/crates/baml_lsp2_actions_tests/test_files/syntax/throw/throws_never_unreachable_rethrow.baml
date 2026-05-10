@@ -25,12 +25,12 @@ function server(req: int) -> bool throws never {
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// Error: throws contract violation: `never` is missing unknown
+// Error: throws contract violation: `never` is missing user.Errors.AuthenticationError
 //     ╭─[ throw_throws_never_unreachable_rethrow.baml:11:41 ]
 //     │
 //  11 │ function server(req: int) -> bool throws never {
 //     │                                         ───┬──  
-//     │                                            ╰──── throws contract violation: `never` is missing unknown
+//     │                                            ╰──── throws contract violation: `never` is missing user.Errors.AuthenticationError
 //     │ 
 //     │ Note: Error code: E0096
 // ────╯

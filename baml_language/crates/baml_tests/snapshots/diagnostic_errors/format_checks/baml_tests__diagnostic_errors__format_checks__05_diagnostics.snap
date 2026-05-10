@@ -450,10 +450,21 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Error: unreachable arm
-     ╭─[ match_exprs.baml:157:18 ]
+  [type] Error: type mismatch: expected "hello", got "bye"
+     ╭─[ match_exprs.baml:160:31 ]
      │
- 157 │         "bye" => "farewell",
+ 160 │ ╭─▶         "hello" => "greeting",
+ 161 │ ├─▶         "bye" => "farewell",
+     │ │                                  
+     │ ╰────────────────────────────────── type mismatch: expected "hello", got "bye"
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ match_exprs.baml:161:18 ]
+     │
+ 161 │         "bye" => "farewell",
      │                  ─────┬────  
      │                       ╰────── unreachable arm
      │ 
@@ -461,9 +472,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: unreachable arm
-     ╭─[ match_exprs.baml:158:14 ]
+     ╭─[ match_exprs.baml:162:14 ]
      │
- 158 │         _ => "other"
+ 162 │         _ => "other"
      │              ───┬───  
      │                 ╰───── unreachable arm
      │ 
@@ -471,9 +482,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `bool` and `bool`
-     ╭─[ match_exprs.baml:307:20 ]
+     ╭─[ match_exprs.baml:311:20 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                    ──┬──  
      │                      ╰──── operator `Mul` cannot be applied to `bool` and `bool`
      │ 
@@ -481,9 +492,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `int` and `bool`
-     ╭─[ match_exprs.baml:307:28 ]
+     ╭─[ match_exprs.baml:311:28 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                            ──┬──  
      │                              ╰──── operator `Mul` cannot be applied to `int` and `bool`
      │ 
@@ -491,9 +502,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `bool` and `bool`
-     ╭─[ match_exprs.baml:307:56 ]
+     ╭─[ match_exprs.baml:311:56 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                                                        ──┬──  
      │                                                          ╰──── operator `Mul` cannot be applied to `bool` and `bool`
      │ 
@@ -501,9 +512,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `int` and `bool`
-     ╭─[ match_exprs.baml:307:68 ]
+     ╭─[ match_exprs.baml:311:68 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                                                                    ──┬──  
      │                                                                      ╰──── operator `Mul` cannot be applied to `int` and `bool`
      │ 
@@ -511,21 +522,81 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: operator `Mul` cannot be applied to `bool` and `int`
-     ╭─[ match_exprs.baml:307:80 ]
+     ╭─[ match_exprs.baml:311:80 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                                                                                ──┬──  
      │                                                                                  ╰──── operator `Mul` cannot be applied to `bool` and `int`
      │ 
      │ Note: Error code: E0004
 ─────╯
 
-  [type] Error: type mismatch: expected string, got 0
-     ╭─[ match_exprs.baml:446:6 ]
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ match_exprs.baml:386:6 ]
      │
- 446 │ ╭─▶     }
+ 386 │ ╭─▶     }
      ┆ ┆   
- 451 │ ├─▶     }
+ 391 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ match_exprs.baml:391:6 ]
+     │
+ 391 │ ╭─▶     }
+     ┆ ┆   
+ 396 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ match_exprs.baml:396:6 ]
+     │
+ 396 │ ╭─▶     }
+     ┆ ┆   
+ 401 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ match_exprs.baml:401:6 ]
+     │
+ 401 │ ╭─▶     }
+     ┆ ┆   
+ 406 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ match_exprs.baml:416:6 ]
+     │
+ 416 │ ╭─▶     }
+     ┆ ┆   
+ 421 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: type mismatch: expected string, got 0
+     ╭─[ match_exprs.baml:416:6 ]
+     │
+ 416 │ ╭─▶     }
+     ┆ ┆   
+ 421 │ ├─▶     }
      │ │           
      │ ╰─────────── type mismatch: expected string, got 0
      │     

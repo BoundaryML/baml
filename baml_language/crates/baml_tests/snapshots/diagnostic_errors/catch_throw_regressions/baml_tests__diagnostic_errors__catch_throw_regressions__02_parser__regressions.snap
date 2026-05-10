@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 27825
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -120,13 +119,9 @@ SOURCE_FILE
             L_BRACE "{"
             CATCH_ARM
               PATTERN
-                CHAIN_PATTERN
-                  WILDCARD_PATTERN "_"
-                    WORD "_"
-                  COLON ":"
-                  TYPE_PATTERN
-                    TYPE_EXPR "string"
-                      WORD "string"
+                TYPE_PATTERN
+                  TYPE_EXPR "string"
+                    WORD "string"
               FAT_ARROW "=>"
               STRING_LITERAL "http!"
                 QUOTE """
@@ -143,13 +138,9 @@ SOURCE_FILE
             L_BRACE "{"
             CATCH_ARM
               PATTERN
-                CHAIN_PATTERN
-                  WILDCARD_PATTERN "_"
-                    WORD "_"
-                  COLON ":"
-                  TYPE_PATTERN
-                    TYPE_EXPR "int"
-                      WORD "int"
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
               FAT_ARROW "=>"
               STRING_LITERAL "index!"
                 QUOTE """
@@ -448,13 +439,9 @@ SOURCE_FILE
             L_BRACE "{"
             CATCH_ARM
               PATTERN
-                CHAIN_PATTERN
-                  WILDCARD_PATTERN "_"
-                    WORD "_"
-                  COLON ":"
-                  TYPE_PATTERN
-                    TYPE_EXPR "string"
-                      WORD "string"
+                TYPE_PATTERN
+                  TYPE_EXPR "string"
+                    WORD "string"
               FAT_ARROW "=>"
               STRING_LITERAL "handled"
                 QUOTE """

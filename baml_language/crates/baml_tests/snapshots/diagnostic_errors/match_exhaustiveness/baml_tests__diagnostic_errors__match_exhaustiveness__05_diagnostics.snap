@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 33751
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: unreachable arm
@@ -33,6 +32,18 @@ assertion_line: 33751
     │ Note: Error code: E0063
 ────╯
 
+  [type] Error: non-exhaustive match on `int`; missing: _
+    ╭─[ match_exhaustiveness.baml:59:51 ]
+    │
+ 59 │ ╭─▶ function GuardedOnlyNonExhaustive(x: int) -> int {
+    ┆ ┆   
+ 63 │ ├─▶     }
+    │ │           
+    │ ╰─────────── non-exhaustive match on `int`; missing: _
+    │     
+    │     Note: Error code: E0062
+────╯
+
   [type] Error: non-exhaustive match on `bool`; missing: false
      ╭─[ match_exhaustiveness.baml:243:60 ]
      │
@@ -53,6 +64,75 @@ assertion_line: 33751
  253 │ ├─▶     }
      │ │           
      │ ╰─────────── non-exhaustive match on `bool`; missing: true
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `user.AlwaysTrue`; missing: true
+     ╭─[ match_exhaustiveness.baml:295:70 ]
+     │
+ 295 │ ╭─▶ function NonExhaustiveTrueTypeWrongLiteral(t: AlwaysTrue) -> string {
+     ┆ ┆   
+ 298 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.AlwaysTrue`; missing: true
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: type mismatch: expected user.AlwaysTrue, got false
+     ╭─[ match_exhaustiveness.baml:296:16 ]
+     │
+ 296 │ ╭─▶     match (t) {
+ 297 │ ├─▶         false => "wrong!"
+     │ │                               
+     │ ╰─────────────────────────────── type mismatch: expected user.AlwaysTrue, got false
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:297:18 ]
+     │
+ 297 │         false => "wrong!"
+     │                  ────┬───  
+     │                      ╰───── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: non-exhaustive match on `user.CustomBool`; missing: false
+     ╭─[ match_exhaustiveness.baml:302:67 ]
+     │
+ 302 │ ╭─▶ function NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
+     ┆ ┆   
+ 305 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.CustomBool`; missing: false
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `user.Role`; missing: "system"
+     ╭─[ match_exhaustiveness.baml:355:60 ]
+     │
+ 355 │ ╭─▶ function NonExhaustiveStringLiteral(role: Role) -> string {
+     ┆ ┆   
+ 359 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.Role`; missing: "system"
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `user.SuccessCode`; missing: 204
+     ╭─[ match_exhaustiveness.baml:396:64 ]
+     │
+ 396 │ ╭─▶ function NonExhaustiveIntLiteral(code: SuccessCode) -> string {
+     ┆ ┆   
+ 400 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.SuccessCode`; missing: 204
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -92,6 +172,16 @@ assertion_line: 33751
 ─────╯
 
   [type] Error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:489:14 ]
+     │
+ 489 │         1 => "second one",
+     │              ──────┬─────  
+     │                    ╰─────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: unreachable arm
      ╭─[ match_exhaustiveness.baml:498:17 ]
      │
  498 │         true => "second true",
@@ -99,6 +189,152 @@ assertion_line: 33751
      │                       ╰──────── unreachable arm
      │ 
      │ Note: Error code: E0063
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:507:19 ]
+     │
+ 507 │         "user" => "second user",
+     │                   ──────┬──────  
+     │                         ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: non-exhaustive match on `user.MaybeOk`; missing: null
+     ╭─[ match_exhaustiveness.baml:529:69 ]
+     │
+ 529 │ ╭─▶ function NonExhaustiveOptionalMissingNull(code: MaybeOk) -> string {
+     ┆ ┆   
+ 532 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.MaybeOk`; missing: null
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `user.MaybeOk`; missing: 200
+     ╭─[ match_exhaustiveness.baml:536:70 ]
+     │
+ 536 │ ╭─▶ function NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
+     ┆ ┆   
+ 539 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.MaybeOk`; missing: 200
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `user.MixedLiterals`; missing: true
+     ╭─[ match_exhaustiveness.baml:559:66 ]
+     │
+ 559 │ ╭─▶ function NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
+     ┆ ┆   
+ 563 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.MixedLiterals`; missing: true
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `user.OkOrCreated`; missing: 201
+     ╭─[ match_exhaustiveness.baml:583:69 ]
+     │
+ 583 │ ╭─▶ function NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
+     ┆ ┆   
+ 586 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.OkOrCreated`; missing: 201
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }
+     ╭─[ match_exhaustiveness.baml:598:60 ]
+     │
+ 598 │ ╭─▶ function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
+     ┆ ┆   
+ 603 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:600:26 ]
+     │
+ 600 │         let s: Success => s.data,
+     │                          ───┬───  
+     │                             ╰───── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:601:26 ]
+     │
+ 601 │         let f: Failure => f.reason,
+     │                          ────┬────  
+     │                              ╰────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }, null, null
+     ╭─[ match_exhaustiveness.baml:607:74 ]
+     │
+ 607 │ ╭─▶ function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
+     ┆ ┆   
+ 611 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }, null, null
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:609:26 ]
+     │
+ 609 │         let s: Success => s.data,
+     │                          ───┬───  
+     │                             ╰───── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:610:26 ]
+     │
+ 610 │         let f: Failure => f.reason
+     │                          ────┬────  
+     │                              ╰────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] Error: non-exhaustive match on `user.Result`; missing: user.Failure { reason: _ }
+     ╭─[ match_exhaustiveness.baml:620:65 ]
+     │
+ 620 │ ╭─▶ function NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
+     ┆ ┆   
+ 623 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.Result`; missing: user.Failure { reason: _ }
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
+     ╭─[ match_exhaustiveness.baml:627:70 ]
+     │
+ 627 │ ╭─▶ function NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
+     ┆ ┆   
+ 631 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
+     │     
+     │     Note: Error code: E0062
 ─────╯
 
   [type] Error: unreachable arm
@@ -135,6 +371,30 @@ assertion_line: 33751
      │     Note: Error code: E0062
 ─────╯
 
+  [type] Error: non-exhaustive match on `user.SuccessOr200`; missing: 200
+     ╭─[ match_exhaustiveness.baml:704:82 ]
+     │
+ 704 │ ╭─▶ function NonExhaustiveClassPlusLiteralMissingLiteral(x: SuccessOr200) -> string {
+     ┆ ┆   
+ 707 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.SuccessOr200`; missing: 200
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: non-exhaustive match on `user.SuccessOr200`; missing: user.Success { data: _ }
+     ╭─[ match_exhaustiveness.baml:711:80 ]
+     │
+ 711 │ ╭─▶ function NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
+     ┆ ┆   
+ 714 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.SuccessOr200`; missing: user.Success { data: _ }
+     │     
+     │     Note: Error code: E0062
+─────╯
+
   [type] Error: unreachable arm
      ╭─[ match_exhaustiveness.baml:733:26 ]
      │
@@ -145,16 +405,27 @@ assertion_line: 33751
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: non-exhaustive match on `bool`; missing: false, true
+  [type] Error: non-exhaustive match on `bool`; missing: true, false
      ╭─[ match_exhaustiveness.baml:744:58 ]
      │
  744 │ ╭─▶ function WrongLiteralTypeBoolWithInt(b: bool) -> string {
      ┆ ┆   
  747 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `bool`; missing: false, true
+     │ ╰─────────── non-exhaustive match on `bool`; missing: true, false
      │     
      │     Note: Error code: E0062
+─────╯
+
+  [type] Error: type mismatch: expected bool, got 42
+     ╭─[ match_exhaustiveness.baml:745:16 ]
+     │
+ 745 │ ╭─▶     match (b) {
+ 746 │ ├─▶         42 => "wrong type"
+     │ │                                
+     │ ╰──────────────────────────────── type mismatch: expected bool, got 42
+     │     
+     │     Note: Error code: E0001
 ─────╯
 
   [type] Error: unreachable arm
@@ -165,6 +436,41 @@ assertion_line: 33751
      │                     ╰─────── unreachable arm
      │ 
      │ Note: Error code: E0063
+─────╯
+
+  [type] Error: non-exhaustive match on `int`; missing: _
+     ╭─[ match_exhaustiveness.baml:751:59 ]
+     │
+ 751 │ ╭─▶ function WrongLiteralTypeIntWithString(x: int) -> string {
+     ┆ ┆   
+ 754 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `int`; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: type mismatch: expected int, got "hello"
+     ╭─[ match_exhaustiveness.baml:752:16 ]
+     │
+ 752 │ ╭─▶     match (x) {
+ 753 │ ├─▶         "hello" => "wrong type"
+     │ │                                     
+     │ ╰───────────────────────────────────── type mismatch: expected int, got "hello"
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
+     ╭─[ match_exhaustiveness.baml:763:64 ]
+     │
+ 763 │ ╭─▶ function PartialUnionPatternCoverage(r: FullResult) -> string {
+     ┆ ┆   
+ 766 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
+     │     
+     │     Note: Error code: E0062
 ─────╯
 
   [type] Error: unreachable arm

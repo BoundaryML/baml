@@ -122,7 +122,7 @@ function class_destructure_field_pattern_type_mismatch() -> int {
 }
 
 function class_destructure_invalid_chain_type() -> int {
-    let Person { age }: Address = Person {
+    let Person { age } = Person {
         age: 1,
         flexible_age: 2,
         address: Address { zip: 3 }
@@ -142,9 +142,14 @@ function generic_class_type_pattern_in_chain_requires_type_args(boxed: Box<int>)
     }
 }
 
-function class_destructure_chain_binding_middle_link_is_invalid(boxed: Box<int>) -> int {
-    let Box { value }: let alias: Box<int> = boxed;
-    value + alias.value
+function generic_class_destructure_requires_type_args(boxed: Box<int>) -> int {
+    let Box { value } = boxed;
+    value
+}
+
+function class_destructure_box(boxed: Box<int>) -> int {
+    let Box<int> { value } = boxed;
+    value
 }
 
 // ============================================================================
@@ -215,7 +220,7 @@ function let_optional_class_field_narrower_than_field_is_refutable() -> int {
 
 function let_generic_class_field_type_narrower_than_substituted_field_is_refutable() -> int {
     let boxed: Box<string> = Box { value: "ready" };
-    let Box { value: int } = boxed;
+    let Box<string> { value: int } = boxed;
     1
 }
 
@@ -241,7 +246,7 @@ function class_destructure_or_pattern_same_binding_conflicting_types(v: Person |
 
 function generic_class_destructure_or_pattern_same_binding_conflicting_types(v: Box<int> | Box<string>) -> int {
     match (v) {
-        (Box { value: let value }: Box<int>) | (Box { value: let value }: Box<string>) => 1
+        Box<int> { value: let value } | Box<string> { value: let value } => 1
     }
 }
 
@@ -249,9 +254,9 @@ function nested_generic_class_destructure_duplicate_binding_name() -> int {
     let boxed: Box<SameNameInner> = Box {
         value: SameNameInner { field: 1 }
     };
-    let Box {
+    let Box<SameNameInner> {
         value: let value: SameNameInner { field: let value }
-    }: Box<SameNameInner> = boxed;
+    } = boxed;
     0
 }
 
@@ -293,16 +298,6 @@ function class_destructure_formatter_trivia_preserved() -> int {
     };
     let Person { /* open */ age /* before colon */ : /* after colon */ let years /* before comma */, /* after comma */ address: Address { /* nested */ zip } /* before close */ } = input;
     years + zip
-}
-
-function class_destructure_formatter_deep_chain_trivia() -> int {
-    let input = Person {
-        age: 1,
-        flexible_age: 2,
-        address: Address { zip: 3 }
-    };
-    let Person { /* outer open */ address /* before outer colon */ : /* after outer colon */ let addr_alias /* before chain colon */ : /* before nested */ Address { /* nested open */ zip /* before zip colon */ : /* after zip colon */ let zip_alias /* before trailing comma */, /* after trailing comma */ } /* before type chain */ : /* after type chain colon */ Address } = input;
-    zip_alias
 }
 
 function class_destructure_formatter_empty_and_trailing_comma_trivia() -> int {

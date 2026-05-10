@@ -26,7 +26,7 @@ async fn match_typed_pattern_first_arm() {
             let result = Success { data: "hello" };
             match (result: Success | Failure) {
                 let s: Success => "success: " + s.data,
-                _: Failure => "failure",
+                Failure => "failure",
             }
         }
     "#
@@ -106,9 +106,6 @@ async fn match_typed_pattern_second_arm() {
         jump L1
 
       L0:
-        load_var result
-        is_type Failure
-        pop_jump_if_false L2
         load_const "failure: "
         load_var result
         load_field .reason
@@ -206,10 +203,10 @@ async fn match_typed_discard_patterns_typetag_switch_path() {
         r#"
         function classify(x: int | string | bool | float) -> int {
             match (x) {
-                _: int => 1,
-                _: string => 2,
-                _: bool => 3,
-                _: float => 4,
+                int => 1,
+                string => 2,
+                bool => 3,
+                float => 4,
             }
         }
 
@@ -274,7 +271,7 @@ async fn match_guard_true() {
             match (s) {
                 let x: Score if x.value >= 90 => "excellent",
                 let x: Score if x.value >= 70 => "good",
-                _: Score => "needs work",
+                Score => "needs work",
             }
         }
     "#
@@ -308,9 +305,6 @@ async fn match_guard_true() {
         jump L2
 
       L1:
-        load_var s
-        is_type Score
-        pop_jump_if_false L4
         load_const "needs work"
         jump L4
 
@@ -345,7 +339,7 @@ async fn match_guard_fallthrough() {
             match (s) {
                 let x: Score if x.value >= 90 => "excellent",
                 let x: Score if x.value >= 70 => "good",
-                _: Score => "needs work",
+                Score => "needs work",
             }
         }
     "#
@@ -379,9 +373,6 @@ async fn match_guard_fallthrough() {
         jump L2
 
       L1:
-        load_var s
-        is_type Score
-        pop_jump_if_false L4
         load_const "needs work"
         jump L4
 
@@ -416,7 +407,7 @@ async fn match_guard_all_fail() {
             match (s) {
                 let x: Score if x.value >= 90 => "excellent",
                 let x: Score if x.value >= 70 => "good",
-                _: Score => "needs work",
+                Score => "needs work",
             }
         }
     "#
@@ -450,9 +441,6 @@ async fn match_guard_all_fail() {
         jump L2
 
       L1:
-        load_var s
-        is_type Score
-        pop_jump_if_false L4
         load_const "needs work"
         jump L4
 
@@ -752,9 +740,6 @@ async fn match_mixed_literal_typed_guard() {
         jump L2
 
       L1:
-        load_var x
-        is_type int
-        pop_jump_if_false L4
         load_const "other int"
         jump L4
 
@@ -818,9 +803,6 @@ async fn match_mixed_literal_typed_guard_fallthrough() {
         jump L2
 
       L1:
-        load_var x
-        is_type int
-        pop_jump_if_false L4
         load_const "other int"
         jump L4
 
@@ -889,9 +871,6 @@ async fn match_guard_on_typed_pattern_field_access() {
         jump L2
 
       L1:
-        load_var result
-        is_type Failure
-        pop_jump_if_false L4
         load_const "failure"
         jump L4
 
@@ -961,9 +940,6 @@ async fn match_guard_on_typed_pattern_field_access_fails() {
         jump L2
 
       L1:
-        load_var result
-        is_type Failure
-        pop_jump_if_false L4
         load_const "failure"
         jump L4
 
@@ -1384,9 +1360,6 @@ async fn match_class_types_exhaustive_first() {
         jump L2
 
       L1:
-        load_var animal
-        is_type Bird
-        pop_jump_if_false L4
         load_const "bird: "
         load_var animal
         load_field .name
@@ -1460,9 +1433,6 @@ async fn match_class_types_exhaustive_last() {
         jump L2
 
       L1:
-        load_var animal
-        is_type Bird
-        pop_jump_if_false L4
         load_const "bird: "
         load_var animal
         load_field .name
@@ -1751,9 +1721,6 @@ async fn match_multiple_typed_patterns_with_guards() {
         jump L3
 
       L2:
-        load_var result
-        is_type Failure
-        pop_jump_if_false L6
         load_const "failure"
         jump L6
 
@@ -1904,9 +1871,6 @@ async fn match_class_type_is_type_chain() {
         jump L1
 
       L0:
-        load_var animal
-        is_type Dog
-        pop_jump_if_false L2
         load_const "dog"
         jump L2
 
@@ -2047,10 +2011,10 @@ async fn match_null_in_type_tag_jump_table() {
         r#"
         function classify(x: int | string | bool | null) -> string {
             match (x) {
-                _: int    => "int",
-                _: string => "string",
-                _: bool   => "bool",
-                _: null   => "null"
+                int    => "int",
+                string => "string",
+                bool   => "bool",
+                null   => "null"
             }
         }
         function main() -> string {
@@ -2111,7 +2075,7 @@ async fn match_null_with_class_types_type_tag() {
             match (x) {
                 let c: Cat  => "cat",
                 let d: Dog  => "dog",
-                _: null => "nothing"
+                null => "nothing"
             }
         }
         function main() -> string {
@@ -2134,9 +2098,6 @@ async fn match_null_with_class_types_type_tag() {
         jump L2
 
       L1:
-        load_var x
-        is_type null
-        pop_jump_if_false L4
         load_const "nothing"
         jump L4
 

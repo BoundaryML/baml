@@ -549,9 +549,13 @@ impl<'db> SemanticIndexBuilder<'db> {
     ) -> FxHashMap<Name, TextRange> {
         match &patterns[pat_id] {
             ast::Pattern::Wildcard | ast::Pattern::Type(_) => FxHashMap::default(),
-            ast::Pattern::Bind { name } => {
+            ast::Pattern::Bind { name, subpat } => {
                 let mut m = FxHashMap::default();
                 m.insert(name.clone(), source_map.pattern_span(pat_id));
+                if let Some(sp) = subpat {
+                    let inner = Self::collect_pattern_names(patterns, *sp, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
                 m
             }
             ast::Pattern::Class { fields, .. } => {
@@ -573,9 +577,24 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
                 m
             }
-            ast::Pattern::Chain(parts) => {
+            ast::Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ascription: _,
+            } => {
                 let mut m: FxHashMap<Name, TextRange> = FxHashMap::default();
-                for id in parts {
+                for id in prefix {
+                    let inner = Self::collect_pattern_names(patterns, *id, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                if let Some(rest) = rest
+                    && let Some(id) = rest.pat
+                {
+                    let inner = Self::collect_pattern_names(patterns, id, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                for id in suffix {
                     let inner = Self::collect_pattern_names(patterns, *id, source_map, diagnostics);
                     Self::merge_with_dup_check(&mut m, inner, diagnostics);
                 }

@@ -31,14 +31,14 @@ function MissingMultipleVariants(c: Color) -> string {
 //     │     
 //     │     Note: Error code: E0062
 // ────╯
-// Error: non-exhaustive match on `user.Color`; missing: user.Color.Blue, user.Color.Green
+// Error: non-exhaustive match on `user.Color`; missing: user.Color.Green, user.Color.Blue
 //     ╭─[ match_match_non_exhaustive.baml:15:55 ]
 //     │
 //  15 │ ╭─▶ function MissingMultipleVariants(c: Color) -> string {
 //     ┆ ┆   
 //  18 │ ├─▶   }
 //     │ │         
-//     │ ╰───────── non-exhaustive match on `user.Color`; missing: user.Color.Blue, user.Color.Green
+//     │ ╰───────── non-exhaustive match on `user.Color`; missing: user.Color.Green, user.Color.Blue
 //     │     
 //     │     Note: Error code: E0062
 // ────╯

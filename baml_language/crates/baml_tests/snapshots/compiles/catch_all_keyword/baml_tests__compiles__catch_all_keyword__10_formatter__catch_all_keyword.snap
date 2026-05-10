@@ -18,7 +18,7 @@ function MayFailIntOrString(x: int) -> string {
 // Non-exhaustive catch — partial handling is fine
 function PartialCatch(x: int) -> string {
     MayFailIntOrString(x) catch (e) {
-        _: string => "caught string"
+        string => "caught string"
     }
 }
 
@@ -32,15 +32,15 @@ function CatchAllWildcard(x: int) -> string {
 // catch_all with all types explicitly handled
 function CatchAllTyped(x: int) -> string {
     MayFailIntOrString(x) catch_all (e) {
-        _: string => "caught string",
-        _: int => "caught int"
+        string => "caught string",
+        int => "caught int"
     }
 }
 
 // Chained: catch handles string, catch_all handles rest
 function CatchThenCatchAll(x: int) -> string {
     MayFailIntOrString(x) catch (e) {
-        _: string => "caught string"
+        string => "caught string"
     } catch_all (e2) {
         _ => "caught rest"
     }

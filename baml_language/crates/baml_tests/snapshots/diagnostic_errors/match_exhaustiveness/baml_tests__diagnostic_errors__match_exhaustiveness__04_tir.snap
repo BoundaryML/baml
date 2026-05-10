@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 33696
 ---
 === TIR2 ===
 class user.Success {
@@ -72,6 +71,7 @@ function user.GuardedOnlyNonExhaustive(x: int) -> int throws never {
       n: int if n < 0 =>
         n * Neg 1 : int
   }
+  !! 1733..1831: non-exhaustive match on `int`; missing: _
 }
 function user.GuardedWithFallback(x: int) -> int throws never {
   { : int | 0
@@ -134,9 +134,9 @@ function user.ExhaustiveLiteralWithBaseType(x: int) -> string throws never {
 function user.OverlappingTypedPatterns(r: user.Result) -> string throws never {
   { : "success" | "covers failure only (success already handled)"
     match (r : user.Result) : "success" | "covers failure only (success already handled)"
-      _: Success =>
+      Success =>
         "success" : "success"
-      _: Success | Failure =>
+      Success | Failure =>
         "covers failure on..." : "covers failure only (success already handled)"
   }
 }
@@ -171,7 +171,7 @@ function user.PartialUnionPlusCatchAll(r: user.FullResult) -> string throws neve
     match (r : user.FullResult) : "success or failure" | "pending"
       x: Success | Failure =>
         "success or failure" : "success or failure"
-      _: Pending =>
+      Pending =>
         "pending" : "pending"
   }
 }
@@ -228,7 +228,7 @@ function user.NonExhaustiveBoolMissingFalse(b: bool) -> string throws never {
       true =>
         "yes" : "yes"
   }
-  !! 7296..7340: non-exhaustive match on `bool`; missing: false
+  !! 7287..7331: non-exhaustive match on `bool`; missing: false
 }
 function user.NonExhaustiveBoolMissingTrue(b: bool) -> string throws never {
   { : "no"
@@ -236,7 +236,7 @@ function user.NonExhaustiveBoolMissingTrue(b: bool) -> string throws never {
       false =>
         "no" : "no"
   }
-  !! 7455..7499: non-exhaustive match on `bool`; missing: true
+  !! 7446..7490: non-exhaustive match on `bool`; missing: true
 }
 function user.BoolUnionPattern(b: bool) -> string throws never {
   { : "covered"
@@ -277,6 +277,9 @@ function user.NonExhaustiveTrueTypeWrongLiteral(t: user.AlwaysTrue) -> string th
       false =>
         "wrong!" : "wrong!"
   }
+  !! 8595..8609: type mismatch: expected user.AlwaysTrue, got false
+  !! 8579..8627: non-exhaustive match on `user.AlwaysTrue`; missing: true
+  !! 8613..8621: unreachable arm
 }
 function user.NonExhaustiveCustomBoolMissing(b: user.CustomBool) -> string throws never {
   { : "yes"
@@ -284,6 +287,7 @@ function user.NonExhaustiveCustomBoolMissing(b: user.CustomBool) -> string throw
       true =>
         "yes" : "yes"
   }
+  !! 8748..8792: non-exhaustive match on `user.CustomBool`; missing: false
 }
 function user.ExhaustiveOptional(x: int?) -> string throws never {
   { : "has value" | "no value"
@@ -334,6 +338,7 @@ function user.NonExhaustiveStringLiteral(role: user.Role) -> string throws never
       "assistant" =>
         "Assistant" : "Assistant"
   }
+  !! 10191..10277: non-exhaustive match on `user.Role`; missing: "system"
 }
 function user.StringLiteralUnionPattern(role: user.Role) -> string throws never {
   { : "chat participant" | "system"
@@ -373,6 +378,7 @@ function user.NonExhaustiveIntLiteral(code: user.SuccessCode) -> string throws n
       201 =>
         "Created" : "Created"
   }
+  !! 11263..11334: non-exhaustive match on `user.SuccessCode`; missing: 204
 }
 function user.IntLiteralUnionPattern(code: user.SuccessCode) -> string throws never {
   { : "success with body" | "no content"
@@ -416,7 +422,7 @@ function user.NonExhaustiveEnumMissingOne(s: user.Status) -> string throws never
       Status.Inactive =>
         "inactive" : "inactive"
   }
-  !! 13303..13398: non-exhaustive match on `user.Status`; missing: user.Status.Pending
+  !! 13294..13389: non-exhaustive match on `user.Status`; missing: user.Status.Pending
 }
 function user.NonExhaustiveEnumMissingMultiple(s: user.Status) -> string throws never {
   { : "active"
@@ -424,7 +430,7 @@ function user.NonExhaustiveEnumMissingMultiple(s: user.Status) -> string throws 
       Status.Active =>
         "active" : "active"
   }
-  !! 13516..13572: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+  !! 13507..13563: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
 }
 function user.DuplicateEnumVariant(s: user.Status) -> string throws never {
   { : "first" | "second" | "inactive" | "pending"
@@ -438,7 +444,7 @@ function user.DuplicateEnumVariant(s: user.Status) -> string throws never {
       Status.Pending =>
         "pending" : "pending"
   }
-  !! 13988..13996: unreachable arm
+  !! 13979..13987: unreachable arm
 }
 function user.DuplicateIntLiteral(x: int) -> string throws never {
   { : "first one" | "second one" | "other"
@@ -450,6 +456,7 @@ function user.DuplicateIntLiteral(x: int) -> string throws never {
       _ =>
         "other" : "other"
   }
+  !! 14215..14227: unreachable arm
 }
 function user.DuplicateBoolLiteral(b: bool) -> string throws never {
   { : "first true" | "second true" | "false"
@@ -461,7 +468,7 @@ function user.DuplicateBoolLiteral(b: bool) -> string throws never {
       false =>
         "false" : "false"
   }
-  !! 14423..14436: unreachable arm
+  !! 14414..14427: unreachable arm
 }
 function user.DuplicateStringLiteral(role: user.Role) -> string throws never {
   { : "first user" | "second user" | "assistant" | "system"
@@ -475,6 +482,7 @@ function user.DuplicateStringLiteral(role: user.Role) -> string throws never {
       "system" =>
         "system" : "system"
   }
+  !! 14629..14642: unreachable arm
 }
 type user.MaybeOk = 200?
 function user.ExhaustiveOptionalSingleton(code: user.MaybeOk) -> string throws never {
@@ -492,6 +500,7 @@ function user.NonExhaustiveOptionalMissingNull(code: user.MaybeOk) -> string thr
       200 =>
         "OK" : "OK"
   }
+  !! 15267..15312: non-exhaustive match on `user.MaybeOk`; missing: null
 }
 function user.NonExhaustiveOptionalMissingValue(code: user.MaybeOk) -> string throws never {
   { : "no code"
@@ -499,6 +508,7 @@ function user.NonExhaustiveOptionalMissingValue(code: user.MaybeOk) -> string th
       null =>
         "no code" : "no code"
   }
+  !! 15437..15488: non-exhaustive match on `user.MaybeOk`; missing: 200
 }
 type user.MixedLiterals = 200 | "success" | true
 function user.ExhaustiveMixedLiterals(x: user.MixedLiterals) -> string throws never {
@@ -520,6 +530,7 @@ function user.NonExhaustiveMixedLiterals(x: user.MixedLiterals) -> string throws
       "success" =>
         "string success" : "string success"
   }
+  !! 16119..16205: non-exhaustive match on `user.MixedLiterals`; missing: true
 }
 type user.OkCode = 200
 type user.OkOrCreated = user.OkCode | 201
@@ -538,6 +549,7 @@ function user.NonExhaustiveAliasOfLiterals(code: user.OkOrCreated) -> string thr
       200 =>
         "ok" : "ok"
   }
+  !! 16810..16855: non-exhaustive match on `user.OkOrCreated`; missing: 201
 }
 type user.DoubleMaybe = user.MaybeResult?
 function user.ExhaustiveDoubleMaybe(dm: user.DoubleMaybe) -> string throws never {
@@ -550,6 +562,9 @@ function user.ExhaustiveDoubleMaybe(dm: user.DoubleMaybe) -> string throws never
       null =>
         "nothing" : "nothing"
   }
+  !! 17329..17448: non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }
+  !! 17372..17379: unreachable arm
+  !! 17406..17415: unreachable arm
 }
 function user.NonExhaustiveDoubleMaybeMissingNull(dm: user.DoubleMaybe) -> string throws never {
   { : string
@@ -559,6 +574,9 @@ function user.NonExhaustiveDoubleMaybeMissingNull(dm: user.DoubleMaybe) -> strin
       f: Failure =>
         f.reason : string
   }
+  !! 17573..17665: non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }, null, null
+  !! 17616..17623: unreachable arm
+  !! 17650..17659: unreachable arm
 }
 function user.NonExhaustiveTypeAliasMissingOne(r: user.Result) -> string throws never {
   { : string
@@ -566,6 +584,7 @@ function user.NonExhaustiveTypeAliasMissingOne(r: user.Result) -> string throws 
       s: Success =>
         s.data : string
   }
+  !! 18033..18088: non-exhaustive match on `user.Result`; missing: user.Failure { reason: _ }
 }
 function user.NonExhaustiveFullResultMissingOne(r: user.FullResult) -> string throws never {
   { : string
@@ -575,6 +594,7 @@ function user.NonExhaustiveFullResultMissingOne(r: user.FullResult) -> string th
       f: Failure =>
         f.reason : string
   }
+  !! 18215..18306: non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
 }
 function user.StringLiteralAfterStringType(s: string) -> string throws never {
   { : "any string" | "unreachable"
@@ -584,7 +604,7 @@ function user.StringLiteralAfterStringType(s: string) -> string throws never {
       "hello" =>
         "unreachable" : "unreachable"
   }
-  !! 18786..18799: unreachable arm
+  !! 18777..18790: unreachable arm
 }
 function user.ExhaustiveNullableEnum(s: user.Status?) -> string throws never {
   { : "active" | "inactive" | "pending" | "no status"
@@ -618,7 +638,7 @@ function user.NonExhaustiveNullableEnumMissingNull(s: user.Status?) -> string th
       Status.Pending =>
         "pending" : "pending"
   }
-  !! 19644..19776: non-exhaustive match on `user.Status?`; missing: null
+  !! 19635..19767: non-exhaustive match on `user.Status?`; missing: null
 }
 function user.NonExhaustiveNullableEnumMissingVariant(s: user.Status?) -> string throws never {
   { : "active" | "inactive" | "no status"
@@ -630,7 +650,7 @@ function user.NonExhaustiveNullableEnumMissingVariant(s: user.Status?) -> string
       null =>
         "no status" : "no status"
   }
-  !! 19901..20025: non-exhaustive match on `user.Status?`; missing: user.Status.Pending
+  !! 19892..20016: non-exhaustive match on `user.Status?`; missing: user.Status.Pending
 }
 type user.SuccessOr200 = user.Success | 200
 function user.ExhaustiveClassPlusLiteral(x: user.SuccessOr200) -> string throws never {
@@ -648,6 +668,7 @@ function user.NonExhaustiveClassPlusLiteralMissingLiteral(x: user.SuccessOr200) 
       s: Success =>
         s.data : string
   }
+  !! 20630..20685: non-exhaustive match on `user.SuccessOr200`; missing: 200
 }
 function user.NonExhaustiveClassPlusLiteralMissingClass(x: user.SuccessOr200) -> string throws never {
   { : "http ok"
@@ -655,6 +676,7 @@ function user.NonExhaustiveClassPlusLiteralMissingClass(x: user.SuccessOr200) ->
       200 =>
         "http ok" : "http ok"
   }
+  !! 20827..20874: non-exhaustive match on `user.SuccessOr200`; missing: user.Success { data: _ }
 }
 function user.ExhaustiveEnumWithTypedPattern(s: user.Status) -> string throws never {
   { : "any status"
@@ -671,7 +693,7 @@ function user.EnumVariantAfterTypedEnum(s: user.Status) -> string throws never {
       Status.Active =>
         "unreachable" : "unreachable"
   }
-  !! 21510..21523: unreachable arm
+  !! 21498..21511: unreachable arm
 }
 function user.WrongLiteralTypeBoolWithInt(b: bool) -> string throws never {
   { : "wrong type"
@@ -679,8 +701,9 @@ function user.WrongLiteralTypeBoolWithInt(b: bool) -> string throws never {
       42 =>
         "wrong type" : "wrong type"
   }
-  !! 22000..22012: unreachable arm
-  !! 21969..22018: non-exhaustive match on `bool`; missing: false, true
+  !! 21973..21984: type mismatch: expected bool, got 42
+  !! 21957..22006: non-exhaustive match on `bool`; missing: true, false
+  !! 21988..22000: unreachable arm
 }
 function user.WrongLiteralTypeIntWithString(x: int) -> string throws never {
   { : "wrong type"
@@ -688,6 +711,8 @@ function user.WrongLiteralTypeIntWithString(x: int) -> string throws never {
       "hello" =>
         "wrong type" : "wrong type"
   }
+  !! 22135..22151: type mismatch: expected int, got "hello"
+  !! 22119..22173: non-exhaustive match on `int`; missing: _
 }
 function user.PartialUnionPatternCoverage(r: user.FullResult) -> string throws never {
   { : "not pending"
@@ -695,6 +720,7 @@ function user.PartialUnionPatternCoverage(r: user.FullResult) -> string throws n
       x: Success | Failure =>
         "not pending" : "not pending"
   }
+  !! 22561..22633: non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
 }
 function user.LiteralAfterTypedPattern(x: int) -> string throws never {
   { : "int" | "unreachable"
@@ -704,7 +730,7 @@ function user.LiteralAfterTypedPattern(x: int) -> string throws never {
       42 =>
         "unreachable" : "unreachable"
   }
-  !! 23494..23507: unreachable arm
+  !! 23482..23495: unreachable arm
 }
 function user.BoolLiteralAfterTypedBool(b: bool) -> string throws never {
   { : "any bool" | "unreachable"
@@ -714,7 +740,7 @@ function user.BoolLiteralAfterTypedBool(b: bool) -> string throws never {
       true =>
         "unreachable" : "unreachable"
   }
-  !! 23694..23707: unreachable arm
+  !! 23682..23695: unreachable arm
 }
 function user.NestedTypeBindings(r: user.Result) -> int throws never {
   { : 0 | 1
@@ -724,7 +750,7 @@ function user.NestedTypeBindings(r: user.Result) -> int throws never {
       f: Failure =>
         1 : 1
   }
-  !! 24235..24236: unreachable arm
+  !! 24223..24224: unreachable arm
 }
 function user.NestedLiteralUnions(code: int) -> string throws never {
   { : "success" | "client error" | "other"
@@ -774,7 +800,7 @@ function user.NestedMatchSpans(x: int, y: bool) -> string throws never {
       _ =>
         "other" : "other"
   }
-  !! 25796..25816: unreachable arm
+  !! 25784..25804: unreachable arm
 }
 function user.MultipleUnreachableSpans(s: user.Status) -> string throws never {
   { : "active" | "duplicate 1" | "inactive" | "duplicate 2" | "pending"
@@ -790,8 +816,8 @@ function user.MultipleUnreachableSpans(s: user.Status) -> string throws never {
       Status.Pending =>
         "pending" : "pending"
   }
-  !! 26116..26129: unreachable arm
-  !! 26195..26208: unreachable arm
+  !! 26104..26117: unreachable arm
+  !! 26183..26196: unreachable arm
 }
 function user.HighLineNumberNonExhaustive(s: user.Status) -> string throws never {
   { : "active only"
@@ -799,7 +825,7 @@ function user.HighLineNumberNonExhaustive(s: user.Status) -> string throws never
       Status.Active =>
         "active only" : "active only"
   }
-  !! 26440..26501: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+  !! 26428..26489: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
 }
 function user.GetStatus() -> user.Status throws never {
   { : user.Status.Active

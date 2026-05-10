@@ -4,7 +4,7 @@ function DestructureQualifiedLet() -> int {
         score: 41
     };
 
-    let root.llm.openai.Response { score }: root.llm.openai.Response = response;
+    let root.llm.openai.Response { score } = response;
     score
 }
 
@@ -16,7 +16,7 @@ function DestructureQualifiedMatch() -> int {
 
     match (response) {
         root.llm.openai.Response { score: 0 } => 0,
-        root.llm.openai.Response { score: let matched }: root.llm.openai.Response => matched
+        root.llm.openai.Response { score: let matched } => matched
     }
 }
 
@@ -26,7 +26,7 @@ function DestructureNamespaceQualifiedLet() -> int {
         score: 45
     };
 
-    let llm.openai.Response { score }: llm.openai.Response = response;
+    let llm.openai.Response { score } = response;
     score
 }
 
@@ -38,7 +38,7 @@ function DestructureNamespaceQualifiedMatch() -> int {
 
     match (response) {
         llm.openai.Response { score: 0 } => 0,
-        llm.openai.Response { score: let matched }: llm.openai.Response => matched
+        llm.openai.Response { score: let matched } => matched
     }
 }
 
@@ -87,7 +87,7 @@ function GenericDestructureQualifiedLet() -> int {
         value: 49
     };
 
-    let root.llm.openai.Box { value }: root.llm.openai.Box<int> = boxed;
+    let root.llm.openai.Box<int> { value } = boxed;
     value
 }
 
@@ -96,7 +96,7 @@ function GenericDestructureNamespaceQualifiedLet() -> int {
         value: "ok"
     };
 
-    let llm.openai.Box { value }: llm.openai.Box<string> = boxed;
+    let llm.openai.Box<string> { value } = boxed;
     value.length()
 }
 
@@ -127,9 +127,9 @@ function DeepGenericDestructureQualifiedLet() -> int {
         inner: root.llm.openai.Box<int> { value: 52 }
     };
 
-    let root.llm.openai.Outer {
-        inner: root.llm.openai.Box { value }
-    }: root.llm.openai.Outer<int> = outer;
+    let root.llm.openai.Outer<int> {
+        inner: root.llm.openai.Box<int> { value }
+    } = outer;
     value
 }
 
@@ -138,8 +138,8 @@ function DeepGenericDestructureNamespaceQualifiedLet() -> int {
         inner: llm.openai.Box<string> { value: "done" }
     };
 
-    let llm.openai.Outer {
-        inner: llm.openai.Box { value }
-    }: llm.openai.Outer<string> = outer;
+    let llm.openai.Outer<string> {
+        inner: llm.openai.Box<string> { value }
+    } = outer;
     value.length()
 }

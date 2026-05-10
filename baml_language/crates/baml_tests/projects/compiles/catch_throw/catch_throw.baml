@@ -38,7 +38,7 @@ function SingleCatchWildcard(x: int) -> string {
 // Single catch with typed arm
 function SingleCatchTyped(x: int) -> string {
     MayFail(x) catch (e) {
-        _: string => "caught string"
+        string => "caught string"
     }
 }
 
@@ -49,9 +49,9 @@ function SingleCatchTyped(x: int) -> string {
 // Additional catch clause for fallback behavior
 function CatchWithFallback(x: int) -> string {
     MayFailIntOrString(x) catch (e) {
-        _: string => "caught string"
+        string => "caught string"
     } catch (e2) {
-        _: int => "caught int fallback"
+        int => "caught int fallback"
     }
 }
 
@@ -62,7 +62,7 @@ function CatchWithFallback(x: int) -> string {
 // Catch with typed arm pattern
 function CatchWithTypedArm(x: int) -> string {
     MayFail(x) catch (e) {
-        _: string => "caught string"
+        string => "caught string"
     }
 }
 
@@ -73,8 +73,8 @@ function CatchWithTypedArm(x: int) -> string {
 // Multiple typed arms in a single catch
 function MultipleCatchArms(x: int) -> string {
     MayFailIntOrString(x) catch (e) {
-        _: string => "caught string",
-        _: int => "caught int"
+        string => "caught string",
+        int => "caught int"
     }
 }
 
@@ -120,8 +120,8 @@ function ThrowStatement(x: int) -> string {
 // Multiple catch clauses on the same expression
 function ChainedCatchClauses(x: int) -> string {
     MayFailIntOrString(x) catch (e) {
-        _: string => "first handler"
+        string => "first handler"
     } catch (e2) {
-        _: int => "second handler"
+        int => "second handler"
     }
 }

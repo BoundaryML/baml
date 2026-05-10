@@ -147,8 +147,8 @@ function ExhaustiveLiteralWithBaseType(x: int) -> string {
 // The second arm SHOULD NOT be flagged as unreachable because it still covers B
 function OverlappingTypedPatterns(r: Result) -> string {
     match (r) {
-        _: Success => "success",
-        _: Success | Failure => "covers failure only (success already handled)",
+        Success => "success",
+        Success | Failure => "covers failure only (success already handled)",
     }
 }
 
@@ -182,7 +182,7 @@ type FullResult = Success | Failure | Pending;
 function PartialUnionPlusCatchAll(r: FullResult) -> string {
     match (r) {
         let x: Success | Failure => "success or failure",
-        _: Pending => "pending",
+        Pending => "pending",
     }
 }
 
@@ -719,7 +719,7 @@ function NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
 
 // ============================================================================
 // EDGE CASE: TYPED PATTERN COVERING ENTIRE ENUM
-// _: Status should cover all Status variants
+// Status should cover all Status variants
 // ============================================================================
 
 // Exhaustive: typed pattern covers all enum variants

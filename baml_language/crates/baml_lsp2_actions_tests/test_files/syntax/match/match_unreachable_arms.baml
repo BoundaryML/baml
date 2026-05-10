@@ -50,3 +50,12 @@ function DuplicateLiteral(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
+// Error: unreachable arm
+//     ╭─[ match_match_unreachable_arms.baml:28:11 ]
+//     │
+//  28 │     42 => "duplicate",
+//     │           ─────┬─────  
+//     │                ╰─────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0063
+// ────╯
