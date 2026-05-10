@@ -650,8 +650,8 @@ pub enum Stmt {
     Expr(ExprId),
     Let {
         /// The binding pattern. A `: T` annotation lives inside the pattern
-        /// as a `Chain` link, not as a separate field on `Stmt::Let` — see
-        /// [`Pattern::Chain`].
+        /// as the bind's sub-pattern slot, not as a separate field on
+        /// `Stmt::Let` — see [`Pattern::Bind`].
         pattern: PatId,
         initializer: Option<ExprId>,
         is_watched: bool,
@@ -710,11 +710,11 @@ pub enum Stmt {
 /// - `_` always lowers to [`Pattern::Wildcard`] — never `Bind { name: "_" }`.
 /// - 1-element `Or` is NOT allocated; it collapses to the inner pattern.
 ///   So if you see `Or(parts)`, `parts.len() >= 2`.
-/// - The `: T` annotation in `let x: T` is carried as
-///   [`Pattern::Bind::ascription`] (and likewise
-///   [`Pattern::Array::ascription`] for `[…]: T`). `:` is only valid after
-///   `let x` or `[…]` — it is rejected on `_`, `Class { … }`, bare types,
-///   and Or-patterns.
+/// - The `: T` annotation in `let x: T` is carried as the bind's `subpat`
+///   slot (see [`Pattern::Bind`]) and likewise as `Pattern::Array`'s
+///   `ascription` field for `[…]: T`. `:` is only valid after `let x` or
+///   `[…]` — it is rejected on `_`, `Class { … }`, bare types, and
+///   Or-patterns.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pattern {
     // ── Atoms (single-shape patterns) ────────────────────────────────────

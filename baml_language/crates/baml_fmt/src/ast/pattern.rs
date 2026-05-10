@@ -589,18 +589,8 @@ impl ArrayPattern {
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         printer.print_raw_token(&self.open_bracket);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_bracket.span());
-
-        if self.elements.is_empty() {
-            try_print_trivia_single_line_spaced(printer, open_trailing, false, true)?;
-            let (close_leading, _) = printer
-                .trivia
-                .get_for_range_split(self.close_bracket.span());
-            try_print_trivia_single_line_spaced(printer, close_leading, true, false)?;
-            printer.print_raw_token(&self.close_bracket);
-            return (printer.output.len() <= shape.width).then(PrintInfo::default_single_line);
-        }
-
         try_print_trivia_single_line_spaced(printer, open_trailing, false, true)?;
+
         for (idx, (element, comma)) in self.elements.iter().enumerate() {
             let (element_leading, element_trailing) = printer.trivia.get_for_element(element);
             try_print_trivia_single_line_spaced(printer, element_leading, false, true)?;

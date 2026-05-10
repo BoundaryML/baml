@@ -1144,6 +1144,213 @@ async fn match_array_destructure_outer_chain_applies_to_whole_array() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(234)));
 }
 
+// Five-level alternating class/array/class/array/class with a typed
+// bind near the floor, joined across an Or that reaches the same name
+// via a flipped traversal (prefix-then-suffix vs suffix-then-prefix on
+// every slice level). All four combinations of the input must route to
+// exactly one of the two arms, and `let x: int` must come out as `int`
+// at every depth.
+#[tokio::test]
+async fn match_alternating_class_array_five_levels_or_flipped_traversal() {
+    let output = baml_test!(
+        r#"
+        class Atom {
+            value int
+        }
+
+        class Slot {
+            atoms Atom[]
+        }
+
+        class Row {
+            slots Slot[]
+        }
+
+        class Sheet {
+            rows Row[]
+        }
+
+        function pick(s: Sheet) -> int {
+            match (s) {
+                Sheet { rows: [_, Row { slots: [_, Slot { atoms: [_, Atom { value: let x: int }, ..] }, ..] }, ..] }
+                | Sheet { rows: [.., Row { slots: [.., Slot { atoms: [.., Atom { value: let x: int }, _] }] }] } => x,
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            // Hits arm 1: rows[1].slots[1].atoms[1] = 42
+            let target = Atom { value: 42 };
+            let stuffer_atom = Atom { value: 0 };
+            let stuffer_slot = Slot { atoms: [stuffer_atom, stuffer_atom, stuffer_atom] };
+            let stuffer_row = Row { slots: [stuffer_slot, stuffer_slot, stuffer_slot] };
+            let target_slot = Slot { atoms: [stuffer_atom, target, stuffer_atom] };
+            let target_row = Row { slots: [stuffer_slot, target_slot, stuffer_slot] };
+            pick(Sheet { rows: [stuffer_row, target_row, stuffer_row] })
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+// Or-pattern with FOUR alternates, each reaching `let v: int` via a
+// completely different traversal across mixed-depth class and array
+// shapes. Same-name same-type bind across every alt forces the matrix
+// to unify the binding type via join.
+#[tokio::test]
+async fn match_or_four_alternates_same_name_different_paths() {
+    let output = baml_test!(
+        r#"
+        class Wrap {
+            inner int[]
+        }
+
+        class Pair {
+            left Wrap
+            right int[]
+        }
+
+        function pick(p: Pair | Wrap | int[][] | int[]) -> int {
+            match (p) {
+                Pair { left: Wrap { inner: [_, let v: int, ..] }, right: _ }
+                | Pair { left: _, right: [_, _, let v: int, ..] }
+                | Wrap { inner: [.., let v: int, _, _] }
+                | [_, [.., let v: int], ..] => v,
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            // Pair branch 1: left Wrap inner [_, 7, ..]
+            let a = pick(Pair { left: Wrap { inner: [99, 7, 100] }, right: [0] });
+            // Pair branch 2: right [_, _, 8, ..]
+            let b = pick(Pair { left: Wrap { inner: [99] }, right: [99, 99, 8, 99] });
+            // Wrap branch: inner [.., 9, _, _]
+            let c = pick(Wrap { inner: [99, 9, 99, 99] });
+            // 2D array branch: [_, [.., 6], ..]
+            let d = pick([[99], [4, 5, 6], [99]]);
+            a * 1000 + b * 100 + c * 10 + d
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(7896)));
+}
+
+// Class-of-arrays-of-classes-of-arrays. Match drills through three
+// levels of structural destructure with positional and rest-flanked
+// bindings, then names a deep cell across an Or with an alternate that
+// reaches the same cell via a different path.
+#[tokio::test]
+async fn match_deep_class_array_or_picks_deep_cell() {
+    let output = baml_test!(
+        r#"
+        class Cell {
+            row int[]
+        }
+
+        class Grid {
+            cells Cell[]
+        }
+
+        function score(g: Grid) -> int {
+            match (g) {
+                Grid { cells: [_, Cell { row: [_, let x, ..] }, ..] }
+                | Grid { cells: [.., Cell { row: [.., let x, _] }] } => x,
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            score(Grid {
+                cells: [
+                    Cell { row: [1, 2, 3] },
+                    Cell { row: [10, 42, 30] },
+                    Cell { row: [100, 200, 300] }
+                ]
+            })
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+// Or-pattern across a 2D array vs a class with a 2D array field, both
+// reaching a deep `int` via different slice/class shapes. Verifies that
+// the matrix lines up the binding's type as `int` despite the alternates
+// taking very different paths.
+#[tokio::test]
+async fn match_or_2d_array_vs_class_with_2d_field() {
+    let output = baml_test!(
+        r#"
+        class Wrap {
+            grid int[][]
+        }
+
+        function score(v: int[][] | Wrap) -> int {
+            match (v) {
+                [[let x, ..], ..]
+                | Wrap { grid: [.., [_, let x, ..]] } => x,
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            let bare = score([[7, 1, 2], [8, 9]]);
+            let wrapped = score(Wrap { grid: [[1, 2], [3, 11, 5]] });
+            bare * 100 + wrapped
+        }
+    "#
+    );
+    // bare: [[7, 1, 2], [8, 9]] → first arm, x = 7 → 7
+    // wrapped: Wrap { grid: [[1, 2], [3, 11, 5]] } → second arm,
+    //          last cell row = [3, 11, 5], skip first, take next → x = 11
+    assert_eq!(output.result, Ok(BexExternalValue::Int(7 * 100 + 11)));
+}
+
+// Multiple prefix bindings + wildcard rest + suffix binding:
+// `[let x, let y, .., let z]` should bind `x`, `y` to the first two
+// elements and `z` to the last.
+#[tokio::test]
+async fn match_array_destructure_two_prefix_rest_suffix_binding() {
+    let output = baml_test!(
+        r#"
+        function score(xs: int[]) -> int {
+            match (xs) {
+                [let x, let y, .., let z] => x * 100 + y * 10 + z,
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            score([7, 8, 99, 99, 9])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(789)));
+}
+
+// Prefix binding + wildcard rest + multiple suffix bindings:
+// `[let x, .., let y, let z]` should bind `x` to the first element and
+// `y`, `z` to the last two.
+#[tokio::test]
+async fn match_array_destructure_prefix_rest_two_suffix_bindings() {
+    let output = baml_test!(
+        r#"
+        function score(xs: int[]) -> int {
+            match (xs) {
+                [let x, .., let y, let z] => x * 100 + y * 10 + z,
+                _ => 0
+            }
+        }
+
+        function main() -> int {
+            score([7, 99, 99, 8, 9])
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(789)));
+}
+
 #[tokio::test]
 async fn match_array_destructure_inside_class_destructure_empty_field() {
     let output = baml_test!(

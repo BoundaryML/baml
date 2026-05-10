@@ -7,7 +7,7 @@
 //! Architecture is a reduced port of rustc's `rustc_pattern_analysis`:
 //! - [`Ctor`] is the head of a deconstructed pattern (a value's "shape").
 //! - [`DPat`] is a pattern in deconstructed form: ctor + sub-patterns + type.
-//! - [`Matrix`] is a 2-D grid of `DPat`s; rows are arms, columns are positions.
+//! - `Matrix` (private) is a 2-D grid of `DPat`s; rows are arms, columns are positions.
 //! - The recursive *usefulness* algorithm specializes the matrix on each ctor of
 //!   the leading column, recursing into sub-pattern columns. A column is
 //!   exhaustive iff its ctor enumeration is fully covered by the matrix.

@@ -242,6 +242,12 @@ impl Printable for LetStmt {
         if let Some(let_keyword) = &self.let_keyword {
             printer.print_raw_token(let_keyword);
             printer.print_str(" ");
+            // Preserve trivia between `let` and the pattern — e.g.
+            // `let /*keep*/ [x]` would otherwise lose the comment.
+            let (_, let_trailing) = printer.trivia.get_for_range_split(let_keyword.span());
+            if printer.print_trivia_squished(let_trailing) > 0 {
+                printer.print_str(" ");
+            }
         }
         // Simple binding patterns carry `let`, the binding name, and any `: T` narrow.
         multi_lined |= printer.print(&self.pattern, shape.clone()).multi_lined;
@@ -273,6 +279,8 @@ impl Printable for LetStmt {
     fn leftmost_token(&self) -> TextRange {
         if let Some(watch) = &self.watch {
             watch.span()
+        } else if let Some(let_keyword) = &self.let_keyword {
+            let_keyword.span()
         } else {
             self.pattern.leftmost_token()
         }
@@ -701,6 +709,11 @@ impl PrintMultiLine for ForIteratorArgs {
                 if let Some(let_keyword) = &let_stmt.let_keyword {
                     printer.print_raw_token(let_keyword);
                     printer.print_spaces(1);
+                    // Preserve trivia between `let` and the pattern.
+                    let (_, let_trailing) = printer.trivia.get_for_range_split(let_keyword.span());
+                    if printer.print_trivia_squished(let_trailing) > 0 {
+                        printer.print_spaces(1);
+                    }
                 }
                 printer.print(&let_stmt.pattern, inner_shape.clone());
             }
@@ -754,6 +767,11 @@ impl ForIteratorArgs {
                 if let Some(let_keyword) = &let_stmt.let_keyword {
                     printer.print_raw_token(let_keyword);
                     printer.print_spaces(1);
+                    // Preserve trivia between `let` and the pattern.
+                    let (_, let_trailing) = printer.trivia.get_for_range_split(let_keyword.span());
+                    if printer.print_trivia_squished(let_trailing) > 0 {
+                        printer.print_spaces(1);
+                    }
                 }
                 if printer
                     .print(&let_stmt.pattern, Shape::unlimited_single_line())

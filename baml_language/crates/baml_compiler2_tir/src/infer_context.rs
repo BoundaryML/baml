@@ -115,7 +115,9 @@ pub enum TirTypeError {
     RestSubPatternNotSupported,
     /// A `let` statement or `for-let` binding uses a pattern that can fail
     /// for values of the type flowing into it.
-    RefutablePatternInLet { context: &'static str },
+    RefutablePatternInLet {
+        context: crate::builder::IrrefutableContextKind,
+    },
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
@@ -322,7 +324,8 @@ impl fmt::Display for TirTypeError {
             ),
             TirTypeError::RefutablePatternInLet { context } => write!(
                 f,
-                "refutable pattern in {context} binding; refutable patterns belong in `match`"
+                "refutable pattern in {} binding; refutable patterns belong in `match`",
+                context.as_str()
             ),
             TirTypeError::InvalidCatchBindingType { type_name } => write!(
                 f,
