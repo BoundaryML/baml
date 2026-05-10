@@ -6000,9 +6000,7 @@ impl LoweringContext<'_> {
     fn pattern_contains_structural(&self, pat_id: AstPatId) -> bool {
         match &self.body.patterns[pat_id] {
             AstPattern::Class { .. } | AstPattern::Array { .. } => true,
-            AstPattern::Chain(parts) | AstPattern::Or(parts) => {
-                parts.iter().any(|p| self.pattern_contains_structural(*p))
-            }
+            AstPattern::Or(parts) => parts.iter().any(|p| self.pattern_contains_structural(*p)),
             AstPattern::Wildcard | AstPattern::Bind { .. } | AstPattern::Type(_) => false,
         }
     }
@@ -6228,55 +6226,36 @@ impl LoweringContext<'_> {
     ) {
         let pat = self.body.patterns[pat_id].clone();
 
-        // Chain folds the OLD `(kind, narrow)` shape: every non-binding link
-        // must succeed against the same scrutinee. Bind/Wildcard links have
-        // no runtime test, so skip them. Type links emit `is_type` directly
-        // (matching OLD's `pat.narrow.is_some()` codegen — even for Null,
-        // which OLD's bare `null =>` arm path special-cased to `==`). Other
-        // sub-patterns (e.g. `Or`) recurse through `lower_pattern_test`.
-        if let AstPattern::Chain(parts) = &pat {
-            let testable: Vec<AstPatId> = parts
-                .iter()
-                .copied()
-                .filter(|p| {
-                    !matches!(
-                        self.body.patterns[*p],
-                        AstPattern::Bind { .. } | AstPattern::Wildcard
-                    )
-                })
-                .collect();
-            if testable.is_empty() {
-                self.builder.goto(success);
-                return;
+        // Bind sub-pattern: `let x: <pattern>` defers to the sub-
+        // pattern's runtime test (recursively). The bind itself doesn't
+        // emit a runtime check; the sub-pattern does.
+        if let AstPattern::Bind {
+            subpat: Some(sp), ..
+        } = &pat
+        {
+            return self.lower_pattern_test(scrutinee, *sp, success, failure);
+        }
+        // Array `: T` ascription emits an `is_type` test before the
+        // structural shape test below.
+        if let AstPattern::Array {
+            ascription: Some(ty_expr),
+            ..
+        } = &pat
+        {
+            let after_ascription = self.builder.create_block();
+            if let Some(tir_ty) = self
+                .pat_types
+                .get(&(self.current_scope, pat_id))
+                .filter(|ty| !matches!(ty, Tir2Ty::Never { .. }))
+                .cloned()
+            {
+                self.emit_is_tir_type_branch(scrutinee, &tir_ty, after_ascription, failure);
+            } else {
+                let annotation_ty = self.resolve_type_annotation(ty_expr);
+                self.emit_is_type_branch(scrutinee, annotation_ty, after_ascription, failure);
             }
-            let n = testable.len();
-            for (i, sub_pat) in testable.iter().copied().enumerate() {
-                let next = if i + 1 == n {
-                    success
-                } else {
-                    self.builder.create_block()
-                };
-                if let AstPattern::Type(ty) = &self.body.patterns[sub_pat] {
-                    let ty = ty.clone();
-                    if let Some(tir_ty) = self
-                        .pat_types
-                        .get(&(self.current_scope, sub_pat))
-                        .filter(|ty| !matches!(ty, Tir2Ty::Never { .. }))
-                        .cloned()
-                    {
-                        self.emit_is_tir_type_branch(scrutinee, &tir_ty, next, failure);
-                    } else {
-                        let annotation_ty = self.resolve_type_annotation(&ty);
-                        self.emit_is_type_branch(scrutinee, annotation_ty, next, failure);
-                    }
-                } else {
-                    self.lower_pattern_test(scrutinee, sub_pat, next, failure);
-                }
-                if i + 1 < n {
-                    self.builder.set_current_block(next);
-                }
-            }
-            return;
+            self.builder.set_current_block(after_ascription);
+            // Fall through to the array shape test below.
         }
 
         match &pat {
@@ -6428,6 +6407,7 @@ impl LoweringContext<'_> {
                 prefix,
                 rest,
                 suffix,
+                ascription: _,
             } => {
                 let array_success = self.builder.create_block();
 
@@ -6512,16 +6492,18 @@ impl LoweringContext<'_> {
                     self.lower_pattern_test(rest_local, rest_pat, success, failure);
                 }
             }
-            AstPattern::Chain(_) => unreachable!("handled above"),
         }
     }
 
     fn is_irrefutable_catch_all(&self, pat_id: AstPatId) -> bool {
         match &self.body.patterns[pat_id] {
-            AstPattern::Wildcard | AstPattern::Bind { .. } => true,
-            AstPattern::Chain(parts) => parts
-                .iter()
-                .all(|part| self.is_irrefutable_catch_all(*part)),
+            AstPattern::Wildcard => true,
+            // `let x` is irrefutable; `let x: <pat>` is refutable iff
+            // the inner sub-pattern is.
+            AstPattern::Bind { subpat, .. } => match subpat {
+                None => true,
+                Some(sp) => self.is_irrefutable_catch_all(*sp),
+            },
             AstPattern::Or(parts) => parts
                 .iter()
                 .any(|part| self.is_irrefutable_catch_all(*part)),
@@ -6529,22 +6511,23 @@ impl LoweringContext<'_> {
         }
     }
 
-    /// The OLD `Pattern.narrow` field was a single optional `TypeExpr`
-    /// alongside `Pattern.kind`. The new flat enum encodes the same idea as
-    /// `Pattern::Chain(Vec<PatId>)` where the type narrows are `Type` links.
-    /// This helper recovers OLD's `narrow` view: the rightmost `Type` link of
-    /// a `Chain`, or `None` for atom patterns (including atom `Type` patterns).
+    /// Type ascription on the pattern, if any. For `let x: T` (where the
+    /// sub-pattern is a `Type`), returns `T`. For `[…]: T` (Array with
+    /// ascription), returns `T`. Returns `None` for everything else
+    /// (including `let x: <non-type-pattern>`).
     fn pattern_narrow_type(&self, pat_id: AstPatId) -> Option<AstTypeExpr> {
-        if let AstPattern::Chain(parts) = &self.body.patterns[pat_id] {
-            parts
-                .iter()
-                .rev()
-                .find_map(|&p| match &self.body.patterns[p] {
-                    AstPattern::Type(t) => Some(t.clone()),
-                    _ => None,
-                })
-        } else {
-            None
+        match &self.body.patterns[pat_id] {
+            AstPattern::Bind {
+                subpat: Some(sp), ..
+            } => match &self.body.patterns[*sp] {
+                AstPattern::Type(t) => Some(t.clone()),
+                _ => None,
+            },
+            AstPattern::Array {
+                ascription: Some(t),
+                ..
+            } => Some(t.clone()),
+            _ => None,
         }
     }
 
@@ -6571,7 +6554,7 @@ impl LoweringContext<'_> {
         is_watched: bool,
     ) {
         match self.body.patterns[pat_id].clone() {
-            AstPattern::Bind { name } => {
+            AstPattern::Bind { name, subpat } => {
                 // For Or-patterns we look up `pat_types` against the inner
                 // bind's `pat_id`, not the outer `root`. That's safe because
                 // TIR rejects Or-branches whose shared bindings disagree on
@@ -6600,13 +6583,10 @@ impl LoweringContext<'_> {
                 );
                 self.record_pattern_binding_local(root, &name, local);
                 self.locals.insert(name, local);
-            }
-            AstPattern::Chain(parts) => {
-                // Every Bind in a chain refers to the same scrutinee value
-                // (each link is a refinement, not a sub-projection). Bind
-                // them all in order, keeping the root pat_id.
-                for p in parts {
-                    self.bind_pattern_inner(scrutinee, p, root, pat_id, fresh_cell, is_watched);
+                // Recurse into the sub-pattern so inner bindings (e.g.
+                // `let x: let y` or `let x: Class { f }`) get emitted too.
+                if let Some(sp) = subpat {
+                    self.bind_pattern_inner(scrutinee, sp, root, sp, fresh_cell, is_watched);
                 }
             }
             AstPattern::Or(parts) => {
@@ -6638,6 +6618,7 @@ impl LoweringContext<'_> {
                 prefix,
                 rest,
                 suffix,
+                ascription: _,
             } => {
                 for (idx, elem_pat) in prefix.iter().copied().enumerate() {
                     let elem_local =
@@ -6677,10 +6658,10 @@ impl LoweringContext<'_> {
 
     fn collect_pattern_bindings(&self, pat_id: AstPatId, out: &mut Vec<(Name, AstPatId)>) {
         match self.body.patterns[pat_id].clone() {
-            AstPattern::Bind { name } => out.push((name, pat_id)),
-            AstPattern::Chain(parts) => {
-                for part in parts {
-                    self.collect_pattern_bindings(part, out);
+            AstPattern::Bind { name, subpat } => {
+                out.push((name, pat_id));
+                if let Some(sp) = subpat {
+                    self.collect_pattern_bindings(sp, out);
                 }
             }
             AstPattern::Or(parts) => {
@@ -6697,6 +6678,7 @@ impl LoweringContext<'_> {
                 prefix,
                 rest,
                 suffix,
+                ascription: _,
             } => {
                 for part in prefix {
                     self.collect_pattern_bindings(part, out);
@@ -6786,18 +6768,13 @@ impl LoweringContext<'_> {
         narrow_root: AstPatId,
     ) {
         match self.body.patterns[pat_id].clone() {
-            AstPattern::Bind { name } => {
+            AstPattern::Bind { name, .. } => {
                 if let Some(&local) = self.locals.get(&name) {
                     self.builder.assign(
                         Place::local(local),
                         Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
                     );
                     self.record_pattern_binding_local(root, &name, local);
-                }
-            }
-            AstPattern::Chain(parts) => {
-                for part in parts {
-                    self.assign_pattern_to_existing(scrutinee, part, root, pat_id);
                 }
             }
             AstPattern::Or(parts) => {
@@ -6816,6 +6793,7 @@ impl LoweringContext<'_> {
                 prefix,
                 rest,
                 suffix,
+                ascription: _,
             } => {
                 for (idx, elem_pat) in prefix.iter().copied().enumerate() {
                     let elem_local =
@@ -6864,26 +6842,31 @@ impl LoweringContext<'_> {
         if self.pattern_contains_structural(pat_id) {
             return None;
         }
-        // For Chain patterns the narrow's resolved TIR type lives at the
-        // *inner* `Type` link's PatId, not at the outer Chain PatId
-        // (register_pattern_types stores `flow_ty` at the outer one).
-        if let AstPattern::Chain(parts) = pat {
-            let narrow_id = parts
-                .iter()
-                .rev()
-                .find(|&&p| matches!(self.body.patterns[p], AstPattern::Type(_)))
-                .copied()?;
-            if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, narrow_id)) {
+        // Bind/Array patterns may carry a `:T` type ascription; resolve
+        // via the ascription's TypeExpr if present. For Bind, the
+        // ascription is the sub-pattern when it's a `Type(...)` shape.
+        let ascription_ty = match pat {
+            AstPattern::Bind {
+                subpat: Some(sp), ..
+            } => match &self.body.patterns[*sp] {
+                AstPattern::Type(t) => Some(t.clone()),
+                _ => None,
+            },
+            AstPattern::Array {
+                ascription: Some(t),
+                ..
+            } => Some(t.clone()),
+            _ => None,
+        };
+        if let Some(ty_expr) = ascription_ty {
+            if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)) {
                 let resolved = self.resolved_aliases.convert(tir_ty);
                 if let Some(tags) = self.ty_to_type_tags(&resolved) {
                     return Some(tags);
                 }
             }
-            if let AstPattern::Type(ty_expr) = &self.body.patterns[narrow_id] {
-                let resolved = self.resolve_type_annotation(ty_expr);
-                return self.ty_to_type_tags(&resolved);
-            }
-            return None;
+            let resolved = self.resolve_type_annotation(&ty_expr);
+            return self.ty_to_type_tags(&resolved);
         }
         match pat {
             AstPattern::Wildcard => None,

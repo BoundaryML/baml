@@ -80,6 +80,17 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0062
 ─────╯
 
+  [type] Error: type mismatch: expected user.AlwaysTrue, got false
+     ╭─[ match_exhaustiveness.baml:296:16 ]
+     │
+ 296 │ ╭─▶     match (t) {
+ 297 │ ├─▶         false => "wrong!"
+     │ │                               
+     │ ╰─────────────────────────────── type mismatch: expected user.AlwaysTrue, got false
+     │     
+     │     Note: Error code: E0001
+─────╯
+
   [type] Error: unreachable arm
      ╭─[ match_exhaustiveness.baml:297:18 ]
      │
@@ -100,16 +111,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │ ╰─────────── non-exhaustive match on `user.CustomBool`; missing: false
      │     
      │     Note: Error code: E0062
-─────╯
-
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:317:17 ]
-     │
- 317 │         null => "no value"
-     │                 ─────┬────  
-     │                      ╰────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: non-exhaustive match on `user.Role`; missing: "system"
@@ -134,38 +135,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │ ╰─────────── non-exhaustive match on `user.SuccessCode`; missing: 204
      │     
      │     Note: Error code: E0062
-─────╯
-
-  [type] Error: non-exhaustive match on `user.MaybeResult`; missing: user.Success {_}, user.Failure {_}
-     ╭─[ match_exhaustiveness.baml:419:54 ]
-     │
- 419 │ ╭─▶ function NestedTypeAlias(mr: MaybeResult) -> string {
-     ┆ ┆   
- 424 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `user.MaybeResult`; missing: user.Success {_}, user.Failure {_}
-     │     
-     │     Note: Error code: E0062
-─────╯
-
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:421:26 ]
-     │
- 421 │         let s: Success => s.data,
-     │                          ───┬───  
-     │                             ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
-
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:422:26 ]
-     │
- 422 │         let f: Failure => f.reason,
-     │                          ────┬────  
-     │                              ╰────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: non-exhaustive match on `user.Status`; missing: user.Status.Pending
@@ -280,14 +249,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: non-exhaustive match on `user.DoubleMaybe`; missing: user.Success {_}, user.Failure {_}
+  [type] Error: non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }
      ╭─[ match_exhaustiveness.baml:598:60 ]
      │
  598 │ ╭─▶ function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
      ┆ ┆   
  603 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.DoubleMaybe`; missing: user.Success {_}, user.Failure {_}
+     │ ╰─────────── non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -312,14 +281,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: non-exhaustive match on `user.DoubleMaybe`; missing: user.Success {_}, user.Failure {_}, null
+  [type] Error: non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }, null, null
      ╭─[ match_exhaustiveness.baml:607:74 ]
      │
  607 │ ╭─▶ function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
      ┆ ┆   
  611 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.DoubleMaybe`; missing: user.Success {_}, user.Failure {_}, null
+     │ ╰─────────── non-exhaustive match on `user.DoubleMaybe`; missing: user.Success { data: _ }, user.Failure { reason: _ }, null, null
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -344,26 +313,26 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: non-exhaustive match on `user.Result`; missing: user.Failure {_}
+  [type] Error: non-exhaustive match on `user.Result`; missing: user.Failure { reason: _ }
      ╭─[ match_exhaustiveness.baml:620:65 ]
      │
  620 │ ╭─▶ function NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
      ┆ ┆   
  623 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Result`; missing: user.Failure {_}
+     │ ╰─────────── non-exhaustive match on `user.Result`; missing: user.Failure { reason: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: non-exhaustive match on `user.FullResult`; missing: user.Pending {_}
+  [type] Error: non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
      ╭─[ match_exhaustiveness.baml:627:70 ]
      │
  627 │ ╭─▶ function NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
      ┆ ┆   
  631 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.FullResult`; missing: user.Pending {_}
+     │ ╰─────────── non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -414,14 +383,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: non-exhaustive match on `user.SuccessOr200`; missing: user.Success {_}
+  [type] Error: non-exhaustive match on `user.SuccessOr200`; missing: user.Success { data: _ }
      ╭─[ match_exhaustiveness.baml:711:80 ]
      │
  711 │ ╭─▶ function NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
      ┆ ┆   
  714 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.SuccessOr200`; missing: user.Success {_}
+     │ ╰─────────── non-exhaustive match on `user.SuccessOr200`; missing: user.Success { data: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -448,6 +417,17 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0062
 ─────╯
 
+  [type] Error: type mismatch: expected bool, got 42
+     ╭─[ match_exhaustiveness.baml:745:16 ]
+     │
+ 745 │ ╭─▶     match (b) {
+ 746 │ ├─▶         42 => "wrong type"
+     │ │                                
+     │ ╰──────────────────────────────── type mismatch: expected bool, got 42
+     │     
+     │     Note: Error code: E0001
+─────╯
+
   [type] Error: unreachable arm
      ╭─[ match_exhaustiveness.baml:746:15 ]
      │
@@ -470,14 +450,25 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: non-exhaustive match on `user.FullResult`; missing: user.Pending {_}
+  [type] Error: type mismatch: expected int, got "hello"
+     ╭─[ match_exhaustiveness.baml:752:16 ]
+     │
+ 752 │ ╭─▶     match (x) {
+ 753 │ ├─▶         "hello" => "wrong type"
+     │ │                                     
+     │ ╰───────────────────────────────────── type mismatch: expected int, got "hello"
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
      ╭─[ match_exhaustiveness.baml:763:64 ]
      │
  763 │ ╭─▶ function PartialUnionPatternCoverage(r: FullResult) -> string {
      ┆ ┆   
  766 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.FullResult`; missing: user.Pending {_}
+     │ ╰─────────── non-exhaustive match on `user.FullResult`; missing: user.Pending { eta: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -552,14 +543,4 @@ source: crates/baml_tests/src/generated_tests.rs
      │ ╰─────────── non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
      │     
      │     Note: Error code: E0062
-─────╯
-
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:975:25 ]
-     │
- 975 │         let f: float => "float"
-     │                         ───┬───  
-     │                            ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
 ─────╯

@@ -1591,8 +1591,8 @@ function f() -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("type mismatch"),
-        "rest pattern annotation should be checked against the rest slice type, got:\n{output}"
+        output.contains("rest pattern `..` cannot carry a sub-pattern"),
+        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
     );
 }
 
@@ -1639,8 +1639,8 @@ function f(boxes: Box[]) -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("type mismatch"),
-        "rest should be checked as the remaining slice, not a single element, got:\n{output}"
+        output.contains("rest pattern `..` cannot carry a sub-pattern"),
+        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
     );
 }
 
@@ -1661,8 +1661,8 @@ function f(xs: int[]) -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("type mismatch"),
-        "nested rest subpattern annotation should be checked against the rest slice, got:\n{output}"
+        output.contains("rest pattern `..` cannot carry a sub-pattern"),
+        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
     );
 }
 

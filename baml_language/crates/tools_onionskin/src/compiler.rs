@@ -620,7 +620,10 @@ fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBo
     let pat = &body.patterns[pat_id];
     match pat {
         Pattern::Wildcard => "_".to_string(),
-        Pattern::Bind { name } => name.to_string(),
+        Pattern::Bind { name, subpat } => match subpat {
+            Some(sp) => format!("{name}: {}", pat_desc(*sp, body)),
+            None => name.to_string(),
+        },
         Pattern::Type(ty) => hir2_type_expr_to_string(ty),
         Pattern::Class { class, fields, .. } => {
             let class_path: Vec<_> = class.iter().map(|s| s.as_str()).collect();
@@ -634,6 +637,7 @@ fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBo
             prefix,
             rest,
             suffix,
+            ascription,
         } => {
             let mut parts = prefix
                 .iter()
@@ -646,18 +650,17 @@ fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBo
                 });
             }
             parts.extend(suffix.iter().map(|p| pat_desc(*p, body)));
-            format!("[{}]", parts.join(", "))
+            let arr = format!("[{}]", parts.join(", "));
+            match ascription {
+                Some(t) => format!("{arr}: {}", hir2_type_expr_to_string(t)),
+                None => arr,
+            }
         }
         Pattern::Or(pats) => pats
             .iter()
             .map(|p| pat_desc(*p, body))
             .collect::<Vec<_>>()
             .join(" | "),
-        Pattern::Chain(pats) => pats
-            .iter()
-            .map(|p| pat_desc(*p, body))
-            .collect::<Vec<_>>()
-            .join(" : "),
     }
 }
 
@@ -1939,7 +1942,10 @@ impl CompilerRunner {
             let pat = &body.patterns[pat_id];
             match pat {
                 Pattern::Wildcard => "_".to_string(),
-                Pattern::Bind { name } => name.to_string(),
+                Pattern::Bind { name, subpat } => match subpat {
+                    Some(sp) => format!("{name}: {}", pat_desc(*sp, body)),
+                    None => name.to_string(),
+                },
                 Pattern::Type(ty) => hir2_type_expr_to_string(ty),
                 Pattern::Class { class, fields, .. } => {
                     let class_path: Vec<_> = class.iter().map(|s| s.as_str()).collect();
@@ -1953,6 +1959,7 @@ impl CompilerRunner {
                     prefix,
                     rest,
                     suffix,
+                    ascription,
                 } => {
                     let mut parts = prefix
                         .iter()
@@ -1965,18 +1972,17 @@ impl CompilerRunner {
                         });
                     }
                     parts.extend(suffix.iter().map(|p| pat_desc(*p, body)));
-                    format!("[{}]", parts.join(", "))
+                    let arr = format!("[{}]", parts.join(", "));
+                    match ascription {
+                        Some(t) => format!("{arr}: {}", hir2_type_expr_to_string(t)),
+                        None => arr,
+                    }
                 }
                 Pattern::Or(pats) => pats
                     .iter()
                     .map(|p| pat_desc(*p, body))
                     .collect::<Vec<_>>()
                     .join(" | "),
-                Pattern::Chain(pats) => pats
-                    .iter()
-                    .map(|p| pat_desc(*p, body))
-                    .collect::<Vec<_>>()
-                    .join(" : "),
             }
         }
 

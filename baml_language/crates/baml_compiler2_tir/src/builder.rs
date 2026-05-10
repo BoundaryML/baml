@@ -669,6 +669,52 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty
     }
 
+    /// Pattern-matrix-internal normalization of a scrutinee type.
+    /// Rewrites `Ty::Optional(T)` into `Ty::Union([T, null])` so the
+    /// matrix's `UnionMember` dispatch applies uniformly. Optionals
+    /// embedded as members of an outer Union are flattened in the same
+    /// way (so `int? | string` becomes `int | null | string`), and
+    /// duplicate `null` members get deduplicated.
+    ///
+    /// Only the matrix's column type, dpat scrut tags, and witness
+    /// inputs use this form — `Ty::Optional` remains the canonical
+    /// representation everywhere else (subtyping, codegen, display in
+    /// non-match diagnostics, `pattern_types` map values, `matched_ty`
+    /// flowing into binding inference).
+    fn matrix_normalize_scrut(&self, ty: &Ty) -> Ty {
+        let expanded = self.expand_alias_chains(ty.clone());
+        match expanded {
+            Ty::Optional(inner, _) => Ty::Union(
+                vec![
+                    *inner,
+                    Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                ],
+                TyAttr::default(),
+            ),
+            Ty::Union(members, attr) => {
+                let mut flat: Vec<Ty> = Vec::with_capacity(members.len());
+                let mut has_null = false;
+                for m in members {
+                    match self.expand_alias_chains(m) {
+                        Ty::Optional(inner, _) => {
+                            flat.push(*inner);
+                            has_null = true;
+                        }
+                        Ty::Primitive(PrimitiveType::Null, _) => {
+                            has_null = true;
+                        }
+                        other => flat.push(other),
+                    }
+                }
+                if has_null {
+                    flat.push(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
+                }
+                Ty::Union(flat, attr)
+            }
+            other => other,
+        }
+    }
+
     fn expected_lambda_function_ty(&self, expected: &Ty) -> Option<Ty> {
         fn peel(builder: &TypeInferenceBuilder<'_>, ty: Ty, depth: usize) -> Option<Ty> {
             if depth == 0 {
@@ -2824,10 +2870,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         // Pass 2: run the matrix algorithm once on all non-guarded arms.
+        // Normalize the scrutinee for the matrix only — `Optional<T>` is
+        // treated as `Union<T, null>` so UnionMember dispatch covers
+        // both branches. The `NonExhaustiveMatch` diagnostic below still
+        // carries the original `scrutinee_ty` for display.
+        let scrutinee_ty_for_matrix = self.matrix_normalize_scrut(&scrutinee_ty);
         let report = crate::pattern_lowering::compute_match_usefulness(
             self,
             &matrix_arms,
-            scrutinee_ty.clone(),
+            scrutinee_ty_for_matrix,
         );
 
         // Exhaustiveness diagnostic.
@@ -2837,7 +2888,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             let missing: Vec<String> = report
                 .missing
                 .iter()
-                .map(std::string::ToString::to_string)
+                .map(|w| self.render_witness_pat(w))
                 .collect();
             self.context.report_simple(
                 TirTypeError::NonExhaustiveMatch {
@@ -2957,8 +3008,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Probe the arm pattern's matched type for narrowing.
                 // Bindings/refutability are handled by the per-arm walk
                 // below, after the narrowed type is finalised.
-                let arm_probe =
-                    self.analyze_and_lower(arm.pattern, &clause_binding_ty, body, arm.body);
+                let arm_probe = self.analyze_and_lower_no_subtype_check(
+                    arm.pattern,
+                    &clause_binding_ty,
+                    body,
+                    arm.body,
+                );
                 let mut narrowed_ty = arm_probe.matched_ty.clone();
                 let written_arm_ty = arm_expected_ty
                     .clone()
@@ -3021,7 +3076,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
 
                 let arm_flow = catch_binding_ty(written_arm_ty);
-                let arm_result = self.analyze_and_lower(arm.pattern, &arm_flow, body, arm.body);
+                let arm_result =
+                    self.analyze_and_lower_no_subtype_check(arm.pattern, &arm_flow, body, arm.body);
                 self.finalize_pattern_lowering(arm.pattern, &arm_result, None, None, &arm_flow);
 
                 let arm_ty = self.infer_expr(arm.body, body);
@@ -3308,7 +3364,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn pattern_contains_structural_syntax(pat_id: PatId, body: &ExprBody) -> bool {
         match &body.patterns[pat_id] {
             ast::Pattern::Class { .. } | ast::Pattern::Array { .. } => true,
-            ast::Pattern::Chain(parts) | ast::Pattern::Or(parts) => parts
+            ast::Pattern::Or(parts) => parts
                 .iter()
                 .any(|part| Self::pattern_contains_structural_syntax(*part, body)),
             ast::Pattern::Wildcard | ast::Pattern::Bind { .. } | ast::Pattern::Type(_) => false,
@@ -3321,8 +3377,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         at_expr: ExprId,
     ) -> Option<Ty> {
-        match &body.patterns[pat_id] {
-            ast::Pattern::Wildcard | ast::Pattern::Bind { .. } => None,
+        match &body.patterns[pat_id].clone() {
+            ast::Pattern::Wildcard => None,
+            // `let x` has no required type; `let x: T` (or any sub-pattern)
+            // delegates to the sub-pattern's required type.
+            ast::Pattern::Bind { subpat, .. } => match subpat {
+                Some(sp) => self.pattern_required_ty(*sp, body, at_expr),
+                None => None,
+            },
             ast::Pattern::Type(t) => Some(self.resolve_type_expr_silent(t)),
             ast::Pattern::Class {
                 class,
@@ -3340,7 +3402,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 prefix,
                 rest,
                 suffix,
+                ascription,
             } => {
+                // An explicit `: T` ascription on the array as a whole
+                // takes precedence over element-derived types.
+                if let Some(ty_expr) = ascription {
+                    return Some(self.resolve_type_expr_silent(ty_expr));
+                }
                 let mut elem_tys = Vec::new();
                 for p in prefix.iter().chain(suffix.iter()) {
                     if let Some(ty) = self.pattern_required_ty(*p, body, at_expr) {
@@ -3359,10 +3427,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let elem_ty = (!elem_tys.is_empty()).then(|| Self::join_all(&elem_tys))?;
                 Some(Ty::List(Box::new(elem_ty), TyAttr::default()))
             }
-            ast::Pattern::Chain(parts) => parts
-                .iter()
-                .filter_map(|part| self.pattern_required_ty(*part, body, at_expr))
-                .next_back(),
             ast::Pattern::Or(parts) => parts
                 .iter()
                 .filter_map(|part| {
@@ -3370,6 +3434,84 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .map(PatternExpectedTy::into_ty)
                 })
                 .reduce(|a, b| Self::join_all(&[a, b])),
+        }
+    }
+
+    /// Natural type of a chain link for the chain widening check.
+    ///
+    /// Mirrors rust's pattern type semantic: every pattern has a most-
+    /// specific representative type, and chain widening enforces that
+    /// consecutive links go progressively wider. Unconstrained patterns
+    /// and empty arrays use `Never`-flavoured naturals so plain strict
+    /// subtype works without carve-outs:
+    ///
+    /// - `Bind` / `Wildcard` → `Never` (bottom; subtype of anything).
+    /// - `[..]` / `[]` (no element constraints) → `List<Never>`, so
+    ///   `[..]: int[]` is `List<Never> <: List<int>` ✓ via covariance.
+    /// - `[a, b, c]` → `List<join of element naturals>`.
+    /// - `Type(t)` → resolved `t`.
+    /// - `Class { … }` → `Class<args>`.
+    /// - `Or` → join of branch naturals.
+    /// - inner `Chain` → rightmost (widest) link's natural.
+    fn chain_widening_natural_type(&mut self, pat_id: PatId, body: &ExprBody) -> Ty {
+        match &body.patterns[pat_id].clone() {
+            ast::Pattern::Wildcard => Ty::Never {
+                attr: TyAttr::default(),
+            },
+            // `let x: <pattern>` — recurse into subpat for the natural
+            // type. `let x` (no subpat) is a pure binding → Never.
+            ast::Pattern::Bind { subpat, .. } => match subpat {
+                Some(sp) => self.chain_widening_natural_type(*sp, body),
+                None => Ty::Never {
+                    attr: TyAttr::default(),
+                },
+            },
+            ast::Pattern::Type(t) => self.resolve_type_expr_silent(t),
+            ast::Pattern::Class {
+                class,
+                generic_args,
+                ..
+            } => self.resolve_class_pattern_type(class, generic_args, None),
+            ast::Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ascription,
+            } => {
+                // Ascription on the array as a whole wins.
+                if let Some(t) = ascription {
+                    return self.resolve_type_expr_silent(t);
+                }
+                let mut elem_tys: Vec<Ty> = prefix
+                    .iter()
+                    .chain(suffix.iter())
+                    .map(|&p| self.chain_widening_natural_type(p, body))
+                    .collect();
+                if let Some(rp) = rest
+                    && let Some(rest_pat) = rp.pat
+                    && let ast::Pattern::Array { .. } = &body.patterns[rest_pat]
+                {
+                    let nested = self.chain_widening_natural_type(rest_pat, body);
+                    if let Ty::List(inner, _) | Ty::EvolvingList(inner, _) = nested {
+                        elem_tys.push(*inner);
+                    }
+                }
+                let elem = if elem_tys.is_empty() {
+                    Ty::Never {
+                        attr: TyAttr::default(),
+                    }
+                } else {
+                    Self::join_all(&elem_tys)
+                };
+                Ty::List(Box::new(elem), TyAttr::default())
+            }
+            ast::Pattern::Or(parts) => {
+                let part_tys: Vec<Ty> = parts
+                    .iter()
+                    .map(|&p| self.chain_widening_natural_type(p, body))
+                    .collect();
+                Self::join_all(&part_tys)
+            }
         }
     }
 
@@ -6691,14 +6833,27 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             Ty::Class(_, args, _) => args.clone(),
             _ => Vec::new(),
         };
+        // Normalize each field type for matrix consumption — matches the
+        // normalization the dispatcher applied to each field pattern's
+        // dpat scrut tag, so column types and row ctors stay aligned.
+        // Without this, an `Optional<T>` field column would enumerate only
+        // `Single(null)` (List/Function inner ctors are missing here) and
+        // wildcard rows for `T`-shaped patterns would shadow concrete
+        // `null` arms.
         self.class_field_types_ordered(qtn, &args)
+            .into_iter()
+            .map(|ft| self.matrix_normalize_scrut(&ft))
+            .collect()
     }
 
     fn list_element_type(&self, ty: &Ty) -> Ty {
-        match self.expand_alias_chains(ty.clone()) {
+        let elem = match self.expand_alias_chains(ty.clone()) {
             Ty::List(elem, _) | Ty::EvolvingList(elem, _) => *elem,
             other => other,
-        }
+        };
+        // Same rationale as class_field_types: list element columns flow
+        // into slice-pattern specialization with normalized scrut tags.
+        self.matrix_normalize_scrut(&elem)
     }
 
     // is_inhabited uses the trait's default impl (recursive walk over
@@ -6746,10 +6901,16 @@ impl TypeInferenceBuilder<'_> {
         // Refutable-pattern check for irrefutable contexts (let, for,
         // catch). Now consistent for every pattern shape — the matrix
         // tells us definitively whether the pattern covers all values
-        // of the scrutinee type.
+        // of the scrutinee type. Normalize the scrut for the matrix so
+        // the column type matches the dpat scrut tags produced by
+        // `analyze_and_lower_no_subtype_check`.
         if let Some(ctx) = irrefutable
-            && crate::pattern_lowering::check_irrefutable(self, &result.dpat, scrut_ty.clone())
-                .is_err()
+            && crate::pattern_lowering::check_irrefutable(
+                self,
+                &result.dpat,
+                self.matrix_normalize_scrut(scrut_ty),
+            )
+            .is_err()
         {
             self.report_refutable_pattern_in_irrefutable_context(
                 pattern,
@@ -6789,6 +6950,64 @@ impl TypeInferenceBuilder<'_> {
         body: &ExprBody,
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
+        self.check_pattern_vs_scrut_subtype(pat_id, scrut_ty, body, at_expr);
+        self.analyze_and_lower_no_subtype_check(pat_id, scrut_ty, body, at_expr)
+    }
+
+    /// Strict pattern-vs-scrut type check (rustc-style). A pattern's
+    /// natural type must be a subtype of the scrutinee — otherwise the
+    /// arm could never fire for any value of the scrut. This catches
+    /// cases like `match x: int[] { []: string[] => … }` (string[] is
+    /// not a subtype of int[]) and `match x: Foo { Bar::D => … }` (Bar
+    /// and Foo disjoint), where we'd otherwise silently produce an
+    /// unreachable arm with `matched_ty = Never`.
+    ///
+    /// Skipped during error-recovery / generics to avoid cascading
+    /// diagnostics. Bind/Wildcard patterns have natural type `Unknown`
+    /// (per `pattern_natural_type`), so they always pass.
+    ///
+    /// Match/let/for callers go through `analyze_and_lower` and get this
+    /// check for free. Catch arms call `analyze_and_lower_no_subtype_check`
+    /// directly because catch dispatch is a runtime type test — an `int`
+    /// arm against a `string`-only throw set is unreachable, not ill-typed,
+    /// and that case is already reported as an unreachable-arm warning by
+    /// `infer_catch_expr`'s per-arm `throw_matches.may_match.is_empty()`
+    /// check.
+    fn check_pattern_vs_scrut_subtype(
+        &mut self,
+        pat_id: PatId,
+        scrut_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) {
+        let pat_natural = self.chain_widening_natural_type(pat_id, body);
+        let scrut_for_check = self.expand_alias_chains(scrut_ty.clone());
+        if !Self::ty_contains_recovery_unknown(&pat_natural)
+            && !Self::ty_contains_recovery_unknown(&scrut_for_check)
+            && !crate::generics::contains_typevar(&pat_natural)
+            && !crate::generics::contains_typevar(&scrut_for_check)
+            && !self.is_subtype(&pat_natural, &scrut_for_check)
+            && !self.is_subtype(&scrut_for_check, &pat_natural)
+        {
+            let err = TirTypeError::TypeMismatch {
+                expected: scrut_ty.clone(),
+                got: pat_natural,
+            };
+            if let Some(sm) = self.body_source_map.as_ref() {
+                self.context.report_at_span(err, sm.pattern_span(pat_id));
+            } else {
+                self.context.report_simple(err, at_expr);
+            }
+        }
+    }
+
+    fn analyze_and_lower_no_subtype_check(
+        &mut self,
+        pat_id: PatId,
+        scrut_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> crate::pattern_lowering::PatternResult {
         // If the scrutinee is a Union, decide which members this pattern
         // targets. Most patterns target exactly one member and get wrapped
         // in `UnionMember(M)` so the matrix can specialise on the union
@@ -6799,8 +7018,15 @@ impl TypeInferenceBuilder<'_> {
         // — the pattern matches every value of either member). In that case
         // we wrap as an Or across one UnionMember per matching member, with
         // the same inner DPat lowered for each member's element type.
-        let scrut_expanded = self.expand_alias_chains(scrut_ty.clone());
-        if let Ty::Union(members, _) = &scrut_expanded {
+        //
+        // `Optional<T>` is normalized to `Union<T, null>` for matrix
+        // purposes only (`matrix_normalize_scrut`). The dpat scrut tags
+        // attached here use the normalized form so the matrix's
+        // UnionMember specialization can find the member inside the
+        // column type. `pattern_types` and `matched_ty` keep the original
+        // `Optional` representation.
+        let normalized_scrut = self.matrix_normalize_scrut(scrut_ty);
+        if let Ty::Union(members, _) = &normalized_scrut {
             let targets = self.union_targets_for_pattern(pat_id, body, members);
             if targets.len() == 1 {
                 let member_ty = targets.into_iter().next().unwrap();
@@ -6808,13 +7034,21 @@ impl TypeInferenceBuilder<'_> {
                 let wrapped = crate::exhaustiveness::DPat::union_member(
                     member_ty.clone(),
                     inner.dpat,
-                    scrut_ty.clone(),
+                    normalized_scrut.clone(),
                 );
-                self.pattern_types.insert(pat_id, member_ty.clone());
+                // Use `inner.matched_ty` (the deepest narrowed type) rather
+                // than `member_ty` (the union-member projection). They match
+                // for shallow unions, but for nested cases like
+                // `Optional<Union<A, B>>` the outer projection is
+                // `Union<A, B>` while the inner narrows further to `A` —
+                // bindings and arm-body narrowing want the latter. The
+                // multi-target branch below already does this via
+                // `join_all(&matched_tys)`.
+                self.pattern_types.insert(pat_id, inner.matched_ty.clone());
                 return crate::pattern_lowering::PatternResult {
                     dpat: wrapped,
                     required_ty: inner.required_ty,
-                    matched_ty: member_ty,
+                    matched_ty: inner.matched_ty,
                     bindings: inner.bindings,
                 };
             }
@@ -6835,7 +7069,7 @@ impl TypeInferenceBuilder<'_> {
                     let wrapped = crate::exhaustiveness::DPat::union_member(
                         member_ty.clone(),
                         inner.dpat,
-                        scrut_ty.clone(),
+                        normalized_scrut.clone(),
                     );
                     alts.push(wrapped);
                     if let Some(req) = inner.required_ty {
@@ -6863,7 +7097,7 @@ impl TypeInferenceBuilder<'_> {
                 let matched = Self::join_all(&matched_tys);
                 self.pattern_types.insert(pat_id, matched.clone());
                 return crate::pattern_lowering::PatternResult {
-                    dpat: crate::exhaustiveness::DPat::or(alts, scrut_ty.clone()),
+                    dpat: crate::exhaustiveness::DPat::or(alts, normalized_scrut),
                     required_ty: if required_tys.is_empty() {
                         None
                     } else {
@@ -6904,11 +7138,140 @@ impl TypeInferenceBuilder<'_> {
         if matches!(natural, Ty::Unknown { .. }) {
             return Vec::new();
         }
+        // Pattern matching dispatches on runtime type identity, not the
+        // type-system subtype relation. Subtype is too liberal because of
+        // cross-tag bridges like `Int <: Float` (the numeric tower) — a
+        // value tagged `int` at runtime is never matched by a `float`
+        // pattern, despite the type system saying `Int <: Float`. Use a
+        // structural overlap check that respects runtime tag identity:
+        // primitives must agree on head, classes must agree on qtn AND
+        // overlap pairwise on their generic args.
         union_members
             .iter()
-            .filter(|m| self.is_subtype(&natural, m) || self.is_subtype(m, &natural))
+            .filter(|m| self.types_overlap(&natural, m))
             .cloned()
             .collect()
+    }
+
+    /// Two types overlap (for pattern dispatch) iff some atom of `a`
+    /// shares a runtime identity with some atom of `b`. Unions/Optionals
+    /// decompose into atoms; everything else is a single atom matched by
+    /// [`Self::atoms_overlap`].
+    fn types_overlap(&self, a: &Ty, b: &Ty) -> bool {
+        let mut a_atoms: Vec<Ty> = Vec::new();
+        self.collect_overlap_atoms(a, &mut a_atoms);
+        let mut b_atoms: Vec<Ty> = Vec::new();
+        self.collect_overlap_atoms(b, &mut b_atoms);
+        a_atoms
+            .iter()
+            .any(|aa| b_atoms.iter().any(|bb| self.atoms_overlap(aa, bb)))
+    }
+
+    fn collect_overlap_atoms(&self, t: &Ty, out: &mut Vec<Ty>) {
+        let expanded = self.expand_alias_chains(t.clone());
+        match expanded {
+            Ty::Union(members, _) => {
+                for m in members {
+                    self.collect_overlap_atoms(&m, out);
+                }
+            }
+            Ty::Optional(inner, _) => {
+                self.collect_overlap_atoms(&inner, out);
+                out.push(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
+            }
+            other => out.push(other),
+        }
+    }
+
+    /// Structural identity check used by [`Self::types_overlap`]. Two
+    /// atoms overlap iff they could share at least one runtime value.
+    fn atoms_overlap(&self, a: &Ty, b: &Ty) -> bool {
+        // Error/recovery types are bidirectionally compatible with
+        // anything to suppress cascading diagnostics.
+        if matches!(a, Ty::Unknown { .. } | Ty::Error { .. })
+            || matches!(b, Ty::Unknown { .. } | Ty::Error { .. })
+        {
+            return true;
+        }
+        // Unconstrained type variables target every atom.
+        if matches!(a, Ty::TypeVar(..)) || matches!(b, Ty::TypeVar(..)) {
+            return true;
+        }
+        match (a, b) {
+            // Primitives: strict head equality (no `Int <: Float`).
+            (Ty::Primitive(p1, _), Ty::Primitive(p2, _)) => p1 == p2,
+            // Literal vs primitive: literal's primitive head must match.
+            (Ty::Literal(lit, _, _), Ty::Primitive(p, _))
+            | (Ty::Primitive(p, _), Ty::Literal(lit, _, _)) => {
+                PrimitiveType::from_literal(lit) == *p
+            }
+            // Two literals: same value (modulo float canonicalization).
+            (Ty::Literal(l1, _, _), Ty::Literal(l2, _, _)) => l1 == l2,
+            // Class: same qtn AND every type-arg pair overlaps.
+            (Ty::Class(q1, args1, _), Ty::Class(q2, args2, _)) => {
+                q1 == q2
+                    && args1.len() == args2.len()
+                    && args1
+                        .iter()
+                        .zip(args2.iter())
+                        .all(|(x, y)| self.types_overlap(x, y))
+            }
+            // Enum/EnumVariant: same enum qtn. Variants of the same enum
+            // overlap with each other and with the bare enum.
+            (Ty::Enum(q1, _), Ty::Enum(q2, _)) => q1 == q2,
+            (Ty::EnumVariant(q1, v1, _), Ty::EnumVariant(q2, v2, _)) => q1 == q2 && v1 == v2,
+            (Ty::Enum(q1, _), Ty::EnumVariant(q2, _, _))
+            | (Ty::EnumVariant(q2, _, _), Ty::Enum(q1, _)) => q1 == q2,
+            // List/Map: same head AND inner types overlap. The element /
+            // key / value types are part of the pattern's natural shape
+            // (e.g. `[let x: int]` has natural `List<int>`), so a pattern
+            // targeting `List<int>` does not target `List<string>`.
+            (
+                Ty::List(a_elem, _) | Ty::EvolvingList(a_elem, _),
+                Ty::List(b_elem, _) | Ty::EvolvingList(b_elem, _),
+            ) => self.types_overlap(a_elem, b_elem),
+            (
+                Ty::Map(a_k, a_v, _) | Ty::EvolvingMap(a_k, a_v, _),
+                Ty::Map(b_k, b_v, _) | Ty::EvolvingMap(b_k, b_v, _),
+            ) => self.types_overlap(a_k, b_k) && self.types_overlap(a_v, b_v),
+            // Function: arities match AND every param pair overlaps AND
+            // returns overlap. A `(int) -> int` pattern can never match a
+            // `(string) -> int` value, so they must not be reported as
+            // overlapping for union dispatch.
+            (
+                Ty::Function {
+                    params: a_params,
+                    ret: a_ret,
+                    ..
+                },
+                Ty::Function {
+                    params: b_params,
+                    ret: b_ret,
+                    ..
+                },
+            ) => {
+                a_params.len() == b_params.len()
+                    && a_params
+                        .iter()
+                        .zip(b_params.iter())
+                        .all(|((_, x), (_, y))| self.types_overlap(x, y))
+                    && self.types_overlap(a_ret, b_ret)
+            }
+            // Never has no values, so it doesn't overlap with anything.
+            (Ty::Never { .. }, _) | (_, Ty::Never { .. }) => false,
+            // Self-overlap for atoms that aren't covered above. These have a
+            // single inhabited "kind" that's identified by discriminant —
+            // `type` (the type-of-types), `void`, builtin-unknown sentinel,
+            // etc. Without these, e.g. `Optional<type>` looks like it
+            // overlaps only its `null` branch, breaking refutability checks
+            // for `let t: type? = null`.
+            (Ty::Type { .. }, Ty::Type { .. })
+            | (Ty::Void { .. }, Ty::Void { .. })
+            | (Ty::BuiltinUnknown { .. }, Ty::BuiltinUnknown { .. })
+            | (Ty::RustType { .. }, Ty::RustType { .. }) => true,
+            // Anything else: distinct heads.
+            _ => false,
+        }
     }
 
     /// The pattern's natural type — what it would match without a
@@ -6927,8 +7290,15 @@ impl TypeInferenceBuilder<'_> {
     /// - `Chain(parts)` ⇒ rightmost link's natural type (the widened type)
     fn pattern_natural_type(&mut self, pat_id: PatId, body: &ExprBody) -> Ty {
         match &body.patterns[pat_id].clone() {
-            ast::Pattern::Wildcard | ast::Pattern::Bind { .. } => Ty::Unknown {
+            ast::Pattern::Wildcard => Ty::Unknown {
                 attr: TyAttr::default(),
+            },
+            // `let x` → Unknown; `let x: <pattern>` → recurse into subpat.
+            ast::Pattern::Bind { subpat, .. } => match subpat {
+                Some(sp) => self.pattern_natural_type(*sp, body),
+                None => Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
             },
             ast::Pattern::Type(t) => self.resolve_type_expr_silent(t),
             ast::Pattern::Class {
@@ -6940,27 +7310,23 @@ impl TypeInferenceBuilder<'_> {
                 prefix,
                 rest,
                 suffix,
+                ascription,
             } => {
+                if let Some(t) = ascription {
+                    return self.resolve_type_expr_silent(t);
+                }
                 let mut elem_tys: Vec<Ty> = prefix
                     .iter()
                     .chain(suffix.iter())
                     .map(|&p| self.pattern_natural_type(p, body))
                     .collect();
-                // Rest's *binding* doesn't constrain elements (it binds
-                // a sub-list, not an element), so don't include it. The
-                // pre-flattening in `lower_array_pat` already merged any
-                // structural rest sub-pattern into prefix/suffix, so we
-                // don't need to peer inside rest sub-Array shapes here.
                 if let Some(rp) = rest
                     && let Some(rest_pat) = rp.pat
+                    && let ast::Pattern::Array { .. } = &body.patterns[rest_pat]
                 {
-                    // If the rest sub-pattern is itself an Array, its
-                    // elements join into the parent's element type.
-                    if let ast::Pattern::Array { .. } = &body.patterns[rest_pat] {
-                        let rest_natural = self.pattern_natural_type(rest_pat, body);
-                        if let Ty::List(inner, _) | Ty::EvolvingList(inner, _) = rest_natural {
-                            elem_tys.push(*inner);
-                        }
+                    let rest_natural = self.pattern_natural_type(rest_pat, body);
+                    if let Ty::List(inner, _) | Ty::EvolvingList(inner, _) = rest_natural {
+                        elem_tys.push(*inner);
                     }
                 }
                 let elem = if elem_tys.is_empty() {
@@ -6979,12 +7345,6 @@ impl TypeInferenceBuilder<'_> {
                     .collect();
                 Self::join_all(&part_tys)
             }
-            ast::Pattern::Chain(parts) => parts
-                .last()
-                .map(|&p| self.pattern_natural_type(p, body))
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                }),
         }
     }
 
@@ -6999,7 +7359,9 @@ impl TypeInferenceBuilder<'_> {
     ) -> crate::pattern_lowering::PatternResult {
         let result = match &body.patterns[pat_id].clone() {
             ast::Pattern::Wildcard => Self::lower_wildcard_pat(scrut_ty),
-            ast::Pattern::Bind { name } => Self::lower_bind_pat(pat_id, name.clone(), scrut_ty),
+            ast::Pattern::Bind { name, subpat } => {
+                self.lower_bind_pat(pat_id, name.clone(), *subpat, scrut_ty, body, at_expr)
+            }
             ast::Pattern::Type(t) => self.lower_type_pat(t, scrut_ty, at_expr),
             ast::Pattern::Class {
                 class,
@@ -7010,9 +7372,17 @@ impl TypeInferenceBuilder<'_> {
                 prefix,
                 rest,
                 suffix,
-            } => self.lower_array_pat(prefix, rest.as_ref(), suffix, scrut_ty, body, at_expr),
+                ascription,
+            } => self.lower_array_pat(
+                prefix,
+                rest.as_ref(),
+                suffix,
+                ascription.as_ref(),
+                scrut_ty,
+                body,
+                at_expr,
+            ),
             ast::Pattern::Or(parts) => self.lower_or_pat(parts, scrut_ty, body, at_expr),
-            ast::Pattern::Chain(parts) => self.lower_chain_pat(parts, scrut_ty, body, at_expr),
         };
         self.pattern_types.insert(pat_id, result.matched_ty.clone());
         result
@@ -7058,17 +7428,6 @@ impl TypeInferenceBuilder<'_> {
                 let resolved = self.resolve_type_expr_silent(t);
                 self.find_matching_union_member(&resolved, union_members)
             }
-            ast::Pattern::Chain(parts) => {
-                // The chain's structural part (rightmost Class/Array, or
-                // rightmost Type) determines the targeted member. Walk
-                // parts and return the first part that targets a member.
-                for &part in parts {
-                    if let Some(m) = self.union_target_for_pattern(part, body, union_members) {
-                        return Some(m);
-                    }
-                }
-                None
-            }
             // Or-patterns are handled per-branch by the recursive walk:
             // each branch goes through `analyze_and_lower` independently
             // and gets its own UnionMember wrapping.
@@ -7099,19 +7458,48 @@ impl TypeInferenceBuilder<'_> {
     }
 
     fn lower_bind_pat(
+        &mut self,
         pat_id: PatId,
         name: Name,
+        subpat: Option<PatId>,
         scrut_ty: &Ty,
+        body: &ExprBody,
+        at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
+        // Bare bind without sub-pattern: matches anything, binds at scrut.
+        let Some(sp) = subpat else {
+            return crate::pattern_lowering::PatternResult {
+                dpat: crate::exhaustiveness::DPat::wildcard(scrut_ty.clone()),
+                required_ty: None,
+                matched_ty: scrut_ty.clone(),
+                bindings: vec![crate::pattern_lowering::PatternBinding {
+                    name,
+                    pat_id,
+                    ty: scrut_ty.clone(),
+                }],
+            };
+        };
+        // `let x: <pattern>` — lower the sub-pattern (which can be a type
+        // ascription, another binding, an array/class destructure, etc.),
+        // then prepend the outer binding at the sub-pattern's narrowed type.
+        // Skip the per-subpat strict subtype check: the parent
+        // analyze_and_lower already checked the bind's natural type
+        // (which is the subpat's natural type per `pattern_natural_type`)
+        // against `scrut_ty`, so re-running it would double-diagnose
+        // match arms and would also break catch arms that bypass the
+        // outer check intentionally.
+        let inner = self.analyze_and_lower_no_subtype_check(sp, scrut_ty, body, at_expr);
+        let mut bindings = vec![crate::pattern_lowering::PatternBinding {
+            name,
+            pat_id,
+            ty: inner.matched_ty.clone(),
+        }];
+        bindings.extend(inner.bindings);
         crate::pattern_lowering::PatternResult {
-            dpat: crate::exhaustiveness::DPat::wildcard(scrut_ty.clone()),
-            required_ty: None,
-            matched_ty: scrut_ty.clone(),
-            bindings: vec![crate::pattern_lowering::PatternBinding {
-                name,
-                pat_id,
-                ty: scrut_ty.clone(),
-            }],
+            dpat: inner.dpat,
+            required_ty: inner.required_ty,
+            matched_ty: inner.matched_ty,
+            bindings,
         }
     }
 
@@ -7133,7 +7521,7 @@ impl TypeInferenceBuilder<'_> {
     }
 
     /// Build a `DPat` that matches every value of `t`. Used by `Type(t)`
-    /// patterns. Three regimes:
+    /// patterns. Four regimes:
     ///
     /// - Singleton types (`Literal`, `EnumVariant`, `null`) →
     ///   `DPat::single(t, scrut_ty)`.
@@ -7142,12 +7530,12 @@ impl TypeInferenceBuilder<'_> {
     ///   singletons; the algorithm explodes Or rows during specialization.
     /// - Class types → `DPat::class(qtn, [Wildcard for each field])`.
     /// - Opaque alphabets (raw int/string/float, generics, lists, maps,
-    ///   functions) → `DPat::wildcard`. **Limitation:** when the
-    ///   scrutinee is broader than `t` (e.g. `Type(int)` against
-    ///   `int | null`), the wildcard incorrectly covers values outside
-    ///   `t`. The matrix would mark a subsequent `null` arm unreachable.
-    ///   Surfaces only for opaque-typed unions; a future refinement is to
-    ///   add a "type tag" ctor.
+    ///   functions) → `DPat::wildcard`.
+    ///
+    /// Callers are expected to project union scrutinees onto a single
+    /// member before calling this (`analyze_and_lower` does that via
+    /// `Ctor::UnionMember`), so `scrut_ty` here is the column type at the
+    /// matched branch.
     fn dpat_for_type(&self, t: &Ty, scrut_ty: &Ty) -> crate::exhaustiveness::DPat {
         use crate::exhaustiveness::DPat;
         let expanded = self.expand_alias_chains(t.clone());
@@ -7327,6 +7715,57 @@ impl TypeInferenceBuilder<'_> {
 
     /// Class field NAMES in declaration order. Companion to
     /// `class_field_types_ordered`.
+    /// Render a [`crate::exhaustiveness::WitnessPat`] for the
+    /// `non-exhaustive match` diagnostic. Mirrors `WitnessPat`'s `Display`
+    /// impl but looks up class field names so witnesses like
+    /// `Mixed { value: int }` say which field is which instead of just
+    /// `Mixed { int }`.
+    fn render_witness_pat(&self, w: &crate::exhaustiveness::WitnessPat) -> String {
+        use std::fmt::Write as _;
+
+        use crate::exhaustiveness::Ctor;
+        match &w.ctor {
+            Ctor::Class(qtn) => {
+                let names = self.class_field_names_ordered(qtn);
+                if w.fields.is_empty() {
+                    return format!("{qtn} {{}}");
+                }
+                let mut out = format!("{qtn} {{ ");
+                for (i, fld) in w.fields.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    let rendered = self.render_witness_pat(fld);
+                    if let Some(name) = names.get(i) {
+                        let _ = write!(out, "{name}: {rendered}");
+                    } else {
+                        out.push_str(&rendered);
+                    }
+                }
+                out.push_str(" }");
+                out
+            }
+            // For everything else, fall through to the standard Display
+            // impl. UnionMember inner pats cascade through this method too,
+            // so a Class nested inside a UnionMember still gets field
+            // labels.
+            Ctor::UnionMember(_) => match w.fields.first() {
+                Some(inner) => {
+                    let s = self.render_witness_pat(inner);
+                    if matches!(s.as_str(), "_") {
+                        // Inner collapsed to placeholder; fall back to the
+                        // member type name (`int`, `Foo`, etc.).
+                        w.to_string()
+                    } else {
+                        s
+                    }
+                }
+                None => w.to_string(),
+            },
+            _ => w.to_string(),
+        }
+    }
+
     fn class_field_names_ordered(&self, qtn: &crate::ty::QualifiedTypeName) -> Vec<Name> {
         let Some(items) = self.resolve_class_pkg_items(qtn.package()) else {
             return Vec::new();
@@ -7341,11 +7780,13 @@ impl TypeInferenceBuilder<'_> {
         class_data.fields.iter().map(|f| f.name.clone()).collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn lower_array_pat(
         &mut self,
         prefix: &[PatId],
         rest: Option<&ast::ArrayRestPat>,
         suffix: &[PatId],
+        ascription: Option<&TypeExpr>,
         scrut_ty: &Ty,
         body: &ExprBody,
         at_expr: ExprId,
@@ -7355,13 +7796,41 @@ impl TypeInferenceBuilder<'_> {
             pattern_lowering::{PatternBinding, PatternResult},
         };
 
-        // Determine element type from the scrutinee.
-        let elem_ty = match self.expand_alias_chains(scrut_ty.clone()) {
+        // If the array carries a `: T` ascription, narrow the scrutinee
+        // through the ascribed type before walking elements. Mirrors the
+        // narrowing flow used by `Pattern::Bind { ascription }`.
+        let ascription_resolved = ascription.map(|t| self.resolve_type_expr(t, at_expr));
+        let effective_scrut = match &ascription_resolved {
+            Some(ty) => self.intersect_pattern_flow_types(scrut_ty, ty),
+            None => scrut_ty.clone(),
+        };
+
+        // Determine element type from the (possibly narrowed) scrutinee.
+        let elem_ty = match self.expand_alias_chains(effective_scrut.clone()) {
             Ty::List(elem, _) | Ty::EvolvingList(elem, _) => *elem,
             _ => Ty::Unknown {
                 attr: TyAttr::default(),
             },
         };
+
+        // Reject any non-trivial rest sub-pattern: only bare `..` is
+        // allowed for now. Bindings (`..let r`), structural rests
+        // (`..[a, b]`), class destructures (`..Box {}`), and chain
+        // ascriptions (`..pat: T`) are all disallowed while we settle
+        // the rest-vs-slice typing semantics. The chain widening rule
+        // only catches mismatches *between* chain links, not the
+        // implicit "rest is a slice" constraint, so partial support
+        // would let contradictory annotations slip through silently.
+        if let Some(rp) = rest
+            && let Some(rest_pat) = rp.pat
+        {
+            let err = TirTypeError::RestSubPatternNotSupported;
+            if let Some(sm) = self.body_source_map.as_ref() {
+                self.context.report_at_span(err, sm.pattern_span(rest_pat));
+            } else {
+                self.context.report_simple(err, at_expr);
+            }
+        }
 
         // Pre-flatten nested rest sub-patterns: `[a, ..[b, ..c, d], e]`
         // collapses to `[a, b, ..c, d, e]`. baml has no equivalent of this
@@ -7401,6 +7870,27 @@ impl TypeInferenceBuilder<'_> {
         // doesn't consume a slot in the slice shape.
         if let Some(rest_pat) = rest_binding_pat {
             let rest_ty = Ty::List(Box::new(elem_ty.clone()), TyAttr::default());
+            // The rest sub-pattern matches against the *slice* (a list),
+            // not against an element. If the user annotates it with a
+            // non-list type (e.g. `..let r: int`, or `..Box { .. }`, or
+            // `..[x]: int`), that's a type mismatch — the annotation
+            // claims something incompatible with `List<elem>`.
+            if let Some(expected) = self.pattern_expected_ty(rest_pat, body, at_expr)
+                && !Self::ty_contains_recovery_unknown(&rest_ty)
+                && !crate::generics::contains_typevar(&rest_ty)
+                && !self.is_subtype(expected.ty(), &rest_ty)
+            {
+                let got = expected.into_ty();
+                let err = TirTypeError::TypeMismatch {
+                    expected: rest_ty.clone(),
+                    got,
+                };
+                if let Some(sm) = self.body_source_map.as_ref() {
+                    self.context.report_at_span(err, sm.pattern_span(rest_pat));
+                } else {
+                    self.context.report_simple(err, at_expr);
+                }
+            }
             let r = self.analyze_and_lower(rest_pat, &rest_ty, body, at_expr);
             bindings.extend(r.bindings);
         }
@@ -7415,8 +7905,11 @@ impl TypeInferenceBuilder<'_> {
         };
 
         // Required type: List<join of element required tys>, or List<elem>
-        // if no element constrained the type.
-        let required = if element_required_tys.is_empty() {
+        // if no element constrained the type. If the array carries a `: T`
+        // ascription, that takes precedence as the required type.
+        let required = if let Some(ty) = ascription_resolved {
+            Some(ty)
+        } else if element_required_tys.is_empty() {
             None
         } else {
             let joined = Self::join_all(&element_required_tys);
@@ -7424,9 +7917,9 @@ impl TypeInferenceBuilder<'_> {
         };
 
         PatternResult {
-            dpat: DPat::slice(shape, sub_dpats, scrut_ty.clone()),
+            dpat: DPat::slice(shape, sub_dpats, effective_scrut.clone()),
             required_ty: required,
-            matched_ty: scrut_ty.clone(),
+            matched_ty: effective_scrut,
             bindings,
         }
     }
@@ -7454,27 +7947,21 @@ impl TypeInferenceBuilder<'_> {
             return (prefix, true, None, suffix);
         };
 
-        // Look through Chain to find the structural component (leftmost).
-        let mut probe = rest_pat;
-        loop {
-            match &body.patterns[probe] {
-                ast::Pattern::Chain(parts) if !parts.is_empty() => probe = parts[0],
-                _ => break,
-            }
-        }
-
-        match &body.patterns[probe] {
+        // Rest sub-patterns are disabled at TIR (we emit
+        // `RestSubPatternNotSupported` elsewhere). For error recovery
+        // here we simply treat the rest as a bare binding-like slot —
+        // no nested array flattening, no chain unwrapping.
+        match &body.patterns[rest_pat] {
             ast::Pattern::Array {
                 prefix: ip,
                 rest: ir,
                 suffix: is,
+                ascription: _,
             } => {
                 let mut new_prefix = prefix;
                 new_prefix.extend(ip.iter().copied());
                 let mut new_suffix: Vec<PatId> = is.clone();
                 new_suffix.extend(suffix);
-                // Clone the inner ArrayRestPat into a local so we can pass
-                // it by reference into the recursive call.
                 let ir_owned = ir.clone();
                 Self::flatten_array_rest(body, new_prefix, ir_owned.as_ref(), new_suffix)
             }
@@ -7508,7 +7995,12 @@ impl TypeInferenceBuilder<'_> {
         let mut bindings_by_name: FxHashMap<Name, Vec<(PatId, Ty)>> = FxHashMap::default();
 
         for &p in parts {
-            let r = self.analyze_and_lower(p, scrut_ty, body, at_expr);
+            // Skip the per-branch strict subtype check: the parent
+            // analyze_and_lower call already checked the joined natural
+            // type (`foo | bar`) against `scrut_ty`, and re-running it
+            // per-branch would double-diagnose match arms and would also
+            // break catch arms that bypass the outer check intentionally.
+            let r = self.analyze_and_lower_no_subtype_check(p, scrut_ty, body, at_expr);
             alts.push(r.dpat);
             for b in r.bindings {
                 bindings_by_name
@@ -7566,6 +8058,14 @@ impl TypeInferenceBuilder<'_> {
         // the matrix should match against. Bind/Wildcard parts only
         // bind and contribute a wildcard DPat (no narrowing).
         //
+        // Chain widening check: each consecutive pair of *narrowing* links
+        // must satisfy prev's natural type <: next's natural type. Bind/
+        // Wildcard contribute no narrowing — under strict subtype their
+        // natural type would be `Never` (bottom), so they always widen
+        // trivially; we just skip them in the consecutive-link check.
+        // Catches cases like `[..]: string` (`List<Never> <: string`?)
+        // and `[int, string, int]: int[]` (`List<int|string> <: List<int>`?).
+        //
         // Bindings: we track *which* bindings come from chain alias links
         // (Bind/Or-of-Bind parts) versus from structural sub-walks. Chain
         // alias bindings get retyped to the final widened type (so
@@ -7581,6 +8081,7 @@ impl TypeInferenceBuilder<'_> {
         // First narrowing DPat encountered (leftmost = most specific).
         let mut narrowing_dpat: Option<DPat> = None;
         let mut last_required: Option<Ty> = None;
+        let mut prev_widening_natural: Option<(PatId, Ty)> = None;
 
         for &part in parts {
             let is_alias_link = matches!(
@@ -7591,6 +8092,34 @@ impl TypeInferenceBuilder<'_> {
                 &body.patterns[part],
                 ast::Pattern::Type(_) | ast::Pattern::Class { .. } | ast::Pattern::Array { .. }
             );
+
+            // Chain widening check between this part's natural type and
+            // the previous narrowing link's natural type. Skipped when
+            // either contains recovery-unknowns or typevars (mirrors the
+            // OLD `chain_constraints_compatible` carve-outs to avoid
+            // over-firing during error recovery / generic instantiation).
+            if is_narrowing {
+                let next_natural = self.chain_widening_natural_type(part, body);
+                if let Some((prev_pat, prev_natural)) = prev_widening_natural.as_ref()
+                    && !Self::ty_contains_recovery_unknown(prev_natural)
+                    && !Self::ty_contains_recovery_unknown(&next_natural)
+                    && !crate::generics::contains_typevar(prev_natural)
+                    && !crate::generics::contains_typevar(&next_natural)
+                    && !self.is_subtype(prev_natural, &next_natural)
+                {
+                    let err = TirTypeError::TypeMismatch {
+                        expected: next_natural.clone(),
+                        got: prev_natural.clone(),
+                    };
+                    if let Some(sm) = self.body_source_map.as_ref() {
+                        self.context.report_at_span(err, sm.pattern_span(*prev_pat));
+                    } else {
+                        self.context.report_simple(err, at_expr);
+                    }
+                }
+                prev_widening_natural = Some((part, next_natural));
+            }
+
             let r = self.analyze_and_lower(part, &current_ty, body, at_expr);
             // Update `current_ty` to the part's matched_ty, so subsequent
             // parts narrow against the latest view of the value's type.

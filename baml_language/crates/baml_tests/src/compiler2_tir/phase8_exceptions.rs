@@ -166,6 +166,77 @@ function f(e: TimeoutError | OtherError) -> int {
 }
 
 #[test]
+fn impossible_typed_match_binding_is_unreachable() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(x: int) -> string {
+  return match (x) {
+    let s: string => s,
+    _ => "fallback"
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("unreachable arm"),
+        "expected `let s: string` against int scrutinee to be unreachable, got:\n{output}"
+    );
+    assert!(
+        output.contains("s: string =>"),
+        "expected diagnostic output to include the impossible string arm, got:\n{output}"
+    );
+}
+
+#[test]
+fn impossible_array_chain_match_arm_is_unreachable() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(xs: int[]) -> string {
+  return match (xs) {
+    []: string[] => "bad",
+    _ => "fallback"
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("type mismatch"),
+        "expected `[]: string[]` against int[] scrutinee to produce a type mismatch, got:\n{output}"
+    );
+    assert!(
+        output.contains("string[]"),
+        "expected type-mismatch diagnostic to mention string[], got:\n{output}"
+    );
+}
+
+#[test]
+fn typed_pattern_without_widening_does_not_make_union_match_exhaustive() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(v: int | string) -> string {
+  return match (v) {
+    let x: int => "int"
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("non-exhaustive match"),
+        "expected plain int arm to leave string branch uncovered, got:\n{output}"
+    );
+    assert!(
+        output.contains("missing:"),
+        "expected non-exhaustive diagnostic to include missing case details, got:\n{output}"
+    );
+}
+
+#[test]
 fn catch_binding_is_narrowed_per_arm() {
     let mut db = make_db();
     let file = db.add_file(
@@ -311,7 +382,7 @@ function fail() -> int {
 function f() -> int {
   return fail() catch (e) {
     _ => 1
-    _: AppError | baml.panics.DivisionByZero => 2
+    AppError | baml.panics.DivisionByZero => 2
   }
 }"#,
     );
@@ -765,7 +836,7 @@ fn literal_catch_arm_does_not_consume_entire_type_from_residual() {
 function f() -> int {
   return fail() catch (e) {
     42 => 1,
-    _: int => 2,
+    int => 2,
     _ => 3
   }
 }"#,
@@ -774,7 +845,7 @@ function f() -> int {
     let output = render_tir(&db, file);
     let unreachable_count = output.matches("unreachable arm").count();
     // Only the trailing wildcard `_ => 3` should be unreachable (int is fully
-    // handled by the literal + typed arms). The `_: int` arm must stay reachable.
+    // handled by the literal + typed arms). The `int` arm must stay reachable.
     assert!(
         unreachable_count <= 1,
         "typed int arm after literal 42 arm should NOT be unreachable, got:\n{output}"
@@ -801,7 +872,7 @@ function fail(which: int) -> int {
 function f() -> int {
   return fail(0) catch (e) {
     Status.Active => 1,
-    _: Status => 2,
+    Status => 2,
     _ => 3
   }
 }"#,
@@ -809,7 +880,7 @@ function f() -> int {
 
     let output = render_tir(&db, file);
     let unreachable_count = output.matches("unreachable arm").count();
-    // Only the trailing wildcard should be unreachable. The `_: Status` arm
+    // Only the trailing wildcard should be unreachable. The `Status` arm
     // must stay reachable since Status.Active doesn't cover all variants.
     assert!(
         unreachable_count <= 1,

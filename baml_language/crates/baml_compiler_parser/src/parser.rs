@@ -3054,26 +3054,14 @@ impl<'a> Parser<'a> {
     // `:` splits before `|`, so `let x: int | string` is `let x : (int | string)`.
 
     /// Parse a pattern. Always wraps the result in a `PATTERN` node.
+    /// Patterns are `union ('|' union)*` of atoms. The `:` type-ascription
+    /// is a grammar property of the `BINDING_PATTERN` and `ARRAY_PATTERN`
+    /// atoms (handled inside `parse_let_pattern` / `parse_array_pattern`),
+    /// not a separate combinator.
     fn parse_pattern(&mut self) {
         self.with_node(SyntaxKind::PATTERN, |p| {
-            p.parse_pattern_chain();
+            p.parse_pattern_union();
         });
-    }
-
-    /// Parse a chain of patterns separated by `:`. Wraps in `CHAIN_PATTERN`
-    /// only if at least one `:` is present.
-    fn parse_pattern_chain(&mut self) {
-        let chain_start = self.events.len();
-        self.parse_pattern_union();
-        if !self.at(TokenKind::Colon) {
-            return;
-        }
-        while self.at(TokenKind::Colon) {
-            self.bump(); // :
-            self.parse_pattern_union();
-        }
-        self.wrap_events_in_node(chain_start, SyntaxKind::CHAIN_PATTERN);
-        self.finish_node();
     }
 
     /// Parse a `|`-separated union. Wraps in `UNION_PATTERN` only if at least
@@ -3393,6 +3381,16 @@ impl<'a> Parser<'a> {
         }
 
         self.bump(); // WORD
+        // Optional `: <pattern>` sub-pattern. Folded directly into the
+        // BINDING_PATTERN node. The right side is any pattern — type
+        // ascription (`let x: int`), aliasing chain (`let x: let y`),
+        // structural destructure (`let x: [a, b]`, `let x: Class { f }`),
+        // etc. `let x: int | string` consumes `|` as type-union syntax
+        // (use explicit parens for `(let x: int) | (let y: string)`).
+        if self.at(TokenKind::Colon) {
+            self.bump(); // :
+            self.parse_pattern();
+        }
         self.wrap_events_in_node(start, SyntaxKind::BINDING_PATTERN);
         self.finish_node();
     }
@@ -3513,6 +3511,13 @@ impl<'a> Parser<'a> {
             }
 
             p.expect(TokenKind::RBracket);
+
+            // Optional `: T` type ascription — folded into the
+            // ARRAY_PATTERN node. Consumes `|` as type-union syntax.
+            if p.at(TokenKind::Colon) {
+                p.bump(); // :
+                p.parse_type_with(/* consume_union = */ true);
+            }
         });
     }
 
@@ -5883,76 +5888,6 @@ function Demo(x 200) -> int {
     }
 
     #[test]
-    fn parses_chained_catch_clauses_with_typed_arms() {
-        let source = r#"
-function Demo() -> int {
-  foo() catch (e) {
-    _ => { throw e; }
-  } catch (e2) {
-    _: ValidationError => { 1 }
-    other => { throw other; }
-  } catch (e3) {
-    _: Panic => { throw e3; }
-    other => 2
-  }
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let catch_expr = root
-            .descendants()
-            .find(|n| n.kind() == SyntaxKind::CATCH_EXPR)
-            .expect("expected CATCH_EXPR node");
-
-        let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
-        assert_eq!(child_kinds[0], SyntaxKind::CALL_EXPR);
-        assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
-        assert_eq!(child_kinds[2], SyntaxKind::CATCH_CLAUSE);
-        assert_eq!(child_kinds[3], SyntaxKind::CATCH_CLAUSE);
-
-        let clauses: Vec<_> = catch_expr
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::CATCH_CLAUSE)
-            .collect();
-        assert_eq!(clauses.len(), 3);
-
-        let keywords: Vec<_> = clauses
-            .iter()
-            .filter_map(|clause| {
-                clause
-                    .children_with_tokens()
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .find(|t| t.kind() == SyntaxKind::KW_CATCH)
-                    .map(|t| t.kind())
-            })
-            .collect();
-
-        assert_eq!(
-            keywords,
-            vec![
-                SyntaxKind::KW_CATCH,
-                SyntaxKind::KW_CATCH,
-                SyntaxKind::KW_CATCH,
-            ]
-        );
-
-        let second_clause_arms: Vec<_> = clauses[1]
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::CATCH_ARM)
-            .collect();
-        assert_eq!(second_clause_arms.len(), 2);
-        assert!(
-            second_clause_arms[0]
-                .text()
-                .to_string()
-                .contains("ValidationError")
-        );
-        assert!(second_clause_arms[1].text().to_string().contains("other"));
-    }
-
-    #[test]
     fn parses_throw_statement_and_throw_expression_in_catch_arm() {
         let source = r#"
 function Demo() -> int {
@@ -5981,34 +5916,6 @@ function Demo() -> int {
             .filter(|n| n.kind() == SyntaxKind::THROW_EXPR)
             .count();
         assert_eq!(throw_expr_count, 2);
-    }
-
-    #[test]
-    fn reports_missing_fat_arrow_in_catch_arm_and_recovers_next_arm() {
-        let source = r#"
-function Demo() -> int {
-  foo() catch (e) {
-    _: ValidationError
-    other => 1
-  }
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-
-        assert!(errors.iter().any(|error| {
-            matches!(
-                error,
-                ParseError::UnexpectedToken { expected, .. }
-                    if expected == "'=>' after catch pattern"
-            )
-        }));
-
-        let arm_count = root
-            .descendants()
-            .filter(|n| n.kind() == SyntaxKind::CATCH_ARM)
-            .count();
-        assert_eq!(arm_count, 2);
     }
 
     #[test]
@@ -6109,545 +6016,6 @@ type Callback = (value: int) -> string throws Foo
     /// Direct child node-kinds of `node` (tokens stripped).
     fn child_kinds(node: &SyntaxNode) -> Vec<SyntaxKind> {
         node.children().map(|n| n.kind()).collect()
-    }
-
-    #[test]
-    fn pattern_pipe_binds_tighter_than_colon() {
-        // `let x: int | string = 1` ≡ `let x : (int | string) = 1`.
-        // The CHAIN_PATTERN should split on `:` first, with the right-hand
-        // link being a UNION_PATTERN of two TYPE_PATTERNs.
-        let source = r#"
-function Demo() -> int {
-  let x: int | string = 1;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN at top of pattern");
-
-        let kinds = child_kinds(&chain);
-        assert_eq!(
-            kinds,
-            vec![SyntaxKind::BINDING_PATTERN, SyntaxKind::UNION_PATTERN],
-            "chain should be (binding) : (union), got {kinds:?}"
-        );
-
-        let union = chain
-            .children()
-            .find(|n| n.kind() == SyntaxKind::UNION_PATTERN)
-            .unwrap();
-        let union_atoms: Vec<_> = union
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::TYPE_PATTERN)
-            .collect();
-        assert_eq!(union_atoms.len(), 2);
-        assert!(union_atoms[0].text().to_string().contains("int"));
-        assert!(union_atoms[1].text().to_string().contains("string"));
-    }
-
-    #[test]
-    fn pattern_chain_splits_on_colon_first() {
-        // `let x: A | B: C = y` ≡ `let x : (A | B) : C = y`.
-        // Three chain links: BINDING_PATTERN, UNION_PATTERN, TYPE_PATTERN.
-        let source = r#"
-function Demo() -> int {
-  let x: int | string: int = 1;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-
-        let kinds = child_kinds(&chain);
-        assert_eq!(
-            kinds,
-            vec![
-                SyntaxKind::BINDING_PATTERN,
-                SyntaxKind::UNION_PATTERN,
-                SyntaxKind::TYPE_PATTERN,
-            ],
-            "expected 3-link chain, got {kinds:?}"
-        );
-    }
-
-    #[test]
-    fn pattern_paren_groups_union_at_chain_level() {
-        // Explicit grouping: `let x: (int | string) = 1`. The right-hand
-        // chain link is a PAREN_PATTERN, which itself wraps a PATTERN whose
-        // top-level child is a UNION_PATTERN. Important contrast with the
-        // function-type case below — `(int)` followed by `->` is a type, but
-        // `(int | string)` with no arrow is a paren pattern.
-        let source = r#"
-function Demo() -> int {
-  let x: (int | string) = 1;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-
-        let kinds = child_kinds(&chain);
-        assert_eq!(
-            kinds,
-            vec![SyntaxKind::BINDING_PATTERN, SyntaxKind::PAREN_PATTERN],
-        );
-
-        let paren = chain
-            .children()
-            .find(|n| n.kind() == SyntaxKind::PAREN_PATTERN)
-            .unwrap();
-        let inner_pattern = paren
-            .children()
-            .find(|n| n.kind() == SyntaxKind::PATTERN)
-            .expect("expected PATTERN inside PAREN_PATTERN");
-        let inner_kinds = child_kinds(&inner_pattern);
-        assert_eq!(
-            inner_kinds,
-            vec![SyntaxKind::UNION_PATTERN],
-            "expected UNION_PATTERN inside paren"
-        );
-    }
-
-    #[test]
-    fn pattern_function_type_no_arg() {
-        // `(int) -> int` in a pattern atom: the `(...)` is NOT a paren
-        // pattern, it's the start of a function-type. Lookahead past the
-        // matching `)` finds `->`, so we route to TYPE_PATTERN.
-        let source = r#"
-function Demo() -> int {
-  let f: (int) -> int = foo;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-
-        let kinds = child_kinds(&chain);
-        assert_eq!(
-            kinds,
-            vec![SyntaxKind::BINDING_PATTERN, SyntaxKind::TYPE_PATTERN],
-            "function-type atom must be a TYPE_PATTERN, not a PAREN_PATTERN"
-        );
-
-        // The TYPE_PATTERN should contain a TYPE_EXPR with an ARROW token —
-        // i.e. the function-type carrier shape used elsewhere.
-        let type_pat = chain
-            .children()
-            .find(|n| n.kind() == SyntaxKind::TYPE_PATTERN)
-            .unwrap();
-        let has_arrow = type_pat.descendants_with_tokens().any(|c| {
-            matches!(
-                c,
-                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::ARROW
-            )
-        });
-        assert!(has_arrow, "expected ARROW in function-type TYPE_PATTERN");
-    }
-
-    #[test]
-    fn pattern_function_type_in_paren_group() {
-        // `((int) -> int)` — outer parens have nothing after the matching `)`
-        // (well, `=`), so the outer `(` is a PAREN_PATTERN. The inner
-        // `(int) -> int` IS followed by `)`-then-`=`, but inside the paren we
-        // re-enter parse_pattern which re-runs the lookahead from the inner
-        // `(`, sees `->`, and routes to TYPE_PATTERN.
-        let source = r#"
-function Demo() -> int {
-  let f: ((int) -> int) = foo;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-
-        assert_eq!(
-            child_kinds(&chain),
-            vec![SyntaxKind::BINDING_PATTERN, SyntaxKind::PAREN_PATTERN],
-            "outer `(...)` with no trailing `->` must be a PAREN_PATTERN"
-        );
-
-        let paren = chain
-            .children()
-            .find(|n| n.kind() == SyntaxKind::PAREN_PATTERN)
-            .unwrap();
-        let inner_pattern = paren
-            .children()
-            .find(|n| n.kind() == SyntaxKind::PATTERN)
-            .expect("expected PATTERN inside PAREN_PATTERN");
-        assert_eq!(
-            child_kinds(&inner_pattern),
-            vec![SyntaxKind::TYPE_PATTERN],
-            "inner `(int) -> int` must be a single TYPE_PATTERN function-type atom"
-        );
-    }
-
-    #[test]
-    fn pattern_higher_order_function_type() {
-        // `((int) -> int) -> int` — outer `(` lookahead correctly walks past
-        // the inner `(int) -> int` (with the bracket-stack handling nested
-        // parens) and finds the trailing `->`, so the WHOLE thing is one
-        // TYPE_PATTERN, not a paren pattern around a function type.
-        let source = r#"
-function Demo() -> int {
-  let f: ((int) -> int) -> int = foo;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-
-        assert_eq!(
-            child_kinds(&chain),
-            vec![SyntaxKind::BINDING_PATTERN, SyntaxKind::TYPE_PATTERN],
-            "outer `(...) ->` shape must collapse to a single TYPE_PATTERN"
-        );
-        assert!(
-            chain
-                .children()
-                .all(|n| n.kind() != SyntaxKind::PAREN_PATTERN),
-            "no PAREN_PATTERN should appear at chain level for a function-type atom"
-        );
-    }
-
-    #[test]
-    fn pattern_paren_grouped_union_with_function_type() {
-        // `((int) -> int) | string` — paren group around a function-type,
-        // then `|` to UNION it with `string`. The outer `(` is a paren
-        // group (lookahead past `)` finds `|`, not `->`), and inside the
-        // group the function type is a TYPE_PATTERN.
-        let source = r#"
-function Demo() -> int {
-  let f: ((int) -> int) | string = foo;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-
-        // The right-hand chain link is a UNION_PATTERN of [PAREN, TYPE].
-        let kinds = child_kinds(&chain);
-        assert_eq!(
-            kinds,
-            vec![SyntaxKind::BINDING_PATTERN, SyntaxKind::UNION_PATTERN],
-        );
-
-        let union = chain
-            .children()
-            .find(|n| n.kind() == SyntaxKind::UNION_PATTERN)
-            .unwrap();
-        let union_kinds = child_kinds(&union);
-        assert_eq!(
-            union_kinds,
-            vec![SyntaxKind::PAREN_PATTERN, SyntaxKind::TYPE_PATTERN],
-            "union should be (paren-grouped fn-type) | string"
-        );
-
-        // And inside the paren group, the function type is a TYPE_PATTERN.
-        let paren = union
-            .children()
-            .find(|n| n.kind() == SyntaxKind::PAREN_PATTERN)
-            .unwrap();
-        let inner_pattern = paren
-            .children()
-            .find(|n| n.kind() == SyntaxKind::PATTERN)
-            .expect("expected PATTERN inside PAREN_PATTERN");
-        assert_eq!(child_kinds(&inner_pattern), vec![SyntaxKind::TYPE_PATTERN],);
-    }
-
-    #[test]
-    fn pattern_ridiculous_paren_nesting() {
-        // Five layers of paren grouping around a single TYPE_PATTERN. Each
-        // nested `(` is a fresh PAREN_PATTERN — none of them collapse into a
-        // function-type because there's no `->` after any of the matching
-        // closers.
-        let source = r#"
-function Demo() -> int {
-  let x: (((((int))))) = 1;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-
-        // Walk down the paren chain on the right-hand link.
-        let mut current = chain
-            .children()
-            .find(|n| n.kind() == SyntaxKind::PAREN_PATTERN)
-            .expect("expected outer PAREN_PATTERN");
-        let mut depth = 1;
-        loop {
-            let inner_pattern = current
-                .children()
-                .find(|n| n.kind() == SyntaxKind::PATTERN)
-                .expect("expected PATTERN inside PAREN_PATTERN");
-            match inner_pattern
-                .children()
-                .find(|n| {
-                    matches!(
-                        n.kind(),
-                        SyntaxKind::PAREN_PATTERN | SyntaxKind::TYPE_PATTERN
-                    )
-                })
-                .expect("expected paren or type at this depth")
-            {
-                next if next.kind() == SyntaxKind::PAREN_PATTERN => {
-                    current = next;
-                    depth += 1;
-                }
-                ty => {
-                    assert_eq!(ty.kind(), SyntaxKind::TYPE_PATTERN);
-                    assert!(ty.text().to_string().contains("int"));
-                    break;
-                }
-            }
-        }
-        assert_eq!(depth, 5, "expected 5 layers of paren nesting");
-    }
-
-    #[test]
-    fn pattern_three_layer_higher_order_function_type() {
-        // Layer 1: `(int) -> int`
-        // Layer 2: `((int) -> int) -> int`
-        // Layer 3: `(((int) -> int) -> int) -> int`
-        // Outermost `(` lookahead must walk past TWO levels of nested parens
-        // (via the stack) and still recognise the final `->`. The whole atom
-        // collapses into a single TYPE_PATTERN — NO PAREN_PATTERNs anywhere
-        // in the chain link, since each set of parens is part of a function
-        // type carrier.
-        let source = r#"
-function Demo() -> int {
-  let f: (((int) -> int) -> int) -> int = foo;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-
-        assert_eq!(
-            child_kinds(&chain),
-            vec![SyntaxKind::BINDING_PATTERN, SyntaxKind::TYPE_PATTERN],
-        );
-
-        // Crucially: no PAREN_PATTERN should appear anywhere under the chain.
-        let any_paren = chain
-            .descendants()
-            .any(|n| n.kind() == SyntaxKind::PAREN_PATTERN);
-        assert!(
-            !any_paren,
-            "no PAREN_PATTERN should appear — every `(` here is a function-type opener"
-        );
-
-        // Sanity: there should be three ARROW tokens inside the type pattern.
-        let type_pat = chain
-            .children()
-            .find(|n| n.kind() == SyntaxKind::TYPE_PATTERN)
-            .unwrap();
-        let arrow_count = type_pat
-            .descendants_with_tokens()
-            .filter(|c| {
-                matches!(
-                    c,
-                    rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::ARROW
-                )
-            })
-            .count();
-        assert_eq!(arrow_count, 3, "expected three `->` arrows in 3-layer HOF");
-    }
-
-    #[test]
-    fn pattern_long_union() {
-        // 7-way union — verifies the `|` loop in parse_pattern_union doesn't
-        // get confused with arbitrary atoms (path, literal int, literal
-        // string, bool, etc.).
-        let source = r#"
-function Demo() -> int {
-  let x: int | string | bool | "a" | "b" | 1 | 2 = 1;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-
-        let union = chain
-            .children()
-            .find(|n| n.kind() == SyntaxKind::UNION_PATTERN)
-            .expect("expected UNION_PATTERN");
-        let atoms: Vec<_> = union
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::TYPE_PATTERN)
-            .collect();
-        assert_eq!(atoms.len(), 7, "expected 7 union atoms");
-    }
-
-    #[test]
-    fn pattern_long_chain_with_unions() {
-        // Mix of `:` chain links and `|` unions inside each link. The chain
-        // must split on `:` first, with each link being either a single atom
-        // or a UNION_PATTERN.
-        //
-        // Shape (5 chain links):
-        //   let x : int : 1 : 1 | 2 : 1 | 2 | 3 : int = 1
-        //
-        // Expected children of CHAIN_PATTERN:
-        //   BINDING, TYPE, TYPE, UNION(1|2), UNION(1|2|3), TYPE
-        let source = r#"
-function Demo() -> int {
-  let x: int: 1: 1 | 2: 1 | 2 | 3: int = 1;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-
-        let kinds = child_kinds(&chain);
-        assert_eq!(
-            kinds,
-            vec![
-                SyntaxKind::BINDING_PATTERN,
-                SyntaxKind::TYPE_PATTERN,  // int
-                SyntaxKind::TYPE_PATTERN,  // 1
-                SyntaxKind::UNION_PATTERN, // 1 | 2
-                SyntaxKind::UNION_PATTERN, // 1 | 2 | 3
-                SyntaxKind::TYPE_PATTERN,  // int
-            ],
-            "got {kinds:?}"
-        );
-
-        // Sanity-check the union widths.
-        let unions: Vec<_> = chain
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::UNION_PATTERN)
-            .collect();
-        let widths: Vec<usize> = unions
-            .iter()
-            .map(|u| {
-                u.children()
-                    .filter(|c| c.kind() == SyntaxKind::TYPE_PATTERN)
-                    .count()
-            })
-            .collect();
-        assert_eq!(widths, vec![2, 3]);
-    }
-
-    #[test]
-    fn pattern_unparenthesized_function_type_union_splits_on_pipe() {
-        // `(int) -> int | string` in pattern position must parse as a
-        // UNION_PATTERN of two TYPE_PATTERNs ([fn, string]) rather than a
-        // single function type whose return swallows `| string`.
-        // Regression: `parse_paren_or_function_type` used to call
-        // `parse_type()` (which consumes `|`) for the return type even when
-        // the outer caller asked for `consume_union = false`.
-        let source = r#"
-function Demo() -> int {
-  let f: (int) -> int | string = 1;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-        let union = chain
-            .children()
-            .find(|n| n.kind() == SyntaxKind::UNION_PATTERN)
-            .expect("expected UNION_PATTERN — function-type return must not swallow `| string`");
-        let atoms: Vec<_> = union
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::TYPE_PATTERN)
-            .collect();
-        assert_eq!(atoms.len(), 2, "expected 2 union atoms");
-        assert!(
-            atoms[0].text().to_string().contains("->"),
-            "first atom should be the function type, got `{}`",
-            atoms[0].text()
-        );
-        assert!(
-            atoms[1].text().to_string().contains("string"),
-            "second atom should be `string`, got `{}`",
-            atoms[1].text()
-        );
     }
 
     #[test]
@@ -6944,85 +6312,6 @@ function Demo() -> int {
     }
 
     #[test]
-    fn pattern_destructure_chain_union_precedence() {
-        // `let Class { field }: let y | Other { field }: let z = ...`
-        // parses as a chain split on the two top-level `:` separators:
-        //   Class { field } : (let y | Other { field }) : let z
-        let source = r#"
-function Demo() -> int {
-  let Class { field }: let y | Other { field }: let z = Class { field: 1 };
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-
-        assert_eq!(
-            child_kinds(&chain),
-            vec![
-                SyntaxKind::DESTRUCTURE_PATTERN,
-                SyntaxKind::UNION_PATTERN,
-                SyntaxKind::BINDING_PATTERN,
-            ],
-        );
-
-        let union = chain
-            .children()
-            .find(|n| n.kind() == SyntaxKind::UNION_PATTERN)
-            .expect("expected UNION_PATTERN as middle chain link");
-        assert_eq!(
-            child_kinds(&union),
-            vec![SyntaxKind::BINDING_PATTERN, SyntaxKind::DESTRUCTURE_PATTERN],
-        );
-    }
-
-    #[test]
-    fn pattern_parenthesized_destructure_chains_can_be_union_alternatives() {
-        let source = r#"
-function Demo() -> int {
-  match (x) {
-    (Class { field }: let y) | (Other { field }: let y) => 1
-  }
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let arm = root
-            .descendants()
-            .find(|n| n.kind() == SyntaxKind::MATCH_ARM)
-            .expect("expected MATCH_ARM");
-        let pattern = arm
-            .children()
-            .find(|n| n.kind() == SyntaxKind::PATTERN)
-            .expect("expected PATTERN");
-        let union = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::UNION_PATTERN)
-            .expect("expected top-level UNION_PATTERN");
-
-        assert_eq!(
-            child_kinds(&union),
-            vec![SyntaxKind::PAREN_PATTERN, SyntaxKind::PAREN_PATTERN],
-        );
-        for paren in union.children() {
-            let inner_pattern = paren
-                .children()
-                .find(|n| n.kind() == SyntaxKind::PATTERN)
-                .expect("expected PATTERN inside paren");
-            assert_eq!(child_kinds(&inner_pattern), vec![SyntaxKind::CHAIN_PATTERN]);
-        }
-    }
-
-    #[test]
     fn pattern_match_bare_identifier_is_type_pattern() {
         // In match arms, bare `Foo` is a type/path pattern, NOT a binding.
         // Per the spec: "Type Expressions: `let` is explicitly not allowed,
@@ -7062,84 +6351,6 @@ function Demo() -> int {
                 .descendants()
                 .all(|n| n.kind() != SyntaxKind::BINDING_PATTERN),
             "bare identifier should NOT produce a BINDING_PATTERN"
-        );
-    }
-
-    #[test]
-    fn pattern_mixed_grouping_chain_and_union() {
-        // Mixed `:`, `|`, and `(...)` grouping. Source:
-        //   let x: a | (b: c) : d | e = 1
-        //
-        // Expected (chain splits on `:` first):
-        //   CHAIN_PATTERN
-        //     BINDING_PATTERN  (let x)
-        //     UNION_PATTERN    (a | (b: c))
-        //       TYPE_PATTERN  (a)
-        //       PAREN_PATTERN
-        //         PATTERN
-        //           CHAIN_PATTERN  (b : c)
-        //             TYPE_PATTERN (b)
-        //             TYPE_PATTERN (c)
-        //     UNION_PATTERN    (d | e)
-        //       TYPE_PATTERN (d)
-        //       TYPE_PATTERN (e)
-        let source = r#"
-function Demo() -> int {
-  let x: a | (b: c): d | e = 1;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected outer CHAIN_PATTERN");
-
-        assert_eq!(
-            child_kinds(&chain),
-            vec![
-                SyntaxKind::BINDING_PATTERN,
-                SyntaxKind::UNION_PATTERN,
-                SyntaxKind::UNION_PATTERN,
-            ],
-            "chain should split on `:` into binding + 2 unions"
-        );
-
-        let unions: Vec<_> = chain
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::UNION_PATTERN)
-            .collect();
-
-        // First union: TYPE(a) | PAREN(CHAIN(b, c))
-        assert_eq!(
-            child_kinds(&unions[0]),
-            vec![SyntaxKind::TYPE_PATTERN, SyntaxKind::PAREN_PATTERN],
-        );
-        let paren = unions[0]
-            .children()
-            .find(|n| n.kind() == SyntaxKind::PAREN_PATTERN)
-            .unwrap();
-        let paren_inner = paren
-            .children()
-            .find(|n| n.kind() == SyntaxKind::PATTERN)
-            .unwrap();
-        let inner_chain = paren_inner
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("inside the paren, `b: c` should be a CHAIN_PATTERN");
-        assert_eq!(
-            child_kinds(&inner_chain),
-            vec![SyntaxKind::TYPE_PATTERN, SyntaxKind::TYPE_PATTERN],
-        );
-
-        // Second union: TYPE(d) | TYPE(e)
-        assert_eq!(
-            child_kinds(&unions[1]),
-            vec![SyntaxKind::TYPE_PATTERN, SyntaxKind::TYPE_PATTERN],
         );
     }
 
@@ -7387,32 +6598,6 @@ function Demo() -> int {
     }
 
     #[test]
-    fn pattern_let_underscore_with_type_chain() {
-        // `let _: int = 1` — wildcard as the first chain link, type as the
-        // second. The chain split on `:` still works because WILDCARD_PATTERN
-        // is just another atom.
-        let source = r#"
-function Demo() -> int {
-  let _: int = 1;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-        assert_eq!(
-            child_kinds(&chain),
-            vec![SyntaxKind::WILDCARD_PATTERN, SyntaxKind::TYPE_PATTERN],
-        );
-    }
-
-    #[test]
     fn pattern_negative_integer_literal_in_match_arm() {
         // `-42` as a match-arm pattern. Structurally a TYPE_PATTERN whose
         // inner TYPE_EXPR carries a MINUS token followed by an INTEGER_LITERAL.
@@ -7455,40 +6640,6 @@ function Demo() -> int {
             })
             .collect();
         assert_eq!(kinds, vec![SyntaxKind::MINUS, SyntaxKind::INTEGER_LITERAL]);
-    }
-
-    #[test]
-    fn pattern_negative_literal_union_in_chain() {
-        // `let x: -1 | 0 | 1 = 0` — negative integer literals participate in
-        // unions just like positives.
-        let source = r#"
-function Demo() -> int {
-  let x: -1 | 0 | 1 = 0;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-        let union = chain
-            .children()
-            .find(|n| n.kind() == SyntaxKind::UNION_PATTERN)
-            .expect("expected UNION_PATTERN");
-
-        let atoms: Vec<_> = union
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::TYPE_PATTERN)
-            .collect();
-        assert_eq!(atoms.len(), 3);
-        assert!(atoms[0].text().to_string().contains("-1"));
-        assert!(atoms[1].text().to_string().contains('0'));
-        assert!(atoms[2].text().to_string().contains('1'));
     }
 
     #[test]
@@ -7628,44 +6779,6 @@ function Demo(x: -1) -> int {
             "expected parameter type to contain `-1`, got: {}",
             type_expr.text()
         );
-    }
-
-    #[test]
-    fn pattern_function_type_named_param() {
-        // `(x: int, y: int) -> int` — named-parameter form, also a TYPE_PATTERN.
-        let source = r#"
-function Demo() -> int {
-  let f: (x: int, y: int) -> int = foo;
-  1
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let pattern = first_let_pattern(&root);
-        let chain = pattern
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CHAIN_PATTERN)
-            .expect("expected CHAIN_PATTERN");
-
-        let kinds = child_kinds(&chain);
-        assert_eq!(
-            kinds,
-            vec![SyntaxKind::BINDING_PATTERN, SyntaxKind::TYPE_PATTERN],
-        );
-
-        let type_pat = chain
-            .children()
-            .find(|n| n.kind() == SyntaxKind::TYPE_PATTERN)
-            .unwrap();
-        // The function-type should carry FUNCTION_TYPE_PARAM nodes for `x: int`
-        // and `y: int`.
-        let params: Vec<_> = type_pat
-            .descendants()
-            .filter(|n| n.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
-            .collect();
-        assert_eq!(params.len(), 2, "expected two FUNCTION_TYPE_PARAM nodes");
     }
 
     // ============ for-in: `let` is required ============

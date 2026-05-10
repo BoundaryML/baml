@@ -48,7 +48,10 @@ pub(crate) mod support {
         let pat = &body.patterns[pat_id];
         match pat {
             Pattern::Wildcard => "_".to_string(),
-            Pattern::Bind { name } => name.to_string(),
+            Pattern::Bind { name, subpat } => match subpat {
+                Some(sp) => format!("{name}: {}", pat_desc(*sp, body)),
+                None => name.to_string(),
+            },
             Pattern::Class {
                 class,
                 generic_args,
@@ -82,6 +85,7 @@ pub(crate) mod support {
                 prefix,
                 rest,
                 suffix,
+                ascription,
             } => {
                 let mut parts = Vec::new();
                 parts.extend(prefix.iter().map(|p| pat_desc(*p, body)));
@@ -93,7 +97,11 @@ pub(crate) mod support {
                     parts.push(format!("..{rest_desc}"));
                 }
                 parts.extend(suffix.iter().map(|p| pat_desc(*p, body)));
-                format!("[{}]", parts.join(", "))
+                let arr = format!("[{}]", parts.join(", "));
+                match ascription {
+                    Some(t) => format!("{arr}: {t}"),
+                    None => arr,
+                }
             }
             Pattern::Type(ty) => ty.to_string(),
             Pattern::Or(pats) => pats
@@ -101,11 +109,6 @@ pub(crate) mod support {
                 .map(|p| pat_desc(*p, body))
                 .collect::<Vec<_>>()
                 .join(" | "),
-            Pattern::Chain(pats) => pats
-                .iter()
-                .map(|p| pat_desc(*p, body))
-                .collect::<Vec<_>>()
-                .join(": "),
         }
     }
 
@@ -1266,17 +1269,18 @@ pub(crate) mod support {
             let pat = &body.patterns[pat_id];
             match pat {
                 Pattern::Wildcard => "_".to_string(),
-                Pattern::Bind { name } => name.to_string(),
+                Pattern::Bind { name, subpat } => match subpat {
+                    Some(sp) => format!(
+                        "{name}: {}",
+                        pat_desc_hir(*sp, body, prefix, local_type_names)
+                    ),
+                    None => name.to_string(),
+                },
                 Pattern::Or(pats) => pats
                     .iter()
                     .map(|p| pat_desc_hir(*p, body, prefix, local_type_names))
                     .collect::<Vec<_>>()
                     .join(" | "),
-                Pattern::Chain(pats) => pats
-                    .iter()
-                    .map(|p| pat_desc_hir(*p, body, prefix, local_type_names))
-                    .collect::<Vec<_>>()
-                    .join(": "),
                 Pattern::Type(ty) => type_expr_to_string_hir(ty, prefix, local_type_names),
                 Pattern::Class {
                     class,
@@ -1316,6 +1320,7 @@ pub(crate) mod support {
                     prefix: prefix_pats,
                     rest,
                     suffix,
+                    ascription,
                 } => {
                     let mut parts = Vec::new();
                     parts.extend(
@@ -1335,7 +1340,14 @@ pub(crate) mod support {
                             .iter()
                             .map(|p| pat_desc_hir(*p, body, prefix, local_type_names)),
                     );
-                    format!("[{}]", parts.join(", "))
+                    let arr = format!("[{}]", parts.join(", "));
+                    match ascription {
+                        Some(t) => format!(
+                            "{arr}: {}",
+                            type_expr_to_string_hir(t, prefix, local_type_names)
+                        ),
+                        None => arr,
+                    }
                 }
             }
         }

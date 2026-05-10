@@ -22,14 +22,14 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let x"
-                KW_LET "let"
-                WORD "x"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "x"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int"
-                  WORD "int"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.llm.get_return_type"
@@ -107,14 +107,14 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let t"
-                KW_LET "let"
-                WORD "t"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "t"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "type"
-                  WORD "type"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "type"
+                    WORD "type"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.llm.get_return_type"

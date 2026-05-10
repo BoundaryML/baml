@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.DestructureQualifiedLet() -> int throws never {
   { : int
     let response = root.llm.openai.Response { text: "ok", score: 41 } : user.llm.openai.Response
-    let root.llm.openai.Response { score: score }: root.llm.openai.Response = response : user.llm.openai.Response
+    let root.llm.openai.Response { score: score } = response : user.llm.openai.Response
     score : int
   }
 }
@@ -15,14 +15,14 @@ function user.DestructureQualifiedMatch() -> int throws never {
     match (response : user.llm.openai.Response) : 0 | int
       root.llm.openai.Response { score: 0 } =>
         0 : 0
-      root.llm.openai.Response { score: matched }: root.llm.openai.Response =>
+      root.llm.openai.Response { score: matched } =>
         matched : int
   }
 }
 function user.DestructureNamespaceQualifiedLet() -> int throws never {
   { : int
     let response = llm.openai.Response { text: "ok", score: 45 } : user.llm.openai.Response
-    let llm.openai.Response { score: score }: llm.openai.Response = response : user.llm.openai.Response
+    let llm.openai.Response { score: score } = response : user.llm.openai.Response
     score : int
   }
 }
@@ -32,7 +32,7 @@ function user.DestructureNamespaceQualifiedMatch() -> int throws never {
     match (response : user.llm.openai.Response) : 0 | int
       llm.openai.Response { score: 0 } =>
         0 : 0
-      llm.openai.Response { score: matched }: llm.openai.Response =>
+      llm.openai.Response { score: matched } =>
         matched : int
   }
 }

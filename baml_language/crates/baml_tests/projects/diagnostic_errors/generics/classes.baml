@@ -194,7 +194,7 @@ class MaybeBox<T> {
     function get_or_default(self, default: T) -> T {
         match (self.value) {
             let v: T => v,
-            _: null => default,
+            null => default,
         }
     }
 }
@@ -233,7 +233,7 @@ class Foo<T> {
 
 function bare_in_union_param(f: Foo<int> | Foo) -> string {
     match (f) {
-        _: Foo<int> => "specific",
-        _: Foo      => "bare",
+        Foo<int> => "specific",
+        Foo      => "bare",
     }
 }

@@ -1026,7 +1026,7 @@ async fn match_string_literal_with_typed_fallback() {
             match (s) {
                 "ok" => 200,
                 "error" => 500,
-                _: string => 0
+                string => 0
             }
         }
         function main() -> int {

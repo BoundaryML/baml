@@ -450,6 +450,17 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
+  [type] Error: type mismatch: expected "hello", got "bye"
+     ╭─[ match_exprs.baml:160:31 ]
+     │
+ 160 │ ╭─▶         "hello" => "greeting",
+ 161 │ ├─▶         "bye" => "farewell",
+     │ │                                  
+     │ ╰────────────────────────────────── type mismatch: expected "hello", got "bye"
+     │     
+     │     Note: Error code: E0001
+─────╯
+
   [type] Error: unreachable arm
      ╭─[ match_exprs.baml:161:18 ]
      │
@@ -521,11 +532,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: non-exhaustive match on `int`; missing: _
-     ╭─[ match_exprs.baml:388:6 ]
+     ╭─[ match_exprs.baml:386:6 ]
      │
- 388 │ ╭─▶     }
+ 386 │ ╭─▶     }
      ┆ ┆   
- 395 │ ├─▶     }
+ 391 │ ├─▶     }
      │ │           
      │ ╰─────────── non-exhaustive match on `int`; missing: _
      │     
@@ -533,11 +544,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: non-exhaustive match on `int`; missing: _
-     ╭─[ match_exprs.baml:420:6 ]
+     ╭─[ match_exprs.baml:391:6 ]
      │
- 420 │ ╭─▶     }
+ 391 │ ╭─▶     }
      ┆ ┆   
- 425 │ ├─▶     }
+ 396 │ ├─▶     }
      │ │           
      │ ╰─────────── non-exhaustive match on `int`; missing: _
      │     
@@ -545,11 +556,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: non-exhaustive match on `int`; missing: _
-     ╭─[ match_exprs.baml:425:6 ]
+     ╭─[ match_exprs.baml:396:6 ]
      │
- 425 │ ╭─▶     }
+ 396 │ ╭─▶     }
      ┆ ┆   
- 430 │ ├─▶     }
+ 401 │ ├─▶     }
      │ │           
      │ ╰─────────── non-exhaustive match on `int`; missing: _
      │     
@@ -557,11 +568,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: non-exhaustive match on `int`; missing: _
-     ╭─[ match_exprs.baml:430:6 ]
+     ╭─[ match_exprs.baml:401:6 ]
      │
- 430 │ ╭─▶     }
+ 401 │ ╭─▶     }
      ┆ ┆   
- 435 │ ├─▶     }
+ 406 │ ├─▶     }
      │ │           
      │ ╰─────────── non-exhaustive match on `int`; missing: _
      │     
@@ -569,23 +580,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: non-exhaustive match on `int`; missing: _
-     ╭─[ match_exprs.baml:435:6 ]
+     ╭─[ match_exprs.baml:416:6 ]
      │
- 435 │ ╭─▶     }
+ 416 │ ╭─▶     }
      ┆ ┆   
- 440 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `int`; missing: _
-     │     
-     │     Note: Error code: E0062
-─────╯
-
-  [type] Error: non-exhaustive match on `int`; missing: _
-     ╭─[ match_exprs.baml:450:6 ]
-     │
- 450 │ ╭─▶     }
-     ┆ ┆   
- 455 │ ├─▶     }
+ 421 │ ├─▶     }
      │ │           
      │ ╰─────────── non-exhaustive match on `int`; missing: _
      │     
@@ -593,11 +592,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: type mismatch: expected string, got 0
-     ╭─[ match_exprs.baml:450:6 ]
+     ╭─[ match_exprs.baml:416:6 ]
      │
- 450 │ ╭─▶     }
+ 416 │ ╭─▶     }
      ┆ ┆   
- 455 │ ├─▶     }
+ 421 │ ├─▶     }
      │ │           
      │ ╰─────────── type mismatch: expected string, got 0
      │     

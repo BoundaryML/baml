@@ -11,17 +11,12 @@ class user.PatternBucket {
 class user.PatternMatrix {
   rows: int[][]
 }
-type user.AliasA = int | string
-type user.AliasB = string | bool
 type user.Number = int | float
-function user.alias_intersection_in_match_arm(v: user.AliasA) -> int  [expr] {
-  {  } match (v) { s: user.AliasB => s.length(), _ => 0 }
-}
 function user.bare_type_arm(v: int | string) -> int  [expr] {
   {  } match (v) { int => 1, string => 2 }
 }
 function user.call_either_int_caller(cb: (int) -> int | (bool) -> int) -> int  [expr] {
-  {  } match (cb) { _: (int) -> int => 1, _: (bool) -> int => 2 }
+  {  } match (cb) { (int) -> int => 1, (bool) -> int => 2 }
 }
 function user.call_int_callback(cb: (int) -> int) -> int  [expr] {
   {  } match (cb) { f: (int) -> int => f(10) }
@@ -33,7 +28,7 @@ function user.catch_chain_union(mode: int) -> int  [expr] {
   {  } risky_error(mode) catch (e) { user.AppError | string => 1 }
 }
 function user.catch_paren_or_chain(mode: int) -> int  [expr] {
-  {  } risky_error(mode) catch (e) { _: user.AppError | _: string => 1 }
+  {  } risky_error(mode) catch (e) { user.AppError | string => 1 }
 }
 function user.catch_widening_chain(mode: int) -> int  [expr] {
   {  } risky_error(mode) catch (e) { s: string => 1, app: user.AppError => 2 }
@@ -41,89 +36,41 @@ function user.catch_widening_chain(mode: int) -> int  [expr] {
 function user.chain_narrow_then_wildcard(v: int | string | bool) -> int  [expr] {
   {  } match (v) { n: int => n, _ => 0 }
 }
-function user.deeply_parenthesized_binding(v: int) -> int  [expr] {
-  {  } match (v) { x: int => x }
-}
 function user.dispatch_callback(cb: (int) -> int | (string) -> string) -> int  [expr] {
-  {  } match (cb) { f: (int) -> int => f(0), _: (string) -> string => 0 }
+  {  } match (cb) { f: (int) -> int => f(0), (string) -> string => 0 }
 }
 function user.dispatch_with_wildcard(cb: (int) -> int | (string) -> int) -> int  [expr] {
-  {  } match (cb) { _: (int) -> int => 1, _ => 0 }
+  {  } match (cb) { (int) -> int => 1, _ => 0 }
+}
+function user.fn_pattern(cb: (int) -> int) -> int  [expr] {
+  {  } match (cb) { f: (int) -> int => f(0) }
 }
 function user.fn_return_widens(cb: (int) -> int | string) -> int  [expr] {
-  {  } match (cb) { _: (int) -> int: (int) -> int | string => 1 }
+  {  } match (cb) { (int) -> int | string => 1 }
 }
-function user.for_let_chain_widening(items: int[]) -> int  [expr] {
-  { let sum = 0; for n: int: int | string in items { sum Add= 1 } } sum
+function user.for_let_ascription(items: int[]) -> int  [expr] {
+  { let sum = 0; for n: int | string in items { sum Add= 1 } } sum
 }
 function user.for_let_fn_narrow(items: (int) -> int[]) -> int  [expr] {
   { let total = 0; for f: (int) -> int in items { total Add= f(0) } } total
-}
-function user.for_let_multi_chain(items: int | string | bool[]) -> int  [expr] {
-  { let count = 0; for v: int: int | string | bool in items { count Add= 1 } } count
 }
 function user.for_let_with_narrow(items: int[]) -> int  [expr] {
   { let sum = 0; for n: int in items { sum Add= n } } sum
 }
 function user.int_widens_to_alias(v: user.Number) -> int  [expr] {
-  {  } match (v) { n: int: user.Number => 1 }
-}
-function user.int_widens_to_optional(v: int?) -> int?  [expr] {
-  {  } match (v) { n: int: int? => n }
-}
-function user.int_widens_to_union(v: int | string) -> int  [expr] {
-  {  } match (v) { n: int: int | string => 1 }
-}
-function user.let_fn_return_widen() -> int | string  [expr] {
-  { let f: (int) -> int: (int) -> int | string = (x: int) -> int { {  } x } } f(0)
-}
-function user.let_four_step_widen() -> int  [expr] {
-  { let x: 1: int: int | string: int | string | float = 1 } 1
-}
-function user.let_list_widen(items: int[]) -> int  [expr] {
-  { let xs: int[]: int | string[] = items } xs.length()
-}
-function user.let_literal_to_nullable() -> int  [expr] {
-  { let x: 0: int: int? = 0 } 1
-}
-function user.let_literal_to_primitive() -> int  [expr] {
-  { let x: 1: int = 1 } x
-}
-function user.let_nested_paren_union_chain(items: int | string[]) -> int  [expr] {
-  { let xs: int | string[]: int | string[]? = items } 1
-}
-function user.let_string_literal_widening() -> int  [expr] {
-  { let s: "hello": string: string | int = "hello" } 1
-}
-function user.let_three_step_widen() -> int  [expr] {
-  { let x: 1: int: int | string = 1 } 1
-}
-function user.let_widen_to_nullable_union() -> int  [expr] {
-  { let x: int: int?: int | string | null = 1 } 1
-}
-function user.let_wildcard_chain() -> int  [expr] {
-  { let _: int: int | string = 1 } 1
+  {  } match (v) { n: user.Number => 1 }
 }
 function user.literal_widens_to_int(v: int) -> int  [expr] {
-  {  } match (v) { n: 1: int => n }
+  {  } match (v) { n: int => n }
 }
 function user.match_nested_paren_union(v: int | string[]) -> int  [expr] {
-  {  } match (v) { _: int | string[] => 1 }
-}
-function user.mixed_nested_array_class_binding(v: user.PatternMatrix | user.PatternBucket[][]) -> int  [expr] {
-  {  } match (v) { PatternMatrix { rows: [[..x]: int[]] } | [[PatternBucket { values: x }]] => x.length(), _ => 0 }
-}
-function user.mixed_suffix_class_or_prefix_array_binding(v: user.PatternBucket[] | int[][]) -> int  [expr] {
-  {  } match (v) { [.._, PatternBucket { values: x }] | [[..x]: int[], .._] => x.length(), _ => 0 }
-}
-function user.multi_narrow_chain(v: int) -> int  [expr] {
-  {  } match (v) { n: int: int => n }
+  {  } match (v) { int | string[] => 1 }
 }
 function user.nested_paren_union_array_one(items: int | string[]) -> int  [expr] {
   {  } items.length()
 }
 function user.nested_paren_union_array_optional(v: int | string[]?) -> int  [expr] {
-  {  } match (v) { _: int | string[]? => 1 }
+  {  } match (v) { int | string[]? => 1 }
 }
 function user.nested_paren_union_array_three(v: int | string[][]) -> int  [expr] {
   {  } v.length()
@@ -137,17 +84,8 @@ function user.or_with_repeated_bare_binding(v: int) -> int  [expr] {
 function user.or_with_repeated_typed_binding(v: int | string) -> int  [expr] {
   {  } match (v) { x: int | x: int => x, _ => 0 }
 }
-function user.paren_atom_outer_chain(v: int) -> int  [expr] {
-  {  } match (v) { x: int => x }
-}
 function user.paren_chains_in_or(v: int) -> int  [expr] {
   {  } match (v) { x: int | x: int => 1 }
-}
-function user.paren_fn_pattern_with_chain(cb: (int) -> int) -> int  [expr] {
-  {  } match (cb) { f: (int) -> int: (int) -> int => f(0) }
-}
-function user.paren_union_outer_chain(v: int) -> int  [expr] {
-  {  } match (v) { x | x: int => x }
 }
 function user.risky_error(mode: int) -> int  [expr] {
   { if (mode Eq 0) { throw user.AppError { code: 1 } }; throw "boom" }

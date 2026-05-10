@@ -9,16 +9,16 @@ function user.DeepGenericDestructureQualifiedLet() -> int  [expr] {
   { let outer: root.llm.openai.Outer = _ { inner: _ { value: 52 } }; let root.llm.openai.Outer<int> { inner: root.llm.openai.Box<int> { value: value } } = outer } value
 }
 function user.DestructureNamespaceQualifiedLet() -> int  [expr] {
-  { let response = llm.openai.Response { text: "ok", score: 45 }; let llm.openai.Response { score: score }: llm.openai.Response = response } score
+  { let response = llm.openai.Response { text: "ok", score: 45 }; let llm.openai.Response { score: score } = response } score
 }
 function user.DestructureNamespaceQualifiedMatch() -> int  [expr] {
-  { let response = llm.openai.Response { text: "ok", score: 46 } } match (response) { llm.openai.Response { score: 0 } => 0, llm.openai.Response { score: matched }: llm.openai.Response => matched }
+  { let response = llm.openai.Response { text: "ok", score: 46 } } match (response) { llm.openai.Response { score: 0 } => 0, llm.openai.Response { score: matched } => matched }
 }
 function user.DestructureQualifiedLet() -> int  [expr] {
-  { let response = root.llm.openai.Response { text: "ok", score: 41 }; let root.llm.openai.Response { score: score }: root.llm.openai.Response = response } score
+  { let response = root.llm.openai.Response { text: "ok", score: 41 }; let root.llm.openai.Response { score: score } = response } score
 }
 function user.DestructureQualifiedMatch() -> int  [expr] {
-  { let response = root.llm.openai.Response { text: "ok", score: 42 } } match (response) { root.llm.openai.Response { score: 0 } => 0, root.llm.openai.Response { score: matched }: root.llm.openai.Response => matched }
+  { let response = root.llm.openai.Response { text: "ok", score: 42 } } match (response) { root.llm.openai.Response { score: 0 } => 0, root.llm.openai.Response { score: matched } => matched }
 }
 function user.GenericDestructureNamespaceQualifiedLet() -> int  [expr] {
   { let boxed: llm.openai.Box = _ { value: "ok" }; let llm.openai.Box<string> { value: value } = boxed } value.length()

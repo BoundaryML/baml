@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 29732
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -1450,14 +1449,14 @@ SOURCE_FILE
                       COMMA ","
                     MATCH_ARM
                       PATTERN
-                        CHAIN_PATTERN
-                          BINDING_PATTERN "let n"
-                            KW_LET "let"
-                            WORD "n"
+                        BINDING_PATTERN
+                          KW_LET "let"
+                          WORD "n"
                           COLON ":"
-                          TYPE_PATTERN
-                            TYPE_EXPR "int"
-                              WORD "int"
+                          PATTERN
+                            TYPE_PATTERN
+                              TYPE_EXPR "int"
+                                WORD "int"
                       MATCH_GUARD
                         KW_IF "if"
                         BINARY_EXPR "n > 100"
@@ -1475,14 +1474,14 @@ SOURCE_FILE
                       COMMA ","
                     MATCH_ARM
                       PATTERN
-                        CHAIN_PATTERN
-                          BINDING_PATTERN "let n"
-                            KW_LET "let"
-                            WORD "n"
+                        BINDING_PATTERN
+                          KW_LET "let"
+                          WORD "n"
                           COLON ":"
-                          TYPE_PATTERN
-                            TYPE_EXPR "int"
-                              WORD "int"
+                          PATTERN
+                            TYPE_PATTERN
+                              TYPE_EXPR "int"
+                                WORD "int"
                       FAT_ARROW "=>"
                       WORD "n"
                     R_BRACE "}"
@@ -1930,14 +1929,14 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let typed"
-                KW_LET "let"
-                WORD "typed"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "typed"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int"
-                  WORD "int"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
           EQUALS "="
           INTEGER_LITERAL "2"
           SEMICOLON ";"
@@ -1954,31 +1953,30 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "// ===== Long let with type annotation exceeding limit =====
-    let very_long_variable_name_for_testing_wrapping"
-                KW_LET "let"
-                WORD "very_long_variable_name_for_testing_wrapping"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "very_long_variable_name_for_testing_wrapping"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "map"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "string"
-                      WORD "string"
-                    COMMA ","
-                    TYPE_EXPR "int | string | bool | float | null"
-                      WORD "int"
-                      PIPE "|"
-                      WORD "string"
-                      PIPE "|"
-                      WORD "bool"
-                      PIPE "|"
-                      WORD "float"
-                      PIPE "|"
-                      WORD "null"
-                    GREATER ">"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    WORD "map"
+                    TYPE_ARGS
+                      LESS "<"
+                      TYPE_EXPR "string"
+                        WORD "string"
+                      COMMA ","
+                      TYPE_EXPR "int | string | bool | float | null"
+                        WORD "int"
+                        PIPE "|"
+                        WORD "string"
+                        PIPE "|"
+                        WORD "bool"
+                        PIPE "|"
+                        WORD "float"
+                        PIPE "|"
+                        WORD "null"
+                      GREATER ">"
           EQUALS "="
           MAP_LITERAL
             L_BRACE "{"
@@ -2059,43 +2057,42 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "// ===== Long let with nested generic type exceeding limit =====
-    let deeply_typed"
-                KW_LET "let"
-                WORD "deeply_typed"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "deeply_typed"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "map"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "string"
-                      WORD "string"
-                    COMMA ","
-                    TYPE_EXPR
-                      WORD "map"
-                      TYPE_ARGS
-                        LESS "<"
-                        TYPE_EXPR "string"
-                          WORD "string"
-                        COMMA ","
-                        TYPE_EXPR
-                          WORD "map"
-                          TYPE_ARGS
-                            LESS "<"
-                            TYPE_EXPR "string"
-                              WORD "string"
-                            COMMA ","
-                            TYPE_EXPR "int | string | bool"
-                              WORD "int"
-                              PIPE "|"
-                              WORD "string"
-                              PIPE "|"
-                              WORD "bool"
-                            GREATER ">"
-                        GREATER ">"
-                    GREATER ">"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    WORD "map"
+                    TYPE_ARGS
+                      LESS "<"
+                      TYPE_EXPR "string"
+                        WORD "string"
+                      COMMA ","
+                      TYPE_EXPR
+                        WORD "map"
+                        TYPE_ARGS
+                          LESS "<"
+                          TYPE_EXPR "string"
+                            WORD "string"
+                          COMMA ","
+                          TYPE_EXPR
+                            WORD "map"
+                            TYPE_ARGS
+                              LESS "<"
+                              TYPE_EXPR "string"
+                                WORD "string"
+                              COMMA ","
+                              TYPE_EXPR "int | string | bool"
+                                WORD "int"
+                                PIPE "|"
+                                WORD "string"
+                                PIPE "|"
+                                WORD "bool"
+                              GREATER ">"
+                          GREATER ">"
+                      GREATER ">"
           EQUALS "="
           MAP_LITERAL
             L_BRACE "{"
@@ -2128,76 +2125,60 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "// ===== Trivia on let statement (line comments) =====
-    // 1 let keyword leading
-    let // 2 let keyword trailing
-    // 3 name leading
-    trivia_var"
-                KW_LET "let"
-                WORD "trivia_var"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "trivia_var"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "// 6 colon trailing
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "// 6 colon trailing
     // 7 type leading
     int"
-                  WORD "int"
+                    WORD "int"
           EQUALS "="
           INTEGER_LITERAL "42"
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "// 13 semicolon trailing
-
-    // ===== Trivia on let statement (block comments) =====
-    /* 1 let keyword leading */
-    let /* 2 let keyword trailing */
-    /* 3 name leading */
-    trivia_var_block"
-                KW_LET "let"
-                WORD "trivia_var_block"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "trivia_var_block"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "/* 6 colon trailing */
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "/* 6 colon trailing */
     /* 7 type leading */
     int"
-                  WORD "int"
+                    WORD "int"
           EQUALS "="
           INTEGER_LITERAL "42"
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "/* 13 semicolon trailing */
-
-    // ===== Trivia on wrapping let with long type (line comments) =====
-    // 1 let leading
-    let // 2 let trailing
-    // 3 name leading
-    very_long_variable_name_for_testing_wrapping"
-                KW_LET "let"
-                WORD "very_long_variable_name_for_testing_wrapping"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "very_long_variable_name_for_testing_wrapping"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "map"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "string"
-                      WORD "string"
-                    COMMA ","
-                    TYPE_EXPR "int | string | bool | float | null"
-                      WORD "int"
-                      PIPE "|"
-                      WORD "string"
-                      PIPE "|"
-                      WORD "bool"
-                      PIPE "|"
-                      WORD "float"
-                      PIPE "|"
-                      WORD "null"
-                    GREATER ">"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    WORD "map"
+                    TYPE_ARGS
+                      LESS "<"
+                      TYPE_EXPR "string"
+                        WORD "string"
+                      COMMA ","
+                      TYPE_EXPR "int | string | bool | float | null"
+                        WORD "int"
+                        PIPE "|"
+                        WORD "string"
+                        PIPE "|"
+                        WORD "bool"
+                        PIPE "|"
+                        WORD "float"
+                        PIPE "|"
+                        WORD "null"
+                      GREATER ">"
           EQUALS "="
           MAP_LITERAL
             L_BRACE "{"
@@ -2212,38 +2193,30 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "// 13 semicolon trailing
-
-    ///////////////////
-
-    // ===== Trivia on wrapping let with long type (block comments) =====
-    /* 1 let leading */
-    let /* 2 let trailing */
-    /* 3 name leading */
-    very_long_variable_name_for_testing_wrapping"
-                KW_LET "let"
-                WORD "very_long_variable_name_for_testing_wrapping"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "very_long_variable_name_for_testing_wrapping"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "map"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "string"
-                      WORD "string"
-                    COMMA ","
-                    TYPE_EXPR "int | string | bool | float | null"
-                      WORD "int"
-                      PIPE "|"
-                      WORD "string"
-                      PIPE "|"
-                      WORD "bool"
-                      PIPE "|"
-                      WORD "float"
-                      PIPE "|"
-                      WORD "null"
-                    GREATER ">"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    WORD "map"
+                    TYPE_ARGS
+                      LESS "<"
+                      TYPE_EXPR "string"
+                        WORD "string"
+                      COMMA ","
+                      TYPE_EXPR "int | string | bool | float | null"
+                        WORD "int"
+                        PIPE "|"
+                        WORD "string"
+                        PIPE "|"
+                        WORD "bool"
+                        PIPE "|"
+                        WORD "float"
+                        PIPE "|"
+                        WORD "null"
+                      GREATER ">"
           EQUALS "="
           MAP_LITERAL
             L_BRACE "{"

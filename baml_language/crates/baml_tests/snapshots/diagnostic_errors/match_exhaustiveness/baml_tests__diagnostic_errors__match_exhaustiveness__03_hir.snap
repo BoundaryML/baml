@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 33672
 ---
 === HIR2 ===
 class user.Bird {
@@ -268,7 +267,7 @@ function user.OptionalWithCatchAll(x: int?) -> string  [expr] {
   {  } match (x) { null => "no value", _ => "has value" }
 }
 function user.OverlappingTypedPatterns(r: user.Result) -> string  [expr] {
-  {  } match (r) { _: user.Success => "success", _: user.Success | user.Failure => "covers failure on..." }
+  {  } match (r) { user.Success => "success", user.Success | user.Failure => "covers failure on..." }
 }
 function user.OverlappingWithBindings(r: user.Result) -> string  [expr] {
   {  } match (r) { s: user.Success => s.data, x: user.Success | user.Failure => "remaining" }
@@ -280,7 +279,7 @@ function user.PartialUnionPatternCoverage(r: user.FullResult) -> string  [expr] 
   {  } match (r) { x: user.Success | user.Failure => "not pending" }
 }
 function user.PartialUnionPlusCatchAll(r: user.FullResult) -> string  [expr] {
-  {  } match (r) { x: user.Success | user.Failure => "success or failure", _: user.Pending => "pending" }
+  {  } match (r) { x: user.Success | user.Failure => "success or failure", user.Pending => "pending" }
 }
 function user.StringLiteralAfterStringType(s: string) -> string  [expr] {
   {  } match (s) { x: string => "any string", "hello" => "unreachable" }

@@ -2,13 +2,4 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: refutable pattern in let binding; refutable patterns belong in `match`
-    ╭─[ type_positions.baml:32:55 ]
-    │
- 32 │ ╭─▶ function test_union(function_name: string) -> string {
- 33 │ ├─▶     let t: type | string = "hello";
-    │ │                                         
-    │ ╰───────────────────────────────────────── refutable pattern in let binding; refutable patterns belong in `match`
-    │     
-    │     Note: Error code: E0111
-────╯
+No errors found.

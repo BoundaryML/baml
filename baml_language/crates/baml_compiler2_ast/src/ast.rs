@@ -704,50 +704,66 @@ pub enum Stmt {
 /// A pattern in the AST.
 ///
 /// One flat enum. Atoms (`Wildcard`, `Bind`, `Class`, `Type`) describe a
-/// single shape; combinators (`Or`, `Chain`) combine other patterns.
+/// single shape; the only combinator (`Or`) combines other patterns.
 ///
 /// Lowering invariants:
 /// - `_` always lowers to [`Pattern::Wildcard`] — never `Bind { name: "_" }`.
-/// - 1-element `Or` / `Chain` are NOT allocated; they collapse to the inner
-///   pattern. So if you see `Or(parts)` or `Chain(parts)`, `parts.len() >= 2`.
-/// - The `: T` annotation in `let x: T` lives as a [`Pattern::Chain`] link.
+/// - 1-element `Or` is NOT allocated; it collapses to the inner pattern.
+///   So if you see `Or(parts)`, `parts.len() >= 2`.
+/// - The `: T` annotation in `let x: T` is carried as
+///   [`Pattern::Bind::ascription`] (and likewise
+///   [`Pattern::Array::ascription`] for `[…]: T`). `:` is only valid after
+///   `let x` or `[…]` — it is rejected on `_`, `Class { … }`, bare types,
+///   and Or-patterns.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pattern {
     // ── Atoms (single-shape patterns) ────────────────────────────────────
-    /// `_` — wildcard. Always irrefutable. Binds nothing.
+    /// `_` — wildcard. Always irrefutable. Binds nothing. Cannot carry a
+    /// type ascription.
     Wildcard,
-    /// `let x` — name binding. The `let` keyword is required at the syntax
-    /// level but doesn't appear here; the AST just carries the name.
-    Bind { name: Name },
+    /// `let x`, `let x: T`, `let x: [a, b]`, `let x: let y: T` — name
+    /// binding, optionally with a sub-pattern attached via `:`. The
+    /// sub-pattern can be any pattern: a type ascription
+    /// (`Pattern::Type`), another binding (`Pattern::Bind` — chains of
+    /// aliases like `let x: let y`), a structural destructure
+    /// (`Pattern::Array`, `Pattern::Class`), or anything else.
+    /// Progressive widening like `let x: int: float` is naturally
+    /// impossible because `Pattern::Type` doesn't itself have a sub-
+    /// pattern slot.
+    Bind { name: Name, subpat: Option<PatId> },
     /// `pkg.Foo { a, b: <pat>, ... }` — class destructure. `class` is the
     /// dotted path as segments (single-element vec for unqualified names).
+    /// Class destructures cannot carry `: T` ascriptions.
     Class {
         class: Vec<Name>,
         generic_args: Vec<TypeExpr>,
         fields: Vec<FieldPat>,
     },
-    /// `[prefix..., ..rest?, suffix...]` — array destructure. Each element is
-    /// a normal pattern; `rest` binds the copied middle slice when present.
+    /// `[prefix..., ..rest?, suffix...]` or `[…]: T` — array destructure
+    /// optionally with a type ascription. Each element is a normal
+    /// pattern; `rest` binds the copied middle slice when present. The
+    /// `: T` ascription is captured as a `TypeExpr` (not a sub-pattern),
+    /// so deeper chains like `[…]: T1: T2` and exotic shapes like
+    /// `[…]: let xs` are syntactically rejected at AST lowering.
     Array {
         prefix: Vec<PatId>,
         rest: Option<ArrayRestPat>,
         suffix: Vec<PatId>,
+        ascription: Option<TypeExpr>,
     },
     /// Bare type expression in pattern position. Subsumes literal patterns
     /// (`42`, `"hi"`, `true`), `null`, enum variants (`Status.Active`),
     /// path types, generics, function types, etc. — anything in `TypeExpr`.
     /// Refutability is decided by TIR using the scrutinee type; `Type(int)`
     /// is irrefutable against scrutinee `int` but refutable against `int|str`.
+    /// Cannot carry a `: T` ascription.
     Type(TypeExpr),
 
     // ── Combinators (combine other patterns) ─────────────────────────────
     /// `p1 | p2 | ...` — alternation. Length always `>= 2`. Every alternative
-    /// must bind the same names (TIR enforces).
+    /// must bind the same names (TIR enforces). Cannot carry a `: T`
+    /// ascription.
     Or(Vec<PatId>),
-    /// `p1 : p2 : ...` — pairwise subtype chain. Length always `>= 2`. Only
-    /// the leftmost link may bind names; every link's natural type must be a
-    /// subtype of the next (TIR enforces).
-    Chain(Vec<PatId>),
 }
 
 /// Single field inside a class destructure pattern.
@@ -806,7 +822,12 @@ impl Pattern {
     ) {
         match self {
             Pattern::Wildcard | Pattern::Type(_) => {}
-            Pattern::Bind { name } => out.push(name),
+            Pattern::Bind { name, subpat } => {
+                out.push(name);
+                if let Some(sp) = subpat {
+                    patterns[*sp].collect_bound_names(patterns, out);
+                }
+            }
             Pattern::Class { fields, .. } => {
                 for f in fields {
                     patterns[f.pat].collect_bound_names(patterns, out);
@@ -816,6 +837,7 @@ impl Pattern {
                 prefix,
                 rest,
                 suffix,
+                ascription: _,
             } => {
                 for id in prefix {
                     patterns[*id].collect_bound_names(patterns, out);
@@ -826,11 +848,6 @@ impl Pattern {
                     patterns[id].collect_bound_names(patterns, out);
                 }
                 for id in suffix {
-                    patterns[*id].collect_bound_names(patterns, out);
-                }
-            }
-            Pattern::Chain(parts) => {
-                for id in parts {
                     patterns[*id].collect_bound_names(patterns, out);
                 }
             }

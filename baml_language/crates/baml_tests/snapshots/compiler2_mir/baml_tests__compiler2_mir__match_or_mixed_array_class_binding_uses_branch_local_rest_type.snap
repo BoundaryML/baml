@@ -18,11 +18,11 @@ fn user.f(v: NumberBag | int[][]) -> int {
     let _12: int
     let _13: int[]
     let _14: bool
-    let _15: int
-    let _16: bool
-    let _17: int[]
-    let _18: int
-    let _19: bool
+    let _15: bool
+    let _16: int
+    let _17: bool
+    let _18: int[]
+    let _19: int
     let _20: bool
     let _21: int[][]
     let _22: int
@@ -66,23 +66,23 @@ fn user.f(v: NumberBag | int[][]) -> int {
     }
 
     bb5: {
-        _15 = len(_13);
-        _16 = copy _15 >= const 0_i64;
-        branch copy _16 -> [bb6, bb9];
+        _15 = is_type(copy _13, int[]);
+        branch copy _15 -> [bb6, bb9];
     }
 
     bb6: {
-        _18 = len(_13);
-        _17 = call const fn baml.Array.slice(copy _13, const 0_i64, copy _18) -> [bb7];
+        _16 = len(_13);
+        _17 = copy _16 >= const 0_i64;
+        branch copy _17 -> [bb7, bb9];
     }
 
     bb7: {
-        _19 = is_type(copy _17, int[]);
-        branch copy _19 -> [bb8, bb9];
+        _19 = len(_13);
+        _18 = call const fn baml.Array.slice(copy _13, const 0_i64, copy _19) -> [bb8];
     }
 
     bb8: {
-        _20 = is_type(copy _13, int[]);
+        _20 = is_type(copy _18, int[]);
         branch copy _20 -> [bb10, bb9];
     }
 

@@ -426,26 +426,38 @@ impl fmt::Display for WitnessPat {
             // Or never appears in witnesses (apply for Or is a no-op).
             // Render defensively as `_` if ever produced.
             Ctor::Or => write!(f, "_"),
-            // UnionMember is a "which branch" tag — render its inner pat
-            // directly. The type info is carried by the inner pat (e.g.
-            // `Single(Ty::Class(...))`) or by surrounding context in the
-            // diagnostic. If the inner is a wildcard, we lose the type
-            // tag in rendering; LSP/diagnostic layer can supply it via
-            // the witness's `ty` field if needed.
-            Ctor::UnionMember(_) => match self.fields.first() {
-                Some(inner) => write!(f, "{inner}"),
-                None => write!(f, "_"),
+            // UnionMember is a "which branch" tag. When the inner pat
+            // carries a concrete witness (literal, enum variant, class
+            // ctor, etc.), render that — it's the most informative form.
+            // When the inner collapses to a placeholder (`_` from
+            // Wildcard / NonExhaustive / Missing), render the member
+            // type name instead so diagnostics like
+            // `non-exhaustive match; missing: Mixed { value: int }` say
+            // `int` rather than `_`.
+            Ctor::UnionMember(member_ty) => match self.fields.first() {
+                Some(inner)
+                    if !matches!(
+                        inner.ctor,
+                        Ctor::Wildcard | Ctor::NonExhaustive | Ctor::Missing
+                    ) =>
+                {
+                    write!(f, "{inner}")
+                }
+                _ => write_member_ty_witness(f, member_ty),
             },
             Ctor::Single(ty) => write_single_witness(f, ty),
             Ctor::Class(qtn) => {
-                write!(f, "{qtn} {{")?;
+                if self.fields.is_empty() {
+                    return write!(f, "{qtn} {{}}");
+                }
+                write!(f, "{qtn} {{ ")?;
                 for (i, fld) in self.fields.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
                     write!(f, "{fld}")?;
                 }
-                write!(f, "}}")
+                write!(f, " }}")
             }
             Ctor::Slice(shape) => {
                 write!(f, "[")?;
@@ -498,6 +510,19 @@ fn write_single_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
         Ty::EnumVariant(qtn, variant, _) => write!(f, "{qtn}.{variant}"),
         Ty::Primitive(PrimitiveType::Null, _) => write!(f, "null"),
         _ => write!(f, "{ty:?}"),
+    }
+}
+
+/// Render a `UnionMember` witness's member type when the inner pat is a
+/// placeholder (no concrete value to print). Surfaces the member's runtime
+/// shape — `int`, `string`, `Foo`, etc. — rather than `_`.
+fn write_member_ty_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
+    match ty {
+        Ty::Primitive(p, _) => write!(f, "{p}"),
+        Ty::Class(qtn, _, _) | Ty::Enum(qtn, _) => write!(f, "{qtn}"),
+        Ty::EnumVariant(qtn, variant, _) => write!(f, "{qtn}.{variant}"),
+        Ty::Literal(_, _, _) => write_single_witness(f, ty),
+        _ => write!(f, "_"),
     }
 }
 
@@ -1537,7 +1562,7 @@ mod tests {
         );
     }
 
-    // ── Torture-test PatCtx ─────────────────────────────────────────────
+    // ── testing-test PatCtx ─────────────────────────────────────────────
     //
     // A reusable test ctx that supports a class registry. Every test below
     // builds on this. Classes are registered by name with their field types
@@ -1545,13 +1570,13 @@ mod tests {
     // `List<T>` returns NonExhaustive in `enumerate_ctors` because slice
     // splitting is handled in `split_ctors` (which special-cases List).
 
-    struct TortureCtx {
+    struct TestingCtx {
         classes: std::collections::HashMap<QualifiedTypeName, Vec<Ty>>,
         /// Type alias map: `Ty::TypeAlias(qtn)` resolves to the target Ty.
         /// Mirrors the real builder's `expand_alias_chains` behaviour.
         aliases: std::collections::HashMap<QualifiedTypeName, Ty>,
     }
-    impl TortureCtx {
+    impl TestingCtx {
         fn new() -> Self {
             Self {
                 classes: std::collections::HashMap::new(),
@@ -1582,7 +1607,7 @@ mod tests {
             current
         }
     }
-    impl PatCtx for TortureCtx {
+    impl PatCtx for TestingCtx {
         fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
             // Peel aliases first, the same way the real builder will.
             let ty = self.expand_alias(ty);
@@ -1662,7 +1687,7 @@ mod tests {
     /// BAML shape: `type E = A | B`; `class Pair { left E; right E }`.
     #[test]
     fn rustc_port_nested_type_union_pair() {
-        let mut cx = TortureCtx::new();
+        let mut cx = TestingCtx::new();
         let a = qtn("A");
         let b = qtn("B");
         let pair = qtn("NestedPair");
@@ -1739,7 +1764,7 @@ mod tests {
     /// represented as a two-field class over `Optional<bool>`.
     #[test]
     fn rustc_port_optional_pair_witnesses() {
-        let mut cx = TortureCtx::new();
+        let mut cx = TestingCtx::new();
         let pair = qtn("OptionalPair");
         let opt_bool = opt_of(bool_ty());
         let pair_ty = class_ty(&pair);
@@ -1774,14 +1799,14 @@ mod tests {
             "all Optional<bool> pairs except false/false should be missing"
         );
         for expected in [
-            "user.OptionalPair {true, true}",
-            "user.OptionalPair {true, false}",
-            "user.OptionalPair {true, null}",
-            "user.OptionalPair {false, true}",
-            "user.OptionalPair {false, null}",
-            "user.OptionalPair {null, true}",
-            "user.OptionalPair {null, false}",
-            "user.OptionalPair {null, null}",
+            "user.OptionalPair { true, true }",
+            "user.OptionalPair { true, false }",
+            "user.OptionalPair { true, null }",
+            "user.OptionalPair { false, true }",
+            "user.OptionalPair { false, null }",
+            "user.OptionalPair { null, true }",
+            "user.OptionalPair { null, false }",
+            "user.OptionalPair { null, null }",
         ] {
             assert!(
                 witnesses.iter().any(|w| w == expected),
@@ -1800,7 +1825,10 @@ mod tests {
             2,
             "all pairs with a non-false right side should be missing"
         );
-        for expected in ["user.OptionalPair {_, true}", "user.OptionalPair {_, null}"] {
+        for expected in [
+            "user.OptionalPair { _, true }",
+            "user.OptionalPair { _, null }",
+        ] {
             assert!(
                 witnesses.iter().any(|w| w == expected),
                 "expected {expected} in witnesses, got {witnesses:?}"
@@ -1814,7 +1842,7 @@ mod tests {
     /// where `Err` has a `Never` payload and is therefore uninhabited.
     #[test]
     fn rustc_port_empty_variant_payloads_are_ignored() {
-        let mut cx = TortureCtx::new();
+        let mut cx = TestingCtx::new();
         let ok = qtn("NeverOk");
         let err = qtn("NeverErr");
         let pair = qtn("NeverPair");
@@ -1858,7 +1886,7 @@ mod tests {
     /// `test_witnesses`.
     #[test]
     fn rustc_port_bool_empty_match_witnesses() {
-        let cx = TortureCtx::new();
+        let cx = TestingCtx::new();
         let report = compute_match_usefulness(&cx, &[], bool_ty());
         let witnesses: Vec<String> = report.missing.iter().map(ToString::to_string).collect();
         assert_eq!(witnesses, vec!["true", "false"]);
@@ -1869,7 +1897,7 @@ mod tests {
     /// variant is unreachable.
     #[test]
     fn rustc_port_large_enum_type_union_with_trailing_wildcard() {
-        let mut cx = TortureCtx::new();
+        let mut cx = TestingCtx::new();
         let names = [
             "V00", "V01", "V02", "V03", "V04", "V05", "V06", "V07", "V08", "V09", "V10", "V11",
             "V12", "V13", "V14", "V15", "V16", "V17", "V18", "V19",
@@ -1900,7 +1928,7 @@ mod tests {
     /// `[_, ..]` misses `[]`, so a following `_` arm is still useful.
     #[test]
     fn rustc_port_slice_prefix_then_wildcard_keeps_short_length_reachable() {
-        let cx = TortureCtx::new();
+        let cx = TestingCtx::new();
         let scrut = list_of(bool_ty());
         let non_empty = DPat::slice(
             SliceShape::Variable {
@@ -1925,8 +1953,8 @@ mod tests {
     /// `class Quad { a, b, c, d: bool }` — 16 combinations. All present →
     /// exhaustive. Missing one → exact witness reported.
     #[test]
-    fn torture_1_cartesian_quad_all_combos() {
-        let mut cx = TortureCtx::new();
+    fn testing_1_cartesian_quad_all_combos() {
+        let mut cx = TestingCtx::new();
         let q = qtn("Quad");
         cx.register(q.clone(), vec![bool_ty(), bool_ty(), bool_ty(), bool_ty()]);
         let qty = class_ty(&q);
@@ -1981,8 +2009,8 @@ mod tests {
     /// Wildcard mid-pattern expands coverage. `{ a: true, b: _, c: false, d: true }`
     /// covers two cases (b ∈ {true, false}).
     #[test]
-    fn torture_1b_wildcard_in_class_field() {
-        let mut cx = TortureCtx::new();
+    fn testing_1b_wildcard_in_class_field() {
+        let mut cx = TestingCtx::new();
         let q = qtn("Pair");
         cx.register(q.clone(), vec![bool_ty(), bool_ty()]);
         let qty = class_ty(&q);
@@ -2022,8 +2050,8 @@ mod tests {
 
     /// `[true, ..rest, false]` + `[..rest]` covers everything.
     #[test]
-    fn torture_2_variable_prefix_suffix() {
-        let cx = TortureCtx::new();
+    fn testing_2_variable_prefix_suffix() {
+        let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
 
         let arm1 = DPat::slice(
@@ -2068,8 +2096,8 @@ mod tests {
     /// `[]`, `[_]`, `[_, _]`, `[_, _, _, ..]` covers all lengths. Drop one,
     /// verify witness; add unreachable arm, verify detection.
     #[test]
-    fn torture_3_mixed_lengths() {
-        let cx = TortureCtx::new();
+    fn testing_3_mixed_lengths() {
+        let cx = TestingCtx::new();
         let arr = list_of(int_ty());
 
         let arm0 = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
@@ -2146,8 +2174,8 @@ mod tests {
     /// length-1 splits on ok, length 2+ via variable. Drop the false-ok branch
     /// and expect a nested witness `[{ ok: false, val: _ }]`.
     #[test]
-    fn torture_4_array_of_classes() {
-        let mut cx = TortureCtx::new();
+    fn testing_4_array_of_classes() {
+        let mut cx = TestingCtx::new();
         let r = qtn("Result");
         cx.register(r.clone(), vec![bool_ty(), bool_ty()]);
         let result_ty = class_ty(&r);
@@ -2231,8 +2259,8 @@ mod tests {
     /// `class Container { tag: bool, items: Array<bool> }`. Test drop of a
     /// nested fixed-length slice surfaces a nested witness.
     #[test]
-    fn torture_5_class_with_array_field() {
-        let mut cx = TortureCtx::new();
+    fn testing_5_class_with_array_field() {
+        let mut cx = TestingCtx::new();
         let c = qtn("Container");
         let arr = list_of(bool_ty());
         cx.register(c.clone(), vec![bool_ty(), arr.clone()]);
@@ -2289,8 +2317,8 @@ mod tests {
     /// Triple-state: outer null, inner null, true, false. Without flattening,
     /// these are 4 distinct cases.
     #[test]
-    fn torture_6_double_optional() {
-        let cx = TortureCtx::new();
+    fn testing_6_double_optional() {
+        let cx = TestingCtx::new();
         let inner = opt_of(bool_ty());
         let outer = opt_of(inner.clone());
 
@@ -2335,8 +2363,8 @@ mod tests {
     /// Or-pattern `1 | 2` lowers to two rows for arm 0; arm 1 is `2` and is
     /// unreachable; arm 2 is `3` and completes coverage.
     #[test]
-    fn torture_7_or_pattern_unreachable() {
-        let cx = TortureCtx::new();
+    fn testing_7_or_pattern_unreachable() {
+        let cx = TestingCtx::new();
         let scrut = union_of(vec![int_lit(1), int_lit(2), int_lit(3)]);
 
         let arm0_a = DPat::single(int_lit(1), scrut.clone());
@@ -2371,8 +2399,8 @@ mod tests {
     /// `match r: Ok | Err { Ok{val:true}, Ok{val:false}, Err{code:_} }`.
     /// Drop one Ok branch → witness `Ok { val: false }`.
     #[test]
-    fn torture_8_discriminated_union() {
-        let mut cx = TortureCtx::new();
+    fn testing_8_discriminated_union() {
+        let mut cx = TestingCtx::new();
         let ok = qtn("Ok");
         let err = qtn("Err");
         cx.register(ok.clone(), vec![bool_ty()]);
@@ -2421,10 +2449,10 @@ mod tests {
     /// `class Wrapper<T> { inner: T }`. With T=int, `{ inner: _ }` requires
     /// wildcard. With T=bool, `{ inner: true }` + `{ inner: false }` exhausts.
     #[test]
-    fn torture_9_generic_substitution() {
+    fn testing_9_generic_substitution() {
         // We can't (yet) substitute T → bool through the test ctx, so we
         // simulate: register Wrapper twice with different field types.
-        let mut cx = TortureCtx::new();
+        let mut cx = TestingCtx::new();
         let w_int = qtn("WrapperInt");
         let w_bool = qtn("WrapperBool");
         cx.register(w_int.clone(), vec![int_ty()]);
@@ -2478,8 +2506,8 @@ mod tests {
 
     /// Render a missing witness to a known-good string. Catches Display bugs.
     #[test]
-    fn torture_10_witness_exact_rendering() {
-        let mut cx = TortureCtx::new();
+    fn testing_10_witness_exact_rendering() {
+        let mut cx = TestingCtx::new();
         let p = qtn("Pair");
         cx.register(p.clone(), vec![bool_ty(), bool_ty()]);
         let pty = class_ty(&p);
@@ -2511,8 +2539,8 @@ mod tests {
     /// `class A { b: B }; class B { c: Array<C> }; class C { v: bool }`.
     /// Deeply nested missing case unwinding.
     #[test]
-    fn torture_11_deep_nesting() {
-        let mut cx = TortureCtx::new();
+    fn testing_11_deep_nesting() {
+        let mut cx = TestingCtx::new();
         let a = qtn("A");
         let b = qtn("B");
         let c = qtn("C");
@@ -2549,8 +2577,8 @@ mod tests {
 
     /// Empty array only arm against `Array<int>` → witness mentions `..`.
     #[test]
-    fn torture_12a_empty_only_arm_for_list() {
-        let cx = TortureCtx::new();
+    fn testing_12a_empty_only_arm_for_list() {
+        let cx = TestingCtx::new();
         let arr = list_of(int_ty());
         let arm = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
         let report = compute_match_usefulness(&cx, &[arm], arr);
@@ -2562,8 +2590,8 @@ mod tests {
 
     /// Match on `Never` with zero arms is vacuously exhaustive.
     #[test]
-    fn torture_12b_never_zero_arms_exhaustive() {
-        let cx = TortureCtx::new();
+    fn testing_12b_never_zero_arms_exhaustive() {
+        let cx = TestingCtx::new();
         let never = Ty::Never {
             attr: Default::default(),
         };
@@ -2576,8 +2604,8 @@ mod tests {
     /// `[..rest]` first, then `[true]`. The variable covers length-1 with
     /// any element, so the fixed arm is dead.
     #[test]
-    fn torture_13_var_covers_fixed_unreachable() {
-        let cx = TortureCtx::new();
+    fn testing_13_var_covers_fixed_unreachable() {
+        let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
         let any = DPat::slice(
             SliceShape::Variable {
@@ -2609,8 +2637,8 @@ mod tests {
     /// a coverage standpoint the second arm is redundant. Length 0 remains
     /// missing → witness `[]`.
     #[test]
-    fn torture_14_two_vars_redundant_coverage() {
-        let cx = TortureCtx::new();
+    fn testing_14_two_vars_redundant_coverage() {
+        let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
         let pre = DPat::slice(
             SliceShape::Variable {
@@ -2648,8 +2676,8 @@ mod tests {
 
     /// `[_, ..rest]` is Var{1,0}. Length 0 missing → witness `[]`.
     #[test]
-    fn torture_15_prefix_only_var_misses_zero() {
-        let cx = TortureCtx::new();
+    fn testing_15_prefix_only_var_misses_zero() {
+        let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
         let arm = DPat::slice(
             SliceShape::Variable {
@@ -2672,8 +2700,8 @@ mod tests {
 
     /// `[a, b, ..rest]` is Var{2,0}. Lengths 0 and 1 missing.
     #[test]
-    fn torture_16_arity2_var_misses_short_lengths() {
-        let cx = TortureCtx::new();
+    fn testing_16_arity2_var_misses_short_lengths() {
+        let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
         let arm = DPat::slice(
             SliceShape::Variable {
@@ -2711,8 +2739,8 @@ mod tests {
     /// `[a, b]` (Fixed(2)) + `[..r]` (Var{0,0}). Var covers Fixed(2). Fixed
     /// should be unreachable.
     #[test]
-    fn torture_17_var_covers_long_fixed() {
-        let cx = TortureCtx::new();
+    fn testing_17_var_covers_long_fixed() {
+        let cx = TestingCtx::new();
         let arr = list_of(int_ty());
         let any = DPat::slice(
             SliceShape::Variable {
@@ -2741,8 +2769,8 @@ mod tests {
     /// `[a, b, c, ..r, d]` (Var{3,1}). Lengths 0..=3 missing on this arm
     /// alone. With `[..r]` added, exhaustive.
     #[test]
-    fn torture_18_asymmetric_var() {
-        let cx = TortureCtx::new();
+    fn testing_18_asymmetric_var() {
+        let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
         let var31 = DPat::slice(
             SliceShape::Variable {
@@ -2790,8 +2818,8 @@ mod tests {
     /// Outer length-1 splits on inner length-2 patterns; outer ≥2 catchall.
     /// Length-1 inner-`[false, false]` should be missing.
     #[test]
-    fn torture_19_slice_of_slices() {
-        let cx = TortureCtx::new();
+    fn testing_19_slice_of_slices() {
+        let cx = TestingCtx::new();
         let inner_ty = list_of(bool_ty());
         let outer_ty = list_of(inner_ty.clone());
 
@@ -2850,8 +2878,8 @@ mod tests {
     /// length-1 with a=true, and length≥2 catchall. Drop length-1-a=false →
     /// witness mentions inner class with a=false in length-1 slice.
     #[test]
-    fn torture_20_array_of_class_destructure() {
-        let mut cx = TortureCtx::new();
+    fn testing_20_array_of_class_destructure() {
+        let mut cx = TestingCtx::new();
         let p = qtn("Pair");
         cx.register(p.clone(), vec![bool_ty(), bool_ty()]);
         let pty = class_ty(&p);
@@ -2915,8 +2943,8 @@ mod tests {
     /// `class Holder { items: Array<bool> }` matched as `{ items: [..rest] }`
     /// only. The variable covers all lengths → exhaustive.
     #[test]
-    fn torture_21_class_with_var_slice_field() {
-        let mut cx = TortureCtx::new();
+    fn testing_21_class_with_var_slice_field() {
+        let mut cx = TestingCtx::new();
         let h = qtn("Holder");
         let arr = list_of(bool_ty());
         cx.register(h.clone(), vec![arr.clone()]);
@@ -2950,8 +2978,8 @@ mod tests {
 
     /// `class Empty {}` — zero fields. Match `{}` exhaustive.
     #[test]
-    fn torture_22_empty_class() {
-        let mut cx = TortureCtx::new();
+    fn testing_22_empty_class() {
+        let mut cx = TestingCtx::new();
         let e = qtn("Empty");
         cx.register(e.clone(), vec![]);
         let ety = class_ty(&e);
@@ -2966,8 +2994,8 @@ mod tests {
     /// `class Outer { rows: Array<Inner> }; class Inner { val: bool }`.
     /// Drop a deep case → witness reconstructs the full path.
     #[test]
-    fn torture_23_class_slice_class_nesting() {
-        let mut cx = TortureCtx::new();
+    fn testing_23_class_slice_class_nesting() {
+        let mut cx = TestingCtx::new();
         let outer = qtn("Outer");
         let inner = qtn("Inner");
         cx.register(inner.clone(), vec![bool_ty()]);
@@ -3005,8 +3033,8 @@ mod tests {
 
     /// `_` first, then `{a: true, b: false}` — second arm dead.
     #[test]
-    fn torture_24_wildcard_makes_structural_unreachable() {
-        let mut cx = TortureCtx::new();
+    fn testing_24_wildcard_makes_structural_unreachable() {
+        let mut cx = TestingCtx::new();
         let p = qtn("Pair");
         cx.register(p.clone(), vec![bool_ty(), bool_ty()]);
         let pty = class_ty(&p);
@@ -3034,8 +3062,8 @@ mod tests {
     /// `class Pair{a,b: bool}` with `{a: true, b: _}` and `{a: false, b: _}`
     /// — exhaustive without any top-level wildcard (each arm wildcards b).
     #[test]
-    fn torture_25_no_top_wildcard_exhaustive() {
-        let mut cx = TortureCtx::new();
+    fn testing_25_no_top_wildcard_exhaustive() {
+        let mut cx = TestingCtx::new();
         let p = qtn("Pair");
         cx.register(p.clone(), vec![bool_ty(), bool_ty()]);
         let pty = class_ty(&p);
@@ -3068,8 +3096,8 @@ mod tests {
     /// Drop one arbitrary combo (e.g. `0b10110100`) → exactly one missing.
     /// Stresses: matrix scale, deep specialization recursion.
     #[test]
-    fn torture_27_8bit_cartesian() {
-        let mut cx = TortureCtx::new();
+    fn testing_27_8bit_cartesian() {
+        let mut cx = TestingCtx::new();
         let q = qtn("Octet");
         cx.register(q.clone(), vec![bool_ty(); 8]);
         let qty = class_ty(&q);
@@ -3111,8 +3139,8 @@ mod tests {
     /// leaf node (next: null), and deeper-than-leaf (next: non-null) → exhaustive.
     /// Stresses: type recursion through Optional.
     #[test]
-    fn torture_28_linked_list_recursion() {
-        let mut cx = TortureCtx::new();
+    fn testing_28_linked_list_recursion() {
+        let mut cx = TestingCtx::new();
         let n = qtn("Node");
         let n_ty = class_ty(&n);
         let opt_n = opt_of(n_ty.clone());
@@ -3156,8 +3184,8 @@ mod tests {
     /// `A.b: B.c: C.d: D.e: E.v: bool`. Cover only `{b:{c:{d:{e:{v:true}}}}}` →
     /// missing `v: false` deeply nested. Verify witness preserves the chain.
     #[test]
-    fn torture_29_5level_deep_nesting() {
-        let mut cx = TortureCtx::new();
+    fn testing_29_5level_deep_nesting() {
+        let mut cx = TestingCtx::new();
         let e = qtn("E");
         cx.register(e.clone(), vec![bool_ty()]);
         let e_ty = class_ty(&e);
@@ -3239,8 +3267,8 @@ mod tests {
     /// 3-level slice nesting. Outer/middle wildcards, only innermost
     /// constrained. Catch-all `[..]` at outer makes whole match exhaustive.
     #[test]
-    fn torture_30_3d_slice() {
-        let cx = TortureCtx::new();
+    fn testing_30_3d_slice() {
+        let cx = TestingCtx::new();
         let lvl1 = list_of(bool_ty());
         let lvl2 = list_of(lvl1.clone());
         let lvl3 = list_of(lvl2.clone());
@@ -3296,8 +3324,8 @@ mod tests {
     /// (the only missing case). Then a final `{a: T, b: F}` after that → also
     /// redundant.
     #[test]
-    fn torture_31_subsumption_redundancy() {
-        let mut cx = TortureCtx::new();
+    fn testing_31_subsumption_redundancy() {
+        let mut cx = TestingCtx::new();
         let p = qtn("Pair");
         cx.register(p.clone(), vec![bool_ty(), bool_ty()]);
         let pty = class_ty(&p);
@@ -3350,8 +3378,8 @@ mod tests {
     /// Union of 15 classes, each distinct. Cover all 15 → exhaustive.
     /// Drop one → exact missing.
     #[test]
-    fn torture_32_alphabet_union() {
-        let mut cx = TortureCtx::new();
+    fn testing_32_alphabet_union() {
+        let mut cx = TestingCtx::new();
         let names = [
             "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
         ];
@@ -3385,8 +3413,8 @@ mod tests {
     /// `class O { rows: Array<class M { items: Array<class I { v: bool }> }> }`.
     /// Drop a deep case → witness threads through every level.
     #[test]
-    fn torture_33_alternating_structural() {
-        let mut cx = TortureCtx::new();
+    fn testing_33_alternating_structural() {
+        let mut cx = TestingCtx::new();
         let i = qtn("I");
         cx.register(i.clone(), vec![bool_ty()]);
         let i_ty = class_ty(&i);
@@ -3422,8 +3450,8 @@ mod tests {
     /// Variable slice with arity 8. Lengths 0..8 missing on this arm; with
     /// `[..]` catch-all, exhaustive.
     #[test]
-    fn torture_34_wide_variable_slice() {
-        let cx = TortureCtx::new();
+    fn testing_34_wide_variable_slice() {
+        let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
         let var53 = DPat::slice(
             SliceShape::Variable {
@@ -3459,8 +3487,8 @@ mod tests {
     /// arms (each covering 2 combos): exhaustive without any top-level
     /// wildcard.
     #[test]
-    fn torture_35_partial_wildcard_cartesian() {
-        let mut cx = TortureCtx::new();
+    fn testing_35_partial_wildcard_cartesian() {
+        let mut cx = TestingCtx::new();
         let t = qtn("Triple");
         cx.register(t.clone(), vec![bool_ty(), bool_ty(), bool_ty()]);
         let tty = class_ty(&t);
@@ -3499,8 +3527,8 @@ mod tests {
     /// 64 arms over a 6-bool class (64 combos = exhaustive). Verify no
     /// blow-up.
     #[test]
-    fn torture_36_64_arm_scale() {
-        let mut cx = TortureCtx::new();
+    fn testing_36_64_arm_scale() {
+        let mut cx = TestingCtx::new();
         let q = qtn("Sextet");
         cx.register(q.clone(), vec![bool_ty(); 6]);
         let qty = class_ty(&q);
@@ -3525,8 +3553,8 @@ mod tests {
     /// `class P { a, b: bool }` with 3 of 4 combos. Verify exactly one
     /// missing witness (no duplicates from algorithmic paths).
     #[test]
-    fn torture_37_witness_uniqueness() {
-        let mut cx = TortureCtx::new();
+    fn testing_37_witness_uniqueness() {
+        let mut cx = TestingCtx::new();
         let p = qtn("P");
         cx.register(p.clone(), vec![bool_ty(), bool_ty()]);
         let pty = class_ty(&p);
@@ -3561,8 +3589,8 @@ mod tests {
     /// combinations through structural patterns with partial wildcards:
     /// exhaustive via 8 arms.
     #[test]
-    fn torture_38_mixed_deep_wide() {
-        let mut cx = TortureCtx::new();
+    fn testing_38_mixed_deep_wide() {
+        let mut cx = TestingCtx::new();
         let b = qtn("B");
         cx.register(b.clone(), vec![bool_ty(), bool_ty()]);
         let b_ty = class_ty(&b);
@@ -3612,8 +3640,8 @@ mod tests {
     /// `specialize` correctly aligns suffix fields to the rightmost
     /// positions of a matching `Fixed(N)`.
     #[test]
-    fn torture_39_suffix_slice_does_not_cover_wrong_fixed_tail() {
-        let cx = TortureCtx::new();
+    fn testing_39_suffix_slice_does_not_cover_wrong_fixed_tail() {
+        let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
         let ends_true = DPat::slice(
             SliceShape::Variable {
@@ -3647,8 +3675,8 @@ mod tests {
     /// must be `ArmId(1)` (the *source* arm). Or-pattern is encoded as
     /// `DPat::or`; expansion happens inside the algorithm.
     #[test]
-    fn torture_40_or_pattern_source_arm_ids() {
-        let cx = TortureCtx::new();
+    fn testing_40_or_pattern_source_arm_ids() {
+        let cx = TestingCtx::new();
         let scrut = union_of(vec![int_lit(1), int_lit(2)]);
 
         let arm0 = DPat::or(
@@ -3677,8 +3705,8 @@ mod tests {
     /// algorithm must report at least one missing case; the (now-removed)
     /// depth guard previously masked this by silently returning early.
     #[test]
-    fn torture_41_deep_chain_missing_leaf() {
-        let mut cx = TortureCtx::new();
+    fn testing_41_deep_chain_missing_leaf() {
+        let mut cx = TestingCtx::new();
         let qs: Vec<_> = (0..=257).map(|i| qtn(&format!("C{i}"))).collect();
 
         for i in 0..qs.len() {
@@ -3711,8 +3739,8 @@ mod tests {
     /// reported. Exposes whether `apply_missing` skips ctors with
     /// uninhabited field types.
     #[test]
-    fn torture_42_list_of_never_empty_arm_is_exhaustive() {
-        let cx = TortureCtx::new();
+    fn testing_42_list_of_never_empty_arm_is_exhaustive() {
+        let cx = TestingCtx::new();
         let never = Ty::Never {
             attr: Default::default(),
         };
@@ -3738,8 +3766,8 @@ mod tests {
     /// the same case. The missing list and the resulting witnesses must be
     /// deduplicated; otherwise `null` would be reported twice.
     #[test]
-    fn torture_43_duplicate_ctors_deduped_in_missing() {
-        let cx = TortureCtx::new();
+    fn testing_43_duplicate_ctors_deduped_in_missing() {
+        let cx = TestingCtx::new();
         let outer = opt_of(opt_of(bool_ty()));
 
         let arms = vec![
@@ -3768,8 +3796,8 @@ mod tests {
     /// either. A match on `Outer` with zero arms is vacuously exhaustive.
     /// Requires `PatCtx::is_inhabited` to walk class fields recursively.
     #[test]
-    fn torture_46_nested_uninhabited_class_empty_match_exhaustive() {
-        let mut cx = TortureCtx::new();
+    fn testing_46_nested_uninhabited_class_empty_match_exhaustive() {
+        let mut cx = TestingCtx::new();
         let inner = qtn("Inner");
         let outer = qtn("Outer");
         cx.register(
@@ -3796,8 +3824,8 @@ mod tests {
     /// of `Empty` exists (its only field is `Never`), so the wildcard never
     /// fires. Match is vacuously exhaustive AND the wildcard arm is dead.
     #[test]
-    fn torture_46c_wildcard_over_uninhabited_class_unreachable() {
-        let mut cx = TortureCtx::new();
+    fn testing_46c_wildcard_over_uninhabited_class_unreachable() {
+        let mut cx = TestingCtx::new();
         let empty = qtn("Empty");
         cx.register(
             empty.clone(),
@@ -3821,7 +3849,7 @@ mod tests {
 
     // ── UnionMember ctor: discriminate union branches ───────────────────
 
-    /// Helper: a `TortureCtx`-style ctx that enumerates Union members as
+    /// Helper: a `testingCtx`-style ctx that enumerates Union members as
     /// `UnionMember` ctors. Mirrors what the real builder does.
     struct UnionCtx {
         classes: std::collections::HashMap<QualifiedTypeName, Vec<Ty>>,
@@ -3886,7 +3914,7 @@ mod tests {
     /// recurses into a column of type `int[]`, where slice-splitting fires
     /// and recognises `[..]` as exhaustive.
     #[test]
-    fn torture_47_union_member_slice_wildcard_exhaustive() {
+    fn testing_47_union_member_slice_wildcard_exhaustive() {
         let mut cx = UnionCtx::new();
         let cls = qtn("Cls");
         cx.register(cls.clone(), vec![]);
@@ -3930,7 +3958,7 @@ mod tests {
     /// non-exhaustive (matching rustc behaviour for partial slice
     /// coverage inside an enum variant).
     #[test]
-    fn torture_48_union_member_partial_slice_non_exhaustive() {
+    fn testing_48_union_member_partial_slice_non_exhaustive() {
         let mut cx = UnionCtx::new();
         let cls = qtn("Cls");
         cx.register(cls.clone(), vec![]);
@@ -3966,7 +3994,7 @@ mod tests {
     /// recursion depth. This is the test case rustc handles natively
     /// thanks to specialise-then-recurse; we now do the same.
     #[test]
-    fn torture_49_union_member_combined_slices_exhaustive() {
+    fn testing_49_union_member_combined_slices_exhaustive() {
         let mut cx = UnionCtx::new();
         let cls = qtn("Cls");
         cx.register(cls.clone(), vec![]);
@@ -4013,7 +4041,7 @@ mod tests {
     /// The list branch is not covered. Algorithm reports a missing
     /// `UnionMember(int[])` witness.
     #[test]
-    fn torture_50_union_member_missing_branch() {
+    fn testing_50_union_member_missing_branch() {
         let mut cx = UnionCtx::new();
         let cls = qtn("Cls");
         cx.register(cls.clone(), vec![]);
@@ -4033,7 +4061,7 @@ mod tests {
 
     /// Wildcard arm covers any union member: exhaustive.
     #[test]
-    fn torture_51_union_member_wildcard_covers_all() {
+    fn testing_51_union_member_wildcard_covers_all() {
         let mut cx = UnionCtx::new();
         let cls = qtn("Cls");
         cx.register(cls.clone(), vec![]);
@@ -4050,8 +4078,8 @@ mod tests {
     /// — uninhabitedness is anti-monotone. Verify the algorithm doesn't
     /// loop and treats `A` as inhabited (conservative; same as rustc).
     #[test]
-    fn torture_46b_self_recursive_class_treated_as_inhabited() {
-        let mut cx = TortureCtx::new();
+    fn testing_46b_self_recursive_class_treated_as_inhabited() {
+        let mut cx = TestingCtx::new();
         let a = qtn("A");
         let a_ty = class_ty(&a);
         cx.register(a.clone(), vec![a_ty.clone()]);
@@ -4078,8 +4106,8 @@ mod tests {
     /// diagnostics can render the alias name; only the *ctor enumeration*
     /// follows the alias.
     #[test]
-    fn torture_45_type_alias_expansion() {
-        let mut cx = TortureCtx::new();
+    fn testing_45_type_alias_expansion() {
+        let mut cx = TestingCtx::new();
         let foo = qtn("Foo");
         cx.register_alias(foo.clone(), bool_ty());
 
@@ -4115,8 +4143,8 @@ mod tests {
     /// Aliasing a finite literal-union: `type Tri = 1 | 2 | 3`. Coverage of
     /// all three through the alias should be exhaustive.
     #[test]
-    fn torture_45b_alias_to_literal_union() {
-        let mut cx = TortureCtx::new();
+    fn testing_45b_alias_to_literal_union() {
+        let mut cx = TestingCtx::new();
         let tri = qtn("Tri");
         cx.register_alias(
             tri.clone(),
@@ -4144,8 +4172,8 @@ mod tests {
     /// Aliasing a recursive type: `type Tree = Optional<Class<Tree>>`.
     /// Mainly verifying alias cycles don't infinite-loop.
     #[test]
-    fn torture_45c_alias_with_recursion_terminates() {
-        let mut cx = TortureCtx::new();
+    fn testing_45c_alias_with_recursion_terminates() {
+        let mut cx = TestingCtx::new();
         let n = qtn("Node");
         let n_ty = class_ty(&n);
         let opt_n = opt_of(n_ty.clone());
@@ -4180,7 +4208,7 @@ mod tests {
     /// `[_, _, ..]`. The trailing `..` must have a `, ` separator from the
     /// last prefix field. Exposes a Display formatting bug.
     #[test]
-    fn torture_44_prefix_only_var_witness_comma_before_rest() {
+    fn testing_44_prefix_only_var_witness_comma_before_rest() {
         let arr = list_of(bool_ty());
         let witness = WitnessPat::new(
             Ctor::Slice(SliceShape::Variable {
@@ -4203,8 +4231,8 @@ mod tests {
     /// rows useful; not unreachable. Subsequent `[3, _]` also useful.
     /// Verify per-row useful tracking aligns to ArmId.
     #[test]
-    fn torture_26_or_pattern_simulated_rows() {
-        let cx = TortureCtx::new();
+    fn testing_26_or_pattern_simulated_rows() {
+        let cx = TestingCtx::new();
         let arr = list_of(int_ty());
         let arm = |v: i64| {
             DPat::slice(

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 35217
 ---
 === TIR2 ===
 class user.Address {
@@ -94,7 +93,7 @@ function user.NullCoalescing(user: user.User?, fallback: string, count: int) -> 
     let d1 = user?.profile?.name ?? "Anonymous" : string
     let d2 = user?.profile?.name ?? user?.profile?.address?.street ?? "Unknown" : string
     let d3: string = user?.profile?.name ?? fallback : string
-    let d4: string? = user?.profile?.name ?? user?.profile?.address?.zip : string?
+    let d4: string? = user?.profile?.name ?? user?.profile?.address?.zip : string? -> string | null
     let d5 = user?.profile?.scores?.[0] ?? 0 : int
     let d6 = user?.profile?.name ?? fallback : string
     user?.profile?.name = user?.profile?.address?.street ?? "no street" : string

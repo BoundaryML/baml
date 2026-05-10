@@ -26,8 +26,8 @@ class user.SameNameOuter {
   field: user.SameNameInner
   other: user.SameNameInner
 }
-function user.class_destructure_chain_middle_binding_aliases_value(boxed: user.Box) -> int  [expr] {
-  { let Box<int> { value: value }: alias = boxed } value Add alias.value
+function user.class_destructure_box(boxed: user.Box) -> int  [expr] {
+  { let Box<int> { value: value } = boxed } value
 }
 function user.class_destructure_duplicate_binding_name_across_fields() -> int  [expr] {
   { let Person { age: age, flexible_age: age } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } 0
@@ -41,9 +41,6 @@ function user.class_destructure_duplicate_field_key_with_wildcards() -> int  [ex
 function user.class_destructure_field_pattern_type_mismatch() -> int  [expr] {
   {  } match (user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } }) { Person { age: string } => 1, _ => 0 }
 }
-function user.class_destructure_formatter_deep_chain_trivia() -> int  [expr] {
-  { let input = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } }; let Person { address: addr_alias: Address { zip: zip_alias }: user.Address } = input } zip_alias
-}
 function user.class_destructure_formatter_empty_and_trailing_comma_trivia() -> int  [expr] {
   { let input = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } }; let Person {  } = input } match (input) { Person { age: years } => years }
 }
@@ -51,7 +48,7 @@ function user.class_destructure_formatter_trivia_preserved() -> int  [expr] {
   { let input = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } }; let Person { age: years, address: Address { zip: zip } } = input } years Add zip
 }
 function user.class_destructure_invalid_chain_type() -> int  [expr] {
-  { let Person { age: age }: user.Address = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } age
+  { let Person { age: age } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } age
 }
 function user.class_destructure_or_pattern_must_bind_same_names(v: user.Person | int) -> int  [expr] {
   {  } match (v) { Person { age: age } | int => age }

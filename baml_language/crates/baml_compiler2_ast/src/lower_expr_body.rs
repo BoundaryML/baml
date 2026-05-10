@@ -1067,12 +1067,12 @@ impl LoweringContext {
         }
     }
 
-    /// Dispatch on the kind of an atom-shaped pattern node (`CHAIN_PATTERN`,
-    /// `UNION_PATTERN`, `BINDING_PATTERN`, `WILDCARD_PATTERN`, `DESTRUCTURE_PATTERN`,
-    /// `ARRAY_PATTERN`, `TYPE_PATTERN`, `PAREN_PATTERN`). Returns a fresh `PatId`.
+    /// Dispatch on the kind of an atom-shaped pattern node
+    /// (`UNION_PATTERN`, `BINDING_PATTERN`, `WILDCARD_PATTERN`,
+    /// `DESTRUCTURE_PATTERN`, `ARRAY_PATTERN`, `TYPE_PATTERN`,
+    /// `PAREN_PATTERN`). Returns a fresh `PatId`.
     fn lower_pattern_atom_node(&mut self, node: &SyntaxNode) -> PatId {
         match node.kind() {
-            SyntaxKind::CHAIN_PATTERN => self.lower_chain_pattern(node),
             SyntaxKind::UNION_PATTERN => self.lower_union_pattern(node),
             SyntaxKind::BINDING_PATTERN => self.lower_binding_pattern(node),
             SyntaxKind::WILDCARD_PATTERN => {
@@ -1091,20 +1091,6 @@ impl LoweringContext {
             // Lower as wildcard so downstream doesn't crash; the parse error
             // (if any) will surface elsewhere.
             _ => self.alloc_pattern(Pattern::Wildcard, node.text_range()),
-        }
-    }
-
-    /// Lower a `CHAIN_PATTERN` node. Children are atom-shaped pattern nodes
-    /// separated by `:` tokens. Length-1 chains collapse to the inner pattern.
-    fn lower_chain_pattern(&mut self, node: &SyntaxNode) -> PatId {
-        let parts: Vec<PatId> = node
-            .children()
-            .map(|child| self.lower_pattern_atom_node(&child))
-            .collect();
-        match parts.len() {
-            0 => self.alloc_pattern(Pattern::Wildcard, node.text_range()),
-            1 => parts[0],
-            _ => self.alloc_pattern(Pattern::Chain(parts), node.text_range()),
         }
     }
 
@@ -1134,8 +1120,15 @@ impl LoweringContext {
             .find(|t| t.kind() == SyntaxKind::WORD)
             .map(|t| Name::new(t.text()));
 
+        // The parser folds `: <pattern>` into BINDING_PATTERN as a
+        // PATTERN child (any pattern).
+        let subpat = node
+            .children()
+            .find(|c| c.kind() == SyntaxKind::PATTERN)
+            .map(|pat_node| self.lower_pattern(&pat_node));
+
         let pat = match name {
-            Some(name) => Pattern::Bind { name },
+            Some(name) => Pattern::Bind { name, subpat },
             None => Pattern::Wildcard,
         };
         self.alloc_pattern(pat, node.text_range())
@@ -1155,7 +1148,7 @@ impl LoweringContext {
                     &mut self.diags,
                 );
             }
-            Pattern::Chain(pats) | Pattern::Or(pats) => {
+            Pattern::Or(pats) => {
                 for p in pats {
                     self.check_pattern_void_in_annotation(p, context);
                 }
@@ -1169,6 +1162,7 @@ impl LoweringContext {
                 prefix,
                 rest,
                 suffix,
+                ascription,
             } => {
                 for p in prefix.into_iter().chain(suffix) {
                     self.check_pattern_void_in_annotation(p, context);
@@ -1178,8 +1172,23 @@ impl LoweringContext {
                 {
                     self.check_pattern_void_in_annotation(p, context);
                 }
+                if let Some(ty) = ascription {
+                    let span = self.source_map.pattern_span(pat_id);
+                    crate::lower_type_expr::check_void_type(
+                        &ty,
+                        context.to_string(),
+                        span,
+                        false,
+                        &mut self.diags,
+                    );
+                }
             }
-            Pattern::Wildcard | Pattern::Bind { .. } => {}
+            Pattern::Wildcard => {}
+            Pattern::Bind { subpat, .. } => {
+                if let Some(sp) = subpat {
+                    self.check_pattern_void_in_annotation(sp, context);
+                }
+            }
         }
     }
 
@@ -1270,6 +1279,7 @@ impl LoweringContext {
                 } else {
                     Pattern::Bind {
                         name: field_name.clone(),
+                        subpat: None,
                     }
                 };
                 self.alloc_pattern(synth, node.text_range())
@@ -1318,11 +1328,19 @@ impl LoweringContext {
             }
         }
 
+        // Parser folds optional `: T` ascription into ARRAY_PATTERN as
+        // a TYPE_EXPR child.
+        let ascription = node
+            .children()
+            .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
+            .map(|type_expr| crate::lower_type_expr::lower_type_expr_node(&type_expr));
+
         self.alloc_pattern(
             Pattern::Array {
                 prefix,
                 rest,
                 suffix,
+                ascription,
             },
             node.text_range(),
         )
@@ -1379,8 +1397,10 @@ impl LoweringContext {
                                 _ => None,
                             })
                             .unwrap_or_else(|| Name::new("_"));
-                        binding =
-                            Some(self.alloc_pattern(Pattern::Bind { name }, child.text_range()));
+                        binding = Some(self.alloc_pattern(
+                            Pattern::Bind { name, subpat: None },
+                            child.text_range(),
+                        ));
                     }
                     SyntaxKind::CATCH_STACK_TRACE_BINDING => {
                         // Extract the identifier name from the node.
@@ -1395,8 +1415,10 @@ impl LoweringContext {
                                 _ => None,
                             })
                             .unwrap_or_else(|| Name::new("_"));
-                        stack_trace_binding =
-                            Some(self.alloc_pattern(Pattern::Bind { name }, child.text_range()));
+                        stack_trace_binding = Some(self.alloc_pattern(
+                            Pattern::Bind { name, subpat: None },
+                            child.text_range(),
+                        ));
                     }
                     SyntaxKind::CATCH_ARM => {
                         let arm = self.lower_catch_arm(&child);

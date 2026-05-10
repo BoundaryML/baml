@@ -46,16 +46,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Error: class `Box` expects 1 type argument(s), got 0
-     ╭─[ classes.baml:123:34 ]
-     │
- 123 │ function wrong_arity_missing() -> Box {
-     │                                  ──┬─  
-     │                                    ╰─── class `Box` expects 1 type argument(s), got 0
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
   [type] Error: type mismatch: expected T, got 42
      ╭─[ classes.baml:124:18 ]
      │
@@ -66,64 +56,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: class `Box` expects 1 type argument(s), got 2
-     ╭─[ classes.baml:128:32 ]
-     │
- 128 │ function wrong_arity_extra() -> Box<int, string> {
-     │                                ────────┬────────  
-     │                                        ╰────────── class `Box` expects 1 type argument(s), got 2
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] Error: class `Pair` expects 2 type argument(s), got 1
-     ╭─[ classes.baml:133:34 ]
-     │
- 133 │ function wrong_arity_partial() -> Pair<int> {
-     │                                  ─────┬────  
-     │                                       ╰────── class `Pair` expects 2 type argument(s), got 1
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] Error: class `Plain` expects 0 type argument(s), got 1
-     ╭─[ classes.baml:145:41 ]
-     │
- 145 │ function wrong_arity_on_non_generic() -> Plain<int> {
-     │                                         ─────┬─────  
-     │                                              ╰─────── class `Plain` expects 0 type argument(s), got 1
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
   [type] Error: unreachable arm
-     ╭─[ classes.baml:197:24 ]
+     ╭─[ classes.baml:197:21 ]
      │
- 197 │             _: null => default,
-     │                        ───┬───  
-     │                           ╰───── unreachable arm
+ 197 │             null => default,
+     │                     ───┬───  
+     │                        ╰───── unreachable arm
      │ 
      │ Note: Error code: E0063
-─────╯
-
-  [type] Error: class `Foo` expects 1 type argument(s), got 0
-     ╭─[ classes.baml:234:32 ]
-     │
- 234 │ function bare_in_union_param(f: Foo<int> | Foo) -> string {
-     │                                ───────┬───────  
-     │                                       ╰───────── class `Foo` expects 1 type argument(s), got 0
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] Error: class `Foo` expects 1 type argument(s), got 0
-     ╭─[ classes.baml:237:24 ]
-     │
- 237 │         _: Foo      => "bare",
-     │                        ───┬──  
-     │                           ╰──── class `Foo` expects 1 type argument(s), got 0
-     │ 
-     │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved name: fetch_as

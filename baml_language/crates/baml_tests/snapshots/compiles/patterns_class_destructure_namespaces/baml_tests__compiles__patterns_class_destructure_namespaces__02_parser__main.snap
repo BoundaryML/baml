@@ -47,30 +47,19 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              DESTRUCTURE_PATTERN
-                KW_LET "let"
-                WORD "root"
-                DOT "."
-                WORD "llm"
-                DOT "."
-                WORD "openai"
-                DOT "."
-                WORD "Response"
-                L_BRACE "{"
-                FIELD_PATTERN "score"
-                  WORD "score"
-                R_BRACE "}"
-              COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "root.llm.openai.Response"
-                  WORD "root"
-                  DOT "."
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Response"
+            DESTRUCTURE_PATTERN
+              KW_LET "let"
+              WORD "root"
+              DOT "."
+              WORD "llm"
+              DOT "."
+              WORD "openai"
+              DOT "."
+              WORD "Response"
+              L_BRACE "{"
+              FIELD_PATTERN "score"
+                WORD "score"
+              R_BRACE "}"
           EQUALS "="
           WORD "response"
           SEMICOLON ";"
@@ -148,34 +137,23 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                DESTRUCTURE_PATTERN
-                  WORD "root"
-                  DOT "."
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Response"
-                  L_BRACE "{"
-                  FIELD_PATTERN
-                    WORD "score"
-                    COLON ":"
-                    PATTERN
-                      BINDING_PATTERN "let matched"
-                        KW_LET "let"
-                        WORD "matched"
-                  R_BRACE "}"
-                COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "root.llm.openai.Response"
-                    WORD "root"
-                    DOT "."
-                    WORD "llm"
-                    DOT "."
-                    WORD "openai"
-                    DOT "."
-                    WORD "Response"
+              DESTRUCTURE_PATTERN
+                WORD "root"
+                DOT "."
+                WORD "llm"
+                DOT "."
+                WORD "openai"
+                DOT "."
+                WORD "Response"
+                L_BRACE "{"
+                FIELD_PATTERN
+                  WORD "score"
+                  COLON ":"
+                  PATTERN
+                    BINDING_PATTERN "let matched"
+                      KW_LET "let"
+                      WORD "matched"
+                R_BRACE "}"
             FAT_ARROW "=>"
             WORD "matched"
           R_BRACE "}"
@@ -222,26 +200,17 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              DESTRUCTURE_PATTERN
-                KW_LET "let"
-                WORD "llm"
-                DOT "."
-                WORD "openai"
-                DOT "."
-                WORD "Response"
-                L_BRACE "{"
-                FIELD_PATTERN "score"
-                  WORD "score"
-                R_BRACE "}"
-              COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "llm.openai.Response"
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Response"
+            DESTRUCTURE_PATTERN
+              KW_LET "let"
+              WORD "llm"
+              DOT "."
+              WORD "openai"
+              DOT "."
+              WORD "Response"
+              L_BRACE "{"
+              FIELD_PATTERN "score"
+                WORD "score"
+              R_BRACE "}"
           EQUALS "="
           WORD "response"
           SEMICOLON ";"
@@ -315,30 +284,21 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                DESTRUCTURE_PATTERN
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Response"
-                  L_BRACE "{"
-                  FIELD_PATTERN
-                    WORD "score"
-                    COLON ":"
-                    PATTERN
-                      BINDING_PATTERN "let matched"
-                        KW_LET "let"
-                        WORD "matched"
-                  R_BRACE "}"
-                COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "llm.openai.Response"
-                    WORD "llm"
-                    DOT "."
-                    WORD "openai"
-                    DOT "."
-                    WORD "Response"
+              DESTRUCTURE_PATTERN
+                WORD "llm"
+                DOT "."
+                WORD "openai"
+                DOT "."
+                WORD "Response"
+                L_BRACE "{"
+                FIELD_PATTERN
+                  WORD "score"
+                  COLON ":"
+                  PATTERN
+                    BINDING_PATTERN "let matched"
+                      KW_LET "let"
+                      WORD "matched"
+                R_BRACE "}"
             FAT_ARROW "=>"
             WORD "matched"
           R_BRACE "}"
@@ -357,20 +317,20 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let response"
-                KW_LET "let"
-                WORD "response"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "response"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "root.llm.openai.Response"
-                  WORD "root"
-                  DOT "."
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Response"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "root.llm.openai.Response"
+                    WORD "root"
+                    DOT "."
+                    WORD "llm"
+                    DOT "."
+                    WORD "openai"
+                    DOT "."
+                    WORD "Response"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR "root.llm.openai.Response"
@@ -481,18 +441,18 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let response"
-                KW_LET "let"
-                WORD "response"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "response"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "llm.openai.Response"
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Response"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "llm.openai.Response"
+                    WORD "llm"
+                    DOT "."
+                    WORD "openai"
+                    DOT "."
+                    WORD "Response"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR "llm.openai.Response"
@@ -597,25 +557,25 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let boxed"
-                KW_LET "let"
-                WORD "boxed"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "boxed"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "root"
-                  DOT "."
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Box"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "int"
-                      WORD "int"
-                    GREATER ">"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    WORD "root"
+                    DOT "."
+                    WORD "llm"
+                    DOT "."
+                    WORD "openai"
+                    DOT "."
+                    WORD "Box"
+                    TYPE_ARGS
+                      LESS "<"
+                      TYPE_EXPR "int"
+                        WORD "int"
+                      GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR
@@ -678,23 +638,23 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let boxed"
-                KW_LET "let"
-                WORD "boxed"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "boxed"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Box"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "string"
-                      WORD "string"
-                    GREATER ">"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    WORD "llm"
+                    DOT "."
+                    WORD "openai"
+                    DOT "."
+                    WORD "Box"
+                    TYPE_ARGS
+                      LESS "<"
+                      TYPE_EXPR "string"
+                        WORD "string"
+                      GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR
@@ -763,41 +723,41 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let boxed"
-                KW_LET "let"
-                WORD "boxed"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "boxed"
               COLON ":"
-              UNION_PATTERN
-                TYPE_PATTERN
-                  TYPE_EXPR
-                    WORD "root"
-                    DOT "."
-                    WORD "llm"
-                    DOT "."
-                    WORD "openai"
-                    DOT "."
-                    WORD "Box"
-                    TYPE_ARGS
-                      LESS "<"
-                      TYPE_EXPR "int"
-                        WORD "int"
-                      GREATER ">"
-                PIPE "|"
-                TYPE_PATTERN
-                  TYPE_EXPR
-                    WORD "root"
-                    DOT "."
-                    WORD "llm"
-                    DOT "."
-                    WORD "openai"
-                    DOT "."
-                    WORD "Box"
-                    TYPE_ARGS
-                      LESS "<"
-                      TYPE_EXPR "string"
-                        WORD "string"
-                      GREATER ">"
+              PATTERN
+                UNION_PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR
+                      WORD "root"
+                      DOT "."
+                      WORD "llm"
+                      DOT "."
+                      WORD "openai"
+                      DOT "."
+                      WORD "Box"
+                      TYPE_ARGS
+                        LESS "<"
+                        TYPE_EXPR "int"
+                          WORD "int"
+                        GREATER ">"
+                  PIPE "|"
+                  TYPE_PATTERN
+                    TYPE_EXPR
+                      WORD "root"
+                      DOT "."
+                      WORD "llm"
+                      DOT "."
+                      WORD "openai"
+                      DOT "."
+                      WORD "Box"
+                      TYPE_ARGS
+                        LESS "<"
+                        TYPE_EXPR "string"
+                          WORD "string"
+                        GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR
@@ -880,37 +840,37 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let boxed"
-                KW_LET "let"
-                WORD "boxed"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "boxed"
               COLON ":"
-              UNION_PATTERN
-                TYPE_PATTERN
-                  TYPE_EXPR
-                    WORD "llm"
-                    DOT "."
-                    WORD "openai"
-                    DOT "."
-                    WORD "Box"
-                    TYPE_ARGS
-                      LESS "<"
-                      TYPE_EXPR "int"
-                        WORD "int"
-                      GREATER ">"
-                PIPE "|"
-                TYPE_PATTERN
-                  TYPE_EXPR
-                    WORD "llm"
-                    DOT "."
-                    WORD "openai"
-                    DOT "."
-                    WORD "Box"
-                    TYPE_ARGS
-                      LESS "<"
-                      TYPE_EXPR "string"
-                        WORD "string"
-                      GREATER ">"
+              PATTERN
+                UNION_PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR
+                      WORD "llm"
+                      DOT "."
+                      WORD "openai"
+                      DOT "."
+                      WORD "Box"
+                      TYPE_ARGS
+                        LESS "<"
+                        TYPE_EXPR "int"
+                          WORD "int"
+                        GREATER ">"
+                  PIPE "|"
+                  TYPE_PATTERN
+                    TYPE_EXPR
+                      WORD "llm"
+                      DOT "."
+                      WORD "openai"
+                      DOT "."
+                      WORD "Box"
+                      TYPE_ARGS
+                        LESS "<"
+                        TYPE_EXPR "string"
+                          WORD "string"
+                        GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR
@@ -990,25 +950,25 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let outer"
-                KW_LET "let"
-                WORD "outer"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "outer"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "root"
-                  DOT "."
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Outer"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "int"
-                      WORD "int"
-                    GREATER ">"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    WORD "root"
+                    DOT "."
+                    WORD "llm"
+                    DOT "."
+                    WORD "openai"
+                    DOT "."
+                    WORD "Outer"
+                    TYPE_ARGS
+                      LESS "<"
+                      TYPE_EXPR "int"
+                        WORD "int"
+                      GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR
@@ -1110,23 +1070,23 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let outer"
-                KW_LET "let"
-                WORD "outer"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "outer"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "llm"
-                  DOT "."
-                  WORD "openai"
-                  DOT "."
-                  WORD "Outer"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "string"
-                      WORD "string"
-                    GREATER ">"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    WORD "llm"
+                    DOT "."
+                    WORD "openai"
+                    DOT "."
+                    WORD "Outer"
+                    TYPE_ARGS
+                      LESS "<"
+                      TYPE_EXPR "string"
+                        WORD "string"
+                      GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
             PATH_EXPR

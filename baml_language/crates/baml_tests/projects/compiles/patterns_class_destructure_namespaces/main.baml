@@ -4,7 +4,7 @@ function DestructureQualifiedLet() -> int {
         score: 41
     };
 
-    let root.llm.openai.Response { score }: root.llm.openai.Response = response;
+    let root.llm.openai.Response { score } = response;
     score
 }
 
@@ -16,7 +16,7 @@ function DestructureQualifiedMatch() -> int {
 
     match (response) {
         root.llm.openai.Response { score: 0 } => 0,
-        root.llm.openai.Response { score: let matched }: root.llm.openai.Response => matched
+        root.llm.openai.Response { score: let matched } => matched
     }
 }
 
@@ -26,7 +26,7 @@ function DestructureNamespaceQualifiedLet() -> int {
         score: 45
     };
 
-    let llm.openai.Response { score }: llm.openai.Response = response;
+    let llm.openai.Response { score } = response;
     score
 }
 
@@ -38,7 +38,7 @@ function DestructureNamespaceQualifiedMatch() -> int {
 
     match (response) {
         llm.openai.Response { score: 0 } => 0,
-        llm.openai.Response { score: let matched }: llm.openai.Response => matched
+        llm.openai.Response { score: let matched } => matched
     }
 }
 

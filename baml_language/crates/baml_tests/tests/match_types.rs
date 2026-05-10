@@ -26,7 +26,7 @@ async fn match_typed_pattern_first_arm() {
             let result = Success { data: "hello" };
             match (result: Success | Failure) {
                 let s: Success => "success: " + s.data,
-                _: Failure => "failure",
+                Failure => "failure",
             }
         }
     "#
@@ -203,10 +203,10 @@ async fn match_typed_discard_patterns_typetag_switch_path() {
         r#"
         function classify(x: int | string | bool | float) -> int {
             match (x) {
-                _: int => 1,
-                _: string => 2,
-                _: bool => 3,
-                _: float => 4,
+                int => 1,
+                string => 2,
+                bool => 3,
+                float => 4,
             }
         }
 
@@ -271,7 +271,7 @@ async fn match_guard_true() {
             match (s) {
                 let x: Score if x.value >= 90 => "excellent",
                 let x: Score if x.value >= 70 => "good",
-                _: Score => "needs work",
+                Score => "needs work",
             }
         }
     "#
@@ -339,7 +339,7 @@ async fn match_guard_fallthrough() {
             match (s) {
                 let x: Score if x.value >= 90 => "excellent",
                 let x: Score if x.value >= 70 => "good",
-                _: Score => "needs work",
+                Score => "needs work",
             }
         }
     "#
@@ -407,7 +407,7 @@ async fn match_guard_all_fail() {
             match (s) {
                 let x: Score if x.value >= 90 => "excellent",
                 let x: Score if x.value >= 70 => "good",
-                _: Score => "needs work",
+                Score => "needs work",
             }
         }
     "#
@@ -2011,10 +2011,10 @@ async fn match_null_in_type_tag_jump_table() {
         r#"
         function classify(x: int | string | bool | null) -> string {
             match (x) {
-                _: int    => "int",
-                _: string => "string",
-                _: bool   => "bool",
-                _: null   => "null"
+                int    => "int",
+                string => "string",
+                bool   => "bool",
+                null   => "null"
             }
         }
         function main() -> string {
@@ -2075,7 +2075,7 @@ async fn match_null_with_class_types_type_tag() {
             match (x) {
                 let c: Cat  => "cat",
                 let d: Dog  => "dog",
-                _: null => "nothing"
+                null => "nothing"
             }
         }
         function main() -> string {

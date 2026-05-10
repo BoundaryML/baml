@@ -2,7 +2,7 @@
 //!
 //! Progression from simple to complex, covering all catch arm pattern types:
 //!   - Literal value patterns: "string" =>, 42 =>
-//!   - Typed bindings: _: string =>, _: MyClass =>
+//!   - Typed bindings: string =>, MyClass =>
 //!   - Bare type sugar: baml.panics.DivisionByZero =>
 //!   - Wildcard: _ =>
 //!   - User-defined error classes
@@ -259,7 +259,7 @@ async fn catch_multiple_literals_dispatch() {
 }
 
 // ============================================================================
-// §2 — Catch by typed binding (_: Type =>)
+// §2 — Catch by typed binding (Type =>)
 // ============================================================================
 
 #[tokio::test]
@@ -272,7 +272,7 @@ async fn typed_binding_string() {
 
         function main() -> int {
             fails() catch (e) {
-                _: string => 1
+                string => 1
             }
         }
     "#
@@ -315,7 +315,7 @@ async fn typed_binding_int() {
 
         function main() -> int {
             fails() catch (e) {
-                _: int => 1
+                int => 1
             }
         }
     "#
@@ -359,8 +359,8 @@ async fn typed_binding_dispatch_string_vs_int() {
 
         function main() -> int {
             fails(0) catch (e) {
-                _: string => 1,
-                _: int => 2
+                string => 1,
+                int => 2
             }
         }
     "#
@@ -427,8 +427,8 @@ async fn typed_binding_dispatch_int_vs_string() {
 
         function main() -> int {
             fails(1) catch (e) {
-                _: string => 1,
-                _: int => 2
+                string => 1,
+                int => 2
             }
         }
     "#
@@ -447,7 +447,7 @@ async fn typed_binding_plus_wildcard() {
 
         function main() -> int {
             fails(1) catch (e) {
-                _: string => 1,
+                string => 1,
                 _ => 2
             }
         }
@@ -511,7 +511,7 @@ async fn named_binding_string_access_value() {
         function main() -> string {
             fails(0) catch (e) {
                 let msg: string => msg,
-                _: int => "was int"
+                int => "was int"
             }
         }
     "#
@@ -580,7 +580,7 @@ async fn named_binding_int_access_value() {
 
         function main() -> int {
             fails(1) catch (e) {
-                _: string => -1,
+                string => -1,
                 let code: int => code
             }
         }
@@ -653,7 +653,7 @@ async fn catch_user_class_single_arm() {
 
         function main() -> int {
             fails() catch (e) {
-                _: NetworkError => 1
+                NetworkError => 1
             }
         }
     "#
@@ -702,8 +702,8 @@ async fn catch_two_user_classes_dispatch_first() {
 
         function main() -> int {
             fails(0) catch (e) {
-                _: NetworkError => 1,
-                _: ParseError => 2
+                NetworkError => 1,
+                ParseError => 2
             }
         }
     "#
@@ -777,8 +777,8 @@ async fn catch_two_user_classes_dispatch_second() {
 
         function main() -> int {
             fails(1) catch (e) {
-                _: NetworkError => 1,
-                _: ParseError => 2
+                NetworkError => 1,
+                ParseError => 2
             }
         }
     "#
@@ -799,7 +799,7 @@ async fn catch_user_class_plus_wildcard() {
 
         function main() -> int {
             fails(1) catch (e) {
-                _: NetworkError => 1,
+                NetworkError => 1,
                 _ => 2
             }
         }
@@ -866,9 +866,9 @@ async fn catch_three_user_classes_plus_wildcard() {
 
         function main() -> int {
             api(2) catch (e) {
-                _: AuthError => 1,
-                _: NotFound => 2,
-                _: RateLimit => 3,
+                AuthError => 1,
+                NotFound => 2,
+                RateLimit => 3,
                 _ => 4
             }
         }
@@ -1099,7 +1099,7 @@ async fn named_class_binding_dispatch_access_fields() {
 }
 
 // ============================================================================
-// §3b — Catch by bare class name (MyClass => without _: binding)
+// §3b — Catch by bare class name (MyClass => without binding)
 // ============================================================================
 
 #[tokio::test]
@@ -1393,7 +1393,7 @@ async fn catch_division_by_zero() {
         function divides() -> int { 1 / 0 }
 
         function main() -> int {
-            divides() catch (e) { _: baml.panics.DivisionByZero => -1 }
+            divides() catch (e) { baml.panics.DivisionByZero => -1 }
         }
     "#
     );
@@ -1435,7 +1435,7 @@ async fn catch_index_out_of_bounds() {
         function oob() -> int { let a = [1, 2]; a[5] }
 
         function main() -> int {
-            oob() catch (e) { _: baml.panics.IndexOutOfBounds => -1 }
+            oob() catch (e) { baml.panics.IndexOutOfBounds => -1 }
         }
     "#
     );
@@ -1479,7 +1479,7 @@ async fn catch_map_key_not_found() {
         function bad() -> int { let m = {"a": 1}; m["x"] }
 
         function main() -> int {
-            bad() catch (e) { _: baml.panics.MapKeyNotFound => -1 }
+            bad() catch (e) { baml.panics.MapKeyNotFound => -1 }
         }
     "#
     );
@@ -1523,7 +1523,7 @@ async fn catch_negative_index_as_index_out_of_bounds() {
         function bad() -> int { let a = [1, 2]; a[-1] }
 
         function main() -> int {
-            bad() catch (e) { _: baml.panics.IndexOutOfBounds => -1 }
+            bad() catch (e) { baml.panics.IndexOutOfBounds => -1 }
         }
     "#
     );
@@ -1875,7 +1875,7 @@ async fn panic_arm_plus_wildcard_panic_fires() {
 
         function main() -> int {
             risky(0) catch (e) {
-                _: baml.panics.DivisionByZero => 1,
+                baml.panics.DivisionByZero => 1,
                 _ => 2
             }
         }
@@ -1937,7 +1937,7 @@ async fn panic_arm_plus_wildcard_user_error_fires() {
 
         function main() -> int {
             risky(999) catch (e) {
-                _: baml.panics.DivisionByZero => 1,
+                baml.panics.DivisionByZero => 1,
                 _ => 2
             }
         }
@@ -1957,7 +1957,7 @@ async fn panic_arm_plus_wildcard_no_error() {
 
         function main() -> int {
             risky(5) catch (e) {
-                _: baml.panics.DivisionByZero => -1,
+                baml.panics.DivisionByZero => -1,
                 _ => -2
             }
         }
@@ -2027,8 +2027,8 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
 
         function main() -> int {
             risky(0) catch (e) {
-                _: AppError => 1,
-                _: baml.panics.DivisionByZero => 2,
+                AppError => 1,
+                baml.panics.DivisionByZero => 2,
                 _ => 3
             }
         }
@@ -2110,8 +2110,8 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
 
         function main() -> int {
             risky(1) catch (e) {
-                _: AppError => 1,
-                _: baml.panics.DivisionByZero => 2,
+                AppError => 1,
+                baml.panics.DivisionByZero => 2,
                 _ => 3
             }
         }
@@ -2206,8 +2206,8 @@ async fn user_class_plus_panic_plus_wildcard_string_fires() {
 
         function main() -> int {
             risky(2) catch (e) {
-                _: AppError => 1,
-                _: baml.panics.DivisionByZero => 2,
+                AppError => 1,
+                baml.panics.DivisionByZero => 2,
                 _ => 3
             }
         }
@@ -2239,7 +2239,7 @@ async fn mixed_union_arm_plus_wildcard_panic_fires() {
 
         function main() -> int {
             risky(1) catch (e) {
-                _: AppError | baml.panics.DivisionByZero => 1,
+                AppError | baml.panics.DivisionByZero => 1,
                 _ => 99
             }
         }
@@ -2262,7 +2262,7 @@ async fn mixed_union_arm_plus_wildcard_user_error_fires() {
 
         function main() -> int {
             risky(0) catch (e) {
-                _: AppError | baml.panics.DivisionByZero => 1,
+                AppError | baml.panics.DivisionByZero => 1,
                 _ => 99
             }
         }
@@ -2285,7 +2285,7 @@ async fn mixed_union_arm_plus_wildcard_fallback_error_fires() {
 
         function main() -> int {
             risky(2) catch (e) {
-                _: AppError | baml.panics.DivisionByZero => 1,
+                AppError | baml.panics.DivisionByZero => 1,
                 _ => 99
             }
         }
@@ -2308,7 +2308,7 @@ async fn mixed_union_arm_plus_wildcard_other_panic_propagates() {
 
         function main() -> int {
             risky(1) catch (e) {
-                _: AppError | baml.panics.DivisionByZero => 1,
+                AppError | baml.panics.DivisionByZero => 1,
                 _ => 99
             }
         }
@@ -2381,7 +2381,7 @@ async fn mixed_union_no_wildcard_panic_fires() {
 
         function main() -> int {
             risky(1) catch (e) {
-                _: AppError | baml.panics.DivisionByZero => 1
+                AppError | baml.panics.DivisionByZero => 1
             }
         }
     "#
@@ -2404,7 +2404,7 @@ async fn mixed_union_no_wildcard_error_fires() {
 
         function main() -> int {
             risky(0) catch (e) {
-                _: AppError | baml.panics.DivisionByZero => 1
+                AppError | baml.panics.DivisionByZero => 1
             }
         }
     "#
@@ -2424,7 +2424,7 @@ async fn mixed_union_no_wildcard_unmatched_rethrows() {
 
         function main() -> int {
             risky() catch (e) {
-                _: AppError | baml.panics.DivisionByZero => 1
+                AppError | baml.panics.DivisionByZero => 1
             }
         }
     "#
@@ -2454,7 +2454,7 @@ async fn mixed_union_no_wildcard_unmatched_panic_rethrows() {
 
         function main() -> int {
             risky() catch (e) {
-                _: AppError | baml.panics.DivisionByZero => 1
+                AppError | baml.panics.DivisionByZero => 1
             }
         }
     "#
@@ -2478,7 +2478,7 @@ async fn panic_union_plus_wildcard_division_fires() {
 
         function main() -> int {
             risky(0) catch (e) {
-                _: baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds => 1,
+                baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds => 1,
                 _ => 99
             }
         }
@@ -2502,7 +2502,7 @@ async fn panic_union_plus_wildcard_index_fires() {
 
         function main() -> int {
             risky(1) catch (e) {
-                _: baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds => 1,
+                baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds => 1,
                 _ => 99
             }
         }
@@ -2522,7 +2522,7 @@ async fn panic_union_plus_wildcard_error_falls_to_wildcard() {
 
         function main() -> int {
             risky(1) catch (e) {
-                _: baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds => 1,
+                baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds => 1,
                 _ => 99
             }
         }
@@ -2552,9 +2552,9 @@ async fn four_arms_division_by_zero_fires() {
 
         function main() -> int {
             risky(0) catch (e) {
-                _: baml.panics.DivisionByZero => 1,
-                _: baml.panics.IndexOutOfBounds => 2,
-                _: AppError => 3,
+                baml.panics.DivisionByZero => 1,
+                baml.panics.IndexOutOfBounds => 2,
+                AppError => 3,
                 _ => 4
             }
         }
@@ -2681,9 +2681,9 @@ async fn four_arms_index_out_of_bounds_fires() {
 
         function main() -> int {
             risky(1) catch (e) {
-                _: baml.panics.DivisionByZero => 1,
-                _: baml.panics.IndexOutOfBounds => 2,
-                _: AppError => 3,
+                baml.panics.DivisionByZero => 1,
+                baml.panics.IndexOutOfBounds => 2,
+                AppError => 3,
                 _ => 4
             }
         }
@@ -2710,9 +2710,9 @@ async fn four_arms_user_class_fires() {
 
         function main() -> int {
             risky(2) catch (e) {
-                _: baml.panics.DivisionByZero => 1,
-                _: baml.panics.IndexOutOfBounds => 2,
-                _: AppError => 3,
+                baml.panics.DivisionByZero => 1,
+                baml.panics.IndexOutOfBounds => 2,
+                AppError => 3,
                 _ => 4
             }
         }
@@ -2739,9 +2739,9 @@ async fn four_arms_wildcard_fires() {
 
         function main() -> int {
             risky(3) catch (e) {
-                _: baml.panics.DivisionByZero => 1,
-                _: baml.panics.IndexOutOfBounds => 2,
-                _: AppError => 3,
+                baml.panics.DivisionByZero => 1,
+                baml.panics.IndexOutOfBounds => 2,
+                AppError => 3,
                 _ => 4
             }
         }
@@ -2768,9 +2768,9 @@ async fn four_arms_no_error() {
 
         function main() -> int {
             risky(4) catch (e) {
-                _: baml.panics.DivisionByZero => 1,
-                _: baml.panics.IndexOutOfBounds => 2,
-                _: AppError => 3,
+                baml.panics.DivisionByZero => 1,
+                baml.panics.IndexOutOfBounds => 2,
+                AppError => 3,
                 _ => 4
             }
         }
@@ -2930,7 +2930,7 @@ async fn wrong_panic_pattern_propagates() {
         function divides() -> int { 1 / 0 }
 
         function main() -> int {
-            divides() catch (e) { _: baml.panics.IndexOutOfBounds => -1 }
+            divides() catch (e) { baml.panics.IndexOutOfBounds => -1 }
         }
     "#
     );
@@ -2975,7 +2975,7 @@ async fn same_frame_division_caught() {
         r#"
         function main() -> int {
             (1 / 0) catch (e) {
-                _: baml.panics.DivisionByZero => -1
+                baml.panics.DivisionByZero => -1
             }
         }
     "#
@@ -2990,7 +2990,7 @@ async fn same_frame_index_out_of_bounds_caught() {
         function main() -> int {
             let a = [1, 2, 3];
             a[10] catch (e) {
-                _: baml.panics.IndexOutOfBounds => -1
+                baml.panics.IndexOutOfBounds => -1
             }
         }
     "#
@@ -3009,7 +3009,7 @@ async fn panic_alias_catches_any_panic() {
         function divides() -> int { 1 / 0 }
 
         function main() -> int {
-            divides() catch (e) { _: baml.panics.Panic => -1 }
+            divides() catch (e) { baml.panics.Panic => -1 }
         }
     "#
     );
@@ -3025,15 +3025,14 @@ async fn panic_alias_catches_any_panic() {
         call user.divides
         jump L2
         load_var e
-        is_type baml.panics.AllocFailure
-        pop_jump_if_false L0
-        jump L1
+        type_tag
+        jump_table [L1, L1, L1, _, _, L1, _, _, _, L1, L1, _, L1, L1], default L0
 
       L0:
         load_var e
         throw
 
-      L1:
+      L1: Unreachable
         load_const 1
         unary_op -
 
@@ -3055,7 +3054,7 @@ async fn panic_alias_plus_wildcard_dispatch() {
 
         function main() -> int {
             risky(0) catch (e) {
-                _: baml.panics.Panic => 1,
+                baml.panics.Panic => 1,
                 _ => 2
             }
         }
@@ -3067,9 +3066,8 @@ async fn panic_alias_plus_wildcard_dispatch() {
         call user.risky
         jump L2
         load_var e
-        is_type baml.panics.AllocFailure
-        pop_jump_if_false L0
-        jump L1
+        type_tag
+        jump_table [L1, L1, L1, _, _, L1, _, _, _, L1, L1, _, L1, L1], default L0
 
       L0:
         load_var e
@@ -3077,7 +3075,7 @@ async fn panic_alias_plus_wildcard_dispatch() {
         load_const 2
         jump L2
 
-      L1:
+      L1: Unreachable
         load_const 1
 
       L2:
@@ -3163,7 +3161,7 @@ async fn nested_inner_catches_panic_outer_catches_rethrow() {
         function divides() -> int { 1 / 0 }
 
         function middle() -> int {
-            let x = divides() catch (e) { _: baml.panics.DivisionByZero => -1 };
+            let x = divides() catch (e) { baml.panics.DivisionByZero => -1 };
             throw "recovered but failing"
         }
 
@@ -3387,7 +3385,7 @@ async fn caught_panic_has_accessible_fields() {
         function oob() -> int { let a = [10, 20, 30]; a[7] }
 
         function main() -> int {
-            oob() catch (e) { _: baml.panics.IndexOutOfBounds => e.index }
+            oob() catch (e) { baml.panics.IndexOutOfBounds => e.index }
         }
     "#
     );
@@ -3449,10 +3447,10 @@ async fn catch_four_typed_arms_jump_table() {
 
         function main() -> int {
             risky(2) catch (e) {
-                _: ErrA => 10,
-                _: ErrB => 20,
-                _: ErrC => 30,
-                _: ErrD => 40
+                ErrA => 10,
+                ErrB => 20,
+                ErrC => 30,
+                ErrD => 40
             }
         }
     "#
@@ -3559,10 +3557,10 @@ async fn catch_four_typed_arms_plus_wildcard_jump_table() {
 
         function main() -> int {
             risky(4) catch (e) {
-                _: ErrA => 10,
-                _: ErrB => 20,
-                _: ErrC => 30,
-                _: ErrD => 40,
+                ErrA => 10,
+                ErrB => 20,
+                ErrC => 30,
+                ErrD => 40,
                 _ => 99
             }
         }
@@ -3678,8 +3676,8 @@ async fn catch_two_typed_arms_sequential_chain() {
 
         function main() -> int {
             fails(1) catch (e) {
-                _: NetworkError => 1,
-                _: ParseError   => 2
+                NetworkError => 1,
+                ParseError   => 2
             }
         }
     "#
@@ -3754,7 +3752,7 @@ async fn catch_mixed_literal_and_typed_no_switch() {
         function main() -> int {
             fails(0) catch (e) {
                 "boom" => 1,
-                _: AppError => 2,
+                AppError => 2,
                 _ => 3
             }
         }
@@ -3831,10 +3829,10 @@ async fn catch_four_primitive_type_arms() {
 
         function main() -> int {
             fails() catch (e) {
-                _: string => 1,
-                _: int => 2,
-                _: bool => 3,
-                _: null => 4,
+                string => 1,
+                int => 2,
+                bool => 3,
+                null => 4,
                 _ => 0
             }
         }
@@ -3898,10 +3896,10 @@ async fn catch_four_typed_arms_plus_bind_jump_table_rethrows_panic() {
 
         function main() -> int {
             risky() catch (e) {
-                _: ErrA => 10,
-                _: ErrB => 20,
-                _: ErrC => 30,
-                _: ErrD => 40,
+                ErrA => 10,
+                ErrB => 20,
+                ErrC => 30,
+                ErrD => 40,
                 let other => 99
             }
         }
@@ -3926,10 +3924,10 @@ async fn catch_four_typed_arms_plus_bind_chain_rethrows_panic() {
 
         function main() -> int {
             risky() catch (e) {
-                _: ErrA => 10,
-                _: ErrB => 20,
-                _: ErrC => 30,
-                _: ErrD => 40,
+                ErrA => 10,
+                ErrB => 20,
+                ErrC => 30,
+                ErrD => 40,
                 let other: let alias => 99
             }
         }
@@ -3949,10 +3947,10 @@ async fn catch_four_primitive_wildcard_on_float() {
 
         function main() -> int {
             fails() catch (e) {
-                _: string => 1,
-                _: int => 2,
-                _: bool => 3,
-                _: null => 4,
+                string => 1,
+                int => 2,
+                bool => 3,
+                null => 4,
                 _ => 0
             }
         }
@@ -4011,9 +4009,9 @@ async fn catch_three_type_arms_bool_throw() {
 
         function main() -> int {
             fails() catch (e) {
-                _: string => 1,
-                _: int => 2,
-                _: bool => 3,
+                string => 1,
+                int => 2,
+                bool => 3,
                 _ => 0
             }
         }
@@ -4090,10 +4088,10 @@ async fn catch_four_user_classes_instanceof_chain() {
 
         function main() -> int {
             api(2) catch (e) {
-                _: AuthError => 1,
-                _: NotFound => 2,
-                _: RateLimit => 3,
-                _: Timeout => 4,
+                AuthError => 1,
+                NotFound => 2,
+                RateLimit => 3,
+                Timeout => 4,
                 _ => 0
             }
         }
@@ -4318,7 +4316,7 @@ async fn catch_four_literal_arms() {
 
 #[tokio::test]
 async fn catch_mixed_named_and_anonymous_bindings() {
-    // Mixed named (err: ClassName) and anonymous (_: ClassName) bindings
+    // Mixed named (err: ClassName) and anonymous (ClassName) bindings
     // in the same catch block with field access.
     let output = baml_test_optimized!(
         r#"
@@ -4336,7 +4334,7 @@ async fn catch_mixed_named_and_anonymous_bindings() {
                 let err: NetworkError => err.url,
                 let err: AuthError => err.reason,
                 let err: NotFound => err.path,
-                _: RateLimit => "rate limited",
+                RateLimit => "rate limited",
                 _ => "unknown"
             }
         }

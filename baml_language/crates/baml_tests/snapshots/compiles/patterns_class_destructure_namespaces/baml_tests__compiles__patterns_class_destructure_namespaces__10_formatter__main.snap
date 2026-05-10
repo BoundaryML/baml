@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 function DestructureQualifiedLet() -> int {
     let response = root.llm.openai.Response { text: "ok", score: 41 };
 
-    let root.llm.openai.Response { score }: root.llm.openai.Response = response;
+    let root.llm.openai.Response { score } = response;
     score
 }
 
@@ -13,14 +13,14 @@ function DestructureQualifiedMatch() -> int {
 
     match (response) {
         root.llm.openai.Response { score: 0 } => 0,
-        root.llm.openai.Response { score: let matched }: root.llm.openai.Response => matched,
+        root.llm.openai.Response { score: let matched } => matched,
     }
 }
 
 function DestructureNamespaceQualifiedLet() -> int {
     let response = llm.openai.Response { text: "ok", score: 45 };
 
-    let llm.openai.Response { score }: llm.openai.Response = response;
+    let llm.openai.Response { score } = response;
     score
 }
 
@@ -29,7 +29,7 @@ function DestructureNamespaceQualifiedMatch() -> int {
 
     match (response) {
         llm.openai.Response { score: 0 } => 0,
-        llm.openai.Response { score: let matched }: llm.openai.Response => matched,
+        llm.openai.Response { score: let matched } => matched,
     }
 }
 

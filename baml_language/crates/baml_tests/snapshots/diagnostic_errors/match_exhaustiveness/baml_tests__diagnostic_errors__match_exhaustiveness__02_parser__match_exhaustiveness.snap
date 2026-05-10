@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 33648
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -58,14 +57,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let n"
-                  KW_LET "let"
-                  WORD "n"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "n"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "int"
-                    WORD "int"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
             FAT_ARROW "=>"
             STRING_LITERAL "never reached"
               QUOTE """
@@ -110,14 +109,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let n"
-                  KW_LET "let"
-                  WORD "n"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "n"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "int"
-                    WORD "int"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
             FAT_ARROW "=>"
             STRING_LITERAL "unreachable 1"
               QUOTE """
@@ -127,14 +126,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let m"
-                  KW_LET "let"
-                  WORD "m"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "m"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "int"
-                    WORD "int"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
             FAT_ARROW "=>"
             STRING_LITERAL "unreachable 2"
               QUOTE """
@@ -258,14 +257,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let n"
-                  KW_LET "let"
-                  WORD "n"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "n"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "int"
-                    WORD "int"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
             MATCH_GUARD
               KW_IF "if"
               BINARY_EXPR "n > 0"
@@ -280,14 +279,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let n"
-                  KW_LET "let"
-                  WORD "n"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "n"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "int"
-                    WORD "int"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
             MATCH_GUARD
               KW_IF "if"
               BINARY_EXPR "n < 0"
@@ -328,14 +327,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let n"
-                  KW_LET "let"
-                  WORD "n"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "n"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "int"
-                    WORD "int"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
             MATCH_GUARD
               KW_IF "if"
               BINARY_EXPR "n > 0"
@@ -389,14 +388,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let s"
-                  KW_LET "let"
-                  WORD "s"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "s"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Success"
-                    WORD "Success"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Success"
+                      WORD "Success"
             FAT_ARROW "=>"
             PATH_EXPR "s.data"
               WORD "s"
@@ -405,14 +404,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let f"
-                  KW_LET "let"
-                  WORD "f"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "f"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Failure"
-                    WORD "Failure"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Failure"
+                      WORD "Failure"
             FAT_ARROW "=>"
             PATH_EXPR "f.reason"
               WORD "f"
@@ -445,14 +444,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let s"
-                  KW_LET "let"
-                  WORD "s"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "s"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Success"
-                    WORD "Success"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Success"
+                      WORD "Success"
             FAT_ARROW "=>"
             PATH_EXPR "s.data"
               WORD "s"
@@ -627,14 +626,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let n"
-                  KW_LET "let"
-                  WORD "n"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "n"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "int"
-                    WORD "int"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
             FAT_ARROW "=>"
             STRING_LITERAL "other"
               QUOTE """
@@ -667,13 +666,9 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                WILDCARD_PATTERN "_"
-                  WORD "_"
-                COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Success"
-                    WORD "Success"
+              TYPE_PATTERN
+                TYPE_EXPR "Success"
+                  WORD "Success"
             FAT_ARROW "=>"
             STRING_LITERAL "success"
               QUOTE """
@@ -682,18 +677,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                WILDCARD_PATTERN "_"
-                  WORD "_"
-                COLON ":"
-                UNION_PATTERN
-                  TYPE_PATTERN
-                    TYPE_EXPR "Success"
-                      WORD "Success"
-                  PIPE "|"
-                  TYPE_PATTERN
-                    TYPE_EXPR "Failure"
-                      WORD "Failure"
+              UNION_PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "Success"
+                    WORD "Success"
+                PIPE "|"
+                TYPE_PATTERN
+                  TYPE_EXPR "Failure"
+                    WORD "Failure"
             FAT_ARROW "=>"
             STRING_LITERAL "covers failure only (success already handled)"
               QUOTE """
@@ -733,14 +724,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let s"
-                  KW_LET "let"
-                  WORD "s"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "s"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Success"
-                    WORD "Success"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Success"
+                      WORD "Success"
             FAT_ARROW "=>"
             PATH_EXPR "s.data"
               WORD "s"
@@ -749,19 +740,19 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let x"
-                  KW_LET "let"
-                  WORD "x"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
                 COLON ":"
-                UNION_PATTERN
-                  TYPE_PATTERN
-                    TYPE_EXPR "Success"
-                      WORD "Success"
-                  PIPE "|"
-                  TYPE_PATTERN
-                    TYPE_EXPR "Failure"
-                      WORD "Failure"
+                PATTERN
+                  UNION_PATTERN
+                    TYPE_PATTERN
+                      TYPE_EXPR "Success"
+                        WORD "Success"
+                    PIPE "|"
+                    TYPE_PATTERN
+                      TYPE_EXPR "Failure"
+                        WORD "Failure"
             FAT_ARROW "=>"
             STRING_LITERAL "remaining"
               QUOTE """
@@ -794,19 +785,19 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let x"
-                  KW_LET "let"
-                  WORD "x"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
                 COLON ":"
-                UNION_PATTERN
-                  TYPE_PATTERN
-                    TYPE_EXPR "Success"
-                      WORD "Success"
-                  PIPE "|"
-                  TYPE_PATTERN
-                    TYPE_EXPR "Failure"
-                      WORD "Failure"
+                PATTERN
+                  UNION_PATTERN
+                    TYPE_PATTERN
+                      TYPE_EXPR "Success"
+                        WORD "Success"
+                    PIPE "|"
+                    TYPE_PATTERN
+                      TYPE_EXPR "Failure"
+                        WORD "Failure"
             FAT_ARROW "=>"
             STRING_LITERAL "covered"
               QUOTE """
@@ -858,19 +849,19 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let x"
-                  KW_LET "let"
-                  WORD "x"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
                 COLON ":"
-                UNION_PATTERN
-                  TYPE_PATTERN
-                    TYPE_EXPR "Success"
-                      WORD "Success"
-                  PIPE "|"
-                  TYPE_PATTERN
-                    TYPE_EXPR "Failure"
-                      WORD "Failure"
+                PATTERN
+                  UNION_PATTERN
+                    TYPE_PATTERN
+                      TYPE_EXPR "Success"
+                        WORD "Success"
+                    PIPE "|"
+                    TYPE_PATTERN
+                      TYPE_EXPR "Failure"
+                        WORD "Failure"
             FAT_ARROW "=>"
             STRING_LITERAL "success or failure"
               QUOTE """
@@ -881,13 +872,9 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                WILDCARD_PATTERN "_"
-                  WORD "_"
-                COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Pending"
-                    WORD "Pending"
+              TYPE_PATTERN
+                TYPE_EXPR "Pending"
+                  WORD "Pending"
             FAT_ARROW "=>"
             STRING_LITERAL "pending"
               QUOTE """
@@ -1509,14 +1496,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let n"
-                  KW_LET "let"
-                  WORD "n"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "n"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "int"
-                    WORD "int"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
             FAT_ARROW "=>"
             STRING_LITERAL "has value"
               QUOTE """
@@ -2094,14 +2081,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let s"
-                  KW_LET "let"
-                  WORD "s"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "s"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Success"
-                    WORD "Success"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Success"
+                      WORD "Success"
             FAT_ARROW "=>"
             PATH_EXPR "s.data"
               WORD "s"
@@ -2110,14 +2097,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let f"
-                  KW_LET "let"
-                  WORD "f"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "f"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Failure"
-                    WORD "Failure"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Failure"
+                      WORD "Failure"
             FAT_ARROW "=>"
             PATH_EXPR "f.reason"
               WORD "f"
@@ -2183,14 +2170,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let n"
-                  KW_LET "let"
-                  WORD "n"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "n"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "int"
-                    WORD "int"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
             MATCH_GUARD
               KW_IF "if"
               BINARY_EXPR "n > 0"
@@ -2955,14 +2942,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let s"
-                  KW_LET "let"
-                  WORD "s"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "s"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Success"
-                    WORD "Success"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Success"
+                      WORD "Success"
             FAT_ARROW "=>"
             PATH_EXPR "s.data"
               WORD "s"
@@ -2971,14 +2958,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let f"
-                  KW_LET "let"
-                  WORD "f"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "f"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Failure"
-                    WORD "Failure"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Failure"
+                      WORD "Failure"
             FAT_ARROW "=>"
             PATH_EXPR "f.reason"
               WORD "f"
@@ -3022,14 +3009,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let s"
-                  KW_LET "let"
-                  WORD "s"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "s"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Success"
-                    WORD "Success"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Success"
+                      WORD "Success"
             FAT_ARROW "=>"
             PATH_EXPR "s.data"
               WORD "s"
@@ -3038,14 +3025,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let f"
-                  KW_LET "let"
-                  WORD "f"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "f"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Failure"
-                    WORD "Failure"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Failure"
+                      WORD "Failure"
             FAT_ARROW "=>"
             PATH_EXPR "f.reason"
               WORD "f"
@@ -3078,14 +3065,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let s"
-                  KW_LET "let"
-                  WORD "s"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "s"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Success"
-                    WORD "Success"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Success"
+                      WORD "Success"
             FAT_ARROW "=>"
             PATH_EXPR "s.data"
               WORD "s"
@@ -3118,14 +3105,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let s"
-                  KW_LET "let"
-                  WORD "s"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "s"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Success"
-                    WORD "Success"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Success"
+                      WORD "Success"
             FAT_ARROW "=>"
             PATH_EXPR "s.data"
               WORD "s"
@@ -3134,14 +3121,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let f"
-                  KW_LET "let"
-                  WORD "f"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "f"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Failure"
-                    WORD "Failure"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Failure"
+                      WORD "Failure"
             FAT_ARROW "=>"
             PATH_EXPR "f.reason"
               WORD "f"
@@ -3174,14 +3161,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let x"
-                  KW_LET "let"
-                  WORD "x"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "string"
-                    WORD "string"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "string"
+                      WORD "string"
             FAT_ARROW "=>"
             STRING_LITERAL "any string"
               QUOTE """
@@ -3306,14 +3293,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let x"
-                  KW_LET "let"
-                  WORD "x"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Status"
-                    WORD "Status"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Status"
+                      WORD "Status"
             FAT_ARROW "=>"
             STRING_LITERAL "some status"
               QUOTE """
@@ -3494,14 +3481,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let s"
-                  KW_LET "let"
-                  WORD "s"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "s"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Success"
-                    WORD "Success"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Success"
+                      WORD "Success"
             FAT_ARROW "=>"
             PATH_EXPR "s.data"
               WORD "s"
@@ -3546,14 +3533,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let s"
-                  KW_LET "let"
-                  WORD "s"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "s"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Success"
-                    WORD "Success"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Success"
+                      WORD "Success"
             FAT_ARROW "=>"
             PATH_EXPR "s.data"
               WORD "s"
@@ -3622,14 +3609,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let x"
-                  KW_LET "let"
-                  WORD "x"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Status"
-                    WORD "Status"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Status"
+                      WORD "Status"
             FAT_ARROW "=>"
             STRING_LITERAL "any status"
               QUOTE """
@@ -3663,14 +3650,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let x"
-                  KW_LET "let"
-                  WORD "x"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Status"
-                    WORD "Status"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Status"
+                      WORD "Status"
             FAT_ARROW "=>"
             STRING_LITERAL "any status"
               QUOTE """
@@ -3792,19 +3779,19 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let x"
-                  KW_LET "let"
-                  WORD "x"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
                 COLON ":"
-                UNION_PATTERN
-                  TYPE_PATTERN
-                    TYPE_EXPR "Success"
-                      WORD "Success"
-                  PIPE "|"
-                  TYPE_PATTERN
-                    TYPE_EXPR "Failure"
-                      WORD "Failure"
+                PATTERN
+                  UNION_PATTERN
+                    TYPE_PATTERN
+                      TYPE_EXPR "Success"
+                        WORD "Success"
+                    PIPE "|"
+                    TYPE_PATTERN
+                      TYPE_EXPR "Failure"
+                        WORD "Failure"
             FAT_ARROW "=>"
             STRING_LITERAL "not pending"
               QUOTE """
@@ -3838,14 +3825,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let n"
-                  KW_LET "let"
-                  WORD "n"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "n"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "int"
-                    WORD "int"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
             FAT_ARROW "=>"
             STRING_LITERAL "int"
               QUOTE """
@@ -3889,14 +3876,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let x"
-                  KW_LET "let"
-                  WORD "x"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "bool"
-                    WORD "bool"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "bool"
+                      WORD "bool"
             FAT_ARROW "=>"
             STRING_LITERAL "any bool"
               QUOTE """
@@ -3941,36 +3928,36 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let s"
-                  KW_LET "let"
-                  WORD "s"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "s"
                 COLON ":"
-                UNION_PATTERN
-                  TYPE_PATTERN
-                    TYPE_EXPR "Success"
-                      WORD "Success"
-                  PIPE "|"
-                  PAREN_PATTERN
-                    L_PAREN "("
-                    PATTERN
-                      TYPE_PATTERN
-                        TYPE_EXPR "Failure"
-                          WORD "Failure"
-                    R_PAREN ")"
+                PATTERN
+                  UNION_PATTERN
+                    TYPE_PATTERN
+                      TYPE_EXPR "Success"
+                        WORD "Success"
+                    PIPE "|"
+                    PAREN_PATTERN
+                      L_PAREN "("
+                      PATTERN
+                        TYPE_PATTERN
+                          TYPE_EXPR "Failure"
+                            WORD "Failure"
+                      R_PAREN ")"
             FAT_ARROW "=>"
             INTEGER_LITERAL "0"
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let f"
-                  KW_LET "let"
-                  WORD "f"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "f"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Failure"
-                    WORD "Failure"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Failure"
+                      WORD "Failure"
             FAT_ARROW "=>"
             INTEGER_LITERAL "1"
           R_BRACE "}"
@@ -5002,14 +4989,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let i"
-                  KW_LET "let"
-                  WORD "i"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "i"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "int"
-                    WORD "int"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
             FAT_ARROW "=>"
             STRING_LITERAL "int"
               QUOTE """
@@ -5018,14 +5005,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let s"
-                  KW_LET "let"
-                  WORD "s"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "s"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "string"
-                    WORD "string"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "string"
+                      WORD "string"
             FAT_ARROW "=>"
             STRING_LITERAL "string"
               QUOTE """
@@ -5034,14 +5021,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let b"
-                  KW_LET "let"
-                  WORD "b"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "b"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "bool"
-                    WORD "bool"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "bool"
+                      WORD "bool"
             FAT_ARROW "=>"
             STRING_LITERAL "bool"
               QUOTE """
@@ -5050,14 +5037,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let f"
-                  KW_LET "let"
-                  WORD "f"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "f"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "float"
-                    WORD "float"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "float"
+                      WORD "float"
             FAT_ARROW "=>"
             STRING_LITERAL "float"
               QUOTE """
@@ -5132,14 +5119,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let c"
-                  KW_LET "let"
-                  WORD "c"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "c"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Cat"
-                    WORD "Cat"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Cat"
+                      WORD "Cat"
             FAT_ARROW "=>"
             STRING_LITERAL "cat"
               QUOTE """
@@ -5148,14 +5135,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let d"
-                  KW_LET "let"
-                  WORD "d"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "d"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Dog"
-                    WORD "Dog"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Dog"
+                      WORD "Dog"
             FAT_ARROW "=>"
             STRING_LITERAL "dog"
               QUOTE """
@@ -5164,14 +5151,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let b"
-                  KW_LET "let"
-                  WORD "b"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "b"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Bird"
-                    WORD "Bird"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Bird"
+                      WORD "Bird"
             FAT_ARROW "=>"
             STRING_LITERAL "bird"
               QUOTE """
@@ -5180,14 +5167,14 @@ SOURCE_FILE
             COMMA ","
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let f"
-                  KW_LET "let"
-                  WORD "f"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "f"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Fish"
-                    WORD "Fish"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Fish"
+                      WORD "Fish"
             FAT_ARROW "=>"
             STRING_LITERAL "fish"
               QUOTE """

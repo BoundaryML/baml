@@ -218,7 +218,7 @@ async fn lambdas_capture_match_and_catch_pattern_bindings() {
 
         function capture_catch_clause_binding() -> string {
             throw_string() catch (e) {
-                _: string => {
+                string => {
                     let f = () -> string { e }
                     f()
                 }
@@ -276,7 +276,7 @@ async fn match_and_catch_pattern_bindings_restore_outer_locals() {
         function catch_base_uses_outer_lambda() -> int {
             let e = () -> string { "base" }
             let caught = throw_string(e()) catch (e) {
-                _: string => e
+                string => e
             }
             match (caught) {
                 "base" => 3,
@@ -305,9 +305,9 @@ async fn multi_clause_catch_uses_clause_local_binding() {
 
         function main() -> int {
             fail() catch (first) {
-                _: string => 1
+                string => 1
             } catch (second) {
-                _: int => second
+                int => second
             }
         }
     "#

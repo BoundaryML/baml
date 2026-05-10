@@ -89,11 +89,12 @@ function user.class_destructure_field_pattern_type_mismatch() -> int throws neve
       _ =>
         0 : 0
   }
+  !! 2739..2746: type mismatch: expected int, got string
   !! 2768..2769: unreachable arm
 }
 function user.class_destructure_invalid_chain_type() -> int throws never {
   { : int
-    let Person { age: age }: Address = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person -> never
+    let Person { age: age } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     age : int
   }
 }
@@ -103,7 +104,7 @@ function user.generic_class_type_pattern_requires_type_args(boxed: user.Box<int>
       Box =>
         1 : 1
   }
-  !! 3090..3091: class `Box` expects 1 type argument(s), got 0
+  !! 3065..3077: type mismatch: expected user.Box<int>, got user.Box
 }
 function user.generic_class_type_pattern_in_chain_requires_type_args(boxed: user.Box<int>) -> int throws never {
   { : 1
@@ -111,20 +112,21 @@ function user.generic_class_type_pattern_in_chain_requires_type_args(boxed: user
       value: Box =>
         1 : 1
   }
-  !! 3237..3238: class `Box` expects 1 type argument(s), got 0
+  !! 3201..3224: type mismatch: expected user.Box<int>, got user.Box
 }
 function user.generic_class_destructure_requires_type_args(boxed: user.Box<int>) -> int throws never {
   { : T
     let Box { value: value } = boxed : user.Box<int> -> user.Box
     value : T
   }
-  !! 3352..3357: generic class destructure `Box { ... }` must specify type arguments
-  !! 3363..3368: type mismatch: expected int, got T
+  !! 3318..3340: type mismatch: expected user.Box<int>, got user.Box
+  !! 3343..3348: generic class destructure `Box { ... }` must specify type arguments
+  !! 3354..3359: type mismatch: expected int, got T
 }
-function user.class_destructure_chain_middle_binding_aliases_value(boxed: user.Box<int>) -> int throws never {
+function user.class_destructure_box(boxed: user.Box<int>) -> int throws never {
   { : int
-    let Box<int> { value: value }: alias = boxed : user.Box<int>
-    value + alias.value : int
+    let Box<int> { value: value } = boxed : user.Box<int>
+    value : int
   }
 }
 class user.OptionalPerson {
@@ -135,7 +137,7 @@ function user.let_top_level_class_narrows_union_scrutinee_is_refutable(v: user.P
     let Person { age: age } = v : user.Person | int -> user.Person
     age : int
   }
-  !! 3841..3864: refutable pattern in let binding; refutable patterns belong in `match`
+  !! 3776..3799: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.for_top_level_class_narrows_union_element_is_refutable() -> int throws never {
   { : 1
@@ -145,28 +147,28 @@ function user.for_top_level_class_narrows_union_element_is_refutable() -> int th
       }
     1 : 1
   }
-  !! 3965..3983: refutable pattern in for-let binding; refutable patterns belong in `match`
+  !! 3900..3918: refutable pattern in for-let binding; refutable patterns belong in `match`
 }
 function user.let_class_field_type_narrower_than_field_is_refutable() -> int throws never {
   { : 1
     let Person { flexible_age: int } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     1 : 1
   }
-  !! 4182..4219: refutable pattern in let binding; refutable patterns belong in `match`
+  !! 4117..4154: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.let_class_field_literal_narrower_than_field_is_refutable() -> int throws never {
   { : 1
     let Person { age: 1 } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     1 : 1
   }
-  !! 4400..4426: refutable pattern in let binding; refutable patterns belong in `match`
+  !! 4335..4361: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.nested_class_field_type_narrower_than_field_is_refutable() -> int throws never {
   { : 1
     let Person { address: Address { zip: 1 } } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     1 : 1
   }
-  !! 4607..4666: refutable pattern in let binding; refutable patterns belong in `match`
+  !! 4542..4601: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.for_class_field_type_narrower_than_field_is_refutable() -> int throws never {
   { : 1
@@ -176,13 +178,14 @@ function user.for_class_field_type_narrower_than_field_is_refutable() -> int thr
       }
     1 : 1
   }
-  !! 4854..4886: refutable pattern in for-let binding; refutable patterns belong in `match`
+  !! 4789..4821: refutable pattern in for-let binding; refutable patterns belong in `match`
 }
 function user.let_optional_class_field_narrower_than_field_is_refutable() -> int throws never {
   { : 1
     let OptionalPerson { age: int } = OptionalPerson { age: 1 } : user.OptionalPerson
     1 : 1
   }
+  !! 5011..5047: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.let_generic_class_field_type_narrower_than_substituted_field_is_refutable() -> int throws never {
   { : 1
@@ -190,6 +193,7 @@ function user.let_generic_class_field_type_narrower_than_substituted_field_is_re
     let Box<string> { value: int } = boxed : user.Box<string>
     1 : 1
   }
+  !! 5261..5265: type mismatch: expected string, got int
 }
 class user.Admin {
   age: string
@@ -207,7 +211,7 @@ function user.class_destructure_or_pattern_same_binding_conflicting_types(v: use
       Person { age: age } | Admin { age: age } =>
         1 : 1
   }
-  !! 5850..5854: Or-pattern alternatives bind `age` with conflicting types: `int` vs `string`
+  !! 5785..5789: Or-pattern alternatives bind `age` with conflicting types: `int` vs `string`
 }
 function user.generic_class_destructure_or_pattern_same_binding_conflicting_types(v: user.Box<int> | user.Box<string>) -> int throws never {
   { : 1
@@ -215,7 +219,7 @@ function user.generic_class_destructure_or_pattern_same_binding_conflicting_type
       Box<int> { value: value } | Box<string> { value: value } =>
         1 : 1
   }
-  !! 6060..6070: Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
+  !! 5995..6005: Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
 }
 function user.nested_generic_class_destructure_duplicate_binding_name() -> int throws never {
   { : 0
@@ -232,14 +236,15 @@ function user.nested_class_destructure_field_pattern_type_mismatch() -> int thro
       _ =>
         0 : 0
   }
-  !! 6590..6591: unreachable arm
+  !! 6494..6501: type mismatch: expected int, got string
+  !! 6525..6526: unreachable arm
 }
 function user.class_destructure_unknown_renamed_field_span() -> int throws never {
   { : unknown
     let Person { missing: renamed } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     renamed : unknown
   }
-  !! 6817..6824: unresolved name: renamed
+  !! 6752..6759: unresolved name: renamed
 }
 function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int throws never {
   { : int
@@ -251,21 +256,16 @@ function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int
         }
     f(Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) : int
   }
+  !! 6916..6923: type mismatch: expected int, got string
 }
 lambda user.lambda_class_destructure_field_pattern_type_mismatch_span {
+  !! 6928..6929: type mismatch: expected int, got string
 }
 function user.class_destructure_formatter_trivia_preserved() -> int throws never {
   { : int
     let input = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     let Person { age: years, address: Address { zip: zip } } = input : user.Person
     years + zip : int
-  }
-}
-function user.class_destructure_formatter_deep_chain_trivia() -> int throws never {
-  { : int
-    let input = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
-    let Person { address: addr_alias: Address { zip: zip_alias }: Address } = input : user.Person
-    zip_alias : int
   }
 }
 function user.class_destructure_formatter_empty_and_trailing_comma_trivia() -> int throws never {

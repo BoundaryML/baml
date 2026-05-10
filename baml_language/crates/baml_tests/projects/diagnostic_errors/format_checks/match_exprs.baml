@@ -366,17 +366,6 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
         _ => "other"
     }
 
-    // ===== Trivia inside chain narrows (block comments around `:`) =====
-    match (x) {
-        let /* a leading */ n /* b name trailing */
-        : /* c colon trailing */
-        /* d link2 leading */
-        int /* e link2 trailing */
-        : /* f colon2 trailing */
-        /* g link3 leading */
-        int | string /* h link3 trailing */ => n + 1
-    }
-
     // ===== Trivia between Or-pattern alternatives (block comments around `|`) =====
     match (x) {
         /* 1 arm leading */
@@ -385,29 +374,6 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
         /* 5 second leading */
         (let /* 6a paren leading */ x /* 6b name trailing */ : /* 6c colon trailing */ int) /* 7 last trailing */
         => x
-    }
-
-    // ===== Multi-link chain in arm with comments at every join =====
-    match (x) {
-        let n /* before colon-1 */ : /* after colon-1 */ 1 /* between */
-        : /* before colon-2 */ int /* before colon-3 */
-        : /* after colon-3 */ int | string /* end */ => 0
-    }
-
-    // ===== Nested Or wrapping a chain, with trivia at boundaries =====
-    match (x) {
-        (
-            /* outer paren leading */
-            (let /* inner1 leading */ x /* inner1 name */ : /* inner1 colon */ int)
-            | /* between branches */
-            (let /* inner2 leading */ x /* inner2 name */ : /* inner2 colon */ int)
-            /* outer paren trailing */
-        ) => x
-    }
-
-    // ===== Wildcard chain narrow with trivia =====
-    match (x) {
-        _ /* underscore trailing */ : /* colon trailing */ int /* type trailing */ => 0
     }
 
     // ===== Bare type union arm with trivia between members =====
@@ -452,34 +418,5 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Nested Or-of-Or with trivia at outer and inner pipes =====
     match (x) {
         (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0
-    }
-}
-
-function ArrayPatternTrivia(xs: int[][], v: ArrayPatternTriviaBox | int[][]) -> int {
-    // ===== Trivia in nested array patterns =====
-    match (xs) {
-        [ // outer open trailing
-            /* first elem leading */
-            [ /* inner open trailing */ .. /* rest marker trailing */ let first /* first trailing */ ] /* inner close leading */
-            : /* type colon trailing */ int[] /* typed inner trailing */,
-            // rest element leading
-            .. /* outer rest marker trailing */ let rest /* outer rest trailing */,
-            /* outer close leading */
-        ] => first.length(),
-        _ => 0
-    }
-
-    // ===== Trivia in mixed array/class Or-patterns =====
-    match (v) {
-        ArrayPatternTriviaBox {
-            values: /* class field colon trailing */ let x /* class binding trailing */
-        } /* class alt trailing */
-        | /* pipe trailing */
-        [ /* array alt open trailing */
-            [..let x] /* inner array trailing */ : /* inner type colon trailing */ int[],
-            .._ /* ignored rest trailing */,
-            /* array alt close leading */
-        ] => x.length(),
-        _ => 0
     }
 }

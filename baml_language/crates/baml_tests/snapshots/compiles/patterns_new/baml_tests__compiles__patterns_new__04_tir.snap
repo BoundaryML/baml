@@ -27,13 +27,6 @@ function user.chain_narrow_then_wildcard(v: int | string | bool) -> int throws n
         0 : 0
   }
 }
-function user.multi_narrow_chain(v: int) -> int throws never {
-  { : int
-    match (v : int) : int
-      n: int: int =>
-        n : int
-  }
-}
 function user.bare_type_arm(v: int | string) -> int throws never {
   { : 1 | 2
     match (v : int | string) : 1 | 2
@@ -55,23 +48,23 @@ function user.dispatch_callback(cb: (int) -> int throws never | (string) -> stri
     match (cb : (int) -> int throws never | (string) -> string throws never) : int | 0
       f: (int) -> int =>
         f(0) : int
-      _: (string) -> string =>
+      (string) -> string =>
         0 : 0
   }
 }
 function user.call_either_int_caller(cb: (int) -> int throws never | (bool) -> int throws never) -> int throws never {
   { : 1 | 2
     match (cb : (int) -> int throws never | (bool) -> int throws never) : 1 | 2
-      _: (int) -> int =>
+      (int) -> int =>
         1 : 1
-      _: (bool) -> int =>
+      (bool) -> int =>
         2 : 2
   }
 }
 function user.dispatch_with_wildcard(cb: (int) -> int throws never | (string) -> int throws never) -> int throws never {
   { : 1 | 0
     match (cb : (int) -> int throws never | (string) -> int throws never) : 1 | 0
-      _: (int) -> int =>
+      (int) -> int =>
         1 : 1
       _ =>
         0 : 0
@@ -117,31 +110,16 @@ lambda user.call_with_callback {
 lambda user.call_with_callback {
 }
 function user.literal_widens_to_int(v: int) -> int throws never {
-  { : 1
-    match (v : int) : 1
-      n: 1: int =>
-        n : 1
-  }
-  !! 4068..4118: non-exhaustive match on `int`; missing: _
-}
-function user.int_widens_to_optional(v: int?) -> int? throws never {
   { : int
-    match (v : int?) : int
-      n: int: int? =>
+    match (v : int) : int
+      n: int =>
         n : int
-  }
-}
-function user.int_widens_to_union(v: int | string) -> int throws never {
-  { : 1
-    match (v : int | string) : 1
-      n: int: int | string =>
-        1 : 1
   }
 }
 function user.fn_return_widens(cb: (int) -> int | string throws never) -> int throws never {
   { : 1
     match (cb : (int) -> int | string throws __effect_param_0) : 1
-      _: (int) -> int: (int) -> int | string =>
+      (int) -> int | string =>
         1 : 1
   }
 }
@@ -149,29 +127,8 @@ type user.Number = int | float
 function user.int_widens_to_alias(v: user.Number) -> int throws never {
   { : 1
     match (v : user.Number) : 1
-      n: int: Number =>
+      n: Number =>
         1 : 1
-  }
-}
-function user.paren_atom_outer_chain(v: int) -> int throws never {
-  { : int
-    match (v : int) : int
-      x: int =>
-        x : int
-  }
-}
-function user.paren_union_outer_chain(v: int) -> int throws never {
-  { : int
-    match (v : int) : int
-      x | x: int =>
-        x : int
-  }
-}
-function user.deeply_parenthesized_binding(v: int) -> int throws never {
-  { : int
-    match (v : int) : int
-      x: int =>
-        x : int
   }
 }
 function user.paren_chains_in_or(v: int) -> int throws never {
@@ -181,10 +138,10 @@ function user.paren_chains_in_or(v: int) -> int throws never {
         1 : 1
   }
 }
-function user.paren_fn_pattern_with_chain(cb: (int) -> int throws never) -> int throws never {
+function user.fn_pattern(cb: (int) -> int throws never) -> int throws never {
   { : int
     match (cb : (int) -> int throws __effect_param_0) : int
-      f: (int) -> int: (int) -> int =>
+      f: (int) -> int =>
         f(0) : int
   }
 }
@@ -198,10 +155,10 @@ function user.for_let_with_narrow(items: int[]) -> int throws never {
     sum : int
   }
 }
-function user.for_let_chain_widening(items: int[]) -> int throws never {
+function user.for_let_ascription(items: int[]) -> int throws never {
   { : int
     let sum = 0 : 0 -> int
-    for n: int: int | string in items
+    for n: int | string in items
       { : void
         sum Add= 1 : int
       }
@@ -216,16 +173,6 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int thr
         total Add= f(0) : int
       }
     total : int
-  }
-}
-function user.for_let_multi_chain(items: (int | string | bool)[]) -> int throws never {
-  { : int
-    let count = 0 : 0 -> int
-    for v: int: int | string | bool in items
-      { : void
-        count Add= 1 : int
-      }
-    count : int
   }
 }
 class user.AppError {
@@ -252,7 +199,7 @@ function user.catch_paren_or_chain(mode: int) -> int throws never {
   { : int | 1
     catch (risky_error(mode) : int) : unknown
       catch (e)
-        _: AppError | _: string =>
+        AppError | string =>
           1 : 1
   }
 }
@@ -265,71 +212,6 @@ function user.catch_widening_chain(mode: int) -> int throws never {
         app: AppError =>
           2 : 2
   }
-}
-function user.let_literal_to_primitive() -> int throws never {
-  { : 1
-    let x: 1: int = 1 : 1
-    x : 1
-  }
-  !! 8410..8428: refutable pattern in let binding; refutable patterns belong in `match`
-}
-function user.let_three_step_widen() -> int throws never {
-  { : 1
-    let x: 1: int: int | string = 1 : 1
-    1 : 1
-  }
-  !! 8537..8569: refutable pattern in let binding; refutable patterns belong in `match`
-}
-function user.let_four_step_widen() -> int throws never {
-  { : 1
-    let x: 1: int: int | string: int | string | float = 1 : 1
-    1 : 1
-  }
-  !! 8690..8744: refutable pattern in let binding; refutable patterns belong in `match`
-}
-function user.let_widen_to_nullable_union() -> int throws never {
-  { : 1
-    let x: int: int?: int | string | null = 1 : 1 -> int
-    1 : 1
-  }
-}
-function user.let_string_literal_widening() -> int throws never {
-  { : 1
-    let s: "hello": string: string | int = "hello" : "hello"
-    1 : 1
-  }
-  !! 9060..9101: refutable pattern in let binding; refutable patterns belong in `match`
-}
-function user.let_fn_return_widen() -> int | string throws never {
-  { : int
-    let f: (int) -> int: (int) -> int | string = : (x: int) -> int throws never -> (int) -> int throws never
-      (x: int) -> int { ... } : (x: int) -> int throws never
-        {
-          x
-        }
-    f(0) : int
-  }
-}
-lambda user.let_fn_return_widen {
-}
-function user.let_list_widen(items: int[]) -> int throws never {
-  { : int
-    let xs: int[]: (int | string)[] = items : int[]
-    xs.length() : int
-  }
-}
-function user.let_wildcard_chain() -> int throws never {
-  { : 1
-    let _: int: int | string = 1 : 1 -> int
-    1 : 1
-  }
-}
-function user.let_literal_to_nullable() -> int throws never {
-  { : 1
-    let x: 0: int: int? = 0 : 0
-    1 : 1
-  }
-  !! 10028..10052: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.nested_paren_union_array_one(items: (int | string)[]) -> int throws never {
   { : int
@@ -349,32 +231,15 @@ function user.nested_paren_union_array_three(v: (int | string)[][]) -> int throw
 function user.nested_paren_union_array_optional(v: (int | string)[]?) -> int throws never {
   { : 1
     match (v : (int | string)[]?) : 1
-      _: (int | string)[]? =>
+      (int | string)[]? =>
         1 : 1
-  }
-}
-function user.let_nested_paren_union_chain(items: (int | string)[]) -> int throws never {
-  { : 1
-    let xs: (int | string)[]: (int | string)[]? = items : (int | string)[]
-    1 : 1
   }
 }
 function user.match_nested_paren_union(v: (int | string)[]) -> int throws never {
   { : 1
     match (v : (int | string)[]) : 1
-      _: (int | string)[] =>
+      (int | string)[] =>
         1 : 1
-  }
-}
-type user.AliasA = int | string
-type user.AliasB = string | bool
-function user.alias_intersection_in_match_arm(v: user.AliasA) -> int throws never {
-  { : int | 0
-    match (v : user.AliasA) : int | 0
-      s: AliasB =>
-        s.length() : int
-      _ =>
-        0 : 0
   }
 }
 class user.PatternBucket {
@@ -383,30 +248,10 @@ class user.PatternBucket {
 class user.PatternMatrix {
   rows: int[][]
 }
-function user.mixed_suffix_class_or_prefix_array_binding(v: user.PatternBucket[] | int[][]) -> int throws never {
-  { : int | 0
-    match (v : user.PatternBucket[] | int[][]) : int | 0
-      [.._, PatternBucket { values: x }] | [[..x]: int[], .._] =>
-        x.length() : int
-      _ =>
-        0 : 0
-  }
-}
-function user.mixed_nested_array_class_binding(v: user.PatternMatrix | user.PatternBucket[][]) -> int throws never {
-  { : int | 0
-    match (v : user.PatternMatrix | user.PatternBucket[][]) : int | 0
-      PatternMatrix { rows: [[..x]: int[]] } | [[PatternBucket { values: x }]] =>
-        x.length() : int
-      _ =>
-        0 : 0
-  }
-}
 type user.Number$stream = int | float
 class user.AppError$stream {
   code: null | int
 }
-type user.AliasA$stream = int | string
-type user.AliasB$stream = string | bool
 class user.PatternBucket$stream {
   values: int[]
 }

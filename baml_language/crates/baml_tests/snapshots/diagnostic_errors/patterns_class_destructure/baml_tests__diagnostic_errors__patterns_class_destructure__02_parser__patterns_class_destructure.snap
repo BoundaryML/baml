@@ -328,17 +328,17 @@ SOURCE_FILE
                 WORD "field"
                 COLON ":"
                 PATTERN
-                  CHAIN_PATTERN
-                    BINDING_PATTERN "let field"
-                      KW_LET "let"
-                      WORD "field"
+                  BINDING_PATTERN
+                    KW_LET "let"
+                    WORD "field"
                     COLON ":"
-                    DESTRUCTURE_PATTERN
-                      WORD "SameNameInner"
-                      L_BRACE "{"
-                      FIELD_PATTERN "field"
-                        WORD "field"
-                      R_BRACE "}"
+                    PATTERN
+                      DESTRUCTURE_PATTERN
+                        WORD "SameNameInner"
+                        L_BRACE "{"
+                        FIELD_PATTERN "field"
+                          WORD "field"
+                        R_BRACE "}"
               R_BRACE "}"
           EQUALS "="
           OBJECT_LITERAL
@@ -691,18 +691,13 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              DESTRUCTURE_PATTERN
-                KW_LET "let"
-                WORD "Person"
-                L_BRACE "{"
-                FIELD_PATTERN "age"
-                  WORD "age"
-                R_BRACE "}"
-              COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "Address"
-                  WORD "Address"
+            DESTRUCTURE_PATTERN
+              KW_LET "let"
+              WORD "Person"
+              L_BRACE "{"
+              FIELD_PATTERN "age"
+                WORD "age"
+              R_BRACE "}"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Person"
@@ -799,14 +794,14 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              CHAIN_PATTERN
-                BINDING_PATTERN "let value"
-                  KW_LET "let"
-                  WORD "value"
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "value"
                 COLON ":"
-                TYPE_PATTERN
-                  TYPE_EXPR "Box"
-                    WORD "Box"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "Box"
+                      WORD "Box"
             FAT_ARROW "=>"
             INTEGER_LITERAL "1"
           R_BRACE "}"
@@ -849,7 +844,7 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "class_destructure_chain_middle_binding_aliases_value"
+    WORD "class_destructure_box"
     PARAMETER_LIST
       L_PAREN "("
       PARAMETER
@@ -871,33 +866,22 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              DESTRUCTURE_PATTERN
-                KW_LET "let"
-                WORD "Box"
-                GENERIC_ARGS
-                  LESS "<"
-                  TYPE_EXPR "int"
-                    WORD "int"
-                  GREATER ">"
-                L_BRACE "{"
-                FIELD_PATTERN "value"
-                  WORD "value"
-                R_BRACE "}"
-              COLON ":"
-              BINDING_PATTERN "let alias"
-                KW_LET "let"
-                WORD "alias"
+            DESTRUCTURE_PATTERN
+              KW_LET "let"
+              WORD "Box"
+              GENERIC_ARGS
+                LESS "<"
+                TYPE_EXPR "int"
+                  WORD "int"
+                GREATER ">"
+              L_BRACE "{"
+              FIELD_PATTERN "value"
+                WORD "value"
+              R_BRACE "}"
           EQUALS "="
           WORD "boxed"
           SEMICOLON ";"
-        BINARY_EXPR
-          WORD "value"
-          PLUS "+"
-          PATH_EXPR "alias.value"
-            WORD "alias"
-            DOT "."
-            WORD "value"
+        WORD "value"
         R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -1300,19 +1284,19 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let boxed"
-                KW_LET "let"
-                WORD "boxed"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "boxed"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "Box"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "string"
-                      WORD "string"
-                    GREATER ">"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    WORD "Box"
+                    TYPE_ARGS
+                      LESS "<"
+                      TYPE_EXPR "string"
+                        WORD "string"
+                      GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Box"
@@ -1535,19 +1519,19 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let boxed"
-                KW_LET "let"
-                WORD "boxed"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "boxed"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  WORD "Box"
-                  TYPE_ARGS
-                    LESS "<"
-                    TYPE_EXPR "SameNameInner"
-                      WORD "SameNameInner"
-                    GREATER ">"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    WORD "Box"
+                    TYPE_ARGS
+                      LESS "<"
+                      TYPE_EXPR "SameNameInner"
+                        WORD "SameNameInner"
+                      GREATER ">"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Box"
@@ -1580,22 +1564,22 @@ SOURCE_FILE
                 WORD "value"
                 COLON ":"
                 PATTERN
-                  CHAIN_PATTERN
-                    BINDING_PATTERN "let value"
-                      KW_LET "let"
-                      WORD "value"
+                  BINDING_PATTERN
+                    KW_LET "let"
+                    WORD "value"
                     COLON ":"
-                    DESTRUCTURE_PATTERN
-                      WORD "SameNameInner"
-                      L_BRACE "{"
-                      FIELD_PATTERN
-                        WORD "field"
-                        COLON ":"
-                        PATTERN
-                          BINDING_PATTERN "let value"
-                            KW_LET "let"
-                            WORD "value"
-                      R_BRACE "}"
+                    PATTERN
+                      DESTRUCTURE_PATTERN
+                        WORD "SameNameInner"
+                        L_BRACE "{"
+                        FIELD_PATTERN
+                          WORD "field"
+                          COLON ":"
+                          PATTERN
+                            BINDING_PATTERN "let value"
+                              KW_LET "let"
+                              WORD "value"
+                        R_BRACE "}"
               R_BRACE "}"
           EQUALS "="
           WORD "boxed"
@@ -1745,21 +1729,21 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let f"
-                KW_LET "let"
-                WORD "f"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "f"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR
-                  L_PAREN "("
-                  FUNCTION_TYPE_PARAM
-                    TYPE_EXPR "Person"
-                      WORD "Person"
-                  R_PAREN ")"
-                  ARROW "->"
-                  TYPE_EXPR "int"
-                    WORD "int"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR
+                    L_PAREN "("
+                    FUNCTION_TYPE_PARAM
+                      TYPE_EXPR "Person"
+                        WORD "Person"
+                    R_PAREN ")"
+                    ARROW "->"
+                    TYPE_EXPR "int"
+                      WORD "int"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -1902,87 +1886,6 @@ SOURCE_FILE
           WORD "years"
           PLUS "+"
           WORD "zip"
-        R_BRACE "}"
-  FUNCTION_DEF
-    KW_FUNCTION "function"
-    WORD "class_destructure_formatter_deep_chain_trivia"
-    PARAMETER_LIST "()"
-      L_PAREN "("
-      R_PAREN ")"
-    ARROW "->"
-    TYPE_EXPR "int"
-      WORD "int"
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR
-        L_BRACE "{"
-        LET_STMT
-          PATTERN
-            BINDING_PATTERN "let input"
-              KW_LET "let"
-              WORD "input"
-          EQUALS "="
-          OBJECT_LITERAL
-            WORD "Person"
-            L_BRACE "{"
-            OBJECT_FIELD "age: 1"
-              WORD "age"
-              COLON ":"
-              INTEGER_LITERAL "1"
-            COMMA ","
-            OBJECT_FIELD "flexible_age: 2"
-              WORD "flexible_age"
-              COLON ":"
-              INTEGER_LITERAL "2"
-            COMMA ","
-            OBJECT_FIELD
-              WORD "address"
-              COLON ":"
-              OBJECT_LITERAL
-                WORD "Address"
-                L_BRACE "{"
-                OBJECT_FIELD "zip: 3"
-                  WORD "zip"
-                  COLON ":"
-                  INTEGER_LITERAL "3"
-                R_BRACE "}"
-            R_BRACE "}"
-          SEMICOLON ";"
-        LET_STMT
-          PATTERN
-            DESTRUCTURE_PATTERN
-              KW_LET "let"
-              WORD "Person"
-              L_BRACE "{"
-              FIELD_PATTERN
-                WORD "address"
-                COLON ":"
-                PATTERN
-                  CHAIN_PATTERN
-                    BINDING_PATTERN "/* after outer colon */ let addr_alias"
-                      KW_LET "let"
-                      WORD "addr_alias"
-                    COLON ":"
-                    DESTRUCTURE_PATTERN
-                      WORD "Address"
-                      L_BRACE "{"
-                      FIELD_PATTERN
-                        WORD "zip"
-                        COLON ":"
-                        PATTERN
-                          BINDING_PATTERN "/* after zip colon */ let zip_alias"
-                            KW_LET "let"
-                            WORD "zip_alias"
-                      COMMA ","
-                      R_BRACE "}"
-                    COLON ":"
-                    TYPE_PATTERN
-                      TYPE_EXPR "/* after type chain colon */ Address"
-                        WORD "Address"
-              R_BRACE "}"
-          EQUALS "="
-          WORD "input"
-          SEMICOLON ";"
-        WORD "zip_alias"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"

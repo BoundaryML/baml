@@ -691,7 +691,7 @@ function baml.llm.Stream.next(self: baml.llm.Stream) -> unknown | baml.stream.St
       { : never
         let next = : string
           match (self._sse.next() : string?) : string
-            _: null =>
+            null =>
               { : never
                 return root.stream.StreamFinished {  } : baml.stream.StreamFinished
               }
@@ -706,7 +706,7 @@ function baml.llm.Stream.next(self: baml.llm.Stream) -> unknown | baml.stream.St
         let content = self._acc.content() : string
         let parsed: S | root.stream.StreamNoYield = __sap_parse_partial<S>(content, self._cache) : S | baml.stream.StreamNoYield
         match (parsed : S | baml.stream.StreamNoYield) : never
-          _: root.stream.StreamNoYield =>
+          root.stream.StreamNoYield =>
             { : never
               continue
             }
@@ -724,7 +724,7 @@ function baml.llm.Stream.final(self: baml.llm.Stream) -> unknown throws never {
       { : void
         let next = : string
           match (self._sse.next() : string?) : string
-            _: null =>
+            null =>
               { : never
                 break
               }
