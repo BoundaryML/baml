@@ -3346,7 +3346,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.restore_scoped_locals(&arm_snapshot);
                 // `restore_scoped_locals` rolls back `locals`, but
                 // `pattern_types` is global state that the per-arm
-                // `apply_pattern_result(clause.binding, ...)` mutated.
+                // `finalize_pattern_lowering(clause.binding, ...)` mutated.
                 // Without this re-insertion, MIR/LSP would see whichever arm
                 // ran last as the clause header binding's type, even though
                 // the clause-level binding outlives any single arm.
@@ -3700,84 +3700,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .map(PatternExpectedTy::into_ty)
                 })
                 .reduce(|a, b| Self::join_all(&[a, b])),
-        }
-    }
-
-    /// Natural type of a chain link for the chain widening check.
-    ///
-    /// Mirrors rust's pattern type semantic: every pattern has a most-
-    /// specific representative type, and chain widening enforces that
-    /// consecutive links go progressively wider. Unconstrained patterns
-    /// and empty arrays use `Never`-flavoured naturals so plain strict
-    /// subtype works without carve-outs:
-    ///
-    /// - `Bind` / `Wildcard` → `Never` (bottom; subtype of anything).
-    /// - `[..]` / `[]` (no element constraints) → `List<Never>`, so
-    ///   `[..]: int[]` is `List<Never> <: List<int>` ✓ via covariance.
-    /// - `[a, b, c]` → `List<join of element naturals>`.
-    /// - `Type(t)` → resolved `t`.
-    /// - `Class { … }` → `Class<args>`.
-    /// - `Or` → join of branch naturals.
-    /// - inner `Chain` → rightmost (widest) link's natural.
-    fn chain_widening_natural_type(&mut self, pat_id: PatId, body: &ExprBody) -> Ty {
-        match &body.patterns[pat_id].clone() {
-            ast::Pattern::Wildcard => Ty::Never {
-                attr: TyAttr::default(),
-            },
-            // `let x: <pattern>` — recurse into subpat for the natural
-            // type. `let x` (no subpat) is a pure binding → Never.
-            ast::Pattern::Bind { subpat, .. } => match subpat {
-                Some(sp) => self.chain_widening_natural_type(*sp, body),
-                None => Ty::Never {
-                    attr: TyAttr::default(),
-                },
-            },
-            ast::Pattern::Type(t) => self.resolve_type_expr_silent(t),
-            ast::Pattern::Class {
-                class,
-                generic_args,
-                ..
-            } => self.resolve_class_pattern_type(class, generic_args, None),
-            ast::Pattern::Array {
-                prefix,
-                rest,
-                suffix,
-                ascription,
-            } => {
-                // Ascription on the array as a whole wins.
-                if let Some(t) = ascription {
-                    return self.resolve_type_expr_silent(t);
-                }
-                let mut elem_tys: Vec<Ty> = prefix
-                    .iter()
-                    .chain(suffix.iter())
-                    .map(|&p| self.chain_widening_natural_type(p, body))
-                    .collect();
-                if let Some(rp) = rest
-                    && let Some(rest_pat) = rp.pat
-                    && let ast::Pattern::Array { .. } = &body.patterns[rest_pat]
-                {
-                    let nested = self.chain_widening_natural_type(rest_pat, body);
-                    if let Ty::List(inner, _) | Ty::EvolvingList(inner, _) = nested {
-                        elem_tys.push(*inner);
-                    }
-                }
-                let elem = if elem_tys.is_empty() {
-                    Ty::Never {
-                        attr: TyAttr::default(),
-                    }
-                } else {
-                    Self::join_all(&elem_tys)
-                };
-                Ty::List(Box::new(elem), TyAttr::default())
-            }
-            ast::Pattern::Or(parts) => {
-                let part_tys: Vec<Ty> = parts
-                    .iter()
-                    .map(|&p| self.chain_widening_natural_type(p, body))
-                    .collect();
-                Self::join_all(&part_tys)
-            }
         }
     }
 
@@ -7396,7 +7318,6 @@ impl TypeInferenceBuilder<'_> {
 // for now and gets deleted in a follow-up commit once call sites are
 // switched.
 
-#[allow(dead_code)]
 impl TypeInferenceBuilder<'_> {
     /// Recursively lower a source pattern to a [`PatternResult`].
     ///
@@ -7430,8 +7351,8 @@ impl TypeInferenceBuilder<'_> {
     /// unreachable arm with `matched_ty = Never`.
     ///
     /// Skipped during error-recovery / generics to avoid cascading
-    /// diagnostics. Bind/Wildcard patterns have natural type `Unknown`
-    /// (per `pattern_natural_type`), so they always pass.
+    /// diagnostics. Bind/Wildcard patterns get the `Never` unconstrained
+    /// natural here, so they trivially pass via `Never <: anything`.
     ///
     /// Match/let/for callers go through `analyze_and_lower` and get this
     /// check for free. Catch arms call `analyze_and_lower_no_subtype_check`
@@ -7447,7 +7368,16 @@ impl TypeInferenceBuilder<'_> {
         body: &ExprBody,
         at_expr: ExprId,
     ) {
-        let pat_natural = self.chain_widening_natural_type(pat_id, body);
+        // `Never` for unconstrained leaves (Wildcard / bare Bind / empty
+        // Array): plain strict subtype works without carve-outs because
+        // `Never <: anything`.
+        let pat_natural = self.pattern_natural_type(
+            pat_id,
+            body,
+            &Ty::Never {
+                attr: TyAttr::default(),
+            },
+        );
         let scrut_for_check = self.expand_alias_chains(scrut_ty.clone());
         if !Self::ty_contains_recovery_unknown(&pat_natural)
             && !Self::ty_contains_recovery_unknown(&scrut_for_check)
@@ -7585,7 +7515,13 @@ impl TypeInferenceBuilder<'_> {
         // sibling wildcard via the same `NonExhaustive`-vs-concrete-ctor
         // mechanism it uses for `int` literals.
         if matches!(scrut_ty, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. }) {
-            let natural = self.pattern_natural_type(pat_id, body);
+            let natural = self.pattern_natural_type(
+                pat_id,
+                body,
+                &Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+            );
             if !matches!(
                 natural,
                 Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. } | Ty::TypeVar(..)
@@ -7629,7 +7565,13 @@ impl TypeInferenceBuilder<'_> {
         if matches!(&body.patterns[pat_id], ast::Pattern::Or(_)) {
             return Vec::new();
         }
-        let natural = self.pattern_natural_type(pat_id, body);
+        let natural = self.pattern_natural_type(
+            pat_id,
+            body,
+            &Ty::Unknown {
+                attr: TyAttr::default(),
+            },
+        );
         // Pure `Unknown` natural type means a wildcard/bind: targets
         // every member, but the dispatcher prefers no-wrap in that case.
         if matches!(natural, Ty::Unknown { .. }) {
@@ -7772,30 +7714,33 @@ impl TypeInferenceBuilder<'_> {
     }
 
     /// The pattern's natural type — what it would match without a
-    /// surrounding scrutinee context. Used by the union dispatcher to
-    /// pick which members the pattern targets.
+    /// surrounding scrutinee context.
+    ///
+    /// `unconstrained` is the `Ty` substituted for leaves with no type
+    /// information (bare `Wildcard`, `Bind` without subpat, empty
+    /// `Array`):
+    /// - Pass `Ty::Unknown` (the "matches anything" sentinel) for the
+    ///   union dispatcher, where unconstrained patterns target every
+    ///   member.
+    /// - Pass `Ty::Never` (the bottom type) for the chain-widening and
+    ///   pattern-vs-scrut subtype checks, where unconstrained patterns
+    ///   should trivially widen / be a subtype of anything.
     ///
     /// Conventions:
-    /// - Wildcard / Bind without ascription ⇒ `Unknown` (matches anything)
     /// - `Type(t)` ⇒ resolved `t`
     /// - `Class { name, generic_args, .. }` ⇒ `Class<args>`, with
     ///   `Unknown` for any unspecified `T`
     /// - `Array { prefix, rest, suffix }` ⇒ `List<elem>` where `elem` is
-    ///   the join of each sub-position's natural type (Unknown if all
-    ///   unconstrained)
+    ///   the join of each sub-position's natural type (`unconstrained`
+    ///   if all unconstrained); `: T` ascription wins
     /// - `Or(parts)` ⇒ join of each part's natural type
-    /// - `Chain(parts)` ⇒ rightmost link's natural type (the widened type)
-    fn pattern_natural_type(&mut self, pat_id: PatId, body: &ExprBody) -> Ty {
+    fn pattern_natural_type(&mut self, pat_id: PatId, body: &ExprBody, unconstrained: &Ty) -> Ty {
         match &body.patterns[pat_id].clone() {
-            ast::Pattern::Wildcard => Ty::Unknown {
-                attr: TyAttr::default(),
-            },
-            // `let x` → Unknown; `let x: <pattern>` → recurse into subpat.
+            ast::Pattern::Wildcard => unconstrained.clone(),
+            // `let x` → unconstrained; `let x: <pattern>` → recurse.
             ast::Pattern::Bind { subpat, .. } => match subpat {
-                Some(sp) => self.pattern_natural_type(*sp, body),
-                None => Ty::Unknown {
-                    attr: TyAttr::default(),
-                },
+                Some(sp) => self.pattern_natural_type(*sp, body, unconstrained),
+                None => unconstrained.clone(),
             },
             ast::Pattern::Type(t) => self.resolve_type_expr_silent(t),
             ast::Pattern::Class {
@@ -7815,21 +7760,19 @@ impl TypeInferenceBuilder<'_> {
                 let mut elem_tys: Vec<Ty> = prefix
                     .iter()
                     .chain(suffix.iter())
-                    .map(|&p| self.pattern_natural_type(p, body))
+                    .map(|&p| self.pattern_natural_type(p, body, unconstrained))
                     .collect();
                 if let Some(rp) = rest
                     && let Some(rest_pat) = rp.pat
                     && let ast::Pattern::Array { .. } = &body.patterns[rest_pat]
                 {
-                    let rest_natural = self.pattern_natural_type(rest_pat, body);
+                    let rest_natural = self.pattern_natural_type(rest_pat, body, unconstrained);
                     if let Ty::List(inner, _) | Ty::EvolvingList(inner, _) = rest_natural {
                         elem_tys.push(*inner);
                     }
                 }
                 let elem = if elem_tys.is_empty() {
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
+                    unconstrained.clone()
                 } else {
                     Self::join_all(&elem_tys)
                 };
@@ -7838,7 +7781,7 @@ impl TypeInferenceBuilder<'_> {
             ast::Pattern::Or(parts) => {
                 let part_tys: Vec<Ty> = parts
                     .iter()
-                    .map(|&p| self.pattern_natural_type(p, body))
+                    .map(|&p| self.pattern_natural_type(p, body, unconstrained))
                     .collect();
                 Self::join_all(&part_tys)
             }
@@ -7883,66 +7826,6 @@ impl TypeInferenceBuilder<'_> {
         };
         self.pattern_types.insert(pat_id, result.matched_ty.clone());
         result
-    }
-
-    /// If this pattern targets a specific member of `union_members`,
-    /// return that member type. Otherwise (wildcard, bind without a
-    /// type, or pattern matching the whole union) return `None`.
-    ///
-    /// "Targets" = the pattern can only ever match values of one member
-    /// type. A `Class { ... }` pattern targets the matching class member;
-    /// an `[..]` array pattern targets the list member; a `Type(t)` pattern
-    /// where `t` is one member type targets that member; or-pattern parts
-    /// each get checked individually (via the recursive walk).
-    fn union_target_for_pattern(
-        &mut self,
-        pat_id: PatId,
-        body: &ExprBody,
-        union_members: &[Ty],
-    ) -> Option<Ty> {
-        match &body.patterns[pat_id].clone() {
-            ast::Pattern::Class {
-                class,
-                generic_args,
-                ..
-            } => {
-                let class_ty = self.resolve_class_pattern_type(class, generic_args, None);
-                if !matches!(class_ty, Ty::Class(..)) {
-                    return None;
-                }
-                self.find_matching_union_member(&class_ty, union_members)
-            }
-            ast::Pattern::Array { .. } => union_members
-                .iter()
-                .find(|m| {
-                    matches!(
-                        self.expand_alias_chains((*m).clone()),
-                        Ty::List(_, _) | Ty::EvolvingList(_, _)
-                    )
-                })
-                .cloned(),
-            ast::Pattern::Type(t) => {
-                let resolved = self.resolve_type_expr_silent(t);
-                self.find_matching_union_member(&resolved, union_members)
-            }
-            // Or-patterns are handled per-branch by the recursive walk:
-            // each branch goes through `analyze_and_lower` independently
-            // and gets its own UnionMember wrapping.
-            ast::Pattern::Or(_) => None,
-            // Wildcards and pure bindings target *every* member.
-            ast::Pattern::Wildcard | ast::Pattern::Bind { .. } => None,
-        }
-    }
-
-    /// Find a union member that `target` is assignable to. Used to map a
-    /// pattern's natural type to one of the union's member types.
-    fn find_matching_union_member(&self, target: &Ty, members: &[Ty]) -> Option<Ty> {
-        // Prefer an exact match (via ctor identity); fall back to subtype.
-        members
-            .iter()
-            .find(|m| self.is_subtype(target, m) && self.is_subtype(m, target))
-            .cloned()
-            .or_else(|| members.iter().find(|m| self.is_subtype(target, m)).cloned())
     }
 
     fn lower_wildcard_pat(scrut_ty: &Ty) -> crate::pattern_lowering::PatternResult {
@@ -8210,8 +8093,6 @@ impl TypeInferenceBuilder<'_> {
         }
     }
 
-    /// Class field NAMES in declaration order. Companion to
-    /// `class_field_types_ordered`.
     /// Render a [`crate::exhaustiveness::WitnessPat`] for the
     /// `non-exhaustive match` diagnostic. Mirrors `WitnessPat`'s `Display`
     /// impl but looks up class field names so witnesses like
@@ -8263,6 +8144,8 @@ impl TypeInferenceBuilder<'_> {
         }
     }
 
+    /// Class field NAMES in declaration order. Companion to
+    /// `class_field_types_ordered`.
     fn class_field_names_ordered(&self, qtn: &crate::ty::QualifiedTypeName) -> Vec<Name> {
         let Some(items) = self.resolve_class_pkg_items(qtn.package()) else {
             return Vec::new();
@@ -8534,122 +8417,6 @@ impl TypeInferenceBuilder<'_> {
             required_ty: required,
             matched_ty: matched,
             bindings,
-        }
-    }
-
-    fn lower_chain_pat(
-        &mut self,
-        parts: &[PatId],
-        scrut_ty: &Ty,
-        body: &ExprBody,
-        at_expr: ExprId,
-    ) -> crate::pattern_lowering::PatternResult {
-        use crate::{
-            exhaustiveness::DPat,
-            pattern_lowering::{PatternBinding, PatternResult},
-        };
-
-        // Thread `current_ty` left-to-right through chain parts. Each
-        // link is narrower than the next (chain = subtype chain), so the
-        // *leftmost* narrowing link is the most specific — that's what
-        // the matrix should match against. Bind/Wildcard parts only
-        // bind and contribute a wildcard DPat (no narrowing).
-        //
-        // Chain widening check: each consecutive pair of *narrowing* links
-        // must satisfy prev's natural type <: next's natural type. Bind/
-        // Wildcard contribute no narrowing — under strict subtype their
-        // natural type would be `Never` (bottom), so they always widen
-        // trivially; we just skip them in the consecutive-link check.
-        // Catches cases like `[..]: string` (`List<Never> <: string`?)
-        // and `[int, string, int]: int[]` (`List<int|string> <: List<int>`?).
-        //
-        // Bindings: we track *which* bindings come from chain alias links
-        // (Bind/Or-of-Bind parts) versus from structural sub-walks. Chain
-        // alias bindings get retyped to the final widened type (so
-        // `let x: int: float` types `x` at float). Bindings nested inside
-        // a structural part (e.g. `Inner { field: let inner_field }`)
-        // keep their natural sub-pattern types — `inner_field` stays at
-        // `int`, not the chain's widened type.
-        let mut current_ty = scrut_ty.clone();
-        let mut chain_bindings: Vec<PatternBinding> = Vec::new();
-        // Indices into `chain_bindings` of alias bindings that should be
-        // retyped to the final widened type at the end.
-        let mut alias_binding_indices: Vec<usize> = Vec::new();
-        // First narrowing DPat encountered (leftmost = most specific).
-        let mut narrowing_dpat: Option<DPat> = None;
-        let mut last_required: Option<Ty> = None;
-        let mut prev_widening_natural: Option<(PatId, Ty)> = None;
-
-        for &part in parts {
-            let is_alias_link = matches!(
-                &body.patterns[part],
-                ast::Pattern::Bind { .. } | ast::Pattern::Wildcard
-            );
-            let is_narrowing = matches!(
-                &body.patterns[part],
-                ast::Pattern::Type(_) | ast::Pattern::Class { .. } | ast::Pattern::Array { .. }
-            );
-
-            // Chain widening check between this part's natural type and
-            // the previous narrowing link's natural type. Skipped when
-            // either contains recovery-unknowns or typevars (mirrors the
-            // OLD `chain_constraints_compatible` carve-outs to avoid
-            // over-firing during error recovery / generic instantiation).
-            if is_narrowing {
-                let next_natural = self.chain_widening_natural_type(part, body);
-                if let Some((prev_pat, prev_natural)) = prev_widening_natural.as_ref()
-                    && !Self::ty_contains_recovery_unknown(prev_natural)
-                    && !Self::ty_contains_recovery_unknown(&next_natural)
-                    && !crate::generics::contains_typevar(prev_natural)
-                    && !crate::generics::contains_typevar(&next_natural)
-                    && !self.is_subtype(prev_natural, &next_natural)
-                {
-                    let err = TirTypeError::TypeMismatch {
-                        expected: next_natural.clone(),
-                        got: prev_natural.clone(),
-                    };
-                    if let Some(sm) = self.body_source_map.as_ref() {
-                        self.context.report_at_span(err, sm.pattern_span(*prev_pat));
-                    } else {
-                        self.context.report_simple(err, at_expr);
-                    }
-                }
-                prev_widening_natural = Some((part, next_natural));
-            }
-
-            let r = self.analyze_and_lower(part, &current_ty, body, at_expr);
-            // Update `current_ty` to the part's matched_ty, so subsequent
-            // parts narrow against the latest view of the value's type.
-            current_ty = r.matched_ty.clone();
-            let start = chain_bindings.len();
-            chain_bindings.extend(r.bindings);
-            if is_alias_link {
-                for i in start..chain_bindings.len() {
-                    alias_binding_indices.push(i);
-                }
-            }
-            // Track the most recent required_ty (rightmost = widest).
-            if r.required_ty.is_some() {
-                last_required.clone_from(&r.required_ty);
-            }
-            // Take the leftmost narrowing part's DPat as the chain's DPat.
-            if is_narrowing && narrowing_dpat.is_none() {
-                narrowing_dpat = Some(r.dpat);
-            }
-        }
-
-        // Retype only chain alias bindings to the final widened type.
-        for &i in &alias_binding_indices {
-            chain_bindings[i].ty = current_ty.clone();
-        }
-
-        let dpat = narrowing_dpat.unwrap_or_else(|| DPat::wildcard(scrut_ty.clone()));
-
-        PatternResult {
-            dpat,
-            required_ty: last_required,
-            matched_ty: current_ty,
-            bindings: chain_bindings,
         }
     }
 }

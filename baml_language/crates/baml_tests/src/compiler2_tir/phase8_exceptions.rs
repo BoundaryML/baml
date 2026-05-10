@@ -213,6 +213,29 @@ fn impossible_array_chain_match_arm_is_unreachable() {
     );
 }
 
+// `[]: int` ascribes a non-array type to an array pattern. The pattern's
+// natural shape is "an array", so the ascription must itself be an array
+// type — otherwise the pattern can never match any value of any scrut.
+#[test]
+fn array_pattern_with_non_array_ascription_is_rejected() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(xs: int[]) -> string {
+  return match (xs) {
+    []: int => "bad",
+    _ => "fallback"
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("type mismatch"),
+        "expected `[]: int` against int[] scrutinee to produce a type mismatch, got:\n{output}"
+    );
+}
+
 #[test]
 fn typed_pattern_without_widening_does_not_make_union_match_exhaustive() {
     let mut db = make_db();

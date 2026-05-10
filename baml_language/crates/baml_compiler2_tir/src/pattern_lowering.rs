@@ -1,7 +1,8 @@
 //! Source-pattern → `DPat` lowering.
 //!
 //! Bridges the AST `Pattern` HIR to the deconstructed-pattern algorithm in
-//! [`crate::exhaustiveness`]. This module owns:
+//! [`crate::exhaustiveness`]. This module owns the public per-pattern result
+//! types:
 //!
 //! - [`PatternResult`] — the per-pattern output: a `DPat` for the matrix,
 //!   the narrowed `matched_ty` for arm bodies, the upward-flowing
@@ -10,15 +11,10 @@
 //!
 //! - [`PatternBinding`] — a single name binding produced during the walk.
 //!
-//! - The pattern-lowering walk itself (added in a follow-up commit).
-//!
-//! The [`crate::exhaustiveness::PatCtx`] impl for
-//! [`crate::builder::TypeInferenceBuilder`] lives in `builder.rs` next to
-//! the type, matching Rust's "trait impl with the type" convention.
-//!
-//! Note: this module is being phased in alongside the existing `PatternFlow`
-//! system. Once all call sites are switched over, `PatternFlow` and the
-//! `analyze_pattern_*` family in `builder.rs` will be deleted.
+//! The pattern-lowering walk itself (`analyze_and_lower` and friends) and
+//! the [`crate::exhaustiveness::PatCtx`] impl for
+//! [`crate::builder::TypeInferenceBuilder`] both live in `builder.rs`,
+//! matching Rust's "trait impl with the type" convention.
 
 use baml_base::Name;
 use baml_compiler2_ast::PatId;
