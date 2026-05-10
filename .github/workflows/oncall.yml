@@ -3,8 +3,11 @@ name: oncall
 on:
   pull_request:
     paths:
+      - '.github/workflows/oncall.yml'
       - 'tools/bctl'
       - 'tools/bctl_src/**'
+      - 'tools/pyproject.toml'
+      - 'tools/uv.lock'
   schedule:
     - cron: '0 17 * * 5'
   workflow_dispatch:
