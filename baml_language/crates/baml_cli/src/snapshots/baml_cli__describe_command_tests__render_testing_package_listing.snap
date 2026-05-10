@@ -3,15 +3,15 @@ source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
 class            TestRegistration                 <builtin>/testing/registry.baml:5
-class            TestSetRegistration              <builtin>/testing/registry.baml:11
-class            TestCollector                    <builtin>/testing/registry.baml:17
-function         $invoke_collector                <builtin>/testing/registry.baml:60
-class            SerializedTest                   <builtin>/testing/registry.baml:66
-class            SerializedTestSet                <builtin>/testing/registry.baml:71
-type             SerializedTestDef                <builtin>/testing/registry.baml:77
-class            TestRegistry                     <builtin>/testing/registry.baml:81
-function         run_test                         <builtin>/testing/registry.baml:172
-function         run_testset                      <builtin>/testing/registry.baml:198
+class            TestSetRegistration              <builtin>/testing/registry.baml:17
+class            TestCollector                    <builtin>/testing/registry.baml:29
+function         $invoke_collector                <builtin>/testing/registry.baml:72
+class            SerializedTest                   <builtin>/testing/registry.baml:78
+class            SerializedTestSet                <builtin>/testing/registry.baml:83
+type             SerializedTestDef                <builtin>/testing/registry.baml:89
+class            TestRegistry                     <builtin>/testing/registry.baml:93
+function         run_test                         <builtin>/testing/registry.baml:184
+function         run_testset                      <builtin>/testing/registry.baml:210
 type             Outcome                          <builtin>/testing/types.baml:3
 class            RunReport                        <builtin>/testing/types.baml:5
 class            TestReport                       <builtin>/testing/types.baml:15

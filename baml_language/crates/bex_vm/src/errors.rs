@@ -26,6 +26,9 @@ pub enum VmPanic {
     #[error("unreachable code executed")]
     Unreachable,
 
+    #[error("operation cancelled")]
+    Cancelled,
+
     /// A user-caused panic from `baml.sys.panic`.
     #[error("baml.sys.panic: {message}")]
     UserPanic { message: String },
@@ -33,6 +36,12 @@ pub enum VmPanic {
     /// The graceful-ish way to handle potential OOM errors, instead of hard-crashing.
     #[error("memory allocation failed: {message}")]
     AllocFailure { message: String },
+
+    /// A required host resource is unavailable — e.g. the OS entropy source
+    /// returned an error in a sandboxed runtime. Catchable so user code can
+    /// fall back gracefully instead of aborting the host process.
+    #[error("host resource '{resource}' unavailable: {message}")]
+    HostUnavailable { resource: String, message: String },
 }
 
 /// An error value from the BAML standard library. Maps 1:1 to a `baml.errors.*` class.
@@ -40,6 +49,9 @@ pub enum VmPanic {
 pub enum VmBamlError {
     #[error("invalid argument: {message}")]
     InvalidArgument { message: String },
+
+    #[error("parse error: {message}")]
+    ParseError { message: String },
 
     #[error("I/O error: {message}")]
     Io { message: String },
@@ -132,6 +144,12 @@ pub enum VmInternalError {
 
     #[error("invalid compact opcode byte: {0}")]
     InvalidOpcode(u8),
+
+    /// `StoreGlobal` was executed outside of an `$init` function. Globals are
+    /// frozen post-`$init` (shared as `Arc<[Value]>` across VMs) and any
+    /// post-init `StoreGlobal` violates that invariant.
+    #[error("StoreGlobal executed outside of $init (globals are frozen post-init)")]
+    StoreGlobalAfterInit,
 }
 
 /// Any kind of virtual machine error.
@@ -169,6 +187,13 @@ pub enum VmRustFnError {
     BamlError(#[from] VmBamlError),
     #[error("{0}")]
     InternalError(#[from] VmInternalError),
+    /// A pre-built exception `Value` to throw directly as a catchable error.
+    ///
+    /// Used by native functions that need to throw user-defined class instances
+    /// (e.g. `baml.json.JsonParseError`) without going through the
+    /// `VmPanic` / `VmBamlError` enumeration machinery.
+    #[error("thrown value")]
+    Thrown(Value),
 }
 
 #[derive(Debug, Clone, PartialEq)]

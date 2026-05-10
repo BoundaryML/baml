@@ -23,6 +23,7 @@ use axum::{
     routing::get,
 };
 use base64::Engine as _;
+use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
 use futures::{SinkExt, stream::StreamExt};
 use prost::Message;
 use tokio::{net::TcpListener, sync::broadcast};
@@ -295,10 +296,7 @@ async fn handle_ws_in_message(
                         }
                     }
                     Err(e) => {
-                        let is_cancelled = matches!(
-                            &e,
-                            bex_project::RuntimeError::Engine(bex_project::EngineError::Cancelled)
-                        );
+                        let is_cancelled = is_cancelled_runtime_error(&e);
                         WsOutMessage::CallFunctionError {
                             id,
                             error: format!("{e}"),
@@ -356,7 +354,7 @@ async fn handle_ws_in_message(
                         }
                     }
                     Err(e) => {
-                        let is_cancelled = matches!(&e, bex_project::EngineError::Cancelled);
+                        let is_cancelled = is_cancelled_engine_error(&e);
                         WsOutMessage::CallFunctionError {
                             id,
                             error: format!("{e}"),

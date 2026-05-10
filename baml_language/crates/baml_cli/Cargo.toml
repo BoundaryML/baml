@@ -33,6 +33,7 @@ anyhow = { workspace = true }
 clap = { workspace = true, features = [ "color", "env" ] }
 clap-cargo = { workspace = true }
 ctrlc = { workspace = true }
+indexmap = { workspace = true }
 regex = { workspace = true }
 serde_json = { workspace = true }
 strsim = { workspace = true }

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { encodeCallArgs, decodeCallResult, serializeValue, deserializeValue } from '../index';
-import { CallFunctionArgs, BamlHandleType } from '../generated/baml/cffi/v1/baml_inbound';
-import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml/cffi/v1/baml_outbound';
+import { CallFunctionArgs, BamlHandleType } from '../generated/baml_core/cffi/v1/baml_inbound';
+import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml_core/cffi/v1/baml_outbound';
 
 describe('encodeCallArgs', () => {
   it('encodes an unsorted array as function kwargs', () => {
@@ -15,7 +15,9 @@ describe('encodeCallArgs', () => {
 
     const kwarg = decoded.kwargs[0];
     expect(kwarg.key?.$case).toBe('stringKey');
-    expect(kwarg.key?.stringKey).toBe('arr');
+    if (kwarg.key?.$case === 'stringKey') {
+      expect(kwarg.key.stringKey).toBe('arr');
+    }
 
     const val = kwarg.value;
     expect(val?.value?.$case).toBe('listValue');
@@ -139,7 +141,7 @@ describe('decodeCallResult', () => {
       value: {
         $case: 'classValue',
         classValue: {
-          name: { namespace: 1, name: 'Person' },
+          name: { name: 'Person', genericArgs: [] },
           fields: [
             {
               key: 'name',
@@ -166,7 +168,7 @@ describe('decodeCallResult', () => {
       value: {
         $case: 'enumValue',
         enumValue: {
-          name: { namespace: 1, name: 'Color' },
+          name: { name: 'Color', genericArgs: [] },
           value: 'RED',
           isDynamic: false,
         },
@@ -225,7 +227,7 @@ describe('decodeCallResult', () => {
       value: {
         $case: 'unionVariantValue',
         unionVariantValue: {
-          name: { namespace: 1, name: 'StringOrInt' },
+          name: { name: 'StringOrInt', genericArgs: [] },
           isOptional: false,
           isSinglePattern: false,
           selfType: undefined,
@@ -390,7 +392,7 @@ describe('structuredClone round-trip', () => {
       value: {
         $case: 'classValue',
         classValue: {
-          name: { namespace: 1, name: 'Person', genericArgs: [] },
+          name: { name: 'Person', genericArgs: [] },
           fields: [
             { key: 'name', value: { value: { $case: 'stringValue', stringValue: 'Alice' } } },
             { key: 'age', value: { value: { $case: 'intValue', intValue: 30 } } },
@@ -422,7 +424,7 @@ describe('structuredClone round-trip', () => {
       value: {
         $case: 'classValue',
         classValue: {
-          name: { namespace: 1, name: 'ComplexResult', genericArgs: [] },
+          name: { name: 'ComplexResult', genericArgs: [] },
           fields: [
             {
               key: 'items',

@@ -218,12 +218,12 @@ fn string_to_lower_case_returns_string() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
-        "function f(s: string) -> string { return s.toLowerCase(); }",
+        "function f(s: string) -> string { return s.to_lower_case(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(s: string) -> string throws never {
       { : never
-        return s.toLowerCase() : string
+        return s.to_lower_case() : string
       }
     }
     ");
@@ -680,6 +680,12 @@ function f(u: MaybeUser) -> string? {
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.User {
       name: string
+    }
+    function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
+    }
+    function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      User { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.User
     }
     type user.MaybeUser = user.User?
     function user.f(u: user.MaybeUser) -> string? throws never {

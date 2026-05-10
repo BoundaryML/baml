@@ -5012,6 +5012,7 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Class(c) => format!("<class {}>", c.name),
                 Object::Enum(e) => format!("<enum {}>", e.name),
                 Object::Future(_) => "<future>".to_string(),
+                Object::UnscheduledFuture(_) => "<unscheduled future>".to_string(),
                 Object::Collector(_) => "<collector>".to_string(),
                 Object::Type(ty) => format!("<type: {ty}>"),
                 Object::Closure(c) => format!("<closure captures={}>", c.captures.len()),

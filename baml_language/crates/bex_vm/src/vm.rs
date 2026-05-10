@@ -31,18 +31,22 @@ fn unlikely(b: bool) -> bool {
     b
 }
 
-use ::bex_vm_types::{EarlyYieldCheck, RootHaver, types::ErrorClass};
+use ::bex_heap::TlabHolder;
+use ::bex_vm_types::{
+    EarlyYieldCheck, RootHaver,
+    types::{ErrorClass, FutureId},
+};
 use ::core::any::TypeId;
 #[cfg(not(target_arch = "wasm32"))]
 use ::core::sync::atomic::AtomicBool;
-use bex_heap::{BexHeap, Generation, Tlab};
+use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
-    ObjectType, PanicClass, StackIndex, UnaryOp, Value, Variant,
+    BinOp, CmpOp, FunctionKind, FutureRead, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
+    ObjectType, PanicClass, StackIndex, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, BlockNotification},
     types::{
-        BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, Future, FutureType,
-        Instance, PendingFuture, Type,
+        BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, FutureType, Instance, Type,
+        UnscheduledFuture,
     },
 };
 use indexmap::IndexMap;
@@ -273,7 +277,13 @@ pub struct BexVm {
     /// Global variables.
     ///
     /// This stores the functions and globally declared variables.
-    pub globals: GlobalPool,
+    ///
+    /// During `$init`, this is `VmGlobals::Owned` so `StoreGlobal` can
+    /// populate top-level let bindings. After `$init` completes, the engine
+    /// freezes the pool into a shared `Arc<[Value]>` and every subsequent VM
+    /// is constructed with `VmGlobals::Shared`; `StoreGlobal` against the
+    /// shared view is a `VmInternalError`.
+    pub globals: VmGlobals,
 
     /// Resolved class names mapping fully-qualified class names to their heap pointers.
     ///
@@ -309,6 +319,21 @@ pub struct BexVm {
     /// Process argv passed to the engine at startup. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
     pub argv: Arc<[String]>,
+
+    /// Type-args of the *currently dispatching* call, populated by the
+    /// `Instruction::Call` handler from the leading `ntypeargs` `Object::Type`
+    /// stack slots before invoking the callee.
+    ///
+    /// For bytecode callees this is redundant (the type-args are written into
+    /// the new frame's `type_args` field by the Call writeback), but for native
+    /// callees it is the only channel — the native dispatch path does not push
+    /// a bytecode frame, so without this slot any leading type-args would be
+    /// silently dropped.
+    ///
+    /// Saved/restored across nested `Call` instructions; native handlers that
+    /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
+    /// even if the inner callback uses different ones.
+    pending_call_type_args: Vec<baml_type::Ty>,
 }
 
 /// VM execution state.
@@ -324,10 +349,21 @@ pub struct BexVm {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum VmExecState {
-    /// VM cannot proceed. It is awaiting a pending future to complete.
-    Await(HeapPtr),
+    /// Awaiting a pending future.
+    ///
+    /// - Input: a `FutureId` corresponding to a (probably) pending future
+    /// - Output (success): the future's result on top of the stack
+    /// - Output (failure): an exception/panic passed to the VM
+    /// - Output (internal error): engine error
+    Await(FutureId),
 
     /// VM notifies caller about a future that needs to be scheduled.
+    ///
+    /// - Input: a `HeapPtr` to the `UnscheduledFuture` object the VM allocated.
+    /// - Output: the engine pushes a `Future::Pending(future_id)` heap pointer
+    ///   onto the VM stack. Terminal transitions (`Ready`/`Error`/`Cancelled`/
+    ///   `InternalError`) happen later via the `FutureManager`; the VM only
+    ///   ever sees `Pending` directly after this yield.
     ///
     /// Bytecode execution continues when control flow is handled back to the
     /// VM.
@@ -519,6 +555,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::BoundMethod(_) => type_tags::FUNCTION,
                 Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
+                Object::UnscheduledFuture(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
                 Object::RustData(_) => type_tags::UNKNOWN,
                 Object::Collector(_) => type_tags::COLLECTOR,
@@ -545,7 +582,7 @@ impl BexVm {
     /// for contention-free allocation.
     pub fn new(
         heap: Arc<BexHeap>,
-        globals: GlobalPool,
+        globals: VmGlobals,
         resolved_class_names: HashMap<String, HeapPtr>,
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
@@ -593,7 +630,21 @@ impl BexVm {
             traced_frames: Vec::new(),
             current_span_context: None,
             argv,
+            pending_call_type_args: Vec::new(),
         }
+    }
+
+    /// Type-args of the currently dispatching call.
+    ///
+    /// Populated by `Instruction::Call` when the call carries `ntypeargs > 0`.
+    /// For BAML→BAML calls these are also written into the callee's frame; for
+    /// BAML→native calls this slot is the **only** channel, since native
+    /// dispatch does not push a bytecode frame.
+    ///
+    /// Returns an empty slice for calls with `ntypeargs == 0` and from outside
+    /// any call dispatch context.
+    pub fn current_call_type_args(&self) -> &[baml_type::Ty] {
+        &self.pending_call_type_args
     }
 
     /// Read an object from the heap via `HeapPtr`.
@@ -627,42 +678,6 @@ impl BexVm {
         );
         // SAFETY: We have &mut self, ensuring exclusive access to this VM's objects
         unsafe { ptr.get_mut() }
-    }
-
-    /// Write barrier for field/element/cell writes.
-    ///
-    /// Called *before* the actual field write at each mutation site. If `container_ptr`
-    /// is in an older generation than the object being written (`written_value`), the
-    /// card containing `container_ptr` is marked dirty so partial GC can discover
-    /// the cross-generation reference.
-    ///
-    /// This is a no-op when either side is not a heap object, or when the container
-    /// is in Gen0 (no card table for Gen0).
-    #[inline]
-    pub fn write_barrier(&self, container_ptr: HeapPtr, written_value: Value) {
-        if let Value::Object(ref_ptr) = written_value {
-            let container_gen = self.heap.generation_of(container_ptr);
-            let ref_gen = self.heap.generation_of(ref_ptr);
-            if container_gen > ref_gen {
-                self.heap.mark_card_for_ptr(container_ptr);
-            }
-        }
-    }
-
-    /// Conservative write barrier for mutable accessor paths (builtin dispatch).
-    ///
-    /// Unconditionally marks the card dirty if `container_ptr` is in an older
-    /// generation. Used by `as_array_mut` / `as_map_mut` where the actual written
-    /// value is not yet known (it's supplied by the callee trait method).
-    ///
-    /// This over-marks (any mutable access to an older-gen object dirties the card),
-    /// but it is always safe and the cost is negligible since most objects are Gen0.
-    #[inline]
-    pub(crate) fn conservative_write_barrier(&self, container_ptr: HeapPtr) {
-        let container_gen = self.heap.generation_of(container_ptr);
-        if container_gen > Generation::Gen0 {
-            self.heap.mark_card_for_ptr(container_ptr);
-        }
     }
 
     /// Collect all `HeapPtr`s stored in call frames.
@@ -787,7 +802,7 @@ impl BexVm {
         // array may introduce cross-generation references. Used by builtin dispatch
         // (Array.push, Array.pop, etc.) where the actual written values are not
         // visible at this call site.
-        self.conservative_write_barrier(ptr);
+        self.heap.conservative_write_barrier(ptr);
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(ptr), Object::Array(_)) {
             return Err(VmInternalError::TypeError {
@@ -823,7 +838,7 @@ impl BexVm {
         // Conservative write barrier: any mutable access to an older-generation
         // map may introduce cross-generation references. Used by builtin dispatch
         // (Map.set, etc.) where the actual written values are not visible here.
-        self.conservative_write_barrier(index);
+        self.heap.conservative_write_barrier(index);
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(index), Object::Map(_)) {
             return Err(VmInternalError::TypeError {
@@ -867,20 +882,35 @@ impl BexVm {
         // Create heap with compile-time objects
         let heap = BexHeap::new(compile_time_objects);
 
-        // Convert compile-time globals (ConstValue) to runtime globals (Value)
+        // Convert compile-time globals (ConstValue) to runtime globals (Value).
+        // The `from_program` constructor is test-only — we hand the VM an
+        // `Owned` view so that any `$init` bytecode the test happens to drive
+        // can write to globals.
         let globals_vec: Vec<Value> = bytecode
             .globals
             .into_iter()
             .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
             .collect();
-        let globals = GlobalPool::from_vec(globals_vec);
+        let globals = VmGlobals::Owned(bex_vm_types::GlobalPool::from_vec(globals_vec));
 
-        // Build resolved_class_names: convert ObjectIndex -> HeapPtr
-        let resolved_class_names: HashMap<String, HeapPtr> = bytecode
+        // Build resolved_class_names: convert ObjectIndex -> HeapPtr.
+        //
+        // Enum HeapPtrs are folded into the same map: BAML's type namespace is
+        // shared across classes and enums (a class and an enum cannot share an
+        // FQN), so callers that need name-based runtime lookup (e.g.
+        // `baml.json.from_string<Color>(...)`) can dispatch on the resulting
+        // `Object` kind.
+        let mut resolved_class_names: HashMap<String, HeapPtr> = bytecode
             .resolved_class_names
             .into_iter()
             .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw())))
             .collect();
+        resolved_class_names.extend(
+            bytecode
+                .resolved_enums_names
+                .into_iter()
+                .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw()))),
+        );
 
         Ok(Self::new(
             heap,
@@ -926,69 +956,21 @@ impl BexVm {
         self.frames.clear();
     }
 
-    /// Returns a reference to the pending future.
+    /// Returns a reference to the unscheduled future at `future_ptr`.
     ///
-    /// Returns [`VmInternalError::TypeError`] if the future is not pending, or not a future.
-    pub fn pending_future(&self, future_ptr: HeapPtr) -> Result<&PendingFuture, VmInternalError> {
+    /// Returns [`VmInternalError::TypeError`] if the heap object is not an
+    /// `Object::UnscheduledFuture`.
+    pub fn unscheduled_future(
+        &self,
+        future_ptr: HeapPtr,
+    ) -> Result<&UnscheduledFuture, VmInternalError> {
         match self.get_object(future_ptr) {
-            Object::Future(Future::Pending(future)) => Ok(future),
+            Object::UnscheduledFuture(future) => Ok(future),
             other => Err(VmInternalError::TypeError {
-                expected: FutureType::Pending.into(),
+                expected: Type::Object(ObjectType::UnscheduledFuture),
                 got: ObjectType::of(other).into(),
             }),
         }
-    }
-
-    /// Set a future to Ready state without modifying the stack.
-    ///
-    /// Use this for sync operations that complete during `ScheduleFuture` handling,
-    /// before the VM reaches the `Await` instruction. The `Await` instruction will
-    /// extract the value from the Ready future.
-    pub fn set_future_ready(
-        &mut self,
-        future_ptr: HeapPtr,
-        value: Value,
-    ) -> Result<(), VmInternalError> {
-        // Write barrier before mutating the future object.
-        self.write_barrier(future_ptr, value);
-
-        let Object::Future(future) = self.get_object_mut(future_ptr) else {
-            return Err(VmInternalError::TypeError {
-                expected: FutureType::Any.into(),
-                got: ObjectType::of(self.get_object(future_ptr)).into(),
-            });
-        };
-
-        *future = Future::Ready(value);
-        Ok(())
-    }
-
-    /// Fulfill a future and replace the stack top if the VM is awaiting it.
-    ///
-    /// Use this for async operations that complete while the VM is blocked at
-    /// an `Await` instruction. This replaces the future on the stack with the
-    /// ready value so execution can continue.
-    pub fn fulfil_future(
-        &mut self,
-        future_ptr: HeapPtr,
-        value: Value,
-    ) -> Result<(), VmInternalError> {
-        self.set_future_ready(future_ptr, value)?;
-
-        // At any given moment, the VM can only await a single future, because
-        // we can only call the AWAIT instruction on a future on top of the
-        // stack. If that future being await is fulfilled, we need to replace
-        // the future on the stack with the ready value so that the next
-        // instruction that the VM runs can use the value, not the future
-        // object.
-        if let Some(Value::Object(ptr)) = self.stack.last() {
-            if *ptr == future_ptr {
-                self.stack.pop();
-                self.stack.push(value);
-            }
-        }
-
-        Ok(())
     }
 
     /// Allocates an array on the heap and returns it to the caller.
@@ -1005,7 +987,7 @@ impl BexVm {
     }
 
     pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> Value {
-        Value::Object(self.tlab.alloc(Object::Uint8Array(data)))
+        Value::Object(self.tlab.alloc_uint8array(data))
     }
 
     /// TODO: Seems to low level for an embedder, provide an API that takes
@@ -1023,14 +1005,9 @@ impl BexVm {
         Value::Object(self.tlab.alloc(Object::Variant(Variant { enm, index })))
     }
 
-    /// Allocate a future object.
-    pub fn alloc_future(&mut self, future: Future) -> Value {
-        Value::Object(self.tlab.alloc(Object::Future(future)))
-    }
-
     /// Allocate a collector object on the heap.
     pub fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> Value {
-        Value::Object(self.tlab.alloc(Object::Collector(collector)))
+        Value::Object(self.tlab.alloc_collector(collector))
     }
 
     /// Get collector ref from a Value.
@@ -1053,7 +1030,7 @@ impl BexVm {
     ///
     /// Used by generated `copy::` structs for `$rust_type` fields.
     pub fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> Value {
-        Value::Object(self.tlab.alloc(Object::RustData(data)))
+        Value::Object(self.tlab.alloc_rust_data(data))
     }
 
     /// Downcast a `Value::Object` pointing to `Object::RustData` to `&T`.
@@ -1119,9 +1096,43 @@ impl BexVm {
             .unwrap_or_else(|| panic!("resolve_class: class {name:?} not found"))
     }
 
+    /// Look up a function by its fully-qualified name by scanning `vm.globals`.
+    ///
+    /// Returns `Some(ptr)` for the first `Object::Function` whose `name` matches,
+    /// or `None` if no such function exists in the global pool.
+    ///
+    /// This is O(globals) and intended for use in native methods that need to
+    /// dispatch to a dynamically resolved method (e.g. `Map.to_json`). Not
+    /// suitable for hot paths; callers that need repeated lookups should cache
+    /// the result.
+    pub fn find_function_by_name(&self, name: &str) -> Option<HeapPtr> {
+        for v in self.globals.as_slice() {
+            if let Value::Object(ptr) = v {
+                if let Object::Function(f) = self.get_object(*ptr) {
+                    if f.name == name {
+                        return Some(*ptr);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Allocate a `BoundMethod` on the heap, binding `function` (a `HeapPtr`
+    /// pointing to an `Object::Function`) to `receiver`.
+    ///
+    /// When the bound method is called via `YieldToCall`, the VM automatically
+    /// inserts `receiver` as the first argument (`self`).
+    pub fn alloc_bound_method(&mut self, function: HeapPtr, receiver: Value) -> Value {
+        Value::Object(
+            self.tlab
+                .alloc(Object::BoundMethod(BoundMethod { function, receiver })),
+        )
+    }
+
     /// Allocate a type descriptor object on the heap.
     pub fn alloc_type(&mut self, ty: baml_type::Ty) -> Value {
-        Value::Object(self.tlab.alloc(Object::Type(Box::new(ty))))
+        Value::Object(self.tlab.alloc_type(ty))
     }
 
     /// Stops the execution of the current bytecode in favor of the given
@@ -1224,6 +1235,9 @@ impl BexVm {
                 ErrorClass::InvalidArgument,
                 vec![self.alloc_string(message)],
             ),
+            VmBamlError::ParseError { message } => {
+                (ErrorClass::ParseError, vec![self.alloc_string(message)])
+            }
             VmBamlError::Io { message } => (ErrorClass::Io, vec![self.alloc_string(message)]),
             VmBamlError::Timeout {
                 message,
@@ -1319,6 +1333,10 @@ impl BexVm {
                 let msg = self.alloc_string("unreachable code executed".to_string());
                 (PanicClass::Unreachable, vec![msg])
             }
+            VmPanic::Cancelled => {
+                let msg = self.alloc_string("operation cancelled".to_string());
+                (PanicClass::Cancelled, vec![msg])
+            }
             VmPanic::UserPanic { message } => {
                 let msg = self.alloc_string(message);
                 (PanicClass::UserPanic, vec![msg])
@@ -1326,6 +1344,11 @@ impl BexVm {
             VmPanic::AllocFailure { message } => {
                 let msg = self.alloc_string(message);
                 (PanicClass::AllocFailure, vec![msg])
+            }
+            VmPanic::HostUnavailable { resource, message } => {
+                let resource = self.alloc_string(resource);
+                let message = self.alloc_string(message);
+                (PanicClass::HostUnavailable, vec![resource, message])
             }
         };
         self.alloc_panic_value(class, fields)
@@ -1690,6 +1713,7 @@ impl BexVm {
                     NativeCallResult::YieldToCall {
                         callee,
                         args: mut callback_args,
+                        type_args: callback_type_args,
                         continuation,
                     } => {
                         // Push a Native continuation frame, then dispatch the
@@ -1709,13 +1733,53 @@ impl BexVm {
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
 
-                        return self.execute_call_from_locals_offset(
+                        // Mirror the Call-instruction's type-arg plumbing
+                        // (see vm.rs:3757) so a native helper that yields with
+                        // explicit `type_args` (e.g. `baml.json.from_json`
+                        // dispatching a generic class' `from_json`) seeds the
+                        // callee's frame correctly.  Save/restore around the
+                        // dispatch matches the Call-instruction handler.
+                        let prev_pending = std::mem::replace(
+                            &mut self.pending_call_type_args,
+                            callback_type_args.clone(),
+                        );
+                        let frames_before = self.frames.len();
+
+                        let result = self.execute_call_from_locals_offset(
                             real_callee,
                             cb_locals,
                             arg_count,
                             frame_idx,
                             function,
                         );
+
+                        self.pending_call_type_args = prev_pending;
+
+                        // Append explicit type-args to the newly-pushed
+                        // bytecode frame's `type_args` (after class-args from
+                        // BoundMethod / Closure seeding).
+                        if !callback_type_args.is_empty() && self.frames.len() > frames_before {
+                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+                                bf.type_args.extend(callback_type_args);
+                            }
+                        }
+
+                        // Update *frame_idx to point at the new topmost frame.
+                        // Required so the caller's tight inner-dispatch loop
+                        // detects the frame change (the pushed Native
+                        // continuation frame for the outer native that
+                        // yielded) and breaks out to let exec_compact's
+                        // continuation handler run it.  Without this, when the
+                        // recursive callback was itself a Native that returned
+                        // Done synchronously (no frame_idx update from the
+                        // recursion), the inner loop would continue stepping
+                        // the caller's bytecode with a stale Native frame on
+                        // top — eventually reading past the caller's code end.
+                        if !self.frames.is_empty() {
+                            *frame_idx = self.frames.len() - 1;
+                        }
+
+                        return result;
                     }
                 }
             }
@@ -1813,6 +1877,7 @@ impl BexVm {
             VmRustFnError::Panic(panic) => VmError::Thrown(self.panic_to_exception_value(panic)),
             VmRustFnError::BamlError(err) => VmError::Thrown(self.error_to_exception_value(err)),
             VmRustFnError::InternalError(err) => VmError::InternalError(err),
+            VmRustFnError::Thrown(value) => VmError::Thrown(value),
         }
     }
 
@@ -1977,6 +2042,12 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
+        // Re-arm the long-running-loop detector at every yield boundary so
+        // each `exec()` call starts with a fresh budget; a single `exec()`
+        // call yields back to the embedder eventually (e.g. via `Await`,
+        // `EarlyYield`, etc.), which is the right granularity for the
+        // counter to reset at.
+        self.early_yield.reset();
         match self.exec_inner() {
             Err(VmError::InternalError(err)) => {
                 let trace = self.capture_stack_trace();
@@ -2040,6 +2111,7 @@ impl BexVm {
                         NativeCallResult::YieldToCall {
                             callee,
                             args: mut callback_args,
+                            type_args: callback_type_args,
                             continuation,
                         } => {
                             // The continuation wants to call another function.
@@ -2058,13 +2130,31 @@ impl BexVm {
                             let cb_locals = StackIndex::from_raw(self.stack.len());
                             self.stack.extend(callback_args);
 
-                            let ecflo_result = match self.execute_call_from_locals_offset(
+                            // Mirror the Call-instruction's type-arg plumbing for
+                            // continuation-driven YieldToCall (see vm.rs:3757).
+                            let prev_pending = std::mem::replace(
+                                &mut self.pending_call_type_args,
+                                callback_type_args.clone(),
+                            );
+                            let frames_before = self.frames.len();
+
+                            let ecflo_outcome = self.execute_call_from_locals_offset(
                                 real_callee,
                                 cb_locals,
                                 arg_count,
                                 &mut frame_idx,
                                 &mut function,
-                            ) {
+                            );
+
+                            self.pending_call_type_args = prev_pending;
+
+                            if !callback_type_args.is_empty() && self.frames.len() > frames_before {
+                                if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(frame_idx) {
+                                    bf.type_args.extend(callback_type_args);
+                                }
+                            }
+
+                            let ecflo_result = match ecflo_outcome {
                                 Ok(result) => result,
                                 Err(VmError::Thrown(exception_value)) => {
                                     self.try_unwind_exception(
@@ -2119,7 +2209,7 @@ impl BexVm {
                     let (instruction, metadata) = crate::debug::display_instruction(
                         instruction_ptr,
                         function,
-                        &self.globals,
+                        self.globals.as_slice(),
                         None,
                         None,
                     );
@@ -2305,8 +2395,8 @@ impl BexVm {
             }
 
             Instruction::LoadGlobal(index) => {
-                let value = &self.globals[index];
-                self.stack.push(*value);
+                let value = self.globals.get(index);
+                self.stack.push(value);
             }
 
             Instruction::StoreGlobal(index) => {
@@ -2314,7 +2404,10 @@ impl BexVm {
                 let value = self.stack.ensure_pop();
 
                 // No write barrier: globals is a VM-owned root structure, not a heap object.
-                self.globals[index] = value;
+                // Only valid during `$init`; post-init globals are frozen in `Arc<[Value]>`
+                // and a write here is a VM internal error.
+                self.globals
+                    .set(index, value, VmInternalError::StoreGlobalAfterInit)?;
             }
 
             Instruction::LoadField(index) => {
@@ -2370,7 +2463,7 @@ impl BexVm {
                 );
 
                 // Write barrier: mark card if instance is in an older generation than the value.
-                self.write_barrier(instance_index, new_value);
+                self.heap.write_barrier(instance_index, new_value);
 
                 // Set the new value.
                 if let Object::Instance(instance) = self.get_object_mut(instance_index) {
@@ -2419,7 +2512,7 @@ impl BexVm {
                 );
 
                 // Write barrier: mark card if instance is in an older generation than the value.
-                self.write_barrier(instance_index, new_value);
+                self.heap.write_barrier(instance_index, new_value);
 
                 // Set the new value.
                 if let Object::Instance(instance) = self.get_object_mut(instance_index) {
@@ -3243,7 +3336,7 @@ impl BexVm {
                 );
 
                 // Write barrier: mark card if array is in an older generation than the value.
-                self.write_barrier(array_object_index, new_value);
+                self.heap.write_barrier(array_object_index, new_value);
 
                 // Set the new value.
                 match self.get_object_mut(array_object_index) {
@@ -3316,7 +3409,7 @@ impl BexVm {
                 );
 
                 // Write barrier: mark card if map is in an older generation than the value.
-                self.write_barrier(map_index, new_value);
+                self.heap.write_barrier(map_index, new_value);
 
                 // Set the new value.
                 if let Object::Map(map) = self.get_object_mut(map_index) {
@@ -3472,22 +3565,14 @@ impl BexVm {
                 // Collect function call args and cleanup consumed stack.
                 let future_args: Vec<Value> = self.stack.drain(args_offset..).collect();
 
-                // Create the pending future with the SysOp enum.
-                let pending_future = PendingFuture {
+                // Create the unscheduled future to hand off to the embedder.
+                let pending_future = UnscheduledFuture {
                     operation: sys_op,
                     args: future_args,
                 };
 
-                // Allocate the future.
-                let future_value = self.alloc_future(Future::Pending(pending_future));
-
-                // Extract the index
-                let Value::Object(object_index) = future_value else {
-                    unreachable!("alloc_future returns Value::Object")
-                };
-
-                // Now leave the future on top of the stack.
-                self.stack.push(future_value);
+                // Allocate the unscheduled future.
+                let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
 
                 // Yield control flow back to the embedder.
                 return Ok(Some(VmExecState::ScheduleFuture(object_index)));
@@ -3510,14 +3595,44 @@ impl BexVm {
                         .into());
                     };
 
-                    match awaiting {
+                    match awaiting.read() {
                         // Can't do nothing, handle control flow back to embedder.
-                        Future::Pending(_) => {
-                            return Ok(Some(VmExecState::Await(index)));
+                        FutureRead::Pending(future_id) => {
+                            let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                                unreachable!("exec loop frame is always Bytecode");
+                            };
+                            bf.instruction_ptr = instruction_ptr; // we will await again when the future completes
+                            return Ok(Some(VmExecState::Await(future_id)));
                         }
 
                         // Return the ready value
-                        Future::Ready(value) => *value,
+                        FutureRead::Ready(value) => value,
+
+                        // An error occurred while executing the future. (Reserved
+                        // for future user-callable async functions that throw BAML
+                        // values; the engine today routes all sys-op errors through
+                        // `internal_error_future`.)
+                        FutureRead::Error(value) => return Err(VmError::Thrown(value)),
+
+                        // The future was cancelled before completion.
+                        FutureRead::Cancelled => {
+                            return Err(VmError::Thrown(
+                                self.panic_to_exception_value(VmPanic::Cancelled),
+                            ));
+                        }
+
+                        // An unrecoverable internal error occurred while executing the
+                        // future. Yield back to the engine so it can surface the original
+                        // error from the FutureManager's `SetOnce` (the entry is leaked by
+                        // design for InternalError, so the engine's `future_ready` will
+                        // always find it and propagate the underlying `EngineError`).
+                        FutureRead::InternalError(future_id) => {
+                            let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                                unreachable!("exec loop frame is always Bytecode");
+                            };
+                            bf.instruction_ptr = instruction_ptr;
+                            return Ok(Some(VmExecState::Await(future_id)));
+                        }
                     }
                 };
 
@@ -3708,13 +3823,29 @@ impl BexVm {
                 // Native frame, also not the target of a type-arg writeback).
                 let frames_before = self.frames.len();
 
+                // Expose the type-args to the callee through `vm
+                // .current_call_type_args()`.  For BAML→BAML calls the values
+                // also flow through the new frame's `type_args` field below;
+                // for BAML→native calls this slot is the only channel.
+                // Save/restore the previous slot so a native handler that
+                // re-enters the VM via YieldToCall sees its own type-args even
+                // when the inner callback uses different ones.
+                let prev_pending_call_type_args =
+                    std::mem::replace(&mut self.pending_call_type_args, type_args.clone());
+
                 let result = self.execute_call_from_locals_offset(
                     callee_ptr,
                     locals_offset,
                     arg_count,
                     frame_idx,
                     function,
-                )?;
+                );
+
+                // Restore the previous slot regardless of how the call
+                // resolved (success, thrown error, yield).  The native
+                // handler has already consumed the slot at this point.
+                self.pending_call_type_args = prev_pending_call_type_args;
+                let result = result?;
 
                 // Append call-site type_args to the newly-pushed bytecode
                 // frame's existing type_args (which were pre-seeded from
@@ -4261,7 +4392,7 @@ impl BexVm {
                     .into());
                 };
                 // Write barrier before the mutable borrow so we hold only &self.heap.
-                self.write_barrier(cell_ptr, value);
+                self.heap.write_barrier(cell_ptr, value);
                 // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
                 let obj = unsafe { cell_ptr.get_mut() };
                 let Object::Cell(cell) = obj else {
@@ -4343,7 +4474,7 @@ impl BexVm {
                 // Write barrier: mark card if cell is in an older generation than the value.
                 // The shared borrows of `obj`/`closure` have ended, so `write_barrier`
                 // (which borrows `self` immutably via `self.heap`) is safe here.
-                self.write_barrier(cell_ptr, value);
+                self.heap.write_barrier(cell_ptr, value);
                 // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
                 let cell_obj = unsafe { cell_ptr.get_mut() };
                 let Object::Cell(cell) = cell_obj else {
@@ -4759,6 +4890,7 @@ impl BexVm {
                     NativeCallResult::YieldToCall {
                         callee,
                         args: mut callback_args,
+                        type_args: callback_type_args,
                         continuation,
                     } => {
                         self.frames.push(Frame::Native(NativeFrame {
@@ -4772,13 +4904,31 @@ impl BexVm {
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
 
-                        let ecflo_result = match self.execute_call_from_locals_offset(
+                        // Mirror the Call-instruction's type-arg plumbing for
+                        // continuation-driven YieldToCall.
+                        let prev_pending = std::mem::replace(
+                            &mut self.pending_call_type_args,
+                            callback_type_args.clone(),
+                        );
+                        let frames_before = self.frames.len();
+
+                        let ecflo_outcome = self.execute_call_from_locals_offset(
                             real_callee,
                             cb_locals,
                             arg_count,
                             &mut frame_idx,
                             &mut function,
-                        ) {
+                        );
+
+                        self.pending_call_type_args = prev_pending;
+
+                        if !callback_type_args.is_empty() && self.frames.len() > frames_before {
+                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(frame_idx) {
+                                bf.type_args.extend(callback_type_args);
+                            }
+                        }
+
+                        let ecflo_result = match ecflo_outcome {
                             Ok(result) => result,
                             Err(VmError::Thrown(exception_value)) => {
                                 self.try_unwind_exception(
@@ -4941,6 +5091,8 @@ impl BexVm {
 
         // Read opcode byte and advance PC past it.
         // SAFETY: PC is always in bounds (bytecode invariant).
+        // Read opcode byte and advance PC past it.
+        // SAFETY: PC is always in bounds (bytecode invariant).
         #[allow(unsafe_code)]
         let op_byte = unsafe { *code.get_unchecked(*pc) };
         *pc += 1;
@@ -5034,7 +5186,10 @@ impl BexVm {
                     let raw = { read_u32_unchecked(code, pc) };
                     let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let value = self.stack.ensure_pop();
-                    self.globals[global_idx] = value;
+                    // Only valid during `$init`; post-init globals are frozen in `Arc<[Value]>`
+                    // and a write here is a VM internal error.
+                    self.globals
+                        .set(global_idx, value, VmInternalError::StoreGlobalAfterInit)?;
                 }
 
                 // ── LoadField / StoreField / InitField ────────────────────────
@@ -5077,7 +5232,7 @@ impl BexVm {
                         old_value,
                         new_value,
                     );
-                    self.write_barrier(obj_ptr, new_value);
+                    self.heap.write_barrier(obj_ptr, new_value);
                     let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
                         unreachable!("already type-checked above");
                     };
@@ -5096,7 +5251,7 @@ impl BexVm {
                     let new_value = self.stack.ensure_pop();
                     let instance_value = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(&instance_value, ObjectType::Instance)?;
-                    self.write_barrier(obj_ptr, new_value);
+                    self.heap.write_barrier(obj_ptr, new_value);
                     let Object::Instance(instance) = self.get_object_mut(obj_ptr) else {
                         return Err(VmInternalError::TypeError {
                             expected: ObjectType::Instance.into(),
@@ -5270,16 +5425,11 @@ impl BexVm {
                     )?;
                     let args_offset = StackIndex::from_raw(args_offset);
                     let future_args: Vec<Value> = self.stack.drain(args_offset..).collect();
-                    let pending_future = bex_vm_types::types::PendingFuture {
+                    let pending_future = bex_vm_types::types::UnscheduledFuture {
                         operation: sys_op,
                         args: future_args,
                     };
-                    let future_value =
-                        self.alloc_future(bex_vm_types::types::Future::Pending(pending_future));
-                    let Value::Object(object_index) = future_value else {
-                        unreachable!("alloc_future returns Value::Object")
-                    };
-                    self.stack.push(future_value);
+                    let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
                     return Ok(Some(VmExecState::ScheduleFuture(object_index)));
                 }
 
@@ -5461,6 +5611,12 @@ impl BexVm {
                     bf.instruction_ptr = *pc;
 
                     let frames_before = self.frames.len();
+                    // Mirror the native YieldToCall plumbing: stash type_args
+                    // into `pending_call_type_args` so a native callee can
+                    // read them via `current_call_type_args()` (e.g.
+                    // `baml.json.from_json<T>` reads its `T` from there).
+                    let prev_pending =
+                        std::mem::replace(&mut self.pending_call_type_args, type_args.clone());
                     let result = self.execute_call_from_locals_offset(
                         callee_ptr,
                         locals_offset,
@@ -5468,6 +5624,7 @@ impl BexVm {
                         frame_idx,
                         function,
                     );
+                    self.pending_call_type_args = prev_pending;
                     if !type_args.is_empty() && self.frames.len() > frames_before {
                         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                             bf.type_args.extend(type_args);
@@ -5597,6 +5754,12 @@ impl BexVm {
 
                 // ── Await ─────────────────────────────────────────────────────
                 OpCode::Await => {
+                    // Compact opcodes are 1 byte; rewinding by `AWAIT_OPCODE_LEN`
+                    // puts `pc` back at the `OpCode::Await` byte so the outer
+                    // exec loop re-executes the same Await on resume. The
+                    // regular (non-compact) path expresses the same intent by
+                    // explicitly setting `bf.instruction_ptr = instruction_ptr`.
+                    const AWAIT_OPCODE_LEN: usize = 1;
                     let value = self.stack.ensure_stack_top();
                     let wanted_type = bex_vm_types::types::FutureType::Any;
                     let index = self.as_object_ptr(&self.stack[value], wanted_type.into())?;
@@ -5608,11 +5771,31 @@ impl BexVm {
                             }
                             .into());
                         };
-                        match awaiting {
-                            bex_vm_types::types::Future::Pending(_) => {
-                                return Ok(Some(VmExecState::Await(index)));
+                        match awaiting.read() {
+                            FutureRead::Pending(future_id) => {
+                                // Rewind pc to the Await opcode so the outer loop
+                                // saves a position that re-executes Await once the
+                                // future completes.
+                                *pc -= AWAIT_OPCODE_LEN;
+                                return Ok(Some(VmExecState::Await(future_id)));
                             }
-                            bex_vm_types::types::Future::Ready(v) => *v,
+                            FutureRead::Ready(v) => v,
+                            // Reserved for future user-callable async functions
+                            // that throw BAML values; the engine today routes all
+                            // sys-op errors through `internal_error_future`.
+                            FutureRead::Error(value) => return Err(VmError::Thrown(value)),
+                            FutureRead::Cancelled => {
+                                return Err(VmError::Thrown(
+                                    self.panic_to_exception_value(VmPanic::Cancelled),
+                                ));
+                            }
+                            FutureRead::InternalError(future_id) => {
+                                // Yield back to the engine; it will surface the original
+                                // error from the FutureManager's `SetOnce` (the entry is
+                                // leaked by design for InternalError).
+                                *pc -= AWAIT_OPCODE_LEN;
+                                return Ok(Some(VmExecState::Await(future_id)));
+                            }
                         }
                     };
                     self.stack.pop();
@@ -5965,7 +6148,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    self.write_barrier(cell_ptr, value);
+                    self.heap.write_barrier(cell_ptr, value);
                     let obj = unsafe { cell_ptr.get_mut() };
                     let Object::Cell(cell) = obj else {
                         return Err(VmInternalError::TypeError {
@@ -6034,7 +6217,7 @@ impl BexVm {
                         }
                         .into());
                     };
-                    self.write_barrier(cell_ptr, value);
+                    self.heap.write_barrier(cell_ptr, value);
                     let cell_obj = unsafe { cell_ptr.get_mut() };
                     let Object::Cell(cell) = cell_obj else {
                         return Err(VmInternalError::TypeError {
@@ -6230,7 +6413,7 @@ impl BexVm {
                         old_value,
                         new_value,
                     );
-                    self.write_barrier(array_object_index, new_value);
+                    self.heap.write_barrier(array_object_index, new_value);
                     match self.get_object_mut(array_object_index) {
                         Object::Array(array) => {
                             array[index] = new_value;
@@ -6279,7 +6462,7 @@ impl BexVm {
                         old_value,
                         new_value,
                     );
-                    self.write_barrier(map_index, new_value);
+                    self.heap.write_barrier(map_index, new_value);
                     if let Object::Map(map) = self.get_object_mut(map_index) {
                         map.insert(key, new_value);
                     }
@@ -6646,5 +6829,14 @@ impl ::bex_vm_types::RootHaver for BexVm {
         for frame in &mut self.frames {
             frame.forward_roots(roots);
         }
+    }
+}
+
+impl TlabHolder for BexVm {
+    fn tlab(&self) -> &Tlab {
+        &self.tlab
+    }
+    fn tlab_mut(&mut self) -> &mut Tlab {
+        &mut self.tlab
     }
 }

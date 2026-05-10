@@ -178,6 +178,12 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int thr
 class user.AppError {
   code: int
 }
+function user.AppError.to_json(self: user.AppError) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "code": self.code.to_json() } : map<string, baml.json.json>
+}
+function user.AppError.from_json(j: baml.json.json) -> user.AppError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  AppError { code: baml.json.from_json<int>(baml.json.field(j, "code")) } : user.AppError
+}
 function user.risky_error(mode: int) -> int throws user.AppError | string {
   { : never
     if (mode == 0 : bool) : void

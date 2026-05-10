@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.ExtractAny() -> baml.json.json  [llm] {
+  baml.llm.call_llm_function(TestClient, "ExtractAny", map {  })
+}
+function user.ExtractAny$build_request() -> baml.http.Request  [expr] {
+  baml.llm.build_request(TestClient, "ExtractAny", map {  })
+}
+function user.ExtractAny$build_request_stream() -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(TestClient, "ExtractAny", map {  })
+}
+function user.ExtractAny$parse(json: string) -> baml.json.json  [expr] {
+  baml.llm.parse("ExtractAny", json)
+}
+function user.ExtractAny$render_prompt() -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(TestClient, "ExtractAny", map {  })
+}
+function user.TestClient$new() -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+}

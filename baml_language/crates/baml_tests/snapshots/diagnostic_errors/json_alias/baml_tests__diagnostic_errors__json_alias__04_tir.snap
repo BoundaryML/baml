@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.BadAssign(j: baml.json.json) -> int throws never {
+  { : baml.json.json
+    j : baml.json.json
+  }
+  !! 153..154: type mismatch: expected int, got baml.json.json
+}

@@ -40,7 +40,7 @@ function double_backslash() -> string { "\\\\" }
 function double_backslash_length() -> int { "\\\\".length() }
 function trailing_double_backslash() -> string { "a\\\\" }
 function trailing_double_backslash_length() -> int { "a\\\\".length() }
-function replace_backslash() -> string { "a\\b\\c".replaceAll("\\", "/") }
+function replace_backslash() -> string { "a\\b\\c".replace_all("\\", "/") }
 
 // Raw strings with backslash sequences — must preserve them verbatim.
 function raw_double_backslash() -> string { #"\\"# }
@@ -128,7 +128,7 @@ function raw_quad_backslash() -> string { #"\\\\"# }
 
     #[tokio::test]
     async fn replace_all_with_backslash_arguments() {
-        // replaceAll("\\", "/") should replace each backslash with a forward slash.
+        // replace_all("\\", "/") should replace each backslash with a forward slash.
         assert_eq!(run_str!("replace_backslash"), "a/b/c");
     }
 

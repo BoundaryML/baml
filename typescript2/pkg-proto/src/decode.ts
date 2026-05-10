@@ -4,9 +4,9 @@ import type {
   BamlValueMedia,
   BamlValuePromptAst,
   BamlValuePromptAstSimple,
-} from './generated/baml/cffi/v1/baml_outbound';
-import { BamlOutboundValue, MediaTypeEnum } from './generated/baml/cffi/v1/baml_outbound';
-import { BamlHandleType } from './generated/baml/cffi/v1/baml_inbound';
+} from './generated/baml_core/cffi/v1/baml_outbound';
+import { BamlOutboundValue, MediaTypeEnum } from './generated/baml_core/cffi/v1/baml_outbound';
+import { BamlHandleType } from './generated/baml_core/cffi/v1/baml_inbound';
 import type { BamlJsValue, BamlJsClass, BamlJsHandle, BamlJsMedia, BamlJsPromptAst, BamlJsPromptAstSimple, BamlJsPromptAstMessage } from './types';
 
 const HANDLE_TYPE_NAMES: Record<number, string> = {
@@ -185,16 +185,6 @@ function deserializeValue<T>(
     case 'unionVariantValue':
       return holder.value.unionVariantValue.value
         ? deserializeValue(holder.value.unionVariantValue.value, wrapHandle)
-        : null;
-
-    case 'checkedValue':
-      return holder.value.checkedValue.value
-        ? deserializeValue(holder.value.checkedValue.value, wrapHandle)
-        : null;
-
-    case 'streamingStateValue':
-      return holder.value.streamingStateValue.value
-        ? deserializeValue(holder.value.streamingStateValue.value, wrapHandle)
         : null;
 
     case 'handleValue': {

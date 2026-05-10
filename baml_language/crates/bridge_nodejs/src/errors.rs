@@ -79,7 +79,7 @@ pub fn runtime_error_to_napi(err: bex_project::RuntimeError) -> napi::Error {
                     Status::InvalidArg,
                     format!("BamlError: BamlInvalidArgumentError: {err}"),
                 ),
-                EngineError::Cancelled => napi::Error::new(
+                e if bex_project::is_cancelled_engine_error(e) => napi::Error::new(
                     Status::Cancelled,
                     format!("BamlError: BamlCancelledError: {err}"),
                 ),

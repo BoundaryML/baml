@@ -711,6 +711,32 @@ pub struct InferContext<'db> {
     db: &'db dyn crate::Db,
     scope: ScopeId<'db>,
     diagnostics: RefCell<TypeCheckDiagnostics<'db>>,
+    /// When `true`, suppress diagnostics that arise from synthesized
+    /// references to user types/names/members. Set while inferring an
+    /// auto-derived function body (synthesized `to_json` / `from_json`):
+    /// those bodies reference user fields by name, so when a class has a
+    /// malformed field, the synthesizer's `self.<f>.to_json()` and
+    /// `baml.json.from_json<F>(...)` calls surface duplicate
+    /// `UnresolvedType` / `UnresolvedMember` / `NotCallable` errors whose
+    /// spans point back at the user's class — confusing because the user
+    /// didn't write that code. The user's underlying field declaration
+    /// already reports the real error.
+    suppress_member_lookup_errors: std::cell::Cell<bool>,
+}
+
+/// Returns `true` for diagnostic kinds that may arise spuriously from
+/// auto-derived function bodies (synthesized code referencing user types).
+/// We suppress these inside auto-derive bodies; the user's underlying type
+/// declaration already reports the same condition without the synthesized
+/// span confusion.
+fn is_synthesized_code_diag(error: &TirTypeError) -> bool {
+    matches!(
+        error,
+        TirTypeError::UnresolvedMember { .. }
+            | TirTypeError::UnresolvedType { .. }
+            | TirTypeError::UnresolvedName { .. }
+            | TirTypeError::NotCallable { .. }
+    )
 }
 
 impl<'db> InferContext<'db> {
@@ -719,7 +745,14 @@ impl<'db> InferContext<'db> {
             db,
             scope,
             diagnostics: RefCell::new(TypeCheckDiagnostics::default()),
+            suppress_member_lookup_errors: std::cell::Cell::new(false),
         }
+    }
+
+    /// Toggle suppression of `UnresolvedMember` diagnostics for the
+    /// current inference run. See `suppress_member_lookup_errors`.
+    pub fn set_suppress_member_lookup_errors(&self, value: bool) {
+        self.suppress_member_lookup_errors.set(value);
     }
 
     pub fn db(&self) -> &'db dyn crate::Db {
@@ -732,6 +765,9 @@ impl<'db> InferContext<'db> {
 
     /// Report a type error at a specific expression, with optional related locations.
     pub fn report(&self, error: TirTypeError, at: ExprId, related: Vec<RelatedNote<'db>>) {
+        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
+            return;
+        }
         self.diagnostics
             .borrow_mut()
             .diagnostics
@@ -755,6 +791,9 @@ impl<'db> InferContext<'db> {
         at: ExprId,
         related: Vec<RelatedNote<'db>>,
     ) {
+        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
+            return;
+        }
         self.diagnostics
             .borrow_mut()
             .diagnostics
@@ -780,6 +819,9 @@ impl<'db> InferContext<'db> {
         segment_idx: usize,
         related: Vec<RelatedNote<'db>>,
     ) {
+        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
+            return;
+        }
         self.diagnostics
             .borrow_mut()
             .diagnostics
@@ -793,6 +835,9 @@ impl<'db> InferContext<'db> {
 
     /// Report a type error at a type annotation location.
     pub fn report_at_type_annot(&self, error: TirTypeError, at: TypeAnnotId) {
+        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
+            return;
+        }
         self.diagnostics
             .borrow_mut()
             .diagnostics
@@ -816,6 +861,9 @@ impl<'db> InferContext<'db> {
         span: TextRange,
         related: Vec<RelatedNote<'db>>,
     ) {
+        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
+            return;
+        }
         self.diagnostics
             .borrow_mut()
             .diagnostics

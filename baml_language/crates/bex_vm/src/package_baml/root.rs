@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bex_vm_types::{
-    HeapPtr,
-    types::{Future, Instance, Object, Value},
+    FutureRead, HeapPtr,
+    types::{Instance, Object, Value},
 };
 use indexmap::IndexMap;
 
@@ -32,6 +32,18 @@ fn deep_copy_value_recursive(
         Value::Object(ptr) => {
             if let Some(&new_ptr) = copied_objects.get(&ptr) {
                 return Value::Object(new_ptr);
+            }
+
+            // Futures are *handles*, not values: a `Future` is the user-
+            // visible name for an entry the engine's `FutureManager` writes
+            // terminal state into. Even after the future completes, its
+            // on-heap representation remains shared mutable state from the
+            // runtime's point of view — there is no notion of "the same
+            // future, but a copy". Short-circuit before cloning the Object
+            // (which would otherwise clone the `Future` struct uselessly).
+            if matches!(vm.get_object(ptr), Object::Future(_)) {
+                copied_objects.insert(ptr, ptr);
+                return Value::Object(ptr);
             }
 
             let object = vm.get_object(ptr).clone();
@@ -97,7 +109,10 @@ fn deep_copy_value_recursive(
                 Object::Enum(e) => vm.tlab.alloc(Object::Enum(e)),
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
                 Object::RustData(arc) => vm.tlab.alloc(Object::RustData(Arc::clone(&arc))),
-                Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
+                // `Object::Future(_)` is short-circuited above; it can't
+                // reach this match arm.
+                Object::Future(_) => unreachable!("Future short-circuited above"),
+                Object::UnscheduledFuture(f) => vm.tlab.alloc(Object::UnscheduledFuture(f)),
                 Object::Collector(c) => vm.tlab.alloc(Object::Collector(c)),
                 Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),
                 // Closures, bound methods, and cells are shallow-copied: the captured
@@ -205,21 +220,25 @@ fn deep_equals_recursive(
 
                 (Object::Function(_), Object::Function(_)) => a_ptr == b_ptr,
 
-                (Object::Future(a_fut), Object::Future(b_fut)) => match (a_fut, b_fut) {
-                    (Future::Ready(a_val), Future::Ready(b_val)) => {
-                        deep_equals_recursive(vm, *a_val, *b_val, visited)
+                (Object::Future(a_fut), Object::Future(b_fut)) => {
+                    match (a_fut.read(), b_fut.read()) {
+                        (FutureRead::Ready(a_val), FutureRead::Ready(b_val)) => {
+                            deep_equals_recursive(vm, a_val, b_val, visited)
+                        }
+                        (FutureRead::Pending(a_id), FutureRead::Pending(b_id)) => a_id == b_id,
+                        _ => false,
                     }
-                    (Future::Pending(a_pend), Future::Pending(b_pend)) => {
-                        a_pend.operation == b_pend.operation
-                            && a_pend.args.len() == b_pend.args.len()
-                            && a_pend
-                                .args
-                                .iter()
-                                .zip(b_pend.args.iter())
-                                .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
-                    }
-                    _ => false,
-                },
+                }
+
+                (Object::UnscheduledFuture(a_fut), Object::UnscheduledFuture(b_fut)) => {
+                    a_fut.operation == b_fut.operation
+                        && a_fut.args.len() == b_fut.args.len()
+                        && a_fut
+                            .args
+                            .iter()
+                            .zip(b_fut.args.iter())
+                            .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
+                }
 
                 _ => false,
             };

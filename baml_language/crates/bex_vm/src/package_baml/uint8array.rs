@@ -1,12 +1,22 @@
 use bex_vm_types::Value;
 
-use super::{BamlClassUint8Array, PackageBamlImpl};
+use super::{BamlClassUint8Array, PackageBamlImpl, json::raise_serialize_no_path};
 use crate::{
-    VmPanic,
+    BexVm, VmPanic,
     errors::{VmBamlError, VmRustFnError},
 };
 
 impl BamlClassUint8Array for PackageBamlImpl {
+    fn to_json(vm: &mut BexVm, _uint8array: &[u8]) -> Result<Value, VmRustFnError> {
+        // BEP §"non-representable": `uint8array` has no canonical JSON form.
+        // Callers must explicitly encode to base64 or hex before serializing.
+        Err(raise_serialize_no_path(
+            vm,
+            "uint8array requires explicit encoding (use to_base64() or to_hex())",
+            "uint8array",
+        ))
+    }
+
     #[allow(clippy::cast_possible_wrap)]
     fn length(uint8array: &[u8]) -> i64 {
         uint8array.len() as i64

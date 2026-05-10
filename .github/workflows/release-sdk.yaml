@@ -36,7 +36,7 @@ permissions:
   id-token: write
 
 jobs:
-  # Version comes from `baml_language/languages/python/pyproject.toml`
+  # Version comes from `baml_language/sdks/python/pyproject.toml`
   # as-is — bump the file there and merge before tagging a release run.
   build-python-sdk:
     uses: ./.github/workflows/build-python-sdk.reusable.yaml
@@ -50,7 +50,6 @@ jobs:
       - run: echo "::do-nothing::" >/dev/null
 
   publish-to-pypi:
-    environment: release
     needs: [all-builds]
     if: ${{ inputs.publish }}
     # Must use GitHub-hosted runner due to permissions issues with GitHub OIDC trusted publishing

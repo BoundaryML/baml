@@ -23,6 +23,11 @@ class Unreachable {
   message string
 }
 
+/// A cancellation was requested.
+class Cancelled {
+  message string
+}
+
 /// A user-caused panic from `baml.sys.panic`.
 class UserPanic {
   message string
@@ -35,4 +40,12 @@ class AllocFailure {
   message string
 }
 
-type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | UserPanic | AllocFailure
+/// A required host resource is unavailable — e.g. the system entropy source
+/// (`getrandom`) is not accessible in a sandboxed/isolated environment.
+/// `resource` identifies which subsystem is unavailable (`"entropy"`, etc.).
+class HostUnavailable {
+  resource string
+  message string
+}
+
+type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | AllocFailure | HostUnavailable

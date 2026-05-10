@@ -791,7 +791,7 @@ fn lower_class(
         })
         .collect();
 
-    Some(crate::ast::ClassDef {
+    let mut class_def = crate::ast::ClassDef {
         name: Name::new(name_token.text()),
         generic_params,
         fields,
@@ -800,7 +800,13 @@ fn lower_class(
         docstring: crate::docstring::extract_docstring(node),
         span: node.text_range(),
         name_span: name_token.text_range(),
-    })
+    };
+
+    // Auto-derive `to_json` / `from_json` on every user class. Skipped if the
+    // user already defined either method.
+    crate::auto_derive_json::maybe_synthesize_json_methods(&mut class_def);
+
+    Some(class_def)
 }
 
 /// Extract generic type parameter names from a `GENERIC_PARAM_LIST` CST child.

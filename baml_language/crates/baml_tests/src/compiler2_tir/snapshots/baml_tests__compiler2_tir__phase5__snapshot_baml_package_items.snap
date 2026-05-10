@@ -3,35 +3,40 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
-  class Array<T> { methods: [length, at, push, pop, concat, reverse, slice, join, map] }
-  class Map<K, V> { methods: [length, has, keys, values, set, get] }
-  class String { methods: [length, toLowerCase, toUpperCase, trim, includes, startsWith, endsWith, split, substring, replace, indexOf, charAt, matches, replaceAll, to_bytes] }
-  class TypeValue { methods: [to_string] }
-  class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, to_string, sort] }
+  class Array<T> { methods: [length, at, push, pop, concat, reverse, slice, join, map, to_json, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice, from_json] }
+  class Bool { methods: [to_json, from_json] }
+  class Float { methods: [to_json, is_nan, is_infinite, is_finite, abs, min, max, clamp, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, pi, e, golden_ratio, nan, inf, from_json] }
+  class Int { methods: [to_json, abs, min, max, clamp, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, max_value, min_value, from_json] }
+  class Map<K, V> { methods: [length, has, keys, values, set, get, to_json, delete, get_or_insert, clear, from_json] }
+  class Null { methods: [to_json, from_json] }
+  class String { methods: [to_json, length, char_count, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, lines, substring, replace, index_of, char_at, code_point_at, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, from_code_points, from_json] }
+  class TypeValue { methods: [to_string, to_json, from_json] }
+  class Uint8Array { methods: [to_json, length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, to_string, sort, from_json] }
   function deep_copy<T>
   function deep_equals<T>
 namespace baml.env:
   function get
   function get_or_panic
 namespace baml.errors:
-  class AccessError { methods: [] }
-  class DevOther { methods: [] }
-  class HostPanic { methods: [] }
-  class InvalidArgument { methods: [] }
-  class Io { methods: [] }
-  class LlmClient { methods: [] }
-  class NotImplemented { methods: [] }
-  class RenderPrompt { methods: [] }
-  class StackFrame { methods: [] }
-  class StackTrace { methods: [to_string] }
-  class Timeout { methods: [] }
-  class Unsupported { methods: [] }
+  class AccessError { methods: [to_json, from_json] }
+  class DevOther { methods: [to_json, from_json] }
+  class HostPanic { methods: [to_json, from_json] }
+  class InvalidArgument { methods: [to_json, from_json] }
+  class Io { methods: [to_json, from_json] }
+  class LlmClient { methods: [to_json, from_json] }
+  class NotImplemented { methods: [to_json, from_json] }
+  class ParseError { methods: [to_json, from_json] }
+  class RenderPrompt { methods: [to_json, from_json] }
+  class StackFrame { methods: [to_json, from_json] }
+  class StackTrace { methods: [to_string, to_json, from_json] }
+  class Timeout { methods: [to_json, from_json] }
+  class Unsupported { methods: [to_json, from_json] }
 namespace baml.events:
   function send
 namespace baml.fs:
-  class DirEntry { methods: [] }
-  class File { methods: [text, bytes, read, read_bytes, close, seek_from, write, write_bytes] }
-  class MkdirOptions { methods: [] }
+  class DirEntry { methods: [to_json, from_json] }
+  class File { methods: [text, bytes, read, read_bytes, close, seek_from, write, write_bytes, to_json, from_json] }
+  class MkdirOptions { methods: [to_json, from_json] }
   function exists
   function mkdir
   function open
@@ -42,36 +47,49 @@ namespace baml.fs:
   function write
   function write_bytes
 namespace baml.glob:
-  class Glob { methods: [scan, matches] }
-  class ScanOptions { methods: [] }
+  class Glob { methods: [scan, matches, to_json, from_json] }
+  class ScanOptions { methods: [to_json, from_json] }
   function new
 namespace baml.http:
-  class Request { methods: [] }
-  class Response { methods: [text, bytes, ok] }
-  class SseStream { methods: [next, close] }
+  class Request { methods: [to_json, from_json] }
+  class Response { methods: [text, bytes, ok, to_json, from_json] }
+  class SseStream { methods: [next, close, to_json, from_json] }
   function fetch
   function fetch_sse
   function send
 namespace baml.io:
   function input
+namespace baml.json:
+  class JsonDecodeError { methods: [to_json, from_json] }
+  class JsonParseError { methods: [to_json, from_json] }
+  class JsonSerializationError { methods: [to_json, from_json] }
+  type json
+  function field
+  function from_json<T>
+  function from_string<T>
+  function parse
+  function stringify
+  function stringify_pretty
+  function to_json<T>
+  function to_string<T>
 namespace baml.llm:
-  class AnthropicOptions { methods: [] }
-  class AzureOpenAiOptions { methods: [] }
-  class BedrockOptions { methods: [] }
-  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, __make_stream, execute_oneshot, execute_once_oneshot] }
+  class AnthropicOptions { methods: [to_json, from_json] }
+  class AzureOpenAiOptions { methods: [to_json, from_json] }
+  class BedrockOptions { methods: [to_json, from_json] }
+  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, __make_stream, execute_oneshot, execute_once_oneshot, to_json, from_json] }
   enum ClientType
-  class ExecutionContext { methods: [] }
-  class MediaUrlHandler { methods: [] }
-  class OrchestrationStep { methods: [] }
-  class PlannerState { methods: [rr_local_offset, rr_pick_index] }
-  class PrimitiveClient { methods: [render_prompt, specialize_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse] }
-  class PrimitiveClientOptions { methods: [] }
-  class PromptAst { methods: [] }
-  class RetryPolicy { methods: [] }
-  class Stream<T, S> { methods: [next, final] }
-  class StreamAccumulator { methods: [add_events, content, is_done, model, finish_reason, input_tokens, output_tokens] }
-  class StreamCache<T, S> { methods: [new] }
-  class VertexAiOptions { methods: [] }
+  class ExecutionContext { methods: [to_json, from_json] }
+  class MediaUrlHandler { methods: [to_json, from_json] }
+  class OrchestrationStep { methods: [to_json, from_json] }
+  class PlannerState { methods: [rr_local_offset, rr_pick_index, to_json, from_json] }
+  class PrimitiveClient { methods: [render_prompt, specialize_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse, to_json, from_json] }
+  class PrimitiveClientOptions { methods: [to_json, from_json] }
+  class PromptAst { methods: [to_json, from_json] }
+  class RetryPolicy { methods: [to_json, from_json] }
+  class Stream<T, S> { methods: [next, final, to_json, from_json] }
+  class StreamAccumulator { methods: [add_events, content, is_done, model, finish_reason, input_tokens, output_tokens, to_json, from_json] }
+  class StreamCache<T, S> { methods: [new, to_json, from_json] }
+  class VertexAiOptions { methods: [to_json, from_json] }
   function __sap_parse_final<T, S>
   function __sap_parse_partial<T, S>
   function build_request
@@ -87,29 +105,31 @@ namespace baml.llm:
 namespace baml.math:
   function trunc
 namespace baml.media:
-  class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
-  class Image { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
-  class Pdf { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
-  class Video { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
+  class Audio { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
+  class Image { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
+  class Pdf { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
+  class Video { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
 namespace baml.net:
-  class Socket { methods: [read, close] }
+  class Socket { methods: [read, close, to_json, from_json] }
   function connect
 namespace baml.panics:
-  class AllocFailure { methods: [] }
-  class AssertionFailed { methods: [] }
-  class DivisionByZero { methods: [] }
-  class IndexOutOfBounds { methods: [] }
-  class MapKeyNotFound { methods: [] }
+  class AllocFailure { methods: [to_json, from_json] }
+  class AssertionFailed { methods: [to_json, from_json] }
+  class Cancelled { methods: [to_json, from_json] }
+  class DivisionByZero { methods: [to_json, from_json] }
+  class HostUnavailable { methods: [to_json, from_json] }
+  class IndexOutOfBounds { methods: [to_json, from_json] }
+  class MapKeyNotFound { methods: [to_json, from_json] }
   type Panic
-  class StackOverflow { methods: [] }
-  class Unreachable { methods: [] }
-  class UserPanic { methods: [] }
+  class StackOverflow { methods: [to_json, from_json] }
+  class Unreachable { methods: [to_json, from_json] }
+  class UserPanic { methods: [to_json, from_json] }
 namespace baml.stream:
-  class StreamFinished { methods: [] }
-  class StreamNoYield { methods: [] }
+  class StreamFinished { methods: [to_json, from_json] }
+  class StreamNoYield { methods: [to_json, from_json] }
 namespace baml.sys:
-  class ProcessOptions { methods: [] }
-  class ShellOutput { methods: [ok] }
+  class ProcessOptions { methods: [to_json, from_json] }
+  class ShellOutput { methods: [ok, to_json, from_json] }
   function argv
   function exec
   function now_ms

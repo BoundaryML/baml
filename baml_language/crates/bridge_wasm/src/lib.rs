@@ -300,10 +300,7 @@ impl BamlWasmRuntime {
 
         // Handle cancellation error.
         let result = result.map_err(|e| -> JsValue {
-            if matches!(
-                e,
-                bex_project::RuntimeError::Engine(bex_project::EngineError::Cancelled)
-            ) {
+            if bex_project::is_cancelled_runtime_error(&e) {
                 let err = js_sys::Error::new("Operation cancelled");
                 err.set_name("BamlCancelledError");
                 err.into()
@@ -434,7 +431,7 @@ impl BamlWasmRuntime {
                     .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
                 Ok(baml_value.encode_to_vec())
             }
-            Err(bex_project::EngineError::Cancelled) => {
+            Err(e) if bex_project::is_cancelled_engine_error(&e) => {
                 let error = js_sys::Error::new("Function call was cancelled");
                 error.set_name("BamlCancelledError");
                 Err(error.into())

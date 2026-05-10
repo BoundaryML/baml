@@ -21,6 +21,7 @@ use std::{
     },
 };
 
+use ::bex_vm_types::Value;
 use bex_external_types::{Handle, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, ObjectIndex};
 
@@ -472,6 +473,42 @@ impl BexHeap {
     pub(crate) unsafe fn inactive_mut(&self) -> &mut ChunkedVec<Object> {
         // SAFETY: Caller ensures exclusive access
         unsafe { &mut *self.inactive.get() }
+    }
+
+    /// Write barrier for field/element/cell writes.
+    ///
+    /// Called *before* the actual field write at each mutation site. If `container_ptr`
+    /// is in an older generation than the object being written (`written_value`), the
+    /// card containing `container_ptr` is marked dirty so partial GC can discover
+    /// the cross-generation reference.
+    ///
+    /// This is a no-op when either side is not a heap object, or when the container
+    /// is in Gen0 (no card table for Gen0).
+    #[inline]
+    pub fn write_barrier(&self, container_ptr: HeapPtr, written_value: Value) {
+        if let Value::Object(ref_ptr) = written_value {
+            let container_gen = self.generation_of(container_ptr);
+            let ref_gen = self.generation_of(ref_ptr);
+            if container_gen > ref_gen {
+                self.mark_card_for_ptr(container_ptr);
+            }
+        }
+    }
+
+    /// Conservative write barrier for mutable accessor paths (builtin dispatch).
+    ///
+    /// Unconditionally marks the card dirty if `container_ptr` is in an older
+    /// generation. Used by `as_array_mut` / `as_map_mut` where the actual written
+    /// value is not yet known (it's supplied by the callee trait method).
+    ///
+    /// This over-marks (any mutable access to an older-gen object dirties the card),
+    /// but it is always safe and the cost is negligible since most objects are Gen0.
+    #[inline]
+    pub fn conservative_write_barrier(&self, container_ptr: HeapPtr) {
+        let container_gen = self.generation_of(container_ptr);
+        if container_gen > Generation::Gen0 {
+            self.mark_card_for_ptr(container_ptr);
+        }
     }
 
     /// Determine which generation an object pointer belongs to.

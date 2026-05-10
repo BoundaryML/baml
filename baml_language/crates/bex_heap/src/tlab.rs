@@ -175,6 +175,36 @@ impl Tlab {
         self.alloc(Object::Variant(Variant { enm, index }))
     }
 
+    /// Allocate a uint8 array object.
+    #[inline]
+    pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> HeapPtr {
+        self.alloc(Object::Uint8Array(data))
+    }
+
+    /// Allocate opaque Rust data on the heap.
+    #[inline]
+    pub fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> HeapPtr {
+        self.alloc(Object::RustData(data))
+    }
+
+    /// Allocate a collector object on the heap.
+    #[inline]
+    pub fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> HeapPtr {
+        self.alloc(Object::Collector(collector))
+    }
+
+    /// Allocate a type descriptor object on the heap.
+    #[inline]
+    pub fn alloc_type(&mut self, ty: baml_type::Ty) -> HeapPtr {
+        self.alloc(Object::Type(Box::new(ty)))
+    }
+
+    /// Allocate a future object on the heap.
+    #[inline]
+    pub fn alloc_future(&mut self, future: bex_vm_types::Future) -> HeapPtr {
+        self.alloc(Object::Future(future))
+    }
+
     /// Get a new chunk from the heap (cold path).
     #[cold]
     fn refill(&mut self) {
@@ -250,6 +280,11 @@ impl std::fmt::Debug for Tlab {
             .field("remaining", &self.remaining())
             .finish()
     }
+}
+
+pub trait TlabHolder {
+    fn tlab(&self) -> &Tlab;
+    fn tlab_mut(&mut self) -> &mut Tlab;
 }
 
 #[cfg(test)]
@@ -441,6 +476,9 @@ mod tests {
                     field_type: baml_type::Ty::Int {
                         attr: baml_type::TyAttr::default(),
                     },
+                    field_template: baml_type::TyTemplate::Concrete(baml_type::Ty::Int {
+                        attr: baml_type::TyAttr::default(),
+                    }),
                     description: None,
                     alias: None,
                     skip: false,
@@ -450,6 +488,9 @@ mod tests {
                     field_type: baml_type::Ty::Int {
                         attr: baml_type::TyAttr::default(),
                     },
+                    field_template: baml_type::TyTemplate::Concrete(baml_type::Ty::Int {
+                        attr: baml_type::TyAttr::default(),
+                    }),
                     description: None,
                     alias: None,
                     skip: false,

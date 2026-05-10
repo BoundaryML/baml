@@ -1,3 +1,0 @@
-# Generated content inside each test crate. Every rig's `generated/`
-# is build.rs output — never committed; regenerated on every build.
-**/generated/

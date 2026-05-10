@@ -2,6 +2,7 @@ generator lang_python {
   output_type "python/pydantic"
   output_dir "../python"
   version "0.68.0"
+  naming_convention "preserve-case"
 }
 
 class ETA {
@@ -29,18 +30,18 @@ class Foo {
 //----
 //- diagnostics
 // Error: Expected Unexpected token in class body, found if
-//     ╭─[ class_generator_keywords1.baml:12:5 ]
+//     ╭─[ class_generator_keywords1.baml:13:5 ]
 //     │
-//  12 │     if string
+//  13 │     if string
 //     │     ─┬  
 //     │      ╰── Expected Unexpected token in class body, found if
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: field 'string' is missing a type annotation
-//     ╭─[ class_generator_keywords1.baml:12:8 ]
+//     ╭─[ class_generator_keywords1.baml:13:8 ]
 //     │
-//  12 │     if string
+//  13 │     if string
 //     │        ───┬──  
 //     │           ╰──── field 'string' is missing a type annotation
 //     │ 

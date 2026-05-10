@@ -1,14 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 449
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type mismatch: expected baml.llm.Client, got null
-    ╭─[ valid_generator.baml:18:2 ]
+    ╭─[ valid_generator.baml:19:2 ]
     │
- 18 │ ╭─▶ }
+ 19 │ ╭─▶ }
     ┆ ┆   
- 23 │ ├─▶ }
+ 24 │ ├─▶ }
     │ │       
     │ ╰─────── type mismatch: expected baml.llm.Client, got null
     │     
@@ -16,11 +15,11 @@ assertion_line: 449
 ────╯
 
   [type] Error: type mismatch: expected baml.llm.Client, got null
-    ╭─[ valid_generator.baml:20:30 ]
+    ╭─[ valid_generator.baml:21:30 ]
     │
- 20 │ ╭─▶ function GetUser() -> MyClass {
+ 21 │ ╭─▶ function GetUser() -> MyClass {
     ┆ ┆   
- 23 │ ├─▶ }
+ 24 │ ├─▶ }
     │ │       
     │ ╰─────── type mismatch: expected baml.llm.Client, got null
     │     
@@ -28,9 +27,9 @@ assertion_line: 449
 ────╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '<', found '<'
-    ╭─[ valid_generator.baml:21:11 ]
+    ╭─[ valid_generator.baml:22:11 ]
     │
- 21 │     client<llm> MyClient
+ 22 │     client<llm> MyClient
     │           ┬  
     │           ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '<', found '<'
     │ 
@@ -38,9 +37,9 @@ assertion_line: 449
 ────╯
 
   [parse] Error: Expected client name, found '<'
-    ╭─[ valid_generator.baml:21:11 ]
+    ╭─[ valid_generator.baml:22:11 ]
     │
- 21 │     client<llm> MyClient
+ 22 │     client<llm> MyClient
     │           ┬  
     │           ╰── Expected client name, found '<'
     │ 
@@ -48,9 +47,9 @@ assertion_line: 449
 ────╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'llm', found identifier
-    ╭─[ valid_generator.baml:21:12 ]
+    ╭─[ valid_generator.baml:22:12 ]
     │
- 21 │     client<llm> MyClient
+ 22 │     client<llm> MyClient
     │            ─┬─  
     │             ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found 'llm', found identifier
     │ 
@@ -58,9 +57,9 @@ assertion_line: 449
 ────╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '>', found '>'
-    ╭─[ valid_generator.baml:21:15 ]
+    ╭─[ valid_generator.baml:22:15 ]
     │
- 21 │     client<llm> MyClient
+ 22 │     client<llm> MyClient
     │               ┬  
     │               ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '>', found '>'
     │ 
@@ -68,9 +67,9 @@ assertion_line: 449
 ────╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'MyClient', found identifier
-    ╭─[ valid_generator.baml:21:17 ]
+    ╭─[ valid_generator.baml:22:17 ]
     │
- 21 │     client<llm> MyClient
+ 22 │     client<llm> MyClient
     │                 ────┬───  
     │                     ╰───── Expected Only 'client' and 'prompt' allowed in LLM function, found 'MyClient', found identifier
     │ 

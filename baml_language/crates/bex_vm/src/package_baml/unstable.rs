@@ -126,6 +126,7 @@ fn format_value_recursive(
             Object::Function(f) => Ok(format!("<function {}>", f.name)),
             Object::Class(c) => Ok(format!("<class {}>", c.name)),
             Object::Future(_) => Ok("<future>".to_string()),
+            Object::UnscheduledFuture(_) => Ok("<unscheduled future>".to_string()),
             Object::Collector(_) => Ok("<collector>".to_string()),
             Object::Type(ty) => Ok(format!("<type: {ty}>")),
             Object::Uint8Array(bytes) => Ok(format!("<uint8array len={}>", bytes.len())),

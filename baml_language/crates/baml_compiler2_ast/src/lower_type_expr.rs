@@ -392,6 +392,11 @@ fn lower_from_type_name_with_generic_args(name: &str, generic_args: Vec<TypeExpr
             attrs: vec![],
         },
         "uint8array" => TypeExpr::Uint8Array { attrs: vec![] },
+        "json" => TypeExpr::Path {
+            segments: vec![Name::new("baml"), Name::new("json"), Name::new("json")],
+            generic_args: vec![],
+            attrs: vec![],
+        },
         _ => {
             if name.contains('.') {
                 let segments: Vec<Name> = name.split('.').map(Name::new).collect();

@@ -13,26 +13,6 @@ assertion_line: 39224
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved type: json
-   ╭─[ type_aliases_json.baml:1:12 ]
-   │
- 1 │ type JSON = int | float | string | bool | JSON[] | map<string,json>
-   │            ────────────────────────────┬───────────────────────────  
-   │                                        ╰───────────────────────────── unresolved type: json
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: unresolved type: name
-   ╭─[ type_aliases_json.baml:4:8 ]
-   │
- 4 │   inner name
-   │        ──┬──  
-   │          ╰──── unresolved type: name
-   │ 
-   │ Note: Error code: E0002
-───╯
-
   [type] Error: unresolved type: name
    ╭─[ type_aliases_json.baml:4:8 ]
    │

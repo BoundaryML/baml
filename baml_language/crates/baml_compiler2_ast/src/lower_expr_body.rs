@@ -30,6 +30,36 @@ fn is_ident_token(kind: SyntaxKind) -> bool {
     kind == SyntaxKind::WORD || kind == SyntaxKind::KW_CLIENT
 }
 
+/// Locate the `GENERIC_ARGS` node that should be treated as the *call-site*
+/// type-args for a `CALL_EXPR` whose callee is `callee_node`.
+///
+/// Direct child case (`foo<T>(args)`): the `GENERIC_ARGS` sits inside the
+/// callee `PATH_EXPR`. For static-method-on-generic-class calls
+/// (`Box<Secret>.from_json(j)`) the parser emits a `FIELD_ACCESS_EXPR` whose
+/// base `PATH_EXPR` carries the receiver's `GENERIC_ARGS` — that's also a
+/// call-site type-arg from a semantic standpoint, so we walk into the base.
+///
+/// We don't merge `GENERIC_ARGS` from both positions: if both are present
+/// (e.g. `Container<int>.method<U>(args)`) the *method-level* args (direct
+/// child) win, since they're attached to the call itself.
+fn find_callee_generic_args(callee_node: &SyntaxNode) -> Option<SyntaxNode> {
+    if let Some(args) = callee_node
+        .children()
+        .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+    {
+        return Some(args);
+    }
+    match callee_node.kind() {
+        SyntaxKind::FIELD_ACCESS_EXPR | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => {
+            // Base is the first child node — it carries the receiver type's
+            // `GENERIC_ARGS` for `<Type<...>>.method(args)` shape.
+            let base = callee_node.children().next()?;
+            find_callee_generic_args(&base)
+        }
+        _ => None,
+    }
+}
+
 /// Lower a CST `ExprFunctionBody` to an owned `ExprBody` + parallel `AstSourceMap`.
 pub(crate) fn lower(
     expr_body: &baml_compiler_syntax::ast::ExprFunctionBody,
@@ -1618,13 +1648,21 @@ impl LoweringContext {
         let callee_node = node.children().find(|n| n.kind() != SyntaxKind::CALL_ARGS);
 
         // Extract explicit type arguments from the callee node.
-        // When `foo<T, U>(args)` is parsed, the parser emits a PATH_EXPR containing
-        // the callee tokens and a GENERIC_ARGS child node. We walk that node to
-        // collect each TYPE_EXPR child and lower it to an AST TypeExpr.
+        //
+        // Two parser shapes produce GENERIC_ARGS we should treat as call-site
+        // type-args:
+        //
+        //   1. `foo<T, U>(args)` — GENERIC_ARGS is a direct child of the
+        //      callee PATH_EXPR.
+        //   2. `Box<Secret>.from_json(args)` — GENERIC_ARGS is on the
+        //      receiver-type PATH_EXPR nested inside the FIELD_ACCESS_EXPR
+        //      callee.  Treat the receiver's type-args as the call's
+        //      type-args so the BEP-039 type-arg channel seeds the static
+        //      method's frame correctly (e.g. `Box.from_json` sees
+        //      `T = Secret`).
         let type_args: Vec<TypeExpr> = callee_node
-            .iter()
-            .flat_map(rowan::SyntaxNode::children)
-            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+            .as_ref()
+            .and_then(find_callee_generic_args)
             .into_iter()
             .flat_map(|args_node| args_node.children())
             .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)

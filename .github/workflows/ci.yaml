@@ -77,6 +77,7 @@ jobs:
             ':.github/workflows/ci.yaml' \
             ':.github/workflows/release-baml-language-alpha.yml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
+            ':.github/workflows/size-gate.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -200,6 +201,8 @@ jobs:
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':typescript2/app-vscode-webview/**' \
             ':typescript2/pkg-playground/**' \
+            ':typescript2/pkg-proto/**' \
+            ':baml_language/crates/bridge_ctypes/types/**' \
             ':baml_language/crates/baml_playground_wasm/**' \
             ':.github/workflows/webview-tests.reusable.yaml' \
           ; then
@@ -261,8 +264,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Linux jobs for better hit rates
-          shared-key: "linux-cargo-32gb"
+          # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.
+          save-if: false
+          shared-key: "linux-cargo"
 
       - name: "Install cargo-binstall"
         run: |
@@ -321,11 +325,19 @@ jobs:
   cargo-tests:
     name: "Cargo Tests"
     needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/cargo-tests.reusable.yaml
-    with:
-      code_changed: ${{ needs.determine_changes.outputs.code }}
-      run_all: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
     secrets: inherit
+
+  size-gate:
+    name: "Size Gate"
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    uses: ./.github/workflows/size-gate.reusable.yaml
+    secrets: inherit
+    permissions:
+      contents: read
+      pull-requests: write
 
   wasm-pack-tests:
     name: "WASM Pack Tests"
@@ -407,6 +419,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
+          # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.
+          save-if: false
           shared-key: "linux-cargo"
 
       - name: "Install pnpm"
@@ -473,7 +487,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Linux jobs for better hit rates
+          # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.
+          save-if: false
           shared-key: "linux-cargo"
 
       - name: "Install codspeed"

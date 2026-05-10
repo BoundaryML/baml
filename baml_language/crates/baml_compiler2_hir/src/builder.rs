@@ -1067,6 +1067,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_generator(&mut self, g: &ast::GeneratorDef) {
         let local_id = self.item_tree.alloc_generator(g);
+        ItemTree::collect_generator_spans(&mut self.item_tree_source_map, local_id, g);
         let loc = GeneratorLoc::new(self.db, self.file, local_id);
         self.value_contributions.push((
             g.name.clone(),
@@ -1520,15 +1521,32 @@ impl<'db> SemanticIndexBuilder<'db> {
                 generic_args,
                 ..
             } => {
+                // Allow `baml.errors.*`, `root.errors.*`, and `baml.json.*` (fully qualified).
+                // `baml.json.JsonParseError` / `baml.json.JsonDecodeError` /
+                // `baml.json.JsonSerializationError` are stdlib error types just like
+                // `baml.errors.*` ones; they need the same exemption.
                 let is_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
-                    && segments[1].as_str() == "errors";
+                    && (segments[1].as_str() == "errors" || segments[1].as_str() == "json");
+                // Allow single-segment class names (e.g. `JsonParseError`) in
+                // builtin files — the class is resolvable in the current namespace
+                // and TIR will type-check it.  This allows builtin functions to
+                // declare `throws` for classes defined in the same stdlib namespace
+                // without requiring the full `baml.json.JsonParseError` path.
+                let is_builtin_class_ref = segments.len() == 1
+                    && generic_args.is_empty()
+                    && segments[0]
+                        .as_str()
+                        .chars()
+                        .next()
+                        .is_some_and(char::is_uppercase);
                 let is_allowed_generic = segments.len() == 1
                     && generic_args.is_empty()
+                    && !is_builtin_class_ref
                     && allowed_generic_params
                         .iter()
                         .any(|name| name == &segments[0]);
-                if !is_builtin_error && !is_allowed_generic {
+                if !is_builtin_error && !is_builtin_class_ref && !is_allowed_generic {
                     invalid.push(Self::render_type_expr(type_expr));
                 }
             }

@@ -251,6 +251,76 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
 /// pattern have already been resolved to concrete types — so no
 /// `generic_params` are needed.  If future patterns introduce `TypeVars` that
 /// survive to MIR, thread `enclosing_generic_params()` through here.
+/// Convert a `Tir2Ty` to `TyTemplate`, mapping any `TypeVar(name)` whose
+/// `name` appears at position `N` in `generic_params` to `TypeArgRef(N)`.
+///
+/// Free function counterpart to `MirLowerer::ty_to_template`, exposed so
+/// that callers outside of MIR (e.g. `baml_compiler2_emit`'s class-field
+/// type lowering) can build the same templates.
+pub fn tir2_to_template(
+    ty: &Tir2Ty,
+    resolved: &ResolvedAliases,
+    generic_params: &[baml_base::Name],
+) -> TyTemplate {
+    match ty {
+        Tir2Ty::TypeVar(name, _) => {
+            if let Some(n) = generic_params.iter().position(|p| p == name) {
+                TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
+            } else {
+                TyTemplate::Concrete(Ty::Void {
+                    attr: baml_type::TyAttr::default(),
+                })
+            }
+        }
+        Tir2Ty::List(inner, _) => {
+            TyTemplate::Array(Box::new(tir2_to_template(inner, resolved, generic_params)))
+        }
+        Tir2Ty::Optional(inner, _) => {
+            TyTemplate::Optional(Box::new(tir2_to_template(inner, resolved, generic_params)))
+        }
+        Tir2Ty::Map(k, v, _) => TyTemplate::Map(
+            Box::new(tir2_to_template(k, resolved, generic_params)),
+            Box::new(tir2_to_template(v, resolved, generic_params)),
+        ),
+        Tir2Ty::Union(parts, _) => TyTemplate::Union(
+            parts
+                .iter()
+                .map(|p| tir2_to_template(p, resolved, generic_params))
+                .collect(),
+        ),
+        Tir2Ty::Class(qtn, type_args, attr) => {
+            if type_args
+                .iter()
+                .any(baml_compiler2_tir::generics::contains_typevar)
+            {
+                let template_args: Vec<TyTemplate> = type_args
+                    .iter()
+                    .map(|a| tir2_to_template(a, resolved, generic_params))
+                    .collect();
+                TyTemplate::Class(qtn_to_type_name(qtn), template_args)
+            } else {
+                let resolved_args: Vec<Ty> = type_args
+                    .iter()
+                    .map(|a| convert_tir2_ty(a, resolved))
+                    .collect();
+                TyTemplate::Concrete(Ty::Class(
+                    qtn_to_type_name(qtn),
+                    resolved_args,
+                    attr.clone(),
+                ))
+            }
+        }
+        Tir2Ty::EvolvingList(inner, _) => {
+            TyTemplate::Array(Box::new(tir2_to_template(inner, resolved, generic_params)))
+        }
+        Tir2Ty::EvolvingMap(k, v, _) => TyTemplate::Map(
+            Box::new(tir2_to_template(k, resolved, generic_params)),
+            Box::new(tir2_to_template(v, resolved, generic_params)),
+        ),
+        other => TyTemplate::Concrete(convert_tir2_ty(other, resolved)),
+    }
+}
+
 pub(crate) fn ty_to_template_from_resolved_ty(ty: &Ty) -> TyTemplate {
     match ty {
         Ty::Class(tn, args, _) if !args.is_empty() => {
@@ -2286,10 +2356,17 @@ impl<'db> LoweringContext<'db> {
         for (offset, seg) in segments[1..].iter().enumerate() {
             let seg_idx = offset + 1;
             let is_last = seg_idx + 1 == segments.len();
-            if let Ty::Class(ref tn, _, _) = current_ty.clone() {
+            if let Ty::Class(ref tn, ref class_type_args, _) = current_ty.clone() {
                 if let Some(fields) = self.class_fields.get(tn) {
                     if let Some(&idx) = fields.get(seg.as_str()) {
-                        let next_ty = self.class_field_ty(tn, seg);
+                        // Substitute the receiver's class type-args into the
+                        // declared field type so chained access through generic
+                        // positions (`b.value.name` where `b: Box<User>`)
+                        // produces `Ty::Class(User, ...)` rather than the
+                        // erased `Ty::Void`.  Without this, the next iteration
+                        // falls through to the map-key fallback below and the
+                        // VM hits `expected Map, got Instance`.
+                        let next_ty = self.class_field_ty(tn, seg, class_type_args);
                         current_place = Place::Field {
                             base: Box::new(current_place),
                             field: idx,
@@ -2356,16 +2433,21 @@ impl<'db> LoweringContext<'db> {
 
     /// Look up the MIR type of a named field on a class, for chained field access.
     ///
-    /// Returns `Ty::Null` if the field is not found or the type cannot be resolved.
-    /// Used by `lower_multi_segment_path_as_field_chain` to track the type through
-    /// a chain of field projections (`a.b.c` needs the type of `b` to find `c`).
-    fn class_field_ty(&self, class_tn: &TypeName, field_name: &Name) -> Ty {
+    /// `class_type_args` are the type-args carried on the receiver's
+    /// `Ty::Class(tn, class_type_args, _)` (e.g. `[User]` for `Box<User>`).
+    /// They are substituted into the declared field type so a generic-typed
+    /// position (`item: T` in `Container<T>`) resolves to the concrete
+    /// receiver-side binding rather than `Ty::Void`.
+    ///
+    /// Returns `Ty::Null` if the field is not found or the type cannot be
+    /// resolved.  Called by `lower_multi_segment_path_as_field_chain` to
+    /// track the type through a chain of field projections (`a.b.c` needs
+    /// the type of `b` to find `c`).
+    fn class_field_ty(&self, class_tn: &TypeName, field_name: &Name, class_type_args: &[Ty]) -> Ty {
         use baml_compiler2_hir::{contributions::Definition, package::package_items};
         use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
         let db = self.db;
 
-        // class_tn.module_path is [pkg_name, ...namespace_parts].
-        // Use the package name (module_path[0]) to get PackageItems.
         let Some(pkg_name) = class_tn.module_path.first() else {
             return Ty::Null {
                 attr: TyAttr::default(),
@@ -2374,7 +2456,6 @@ impl<'db> LoweringContext<'db> {
         let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name.clone());
         let pkg_items_ref = package_items(db, pkg_id);
 
-        // namespace = module_path[1..] (everything after the package name)
         let namespace: Vec<Name> = class_tn.module_path[1..].to_vec();
 
         let Some(Definition::Class(class_loc)) =
@@ -2411,7 +2492,12 @@ impl<'db> LoweringContext<'db> {
             &class_data.generic_params,
             &mut diags,
         );
-        self.resolved_aliases.convert(&tir_ty)
+        // Build a TyTemplate with `TypeArgRef(N)` for each class-level
+        // generic param, then substitute `class_type_args` so a field
+        // declared as `T` resolves to the concrete receiver-side binding.
+        let template =
+            tir2_to_template(&tir_ty, &self.resolved_aliases, &class_data.generic_params);
+        template.substitute(class_type_args)
     }
 
     fn lower_item_ref(&mut self, expr_id: AstExprId, def: Definition<'db>, dest: Place) {
@@ -3171,7 +3257,7 @@ impl LoweringContext<'_> {
             return;
         }
 
-        // ── Phase 5: Emit LoadType temps for explicit type arguments ─────────
+        // ── Emit LoadType temps for explicit type arguments ──────────────────
         // When the call carries explicit type args (e.g. `describe<User>()` or
         // `fwd<T>()` where T forwards to `described_type<T>()`), materialise
         // each as a `type` value on the stack before the regular value args.
@@ -3186,7 +3272,7 @@ impl LoweringContext<'_> {
             };
         let explicit_type_arg_operands = self.lower_explicit_type_args(&ast_type_args);
 
-        // ── Phase 8: Prepend receiver's class-level type args ────────────────
+        // ── Prepend receiver's class-level type args ─────────────────────────
         // For `b.describe()` where `b: Box<int>`, the method `describe` is compiled
         // as a direct call `describe(b)` (not via MakeBoundMethod). The VM's
         // BoundMethod path for seeding frame.type_args is bypassed, so we instead
@@ -3491,8 +3577,9 @@ impl LoweringContext<'_> {
     ///
     /// Returns `None` when the callee is not `type_of` **or** when the type
     /// argument contains a `TypeVar` (generic-parameter reference).  The latter
-    /// case is deferred to Phase 5 which will produce `TyTemplate::TypeArgRef`
-    /// leaves; attempting it here would emit a broken `LoadType` instruction.
+    /// case is deferred to template lowering, which produces
+    /// `TyTemplate::TypeArgRef` leaves; attempting it here would emit a broken
+    /// `LoadType` instruction.
     fn check_type_of_intrinsic(
         &self,
         callee: AstExprId,
@@ -3602,7 +3689,7 @@ impl LoweringContext<'_> {
             &mut diags,
         );
 
-        // ── 4. (Phase 5) Build TyTemplate — TypeVar → TypeArgRef(N) ────────────
+        // ── 4. Build TyTemplate — TypeVar → TypeArgRef(N) ─────────────────────
         let template = self.ty_to_template(&tir_ty, &generic_params);
         Some(template)
     }
@@ -3612,9 +3699,6 @@ impl LoweringContext<'_> {
     /// `Tir2Ty::TypeVar("T")` whose name appears at position `N` in
     /// `generic_params` maps to `TyTemplate::TypeArgRef(N)`.  All other types
     /// recurse structurally and bottom out at `TyTemplate::Concrete(...)`.
-    ///
-    /// This is the Phase 5 replacement for the direct `convert_tir2_ty` call
-    /// that Phase 4 used for fully-concrete types.
     fn ty_to_template(&self, ty: &Tir2Ty, generic_params: &[baml_base::Name]) -> TyTemplate {
         match ty {
             Tir2Ty::TypeVar(name, _) => {
@@ -4907,10 +4991,10 @@ impl LoweringContext<'_> {
                 };
 
                 for seg in &segments[1..] {
-                    if let Ty::Class(ref tn, _, _) = current_ty.clone() {
+                    if let Ty::Class(ref tn, ref class_type_args, _) = current_ty.clone() {
                         if let Some(fields) = self.class_fields.get(tn) {
                             if let Some(&idx) = fields.get(seg.as_str()) {
-                                let next_ty = self.class_field_ty(tn, seg);
+                                let next_ty = self.class_field_ty(tn, seg, class_type_args);
                                 current_place = Place::Field {
                                     base: Box::new(current_place),
                                     field: idx,

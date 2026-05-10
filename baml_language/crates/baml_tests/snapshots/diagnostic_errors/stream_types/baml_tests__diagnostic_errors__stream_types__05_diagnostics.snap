@@ -19,6 +19,16 @@ assertion_line: 37388
     │ Note: Error code: E0011
 ────╯
 
+  [type] Error: type mismatch: expected int, got string
+    ╭─[ main.baml:31:7 ]
+    │
+ 31 │ class Inner {
+    │       ──┬──  
+    │         ╰──── type mismatch: expected int, got string
+    │ 
+    │ Note: Error code: E0001
+────╯
+
   [validation] Error: Name `Foo` defined 2 times as: class, type
      ╭─[ basic.baml:1:7 ]
      │

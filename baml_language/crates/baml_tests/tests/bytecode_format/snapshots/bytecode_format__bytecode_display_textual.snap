@@ -84,6 +84,150 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> void th
     return
 }
 
+function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
+    load_var j
+    load_const "outcome"
+    call baml.json.field
+    store_var _3
+    load_type "pass" | "fail" | "error"
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "duration_ms"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    alloc_instance testing.RunReport
+    load_var _2
+    init_field .outcome
+    load_var _5
+    init_field .duration_ms
+    return
+}
+
+function testing.RunReport.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .outcome
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    store_var _2
+    load_var self
+    load_field .duration_ms
+    call baml.Int.to_json
+    store_var _7
+    load_var _2
+    load_var _7
+    load_const "outcome"
+    load_const "duration_ms"
+    alloc_map 2
+    return
+}
+
+function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest {
+    load_var j
+    load_const "type"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    alloc_instance testing.SerializedTest
+    load_var _2
+    init_field .type
+    load_var _5
+    init_field .name
+    return
+}
+
+function testing.SerializedTest.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .type
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "type"
+    load_const "name"
+    alloc_map 2
+    return
+}
+
+function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "items"
+    call baml.json.field
+    store_var _6
+    load_type testing.SerializedTest | testing.SerializedTestSet[]
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "loadingTimeMs"
+    call baml.json.field
+    store_var _9
+    load_type int
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    alloc_instance testing.SerializedTestSet
+    load_var _2
+    init_field .name
+    load_var _5
+    init_field .items
+    load_var _8
+    init_field .loadingTimeMs
+    return
+}
+
+function testing.SerializedTestSet.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .items
+    call baml.Array.to_json
+    store_var _5
+    load_var self
+    load_field .loadingTimeMs
+    call baml.Int.to_json
+    store_var _8
+    load_var _2
+    load_var _5
+    load_var _8
+    load_const "name"
+    load_const "items"
+    load_const "loadingTimeMs"
+    alloc_map 3
+    return
+}
+
 function testing.TestCollector.find_testset(self: null, name: string) -> testing.TestSetRegistration {
     load_var self
     load_field .testsets
@@ -126,6 +270,41 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
 
   L4:
     load_var ts
+    return
+}
+
+function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector {
+    load_var j
+    load_const "prefix"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "tests"
+    call baml.json.field
+    store_var _6
+    load_type testing.TestRegistration[]
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "testsets"
+    call baml.json.field
+    store_var _9
+    load_type testing.TestSetRegistration[]
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    alloc_instance testing.TestCollector
+    load_var _2
+    init_field .prefix
+    load_var _5
+    init_field .tests
+    load_var _8
+    init_field .testsets
     return
 }
 
@@ -242,7 +421,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     load_var t
     load_field .name
     load_var hash_prefix
-    call baml.String.startsWith
+    call baml.String.starts_with
 
   L10:
     pop_jump_if_false L11
@@ -361,7 +540,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     load_var ts
     load_field .name
     load_var hash_prefix
-    call baml.String.startsWith
+    call baml.String.starts_with
 
   L10:
     pop_jump_if_false L11
@@ -376,6 +555,72 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     add_int
     store_var __for_idx
     jump L3
+}
+
+function testing.TestCollector.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .prefix
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .tests
+    call baml.Array.to_json
+    store_var _5
+    load_var self
+    load_field .testsets
+    call baml.Array.to_json
+    store_var _8
+    load_var _2
+    load_var _5
+    load_var _8
+    load_const "prefix"
+    load_const "tests"
+    load_const "testsets"
+    alloc_map 3
+    return
+}
+
+function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "body"
+    call baml.json.field
+    store_var _6
+    load_type () -> void throws unknown
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "runner"
+    call baml.json.field
+    store_var _9
+    load_type (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never?
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    alloc_instance testing.TestRegistration
+    load_var _2
+    init_field .name
+    load_var _5
+    init_field .body
+    load_var _8
+    init_field .runner
+    return
+}
+
+function testing.TestRegistration.to_json(self: null) -> baml.json.json {
+    load_type testing.TestRegistration
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
 }
 
 function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
@@ -430,7 +675,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     load_var k
     load_const "/"
     bin_op +
-    call baml.String.startsWith
+    call baml.String.starts_with
     pop_jump_if_false L5
     jump L6
 
@@ -505,6 +750,41 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     return
 }
 
+function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry {
+    load_var j
+    load_const "collector"
+    call baml.json.field
+    store_var _3
+    load_type testing.TestCollector
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "expansions"
+    call baml.json.field
+    store_var _6
+    load_type map<string, testing.TestRegistry>
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "loading_time_ms"
+    call baml.json.field
+    store_var _9
+    load_type int
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    alloc_instance testing.TestRegistry
+    load_var _2
+    init_field .collector
+    load_var _5
+    init_field .expansions
+    load_var _8
+    init_field .loading_time_ms
+    return
+}
+
 function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
     alloc_instance testing.TestRegistry
     load_var collector
@@ -568,7 +848,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     load_var k
     load_const "/"
     bin_op +
-    call baml.String.startsWith
+    call baml.String.starts_with
     pop_jump_if_false L5
     jump L6
 
@@ -728,6 +1008,208 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     jump L0
 }
 
+function testing.TestRegistry.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .collector
+    call testing.TestCollector.to_json
+    store_var _2
+    load_var self
+    load_field .expansions
+    call baml.Map.to_json
+    store_var _5
+    load_var self
+    load_field .loading_time_ms
+    call baml.Int.to_json
+    store_var _8
+    load_var _2
+    load_var _5
+    load_var _8
+    load_const "collector"
+    load_const "expansions"
+    load_const "loading_time_ms"
+    alloc_map 3
+    return
+}
+
+function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
+    load_var j
+    load_const "outcome"
+    call baml.json.field
+    store_var _3
+    load_type "pass" | "fail" | "error"
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "runs"
+    call baml.json.field
+    store_var _6
+    load_type testing.RunReport[]
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    alloc_instance testing.TestReport
+    load_var _2
+    init_field .outcome
+    load_var _5
+    init_field .runs
+    return
+}
+
+function testing.TestReport.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .outcome
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    store_var _2
+    load_var self
+    load_field .runs
+    call baml.Array.to_json
+    store_var _7
+    load_var _2
+    load_var _7
+    load_const "outcome"
+    load_const "runs"
+    alloc_map 2
+    return
+}
+
+function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "collector"
+    call baml.json.field
+    store_var _6
+    load_type (testing.TestCollector) -> void throws unknown
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "runner"
+    call baml.json.field
+    store_var _9
+    load_type (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never?
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    alloc_instance testing.TestSetRegistration
+    load_var _2
+    init_field .name
+    load_var _5
+    init_field .collector
+    load_var _8
+    init_field .runner
+    return
+}
+
+function testing.TestSetRegistration.to_json(self: null) -> baml.json.json {
+    load_type testing.TestSetRegistration
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport {
+    load_var j
+    load_const "outcome"
+    call baml.json.field
+    store_var _3
+    load_type "pass" | "fail" | "error"
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "passed"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "failed"
+    call baml.json.field
+    store_var _9
+    load_type int
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    load_var j
+    load_const "total"
+    call baml.json.field
+    store_var _12
+    load_type int
+    load_var _12
+    call baml.json.from_json
+    store_var _11
+    load_var j
+    load_const "results"
+    call baml.json.field
+    store_var _15
+    load_type testing.TestReport | testing.TestSetReport[]
+    load_var _15
+    call baml.json.from_json
+    store_var _14
+    alloc_instance testing.TestSetReport
+    load_var _2
+    init_field .outcome
+    load_var _5
+    init_field .passed
+    load_var _8
+    init_field .failed
+    load_var _11
+    init_field .total
+    load_var _14
+    init_field .results
+    return
+}
+
+function testing.TestSetReport.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .outcome
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    store_var _2
+    load_var self
+    load_field .passed
+    call baml.Int.to_json
+    store_var _7
+    load_var self
+    load_field .failed
+    call baml.Int.to_json
+    store_var _10
+    load_var self
+    load_field .total
+    call baml.Int.to_json
+    store_var _13
+    load_var self
+    load_field .results
+    call baml.Array.to_json
+    store_var _16
+    load_var _2
+    load_var _7
+    load_var _10
+    load_var _13
+    load_var _16
+    load_const "outcome"
+    load_const "passed"
+    load_const "failed"
+    load_const "total"
+    load_const "results"
+    alloc_map 5
+    return
+}
+
 function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
     load_var ?1
     make_cell
@@ -778,6 +1260,141 @@ function testing.run_testset(run_children: () -> testing.TestSetReport throws ne
     return
 }
 
+function user.ErrorInfo.from_json(j: baml.json.json) -> ErrorInfo {
+    load_var j
+    load_const "code"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    alloc_instance user.ErrorInfo
+    load_var _2
+    init_field .code
+    load_var _5
+    init_field .message
+    return
+}
+
+function user.ErrorInfo.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .code
+    call baml.Int.to_json
+    store_var _2
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    store_var _5
+    load_var _2
+    load_var _5
+    load_const "code"
+    load_const "message"
+    alloc_map 2
+    return
+}
+
+function user.Report.from_json(j: baml.json.json) -> Report {
+    load_var j
+    load_const "score"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "label"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "breakdown"
+    call baml.json.field
+    store_var _9
+    load_type map<string, int>
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    alloc_instance user.Report
+    load_var _2
+    init_field .score
+    load_var _5
+    init_field .label
+    load_var _8
+    init_field .breakdown
+    return
+}
+
+function user.Report.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .score
+    call baml.Int.to_json
+    store_var _2
+    load_var self
+    load_field .label
+    call baml.String.to_json
+    store_var _5
+    load_var self
+    load_field .breakdown
+    call baml.Map.to_json
+    store_var _8
+    load_var _2
+    load_var _5
+    load_var _8
+    load_const "score"
+    load_const "label"
+    load_const "breakdown"
+    alloc_map 3
+    return
+}
+
+function user.User.from_json(j: baml.json.json) -> User {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "age"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "role"
+    call baml.json.field
+    store_var _9
+    load_type Role
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    alloc_instance user.User
+    load_var _2
+    init_field .name
+    load_var _5
+    init_field .age
+    load_var _8
+    init_field .role
+    return
+}
+
 function user.User.promote(self: null, bonus: int) -> Report {
     load_var self
     load_var self
@@ -801,6 +1418,31 @@ function user.User.promote(self: null, bonus: int) -> Report {
     load_var base
     load_field .breakdown
     init_field .breakdown
+    return
+}
+
+function user.User.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .age
+    call baml.Int.to_json
+    store_var _5
+    load_var self
+    load_field .role
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    store_var _8
+    load_var _2
+    load_var _5
+    load_var _8
+    load_const "name"
+    load_const "age"
+    load_const "role"
+    alloc_map 3
     return
 }
 

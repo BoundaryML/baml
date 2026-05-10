@@ -1,0 +1,68 @@
+[project]
+name = "baml_core"
+version = "0.1.3"
+description = "BAML python bindings (new system, bex_engine)"
+authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
+license = "Apache-2.0"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "protobuf>=6.31.1",
+]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7",
+    "pytest-asyncio>=0.21",
+    "pytest-xdist>=3",
+    "maturin>=1.0,<2.0",
+    "grpcio-tools>=1.50",
+    "pydantic>=2",
+    "pyright>=1.1.409",
+    "ruff",
+    "ty",
+]
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+
+[tool.maturin]
+python-source = "src"
+manifest-path = "rust/bridge_python/Cargo.toml"
+module-name = "baml_core.baml_py"
+features = ["extension-module"]
+include = [{ path = "src/baml_core/py.typed", format = ["sdist", "wheel"] }]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-n auto"
+
+[tool.ruff]
+extend-exclude = ["src/baml_core/cffi/v1/*_pb2.py"]
+
+[tool.ty.environment]
+extra-paths = ["tests/sim"]
+
+[tool.ty.rules]
+# Protobuf generated stubs use metaclass patterns ty can't handle.
+conflicting-metaclass = "ignore"
+# proto.py constructs types dynamically at runtime (List[fn()], Literal[var]).
+invalid-type-form = "ignore"
+# Collector subclass returns a Python FunctionLog wrapper instead of the
+# Rust FunctionLog — nominally different types that are functionally identical.
+invalid-method-override = "warn"

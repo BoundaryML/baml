@@ -1,0 +1,16 @@
+// Phase 5 fixture: explicit type-arg `to_string<User>` / `from_string<User>`.
+// MIR snapshot must show `LoadType(User)` followed by a `Call` with
+// `ntypeargs=1` for both calls.
+
+class User {
+  name string
+  age int
+}
+
+function serialize_user(u: User) -> string throws baml.json.JsonSerializationError {
+  baml.json.to_string<User>(u)
+}
+
+function deserialize_user(s: string) -> User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<User>(s)
+}

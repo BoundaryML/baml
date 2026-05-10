@@ -187,6 +187,15 @@ pub enum Instruction {
     ///
     /// Format: `STORE_GLOBAL i` where `i` is the index of the global variable
     /// in the `Vm::globals` array.
+    ///
+    /// # Init-only invariant
+    ///
+    /// Only `$init` (or `$init_test`) functions may emit `StoreGlobal`. The
+    /// compiler enforces this by emitting `StoreGlobal` exclusively from
+    /// `compile_init_function`. Post-`$init` globals are shared across VMs as a
+    /// frozen `Arc<[Value]>`; the runtime treats a `StoreGlobal` against that
+    /// shared view as a `VmInternalError`. Hand-written or fuzzed bytecode that
+    /// emits `StoreGlobal` outside of `$init` will be rejected at runtime.
     StoreGlobal(GlobalIndex),
 
     /// Load a field of an object.

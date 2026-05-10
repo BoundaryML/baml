@@ -1,14 +1,87 @@
+# Cache strategy
+# ==============
+#
+# GHA caching has two quirks we have to dance around:
+#
+#   - an per-repo cache limit (ours is set to 30GiB) for *all* PRs, and
+#   - a rule that only the default branch's cache can be shared by
+#     different branches
+#
+# It's therefore important that we keep the `canary` cache populated, and
+# because GHA caches are immutable, the daily `canary-cache-refresh.yml`
+# workflow purges canary's rust-cache entries and then re-invokes this
+# workflow so the savers below repopulate fresh content. (That purge lives
+# in a separate workflow specifically so `actions: write` is never granted
+# on the `workflow_call` path from `ci.yaml`, which would expose it to
+# PR-controlled cargo build code. See the comment in
+# `canary-cache-refresh.yml`.) The low storage limit means we also try to
+# reuse `shared-key`s:
+#
+# 1. Only canary writes (`save-if: ${{ github.ref == 'refs/heads/canary' }}`).
+#    PR / merge_group / feature-branch runs read from canary's cache
+#    scope but don't save their own — keeps the 30 GiB budget from
+#    fragmenting one entry per ref. `canary-cache-refresh.yml`'s daily
+#    purge + repopulate cycle keeps canary's entries fresh past the 7-day
+#    inactivity TTL during quiet periods.
+#
+# 2. One designated saver per `shared-key`. Every other job that uses
+#    the same key passes `save-if: false` and is read-only. Two jobs
+#    saving under the same key would overwrite each other with
+#    different `target/` snapshots, burning budget without adding
+#    coverage.
+#
+# Saver/reader map
+# ----------------
+#
+# | shared-key      | saver (canary-only)   | readers (`save-if: false`)                      |
+# | --------------- | --------------------- | ----------------------------------------------- |
+# | `linux-cargo`   | `cargo-test-linux`    | `sdk-tests/linux`, `cargo-doc`,                 |
+# |                 |                       | `snapshot-tests`, `ci.yaml::prek`,              |
+# |                 |                       | `ci.yaml::bridge-nodejs-sync`,                  |
+# |                 |                       | `ci.yaml::benchmarks-instrumented`              |
+# | `linux-wasm`    | `cargo-test-wasm`     | —                                               |
+# | `linux-msrv`    | `cargo-build-msrv`    | —                                               |
+# | `macos-cargo`   | `cargo-test-macos`    | `sdk-tests/macos`                               |
+# | `windows-cargo` | `cargo-test-windows`  | `sdk-tests/windows`                             |
+#
+# `cargo-test-linux` is the saver for `linux-cargo` because it builds
+# the broadest target/ tree (`cargo test --no-run --all-features`
+# across the whole workspace) — that's the most useful seed for the
+# subcommand variants the readers run (`cargo doc`, narrower
+# snapshot tests, codspeed builds, the bridge_nodejs build, prek's
+# checks). Per-OS cargo-test jobs are the savers on macos/windows
+# for the same reason.
+#
+# Every rust-cache invocation also passes `cache-all-crates: true`
+# and `cache-workspace-crates: true`. By default rust-cache only
+# caches registry-resolved deps and strips workspace-crate artifacts
+# out of `target/` before saving. We override both: `cache-all-crates`
+# pulls in `~/.cargo/git/` (most importantly our aws-sdk-rust fork,
+# which is otherwise re-downloaded on every Windows run), and
+# `cache-workspace-crates` keeps the compiled workspace `target/` so
+# PRs reading from canary's cache restart with the workspace crates
+# already built. Cache size grows accordingly; the daily refresh in
+# `canary-cache-refresh.yml` bounds it.
+#
+# TODO: in our current setup, any PR that touches Cargo.lock — dependency bump,
+# new crate, anything that re-resolves — will therefore be unable to restore
+# from canary's build cache.  Swatinem/rust-cache@v2 hashes Cargo.lock (and
+# Cargo.toml, rust-toolchain.toml) into every cache key, so any such PRs will
+# have a new hash (and the action provides no mechanism to bypass this).
+# rust-cache's `restore-keys` salvage a deps-only partial restore by prefix,
+# but the entire workspace recompiles.
 name: Cargo Tests (Reusable)
 
 on:
-  workflow_call:
-    inputs:
-      code_changed:
-        required: true
-        type: string
-      run_all:
-        required: true
-        type: boolean
+  workflow_call: {}
+
+# Read-only by design: the daily cache refresh runs in
+# `canary-cache-refresh.yml`, which is the only place `actions: write`
+# is granted. Keeping this workflow read-only means callers (ci.yaml,
+# canary-cache-refresh.yml) never have to grant elevated scope to PR
+# runs that go through the workflow_call path.
+permissions:
+  contents: read
 
 defaults:
   run:
@@ -24,10 +97,9 @@ jobs:
   cargo-test-linux:
     name: "cargo test (linux)"
     runs-on: blacksmith-16vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -39,58 +111,27 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Linux jobs for better hit rates
-          shared-key: "linux-cargo-32gb"
-
-      - name: "Setup Python 3.10+"
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: "Install cargo insta"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-insta
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-cargo"
 
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
-      - name: "Install uv"
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings
+        working-directory: baml_language
 
+      # Snapshot tests live in `baml_tests` and are exercised end-to-end by
+      # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
+      # and run in the dedicated `sdk-tests` matrix below. Skip both here.
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
         working-directory: baml_language
-
-      - name: "Run snapshot tests with insta"
-        run: cargo insta test --workspace --all-features --unreferenced reject
-        working-directory: baml_language
-
-      - name: "Run language test suites"
-        run: |
-          found=0
-          for dir in baml_language/languages/*/; do
-            lang=$(basename "$dir")
-            if [ -f "$dir/test.sh" ]; then
-              echo "==> Running $lang test suite"
-              bash "$dir/test.sh"
-              found=$((found + 1))
-            else
-              echo "::error::languages/$lang/ exists but has no test.sh"
-              exit 1
-            fi
-          done
-          if [ "$found" -eq 0 ]; then
-            echo "::warning::No language test suites found in languages/*/"
-          fi
-
-      - name: "Check documentation"
-        run: cargo doc --all --no-deps
-        working-directory: baml_language
-        env:
-          RUSTDOCFLAGS: "-D warnings"
 
       - name: "Upload test results on failure"
         if: failure()
@@ -101,13 +142,20 @@ jobs:
             baml_language/**/*.snap.new
             baml_language/**/target/nextest/
 
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-test-linux
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
   cargo-test-macos:
     name: "cargo test (macos)"
     runs-on: macos-latest
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -119,55 +167,44 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar macOS jobs for better hit rates
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
           shared-key: "macos-cargo"
-
-      - name: "Setup Python 3.10+"
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
 
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
-      - name: "Install uv"
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
-
-      - name: "Run tests"
-        run: |
-          cargo nextest run --all-features
-          cargo test --all-features --doc
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings
         working-directory: baml_language
 
-      - name: "Run language test suites"
-        run: |
-          found=0
-          for dir in baml_language/languages/*/; do
-            lang=$(basename "$dir")
-            if [ -f "$dir/test.sh" ]; then
-              echo "==> Running $lang test suite"
-              bash "$dir/test.sh"
-              found=$((found + 1))
-            else
-              echo "::error::languages/$lang/ exists but has no test.sh"
-              exit 1
-            fi
-          done
-          if [ "$found" -eq 0 ]; then
-            echo "::warning::No language test suites found in languages/*/"
-          fi
+      # Snapshot tests live in `baml_tests` and are covered by the dedicated
+      # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
+      # dedicated `sdk-tests` matrix below. Skip both here.
+      - name: "Run tests"
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        working-directory: baml_language
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-test-macos
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
 
   cargo-test-windows:
     name: "cargo test (windows)"
     runs-on: blacksmith-4vcpu-windows-2025
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -179,8 +216,85 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Windows jobs for better hit rates
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
           shared-key: "windows-cargo"
+
+      - name: "Install cargo nextest"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings
+        working-directory: baml_language
+
+      # Snapshot tests live in `baml_tests` and are covered by the dedicated
+      # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
+      # dedicated `sdk-tests` matrix below. Skip both here.
+      - name: "Run tests"
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        working-directory: baml_language
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-test-windows
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
+  # SDK tests (codegen end-to-end). The `sdk_test_*` crates each emit a
+  # generated Python project from `.baml` sources via build.rs and then
+  # run ruff / pyright / pytest against it through `uv sync` + `uv run`.
+  # They share a single editable install of `baml_core` (the local
+  # Python SDK) anchored at `baml_language/target/uv-cache`, so multiple
+  # tests racing on `uv sync` contend on uv's editable-build lock and
+  # — on Windows — on wheel-extraction file locks. We pre-warm by
+  # running the per-crate `sync_only` test serially (so the editable
+  # build of `baml_core` and the wheel cache populate exactly once),
+  # then fan out ruff/pyright/pytest in parallel against the warm
+  # cache.
+  sdk-tests:
+    name: "sdk tests (${{ matrix.os-label }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os-label: linux
+            runs-on: blacksmith-16vcpu-ubuntu-2404
+            rust-cache-key: linux-cargo
+            timeout: 30
+          - os-label: macos
+            runs-on: macos-latest
+            rust-cache-key: macos-cargo
+            timeout: 40
+          - os-label: windows
+            runs-on: blacksmith-4vcpu-windows-2025
+            rust-cache-key: windows-cargo
+            timeout: 60
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: ${{ matrix.timeout }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: false
+          shared-key: ${{ matrix.rust-cache-key }}
 
       - name: "Setup Python 3.10+"
         uses: actions/setup-python@v5
@@ -193,40 +307,50 @@ jobs:
           tool: cargo-nextest
 
       - name: "Install uv"
-        run: irm https://astral.sh/uv/install.ps1 | iex
-        shell: powershell
+        uses: astral-sh/setup-uv@v5
 
-      - name: "Run tests"
-        run: |
-          cargo nextest run --all-features
-          cargo test --all-features --doc
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings
         working-directory: baml_language
 
-      - name: "Run language test suites"
-        run: |
-          found=0
-          for dir in baml_language/languages/*/; do
-            lang=$(basename "$dir")
-            if [ -f "$dir/test.sh" ]; then
-              echo "==> Running $lang test suite"
-              bash "$dir/test.sh"
-              found=$((found + 1))
-            else
-              echo "::error::languages/$lang/ exists but has no test.sh"
-              exit 1
-            fi
-          done
-          if [ "$found" -eq 0 ]; then
-            echo "::warning::No language test suites found in languages/*/"
-          fi
+      # Pre-warm: run only the `sync_only` test from each sdk_test crate,
+      # serialized via `--test-threads=1`. The first sync builds the
+      # editable `baml_core` and extracts wheels into the shared
+      # `target/uv-cache`; subsequent syncs hardlink from cache into each
+      # crate's own `generated/.venv`. After this, the parallel test step
+      # below only does cheap cache reads + per-venv hardlinks.
+      - name: "Pre-warm uv cache (sync_only, serial)"
+        run: cargo nextest run --all-features --test-threads=1 -E 'package(/^sdk_test_/) and test(=sync_only)'
+        working-directory: baml_language
+
+      - name: "Run sdk tests"
+        run: cargo nextest run --all-features -E 'package(/^sdk_test_/) and not test(=sync_only)'
+        working-directory: baml_language
+
+      - name: "Upload test results on failure"
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-test-failures-${{ matrix.os-label }}
+          path: |
+            baml_language/sdk_tests/crates/*/generated/
+            baml_language/target/nextest/
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-sdk-tests-${{ matrix.os-label }}
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
 
   cargo-test-wasm:
     name: "cargo test (wasm)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -240,269 +364,39 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Linux WASM jobs for better hit rates
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
           shared-key: "linux-wasm"
 
       - name: "Build for WASM"
         run: |
           WASM_PACKAGES=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | "-p \(.name)"' | xargs)
-          cargo build $WASM_PACKAGES --target wasm32-unknown-unknown --no-default-features --release
+          cargo build $WASM_PACKAGES --target wasm32-unknown-unknown --no-default-features --release --timings
         working-directory: baml_language
 
       - name: "List WASM artifacts"
         run: ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
         working-directory: baml_language
 
-  # ---------------------------------------------------------------------------
-  # Size Gate — one job per platform, unified PR comment at the end
-  # ---------------------------------------------------------------------------
-
-  size-gate-linux:
-    name: "size-gate (linux)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "linux-cargo"
-
-      - name: "Run size-gate check"
-        id: check
-        working-directory: baml_language
-        run: |
-          cargo run -p cargo-size-gate -- size-gate check \
-            --only bridge_cffi-stripped,bridge_cffi \
-            --format json > size-gate-linux.json 2> size-gate-stderr.txt || exit_code=$?
-          cat size-gate-stderr.txt >&2
-          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
-
-      - name: "Upload size-gate report"
+      - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: size-gate-linux
-          path: baml_language/size-gate-linux.json
+          name: cargo-timings-test-wasm
+          path: baml_language/target/cargo-timings/
           if-no-files-found: ignore
 
-      - name: "Upload size-gate binary"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: size-gate-binary
-          path: baml_language/target/debug/cargo-size-gate
-          if-no-files-found: ignore
-
-      - name: "Fail on policy violation"
-        if: steps.check.outputs.exit_code != '0'
-        run: exit ${{ steps.check.outputs.exit_code }}
-
-  size-gate-macos:
-    name: "size-gate (macos)"
-    runs-on: macos-latest
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "macos-cargo"
-
-      - name: "Run size-gate check"
-        id: check
-        working-directory: baml_language
-        run: |
-          cargo run -p cargo-size-gate -- size-gate check \
-            --only bridge_cffi-stripped,bridge_cffi \
-            --format json > size-gate-macos.json 2> size-gate-stderr.txt || exit_code=$?
-          cat size-gate-stderr.txt >&2
-          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
-
-      - name: "Upload size-gate report"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: size-gate-macos
-          path: baml_language/size-gate-macos.json
-          if-no-files-found: ignore
-
-      - name: "Fail on policy violation"
-        if: steps.check.outputs.exit_code != '0'
-        run: exit ${{ steps.check.outputs.exit_code }}
-
-  size-gate-windows:
-    name: "size-gate (windows)"
-    runs-on: blacksmith-4vcpu-windows-2025
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
-    # Right now it needs to download our repo every time which is very slow
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install LLVM tools (llvm-strip)"
-        run: |
-          choco install llvm -y
-          echo 'C:\Program Files\LLVM\bin' >> $GITHUB_PATH
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "windows-cargo"
-
-      - name: "Run size-gate check"
-        id: check
-        working-directory: baml_language
-        run: |
-          cargo run -p cargo-size-gate -- size-gate check \
-            --only bridge_cffi-stripped,bridge_cffi \
-            --format json > size-gate-windows.json 2> size-gate-stderr.txt || exit_code=$?
-          cat size-gate-stderr.txt >&2
-          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
-
-      - name: "Upload size-gate report"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: size-gate-windows
-          path: baml_language/size-gate-windows.json
-          if-no-files-found: ignore
-
-      - name: "Fail on policy violation"
-        if: steps.check.outputs.exit_code != '0'
-        run: exit ${{ steps.check.outputs.exit_code }}
-
-  size-gate-wasm:
-    name: "size-gate (wasm)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup target add wasm32-unknown-unknown
-        working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "linux-wasm"
-
-      - name: "Run size-gate check"
-        id: check
-        working-directory: baml_language
-        run: |
-          cargo run -p cargo-size-gate -- size-gate check \
-            --only bridge_wasm \
-            --format json > size-gate-wasm.json 2> size-gate-stderr.txt || exit_code=$?
-          cat size-gate-stderr.txt >&2
-          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
-
-      - name: "Upload size-gate report"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: size-gate-wasm
-          path: baml_language/size-gate-wasm.json
-          if-no-files-found: ignore
-
-      - name: "Fail on policy violation"
-        if: steps.check.outputs.exit_code != '0'
-        run: exit ${{ steps.check.outputs.exit_code }}
-
-  size-gate-report:
-    name: "size-gate (report)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ always() && (inputs.code_changed == 'true' || inputs.run_all) }}
-    needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
-    permissions:
-      pull-requests: write
-    steps:
-      - name: "Download size-gate reports and binary"
-        uses: actions/download-artifact@v4
-        with:
-          pattern: size-gate-*
-          merge-multiple: true
-          path: reports
-
-      - name: "Compose unified report"
-        env:
-          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-        run: |
-          chmod +x reports/cargo-size-gate
-
-          # Collect all JSON reports that exist
-          json_files=()
-          for platform in linux macos windows wasm; do
-            f="reports/size-gate-${platform}.json"
-            [ -f "$f" ] && json_files+=("$f")
-          done
-
-          # Run agg to produce unified markdown
-          reports/cargo-size-gate size-gate agg \
-            "${json_files[@]}" \
-            --run-url "$RUN_URL" \
-            > unified-report.md || true
-
-      - name: "Post PR comment"
-        if: github.event_name == 'pull_request'
-        uses: thollander/actions-comment-pull-request@v3.0.1
-        with:
-          file-path: unified-report.md
-          comment-tag: size-gate
-
-      - name: "Write job summary"
-        run: cat unified-report.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: "Fail if any size check failed"
-        run: |
-          for result in \
-            "${{ needs.size-gate-linux.result }}" \
-            "${{ needs.size-gate-macos.result }}" \
-            "${{ needs.size-gate-windows.result }}" \
-            "${{ needs.size-gate-wasm.result }}" \
-          ; do
-            if [ "$result" = "failure" ]; then
-              echo "::error::One or more size-gate checks failed"
-              exit 1
-            fi
-          done
+  # Size-gate jobs live in size-gate.reusable.yaml — they are intentionally
+  # decoupled from cargo-tests so a violation never blocks the test workflow.
 
   cargo-build-msrv:
     name: "cargo build (msrv)"
     runs-on: blacksmith-16vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -524,21 +418,36 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across Linux MSRV jobs (32gb runner)
-          shared-key: "linux-msrv-32gb"
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-msrv"
 
       - name: "Build with MSRV"
         env:
           MSRV: ${{ steps.msrv.outputs.value }}
-        run: cargo "+${MSRV}" test --no-run --all-features
+        run: cargo "+${MSRV}" test --no-run --all-features --timings
         working-directory: baml_language
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-msrv
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
 
   check-dependencies:
     name: "check dependencies"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    # Advisory only — never gate the cargo-tests reusable workflow's result.
+    # The step below also has `continue-on-error: true`; this job-level flag
+    # is the belt to the step's suspenders so removing the step-level
+    # bypass later doesn't accidentally start blocking required CI.
+    continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -556,10 +465,45 @@ jobs:
         working-directory: baml_language
         continue-on-error: true # For now, just warn
 
+  cargo-doc:
+    name: "cargo doc"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: false
+          shared-key: "linux-cargo"
+
+      - name: "Generate documentation"
+        run: cargo doc --all --no-deps --timings
+        working-directory: baml_language
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-doc
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
   snapshot-tests:
     name: "snapshot tests"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 30
     env:
       # Disable Python + pipx tools: mise 2025.12.12 downloads a broken
@@ -568,7 +512,7 @@ jobs:
       # mise installs handles its own Python via `uv run`).
       MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -580,13 +524,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across similar Linux jobs for better hit rates
+          cache-all-crates: true
+          cache-workspace-crates: true
+          # See the cache strategy explanation at the top of this file.
+          save-if: false
           shared-key: "linux-cargo"
 
-      - name: "Install cargo insta"
+      - name: "Install cargo insta and nextest"
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-insta
+          tool: cargo-insta,cargo-nextest
 
       - name: "Install mise"
         uses: jdx/mise-action@v2
@@ -595,17 +542,23 @@ jobs:
         with:
           version: 2025.12.12
 
+      - name: "Build tests with --timings"
+        run: cargo test --no-run -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --timings
+        working-directory: baml_language
+
       - name: "Run snapshot tests"
-        run: |
-          cargo insta test --workspace --all-features --unreferenced=reject
-          cargo insta test --workspace --all-features --review
+        run: cargo insta test --test-runner nextest -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --unreferenced=reject
         working-directory: baml_language
 
       - name: "Check for snapshot changes"
         run: |
-          if [ -n "$(git status --porcelain baml_language/crates/baml_tests/snapshots)" ]; then
+          pathspecs=(
+            ':(glob)baml_language/**/*.snap'
+            ':(glob)baml_language/**/*.snap.new'
+          )
+          if [ -n "$(git status --porcelain -- "${pathspecs[@]}")" ]; then
             echo "::error::Snapshot tests have uncommitted changes"
-            git diff baml_language/crates/baml_tests/snapshots
+            git diff -- "${pathspecs[@]}"
             exit 1
           fi
 
@@ -615,5 +568,34 @@ jobs:
         with:
           name: snapshot-failures
           path: |
-            baml_language/crates/baml_tests/snapshots/**/*.snap.new
-            baml_language/crates/baml_tests/snapshots/**/*.snap
+            baml_language/**/*.snap
+            baml_language/**/*.snap.new
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings-snapshot
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
+  cargo-timings:
+    name: "cargo timings (merged)"
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - cargo-test-linux
+      - cargo-test-macos
+      - cargo-test-windows
+      - sdk-tests
+      - cargo-test-wasm
+      - cargo-build-msrv
+      - cargo-doc
+      - snapshot-tests
+    steps:
+      - name: "Merge cargo timings artifacts"
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: cargo-timings
+          pattern: cargo-timings-*
+          delete-merged: true

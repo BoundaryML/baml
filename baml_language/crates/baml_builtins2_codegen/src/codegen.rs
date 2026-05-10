@@ -19,17 +19,26 @@ use crate::types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage};
 // Fallibility
 // ============================================================================
 
-/// Returns `true` if the clean trait method for this path should return
+/// Returns `true` if the clean trait method for this builtin should return
 /// `Result<T, VmError>` instead of plain `T`.
-fn is_fallible(path: &str) -> bool {
-    path.starts_with("baml.unstable.")
+///
+/// A builtin is fallible if it declares a `throws` clause in its `.baml` source,
+/// or if its path is in the implicit allowlist below (for builtins that fail
+/// without a declared throws clause — e.g. `baml.sys.panic` always throws,
+/// `baml.unstable.string` can fail at runtime on certain values, and the
+/// random methods can raise a `HostUnavailable` panic if the OS entropy source
+/// is inaccessible).
+fn is_fallible(b: &NativeBuiltin) -> bool {
+    !b.throws.is_empty()
+        || b.path.starts_with("baml.unstable.")
         || matches!(
-            path,
+            b.path.as_str(),
             "baml.sys.panic"
-                | "baml.Uint8Array.zeroes"
-                | "baml.Uint8Array.from_array"
-                | "baml.Uint8Array.from_hex"
-                | "baml.Uint8Array.from_base64"
+                | "baml.media.Pdf.to_json"
+                | "baml.media.Audio.to_json"
+                | "baml.media.Video.to_json"
+                | "baml.media.Image.to_json"
+                | "baml.Float.random"
         )
 }
 
@@ -874,7 +883,16 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
 
 fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     let glue_name = format!("__glue_{method_name}");
-    let needs_owned = matches!(b.vm_usage, VmUsage::MutRef) || b.may_yield;
+    // When the receiver is `&mut self`, parameter extractions run BEFORE the
+    // mutable receiver extraction. If any parameter borrows VM state shared-ly
+    // (e.g. `vm.as_array(&args[i])?` for a `T[]` param), that borrow conflicts
+    // with the subsequent mutable borrow. Cloning param values up front frees
+    // the immutable borrow before the mutable one.
+    let receiver_is_mut_self = b
+        .receiver
+        .as_ref()
+        .is_some_and(|r| r.receiver_type.is_mut());
+    let needs_owned = matches!(b.vm_usage, VmUsage::MutRef) || b.may_yield || receiver_is_mut_self;
 
     writeln!(
         out,
@@ -900,7 +918,7 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
         return;
     }
 
-    let fallible = is_fallible(&b.path);
+    let fallible = is_fallible(b);
 
     // Use a closure returning NativeFunctionResult so `?` operators work inside.
     out.push_str("        let __result: NativeFunctionResult = (|| {\n");
@@ -954,7 +972,7 @@ fn clean_param_list(b: &NativeBuiltin) -> String {
         parts.push(format!(
             "{}: {}",
             receiver_param_name(recv),
-            receiver_input_type(recv)
+            receiver_input_type_with_vm_usage(recv, b.vm_usage)
         ));
     }
     for p in &b.params {
@@ -973,14 +991,14 @@ fn clean_return_type(b: &NativeBuiltin) -> String {
         if let Some(class_name) = constructor_media_class(b) {
             let ns = constructor_media_namespace(b);
             let inner = format!("copy::{ns}::{class_name}");
-            if is_fallible(&b.path) {
+            if is_fallible(b) {
                 return format!("Result<{inner}, VmRustFnError>");
             }
             return inner;
         }
     }
     let inner = baml_type_to_output(&b.return_type);
-    if is_fallible(&b.path) {
+    if is_fallible(b) {
         format!("Result<{inner}, VmRustFnError>")
     } else {
         inner
@@ -1047,18 +1065,25 @@ fn emit_immut_receiver_extraction_indented(
     needs_owned: bool,
 ) {
     match recv.class_name.as_str() {
-        _ if is_media_class(recv.class_name.as_str()) => {
-            let cls = &recv.class_name;
-            writeln!(
-                out,
-                "{indent}let __instance = vm.as_instance(&args[{idx}])?;"
-            )
-            .unwrap();
-            writeln!(
-                out,
-                "{indent}let {name} = view::media::{cls} {{ instance: __instance }};"
-            )
-            .unwrap();
+        cls if is_media_class(cls) => {
+            if needs_owned {
+                // `//baml:mut_vm` media methods: pass the raw `Value` copy so the
+                // `vm` borrow is released before the mutable-vm call.  The view
+                // struct (`view::media::Cls`) holds `&Instance` which borrows `vm`
+                // and cannot coexist with `&mut BexVm`.
+                writeln!(out, "{indent}let {name} = &args[{idx}];").unwrap();
+            } else {
+                writeln!(
+                    out,
+                    "{indent}let __instance = vm.as_instance(&args[{idx}])?;"
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{indent}let {name} = view::media::{cls} {{ instance: __instance }};"
+                )
+                .unwrap();
+            }
         }
         _ => {
             let rhs = receiver_immut_extraction_expr(&format!("&args[{idx}]"), recv, needs_owned);
@@ -1153,6 +1178,15 @@ fn receiver_immut_extraction_expr(val: &str, recv: &Receiver, needs_owned: bool)
                 format!("vm.as_uint8array({val})?")
             }
         }
+        // Primitive value receivers: extract the underlying scalar. `int` is
+        // backed by `i64`, `float` by `f64` — both `Copy`, so `needs_owned` is
+        // irrelevant.
+        "Int" => format!(
+            "match {val} {{ Value::Int(i) => *i, other => return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}.into()) }}"
+        ),
+        "Float" => format!(
+            "match {val} {{ Value::Float(f) => *f, other => return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}.into()) }}"
+        ),
         name if is_media_class(name) => {
             let kind = media_kind_expr(&recv.class_name);
             if needs_owned {
@@ -1243,6 +1277,11 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool) -> String {
         if !recv.receiver_type.is_static() {
             let name = receiver_param_name(recv);
             if recv.receiver_type.is_mut() {
+                args.push(name);
+            } else if needs_owned && is_media_class(recv.class_name.as_str()) {
+                // For `//baml:mut_vm` media methods the extraction emits
+                // `let pdf = &args[0];` (a `&Value` copy).  Pass `name` directly —
+                // it is already the `&Value` the trait method expects.
                 args.push(name);
             } else {
                 args.push(call_arg_for_type(&name, &receiver_baml_type(recv), is_ref));
@@ -1442,7 +1481,17 @@ fn receiver_param_name(recv: &Receiver) -> String {
     recv.class_name.to_lowercase()
 }
 
+#[allow(dead_code)]
 fn receiver_input_type(recv: &Receiver) -> String {
+    receiver_input_type_with_vm_usage(recv, VmUsage::None)
+}
+
+/// Like `receiver_input_type` but switches media class receivers to `&Value`
+/// when `vm_usage == MutRef` — the `view::media::Cls<'_>` view struct holds a
+/// `&Instance` borrowed from `vm`, which would conflict with the `&mut BexVm`
+/// parameter required for mutating-VM methods.  Passing the raw `Value` (which
+/// is `Copy`) instead avoids the split-borrow.
+fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> String {
     match recv.class_name.as_str() {
         "Array" => {
             if recv.receiver_type.is_mut() {
@@ -1472,10 +1521,27 @@ fn receiver_input_type(recv: &Receiver) -> String {
                 "&[u8]".to_string()
             }
         }
-        "Pdf" => "&view::media::Pdf<'_>".to_string(),
-        "Audio" => "&view::media::Audio<'_>".to_string(),
-        "Video" => "&view::media::Video<'_>".to_string(),
-        "Image" => "&view::media::Image<'_>".to_string(),
+        // Primitive value receivers: pass by value, since the underlying type
+        // (`i64` / `f64` / `bool`) is `Copy` and that's the natural Rust idiom.
+        "Int" => "i64".to_string(),
+        "Float" => "f64".to_string(),
+        name if is_media_class(name) => {
+            // For `//baml:mut_vm` methods the view struct cannot coexist with
+            // `&mut BexVm` (split-borrow).  Use the raw `Value` instead so the
+            // trait impl can extract / clone what it needs from `vm` before the
+            // mutable allocation calls.
+            if matches!(vm_usage, VmUsage::MutRef) {
+                "&Value".to_string()
+            } else {
+                match name {
+                    "Pdf" => "&view::media::Pdf<'_>".to_string(),
+                    "Audio" => "&view::media::Audio<'_>".to_string(),
+                    "Video" => "&view::media::Video<'_>".to_string(),
+                    "Image" => "&view::media::Image<'_>".to_string(),
+                    _ => "&Value".to_string(),
+                }
+            }
+        }
         _ => "&Value".to_string(),
     }
 }
@@ -1489,6 +1555,8 @@ fn receiver_baml_type(recv: &Receiver) -> BamlType {
         ),
         "String" => BamlType::String,
         "Uint8Array" => BamlType::Uint8Array,
+        "Int" => BamlType::Int,
+        "Float" => BamlType::Float,
         "Pdf" | "Audio" | "Video" | "Image" => BamlType::Named(recv.class_name.clone()),
         _ => BamlType::Named(recv.class_name.clone()),
     }

@@ -311,21 +311,24 @@ impl BexHeap {
                 worklist.push(var.enm);
             }
             Object::Future(fut) => {
-                use bex_vm_types::Future;
-                match fut {
-                    Future::Pending(pending) => {
-                        for value in &pending.args {
-                            if let Value::Object(ptr) = value {
-                                worklist.push(*ptr);
-                            }
-                        }
+                use bex_vm_types::FutureRead;
+                match fut.read() {
+                    FutureRead::Ready(Value::Object(ptr))
+                    | FutureRead::Error(Value::Object(ptr)) => {
+                        worklist.push(ptr);
                     }
-                    Future::Ready(value) => {
-                        if let Value::Object(ptr) = value {
-                            worklist.push(*ptr);
-                        }
-                    }
+                    FutureRead::Pending(_)
+                    | FutureRead::Ready(_)
+                    | FutureRead::Error(_)
+                    | FutureRead::Cancelled
+                    | FutureRead::InternalError(_) => {}
                 }
+            }
+            Object::UnscheduledFuture(future) => {
+                worklist.extend(future.args.iter().filter_map(|v| match v {
+                    Value::Object(ptr) => Some(*ptr),
+                    _ => None,
+                }));
             }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
@@ -401,16 +404,17 @@ impl BexHeap {
                 }
             }
             Object::Future(fut) => {
-                use bex_vm_types::Future;
-                match fut {
-                    Future::Pending(pending) => {
-                        for value in &mut pending.args {
-                            self.fixup_value(value, forwarding);
-                        }
-                    }
-                    Future::Ready(value) => {
-                        self.fixup_value(value, forwarding);
-                    }
+                // GC runs with all permits parked, so no concurrent access to
+                // the Future's atomic state. `value_mut_for_fixup` returns
+                // `Some(&mut Value)` only for `Ready`/`Error` states.
+                // SAFETY: GC holds exclusive access via the parked HeapGuard.
+                if let Some(value) = unsafe { fut.value_mut_for_fixup() } {
+                    self.fixup_value(value, forwarding);
+                }
+            }
+            Object::UnscheduledFuture(future) => {
+                for value in &mut future.args {
+                    self.fixup_value(value, forwarding);
                 }
             }
             // Primitives have no references
@@ -650,25 +654,29 @@ impl BexHeap {
                 }
             }
             Object::Future(fut) => {
-                use bex_vm_types::Future;
-                match fut {
-                    Future::Pending(pending) => {
-                        worklist.extend(
-                            pending
-                                .args
-                                .iter()
-                                .filter_map(Value::as_object_ptr)
-                                .filter(|ptr| self.generation_of(*ptr).is_young()),
-                        );
+                use bex_vm_types::FutureRead;
+                match fut.read() {
+                    FutureRead::Ready(Value::Object(ptr))
+                    | FutureRead::Error(Value::Object(ptr))
+                        if self.generation_of(ptr).is_young() =>
+                    {
+                        worklist.push(ptr);
                     }
-                    Future::Ready(value) => {
-                        if let Value::Object(ptr) = value
-                            && self.generation_of(*ptr).is_young()
-                        {
-                            worklist.push(*ptr);
-                        }
-                    }
+                    FutureRead::Pending(_)
+                    | FutureRead::Ready(_)
+                    | FutureRead::Error(_)
+                    | FutureRead::Cancelled
+                    | FutureRead::InternalError(_) => {}
                 }
+            }
+            Object::UnscheduledFuture(future) => {
+                worklist.extend(
+                    future
+                        .args
+                        .iter()
+                        .filter_map(Value::as_object_ptr)
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
             }
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
@@ -991,6 +999,9 @@ mod tests {
                 field_type: baml_type::Ty::Int {
                     attr: baml_type::TyAttr::default(),
                 },
+                field_template: baml_type::TyTemplate::Concrete(baml_type::Ty::Int {
+                    attr: baml_type::TyAttr::default(),
+                }),
                 description: None,
                 alias: None,
                 skip: false,
@@ -1757,17 +1768,17 @@ mod tests {
 
     #[test]
     fn test_gc_traces_future_pending_args() {
-        use bex_vm_types::{Future, PendingFuture, SysOp};
+        use bex_vm_types::{SysOp, UnscheduledFuture};
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let arg1 = tlab.alloc_string("arg1".to_string());
         let arg2 = tlab.alloc_string("arg2".to_string());
-        let future_ptr = tlab.alloc(Object::Future(Future::Pending(PendingFuture {
+        let future_ptr = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
             operation: SysOp::BamlEnvGet,
             args: vec![Value::Object(arg1), Value::Object(arg2)],
-        })));
+        }));
 
         let roots = vec![future_ptr];
         let (stats, _new_roots, _) = unsafe { heap.collect_garbage(&roots) };
@@ -1777,20 +1788,25 @@ mod tests {
 
     #[test]
     fn test_gc_traces_future_ready_object() {
-        use bex_vm_types::Future;
+        use bex_vm_types::{Future, FutureRead, types::FutureId};
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let result = tlab.alloc_string("result".to_string());
-        let future_ptr = tlab.alloc(Object::Future(Future::Ready(Value::Object(result))));
+        let future = Future::pending(FutureId::from_usize(0));
+        // SAFETY: single-writer; this Future is local and not yet visible.
+        unsafe { future.set_ready(Value::Object(result)) };
+        let future_ptr = tlab.alloc(Object::Future(future));
 
         let roots = vec![future_ptr];
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&roots) };
 
         assert_eq!(stats.live_count, 2);
-        let Object::Future(Future::Ready(Value::Object(r))) = (unsafe { new_roots[0].get() })
-        else {
+        let Object::Future(fut) = (unsafe { new_roots[0].get() }) else {
+            panic!("not Future")
+        };
+        let FutureRead::Ready(Value::Object(r)) = fut.read() else {
             panic!("not Future::Ready(Object)")
         };
         let Object::String(s) = (unsafe { r.get() }) else {
@@ -1801,12 +1817,15 @@ mod tests {
 
     #[test]
     fn test_gc_traces_future_ready_primitive() {
-        use bex_vm_types::Future;
+        use bex_vm_types::{Future, types::FutureId};
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let future_ptr = tlab.alloc(Object::Future(Future::Ready(Value::Int(99))));
+        let future = Future::pending(FutureId::from_usize(0));
+        // SAFETY: single-writer; this Future is local and not yet visible.
+        unsafe { future.set_ready(Value::Int(99)) };
+        let future_ptr = tlab.alloc(Object::Future(future));
         let roots = vec![future_ptr];
         let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
 
@@ -2215,7 +2234,7 @@ mod tests {
     fn test_tracing_and_fixup_consistency_all_variants() {
         use baml_type::{Name, TyAttr, TypeName};
         use bex_vm_types::{
-            Class, Enum, Future, PendingFuture, SysOp,
+            Class, Enum, SysOp, UnscheduledFuture,
             types::{Cell, Closure, Instance, Variant},
         };
 
@@ -2253,11 +2272,11 @@ mod tests {
             value: Value::Object(leaf_for_cell),
         }));
 
-        // --- Container: Object::Future (Pending) ---
-        let future_container = tlab.alloc(Object::Future(Future::Pending(PendingFuture {
+        // --- Container: Object::UnscheduledFuture ---
+        let future_container = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
             operation: SysOp::BamlEnvGet,
             args: vec![Value::Object(leaf_for_future)],
-        })));
+        }));
 
         // --- Container: Object::Instance ---
         // Instance requires a class pointer.
@@ -2365,8 +2384,8 @@ mod tests {
         assert_eq!(s, "cell_value");
 
         // Future: args[0] should be the (forwarded) future arg string.
-        let Object::Future(Future::Pending(pending)) = (unsafe { new_roots[4].get() }) else {
-            panic!("new_roots[4] not Future::Pending")
+        let Object::UnscheduledFuture(pending) = (unsafe { new_roots[4].get() }) else {
+            panic!("new_roots[4] not UnscheduledFuture")
         };
         let Value::Object(fut_leaf) = pending.args[0] else {
             panic!("future.args[0] not Object")

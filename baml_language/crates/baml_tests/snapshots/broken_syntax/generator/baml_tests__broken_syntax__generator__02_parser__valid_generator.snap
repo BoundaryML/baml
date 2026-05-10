@@ -35,6 +35,13 @@ SOURCE_FILE
             DOT "."
             INTEGER_LITERAL "0"
             QUOTE """
+      CONFIG_ITEM
+        WORD "naming_convention"
+        CONFIG_VALUE
+          STRING_LITERAL "preserve-case"
+            QUOTE """
+            WORD "preserve-case"
+            QUOTE """
       R_BRACE "}"
   GENERATOR_DEF
     KW_GENERATOR "generator"
@@ -105,9 +112,9 @@ SOURCE_FILE
 
 === ERRORS ===
 Error: Expected client name, found '<'
-    ╭─[ valid_generator.baml:21:11 ]
+    ╭─[ valid_generator.baml:22:11 ]
     │
- 21 │     client<llm> MyClient
+ 22 │     client<llm> MyClient
     │           ┬  
     │           ╰── Expected client name, found '<'
     │ 
@@ -115,9 +122,9 @@ Error: Expected client name, found '<'
 ────╯
 
 Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '<', found '<'
-    ╭─[ valid_generator.baml:21:11 ]
+    ╭─[ valid_generator.baml:22:11 ]
     │
- 21 │     client<llm> MyClient
+ 22 │     client<llm> MyClient
     │           ┬  
     │           ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '<', found '<'
     │ 
@@ -125,9 +132,9 @@ Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '<', f
 ────╯
 
 Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'llm', found identifier
-    ╭─[ valid_generator.baml:21:12 ]
+    ╭─[ valid_generator.baml:22:12 ]
     │
- 21 │     client<llm> MyClient
+ 22 │     client<llm> MyClient
     │            ─┬─  
     │             ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found 'llm', found identifier
     │ 
@@ -135,9 +142,9 @@ Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'llm',
 ────╯
 
 Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '>', found '>'
-    ╭─[ valid_generator.baml:21:15 ]
+    ╭─[ valid_generator.baml:22:15 ]
     │
- 21 │     client<llm> MyClient
+ 22 │     client<llm> MyClient
     │               ┬  
     │               ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '>', found '>'
     │ 
@@ -145,9 +152,9 @@ Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '>', f
 ────╯
 
 Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'MyClient', found identifier
-    ╭─[ valid_generator.baml:21:17 ]
+    ╭─[ valid_generator.baml:22:17 ]
     │
- 21 │     client<llm> MyClient
+ 22 │     client<llm> MyClient
     │                 ────┬───  
     │                     ╰───── Expected Only 'client' and 'prompt' allowed in LLM function, found 'MyClient', found identifier
     │ 

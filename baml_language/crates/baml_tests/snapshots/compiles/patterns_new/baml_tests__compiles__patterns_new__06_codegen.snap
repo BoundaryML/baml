@@ -1,6 +1,54 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.AppError.from_json(j: baml.json.json) -> AppError {
+    load_var j
+    load_const "code"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    alloc_instance user.AppError
+    load_var _2
+    init_field .code
+    return
+}
+
+function user.AppError.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field .code
+    call baml.Int.to_json
+    load_const "code"
+    alloc_map 1
+    return
+}
+
+function user.alias_intersection_in_match_arm(v: int | string) -> int {
+    load_var v
+    is_type string
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var v
+    is_type bool
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L3
+
+  L2:
+    load_var v
+    call baml.String.length
+
+  L3:
+    return
+}
+
 function user.bare_type_arm(v: int | string) -> int {
     load_var v
     is_type int
