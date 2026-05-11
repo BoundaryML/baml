@@ -118,20 +118,21 @@ SOURCE_FILE
             WORD "map"
           CALL_ARGS
             L_PAREN "("
-            LAMBDA_EXPR
-              PARAMETER_LIST
-                L_PAREN "("
-                PARAMETER "x"
+            CALL_ARG
+              LAMBDA_EXPR
+                PARAMETER_LIST
+                  L_PAREN "("
+                  PARAMETER "x"
+                    WORD "x"
+                  COMMA ","
+                  PARAMETER "y"
+                    WORD "y"
+                  R_PAREN ")"
+                ARROW "->"
+                BLOCK_EXPR "{ x }"
+                  L_BRACE "{"
                   WORD "x"
-                COMMA ","
-                PARAMETER "y"
-                  WORD "y"
-                R_PAREN ")"
-              ARROW "->"
-              BLOCK_EXPR "{ x }"
-                L_BRACE "{"
-                WORD "x"
-                R_BRACE "}"
+                  R_BRACE "}"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -176,20 +177,21 @@ SOURCE_FILE
             WORD "map"
           CALL_ARGS
             L_PAREN "("
-            LAMBDA_EXPR
-              PARAMETER_LIST
-                L_PAREN "("
-                PARAMETER
+            CALL_ARG
+              LAMBDA_EXPR
+                PARAMETER_LIST
+                  L_PAREN "("
+                  PARAMETER
+                    WORD "x"
+                    COLON ":"
+                    TYPE_EXPR "string"
+                      WORD "string"
+                  R_PAREN ")"
+                ARROW "->"
+                BLOCK_EXPR "{ x }"
+                  L_BRACE "{"
                   WORD "x"
-                  COLON ":"
-                  TYPE_EXPR "string"
-                    WORD "string"
-                R_PAREN ")"
-              ARROW "->"
-              BLOCK_EXPR "{ x }"
-                L_BRACE "{"
-                WORD "x"
-                R_BRACE "}"
+                  R_BRACE "}"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF

@@ -164,12 +164,14 @@ SOURCE_FILE
           WORD "transform"
           CALL_ARGS
             L_PAREN "("
-            WORD "fmt"
+            CALL_ARG "fmt"
+              WORD "fmt"
             COMMA ","
-            STRING_LITERAL "hello"
-              QUOTE """
-              WORD "hello"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "hello"
+                QUOTE """
+                WORD "hello"
+                QUOTE """
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -341,9 +343,10 @@ SOURCE_FILE
           SEMICOLON ";"
         CALL_EXPR
           WORD "f"
-          CALL_ARGS "(e)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "e"
+            CALL_ARG "e"
+              WORD "e"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -388,10 +391,11 @@ SOURCE_FILE
           WORD "takes_unbound"
           CALL_ARGS
             L_PAREN "("
-            PATH_EXPR "e.full_name"
-              WORD "e"
-              DOT "."
-              WORD "full_name"
+            CALL_ARG
+              PATH_EXPR "e.full_name"
+                WORD "e"
+                DOT "."
+                WORD "full_name"
             R_PAREN ")"
         R_BRACE "}"
 

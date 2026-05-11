@@ -23,7 +23,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     infer_context::TirTypeError,
     lower_type_expr::lower_type_expr_in_ns,
-    ty::{Ty, TyAttr},
+    ty::{FunctionParamMode, FunctionParamTy, Ty, TyAttr},
 };
 
 // ── Type variable binding ─────────────────────────────────────────────────────
@@ -81,7 +81,11 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
         } => Ty::Function {
             params: params
                 .iter()
-                .map(|(n, t)| (n.clone(), substitute_ty(t, bindings)))
+                .map(|param| FunctionParamTy {
+                    name: param.name.clone(),
+                    ty: substitute_ty(&param.ty, bindings),
+                    mode: param.mode,
+                })
                 .collect(),
             ret: Box::new(substitute_ty(ret, bindings)),
             throws: Box::new(substitute_ty(throws, bindings)),
@@ -221,18 +225,21 @@ pub fn lower_type_expr_with_generics(
         } => Ty::Function {
             params: params
                 .iter()
-                .map(|p| {
-                    (
-                        p.name.clone(),
-                        lower_type_expr_with_generics(
-                            db,
-                            &p.ty,
-                            package_items,
-                            ns_context,
-                            bindings,
-                            diagnostics,
-                        ),
-                    )
+                .map(|p| FunctionParamTy {
+                    name: p.name.clone(),
+                    ty: lower_type_expr_with_generics(
+                        db,
+                        &p.ty,
+                        package_items,
+                        ns_context,
+                        bindings,
+                        diagnostics,
+                    ),
+                    mode: if p.optional {
+                        FunctionParamMode::Optional
+                    } else {
+                        FunctionParamMode::Required
+                    },
                 })
                 .collect(),
             ret: Box::new(lower_type_expr_with_generics(
@@ -296,9 +303,16 @@ pub fn lower_type_expr_with_generics(
 ///
 /// Returns the slice of params after `self`, or the full slice if `self` is
 /// not the first parameter name.
-pub fn skip_self_param(params: &[(Option<Name>, Ty)]) -> &[(Option<Name>, Ty)] {
+pub fn skip_self_param(params: &[FunctionParamTy]) -> &[FunctionParamTy] {
     match params.first() {
-        Some((Some(name), _)) if name.as_str() == "self" => &params[1..],
+        Some(param)
+            if param
+                .name
+                .as_ref()
+                .is_some_and(|name| name.as_str() == "self") =>
+        {
+            &params[1..]
+        }
         _ => params,
     }
 }
@@ -320,7 +334,7 @@ pub fn contains_typevar(ty: &Ty) -> bool {
             throws,
             ..
         } => {
-            params.iter().any(|(_, t)| contains_typevar(t))
+            params.iter().any(|param| contains_typevar(&param.ty))
                 || contains_typevar(ret)
                 || contains_typevar(throws)
         }
@@ -377,8 +391,8 @@ fn infer_bindings_inner(
                 ..
             },
         ) => {
-            for ((_, ft), (_, at)) in fp.iter().zip(ap.iter()) {
-                infer_bindings_inner(ft, at, bindings, allow_typevar_actuals);
+            for (fp, ap) in fp.iter().zip(ap.iter()) {
+                infer_bindings_inner(&fp.ty, &ap.ty, bindings, allow_typevar_actuals);
             }
             infer_bindings_inner(fr, ar, bindings, allow_typevar_actuals);
             infer_bindings_inner(fth, ath, bindings, allow_typevar_actuals);
@@ -489,7 +503,11 @@ pub fn erase_unresolved_typevars(
         } => Ty::Function {
             params: params
                 .iter()
-                .map(|(n, t)| (n.clone(), erase_unresolved_typevars(t, diagnostics)))
+                .map(|param| FunctionParamTy {
+                    name: param.name.clone(),
+                    ty: erase_unresolved_typevars(&param.ty, diagnostics),
+                    mode: param.mode,
+                })
                 .collect(),
             ret: Box::new(erase_unresolved_typevars(ret, diagnostics)),
             throws: Box::new(erase_unresolved_typevars(throws, diagnostics)),

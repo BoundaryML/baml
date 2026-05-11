@@ -11,7 +11,7 @@ pub(crate) mod function;
 pub(crate) mod method;
 pub(crate) mod type_alias;
 
-use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
+use baml_codegen_types::{FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty};
 
 use crate::{
     emit::{
@@ -183,7 +183,7 @@ fn expand_function(
         &fqn_root,
         &f.arguments,
         &f.return_type,
-        |py_name, fqn, mode, params, arg_tys, return_ty| {
+        |py_name, fqn, mode, params, arg_tys, arg_defaults, return_ty| {
             out.push((
                 leaf.clone(),
                 EmittedSymbol::Function(PyFunction {
@@ -191,6 +191,7 @@ fn expand_function(
                     baml_fqn: fqn,
                     mode,
                     param_names: params,
+                    arg_defaults,
                     arg_tys,
                     return_ty,
                     generic_params: func_generic_params.clone(),
@@ -231,7 +232,7 @@ fn expand_methods(
             &fqn_root,
             &m.arguments,
             &m.return_type,
-            |py_name, fqn, mode, params, arg_tys, return_ty| {
+            |py_name, fqn, mode, params, arg_tys, arg_defaults, return_ty| {
                 let param_names = match kind {
                     MethodKind::Static => params,
                     MethodKind::Instance => {
@@ -246,6 +247,7 @@ fn expand_methods(
                     baml_fqn: fqn,
                     mode,
                     param_names,
+                    arg_defaults,
                     kind,
                     arg_tys,
                     return_ty,
@@ -285,19 +287,30 @@ fn expand_callable<F>(
     return_type: &Ty,
     mut emit: F,
 ) where
-    F: FnMut(String, String, SyncAsync, Vec<String>, Vec<Ty>, Ty),
+    F: FnMut(
+        String,
+        String,
+        SyncAsync,
+        Vec<String>,
+        Vec<Ty>,
+        Vec<Option<FunctionArgumentDefault>>,
+        Ty,
+    ),
 {
     let params: Vec<String> = arguments
         .iter()
         .map(|a| a.name.as_str().to_string())
         .collect();
     let arg_types: Vec<Ty> = arguments.iter().map(|a| a.ty.clone()).collect();
+    let arg_defaults: Vec<Option<FunctionArgumentDefault>> =
+        arguments.iter().map(|a| a.default.clone()).collect();
     emit(
         bare.to_string(),
         fqn_root.to_string(),
         SyncAsync::Sync,
         params.clone(),
         arg_types.clone(),
+        arg_defaults.clone(),
         return_type.clone(),
     );
     emit(
@@ -306,6 +319,7 @@ fn expand_callable<F>(
         SyncAsync::Async,
         params,
         arg_types,
+        arg_defaults,
         return_type.clone(),
     );
 }

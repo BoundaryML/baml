@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a.rs
+expression: tir
+---
+function user.type_mismatch(a: int = "bad") -> int throws never {
+  { : int
+    a : int
+  }
+  !! 33..38: type mismatch: expected int, got "bad"
+}
+function user.forward_ref(a: int = b, b: int = 1) -> int throws never {
+  { : int
+    a : int
+  }
+  !! 83..84: default for parameter `a` cannot reference later parameter `b`
+}
+function user.forward_ref_in_match(seed: int, a: int = ..., b: int = 1) -> int throws never {
+  { : int
+    a : int
+  }
+  !! 160..192: default for parameter `a` cannot reference later parameter `b`
+}
+function user.required_after_default(a: int = 1, b: int) -> int throws never {
+  { : int
+    b : int
+  }
+  !! 262..269: required parameter `b` cannot appear after a defaulted parameter
+}

@@ -258,6 +258,7 @@ mod tests {
                     .iter()
                     .map(|p| crate::ast::FunctionTypeParam {
                         name: p.name.clone(),
+                        optional: p.optional,
                         ty: strip_spans(&p.ty),
                     })
                     .collect(),
@@ -327,6 +328,117 @@ function deep_copy<T>(value: T) -> T {
 
         assert_eq!(function.generic_params.len(), 1);
         assert_eq!(function.generic_params[0].as_str(), "T");
+    }
+
+    #[test]
+    fn ast_preserves_parameter_defaults_and_call_labels() {
+        let source = r#"
+function Search(query: string, max_results: int = 10) -> int {
+  Search(query = "cats", max_results = 5)
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+
+        assert!(function.params[0].default.is_none());
+        let default_id = function.params[1]
+            .default
+            .expect("expected default expression id");
+        assert!(matches!(
+            function.defaults.expr(default_id),
+            Expr::Literal(_)
+        ));
+
+        let Some(FunctionBodyDef::Expr(body, _source_map)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let call_id = body.root_expr.expect("expected body root expression");
+        let Expr::Block {
+            tail_expr: Some(tail),
+            ..
+        } = &body.exprs[call_id]
+        else {
+            panic!("expected block root");
+        };
+        let Expr::Call { args, .. } = &body.exprs[*tail] else {
+            panic!("expected call tail expression");
+        };
+
+        assert_eq!(
+            args[0].label.as_ref().map(smol_str::SmolStr::as_str),
+            Some("query")
+        );
+        assert_eq!(
+            args[1].label.as_ref().map(smol_str::SmolStr::as_str),
+            Some("max_results")
+        );
+    }
+
+    #[test]
+    fn ast_default_indices_survive_recovered_parameter() {
+        let source = r#"
+function Broken(: int = 1, value: int = 2) -> int {
+  value
+}
+"#;
+        let root = {
+            let tokens = lex_lossless(source, FileId::new(0));
+            let (green, _errors) = parse_file(&tokens);
+            SyntaxNode::new_root(green)
+        };
+        let (items, _diags, _env_var_refs) = lower_file(&root);
+        let function = first_function(items);
+
+        assert_eq!(function.params.len(), 1);
+        assert_eq!(function.params[0].name.as_str(), "value");
+        let default_id = function.params[0]
+            .default
+            .expect("expected valid param default to survive recovery");
+        assert!(matches!(
+            function.defaults.expr(default_id),
+            Expr::Literal(_)
+        ));
+    }
+
+    #[test]
+    fn ast_default_indices_skip_missing_name_slots() {
+        let source = r#"
+function Broken(: int, b: string = "x") -> string {
+  b
+}
+"#;
+        let root = {
+            let tokens = lex_lossless(source, FileId::new(0));
+            let (green, _errors) = parse_file(&tokens);
+            SyntaxNode::new_root(green)
+        };
+        let (items, diags, _env_var_refs) = lower_file(&root);
+        let function = first_function(items);
+
+        assert!(
+            diags
+                .iter()
+                .any(|diag| matches!(diag, crate::LoweringDiagnostic::MissingParamName { .. })),
+            "lower_param should report the recovered missing name"
+        );
+        assert_eq!(
+            function.params.len(),
+            1,
+            "lower_params_with_defaults should filter out the missing-name slot"
+        );
+        assert_eq!(function.params[0].name.as_str(), "b");
+        assert_eq!(
+            function.defaults.exprs.exprs.len(),
+            1,
+            "lower_expr_body::lower_default_expr_nodes should only lower b's default"
+        );
+
+        let default_id = function.params[0]
+            .default
+            .expect("expected b's default to use the lowered params index");
+        assert_eq!(
+            function.defaults.expr(default_id),
+            &Expr::Literal(crate::ast::Literal::String("x".to_string()))
+        );
     }
 
     #[test]

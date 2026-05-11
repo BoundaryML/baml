@@ -460,8 +460,8 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::Expr::Call { callee, args, .. } | ast::Expr::OptionalCall { callee, args } => {
                 self.walk_expr(*callee, body, source_map, true);
-                for &arg in args {
-                    self.walk_expr(arg, body, source_map, true);
+                for arg in args {
+                    self.walk_expr(arg.expr, body, source_map, true);
                 }
             }
             ast::Expr::Object {
@@ -798,12 +798,22 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .params
                 .push((param.name.clone(), idx));
         }
+        self.lambda_stack.push(scope_id);
+        for param in &func_def.params {
+            if let Some(default) = param.default {
+                self.walk_expr(
+                    default.expr(),
+                    &func_def.defaults.exprs,
+                    &func_def.defaults.source_map,
+                    true,
+                );
+            }
+        }
         if let Some(ast::FunctionBodyDef::Expr(lambda_body, lambda_source_map)) = &func_def.body {
-            self.lambda_stack.push(scope_id);
             self.walk_expr_body(lambda_body, lambda_source_map);
             self.analyze_lambda_captures(scope_id, lambda_body, lambda_source_map);
-            self.lambda_stack.pop();
         }
+        self.lambda_stack.pop();
         self.pop_scope();
     }
 
@@ -944,6 +954,16 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));
+        }
+        for param in &f.params {
+            if let Some(default) = param.default {
+                self.walk_expr(
+                    default.expr(),
+                    &f.defaults.exprs,
+                    &f.defaults.source_map,
+                    true,
+                );
+            }
         }
 
         if let Some(ast::FunctionBodyDef::Expr(ref body, ref source_map)) = f.body {

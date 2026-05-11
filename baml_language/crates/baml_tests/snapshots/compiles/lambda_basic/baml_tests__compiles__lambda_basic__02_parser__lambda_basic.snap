@@ -42,9 +42,10 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "double"
-          CALL_ARGS "(21)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "21"
+            CALL_ARG "21"
+              INTEGER_LITERAL "21"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -84,9 +85,10 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "double"
-          CALL_ARGS "(21)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "21"
+            CALL_ARG "21"
+              INTEGER_LITERAL "21"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -166,20 +168,21 @@ SOURCE_FILE
             WORD "map"
           CALL_ARGS
             L_PAREN "("
-            LAMBDA_EXPR
-              PARAMETER_LIST
-                L_PAREN "("
-                PARAMETER "x"
-                  WORD "x"
-                R_PAREN ")"
-              ARROW "->"
-              BLOCK_EXPR
-                L_BRACE "{"
-                BINARY_EXPR "x * 2"
-                  WORD "x"
-                  STAR "*"
-                  INTEGER_LITERAL "2"
-                R_BRACE "}"
+            CALL_ARG
+              LAMBDA_EXPR
+                PARAMETER_LIST
+                  L_PAREN "("
+                  PARAMETER "x"
+                    WORD "x"
+                  R_PAREN ")"
+                ARROW "->"
+                BLOCK_EXPR
+                  L_BRACE "{"
+                  BINARY_EXPR "x * 2"
+                    WORD "x"
+                    STAR "*"
+                    INTEGER_LITERAL "2"
+                  R_BRACE "}"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -241,9 +244,10 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "risky"
-          CALL_ARGS "(42)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "42"
+            CALL_ARG "42"
+              INTEGER_LITERAL "42"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -292,9 +296,10 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "add_offset"
-          CALL_ARGS "(32)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "32"
+            CALL_ARG "32"
+              INTEGER_LITERAL "32"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -354,16 +359,18 @@ SOURCE_FILE
                     R_BRACE "}"
               CALL_EXPR
                 WORD "inner"
-                CALL_ARGS "(1)"
+                CALL_ARGS
                   L_PAREN "("
-                  INTEGER_LITERAL "1"
+                  CALL_ARG "1"
+                    INTEGER_LITERAL "1"
                   R_PAREN ")"
               R_BRACE "}"
         CALL_EXPR
           WORD "outer"
-          CALL_ARGS "(41)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "41"
+            CALL_ARG "41"
+              INTEGER_LITERAL "41"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -407,9 +414,10 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "identity"
-          CALL_ARGS "(42)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "42"
+            CALL_ARG "42"
+              INTEGER_LITERAL "42"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -457,11 +465,13 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "add"
-          CALL_ARGS "(20, 22)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "20"
+            CALL_ARG "20"
+              INTEGER_LITERAL "20"
             COMMA ","
-            INTEGER_LITERAL "22"
+            CALL_ARG "22"
+              INTEGER_LITERAL "22"
             R_PAREN ")"
         R_BRACE "}"
 

@@ -64,6 +64,7 @@ fn inject_function(
         },
         param_names: vec![],
         param_types: vec![],
+        param_has_default: vec![],
         throws_type: None,
         origin: FunctionOrigin::UserDefined,
         body_meta: None,

@@ -46,6 +46,21 @@ pub struct FunctionArgument {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
     pub ty: super::Ty,
+    pub default: Option<FunctionArgumentDefault>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FunctionArgumentDefault {
+    Null,
+    Literal(DefaultLiteral),
+    Expression { source: Option<String> },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DefaultLiteral {
+    Scalar(baml_base::Literal),
+    EmptyList,
+    EmptyMap,
 }
 
 pub struct Class {
@@ -205,7 +220,7 @@ impl super::Ty {
             }
             Ty::Callable { params, ret } => {
                 for p in params {
-                    unions.extend(p.walk_all_unions());
+                    unions.extend(p.ty.walk_all_unions());
                 }
                 unions.extend(ret.walk_all_unions());
             }

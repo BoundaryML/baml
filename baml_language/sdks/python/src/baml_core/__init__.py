@@ -206,24 +206,36 @@ async def call_function(rt, function_name, kwargs, ctx=None, collectors=None, ab
 # ---------------------------------------------------------------------------
 
 Mode = Literal["sync", "async"]
+UNSET = object()
 
 
 def _build_kwargs(
-    args: Sequence[Any], kwargs: Dict[str, Any], param_names: List[str]
+    args: Sequence[Any],
+    kwargs: Dict[str, Any],
+    param_names: List[str],
+    required_positional_count: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Zip positional args with captured `param_names`, then merge
     caller-supplied kwargs on top. Extra positional args error loudly
     so callers see a TypeError at the callsite, not a missing-argument
     error deep in the bridge."""
-    if len(args) > len(param_names):
+    positional_limit = (
+        len(param_names)
+        if required_positional_count is None
+        else required_positional_count
+    )
+    if len(args) > positional_limit:
         raise TypeError(
             f"got {len(args)} positional arguments but only "
-            f"{len(param_names)} parameter names ({param_names!r})"
+            f"{positional_limit} positional parameter names "
+            f"({param_names[:positional_limit]!r})"
         )
     built: Dict[str, Any] = {}
     for name, value in zip(param_names, args):
         built[name] = value
     for k, v in kwargs.items():
+        if v is UNSET:
+            continue
         if k in built:
             raise TypeError(f"multiple values for argument {k!r}")
         built[k] = v
@@ -231,7 +243,10 @@ def _build_kwargs(
 
 
 def _make_call(
-    baml_fqn: str, mode: Mode, param_names: List[str]
+    baml_fqn: str,
+    mode: Mode,
+    param_names: List[str],
+    required_positional_count: Optional[int] = None,
 ) -> Callable[..., Any]:
     # Codegen always emits fully-qualified `<pkg>.<ns…>.<name>` FQNs and
     # the engine stores user functions under the same form (see
@@ -239,7 +254,7 @@ def _make_call(
     names = list(param_names)
     if mode == "sync":
         def _sync(*args: Any, **kwargs: Any) -> Any:
-            merged = _build_kwargs(args, kwargs, names)
+            merged = _build_kwargs(args, kwargs, names, required_positional_count)
             rt = get_runtime()
             args_proto = encode_call_args(merged)
             result_bytes = rt.call_function_sync(baml_fqn, args_proto, None, None, None)
@@ -250,7 +265,7 @@ def _make_call(
         return _sync
     elif mode == "async":
         async def _async(*args: Any, **kwargs: Any) -> Any:
-            merged = _build_kwargs(args, kwargs, names)
+            merged = _build_kwargs(args, kwargs, names, required_positional_count)
             rt = get_runtime()
             args_proto = encode_call_args(merged)
             result_bytes = await rt.call_function(baml_fqn, args_proto, None, None, None)
@@ -264,31 +279,40 @@ def _make_call(
 
 
 def define_function(
-    baml_fqn: str, mode: Mode, param_names: List[str]
+    baml_fqn: str,
+    mode: Mode,
+    param_names: List[str],
+    required_positional_count: Optional[int] = None,
 ) -> Callable[..., Any]:
     """Factory for a free BAML function. Captures the call contract by
     closure; returns a callable that zips positional args against
     `param_names`, encodes them, and hands the result to `decode_call_result`."""
-    return _make_call(baml_fqn, mode, param_names)
+    return _make_call(baml_fqn, mode, param_names, required_positional_count)
 
 
 def define_static_method(
-    baml_fqn: str, mode: Mode, param_names: List[str]
+    baml_fqn: str,
+    mode: Mode,
+    param_names: List[str],
+    required_positional_count: Optional[int] = None,
 ) -> Callable[..., Any]:
     """Factory for a BAML static method. Same contract as `define_function`
     today; a distinct name lets codegen route stdlib-shaped call sites
     without branching on string shape."""
-    return _make_call(baml_fqn, mode, param_names)
+    return _make_call(baml_fqn, mode, param_names, required_positional_count)
 
 
 def define_instance_method(
-    baml_fqn: str, mode: Mode, param_names: List[str]
+    baml_fqn: str,
+    mode: Mode,
+    param_names: List[str],
+    required_positional_count: Optional[int] = None,
 ) -> Callable[..., Any]:
     """Factory for a BAML instance method. `param_names[0]` is expected
     to be ``"self"``; Python's descriptor protocol supplies the receiver
     as positional arg 0 when the returned callable is installed as a
     class attribute."""
-    return _make_call(baml_fqn, mode, param_names)
+    return _make_call(baml_fqn, mode, param_names, required_positional_count)
 
 
 __all__ = [
@@ -301,6 +325,7 @@ __all__ = [
     "HostSpanManager",
     "LLMCall",
     "Timing",
+    "UNSET",
     "Usage",
     "BamlCtxManager",
     "BamlError",

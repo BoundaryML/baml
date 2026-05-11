@@ -411,6 +411,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         name: SmolStr::new(format!("{}$stream", func.name)),
                         generic_params: func.generic_params.clone(),
                         params: func.params.clone(),
+                        defaults: func.defaults.clone(),
                         return_type: Some(stream_return_type.clone()),
                         throws: None,
                         body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
@@ -441,6 +442,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                             },
                             span,
                         }),
+                        default: None,
                         span,
                         name_span,
                     };
@@ -452,6 +454,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         name: SmolStr::new(format!("{}$parse_stream", func.name)),
                         generic_params: func.generic_params.clone(),
                         params: vec![sse_param],
+                        defaults: ast::FunctionDefaults::empty(),
                         return_type: Some(stream_return_type),
                         throws: None,
                         body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
@@ -566,7 +569,11 @@ pub fn function_signature<'db>(
                 .as_ref()
                 .map(|te| te.expr.clone())
                 .unwrap_or(ast::TypeExpr::Unknown { attrs: vec![] });
-            (p.name.clone(), type_expr)
+            baml_compiler2_hir::signature::SignatureParam {
+                name: p.name.clone(),
+                ty: type_expr,
+                has_default: p.default.is_some(),
+            }
         })
         .collect();
 
@@ -610,7 +617,11 @@ pub fn elaborated_function_signature<'db>(
                 .as_ref()
                 .map(|te| te.expr.clone())
                 .unwrap_or(ast::TypeExpr::Unknown { attrs: vec![] });
-            (p.name.clone(), type_expr)
+            baml_compiler2_hir::signature::SignatureParam {
+                name: p.name.clone(),
+                ty: type_expr,
+                has_default: p.default.is_some(),
+            }
         })
         .collect();
 
@@ -628,6 +639,25 @@ pub fn elaborated_function_signature<'db>(
             throws,
         ),
     )
+}
+
+/// Canonical function parameter defaults — uses PPIR's item tree.
+pub fn function_parameter_defaults<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Arc<baml_compiler2_hir::signature::FunctionParameterDefaults> {
+    let file = function.file(db);
+    let item_tree = file_item_tree(db, file);
+    let func_data = &item_tree[function.id(db)];
+
+    Arc::new(baml_compiler2_hir::signature::FunctionParameterDefaults {
+        params: func_data
+            .params
+            .iter()
+            .map(|param| param.default.clone())
+            .collect(),
+        defaults: func_data.defaults.clone(),
+    })
 }
 
 /// Canonical function signature source map — uses PPIR's item tree.

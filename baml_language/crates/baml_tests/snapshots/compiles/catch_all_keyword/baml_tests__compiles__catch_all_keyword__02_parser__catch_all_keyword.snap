@@ -81,9 +81,10 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "MayFailIntOrString"
-            CALL_ARGS "(x)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "x"
+              CALL_ARG "x"
+                WORD "x"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH "catch"
@@ -125,9 +126,10 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "MayFailIntOrString"
-            CALL_ARGS "(x)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "x"
+              CALL_ARG "x"
+                WORD "x"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH_ALL "catch_all"
@@ -168,9 +170,10 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "MayFailIntOrString"
-            CALL_ARGS "(x)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "x"
+              CALL_ARG "x"
+                WORD "x"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH_ALL "catch_all"
@@ -224,9 +227,10 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "MayFailIntOrString"
-            CALL_ARGS "(x)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "x"
+              CALL_ARG "x"
+                WORD "x"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH "catch"

@@ -7,6 +7,17 @@
 use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
 use baml_project::ProjectDatabase;
 
+const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_emit");
+const OPTIONAL_DEFAULTS_SOURCE: &str = r#"
+function add(base: int, amount: int = base + 2) -> int {
+  base + amount
+}
+
+function main() -> int {
+  add(5)
+}
+"#;
+
 fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.set_project_root(std::path::Path::new("."));
@@ -21,6 +32,12 @@ fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
         },
     )
     .expect("compilation should succeed")
+}
+
+macro_rules! emit_snapshot {
+    ($name:expr, $output:expr) => {
+        assert_compiler2_snapshot!(SNAPSHOT_PATH, $name, $output);
+    };
 }
 
 #[test]
@@ -97,6 +114,49 @@ fn class_field_lookup() {
         program.function_indices.contains_key("user.origin"),
         "expected 'user.origin' in function_indices, got: {:?}",
         program.function_indices.keys().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn optional_param_metadata_and_omitted_sentinel_emit() {
+    let mut db = make_db();
+    db.add_file("test.baml", OPTIONAL_DEFAULTS_SOURCE);
+    let program = compile(&db);
+
+    let add_idx = program.function_indices["user.add"];
+    let bex_vm_types::Object::Function(add) = &(*program.objects)[add_idx] else {
+        panic!("expected user.add to be a function");
+    };
+    assert_eq!(add.param_has_default, vec![false, true]);
+    assert!(
+        add.bytecode
+            .constants
+            .iter()
+            .any(|c| matches!(c, bex_vm_types::ConstValue::OmittedArg)),
+        "expected default prologue to compare against OmittedArg"
+    );
+
+    let main_idx = program.function_indices["user.main"];
+    let bex_vm_types::Object::Function(main) = &(*program.objects)[main_idx] else {
+        panic!("expected user.main to be a function");
+    };
+    assert!(
+        main.bytecode
+            .constants
+            .iter()
+            .any(|c| matches!(c, bex_vm_types::ConstValue::OmittedArg)),
+        "expected omitted source argument to be emitted as OmittedArg"
+    );
+}
+
+#[test]
+fn optional_defaults_emit_snapshot() {
+    let mut db = make_db();
+    db.add_file("test.baml", OPTIONAL_DEFAULTS_SOURCE);
+    let program = compile(&db);
+    emit_snapshot!(
+        "optional_defaults_emit_snapshot",
+        crate::engine::display_user_functions(&program)
     );
 }
 
@@ -202,6 +262,9 @@ fn init_test_chainer_synthesized_when_tests_present() {
         "expected $init_test chainer to have arity 1, got: {}",
         chainer.arity
     );
+    assert_eq!(chainer.param_names, vec!["registry"]);
+    assert_eq!(chainer.param_types.len(), 1);
+    assert_eq!(chainer.param_has_default, vec![false]);
 }
 
 /// Verify that when a file has NO test blocks, no `$init_test` chainer is synthesized.

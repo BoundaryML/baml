@@ -116,7 +116,17 @@ pub struct UserFunctionInfo {
     pub origin: FunctionOrigin,
     pub param_names: Vec<String>,
     pub param_types: Vec<Ty>,
+    pub param_has_default: Vec<bool>,
     pub return_type: Ty,
+}
+
+/// Internal call argument after host binding has distinguished omission from
+/// explicit null. This is intentionally not part of the external bridge value
+/// surface.
+#[derive(Debug, Clone)]
+pub enum BexCallArg {
+    Provided(Box<BexExternalValue>),
+    OmittedDefault,
 }
 
 // ============================================================================
@@ -963,12 +973,51 @@ impl BexEngine {
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
+        let args = args
+            .into_iter()
+            .map(|arg| BexCallArg::Provided(Box::new(arg)))
+            .collect();
+        self.call_function_bound_args(
+            function_name,
+            args,
+            FunctionCallContext {
+                call_id,
+                host_ctx,
+                collectors,
+                cancel,
+            },
+            copy_objects,
+        )
+        .await
+    }
+
+    pub async fn call_function_bound_args(
+        self: &Arc<Self>,
+        function_name: &str,
+        args: Vec<BexCallArg>,
+        FunctionCallContext {
+            call_id,
+            host_ctx,
+            collectors,
+            cancel,
+        }: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
         // Fail fast if already cancelled — guarantees pre-cancelled tokens
         // always produce a `baml.panics.Cancelled` panic regardless of
         // function contents.
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
+
+        let function_index = self.lookup_function(function_name)?;
+        self.validate_bound_args(function_name, &args)?;
+        let return_type = self
+            .function_return_type(function_name)
+            .unwrap_or(Ty::Null {
+                attr: baml_type::TyAttr::default(),
+            });
+        let throws_type = self.function_throws_type(function_name);
 
         // Register this call so `cancel_function_call(call_id)` can target
         // it. The RAII guard removes the entry on drop (including panic
@@ -993,20 +1042,21 @@ impl BexEngine {
         let vm = self.heap_permit_manager.new_permit(vm).await;
         let mut vm = vm.acquire().await;
 
-        let function_index = self.lookup_function(function_name)?;
-        let return_type = self
-            .function_return_type(function_name)
-            .unwrap_or(Ty::Null {
-                attr: baml_type::TyAttr::default(),
-            });
-        let throws_type = self.function_throws_type(function_name);
-
         // Snapshot args for the root FunctionStart event before converting to VM values
-        let args_snapshot = args.clone();
+        let args_snapshot = args
+            .iter()
+            .filter_map(|arg| match arg {
+                BexCallArg::Provided(value) => Some(value.as_ref().clone()),
+                BexCallArg::OmittedDefault => None,
+            })
+            .collect();
 
         let vm_args: Vec<Value> = args
             .into_iter()
-            .map(|arg| self.convert_external_to_vm_value(&mut vm, arg))
+            .map(|arg| match arg {
+                BexCallArg::Provided(arg) => self.convert_external_to_vm_value(&mut vm, *arg),
+                BexCallArg::OmittedDefault => Ok(Value::OmittedArg),
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         vm.set_entry_point(function_index, &vm_args);
@@ -1121,6 +1171,36 @@ impl BexEngine {
         }
     }
 
+    fn validate_bound_args(
+        &self,
+        function_name: &str,
+        args: &[BexCallArg],
+    ) -> Result<(), EngineError> {
+        let params = self.function_params(function_name)?;
+        if args.len() != params.len() {
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "Function `{function_name}` expects {} argument(s), got {}",
+                    params.len(),
+                    args.len()
+                ),
+            });
+        }
+
+        for (idx, arg) in args.iter().enumerate() {
+            if matches!(arg, BexCallArg::OmittedDefault) && !params[idx].2 {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "Argument `{}` for function `{function_name}` cannot be omitted; only parameters with defaults may use omitted defaults",
+                        params[idx].0
+                    ),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
     /// Look up a function by name and return its heap pointer.
     ///
     /// Tries the exact name first, then falls back to `"user.{name}"` to handle
@@ -1199,7 +1279,7 @@ impl BexEngine {
     }
 
     /// Get parameter names and types for a function by dereferencing its heap object.
-    pub fn function_params(&self, name: &str) -> Result<Vec<(&str, &Ty)>, EngineError> {
+    pub fn function_params(&self, name: &str) -> Result<Vec<(&str, &Ty, bool)>, EngineError> {
         let resolved = self
             .resolve_function_name(name)
             .ok_or(EngineError::FunctionNotFound {
@@ -1218,7 +1298,14 @@ impl BexEngine {
                 .param_names
                 .iter()
                 .zip(func.param_types.iter())
-                .map(|(name, ty)| (name.as_str(), ty))
+                .enumerate()
+                .map(|(idx, (name, ty))| {
+                    (
+                        name.as_str(),
+                        ty,
+                        func.param_has_default.get(idx).copied().unwrap_or(false),
+                    )
+                })
                 .collect()),
             other => Err(EngineError::TypeMismatch {
                 message: format!("Expected Function, got {other:?}"),
@@ -1249,6 +1336,7 @@ impl BexEngine {
                             origin: func.origin,
                             param_names: func.param_names.clone(),
                             param_types: func.param_types.clone(),
+                            param_has_default: func.param_has_default.clone(),
                             return_type: func.return_type.clone(),
                         })
                     }

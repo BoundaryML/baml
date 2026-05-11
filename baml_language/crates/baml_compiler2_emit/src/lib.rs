@@ -528,6 +528,7 @@ pub fn generate_project_bytecode_with_opt(
                         },
                         param_names: Vec::new(),
                         param_types: Vec::new(),
+                        param_has_default: Vec::new(),
                         throws_type: None,
                         origin: FunctionOrigin::Builtin,
                         body_meta: None,
@@ -554,6 +555,7 @@ pub fn generate_project_bytecode_with_opt(
                     },
                     param_names: Vec::new(),
                     param_types: Vec::new(),
+                    param_has_default: Vec::new(),
                     throws_type: None,
                     origin: FunctionOrigin::Builtin,
                     body_meta: None,
@@ -562,11 +564,19 @@ pub fn generate_project_bytecode_with_opt(
             };
 
             // Set function metadata from signature
-            let (param_names, param_types, return_type) =
-                compute_function_metadata_from_item_tree(db, *file, func_data, cache_pass4);
+            let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+            let (param_names, param_types, param_has_default, return_type) =
+                compute_function_metadata_from_item_tree(
+                    db,
+                    *file,
+                    func_data,
+                    &parameter_defaults,
+                    cache_pass4,
+                );
             compiled_fn.return_type = return_type;
             compiled_fn.param_names = param_names;
             compiled_fn.param_types = param_types;
+            compiled_fn.param_has_default = param_has_default;
 
             // Set inferred throws type from TIR throw inference
             compiled_fn.throws_type = compute_throws_type(db, *file, &func_data.name, cache_pass4);
@@ -779,7 +789,8 @@ pub fn generate_project_bytecode_with_opt(
                     attr: baml_type::TyAttr::default(),
                 },
                 param_names: vec!["registry".to_string()],
-                param_types: Vec::new(), // type not needed for chainer dispatch
+                param_types: vec![baml_type::Ty::unknown()], // type not needed for chainer dispatch
+                param_has_default: vec![false],
                 throws_type: None,
                 origin: FunctionOrigin::Internal,
                 body_meta: None,
@@ -954,8 +965,9 @@ fn compute_function_metadata_from_item_tree(
     db: &dyn baml_compiler2_mir::Db,
     file: baml_base::SourceFile,
     func_data: &baml_compiler2_hir::item_tree::Function,
+    parameter_defaults: &baml_compiler2_hir::signature::FunctionParameterDefaults,
     cache: &ResolvedAliases,
-) -> (Vec<String>, Vec<baml_type::Ty>, baml_type::Ty) {
+) -> (Vec<String>, Vec<baml_type::Ty>, Vec<bool>, baml_type::Ty) {
     let param_names: Vec<String> = func_data
         .params
         .iter()
@@ -1000,13 +1012,19 @@ fn compute_function_metadata_from_item_tree(
         })
         .collect();
 
+    let param_has_default: Vec<bool> = parameter_defaults
+        .params
+        .iter()
+        .map(Option::is_some)
+        .collect();
+
     let return_type = func_data
         .return_type
         .as_ref()
         .map(|te| resolve(&te.expr))
         .unwrap_or_else(null_ty);
 
-    (param_names, param_types, return_type)
+    (param_names, param_types, param_has_default, return_type)
 }
 
 /// Lower a PPIR-computed stream-expanded `TypeExpr` to `baml_type::Ty`.
@@ -1351,6 +1369,7 @@ fn compile_init_function<'db>(
                     },
                     param_names: Vec::new(),
                     param_types: Vec::new(),
+                    param_has_default: Vec::new(),
                     throws_type: None,
                     origin: FunctionOrigin::Internal,
                     body_meta: None,
@@ -1424,6 +1443,7 @@ fn compile_init_function<'db>(
         },
         param_names: Vec::new(),
         param_types: Vec::new(),
+        param_has_default: Vec::new(),
         throws_type: None,
         origin: FunctionOrigin::Internal,
         body_meta: None,
@@ -1433,9 +1453,83 @@ fn compile_init_function<'db>(
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::{HashMap, HashSet},
+        path::PathBuf,
+        sync::atomic::{AtomicU32, Ordering},
+    };
+
+    use baml_base::{FileId, SourceFile};
+    use baml_compiler2_ast as ast;
     use baml_compiler2_hir::item_tree::{Attribute, AttributeArg};
+    use baml_workspace::Project;
 
     use super::*;
+
+    #[salsa::db]
+    struct TestDb {
+        storage: salsa::Storage<TestDb>,
+        next_file_id: AtomicU32,
+        project: Option<Project>,
+    }
+
+    impl Default for TestDb {
+        fn default() -> Self {
+            Self {
+                storage: salsa::Storage::default(),
+                next_file_id: AtomicU32::new(0),
+                project: None,
+            }
+        }
+    }
+
+    impl Clone for TestDb {
+        fn clone(&self) -> Self {
+            Self {
+                storage: self.storage.clone(),
+                next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::SeqCst)),
+                project: self.project,
+            }
+        }
+    }
+
+    impl TestDb {
+        fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
+            let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
+            SourceFile::new(self, content.to_string(), path.into(), file_id)
+        }
+
+        fn init_with_file(&mut self) -> SourceFile {
+            let file = self.add_file("test.baml", "function f() -> int { 1 }");
+            self.project = Some(Project::new(self, PathBuf::from("."), vec![file]));
+            file
+        }
+    }
+
+    #[salsa::db]
+    impl salsa::Database for TestDb {}
+
+    #[salsa::db]
+    impl baml_workspace::Db for TestDb {
+        fn project(&self) -> Project {
+            self.project.expect("TestDb not initialized")
+        }
+    }
+
+    #[salsa::db]
+    impl baml_compiler2_hir::Db for TestDb {}
+
+    #[salsa::db]
+    impl baml_compiler2_ppir::Db for TestDb {}
+
+    #[salsa::db]
+    impl baml_compiler2_tir::Db for TestDb {}
+
+    #[salsa::db]
+    impl baml_compiler2_mir::Db for TestDb {}
+
+    #[salsa::db]
+    impl Db for TestDb {}
 
     // ── parse_string_attr_value ─────────────────────────────────────────
 
@@ -1524,6 +1618,67 @@ mod tests {
         // Degenerate: #"# (would panic without length guard)
         let degenerate = "#\"#";
         assert_eq!(parse_string_attr_value(degenerate), None);
+    }
+
+    #[test]
+    fn function_metadata_reports_defaulted_params() {
+        let mut db = TestDb::default();
+        let file = db.init_with_file();
+
+        let mut defaults = ast::FunctionDefaults::empty();
+        let default_expr = ast::DefaultExprId::new(defaults.exprs.exprs.alloc(ast::Expr::Null));
+        let function_id = baml_compiler2_hir::ids::LocalItemId::<
+            baml_compiler2_hir::ids::FunctionMarker,
+        >::new(1, 0);
+        let default_ref = baml_compiler2_hir::item_tree::DefaultExprRef {
+            function: function_id,
+            expr: default_expr,
+        };
+        let param = |name: &str, default| baml_compiler2_hir::item_tree::FunctionParam {
+            name: baml_base::Name::new(name),
+            type_expr: None,
+            default,
+            span: baml_base::Span::fake().range,
+        };
+        let func_data = baml_compiler2_hir::item_tree::Function {
+            name: baml_base::Name::new("f"),
+            generic_params: Vec::new(),
+            params: vec![
+                param("required", None),
+                param("with_default", Some(default_ref)),
+                param("also_required", None),
+            ],
+            defaults,
+            return_type: None,
+            throws: None,
+            body: None,
+            declarative_meta: None,
+            origin: ast::FunctionOrigin::UserDefined,
+            docstring: None,
+            span: baml_base::Span::fake().range,
+        };
+        let parameter_defaults = baml_compiler2_hir::signature::FunctionParameterDefaults {
+            params: func_data
+                .params
+                .iter()
+                .map(|param| param.default.clone())
+                .collect(),
+            defaults: func_data.defaults.clone(),
+        };
+        let cache = ResolvedAliases {
+            aliases: HashMap::new(),
+            recursive: HashSet::new(),
+        };
+
+        let (_, _, param_has_default, _) = compute_function_metadata_from_item_tree(
+            &db,
+            file,
+            &func_data,
+            &parameter_defaults,
+            &cache,
+        );
+
+        assert_eq!(param_has_default, vec![false, true, false]);
     }
 
     // ── extract_schema_attrs ────────────────────────────────────────────

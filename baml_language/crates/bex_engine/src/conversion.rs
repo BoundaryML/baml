@@ -30,6 +30,11 @@ impl BexEngine {
         let effective_type = resolve_effective_type(value, declared_type);
 
         let external = match value {
+            Value::OmittedArg => {
+                return Err(EngineError::TypeMismatch {
+                    message: "internal omitted argument escaped to external conversion".to_string(),
+                });
+            }
             Value::Null => BexExternalValue::Null,
             Value::Int(i) => BexExternalValue::Int(*i),
             Value::Float(f) => BexExternalValue::Float(*f),
@@ -380,6 +385,9 @@ impl BexEngine {
 impl BexEngine {
     pub(crate) fn vm_arg_to_bex_value(&self, value: &Value) -> BexExternalValue {
         match value {
+            Value::OmittedArg => {
+                panic!("Cannot convert omitted argument sentinel to BexExternalValue")
+            }
             Value::Null => BexExternalValue::Null,
             Value::Int(i) => BexExternalValue::Int(*i),
             Value::Float(f) => BexExternalValue::Float(*f),
@@ -402,6 +410,9 @@ impl BexEngine {
         value: &Value,
     ) -> BexExternalValue {
         match value {
+            Value::OmittedArg => {
+                panic!("Cannot convert omitted argument sentinel to BexExternalValue")
+            }
             Value::Null => BexExternalValue::Null,
             Value::Int(i) => BexExternalValue::Int(*i),
             Value::Float(f) => BexExternalValue::Float(*f),
@@ -587,6 +598,7 @@ fn resolve_effective_type<'a>(value: &Value, declared_type: &'a Ty) -> &'a Ty {
 /// Find the union member that matches the runtime value's type.
 fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'a Ty> {
     match value {
+        Value::OmittedArg => None,
         Value::Null => members.iter().find(|m| matches!(m, Ty::Null { .. })),
         Value::Int(_) => members
             .iter()
@@ -678,6 +690,9 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
 /// primitives, strings, arrays, maps, and resources - not instances/variants.
 pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue {
     match value {
+        Value::OmittedArg => {
+            panic!("Cannot convert omitted argument sentinel to BexExternalValue")
+        }
         Value::Null => BexExternalValue::Null,
         Value::Int(i) => BexExternalValue::Int(*i),
         Value::Float(f) => BexExternalValue::Float(*f),

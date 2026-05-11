@@ -54,12 +54,14 @@ SOURCE_FILE
           WORD "f"
           CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "1"
+            CALL_ARG "1"
+              INTEGER_LITERAL "1"
             COMMA ","
-            STRING_LITERAL "two"
-              QUOTE """
-              WORD "two"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "two"
+                QUOTE """
+                WORD "two"
+                QUOTE """
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -77,12 +79,14 @@ SOURCE_FILE
           WORD "f"
           CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "1"
+            CALL_ARG "1"
+              INTEGER_LITERAL "1"
             COMMA ","
-            STRING_LITERAL "two"
-              QUOTE """
-              WORD "two"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "two"
+                QUOTE """
+                WORD "two"
+                QUOTE """
             R_PAREN ")"
         R_PAREN ")"
         R_BRACE "}"
@@ -107,12 +111,14 @@ SOURCE_FILE
           WORD "string"
           CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "1"
+            CALL_ARG "1"
+              INTEGER_LITERAL "1"
             COMMA ","
-            STRING_LITERAL "two"
-              QUOTE """
-              WORD "two"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "two"
+                QUOTE """
+                WORD "two"
+                QUOTE """
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -206,12 +212,14 @@ SOURCE_FILE
               WORD "string"
               CALL_ARGS
                 L_PAREN "("
-                INTEGER_LITERAL "1"
+                CALL_ARG "1"
+                  INTEGER_LITERAL "1"
                 COMMA ","
-                STRING_LITERAL "two"
-                  QUOTE """
-                  WORD "two"
-                  QUOTE """
+                CALL_ARG
+                  STRING_LITERAL "two"
+                    QUOTE """
+                    WORD "two"
+                    QUOTE """
             R_BRACE "}"
 
 === ERRORS ===

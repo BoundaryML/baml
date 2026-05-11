@@ -334,6 +334,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
         Value::Float(f) => serde_json::Number::from_f64(f)
             .map(serde_json::Value::Number)
             .unwrap_or(serde_json::Value::Null),
+        Value::OmittedArg => serde_json::Value::Null,
         Value::Object(ptr) => match vm.get_object(ptr) {
             Object::String(s) => serde_json::Value::String(s.clone()),
             Object::Array(arr) => {

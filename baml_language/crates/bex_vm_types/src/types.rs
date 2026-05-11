@@ -378,6 +378,9 @@ pub struct Function {
     /// Parameter types in declaration order.
     pub param_types: Vec<Ty>,
 
+    /// Whether each parameter has a BAML default expression.
+    pub param_has_default: Vec<bool>,
+
     /// Inferred throws type — the union of all types this function (and its callees)
     /// may throw. `None` if the function never throws. Used by the engine to convert
     /// uncaught throw values to `BexExternalValue`.
@@ -573,6 +576,11 @@ pub enum SentinelKind {
 /// would happen with any other object type that we don't want to have referential equality for.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Value {
+    /// Internal sentinel for an omitted defaulted argument.
+    ///
+    /// This value is only valid between call binding and a callee-entry default
+    /// prologue. It must not be serialized or exposed to host code.
+    OmittedArg,
     Null,
     Int(i64),
     Float(f64),
@@ -589,6 +597,7 @@ impl Value {
     /// Returns the [`HeapPtr`] if this is an [`Object`].
     pub const fn as_object_ptr(&self) -> Option<HeapPtr> {
         match self {
+            Value::OmittedArg => None,
             Value::Object(ptr) => Some(*ptr),
             _ => None,
         }
@@ -598,6 +607,7 @@ impl Value {
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Value::OmittedArg => write!(f, "<omitted>"),
             Value::Null => write!(f, "null"),
             Value::Int(int) => write!(f, "{int}"),
             Value::Float(float) => write!(f, "{}", format_float(*float)),
@@ -686,6 +696,7 @@ pub struct TestCase {
 /// `Object::Type` on the heap.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ConstValue {
+    OmittedArg,
     Null,
     Int(i64),
     Float(f64),
@@ -727,6 +738,7 @@ impl ConstValue {
         F: Fn(crate::ObjectIndex) -> HeapPtr,
     {
         match self {
+            ConstValue::OmittedArg => Value::OmittedArg,
             ConstValue::Null => Value::Null,
             ConstValue::Int(v) => Value::Int(*v),
             ConstValue::Float(v) => Value::Float(*v),
@@ -1254,6 +1266,7 @@ impl FutureId {
 /// that creates this automatically based on the [`Value`] enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type {
+    OmittedArg,
     Int,
     Float,
     Bool,
@@ -1263,6 +1276,7 @@ pub enum Type {
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Type::OmittedArg => write!(f, "omitted argument"),
             Type::Int => write!(f, "int"),
             Type::Float => write!(f, "float"),
             Type::Bool => write!(f, "bool"),
@@ -1281,6 +1295,7 @@ impl Type {
     /// Get the type of a value.
     pub fn of(value: &Value, when_object: impl FnOnce(HeapPtr) -> ObjectType) -> Self {
         match value {
+            Value::OmittedArg => Type::OmittedArg,
             Value::Int(_) => Type::Int,
             Value::Float(_) => Type::Float,
             Value::Bool(_) => Type::Bool,
@@ -1450,7 +1465,7 @@ impl From<&Future> for FutureType {
 
 #[cfg(test)]
 mod tests {
-    use super::format_float;
+    use super::{ConstValue, Type, Value, format_float};
 
     #[test]
     fn test_format_float() {
@@ -1470,5 +1485,17 @@ mod tests {
         assert_eq!(format_float(f64::INFINITY), "Infinity");
         assert_eq!(format_float(f64::NEG_INFINITY), "-Infinity");
         assert_eq!(format_float(f64::NAN), "NaN");
+    }
+
+    #[test]
+    fn omitted_arg_roundtrip_stays_in_sync() {
+        let value = ConstValue::OmittedArg.to_value(|_| unreachable!("no object expected"));
+
+        assert_eq!(value, Value::OmittedArg);
+        assert_eq!(
+            Type::of(&value, |_| unreachable!("omitted arg is not an object")),
+            Type::OmittedArg
+        );
+        assert_eq!(value.to_string(), "<omitted>");
     }
 }

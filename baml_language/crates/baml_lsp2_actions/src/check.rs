@@ -23,8 +23,12 @@ use std::collections::HashSet;
 
 use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic};
-use baml_compiler2_hir::{body::FunctionBody, file_semantic_index};
-use baml_compiler2_tir::inference::render_scope_diagnostics;
+use baml_compiler2_hir::{body::FunctionBody, file_semantic_index, scope::ScopeKind};
+use baml_compiler2_tir::{
+    infer_context::{DiagnosticLocation, TirTypeError},
+    inference::render_scope_diagnostics,
+    ty::{Ty, TyAttr},
+};
 use indexmap::IndexMap;
 use text_size::{TextRange, TextSize};
 
@@ -127,7 +131,9 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+    let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
+    let pkg_items = &res_ctx.own_items;
+    let aliases = collect_type_aliases_for_resolution_context(db, res_ctx);
     let ast_items = {
         let tree = baml_compiler_parser::syntax_tree(db, file);
         let (items, _, _) = baml_compiler2_ast::lower_file_with_file_id(&tree, file_id);
@@ -172,11 +178,16 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
 
         let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
         let mut type_errors = Vec::new();
+        let mut param_types = Vec::new();
 
         // Compute the effective generic params: method params + enclosing class params.
         let mut generic_params = func_data.generic_params.clone();
-        if let Some((_, class_id)) = method_to_class.iter().find(|(mid, _)| mid == local_id) {
-            let class_data = &item_tree[*class_id];
+        let enclosing_class_id = method_to_class
+            .iter()
+            .find(|(mid, _)| mid == local_id)
+            .map(|(_, class_id)| *class_id);
+        if let Some(class_id) = enclosing_class_id {
+            let class_data = &item_tree[class_id];
             // Prepend class generic params (class params come first, method params after)
             let mut merged = class_data.generic_params.clone();
             merged.extend(generic_params);
@@ -213,16 +224,42 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         }
 
         // Check parameter types — use the type_expr span, not the whole param span.
-        for (i, (_name, te)) in sig.params.iter().enumerate() {
+        for (i, param) in sig.params.iter().enumerate() {
             type_errors.clear();
-            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                db,
-                te,
-                pkg_items,
-                &pkg_info.namespace_path,
-                &generic_params,
-                &mut type_errors,
-            );
+            let param_ty = if param.name.as_str() == "self"
+                && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
+            {
+                enclosing_class_id
+                    .as_ref()
+                    .and_then(|class_id| {
+                        let class_data = &item_tree[*class_id];
+                        pkg_items
+                            .lookup_type(&pkg_info.namespace_path, &class_data.name)
+                            .map(|def| {
+                                Ty::Class(
+                                    baml_compiler2_tir::lower_type_expr::qualify_def(
+                                        db,
+                                        def,
+                                        &class_data.name,
+                                    ),
+                                    vec![],
+                                    TyAttr::default(),
+                                )
+                            })
+                    })
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    })
+            } else {
+                baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                    db,
+                    &param.ty,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &generic_params,
+                    &mut type_errors,
+                )
+            };
             if !type_errors.is_empty() {
                 if let Some(param) = func_data.params.get(i) {
                     if let Some(type_spanned) = &param.type_expr {
@@ -241,6 +278,56 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                         }
                     }
                 }
+            }
+            param_types.push((param.name.clone(), param_ty));
+        }
+
+        if let Some(scope_id) = function_scope_id(index, func_data) {
+            let context = baml_compiler2_tir::infer_context::InferContext::new(db, scope_id);
+            let mut builder = baml_compiler2_tir::builder::TypeInferenceBuilder::new(
+                context,
+                res_ctx,
+                pkg_id,
+                scope_id,
+                aliases.clone(),
+            );
+            builder.set_generic_params(generic_params);
+            for (name, ty) in &param_types {
+                builder.add_local(name.clone(), ty.clone());
+                builder.param_types.push((name.clone(), ty.clone()));
+            }
+            let parameter_defaults =
+                baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
+            builder.check_function_parameter_defaults(
+                &func_data.params,
+                &parameter_defaults,
+                &param_types,
+            );
+
+            let (
+                _expressions,
+                _pattern_types,
+                _resolutions,
+                _catch_residual_throws,
+                _exhaustive_matches,
+                type_check_diagnostics,
+                _path_root_types,
+                _path_segment_types,
+                _path_member_resolutions,
+                _param_types,
+                _call_plans,
+                _function_coercions,
+                _call_throws,
+                _default_parameter_inference,
+            ) = builder.finish();
+            for tir_diag in type_check_diagnostics.diagnostics {
+                if !is_function_default_signature_diagnostic(&tir_diag) {
+                    continue;
+                }
+                diagnostics.push(tir_rendered_to_diagnostic(
+                    tir_diag.render(db, file, None),
+                    file_id,
+                ));
             }
         }
     }
@@ -707,7 +794,7 @@ fn build_jinja_types(
             continue;
         };
         let file = class_loc.file(db);
-        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
         let class_data = &item_tree[class_loc.id(db)];
         let class_namespace =
             baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
@@ -732,7 +819,7 @@ fn build_jinja_types(
         let Definition::Enum(enum_loc) = *def else {
             continue;
         };
-        let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
         let enum_data = &item_tree[enum_loc.id(db)];
         types.add_enum(
             enum_data.name.as_str(),
@@ -749,7 +836,7 @@ fn build_jinja_types(
             continue;
         };
         let file = alias_loc.file(db);
-        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
         let alias_data = &item_tree[alias_loc.id(db)];
         if let Some(type_expr) = &alias_data.type_expr {
             let alias_namespace =
@@ -766,7 +853,7 @@ fn build_jinja_types(
             continue;
         };
         let file = template_loc.file(db);
-        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
         let template = &item_tree[template_loc.id(db)];
         let template_namespace =
             baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
@@ -889,7 +976,7 @@ fn jinja_type_from_type_expr_inner(
                         return Type::RecursiveTypeAlias(name);
                     }
                     let file = alias_loc.file(db);
-                    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+                    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
                     let alias = &item_tree[alias_loc.id(db)];
                     let alias_namespace =
                         baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
@@ -1083,6 +1170,57 @@ fn jinja_diagnostic_id(message: &str) -> DiagnosticId {
     }
 }
 
+fn collect_type_aliases_for_resolution_context<'db>(
+    db: &'db dyn Db,
+    res_ctx: &'db baml_compiler2_tir::package_interface::PackageResolutionContext<'db>,
+) -> std::collections::HashMap<baml_compiler2_tir::ty::QualifiedTypeName, baml_compiler2_tir::ty::Ty>
+{
+    let mut aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &res_ctx.own_items);
+    for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
+        for types_in_ns in dep_iface.types.values() {
+            for exported in types_in_ns.values() {
+                if let baml_compiler2_tir::package_interface::ExportedType::TypeAlias {
+                    qtn,
+                    resolved,
+                } = exported
+                {
+                    aliases.insert(qtn.clone(), resolved.clone());
+                }
+            }
+        }
+    }
+    aliases
+}
+
+fn function_scope_id<'db>(
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
+    func_data: &baml_compiler2_hir::item_tree::Function,
+) -> Option<baml_compiler2_hir::scope::ScopeId<'db>> {
+    index
+        .scopes
+        .iter()
+        .zip(index.scope_ids.iter())
+        .find_map(|(scope, scope_id)| {
+            (matches!(scope.kind, ScopeKind::Function)
+                && scope.range == func_data.span
+                && scope.name.as_ref() == Some(&func_data.name))
+            .then_some(*scope_id)
+        })
+}
+
+fn is_function_default_signature_diagnostic(
+    diag: &baml_compiler2_tir::infer_context::TirDiagnostic<'_>,
+) -> bool {
+    matches!(&diag.primary, DiagnosticLocation::Span(_))
+        && matches!(
+            &diag.error,
+            TirTypeError::RequiredParamAfterDefault { .. }
+                | TirTypeError::SelfParamDefault
+                | TirTypeError::DefaultParamForwardReference { .. }
+                | TirTypeError::TypeMismatch { .. }
+        )
+}
+
 /// Convert a `RenderedTirDiagnostic` to the shared `Diagnostic` type.
 ///
 /// `RenderedTirDiagnostic` has already resolved arena IDs to `TextRange`.
@@ -1142,7 +1280,15 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InvalidBinaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::InvalidUnaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnresolvedType { .. } => DiagnosticId::UnknownType,
-        TirTypeError::ArgumentCountMismatch { .. } => DiagnosticId::ArgumentCountMismatch,
+        TirTypeError::ArgumentCountMismatch { .. }
+        | TirTypeError::PositionalArgumentAfterNamed
+        | TirTypeError::DuplicateNamedArgument { .. }
+        | TirTypeError::UnknownNamedArgument { .. }
+        | TirTypeError::DefaultedParamPassedPositionally { .. }
+        | TirTypeError::MissingRequiredArgument { .. } => DiagnosticId::ArgumentCountMismatch,
+        TirTypeError::RequiredParamAfterDefault { .. }
+        | TirTypeError::SelfParamDefault
+        | TirTypeError::DefaultParamForwardReference { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::MissingReturn { .. } => DiagnosticId::MissingReturnExpression,
         TirTypeError::AliasCycle { .. } => DiagnosticId::AliasCycle,
         TirTypeError::ClassCycle { .. } => DiagnosticId::ClassCycle,
@@ -1485,6 +1631,43 @@ function TakeGuess(person: Person) -> string {
     }
 
     #[test]
+    fn check_file_reports_builtin_function_default_constraints() {
+        let test = CursorTest::new(
+            r#"function BadBuiltin(
+  a: int = b,
+  b: int = 1,
+  label: string = 2,
+  required: int
+) -> int {
+  $rust_function
+}
+<[CURSOR]"#,
+        );
+
+        let messages = check_file(&test.db, test.cursor.file)
+            .into_iter()
+            .map(|diag| diag.message)
+            .collect::<Vec<_>>();
+
+        assert!(
+            messages.iter().any(|message| message
+                == "default for parameter `a` cannot reference later parameter `b`"),
+            "missing forward-reference diagnostic; got {messages:#?}"
+        );
+        assert!(
+            messages
+                .iter()
+                .any(|message| message == "type mismatch: expected string, got 2"),
+            "missing default type-mismatch diagnostic; got {messages:#?}"
+        );
+        assert!(
+            messages.iter().any(|message| message
+                == "required parameter `required` cannot appear after a defaulted parameter"),
+            "missing required-after-default diagnostic; got {messages:#?}"
+        );
+    }
+
+    #[test]
     fn check_file_allows_null_in_constraint_jinja_expression() {
         let test = CursorTest::new(
             r#"type ConstrainedLong = map<string, int | string | bool> @check("valid", {{ this != null }})
@@ -1506,6 +1689,32 @@ function TakeGuess(person: Person) -> string {
         assert_eq!(
             normalize_regex_like_string_escapes(r#"this.matches("^\"\d\"$")"#),
             r#"this.matches("^\"\\d\"$")"#,
+        );
+    }
+
+    #[test]
+    fn check_file_reports_builtin_self_default_constraint() {
+        let test = CursorTest::new(
+            r#"class Counter {
+  value int
+
+  function Current(self = null) -> int {
+    $rust_function
+  }
+}
+<[CURSOR]"#,
+        );
+
+        let messages = check_file(&test.db, test.cursor.file)
+            .into_iter()
+            .map(|diag| diag.message)
+            .collect::<Vec<_>>();
+
+        assert!(
+            messages
+                .iter()
+                .any(|message| message == "`self` cannot have a default value"),
+            "missing self-default diagnostic; got {messages:#?}"
         );
     }
 }

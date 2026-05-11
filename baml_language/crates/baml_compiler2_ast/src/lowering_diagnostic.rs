@@ -34,6 +34,9 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
+    /// A parameter default was parsed in a context that does not support defaults.
+    UnsupportedParameterDefault { context: String, span: TextRange },
+
     /// An enum variant has no name token.
     MissingVariantName { enum_name: String, span: TextRange },
 
@@ -130,6 +133,12 @@ impl LoweringDiagnostic {
                 format!("parameter in function `{function_name}` is missing a name"),
                 *span,
                 "expected a parameter name",
+            ),
+            LoweringDiagnostic::UnsupportedParameterDefault { context, span } => (
+                DiagnosticId::InvalidSyntax,
+                format!("parameter defaults are not supported in {context}"),
+                *span,
+                "default value is not allowed here",
             ),
             LoweringDiagnostic::MissingVariantName { enum_name, span } => (
                 DiagnosticId::MissingName,

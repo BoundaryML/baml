@@ -2,6 +2,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Write as _,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -14,8 +15,8 @@ use baml_db::{
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
 use bex_engine::{
-    BexEngine, BexExternalValue, ClassDefinition, FunctionCallContextBuilder, Ty, TypeName,
-    UserFunctionInfo,
+    BexCallArg, BexEngine, BexExternalValue, ClassDefinition, FunctionCallContextBuilder, Ty,
+    TypeName, UserFunctionInfo,
 };
 // For --log-file event sink.
 use clap::Args;
@@ -335,6 +336,7 @@ impl RunArgs {
             &func_info.param_names,
             &func_info.param_types,
             engine.class_definitions(),
+            &func_info.param_has_default,
         )?;
 
         self.vlog(format_args!(
@@ -345,7 +347,7 @@ impl RunArgs {
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let engine = Arc::new(engine);
         let start = std::time::Instant::now();
-        let result = rt.block_on(engine.call_function(
+        let result = rt.block_on(engine.call_function_bound_args(
             &function_name,
             args,
             FunctionCallContextBuilder::new(CallId::next()).build(),
@@ -764,7 +766,7 @@ impl RunArgs {
                         && let Ok(params) = engine.function_params(func_name)
                     {
                         let param_names: Vec<String> =
-                            params.iter().map(|(n, _)| (*n).to_string()).collect();
+                            params.iter().map(|(n, _, _)| (*n).to_string()).collect();
                         let flag_keys = extract_flag_keys(&expansion.extra_args);
                         for flag in flag_keys.iter().filter(|k| !param_names.contains(k)) {
                             errors.push(Self::script_error(
@@ -870,7 +872,8 @@ impl RunArgs {
         param_names: &[String],
         param_types: &[Ty],
         class_defs: &IndexMap<TypeName, ClassDefinition>,
-    ) -> Result<Vec<BexExternalValue>> {
+        param_has_default: &[bool],
+    ) -> Result<Vec<BexCallArg>> {
         let json_map = match &self.json_args {
             Some(source) => {
                 let json = load_json_source(source)?;
@@ -894,7 +897,13 @@ impl RunArgs {
             None => HashMap::new(),
         };
 
-        let cli_map = parse_auto_cli_args(target_args, param_names, param_types, class_defs)?;
+        let cli_map = parse_auto_cli_args(
+            target_args,
+            param_names,
+            param_types,
+            class_defs,
+            param_has_default,
+        )?;
 
         // CLI args override --json-args values.
         let mut merged = json_map;
@@ -905,8 +914,12 @@ impl RunArgs {
         let mut ordered = Vec::with_capacity(param_names.len());
         for (i, name) in param_names.iter().enumerate() {
             match merged.remove(name.as_str()) {
-                Some(value) => ordered.push(value),
+                Some(value) => ordered.push(BexCallArg::Provided(Box::new(value))),
                 None => {
+                    if param_has_default.get(i).copied().unwrap_or(false) {
+                        ordered.push(BexCallArg::OmittedDefault);
+                        continue;
+                    }
                     let ty = &param_types[i];
                     anyhow::bail!(
                         "Missing required argument `--{name}` (type: {ty}).\n\
@@ -1087,25 +1100,43 @@ impl RunArgs {
     // ========================================================================
 
     fn print_target_help(function_name: &str, func_info: &UserFunctionInfo) {
+        print!("{}", Self::target_help_text(function_name, func_info));
+    }
+
+    fn target_help_text(function_name: &str, func_info: &UserFunctionInfo) -> String {
         let display = function_name.strip_prefix("user.").unwrap_or(function_name);
         let param_names = &func_info.param_names;
         let param_types = &func_info.param_types;
+        let param_has_default = &func_info.param_has_default;
         let ret_str = func_info.return_type.to_string();
 
         let params_str: Vec<String> = param_names
             .iter()
             .zip(param_types.iter())
-            .map(|(n, t)| format!("{n}: {t}"))
+            .enumerate()
+            .map(|(idx, (n, t))| {
+                if param_has_default.get(idx).copied().unwrap_or(false) {
+                    format!("{n}: {t} [optional]")
+                } else {
+                    format!("{n}: {t}")
+                }
+            })
             .collect();
 
-        println!("function {display}({}) -> {ret_str}", params_str.join(", "));
-        println!();
+        let mut out = String::new();
+        writeln!(
+            out,
+            "function {display}({}) -> {ret_str}",
+            params_str.join(", ")
+        )
+        .unwrap();
+        writeln!(out).unwrap();
 
         if param_names.is_empty() {
-            println!("  This function takes no arguments.");
+            writeln!(out, "  This function takes no arguments.").unwrap();
         } else {
-            println!("  Arguments (pass after `--`):\n");
-            for (name, ty) in param_names.iter().zip(param_types.iter()) {
+            writeln!(out, "  Arguments (pass after `--`):\n").unwrap();
+            for (idx, (name, ty)) in param_names.iter().zip(param_types.iter()).enumerate() {
                 let type_hint = match ty {
                     Ty::Bool { .. } => " (use --name=true or --name=false)".to_string(),
                     Ty::Enum(tn, _) => format!(" (enum {tn})"),
@@ -1114,20 +1145,35 @@ impl RunArgs {
                     }
                     _ => String::new(),
                 };
-                println!("    --{name} <{ty}>{type_hint}");
+                let optional = if param_has_default.get(idx).copied().unwrap_or(false) {
+                    " [optional]"
+                } else {
+                    ""
+                };
+                writeln!(out, "    --{name} <{ty}>{optional}{type_hint}").unwrap();
             }
         }
 
-        println!();
-        println!(
-            "  Example: baml run --function {display} -- {}",
-            param_names
-                .iter()
-                .zip(param_types.iter())
-                .map(|(n, t)| format!("--{n} {}", example_value(t)))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
+        let example_args = param_names
+            .iter()
+            .zip(param_types.iter())
+            .enumerate()
+            .filter(|(idx, _)| !param_has_default.get(*idx).copied().unwrap_or(false))
+            .map(|(_, (n, t))| format!("--{n} {}", example_value(t)))
+            .collect::<Vec<_>>()
+            .join(" ");
+        writeln!(out).unwrap();
+        if example_args.is_empty() {
+            writeln!(out, "  Example: baml run --function {display}").unwrap();
+        } else {
+            writeln!(
+                out,
+                "  Example: baml run --function {display} -- {example_args}"
+            )
+            .unwrap();
+        }
+
+        out
     }
 
     // ========================================================================
@@ -1213,7 +1259,7 @@ fn find_user_function(engine: &BexEngine, name: &str) -> Option<UserFunctionInfo
 /// Supports:
 /// - `--name value` (two tokens)
 /// - `--name=value` (single token with `=`, including `--name=` for empty string)
-/// - Positional sugar: single bare token when function has exactly one parameter
+/// - Positional sugar: single bare token when function has exactly one required parameter
 ///
 /// Bare tokens that don't match a `--flag` are skipped — they remain
 /// accessible via `baml.argv` but don't bind to parameters.
@@ -1222,18 +1268,36 @@ fn parse_auto_cli_args(
     param_names: &[String],
     param_types: &[Ty],
     class_defs: &IndexMap<TypeName, ClassDefinition>,
+    param_has_default: &[bool],
 ) -> Result<HashMap<String, BexExternalValue>> {
     if tokens.is_empty() || param_names.is_empty() {
         return Ok(HashMap::new());
     }
 
-    // Positional sugar: single non-flag token + exactly one param.
-    if tokens.len() == 1 && !tokens[0].starts_with("--") && param_names.len() == 1 {
-        let value = parse_cli_value(&tokens[0], &param_types[0], class_defs)
-            .with_context(|| format!("Invalid value for `{}`: {}", param_names[0], tokens[0]))?;
-        let mut map = HashMap::new();
-        map.insert(param_names[0].clone(), value);
-        return Ok(map);
+    // Positional sugar: single non-flag token + exactly one required param.
+    if tokens.len() == 1 && !tokens[0].starts_with("--") {
+        let required_params: Vec<usize> = param_names
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, _)| {
+                if param_has_default.get(idx).copied().unwrap_or(false) {
+                    None
+                } else {
+                    Some(idx)
+                }
+            })
+            .collect();
+
+        if required_params.len() == 1 {
+            let idx = required_params[0];
+            let value =
+                parse_cli_value(&tokens[0], &param_types[idx], class_defs).with_context(|| {
+                    format!("Invalid value for `{}`: {}", param_names[idx], tokens[0])
+                })?;
+            let mut map = HashMap::new();
+            map.insert(param_names[idx].clone(), value);
+            return Ok(map);
+        }
     }
 
     let mut args = HashMap::new();
@@ -1880,7 +1944,8 @@ mod tests {
 
     #[test]
     fn test_auto_cli_empty() {
-        let result = parse_auto_cli_args(&[], &[s("x")], &[ty_int()], &IndexMap::new()).unwrap();
+        let result =
+            parse_auto_cli_args(&[], &[s("x")], &[ty_int()], &IndexMap::new(), &[false]).unwrap();
         assert!(result.is_empty());
     }
 
@@ -1889,7 +1954,9 @@ mod tests {
         let tokens = vec![s("--a"), s("10"), s("--b"), s("20")];
         let names = vec![s("a"), s("b")];
         let types = vec![ty_int(), ty_int()];
-        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
+        let result =
+            parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new(), &[false, false])
+                .unwrap();
         assert!(matches!(result.get("a"), Some(BexExternalValue::Int(10))));
         assert!(matches!(result.get("b"), Some(BexExternalValue::Int(20))));
     }
@@ -1899,7 +1966,8 @@ mod tests {
         let tokens = vec![s("--flag=true")];
         let names = vec![s("flag")];
         let types = vec![ty_bool()];
-        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
+        let result =
+            parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new(), &[false]).unwrap();
         assert!(matches!(
             result.get("flag"),
             Some(BexExternalValue::Bool(true))
@@ -1911,8 +1979,26 @@ mod tests {
         let tokens = vec![s("hello")];
         let names = vec![s("name")];
         let types = vec![ty_string()];
-        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
+        let result =
+            parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new(), &[false]).unwrap();
         assert!(matches!(result.get("name"), Some(BexExternalValue::String(s)) if s == "hello"));
+    }
+
+    #[test]
+    fn test_auto_cli_positional_sugar_allows_defaulted_params() {
+        let tokens = vec![s("hello")];
+        let names = vec![s("max_results"), s("query"), s("filter")];
+        let types = vec![ty_int(), ty_string(), ty_string()];
+        let result = parse_auto_cli_args(
+            &tokens,
+            &names,
+            &types,
+            &IndexMap::new(),
+            &[true, false, true],
+        )
+        .unwrap();
+        assert!(matches!(result.get("query"), Some(BexExternalValue::String(s)) if s == "hello"));
+        assert_eq!(result.len(), 1);
     }
 
     #[test]
@@ -1922,7 +2008,9 @@ mod tests {
         let tokens = vec![s("hello")];
         let names = vec![s("a"), s("b")];
         let types = vec![ty_string(), ty_string()];
-        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
+        let result =
+            parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new(), &[false, false])
+                .unwrap();
         assert!(result.is_empty());
     }
 
@@ -1931,7 +2019,7 @@ mod tests {
         let tokens = vec![s("--unknown"), s("val")];
         let names = vec![s("a")];
         let types = vec![ty_int()];
-        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new());
+        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new(), &[false]);
         assert!(result.is_err());
     }
 
@@ -1940,7 +2028,7 @@ mod tests {
         let tokens = vec![s("--a")];
         let names = vec![s("a")];
         let types = vec![ty_int()];
-        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new());
+        let result = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new(), &[false]);
         assert!(result.is_err());
     }
 
@@ -2457,6 +2545,13 @@ mod tests {
         }
     }
 
+    fn provided_arg(arg: &BexCallArg) -> &BexExternalValue {
+        match arg {
+            BexCallArg::Provided(value) => value.as_ref(),
+            BexCallArg::OmittedDefault => panic!("expected provided argument"),
+        }
+    }
+
     // ── BEP-027 §"baml.argv" — argv layout ─────────────────────────
 
     /// "If there is no target, `baml run` runs the root namespace's `main`."
@@ -2577,10 +2672,14 @@ mod tests {
                 &[s("text"), s("max_words")],
                 &[ty_string(), ty_int()],
                 &IndexMap::new(),
+                &[false, false],
             )
             .unwrap();
-        assert!(matches!(&ordered[0], BexExternalValue::String(s) if s == "hello"));
-        assert!(matches!(&ordered[1], BexExternalValue::Int(30)));
+        assert!(matches!(provided_arg(&ordered[0]), BexExternalValue::String(s) if s == "hello"));
+        assert!(matches!(
+            provided_arg(&ordered[1]),
+            BexExternalValue::Int(30)
+        ));
     }
 
     /// BEP-027 §"Auto-CLI conventions": parameters appear after `--`. No JSON.
@@ -2593,10 +2692,14 @@ mod tests {
                 &[s("text"), s("max_words")],
                 &[ty_string(), ty_int()],
                 &IndexMap::new(),
+                &[false, false],
             )
             .unwrap();
-        assert!(matches!(&ordered[0], BexExternalValue::String(s) if s == "hi"));
-        assert!(matches!(&ordered[1], BexExternalValue::Int(5)));
+        assert!(matches!(provided_arg(&ordered[0]), BexExternalValue::String(s) if s == "hi"));
+        assert!(matches!(
+            provided_arg(&ordered[1]),
+            BexExternalValue::Int(5)
+        ));
     }
 
     /// BEP-027: "auto-CLI flags (after `--`) override JSON keys".
@@ -2610,11 +2713,17 @@ mod tests {
                 &[s("text"), s("max_words")],
                 &[ty_string(), ty_int()],
                 &IndexMap::new(),
+                &[false, false],
             )
             .unwrap();
         // text from JSON; max_words overridden by CLI.
-        assert!(matches!(&ordered[0], BexExternalValue::String(s) if s == "from-json"));
-        assert!(matches!(&ordered[1], BexExternalValue::Int(99)));
+        assert!(
+            matches!(provided_arg(&ordered[0]), BexExternalValue::String(s) if s == "from-json")
+        );
+        assert!(matches!(
+            provided_arg(&ordered[1]),
+            BexExternalValue::Int(99)
+        ));
     }
 
     /// BEP-027 §"Auto-CLI conventions": a required parameter with no value
@@ -2623,7 +2732,13 @@ mod tests {
     fn test_bep_build_args_missing_required_is_error() {
         let args = run_args();
         let err = args
-            .build_args_from(&[], &[s("text")], &[ty_string()], &IndexMap::new())
+            .build_args_from(
+                &[],
+                &[s("text")],
+                &[ty_string()],
+                &IndexMap::new(),
+                &[false],
+            )
             .unwrap_err();
         let msg = format!("{err}");
         assert!(
@@ -2632,13 +2747,140 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_bep_build_args_omits_defaulted_parameters() {
+        let args = run_args();
+        let ordered = args
+            .build_args_from(
+                &[s("--query"), s("cats")],
+                &[s("query"), s("max_results"), s("filter")],
+                &[ty_string(), ty_int(), ty_string()],
+                &IndexMap::new(),
+                &[false, true, true],
+            )
+            .unwrap();
+
+        assert!(matches!(provided_arg(&ordered[0]), BexExternalValue::String(s) if s == "cats"));
+        assert!(matches!(ordered[1], BexCallArg::OmittedDefault));
+        assert!(matches!(ordered[2], BexCallArg::OmittedDefault));
+    }
+
+    #[test]
+    fn test_target_help_marks_defaulted_params_optional() {
+        let func_info = UserFunctionInfo {
+            qualified_name: s("user.Search"),
+            display_name: s("Search"),
+            origin: bex_vm_types::FunctionOrigin::UserDefined,
+            param_names: vec![s("query"), s("max_results")],
+            param_types: vec![ty_string(), ty_int()],
+            param_has_default: vec![false, true],
+            return_type: ty_int(),
+        };
+
+        let help = RunArgs::target_help_text("Search", &func_info);
+
+        assert!(help.contains("query: string"));
+        assert!(help.contains("max_results: int [optional]"));
+        assert!(help.contains("--max_results <int> [optional]"));
+        assert!(help.contains("baml run --function Search -- --query"));
+        assert!(
+            !help.contains(
+                "Example: baml run --function Search -- --query \"value\" --max_results 42"
+            ),
+            "optional params should not be shown as required in examples: {help}"
+        );
+    }
+
+    #[test]
+    fn test_bep_run_bound_args_use_defaults_for_normal_function() {
+        let engine = engine_from_source(
+            r#"
+function HostEntry(query: string, max_results: int = 10, filter: string = "none") -> int {
+  max_results
+}
+"#,
+        );
+        let func_info = find_user_function(&engine, "HostEntry").expect("HostEntry function");
+        let args = run_args()
+            .build_args_from(
+                &[s("--query"), s("cats")],
+                &func_info.param_names,
+                &func_info.param_types,
+                engine.class_definitions(),
+                &func_info.param_has_default,
+            )
+            .unwrap();
+
+        assert!(matches!(args[1], BexCallArg::OmittedDefault));
+        assert!(matches!(args[2], BexCallArg::OmittedDefault));
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt
+            .block_on(Arc::new(engine).call_function_bound_args(
+                "HostEntry",
+                args,
+                FunctionCallContextBuilder::new(CallId::next()).build(),
+                true,
+            ))
+            .unwrap();
+        assert!(matches!(result, BexExternalValue::Int(10)));
+    }
+
+    #[test]
+    fn test_bep_run_bound_args_use_defaults_for_render_prompt_companion() {
+        let engine = engine_from_source(
+            r##"
+client<llm> TestClient {
+  provider openai
+  options {
+    model "gpt-4o"
+  }
+}
+
+function AskDocs(query: string, max_results: int = 10, filter: string = "none") -> string {
+  client TestClient
+  prompt #"{{ query }} {{ max_results }} {{ filter }}"#
+}
+"##,
+        );
+        let func_info =
+            find_user_function(&engine, "AskDocs$render_prompt").expect("render_prompt function");
+        let args = run_args()
+            .build_args_from(
+                &[s("--query"), s("cats")],
+                &func_info.param_names,
+                &func_info.param_types,
+                engine.class_definitions(),
+                &func_info.param_has_default,
+            )
+            .unwrap();
+
+        assert!(matches!(args[1], BexCallArg::OmittedDefault));
+        assert!(matches!(args[2], BexCallArg::OmittedDefault));
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(Arc::new(engine).call_function_bound_args(
+            "AskDocs$render_prompt",
+            args,
+            FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        ))
+        .expect("render_prompt should evaluate omitted defaults");
+    }
+
     /// Unknown arg keys are *not* a hard error — BEP permits pass-through
     /// extras (they appear in `baml.argv`). The CLI emits a stderr warning.
     #[test]
     fn test_bep_build_args_unknown_is_non_fatal() {
         let mut args = run_args();
         args.json_args = Some(s(r#"{"text": "hi", "unknown_key": 1}"#));
-        let result = args.build_args_from(&[], &[s("text")], &[ty_string()], &IndexMap::new());
+        let result = args.build_args_from(
+            &[],
+            &[s("text")],
+            &[ty_string()],
+            &IndexMap::new(),
+            &[false],
+        );
         assert!(
             result.is_ok(),
             "unknown JSON keys should warn, not fail: {result:?}"
@@ -2657,9 +2899,10 @@ mod tests {
                 &[s("style")],
                 &[Ty::Enum(tn("SummaryStyle"), Default::default())],
                 &IndexMap::new(),
+                &[false],
             )
             .unwrap();
-        match &ordered[0] {
+        match provided_arg(&ordered[0]) {
             BexExternalValue::Variant {
                 enum_name,
                 variant_name,
@@ -2681,9 +2924,10 @@ mod tests {
                 &[s("style")],
                 &[Ty::Enum(tn("SummaryStyle"), Default::default())],
                 &IndexMap::new(),
+                &[false],
             )
             .unwrap();
-        match &ordered[0] {
+        match provided_arg(&ordered[0]) {
             BexExternalValue::Variant { variant_name, .. } => {
                 assert_eq!(variant_name, "Concise");
             }
@@ -2707,10 +2951,14 @@ mod tests {
                 &[s("text"), s("max_words")],
                 &[ty_string(), ty_int()],
                 &IndexMap::new(),
+                &[false, false],
             )
             .unwrap();
-        assert!(matches!(&ordered[0], BexExternalValue::String(s) if s == "filed"));
-        assert!(matches!(&ordered[1], BexExternalValue::Int(7)));
+        assert!(matches!(provided_arg(&ordered[0]), BexExternalValue::String(s) if s == "filed"));
+        assert!(matches!(
+            provided_arg(&ordered[1]),
+            BexExternalValue::Int(7)
+        ));
 
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -2722,7 +2970,13 @@ mod tests {
         let mut args = run_args();
         args.json_args = Some(s(r#"[1, 2, 3]"#));
         let err = args
-            .build_args_from(&[], &[s("text")], &[ty_string()], &IndexMap::new())
+            .build_args_from(
+                &[],
+                &[s("text")],
+                &[ty_string()],
+                &IndexMap::new(),
+                &[false],
+            )
             .unwrap_err();
         assert!(format!("{err}").contains("JSON object"));
     }
@@ -2736,12 +2990,20 @@ mod tests {
         let tokens = vec![s("--start_date"), s("2024-01-01")];
         let names = vec![s("start_date")];
         let result =
-            parse_auto_cli_args(&tokens, &names, &[ty_string()], &IndexMap::new()).unwrap();
+            parse_auto_cli_args(&tokens, &names, &[ty_string()], &IndexMap::new(), &[false])
+                .unwrap();
         assert!(result.contains_key("start_date"));
         // The kebab-form must NOT be accepted.
         let tokens_kebab = vec![s("--start-date"), s("2024-01-01")];
         assert!(
-            parse_auto_cli_args(&tokens_kebab, &names, &[ty_string()], &IndexMap::new()).is_err()
+            parse_auto_cli_args(
+                &tokens_kebab,
+                &names,
+                &[ty_string()],
+                &IndexMap::new(),
+                &[false]
+            )
+            .is_err()
         );
     }
 
@@ -2753,14 +3015,16 @@ mod tests {
         let types = vec![ty_bool()];
 
         let tokens_true = vec![s("--verbose=true")];
-        let r = parse_auto_cli_args(&tokens_true, &names, &types, &IndexMap::new()).unwrap();
+        let r =
+            parse_auto_cli_args(&tokens_true, &names, &types, &IndexMap::new(), &[false]).unwrap();
         assert!(matches!(
             r.get("verbose"),
             Some(BexExternalValue::Bool(true))
         ));
 
         let tokens_false = vec![s("--verbose=false")];
-        let r = parse_auto_cli_args(&tokens_false, &names, &types, &IndexMap::new()).unwrap();
+        let r =
+            parse_auto_cli_args(&tokens_false, &names, &types, &IndexMap::new(), &[false]).unwrap();
         assert!(matches!(
             r.get("verbose"),
             Some(BexExternalValue::Bool(false))
@@ -2780,7 +3044,14 @@ mod tests {
         ];
         let names = vec![s("start_date"), s("end_date"), s("dry_run")];
         let types = vec![ty_string(), ty_string(), ty_bool()];
-        let r = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
+        let r = parse_auto_cli_args(
+            &tokens,
+            &names,
+            &types,
+            &IndexMap::new(),
+            &[false, false, false],
+        )
+        .unwrap();
         assert!(
             matches!(r.get("start_date"), Some(BexExternalValue::String(s)) if s == "2024-01-01")
         );
@@ -2800,7 +3071,7 @@ mod tests {
         let tokens = vec![s("the text to summarize")];
         let names = vec![s("text")];
         let types = vec![ty_string()];
-        let r = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
+        let r = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new(), &[false]).unwrap();
         assert!(
             matches!(r.get("text"), Some(BexExternalValue::String(s)) if s == "the text to summarize")
         );
@@ -2813,7 +3084,7 @@ mod tests {
         let tokens = vec![s("--text"), s("hi"), s("extra"), s("data")];
         let names = vec![s("text")];
         let types = vec![ty_string()];
-        let r = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
+        let r = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new(), &[false]).unwrap();
         assert!(matches!(r.get("text"), Some(BexExternalValue::String(s)) if s == "hi"));
         assert_eq!(r.len(), 1, "bare tokens should not produce entries");
     }
@@ -2832,7 +3103,8 @@ mod tests {
         ];
         let names = vec![s("a"), s("b")];
         let types = vec![ty_int(), ty_int()];
-        let r = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new()).unwrap();
+        let r = parse_auto_cli_args(&tokens, &names, &types, &IndexMap::new(), &[false, false])
+            .unwrap();
         assert!(matches!(r.get("a"), Some(BexExternalValue::Int(1))));
         assert!(matches!(r.get("b"), Some(BexExternalValue::Int(2))));
         assert_eq!(r.len(), 2);

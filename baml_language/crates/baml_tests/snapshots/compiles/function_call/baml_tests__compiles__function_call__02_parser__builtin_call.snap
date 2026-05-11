@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 8403
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -40,9 +39,10 @@ SOURCE_FILE
               WORD "Array"
               DOT "."
               WORD "length"
-            CALL_ARGS "(array)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "array"
+              CALL_ARG "array"
+                WORD "array"
               R_PAREN ")"
           SEMICOLON ";"
         R_BRACE "}"

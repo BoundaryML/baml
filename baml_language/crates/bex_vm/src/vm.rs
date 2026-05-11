@@ -131,6 +131,28 @@ impl Frame {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use bex_vm_types::{Value, types::type_tags};
+
+    use super::value_type_tag;
+
+    #[test]
+    fn omitted_arg_uses_unknown_type_tag() {
+        let value = Value::OmittedArg;
+
+        assert_eq!(value_type_tag(&value), type_tags::UNKNOWN);
+        assert!(matches!(
+            Value::Int(type_tags::UNKNOWN),
+            Value::Int(tag) if value_type_tag(&value) == tag
+        ));
+        assert!(!matches!(
+            Value::Int(type_tags::INT),
+            Value::Int(tag) if value_type_tag(&value) == tag
+        ));
+    }
+}
+
 impl RootHaver for Frame {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         match self {
@@ -537,6 +559,7 @@ fn value_type_tag(value: &Value) -> i64 {
     use bex_vm_types::types::type_tags;
 
     match value {
+        Value::OmittedArg => type_tags::UNKNOWN,
         Value::Int(_) => type_tags::INT,
         Value::Float(_) => type_tags::FLOAT,
         Value::Bool(_) => type_tags::BOOL,

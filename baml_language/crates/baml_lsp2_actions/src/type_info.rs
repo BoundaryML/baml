@@ -45,6 +45,20 @@ use crate::{Db, utils};
 
 // ── TypeInfo ──────────────────────────────────────────────────────────────────
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionParamInfo {
+    pub name: String,
+    pub ty: String,
+    pub optional: bool,
+}
+
+impl FunctionParamInfo {
+    pub fn render(&self) -> String {
+        let optional = if self.optional { "?" } else { "" };
+        format!("{}{}: {}", self.name, optional, self.ty)
+    }
+}
+
 /// Structured type/signature info at a cursor position.
 ///
 /// Returned by `type_at`. The LSP layer (`request.rs`) formats this into hover
@@ -52,10 +66,10 @@ use crate::{Db, utils};
 /// different output contexts (markdown, plain text, etc.).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeInfo {
-    /// A function definition: name, parameters (name + type string), return type.
+    /// A function definition: name, parameters, return type.
     Function {
         name: String,
-        params: Vec<(String, String)>,
+        params: Vec<FunctionParamInfo>,
         return_type: Option<String>,
         throws: Option<String>,
         note: Option<String>,
@@ -91,7 +105,7 @@ impl TypeInfo {
                 note,
             } => {
                 let param_strs: Vec<String> =
-                    params.iter().map(|(n, t)| format!("{n}: {t}")).collect();
+                    params.iter().map(FunctionParamInfo::render).collect();
                 let ret = return_type
                     .as_deref()
                     .map(|r| format!(" -> {r}"))
@@ -246,11 +260,10 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                 let params = sig
                     .params
                     .iter()
-                    .map(|(param_name, type_expr)| {
-                        (
-                            param_name.as_str().to_string(),
-                            utils::display_type_expr(type_expr),
-                        )
+                    .map(|param| FunctionParamInfo {
+                        name: param.name.as_str().to_string(),
+                        ty: utils::display_type_expr(&param.ty),
+                        optional: param.has_default,
                     })
                     .collect();
                 let return_type = sig.return_type.as_ref().map(utils::display_type_expr);
@@ -271,7 +284,15 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             let params = exported
                 .params
                 .iter()
-                .map(|(param_name, ty)| (param_name.as_str().to_string(), display_surface_ty(ty)))
+                .map(|param| FunctionParamInfo {
+                    name: param
+                        .name
+                        .as_ref()
+                        .map(|name| name.as_str().to_string())
+                        .unwrap_or_else(|| "_".to_string()),
+                    ty: display_surface_ty(&param.ty),
+                    optional: param.is_optional(),
+                })
                 .collect();
             let return_type = Some(display_surface_ty(&exported.return_type));
             let throws = if exported.declared_throws.is_some()
@@ -463,8 +484,8 @@ fn callback_forwarding_note(
     let mut matching_params = exported
         .params
         .iter()
-        .filter(|(_, ty)| function_param_matches_effect_slot(ty, effect_name))
-        .map(|(name, _)| name)
+        .filter(|param| function_param_matches_effect_slot(&param.ty, effect_name))
+        .filter_map(|param| param.name.as_ref())
         .collect::<Vec<_>>();
 
     if matching_params.len() == 1 {
@@ -519,7 +540,7 @@ fn local_type_info(
             let ty_str = sig
                 .params
                 .get(param_idx)
-                .map(|(_, te)| utils::display_type_expr(te))
+                .map(|param| utils::display_type_expr(&param.ty))
                 .unwrap_or_else(|| "unknown".to_string());
             Some(TypeInfo::LocalVar {
                 name: name.as_str().to_string(),

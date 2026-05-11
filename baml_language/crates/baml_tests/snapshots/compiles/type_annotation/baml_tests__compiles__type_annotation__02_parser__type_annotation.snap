@@ -38,9 +38,10 @@ SOURCE_FILE
               WORD "llm"
               DOT "."
               WORD "get_return_type"
-            CALL_ARGS "(function_name)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "function_name"
+              CALL_ARG "function_name"
+                WORD "function_name"
               R_PAREN ")"
           SEMICOLON ";"
         RETURN_STMT
