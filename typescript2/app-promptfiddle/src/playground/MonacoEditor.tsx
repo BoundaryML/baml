@@ -1145,7 +1145,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         </div>
       )}
       {/* Actual workbench mounts here */}
-      <div ref={containerRef} className="w-full h-full relative overflow-hidden" />
+      <div ref={containerRef} className="nokey w-full h-full relative overflow-hidden" />
       {/* Dev-only: restart button + worker info (client-only to avoid hydration mismatch) */}
       {mounted && isDev && (
         <button

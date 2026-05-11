@@ -16,7 +16,10 @@ export function cfgToGraphNodes(cfg: ControlFlowGraph): { nodes: GraphNode[]; ed
       metadata: {
         logFilterKey: node.logFilterKey,
         sourceExpr: node.sourceExpr,
+        sourceSpan: node.sourceSpan,
         isContainer: node.isContainer,
+        llmClient: node.llmClient,
+        calleeName: node.calleeName,
       },
     });
   }
@@ -39,6 +42,7 @@ function cfgNodeTypeToGraphType(nt: CfgNodeType): GraphNodeType {
   // separately in graphToReactflow via isContainer.
   switch (nt) {
     case 'functionRoot': return 'function';
+    case 'llmFunction': return 'llm_function';
     case 'headerContextEnter': return 'header';
     case 'branchGroup': return 'conditional';
     case 'branchArm': return 'scope';
@@ -80,6 +84,7 @@ export function graphToReactflow(
         executionState: 'not-started' as const,
         selected: false,
         logFilterKey: gn.metadata.logFilterKey,
+        llmClient: gn.metadata.llmClient,
       },
       ...(parentId ? { parentId } : {}),
     } as WorkflowNode;

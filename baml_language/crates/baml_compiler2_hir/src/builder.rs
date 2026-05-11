@@ -69,6 +69,7 @@ pub struct SemanticIndexBuilder<'db> {
     value_contributions: Vec<(Name, Contribution<'db>)>,
     diagnostics: Vec<Hir2Diagnostic>,
     lowering_diagnostics: Vec<LoweringDiagnostic>,
+    env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
 impl<'db> SemanticIndexBuilder<'db> {
@@ -90,6 +91,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             value_contributions: Vec::new(),
             diagnostics: Vec::new(),
             lowering_diagnostics: Vec::new(),
+            env_var_refs: Vec::new(),
         }
     }
 
@@ -97,6 +99,13 @@ impl<'db> SemanticIndexBuilder<'db> {
     #[must_use]
     pub fn with_lowering_diagnostics(mut self, diags: Vec<LoweringDiagnostic>) -> Self {
         self.lowering_diagnostics = diags;
+        self
+    }
+
+    /// Set env var references collected during CST → AST lowering.
+    #[must_use]
+    pub fn with_env_var_refs(mut self, refs: Vec<baml_compiler2_ast::EnvVarRef>) -> Self {
+        self.env_var_refs = refs;
         self
     }
 
@@ -174,6 +183,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             }),
             extra,
             path_resolutions: self.path_resolutions,
+            env_var_refs: self.env_var_refs,
         }
     }
 

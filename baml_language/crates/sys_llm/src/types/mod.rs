@@ -6,6 +6,7 @@ mod sap;
 pub use output_format::OutputFormatContent;
 pub(crate) use output_format::{
     Class, ClassField, Enum, EnumValue, HoistClasses, MapStyle, RenderOptions, RenderSetting,
+    is_text_or_image_union,
 };
 pub use sap::SapStreamCache;
 

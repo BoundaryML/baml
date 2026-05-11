@@ -19,10 +19,14 @@
 //!    and type alias bodies, via `resolve_class_fields` and `resolve_type_alias`
 //!    (both Salsa-cached per item).
 
-use baml_base::{FileId, SourceFile, Span};
+use std::collections::HashSet;
+
+use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic};
 use baml_compiler2_hir::{body::FunctionBody, file_semantic_index};
 use baml_compiler2_tir::inference::render_scope_diagnostics;
+use indexmap::IndexMap;
+use text_size::{TextRange, TextSize};
 
 use crate::Db;
 
@@ -120,18 +124,34 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         }
     }
 
-    // ── 5. Function signature diagnostics ────────────────────────────────────
-    //
-    // For functions whose signatures are NOT already validated by scope inference
-    // (i.e. non-expression-body functions: LLM, Builtin, Missing), lower the
-    // param types and return type to check for unresolved types.
-    // Expression-body functions already get this check in step 3 via
-    // `infer_scope_types`, so we skip them to avoid duplicate diagnostics.
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+    let ast_items = {
+        let tree = baml_compiler_parser::syntax_tree(db, file);
+        let (items, _, _) = baml_compiler2_ast::lower_file_with_file_id(&tree, file_id);
+        items
+    };
 
+    // ── 5. Jinja prompt/template diagnostics ────────────────────────────────
+    //
+    // Declarative LLM prompts and template_strings are MiniJinja templates, not
+    // regular expression bodies. Validate them with the shared MiniJinja AST
+    // type checker so prompt diagnostics match runtime template semantics.
+    let source_text = file.text(db);
+    diagnostics.extend(check_jinja_templates(
+        db,
+        file_id,
+        &item_tree,
+        pkg_items,
+        &pkg_info.namespace_path,
+        &ast_items,
+        source_text,
+    ));
+
+    // ── 6. Function signature diagnostics ────────────────────────────────────
+    //
     // Build a method → enclosing class list so we can merge class generic params.
     let mut method_to_class = Vec::new();
     for (class_id, class_data) in &item_tree.classes {
@@ -232,6 +252,835 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     });
 
     diagnostics
+}
+
+fn check_jinja_templates(
+    db: &dyn Db,
+    file_id: FileId,
+    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+    ast_items: &[baml_compiler2_ast::Item],
+    source_text: &str,
+) -> Vec<Diagnostic> {
+    let base_types = build_jinja_types(db, pkg_items, namespace_path);
+    let mut diagnostics = Vec::new();
+
+    for func_data in item_tree.functions.values() {
+        diagnostics.extend(check_llm_prompt_template(
+            db,
+            file_id,
+            func_data,
+            pkg_items,
+            namespace_path,
+            &base_types,
+            source_text,
+        ));
+    }
+
+    for template in item_tree.template_strings.values() {
+        let Some(body) = &template.body else {
+            continue;
+        };
+
+        let mut types = base_types.clone();
+        types.start_scope();
+        for param in &template.params {
+            let ty = param
+                .type_expr
+                .as_ref()
+                .map(|type_expr| {
+                    jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, namespace_path)
+                })
+                .unwrap_or(sys_jinja_types::Type::Unknown);
+            types.add_variable(param.name.as_str(), ty);
+        }
+
+        let range_hint = template.span;
+        diagnostics.extend(render_jinja_validation_result(
+            file_id,
+            source_text,
+            range_hint,
+            body,
+            sys_jinja_types::validate_template(template.name.as_str(), body, &mut types),
+        ));
+    }
+
+    diagnostics.extend(check_jinja_constraints(
+        db,
+        file_id,
+        pkg_items,
+        namespace_path,
+        ast_items,
+        &base_types,
+    ));
+
+    diagnostics
+}
+
+fn check_jinja_constraints(
+    db: &dyn Db,
+    file_id: FileId,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+    ast_items: &[baml_compiler2_ast::Item],
+    base_types: &sys_jinja_types::PredefinedTypes,
+) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+
+    for item in ast_items {
+        match item {
+            baml_compiler2_ast::Item::Class(class_data) => {
+                let this_ty = sys_jinja_types::Type::ClassRef(class_data.name.to_string());
+                diagnostics.extend(check_ast_constraint_attrs(
+                    file_id,
+                    &class_data.attributes,
+                    base_types,
+                    &this_ty,
+                ));
+
+                for field in &class_data.fields {
+                    if let Some(type_expr) = &field.type_expr {
+                        let this_ty = jinja_type_from_type_expr(
+                            db,
+                            &type_expr.expr,
+                            pkg_items,
+                            namespace_path,
+                        );
+                        diagnostics.extend(check_ast_type_constraint_attrs(
+                            db,
+                            file_id,
+                            &type_expr.expr,
+                            base_types,
+                            &this_ty,
+                            pkg_items,
+                            namespace_path,
+                        ));
+                    }
+                }
+            }
+            baml_compiler2_ast::Item::Function(func_data) => {
+                for param in &func_data.params {
+                    if let Some(type_expr) = &param.type_expr {
+                        let this_ty = jinja_type_from_type_expr(
+                            db,
+                            &type_expr.expr,
+                            pkg_items,
+                            namespace_path,
+                        );
+                        diagnostics.extend(check_ast_type_constraint_attrs(
+                            db,
+                            file_id,
+                            &type_expr.expr,
+                            base_types,
+                            &this_ty,
+                            pkg_items,
+                            namespace_path,
+                        ));
+                    }
+                }
+
+                if let Some(type_expr) = &func_data.return_type {
+                    let this_ty =
+                        jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, namespace_path);
+                    diagnostics.extend(check_ast_type_constraint_attrs(
+                        db,
+                        file_id,
+                        &type_expr.expr,
+                        base_types,
+                        &this_ty,
+                        pkg_items,
+                        namespace_path,
+                    ));
+                }
+            }
+            baml_compiler2_ast::Item::TypeAlias(alias_data) => {
+                if let Some(type_expr) = &alias_data.type_expr {
+                    let this_ty =
+                        jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, namespace_path);
+                    diagnostics.extend(check_ast_type_constraint_attrs(
+                        db,
+                        file_id,
+                        &type_expr.expr,
+                        base_types,
+                        &this_ty,
+                        pkg_items,
+                        namespace_path,
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    diagnostics
+}
+
+fn check_ast_constraint_attrs(
+    file_id: FileId,
+    attrs: &[baml_compiler2_ast::RawAttribute],
+    base_types: &sys_jinja_types::PredefinedTypes,
+    this_ty: &sys_jinja_types::Type,
+) -> Vec<Diagnostic> {
+    attrs
+        .iter()
+        .filter_map(|attr| {
+            constraint_expression_arg(
+                attr.name.as_str(),
+                attr.args.iter().map(|arg| (&arg.value, arg.span)),
+            )
+        })
+        .flat_map(|(expr, span)| {
+            check_jinja_constraint_expr(file_id, expr, span, base_types, this_ty.clone())
+        })
+        .collect()
+}
+
+fn check_ast_type_constraint_attrs(
+    db: &dyn Db,
+    file_id: FileId,
+    type_expr: &baml_compiler2_ast::TypeExpr,
+    base_types: &sys_jinja_types::PredefinedTypes,
+    this_ty: &sys_jinja_types::Type,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+) -> Vec<Diagnostic> {
+    let mut diagnostics = type_expr
+        .attrs()
+        .iter()
+        .filter_map(|attr| {
+            constraint_expression_arg(
+                attr.name.as_str(),
+                attr.args.iter().map(|arg| (&arg.value, arg.span)),
+            )
+        })
+        .flat_map(|(expr, span)| {
+            check_jinja_constraint_expr(file_id, expr, span, base_types, this_ty.clone())
+        })
+        .collect::<Vec<_>>();
+
+    match type_expr {
+        baml_compiler2_ast::TypeExpr::Optional { inner, .. }
+        | baml_compiler2_ast::TypeExpr::List { inner, .. } => {
+            diagnostics.extend(check_ast_type_constraint_attrs(
+                db,
+                file_id,
+                inner,
+                base_types,
+                &jinja_type_from_type_expr(db, inner, pkg_items, namespace_path),
+                pkg_items,
+                namespace_path,
+            ));
+        }
+        baml_compiler2_ast::TypeExpr::Map { key, value, .. } => {
+            diagnostics.extend(check_ast_type_constraint_attrs(
+                db,
+                file_id,
+                key,
+                base_types,
+                &jinja_type_from_type_expr(db, key, pkg_items, namespace_path),
+                pkg_items,
+                namespace_path,
+            ));
+            diagnostics.extend(check_ast_type_constraint_attrs(
+                db,
+                file_id,
+                value,
+                base_types,
+                &jinja_type_from_type_expr(db, value, pkg_items, namespace_path),
+                pkg_items,
+                namespace_path,
+            ));
+        }
+        baml_compiler2_ast::TypeExpr::Union { variants, .. } => {
+            for variant in variants {
+                diagnostics.extend(check_ast_type_constraint_attrs(
+                    db,
+                    file_id,
+                    variant,
+                    base_types,
+                    &jinja_type_from_type_expr(db, variant, pkg_items, namespace_path),
+                    pkg_items,
+                    namespace_path,
+                ));
+            }
+        }
+        baml_compiler2_ast::TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for param in params {
+                diagnostics.extend(check_ast_type_constraint_attrs(
+                    db,
+                    file_id,
+                    &param.ty,
+                    base_types,
+                    &jinja_type_from_type_expr(db, &param.ty, pkg_items, namespace_path),
+                    pkg_items,
+                    namespace_path,
+                ));
+            }
+            diagnostics.extend(check_ast_type_constraint_attrs(
+                db,
+                file_id,
+                ret,
+                base_types,
+                &jinja_type_from_type_expr(db, ret, pkg_items, namespace_path),
+                pkg_items,
+                namespace_path,
+            ));
+            if let Some(throws) = throws {
+                diagnostics.extend(check_ast_type_constraint_attrs(
+                    db,
+                    file_id,
+                    throws,
+                    base_types,
+                    &jinja_type_from_type_expr(db, throws, pkg_items, namespace_path),
+                    pkg_items,
+                    namespace_path,
+                ));
+            }
+        }
+        baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => {
+            for generic_arg in generic_args {
+                diagnostics.extend(check_ast_type_constraint_attrs(
+                    db,
+                    file_id,
+                    generic_arg,
+                    base_types,
+                    &jinja_type_from_type_expr(db, generic_arg, pkg_items, namespace_path),
+                    pkg_items,
+                    namespace_path,
+                ));
+            }
+        }
+        _ => {}
+    }
+
+    diagnostics
+}
+
+fn constraint_expression_arg<'a>(
+    name: &str,
+    args: impl IntoIterator<Item = (&'a String, TextRange)>,
+) -> Option<(&'a str, TextRange)> {
+    if name != "check" && name != "assert" {
+        return None;
+    }
+
+    args.into_iter().find_map(|(value, span)| {
+        strip_jinja_expression(value).map(|(expr, offset)| {
+            let start = span.start() + TextSize::from(u32::try_from(offset).unwrap_or(u32::MAX));
+            (expr, TextRange::new(start, span.end()))
+        })
+    })
+}
+
+fn strip_jinja_expression(value: &str) -> Option<(&str, usize)> {
+    let outer_start = value.len() - value.trim_start().len();
+    let trimmed = value.trim();
+    let inner = trimmed.strip_prefix("{{")?.strip_suffix("}}")?;
+    let inner_start = inner.len() - inner.trim_start().len();
+    Some((inner.trim(), outer_start + 2 + inner_start))
+}
+
+fn check_jinja_constraint_expr(
+    file_id: FileId,
+    expr: &str,
+    attr_arg_span: TextRange,
+    base_types: &sys_jinja_types::PredefinedTypes,
+    this_ty: sys_jinja_types::Type,
+) -> Vec<Diagnostic> {
+    let this_ty_for_retry = this_ty.clone();
+    let mut types = base_types.clone();
+    types.start_scope();
+    types.add_variable("this", this_ty);
+
+    let result = sys_jinja_types::validate_expression(expr, &mut types).or_else(|error| {
+        if error
+            .parsing_errors
+            .as_ref()
+            .is_some_and(|parse_error| parse_error.to_string().contains("bad string escape"))
+        {
+            let mut retry_types = base_types.clone();
+            retry_types.start_scope();
+            retry_types.add_variable("this", this_ty_for_retry);
+            sys_jinja_types::validate_expression(
+                &normalize_regex_like_string_escapes(expr),
+                &mut retry_types,
+            )
+        } else {
+            Err(error)
+        }
+    });
+
+    render_jinja_expression_validation_result(file_id, attr_arg_span, result)
+}
+
+fn normalize_regex_like_string_escapes(expr: &str) -> String {
+    let mut out = String::with_capacity(expr.len());
+    let mut chars = expr.chars().peekable();
+    let mut quote = None;
+
+    while let Some(ch) = chars.next() {
+        if let Some(active_quote) = quote {
+            out.push(ch);
+            if ch == '\\' {
+                if let Some(&next) = chars.peek() {
+                    if matches!(next, '\\' | '"' | '\'' | 'n' | 'r' | 't' | '0') {
+                        out.push(chars.next().expect("peeked character must exist"));
+                    } else {
+                        out.push('\\');
+                    }
+                }
+            } else if ch == active_quote {
+                quote = None;
+            }
+        } else {
+            if ch == '"' || ch == '\'' {
+                quote = Some(ch);
+            }
+            out.push(ch);
+        }
+    }
+
+    out
+}
+
+fn check_llm_prompt_template(
+    db: &dyn Db,
+    file_id: FileId,
+    func_data: &baml_compiler2_hir::item_tree::Function,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+    base_types: &sys_jinja_types::PredefinedTypes,
+    source_text: &str,
+) -> Vec<Diagnostic> {
+    let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm)) = &func_data.declarative_meta else {
+        return Vec::new();
+    };
+    let Some(prompt) = &llm.prompt else {
+        return Vec::new();
+    };
+
+    let mut types = base_types.clone();
+    types.start_scope();
+    for param in &func_data.params {
+        let ty = param
+            .type_expr
+            .as_ref()
+            .map(|type_expr| {
+                jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, namespace_path)
+            })
+            .unwrap_or(sys_jinja_types::Type::Unknown);
+        types.add_variable(param.name.as_str(), ty);
+    }
+
+    render_jinja_validation_result(
+        file_id,
+        source_text,
+        prompt.span,
+        &prompt.text,
+        sys_jinja_types::validate_template(func_data.name.as_str(), &prompt.text, &mut types),
+    )
+}
+
+fn build_jinja_types(
+    db: &dyn Db,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+) -> sys_jinja_types::PredefinedTypes {
+    use baml_compiler2_hir::contributions::Definition;
+
+    let mut types =
+        sys_jinja_types::PredefinedTypes::default(sys_jinja_types::JinjaContext::Prompt);
+    types.add_variable("baml", sys_jinja_types::Type::Unknown);
+
+    let Some(ns_items) = pkg_items.namespaces.get(namespace_path) else {
+        return types;
+    };
+
+    for def in ns_items.types.values() {
+        let Definition::Class(class_loc) = *def else {
+            continue;
+        };
+        let file = class_loc.file(db);
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let class_data = &item_tree[class_loc.id(db)];
+        let class_namespace =
+            baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
+        let fields = class_data
+            .fields
+            .iter()
+            .map(|field| {
+                let ty = field
+                    .type_expr
+                    .as_ref()
+                    .map(|type_expr| {
+                        jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, &class_namespace)
+                    })
+                    .unwrap_or(sys_jinja_types::Type::Unknown);
+                (field.name.to_string(), ty)
+            })
+            .collect::<IndexMap<_, _>>();
+        types.add_class(class_data.name.as_str(), fields);
+    }
+
+    for def in ns_items.types.values() {
+        let Definition::Enum(enum_loc) = *def else {
+            continue;
+        };
+        let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
+        let enum_data = &item_tree[enum_loc.id(db)];
+        types.add_enum(
+            enum_data.name.as_str(),
+            enum_data
+                .variants
+                .iter()
+                .map(|variant| variant.name.to_string())
+                .collect(),
+        );
+    }
+
+    for def in ns_items.types.values() {
+        let Definition::TypeAlias(alias_loc) = *def else {
+            continue;
+        };
+        let file = alias_loc.file(db);
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let alias_data = &item_tree[alias_loc.id(db)];
+        if let Some(type_expr) = &alias_data.type_expr {
+            let alias_namespace =
+                baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
+            types.add_alias(
+                alias_data.name.as_str(),
+                jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, &alias_namespace),
+            );
+        }
+    }
+
+    for def in ns_items.values.values() {
+        let Definition::TemplateString(template_loc) = *def else {
+            continue;
+        };
+        let file = template_loc.file(db);
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let template = &item_tree[template_loc.id(db)];
+        let template_namespace =
+            baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
+        let args = template
+            .params
+            .iter()
+            .map(|param| {
+                let ty = param
+                    .type_expr
+                    .as_ref()
+                    .map(|type_expr| {
+                        jinja_type_from_type_expr(
+                            db,
+                            &type_expr.expr,
+                            pkg_items,
+                            &template_namespace,
+                        )
+                    })
+                    .unwrap_or(sys_jinja_types::Type::Unknown);
+                (param.name.to_string(), ty)
+            })
+            .collect();
+        types.add_function(template.name.as_str(), sys_jinja_types::Type::String, args);
+    }
+
+    types
+}
+
+fn jinja_type_from_type_expr(
+    db: &dyn Db,
+    type_expr: &baml_compiler2_ast::TypeExpr,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+) -> sys_jinja_types::Type {
+    jinja_type_from_type_expr_inner(
+        db,
+        type_expr,
+        pkg_items,
+        namespace_path,
+        &mut HashSet::new(),
+    )
+}
+
+fn jinja_type_from_type_expr_inner(
+    db: &dyn Db,
+    type_expr: &baml_compiler2_ast::TypeExpr,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+    resolving_aliases: &mut HashSet<String>,
+) -> sys_jinja_types::Type {
+    use baml_compiler2_ast::TypeExpr;
+    use baml_compiler2_hir::contributions::Definition;
+    use sys_jinja_types::Type;
+
+    match type_expr {
+        TypeExpr::Int { .. } => Type::Int,
+        TypeExpr::Float { .. } => Type::Float,
+        TypeExpr::String { .. } => Type::String,
+        TypeExpr::Bool { .. } => Type::Bool,
+        TypeExpr::Null { .. } => Type::None,
+        TypeExpr::Media { kind, .. } => match kind {
+            baml_base::MediaKind::Image => Type::Image,
+            baml_base::MediaKind::Audio => Type::Audio,
+            _ => Type::Unknown,
+        },
+        TypeExpr::Literal { value, .. } => Type::Literal(value.clone()),
+        TypeExpr::Optional { inner, .. } => Type::merge([
+            Type::None,
+            jinja_type_from_type_expr_inner(
+                db,
+                inner,
+                pkg_items,
+                namespace_path,
+                resolving_aliases,
+            ),
+        ]),
+        TypeExpr::List { inner, .. } => Type::List(Box::new(jinja_type_from_type_expr_inner(
+            db,
+            inner,
+            pkg_items,
+            namespace_path,
+            resolving_aliases,
+        ))),
+        TypeExpr::Map { value, .. } => Type::Map(
+            Box::new(Type::String),
+            Box::new(jinja_type_from_type_expr_inner(
+                db,
+                value,
+                pkg_items,
+                namespace_path,
+                resolving_aliases,
+            )),
+        ),
+        TypeExpr::Union { variants, .. } => Type::merge(variants.iter().map(|variant| {
+            jinja_type_from_type_expr_inner(
+                db,
+                variant,
+                pkg_items,
+                namespace_path,
+                resolving_aliases,
+            )
+        })),
+        TypeExpr::Path { segments, .. } if !segments.is_empty() => {
+            let (lookup_namespace, name) = jinja_lookup_path(namespace_path, segments);
+            let key = format!(
+                "{}::{}",
+                lookup_namespace
+                    .iter()
+                    .map(Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join("::"),
+                name
+            );
+            let name_obj = Name::new(name.as_str());
+            match pkg_items.lookup_type(&lookup_namespace, &name_obj) {
+                Some(Definition::Class(_)) => Type::ClassRef(name),
+                Some(Definition::Enum(_)) => Type::EnumTypeRef(name),
+                Some(Definition::TypeAlias(alias_loc)) => {
+                    if !resolving_aliases.insert(key.clone()) {
+                        return Type::RecursiveTypeAlias(name);
+                    }
+                    let file = alias_loc.file(db);
+                    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+                    let alias = &item_tree[alias_loc.id(db)];
+                    let alias_namespace =
+                        baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
+                    let resolved = alias
+                        .type_expr
+                        .as_ref()
+                        .map(|spanned| {
+                            jinja_type_from_type_expr_inner(
+                                db,
+                                &spanned.expr,
+                                pkg_items,
+                                &alias_namespace,
+                                resolving_aliases,
+                            )
+                        })
+                        .unwrap_or(Type::Unknown);
+                    resolving_aliases.remove(&key);
+                    Type::Alias {
+                        name,
+                        target: Box::new(resolved.clone()),
+                        resolved: Box::new(resolved),
+                    }
+                }
+                _ => Type::Unknown,
+            }
+        }
+        TypeExpr::Function { .. } => Type::Unknown,
+        TypeExpr::Uint8Array { .. }
+        | TypeExpr::Never { .. }
+        | TypeExpr::Void { .. }
+        | TypeExpr::BuiltinUnknown { .. }
+        | TypeExpr::Type { .. }
+        | TypeExpr::Rust { .. }
+        | TypeExpr::Error { .. }
+        | TypeExpr::Unknown { .. }
+        | TypeExpr::Path { .. } => Type::Unknown,
+    }
+}
+
+fn jinja_lookup_path(current_namespace: &[Name], segments: &[Name]) -> (Vec<Name>, String) {
+    let (name, namespace) = segments
+        .split_last()
+        .expect("caller guarantees at least one segment");
+    if namespace.is_empty() {
+        (current_namespace.to_vec(), name.to_string())
+    } else {
+        (namespace.to_vec(), name.to_string())
+    }
+}
+
+fn render_jinja_validation_result(
+    file_id: FileId,
+    source_text: &str,
+    raw_string_range: TextRange,
+    _template: &str,
+    result: Result<(), sys_jinja_types::ValidationError>,
+) -> Vec<Diagnostic> {
+    let Err(error) = result else {
+        return Vec::new();
+    };
+
+    if let Some(parse_error) = error.parsing_errors {
+        let range = parse_error
+            .range()
+            .map(|range| jinja_offset_range(source_text, raw_string_range, range.start, range.end))
+            .unwrap_or(raw_string_range);
+        return vec![
+            Diagnostic::error(
+                DiagnosticId::JinjaParseError,
+                format!("Error parsing jinja template: {parse_error}"),
+            )
+            .with_primary_span(Span { file_id, range })
+            .with_phase(DiagnosticPhase::Type),
+        ];
+    }
+
+    error
+        .errors
+        .into_iter()
+        .map(|error| {
+            let span = error.span();
+            let range = jinja_offset_range(
+                source_text,
+                raw_string_range,
+                span.start_offset as usize,
+                span.end_offset as usize,
+            );
+            Diagnostic::warning(jinja_diagnostic_id(error.message()), error.message())
+                .with_primary_span(Span { file_id, range })
+                .with_phase(DiagnosticPhase::Type)
+        })
+        .collect()
+}
+
+fn render_jinja_expression_validation_result(
+    file_id: FileId,
+    attr_arg_span: TextRange,
+    result: Result<(), sys_jinja_types::ValidationError>,
+) -> Vec<Diagnostic> {
+    let Err(error) = result else {
+        return Vec::new();
+    };
+
+    if let Some(parse_error) = error.parsing_errors {
+        let range = parse_error
+            .range()
+            .map(|range| jinja_expression_offset_range(attr_arg_span, range.start, range.end))
+            .unwrap_or(attr_arg_span);
+        return vec![
+            Diagnostic::error(
+                DiagnosticId::JinjaParseError,
+                format!("Error parsing jinja template: {parse_error}"),
+            )
+            .with_primary_span(Span { file_id, range })
+            .with_phase(DiagnosticPhase::Type),
+        ];
+    }
+
+    error
+        .errors
+        .into_iter()
+        .map(|error| {
+            let span = error.span();
+            let range = jinja_expression_offset_range(
+                attr_arg_span,
+                span.start_offset as usize,
+                span.end_offset as usize,
+            );
+            Diagnostic::warning(jinja_diagnostic_id(error.message()), error.message())
+                .with_primary_span(Span { file_id, range })
+                .with_phase(DiagnosticPhase::Type)
+        })
+        .collect()
+}
+
+fn raw_string_content_start(source_text: &str, raw_string_range: TextRange) -> TextSize {
+    let start: usize = raw_string_range.start().into();
+    let end: usize = raw_string_range.end().into();
+    let Some(raw_text) = source_text.get(start..end) else {
+        return raw_string_range.start();
+    };
+    let quote_offset = raw_text.find('"').unwrap_or(0);
+    raw_string_range.start() + TextSize::from(u32::try_from(quote_offset + 1).unwrap_or(u32::MAX))
+}
+
+fn jinja_offset_range(
+    source_text: &str,
+    raw_string_range: TextRange,
+    start_offset: usize,
+    end_offset: usize,
+) -> TextRange {
+    let content_start = raw_string_content_start(source_text, raw_string_range);
+    TextRange::new(
+        content_start + TextSize::from(u32::try_from(start_offset).unwrap_or(u32::MAX)),
+        content_start
+            + TextSize::from(u32::try_from(end_offset.max(start_offset + 1)).unwrap_or(u32::MAX)),
+    )
+}
+
+fn jinja_expression_offset_range(
+    attr_arg_span: TextRange,
+    start_offset: usize,
+    end_offset: usize,
+) -> TextRange {
+    // The span starts at the trimmed inner expression passed to the checker.
+    let expression_start = attr_arg_span.start();
+    TextRange::new(
+        expression_start + TextSize::from(u32::try_from(start_offset).unwrap_or(u32::MAX)),
+        expression_start
+            + TextSize::from(u32::try_from(end_offset.max(start_offset + 1)).unwrap_or(u32::MAX)),
+    )
+}
+
+fn jinja_diagnostic_id(message: &str) -> DiagnosticId {
+    if message.starts_with("Variable `") {
+        DiagnosticId::JinjaUnresolvedVariable
+    } else if message.contains("referenced without parentheses") {
+        DiagnosticId::JinjaFunctionReferenceWithoutCall
+    } else if message.starts_with("Filter '") {
+        DiagnosticId::JinjaInvalidFilter
+    } else if message.contains("expects argument") {
+        DiagnosticId::JinjaWrongArgType
+    } else if message.contains("expects ") && message.contains(" arguments") {
+        DiagnosticId::JinjaWrongArgCount
+    } else if message.contains("property ") {
+        DiagnosticId::JinjaPropertyNotDefined
+    } else if message.contains("enum") && message.contains("string") {
+        DiagnosticId::JinjaEnumStringComparison
+    } else {
+        DiagnosticId::JinjaInvalidType
+    }
 }
 
 /// Convert a `RenderedTirDiagnostic` to the shared `Diagnostic` type.
@@ -414,6 +1263,249 @@ function demo() -> int throws string {
                 "this call forwards whatever callback `cb` throws",
                 "this callback throws `string`",
             ]
+        );
+    }
+
+    #[test]
+    fn check_file_reports_unknown_prompt_variable() {
+        let test = CursorTest::new(
+            r##"client GPT4o {
+  provider openai
+  options {
+    model "gpt-5"
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+class GuessResponse {
+  game_won bool
+  text string
+}
+
+function TakeGuess(user_guess: string, famous_person_name: string) -> GuessResponse {
+  client GPT4o
+  prompt #"
+    {{ famouse_person_name | lower }}
+
+    {{ ctx.output_format }}
+  "#
+}
+<[CURSOR]"##,
+        );
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        let diag = diagnostics
+            .iter()
+            .find(|diag| diag.id == DiagnosticId::JinjaUnresolvedVariable)
+            .expect("unknown prompt variable diagnostic");
+
+        assert!(diag.message.contains("`famouse_person_name`"));
+        assert!(diag.message.contains("does not exist"));
+        let span = diag.primary_span().expect("primary span");
+        let text = test.cursor.file.text(&test.db);
+        let start: usize = span.range.start().into();
+        let end: usize = span.range.end().into();
+        assert_eq!(&text[start..end], "famouse_person_name");
+    }
+
+    #[test]
+    fn check_file_allows_template_string_call_in_prompt() {
+        let test = CursorTest::new(
+            r##"client GPT4o {
+  provider openai
+  options {
+    model "gpt-5"
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+template_string GuessHeader(name: string) #"
+  Guess the person: {{ name }}
+"#
+
+function TakeGuess(famous_person_name: string) -> string {
+  client GPT4o
+  prompt #"
+    {{ GuessHeader(famous_person_name) }}
+  "#
+}
+<[CURSOR]"##,
+        );
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diag| diag.id != DiagnosticId::JinjaUnresolvedVariable),
+            "template string call should not be reported as an unknown prompt variable: {diagnostics:#?}"
+        );
+    }
+
+    #[test]
+    fn check_file_reports_unknown_template_string_argument() {
+        let test = CursorTest::new(
+            r##"client GPT4o {
+  provider openai
+  options {
+    model "gpt-5"
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+template_string GuessHeader(name: string) #"
+  Guess the person: {{ name }}
+"#
+
+function TakeGuess(famous_person_name: string) -> string {
+  client GPT4o
+  prompt #"
+    {{ GuessHeader(famouse_person_name) }}
+  "#
+}
+<[CURSOR]"##,
+        );
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        let diag = diagnostics
+            .iter()
+            .find(|diag| diag.id == DiagnosticId::JinjaUnresolvedVariable)
+            .expect("unknown template string argument diagnostic");
+
+        assert!(diag.message.contains("`famouse_person_name`"));
+        assert!(diag.message.contains("does not exist"));
+        let span = diag.primary_span().expect("primary span");
+        let text = test.cursor.file.text(&test.db);
+        let start: usize = span.range.start().into();
+        let end: usize = span.range.end().into();
+        assert_eq!(&text[start..end], "famouse_person_name");
+    }
+
+    #[test]
+    fn check_file_reports_template_string_call_errors() {
+        let test = CursorTest::new(
+            r##"template_string WithParams(a: int) #"
+  ...
+"#
+
+template_string BadCall1() #"
+  {{ WithParams(a=2, b=2) }}
+"#
+
+template_string BadCall2() #"
+  {{ WithParams("a") }}
+"#
+<[CURSOR]"##,
+        );
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diag| diag.id == DiagnosticId::JinjaWrongArgCount
+                    && diag.message.contains("expects 1 arguments")),
+            "{diagnostics:#?}"
+        );
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diag| diag.id == DiagnosticId::JinjaWrongArgType
+                    && diag.message.contains("expects argument 'a'")),
+            "{diagnostics:#?}"
+        );
+    }
+
+    #[test]
+    fn check_file_resolves_cross_file_jinja_template_strings() {
+        let mut builder = CursorTest::builder();
+        builder.source(
+            "shared.baml",
+            r##"class Person {
+  name string
+}
+
+template_string PersonHeader(person: Person) #"
+  {{ person.name }}
+"#
+"##,
+        );
+        builder.source(
+            "main.baml",
+            r##"client GPT4o {
+  provider openai
+  options {
+    model "gpt-5"
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+function TakeGuess(person: Person) -> string {
+  client GPT4o
+  prompt #"
+    {{ PersonHeader(person) }}
+  "#
+}
+<[CURSOR]"##,
+        );
+        let test = builder.build();
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diag| diag.id != DiagnosticId::JinjaUnresolvedVariable),
+            "cross-file template string calls should resolve in prompts: {diagnostics:#?}"
+        );
+    }
+
+    #[test]
+    fn check_file_reports_constraint_jinja_errors() {
+        let test = CursorTest::new(
+            r#"class Foo {
+  bar string @check(bar_check, {{ bar }})
+  baz int @check(baz_check, {{ ) }})
+}
+<[CURSOR]"#,
+        );
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diag| diag.id == DiagnosticId::JinjaUnresolvedVariable
+                    && diag.message.contains("`bar`")),
+            "{diagnostics:#?}"
+        );
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diag| diag.id == DiagnosticId::JinjaParseError
+                    && diag.message.contains("unexpected `)`")),
+            "{diagnostics:#?}"
+        );
+    }
+
+    #[test]
+    fn check_file_allows_null_in_constraint_jinja_expression() {
+        let test = CursorTest::new(
+            r#"type ConstrainedLong = map<string, int | string | bool> @check("valid", {{ this != null }})
+<[CURSOR]"#,
+        );
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diag| !(diag.id == DiagnosticId::JinjaUnresolvedVariable
+                    && diag.message.contains("`null`"))),
+            "{diagnostics:#?}"
+        );
+    }
+
+    #[test]
+    fn normalizes_regex_escapes_after_escaped_quotes() {
+        assert_eq!(
+            normalize_regex_like_string_escapes(r#"this.matches("^\"\d\"$")"#),
+            r#"this.matches("^\"\\d\"$")"#,
         );
     }
 }

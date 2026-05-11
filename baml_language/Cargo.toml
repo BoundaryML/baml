@@ -5,7 +5,17 @@ members = [
   "sdk_tests/build",
   "sdk_tests/crates/*",
 ]
-exclude = [ "crates/bridge_go" ]
+exclude = [
+  "crates/bridge_go",
+  # Generated Python rig-test outputs do not contain Cargo manifests, but the
+  # workspace member glob above would otherwise make cargo metadata fail.
+  "rig_tests/crates/python_empty",
+  "rig_tests/crates/python_literal_types",
+  "rig_tests/crates/python_map_types",
+  "rig_tests/crates/python_mixed_complex_types",
+  "rig_tests/crates/python_semantic_streaming",
+  "rig_tests/crates/python_union_types_extended",
+]
 resolver = "2"
 
 [workspace.package]
@@ -46,6 +56,8 @@ baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
+sys_jinja = { path = "crates/sys_jinja" }
+sys_jinja_types = { path = "crates/sys_jinja_types" }
 sys_llm = { path = "crates/sys_llm", default-features = false }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }

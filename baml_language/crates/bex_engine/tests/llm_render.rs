@@ -205,6 +205,32 @@ async fn test_render_prompt_with_enums() {
 
 mod common;
 
+#[tokio::test]
+async fn test_render_prompt_e2e_includes_output_format_schema() {
+    let rendered = common::render_output_format(
+        r#"
+class Sentiment {
+    feeling string @description("The detected sentiment")
+    confidence float @description("Confidence score between 0 and 1")
+    reasoning string @description("Brief explanation")
+}
+"#,
+        "Sentiment",
+    )
+    .await;
+
+    assert!(
+        rendered.contains("Answer in JSON using this schema:"),
+        "prompt did not include output format prefix:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("feeling")
+            && rendered.contains("confidence")
+            && rendered.contains("reasoning"),
+        "prompt did not include return class fields:\n{rendered}"
+    );
+}
+
 /// Test the full `render_prompt` flow through the engine.
 ///
 /// This test:

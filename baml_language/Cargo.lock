@@ -1296,10 +1296,12 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "baml_workspace",
+ "indexmap 2.13.0",
  "insta",
  "rowan 0.16.1",
  "salsa",
  "serde",
+ "sys_jinja_types",
  "text-size",
 ]
 
@@ -7609,6 +7611,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sys_jinja"
+version = "0.0.0-beta"
+dependencies = [
+ "minijinja",
+ "minijinja-contrib",
+ "regex",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "sys_jinja_types"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "indexmap 2.13.0",
+ "minijinja",
+ "strsim",
+]
+
+[[package]]
 name = "sys_llm"
 version = "0.0.0-beta"
 dependencies = [
@@ -7636,7 +7658,6 @@ dependencies = [
  "indexmap 2.13.0",
  "infer",
  "minijinja",
- "minijinja-contrib",
  "percent-encoding",
  "regex",
  "rsa",
@@ -7645,6 +7666,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "strum",
+ "sys_jinja",
  "sys_types",
  "thiserror 2.0.18",
  "tokio",

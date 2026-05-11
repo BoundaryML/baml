@@ -40,4 +40,30 @@ test TestFoo {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Warning: class Foo (this) does not have a property 'string'
+//    ╭─[ constraints_block_level.baml:4:26 ]
+//    │
+//  4 │   @@check(foo_and_bar, {{ this.string|length < this.foo }})
+//    │                          ─────┬─────  
+//    │                               ╰─────── class Foo (this) does not have a property 'string'
+//    │ 
+//    │ Note: Error code: E0074
+// ───╯
+// Warning: class Foo2 (this) does not have a property 'string'
+//     ╭─[ constraints_block_level.baml:10:15 ]
+//     │
+//  10 │   @@assert({{ this.string|length < this.foo }})
+//     │               ─────┬─────  
+//     │                    ╰─────── class Foo2 (this) does not have a property 'string'
+//     │ 
+//     │ Note: Error code: E0074
+// ────╯
+// Warning: class Foo3 (this) does not have a property 'string'
+//     ╭─[ constraints_block_level.baml:16:15 ]
+//     │
+//  16 │   @@assert({{ this.string|length < this.foo }})
+//     │               ─────┬─────  
+//     │                    ╰─────── class Foo3 (this) does not have a property 'string'
+//     │ 
+//     │ Note: Error code: E0074
+// ────╯

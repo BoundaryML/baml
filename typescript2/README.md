@@ -43,6 +43,73 @@ pnpm dev:wasm
 
 Then in VSCode, press `F5` and select **"Launch VS Code extension (v2)"**.
 
+### Building a Local VSIX
+
+From `typescript2/`, build and package the VS Code extension with:
+
+```bash
+pnpm vscode:package
+```
+
+The VSIX is written to:
+
+```text
+app-vscode-ext/app-vscode-ext-0.1.0.vsix
+```
+
+What `pnpm vscode:package` does:
+
+1. Removes stale packaged outputs:
+
+   ```bash
+   rm -rf app-vscode-webview/dist app-vscode-ext/dist app-vscode-ext/*.vsix
+   ```
+
+2. Builds the browser WASM bridge:
+
+   ```bash
+   pnpm build:wasm
+   ```
+
+   The current VSIX does not bundle this WASM output; it ships the native `baml-cli` and the webview talks to that CLI over WebSocket. Building WASM here makes the local packaging command catch browser/WASM regressions too.
+
+3. Builds the release language-server CLI:
+
+   ```bash
+   cargo build -p baml_cli --manifest-path ../baml_language/Cargo.toml --release
+   ```
+
+4. Builds the packaged React webview:
+
+   ```bash
+   pnpm --filter app-vscode-webview build
+   ```
+
+5. Builds the VS Code extension host bundle:
+
+   ```bash
+   pnpm --filter app-vscode-ext build
+   ```
+
+6. Stages runtime assets into the extension package:
+
+   ```bash
+   rm -rf app-vscode-ext/dist/playground app-vscode-ext/dist/baml-cli
+   mkdir -p app-vscode-ext/dist/playground app-vscode-ext/dist/baml-cli
+   cp -R app-vscode-webview/dist/. app-vscode-ext/dist/playground/
+   cp ../baml_language/target/release/baml-cli app-vscode-ext/dist/baml-cli/baml-cli
+   chmod 755 app-vscode-ext/dist/baml-cli/baml-cli
+   ```
+
+7. Packages the VSIX:
+
+   ```bash
+   cd app-vscode-ext
+   pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository --skip-license
+   ```
+
+The packaged extension includes `dist/extension.js`, the built webview under `dist/playground`, and the bundled `baml-cli` under `dist/baml-cli`. The bundled CLI is platform-specific, so build the VSIX on the same platform/architecture as the machine that will install it.
+
 ### Standalone Web App
 
 ```bash

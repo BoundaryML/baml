@@ -555,6 +555,7 @@ impl<'a> AstGraphBuilder<'a> {
     // -- Call scope (leaf node — no recursion into the call's arguments) --
 
     fn emit_call_scope(&mut self, call_expr: ast::ExprId, label: &str) {
+        let callee_name = call_callee_name(self.body, call_expr);
         let ordinal = {
             let frame = self
                 .frames
@@ -579,7 +580,8 @@ impl<'a> AstGraphBuilder<'a> {
             label.to_string(),
             Some(call_expr.into_raw().into_u32()),
             NodeType::OtherScope,
-        );
+        )
+        .with_callee_name(callee_name);
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, node_id);
@@ -739,6 +741,15 @@ impl<'a> AstGraphBuilder<'a> {
             (ast::Pattern::Or(_), ChildContext::Or)
         );
         if needs_parens { format!("({s})") } else { s }
+    }
+}
+
+fn call_callee_name(body: &ast::ExprBody, id: ast::ExprId) -> String {
+    match &body.exprs[id] {
+        ast::Expr::Call { callee, .. } | ast::Expr::OptionalCall { callee, .. } => {
+            render_expr_compact_ast(body, *callee)
+        }
+        _ => render_expr_compact_ast(body, id),
     }
 }
 

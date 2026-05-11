@@ -25,8 +25,9 @@
 
 use std::{
     env, fs,
+    io::{self, ErrorKind},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Output},
 };
 
 use baml_db::baml_compiler_diagnostics::Severity;
@@ -230,7 +231,9 @@ fn walk_files(dir: &Path) -> Vec<PathBuf> {
 ///
 /// The uv cache is anchored at `<workspace>/target/uv-cache` so
 /// rust-analyzer and `cargo test` share it; uv's file locks make the
-/// concurrent `uv sync` calls (one per test) safe.
+/// concurrent `uv sync` calls (one per test) safe. If `uv` is managed
+/// by mise but its shim is not on PATH, the helper falls back to
+/// `mise which uv` before giving up.
 pub fn run_test_cmd(cmd: &str) {
     let manifest = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
@@ -259,11 +262,7 @@ pub fn run_test_cmd(cmd: &str) {
     let prog = words.next().unwrap_or_else(|| panic!("empty command"));
     let args: Vec<&str> = words.collect();
 
-    let output = Command::new(prog)
-        .args(&args)
-        .current_dir(&dir)
-        .env("UV_CACHE_DIR", &uv_cache)
-        .output()
+    let output = run_test_process(prog, &args, &dir, &uv_cache)
         .unwrap_or_else(|e| panic!("failed to spawn `{cmd}`: {e}"));
     assert!(
         output.status.success(),
@@ -271,6 +270,49 @@ pub fn run_test_cmd(cmd: &str) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn run_test_process(prog: &str, args: &[&str], dir: &Path, uv_cache: &Path) -> io::Result<Output> {
+    let output = Command::new(prog)
+        .args(args)
+        .current_dir(dir)
+        .env("UV_CACHE_DIR", uv_cache)
+        .output();
+
+    match output {
+        Err(err) if err.kind() == ErrorKind::NotFound && prog == "uv" => {
+            let uv = resolve_mise_uv()?;
+            Command::new(uv)
+                .args(args)
+                .current_dir(dir)
+                .env("UV_CACHE_DIR", uv_cache)
+                .output()
+        }
+        other => other,
+    }
+}
+
+fn resolve_mise_uv() -> io::Result<PathBuf> {
+    let output = Command::new("mise").args(["which", "uv"]).output()?;
+    if !output.status.success() {
+        return Err(io::Error::new(
+            ErrorKind::NotFound,
+            format!(
+                "`uv` is not on PATH and `mise which uv` failed:\n{}.",
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        ));
+    }
+
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    if path.is_empty() {
+        return Err(io::Error::new(
+            ErrorKind::NotFound,
+            "`uv` is not on PATH and `mise which uv` returned an empty path",
+        ));
+    }
+
+    Ok(PathBuf::from(path))
 }
 
 /// Expands to four `#[test]` functions — `sync_only`, `ruff`,

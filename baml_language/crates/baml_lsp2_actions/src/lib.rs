@@ -46,6 +46,7 @@ pub mod check;
 pub mod completions;
 pub mod definition;
 pub mod describe;
+pub mod env_vars;
 pub mod fixes;
 pub mod grep;
 pub mod listing;
@@ -97,6 +98,7 @@ pub use definition::{Location, definition_at};
 pub use describe::{
     DepRef, RefSite, SymbolDescription, describe, describe_by_definition, describe_item_member,
 };
+pub use env_vars::all_env_var_names;
 pub use fixes::{Fix, FixKind, fixes_at};
 pub use grep::{GrepMode, GrepOptions, GrepResult, MatchAnnotation, TextMatch, grep, list_symbols};
 pub use listing::{

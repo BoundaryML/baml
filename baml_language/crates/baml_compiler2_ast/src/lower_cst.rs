@@ -61,29 +61,32 @@ enum TestRegistrationItem {
 ///
 /// All diagnostics (structural lowering issues, client validation,
 /// field-attr-in-wrong-position) are returned as `LoweringDiagnostic` variants.
-pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
+pub fn lower_file(
+    root: &SyntaxNode,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
     lower_file_with_file_id(root, baml_base::FileId::sentinel())
 }
 
 pub fn lower_file_with_file_id(
     root: &SyntaxNode,
     file_id: baml_base::FileId,
-) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
     let mut diags = Vec::new();
+    let mut env_var_refs = Vec::new();
     let mut items = Vec::new();
     let mut test_registrations: Vec<TestRegistrationItem> = Vec::new();
 
     for child in root.children() {
         match child.kind() {
             baml_compiler_syntax::SyntaxKind::FUNCTION_DEF => {
-                if let Some(func) = lower_function(&child, &mut diags) {
+                if let Some(func) = lower_function(&child, &mut diags, &mut env_var_refs) {
                     let companions = expand_companions(&func);
                     items.push(Item::Function(func));
                     items.extend(companions.into_iter().map(Item::Function));
                 }
             }
             baml_compiler_syntax::SyntaxKind::CLASS_DEF => {
-                if let Some(class) = lower_class(&child, &mut diags) {
+                if let Some(class) = lower_class(&child, &mut diags, &mut env_var_refs) {
                     items.push(Item::Class(class));
                 }
             }
@@ -98,7 +101,9 @@ pub fn lower_file_with_file_id(
                 }
             }
             baml_compiler_syntax::SyntaxKind::CLIENT_DEF => {
-                if let Some((let_item, companion)) = synthesize_client_items(&child, &mut diags) {
+                if let Some((let_item, companion)) =
+                    synthesize_client_items(&child, &mut diags, &mut env_var_refs)
+                {
                     items.push(let_item);
                     if let Some(func) = companion {
                         items.push(Item::Function(func));
@@ -131,7 +136,9 @@ pub fn lower_file_with_file_id(
                 }
             }
             baml_compiler_syntax::SyntaxKind::RETRY_POLICY_DEF => {
-                if let Some(let_item) = synthesize_retry_policy_let(&child, &mut diags) {
+                if let Some(let_item) =
+                    synthesize_retry_policy_let(&child, &mut diags, &mut env_var_refs)
+                {
                     items.push(let_item);
                 }
             }
@@ -142,7 +149,12 @@ pub fn lower_file_with_file_id(
     // Synthesize a per-file $init_test function for all collected test/testset registrations.
     // The file_id suffix ensures uniqueness when multiple files contain tests.
     if !test_registrations.is_empty() {
-        let init_fn = synthesize_init_test_function(&test_registrations, file_id, &mut diags);
+        let init_fn = synthesize_init_test_function(
+            &test_registrations,
+            file_id,
+            &mut diags,
+            &mut env_var_refs,
+        );
         items.push(Item::Function(init_fn));
     }
 
@@ -152,7 +164,7 @@ pub fn lower_file_with_file_id(
         diags.push(LoweringDiagnostic::FieldAttributeInTypePosition { attr_name, span });
     }
 
-    (items, diags)
+    (items, diags, env_var_refs)
 }
 
 /// Check if a just-lowered type expression contains `TypeExpr::Unknown` at the root.
@@ -170,7 +182,11 @@ fn check_unknown_type(
 
 // ── Per-item lowering ───────────────────────────────────────────
 
-fn lower_function(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<FunctionDef> {
+fn lower_function(
+    node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
+) -> Option<FunctionDef> {
     let func = ast::FunctionDef::cast(node.clone())?;
     let Some(name_token) = func.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
@@ -247,7 +263,8 @@ fn lower_function(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Opt
             (Some(FunctionBodyDef::Builtin(builtin_kind)), None)
         } else {
             let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
-            let (expr_body, source_map) = lower_expr_body::lower(&expr, &param_names, diags);
+            let (expr_body, source_map) =
+                lower_expr_body::lower(&expr, &param_names, diags, env_var_refs);
             (Some(FunctionBodyDef::Expr(expr_body, source_map)), None)
         }
     } else {
@@ -704,6 +721,7 @@ fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {
 fn lower_class(
     node: &SyntaxNode,
     diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> Option<crate::ast::ClassDef> {
     let class = ast::ClassDef::cast(node.clone())?;
     let Some(name_token) = class.name() else {
@@ -784,7 +802,7 @@ fn lower_class(
 
     let methods = class
         .methods()
-        .filter_map(|f| lower_function(f.syntax(), diags))
+        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
         .flat_map(|func| {
             let companions = expand_companions(&func);
             std::iter::once(func).chain(companions)
@@ -1070,6 +1088,7 @@ fn synthesize_init_test_function(
     registrations: &[TestRegistrationItem],
     file_id: baml_base::FileId,
     diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> FunctionDef {
     let fn_name = if file_id == baml_base::FileId::sentinel() {
         "$init_test".to_string()
@@ -1083,7 +1102,7 @@ fn synthesize_init_test_function(
     // Build statements: one per registration
     let mut stmt_ids: Vec<crate::ast::StmtId> = Vec::with_capacity(registrations.len());
     for reg in registrations {
-        let stmt_expr = synthesize_register_call(reg, &mut ctx, diags);
+        let stmt_expr = synthesize_register_call(reg, &mut ctx, diags, env_var_refs);
         stmt_ids.push(ctx.alloc_stmt(crate::ast::Stmt::Expr(stmt_expr), span));
     }
 
@@ -1097,8 +1116,9 @@ fn synthesize_init_test_function(
         span,
     );
 
-    let (body, source_map, finish_diags) = ctx.finish(Some(block_expr));
+    let (body, source_map, finish_diags, finish_env_refs) = ctx.finish(Some(block_expr));
     diags.extend(finish_diags);
+    env_var_refs.extend(finish_env_refs);
 
     // The single parameter: `registry: testing.TestCollector`
     let registry_param = Param {
@@ -1137,6 +1157,7 @@ fn synthesize_register_call(
     reg: &TestRegistrationItem,
     ctx: &mut lower_expr_body::InitTestContext,
     diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> ExprId {
     let span = text_size::TextRange::default();
     match reg {
@@ -1146,9 +1167,10 @@ fn synthesize_register_call(
             runner_element,
         } => {
             // Lower the test block body into a fresh ExprBody (lambda body)
-            let (lambda_body, lambda_source_map, lambda_diags) =
+            let (lambda_body, lambda_source_map, lambda_diags, lambda_env_refs) =
                 lower_expr_body::lower_block_node(body_node, &[Name::new("registry")]);
             diags.extend(lambda_diags);
+            env_var_refs.extend(lambda_env_refs);
 
             let lambda_def = FunctionDef {
                 name: Name::new("<test body>"),
@@ -1197,13 +1219,14 @@ fn synthesize_register_call(
             runner_element,
         } => {
             // Lower the testset body into a collector lambda using the full testset lowering.
-            let (collector_exprs, collector_source_map, collector_diags) =
+            let (collector_exprs, collector_source_map, collector_diags, collector_env_refs) =
                 lower_expr_body::lower_testset_block_node(
                     body_node,
                     &Name::new("testset"),
                     &[Name::new("registry")],
                 );
             diags.extend(collector_diags);
+            env_var_refs.extend(collector_env_refs);
 
             // Collector lambda parameter: `testset`
             let testset_param = Param {
@@ -1343,6 +1366,7 @@ fn lower_template_string(
 fn synthesize_retry_policy_let(
     node: &SyntaxNode,
     diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> Option<Item> {
     let rp = ast::RetryPolicyDef::cast(node.clone())?;
     let Some(name_token) = rp.name() else {
@@ -1383,7 +1407,11 @@ fn synthesize_retry_policy_let(
                 });
                 return None;
             };
-            let value = crate::lower_config_item::lower_config_value(&item, &mut alloc);
+            let value = crate::lower_config_item::lower_config_value_with_env_refs(
+                &item,
+                &mut alloc,
+                env_var_refs,
+            );
             Some((Name::new(key.text()), value))
         })
         .collect();
@@ -1433,6 +1461,7 @@ fn synthesize_retry_policy_let(
 fn synthesize_client_items(
     node: &SyntaxNode,
     diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> Option<(Item, Option<FunctionDef>)> {
     let client = ast::ClientDef::cast(node.clone())?;
     let Some(name_token) = client.name() else {
@@ -1500,6 +1529,7 @@ fn synthesize_client_items(
             &config_block,
             provider.as_ref(),
             diags,
+            env_var_refs,
         ))
     } else {
         None
@@ -1693,6 +1723,7 @@ fn synthesize_client_new_companion(
     config_block: &ast::ConfigBlock,
     provider: Option<&String>,
     diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> FunctionDef {
     use baml_base::Literal;
 
@@ -1771,7 +1802,11 @@ fn synthesize_client_new_companion(
                     continue;
                 };
                 let k = opt_key.text();
-                let val = crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                let val = crate::lower_config_item::lower_config_value_with_env_refs(
+                    &opt_item,
+                    &mut alloc,
+                    env_var_refs,
+                );
                 let is_null = opt_item.value_str().as_deref() == Some("null");
 
                 if values.contains_key(k) || provider_field_set.contains(k) {

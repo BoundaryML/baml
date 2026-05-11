@@ -533,6 +533,7 @@ impl BexMulitProject {
                 } else {
                     crate::bex_lsp::FunctionKind::Expr
                 },
+                origin: f.origin.into(),
                 capabilities: if f.is_llm {
                     Some(crate::bex_lsp::LlmCapabilities {
                         render_prompt: true,
@@ -966,6 +967,19 @@ impl super::BexLsp for BexMulitProject {
         self.get_bex_for_project(project_root)
     }
 
+    fn all_env_var_names(&self) -> Vec<String> {
+        let projects = self.projects.lock().unwrap();
+        let mut names = std::collections::BTreeSet::new();
+        for (_path, project) in projects.iter() {
+            let db_guard = project.project.db.lock().unwrap();
+            let db = db_guard.db();
+            for name in baml_lsp2_actions::all_env_var_names(db) {
+                names.insert(name);
+            }
+        }
+        names.into_iter().collect()
+    }
+
     fn request_playground_state(&self) {
         self.send_list_projects();
         let projects = self.projects.lock().unwrap();
@@ -1023,6 +1037,7 @@ impl super::BexLsp for BexMulitProject {
             workflow_memberships: vec![],
             source_expr_id: None,
             source_expr_candidates: vec![],
+            source_expr_function_name: None,
             test_name: None,
             cursor_offset: None,
         };

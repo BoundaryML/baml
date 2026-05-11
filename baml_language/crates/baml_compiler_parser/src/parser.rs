@@ -425,6 +425,17 @@ impl<'a> Parser<'a> {
         i
     }
 
+    fn skip_header_comment_at(&self, mut i: usize) -> usize {
+        if !self.is_header_comment_at(i) {
+            return i;
+        }
+
+        while i < self.tokens.len() && self.tokens[i].kind != TokenKind::Newline {
+            i += 1;
+        }
+        i
+    }
+
     /// Skip a parenthesized argument list starting at `(`, returning the index after it.
     fn skip_parenthesized_from(&self, mut i: usize) -> Option<usize> {
         i = self.skip_trivia_and_comments_from(i);
@@ -802,6 +813,23 @@ impl<'a> Parser<'a> {
             return false;
         }
         true
+    }
+
+    fn at_statement_recovery_boundary(&self) -> bool {
+        self.at_top_level_keyword_except_client()
+            || matches!(
+                self.current().map(|t| t.kind),
+                Some(
+                    TokenKind::Watch
+                        | TokenKind::Let
+                        | TokenKind::Return
+                        | TokenKind::While
+                        | TokenKind::For
+                        | TokenKind::Break
+                        | TokenKind::Continue
+                        | TokenKind::Throw
+                )
+            )
     }
 
     /// Expect a '>' token, but also accept '>>' and consume only one '>'.
@@ -2396,7 +2424,7 @@ impl<'a> Parser<'a> {
                 p.start_node(SyntaxKind::PARAMETER_LIST);
                 p.finish_node();
                 // Parse the body
-                p.parse_function_body();
+                p.parse_function_body(false);
                 return;
             }
 
@@ -2404,9 +2432,18 @@ impl<'a> Parser<'a> {
             p.parse_parameter_list();
 
             // Return type
+            let mut allow_llm_body = true;
             if p.eat(TokenKind::Arrow) {
+                if p.at(TokenKind::LBrace) {
+                    // The `{` belongs to the function body, not a return type.
+                    // Keep recovery in expression-body mode so `client` text
+                    // inside the broken body does not masquerade as an LLM
+                    // directive.
+                    allow_llm_body = false;
+                }
                 p.parse_type();
             } else {
+                allow_llm_body = false;
                 p.error_unexpected_token("return type (->)".to_string());
             }
 
@@ -2420,7 +2457,7 @@ impl<'a> Parser<'a> {
 
             // Body
             if p.at(TokenKind::LBrace) {
-                p.parse_function_body();
+                p.parse_function_body(allow_llm_body);
             } else {
                 p.error_unexpected_token("function body".to_string());
             }
@@ -2479,9 +2516,9 @@ impl<'a> Parser<'a> {
         });
     }
 
-    fn parse_function_body(&mut self) {
+    fn parse_function_body(&mut self, allow_llm_body: bool) {
         // Scan tokens to determine function type before parsing (single pass)
-        if self.looks_like_llm_function_body() {
+        if allow_llm_body && self.looks_like_llm_function_body() {
             self.parse_llm_function_body();
         } else {
             self.parse_expr_function_body();
@@ -2496,7 +2533,24 @@ impl<'a> Parser<'a> {
         let mut brace_depth = 0;
 
         while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
+            let new_i = self.skip_header_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
             let token = &self.tokens[i];
+            if self.is_basic_trivia(token.kind) {
+                i += 1;
+                continue;
+            }
+
             match token.kind {
                 TokenKind::LBrace => brace_depth += 1,
                 TokenKind::RBrace if brace_depth == 1 => break,
@@ -4640,12 +4694,19 @@ impl<'a> Parser<'a> {
 
             // Parse map entries
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.at_statement_recovery_boundary() {
+                    break;
+                }
+
                 // Check for valid entry start
                 if p.at(TokenKind::Word) || p.at(TokenKind::Quote) || p.at(TokenKind::Hash) {
                     p.parse_map_entry();
 
                     // Handle comma between entries
                     if !p.at(TokenKind::RBrace) {
+                        if p.at_statement_recovery_boundary() {
+                            break;
+                        }
                         if !p.eat(TokenKind::Comma) {
                             // Missing comma - error but try to continue
                             p.error_unexpected_token("',' or '}' after map entry".to_string());
@@ -4748,6 +4809,10 @@ impl<'a> Parser<'a> {
             }
 
             // Value - any expression (including nested maps)
+            if p.at_statement_recovery_boundary() {
+                p.error_unexpected_token("map value".to_string());
+                return;
+            }
             p.parse_expr();
         });
     }
@@ -4758,12 +4823,19 @@ impl<'a> Parser<'a> {
 
         // Parse fields until we hit the closing brace
         while !self.at(TokenKind::RBrace) && !self.at_end() {
+            if self.at_statement_recovery_boundary() {
+                break;
+            }
+
             // Check for spread element: ...expr
             if self.at(TokenKind::DotDotDot) {
                 self.parse_spread_element();
 
                 // Handle comma between elements
                 if !self.at(TokenKind::RBrace) {
+                    if self.at_statement_recovery_boundary() {
+                        break;
+                    }
                     if !self.eat(TokenKind::Comma) {
                         // Missing comma - error but try to continue
                         self.error_unexpected_token("',' or '}' after spread element".to_string());
@@ -4787,6 +4859,9 @@ impl<'a> Parser<'a> {
 
                 // Handle comma between fields
                 if !self.at(TokenKind::RBrace) {
+                    if self.at_statement_recovery_boundary() {
+                        break;
+                    }
                     if !self.eat(TokenKind::Comma) {
                         // Missing comma - error but try to continue
                         self.error_unexpected_token("',' or '}' after object field".to_string());
@@ -4841,6 +4916,10 @@ impl<'a> Parser<'a> {
             }
 
             // Field value - any expression (including nested constructors)
+            if p.at_statement_recovery_boundary() {
+                p.error_unexpected_token("field value".to_string());
+                return;
+            }
             p.parse_expr();
         });
     }
@@ -5732,6 +5811,35 @@ function Demo() -> string {{
     }
 
     #[test]
+    fn incomplete_map_field_value_stops_before_watch_let() {
+        let (root, _errors) = parse_source(
+            r#"
+function GuessGameAgent() -> string {
+  log.info({"famous_person_name":
+  watch let user_input = SimulateHumanGuess(history)
+  user_input
+}
+"#,
+        );
+
+        let map = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::MAP_LITERAL)
+            .expect("map literal should still be parsed");
+        assert!(
+            !map.text().to_string().contains("watch let"),
+            "unterminated map literal swallowed the following watched statement: {}",
+            map.text()
+        );
+
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::WATCH_LET),
+            "`watch let` should recover as its own statement"
+        );
+    }
+
+    #[test]
     fn parses_function_with_client_as_parameter_name() {
         // `client` is a keyword (KW_CLIENT); it must still be valid as a parameter name.
         let source = r#"
@@ -5775,6 +5883,51 @@ function f() -> int {
 
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn expression_body_header_comment_with_prompt_word_is_not_llm_body() {
+        let source = r#"
+function f() -> string {
+  //# Generate an image from the user prompt.
+  let value = "ok"
+  value
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn missing_return_type_body_with_client_word_is_not_llm_body() {
+        let source = r#"
+function Foo() -> {
+  client GPT4
+}
+"#;
+
+        let (root, _errors) = parse_source(source);
 
         let func = root
             .descendants()

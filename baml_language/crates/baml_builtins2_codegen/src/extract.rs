@@ -98,7 +98,7 @@ pub fn extract_native_builtins()
         let cst_root = SyntaxNode::new_root(green);
 
         // Lower CST → AST items.
-        let (items, diags) = baml_compiler2_ast::lower_file(&cst_root);
+        let (items, diags, _) = baml_compiler2_ast::lower_file(&cst_root);
         for ld in &diags {
             let d = ld.to_diagnostic(FileId::new(0));
             let location = d

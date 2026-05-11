@@ -1,0 +1,253 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function $init() -> null {
+    call $init_let_0
+    store_global user.OpenAIImageResponses
+    load_const null
+    return
+}
+
+function user.GenerateImage(prompt: string) -> image {
+    load_type image
+    load_global user.OpenAIImageResponses
+    load_const "GenerateImage"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.call_llm_function
+    return
+}
+
+function user.GenerateImage$build_request(prompt: string) -> baml.http.Request {
+    load_global user.OpenAIImageResponses
+    load_const "GenerateImage"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.GenerateImage$build_request_stream(prompt: string) -> baml.http.Request {
+    load_global user.OpenAIImageResponses
+    load_const "GenerateImage"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
+function user.GenerateImage$parse(json: string) -> image {
+    load_const "GenerateImage"
+    load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.GenerateImage$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<image, image> {
+    load_var sse
+    load_const "GenerateImage"
+    load_const null
+    call_indirect
+    return
+}
+
+function user.GenerateImage$render_prompt(prompt: string) -> baml.llm.PromptAst {
+    load_global user.OpenAIImageResponses
+    load_const "GenerateImage"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
+function user.GenerateImage$stream(prompt: string) -> baml.llm.Stream<image, image> {
+    load_global user.OpenAIImageResponses
+    load_const "GenerateImage"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
+}
+
+function user.GenerateImageSet(prompt: string) -> image[] {
+    load_type image[]
+    load_global user.OpenAIImageResponses
+    load_const "GenerateImageSet"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.call_llm_function
+    return
+}
+
+function user.GenerateImageSet$build_request(prompt: string) -> baml.http.Request {
+    load_global user.OpenAIImageResponses
+    load_const "GenerateImageSet"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.GenerateImageSet$build_request_stream(prompt: string) -> baml.http.Request {
+    load_global user.OpenAIImageResponses
+    load_const "GenerateImageSet"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
+function user.GenerateImageSet$parse(json: string) -> image[] {
+    load_const "GenerateImageSet"
+    load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.GenerateImageSet$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<image[], image[]> {
+    load_var sse
+    load_const "GenerateImageSet"
+    load_const null
+    call_indirect
+    return
+}
+
+function user.GenerateImageSet$render_prompt(prompt: string) -> baml.llm.PromptAst {
+    load_global user.OpenAIImageResponses
+    load_const "GenerateImageSet"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
+function user.GenerateImageSet$stream(prompt: string) -> baml.llm.Stream<image[], image[]> {
+    load_global user.OpenAIImageResponses
+    load_const "GenerateImageSet"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
+}
+
+function user.GenerateMixedImageNarrative(prompt: string) -> (image | string)[] {
+    load_type image | string[]
+    load_global user.OpenAIImageResponses
+    load_const "GenerateMixedImageNarrative"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.call_llm_function
+    return
+}
+
+function user.GenerateMixedImageNarrative$build_request(prompt: string) -> baml.http.Request {
+    load_global user.OpenAIImageResponses
+    load_const "GenerateMixedImageNarrative"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.GenerateMixedImageNarrative$build_request_stream(prompt: string) -> baml.http.Request {
+    load_global user.OpenAIImageResponses
+    load_const "GenerateMixedImageNarrative"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.build_request_stream
+    return
+}
+
+function user.GenerateMixedImageNarrative$parse(json: string) -> (image | string)[] {
+    load_const "GenerateMixedImageNarrative"
+    load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.GenerateMixedImageNarrative$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<(image | string)[], (image | string)[]> {
+    load_var sse
+    load_const "GenerateMixedImageNarrative"
+    load_const null
+    call_indirect
+    return
+}
+
+function user.GenerateMixedImageNarrative$render_prompt(prompt: string) -> baml.llm.PromptAst {
+    load_global user.OpenAIImageResponses
+    load_const "GenerateMixedImageNarrative"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
+function user.GenerateMixedImageNarrative$stream(prompt: string) -> baml.llm.Stream<(image | string)[], (image | string)[]> {
+    load_global user.OpenAIImageResponses
+    load_const "GenerateMixedImageNarrative"
+    load_var prompt
+    load_const "prompt"
+    alloc_map 1
+    call baml.llm.stream_llm_function
+    return
+}
+
+function user.OpenAIImageResponses$new() -> null {
+    load_const "OPENAI_API_KEY"
+    call baml.env.get_or_panic
+    store_var _2
+    alloc_instance baml.llm.PrimitiveClient
+    load_const "OpenAIImageResponses"
+    init_field .name
+    load_const "openai-responses"
+    init_field .provider
+    alloc_instance baml.llm.PrimitiveClientOptions
+    load_const "gpt-4.1"
+    init_field .model
+    load_const null
+    init_field .base_url
+    load_const null
+    init_field .allowed_role_metadata
+    load_const null
+    init_field .finish_reason_allow_list
+    load_const null
+    init_field .finish_reason_deny_list
+    load_const null
+    init_field .supports_streaming
+    load_const null
+    init_field .default_role
+    load_const null
+    init_field .allowed_roles
+    load_const null
+    init_field .remap_roles
+    load_var _2
+    init_field .api_key
+    load_const null
+    init_field .provider_options
+    load_const null
+    init_field .media_url_handler
+    alloc_map 0
+    init_field .headers
+    alloc_map 0
+    init_field .query_params
+    alloc_array 0
+    load_const "tools"
+    alloc_map 1
+    init_field .request_body
+    init_field .options
+    return
+}

@@ -59,26 +59,22 @@ function FooBar(arg) -> bar {
 //    │ Note: Error code: E0108
 // ───╯
 // Error: unresolved name: Bar
-//    ╭─[ functions_v2_invalid.baml:1:18 ]
+//    ╭─[ functions_v2_invalid.baml:2:10 ]
 //    │
-//  1 │ ╭─▶ function Foo() -> {
-//    ┆ ┆   
-//  4 │ ├─▶ }
-//    │ │       
-//    │ ╰─────── unresolved name: Bar
-//    │     
-//    │     Note: Error code: E0003
+//  2 │   client Bar
+//    │          ─┬─  
+//    │           ╰─── unresolved name: Bar
+//    │ 
+//    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: Bar
-//    ╭─[ functions_v2_invalid.baml:1:1 ]
+// Error: unresolved name: prompt
+//    ╭─[ functions_v2_invalid.baml:3:3 ]
 //    │
-//  1 │ ╭─▶ function Foo() -> {
-//    ┆ ┆   
-//  4 │ ├─▶ }
-//    │ │       
-//    │ ╰─────── unresolved name: Bar
-//    │     
-//    │     Note: Error code: E0003
+//  3 │   prompt #"fa"#
+//    │   ───┬──  
+//    │      ╰──── unresolved name: prompt
+//    │ 
+//    │ Note: Error code: E0003
 // ───╯
 // Error: unresolved type: bar
 //    ╭─[ functions_v2_invalid.baml:6:24 ]

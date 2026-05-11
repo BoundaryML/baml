@@ -65,7 +65,7 @@ pub fn collect_block_attrs(
     for file in project.files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
         let cst = baml_compiler_parser::syntax_tree(db, *file);
-        let (items, _) = ast::lower_file(&cst);
+        let (items, _, _) = ast::lower_file(&cst);
         for item in &items {
             let (name, item_attrs) = match item {
                 ast::Item::Class(c) => (&c.name, &c.attributes),
@@ -96,7 +96,7 @@ pub fn collect_alias_bodies(
     for file in project.files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
         let cst = baml_compiler_parser::syntax_tree(db, *file);
-        let (items, _) = ast::lower_file(&cst);
+        let (items, _, _) = ast::lower_file(&cst);
         for item in &items {
             if let ast::Item::TypeAlias(a) = item {
                 let ty = a
@@ -149,7 +149,7 @@ fn make_raw_attr_no_args(name: &str) -> ast::RawAttribute {
 #[salsa::tracked]
 pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems<'_> {
     let cst = baml_compiler_parser::syntax_tree(db, file);
-    let (items, _) = ast::lower_file(&cst);
+    let (items, _, _) = ast::lower_file(&cst);
 
     // Get HIR classification for the file's package (original types only)
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
@@ -479,14 +479,18 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
-    let (mut items, _) = ast::lower_file_with_file_id(&tree, file.file_id(db));
+    let (mut items, lowering_diags, env_var_refs) =
+        ast::lower_file_with_file_id(&tree, file.file_id(db));
 
     // Merge synthetic *$stream items
     let expansion = ppir_expansion_items(db, file);
     items.extend(expansion.items(db).iter().cloned());
 
     // Re-run HIR builder on merged items
-    baml_compiler2_hir::SemanticIndexBuilder::new(db, file).build(&items, file_range)
+    baml_compiler2_hir::SemanticIndexBuilder::new(db, file)
+        .with_lowering_diagnostics(lowering_diags)
+        .with_env_var_refs(env_var_refs)
+        .build(&items, file_range)
 }
 
 /// Canonical symbol contributions (original + *$stream types).

@@ -25,7 +25,11 @@ type WsOutMessage =
   | { type: 'callFunctionResult'; id: number; result: string }
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'envVarRequest'; id: number; variable: string }
+  | { type: 'processEnvVars'; vars: Record<string, string> }
+  | { type: 'envVarFromShell'; variable: string; value: string }
+  | { type: 'knownEnvVarNames'; names: string[] }
   | { type: 'inputRequest'; id: number; prompt: string | undefined; callId: number }
+  | { type: 'inputResolved'; id: number; callId: number }
   | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
   | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string; responseHeaders?: Record<string, string> }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: unknown | null }
@@ -39,7 +43,9 @@ type WsInMessage =
   | { type: 'callTestFunction'; id: number; project: string; generation: number; testName: string }
   | { type: 'expandTestSet'; project: string; generation: number; testsetName: string }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
-  | { type: 'inputResponse'; id: number; value: string }
+  | { type: 'inputResponse'; id: number; value: string; callId: number }
+  | { type: 'setEnvVar'; key: string; value: string }
+  | { type: 'deleteEnvVar'; key: string }
   | { type: 'requestState' }
   | { type: 'requestCollectTests'; project: string }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
@@ -147,6 +153,10 @@ export class WebSocketRuntimePort implements RuntimePort {
     };
   }
 
+  dispatchLocalMessage(msg: WorkerOutMessage): void {
+    this.deliver(msg);
+  }
+
   dispose(): void {
     this.disposed = true;
     if (this.reconnectTimer) {
@@ -188,9 +198,9 @@ export class WebSocketRuntimePort implements RuntimePort {
           variable: msg.variable,
         };
       case 'setEnvVar':
-        return null; // UI cache only — not sent to server
+        return { type: 'setEnvVar', key: msg.key, value: msg.value };
       case 'deleteEnvVar':
-        return null; // UI cache only — not sent to server
+        return { type: 'deleteEnvVar', key: msg.key };
       case 'selectProject':
         return null; // handled locally for now
       case 'filesChanged':
@@ -229,7 +239,7 @@ export class WebSocketRuntimePort implements RuntimePort {
           testsetName: msg.testsetName,
         };
       case 'inputResponse':
-        return { type: 'inputResponse', id: msg.id, value: msg.value };
+        return { type: 'inputResponse', id: msg.id, value: msg.value, callId: msg.callId };
       case 'clearHandles':
         return null; // handles live in the Rust process; no TS-side cleanup needed
       case 'dispose':
@@ -274,8 +284,16 @@ export class WebSocketRuntimePort implements RuntimePort {
         return { type: 'callFunctionError', id: raw.id, error: raw.error, cancelled: raw.cancelled };
       case 'envVarRequest':
         return { type: 'envVarRequest', id: raw.id, variable: raw.variable };
+      case 'processEnvVars':
+        return { type: 'processEnvVars', vars: raw.vars };
+      case 'envVarFromShell':
+        return { type: 'envVarFromShell', variable: raw.variable, value: raw.value };
+      case 'knownEnvVarNames':
+        return { type: 'knownEnvVarNames', names: raw.names };
       case 'inputRequest':
         return { type: 'inputRequest', id: raw.id, prompt: raw.prompt, callId: raw.callId };
+      case 'inputResolved':
+        return { type: 'inputResolved', id: raw.id, callId: raw.callId };
       case 'fetchLogNew':
         return {
           type: 'fetchLogNew',
