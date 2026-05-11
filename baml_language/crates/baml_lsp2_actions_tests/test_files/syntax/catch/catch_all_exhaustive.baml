@@ -11,7 +11,7 @@ function MayFailIntOrString(x: int) -> string {
 // catch_all with only string arm — int is unhandled → E0094
 function PartialCatchAll(x: int) -> string {
   MayFailIntOrString(x) catch_all (e) {
-    _: string => "caught string"
+    string => "caught string"
   }
 }
 

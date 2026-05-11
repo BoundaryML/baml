@@ -87,7 +87,7 @@ pub fn lower_type_expr_in_ns(
             if let Some(def) = resolved {
                 let short = segments.last().expect("non-empty path");
                 match def {
-                    Definition::Class(class_loc) => {
+                    Definition::Class(_) => {
                         // Collect and lower generic args, storing them in Ty::Class.
                         let lowered_args: Vec<Ty> = generic_args
                             .iter()
@@ -103,21 +103,11 @@ pub fn lower_type_expr_in_ns(
                             })
                             .collect();
 
-                        // Validate arity against the class's declared generic params.
-                        let file = class_loc.file(db);
-                        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-                        let class_data = &item_tree[class_loc.id(db)];
-                        let expected = class_data.generic_params.len();
-                        let got = lowered_args.len();
-
-                        if got != expected {
-                            diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
-                                class_name: short.clone(),
-                                expected,
-                                got,
-                            });
-                        }
-
+                        // Class arity mismatches are not flagged here — downstream
+                        // checks (pattern subtype check, generic substitution,
+                        // assignment checks) already produce a clearer diagnostic
+                        // (e.g. `expected Box<int>, got Box`) when the arity
+                        // mismatch actually matters at the use site.
                         Ty::Class(qualify_def(db, def, short), lowered_args, TyAttr::default())
                     }
                     Definition::Enum(_) => {

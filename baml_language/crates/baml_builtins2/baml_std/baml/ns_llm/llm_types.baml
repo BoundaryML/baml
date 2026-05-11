@@ -481,7 +481,7 @@ class Stream<T, S> {
   function next(self) -> S | root.stream.StreamFinished {
     while (true) {
       let next = match (self._sse.next()) {
-        _: null => {
+        null => {
           return root.stream.StreamFinished {};
         }
         let next: string => next,
@@ -495,7 +495,7 @@ class Stream<T, S> {
       let content = self._acc.content();
       let parsed: S | root.stream.StreamNoYield = __sap_parse_partial<T, S>(content, self._cache);
       match (parsed) {
-        _: root.stream.StreamNoYield => {
+        root.stream.StreamNoYield => {
           continue;
         }
         let parsed: S => {
@@ -511,7 +511,7 @@ class Stream<T, S> {
   function final(self) -> T {
     while (!self._acc.is_done()) {
       let next = match (self._sse.next()) {
-        _: null => {
+        null => {
           break;
         }
         let next: string => next,

@@ -2,67 +2,28 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.alias_intersection_in_match_arm(v: int | string) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int | string // v // param
-    let _2: bool
-    let _3: bool
-    let _4: string | bool // s
-
-    bb0: {
-        _2 = is_type(copy _1, string);
-        branch copy _2 -> [bb3, bb1];
-    }
-
-    bb1: {
-        _3 = is_type(copy _1, bool);
-        branch copy _3 -> [bb3, bb2];
-    }
-
-    bb2: {
-        _0 = const 0_i64;
-        goto -> bb4;
-    }
-
-    bb3: {
-        _4 = copy _1;
-        _0 = call const fn baml.String.length(copy _4) -> [bb4];
-    }
-
-    bb4: {
-        return;
-    }
-}
-
 fn user.bare_type_arm(v: int | string) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int | string // v // param
     let _2: bool
-    let _3: bool
 
     bb0: {
         _2 = is_type(copy _1, int);
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, string);
-        branch copy _3 -> [bb2, bb4];
+        _0 = const 2_i64;
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const 2_i64;
-        goto -> bb4;
+        _0 = const 1_i64;
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const 1_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -72,29 +33,23 @@ fn user.call_either_int_caller(cb: (int) -> int throws never | (bool) -> int thr
     let _0: int // _0 // return
     let _1: (int) -> int throws never | (bool) -> int throws never // cb // param
     let _2: bool
-    let _3: bool
 
     bb0: {
         _2 = is_type(copy _1, (int) -> int throws never);
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, (bool) -> int throws never);
-        branch copy _3 -> [bb2, bb4];
+        _0 = const 2_i64;
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const 2_i64;
-        goto -> bb4;
+        _0 = const 1_i64;
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const 1_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -103,22 +58,16 @@ fn user.call_int_callback(cb: (int) -> int throws never) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: (int) -> int throws never // cb // param
-    let _2: bool
-    let _3: (int) -> int throws never // f
-    let _4: (int) -> int throws never
+    let _2: (int) -> int throws never // f
+    let _3: (int) -> int throws never
 
     bb0: {
-        _2 = is_type(copy _1, (int) -> int throws never);
-        branch copy _2 -> [bb1, bb2];
+        _2 = copy _1;
+        _3 = copy _2;
+        _0 = call copy _3(const 10_i64) -> [bb1];
     }
 
     bb1: {
-        _3 = copy _1;
-        _4 = copy _3;
-        _0 = call copy _4(const 10_i64) -> [bb2];
-    }
-
-    bb2: {
         return;
     }
 }
@@ -131,36 +80,30 @@ fn user.call_with_callback(runner: ((int) -> int throws never) -> int throws nev
     let _3: ((int) -> int throws never) -> int throws never // r
     let _4: ((int) -> int throws never) -> int throws never
     let _5: (int) -> int throws never
-    let _6: bool
-    let _7: ((string) -> int throws never) -> int throws never // r
-    let _8: ((string) -> int throws never) -> int throws never
-    let _9: (string) -> int throws never
+    let _6: ((string) -> int throws never) -> int throws never // r
+    let _7: ((string) -> int throws never) -> int throws never
+    let _8: (string) -> int throws never
 
     bb0: {
         _2 = is_type(copy _1, ((int) -> int throws never) -> int throws never);
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _6 = is_type(copy _1, ((string) -> int throws never) -> int throws never);
-        branch copy _6 -> [bb2, bb4];
+        _6 = copy _1;
+        _7 = copy _6;
+        _8 = make_closure lambda[1]();
+        _0 = call copy _7(copy _8) -> [bb3];
     }
 
     bb2: {
-        _7 = copy _1;
-        _8 = copy _7;
-        _9 = make_closure lambda[1]();
-        _0 = call copy _8(copy _9) -> [bb4];
-    }
-
-    bb3: {
         _3 = copy _1;
         _4 = copy _3;
         _5 = make_closure lambda[0]();
-        _0 = call copy _4(copy _5) -> [bb4];
+        _0 = call copy _4(copy _5) -> [bb3];
     }
 
-    bb4: {
+    bb3: {
         return;
     }
 }
@@ -338,29 +281,6 @@ fn user.chain_narrow_then_wildcard(v: int | string | bool) -> int {
     }
 }
 
-fn user.deeply_parenthesized_binding(v: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // v // param
-    let _2: bool
-    let _3: int // x
-
-    bb0: {
-        _2 = is_type(copy _1, int);
-        branch copy _2 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = copy _1;
-        _0 = copy _3;
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
 fn user.dispatch_callback(cb: (int) -> int throws never | (string) -> string throws never) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -368,30 +288,24 @@ fn user.dispatch_callback(cb: (int) -> int throws never | (string) -> string thr
     let _2: bool
     let _3: (int) -> int throws never // f
     let _4: (int) -> int throws never
-    let _5: bool
 
     bb0: {
         _2 = is_type(copy _1, (int) -> int throws never);
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, (string) -> string throws never);
-        branch copy _5 -> [bb2, bb4];
+        _0 = const 0_i64;
+        goto -> bb3;
     }
 
     bb2: {
-        _0 = const 0_i64;
-        goto -> bb4;
+        _3 = copy _1;
+        _4 = copy _3;
+        _0 = call copy _4(const 0_i64) -> [bb3];
     }
 
     bb3: {
-        _3 = copy _1;
-        _4 = copy _3;
-        _0 = call copy _4(const 0_i64) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }
@@ -422,27 +336,44 @@ fn user.dispatch_with_wildcard(cb: (int) -> int throws never | (string) -> int t
     }
 }
 
+fn user.fn_pattern(cb: (int) -> int throws never) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int) -> int throws never // cb // param
+    let _2: (int) -> int throws never // f
+    let _3: (int) -> int throws never
+
+    bb0: {
+        _2 = copy _1;
+        _3 = copy _2;
+        _0 = call copy _3(const 0_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: (int) -> int | string throws never // cb // param
     let _2: bool
     let _3: bool
-    let _4: bool
 
     bb0: {
         _2 = is_type(copy _1, (int) -> int throws never);
-        branch copy _2 -> [bb1, bb4];
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, (int) -> int throws never);
-        branch copy _3 -> [bb3, bb2];
+        _3 = is_type(copy _1, string);
+        branch copy _3 -> [bb2, bb4];
     }
 
     bb2: {
-        _4 = is_type(copy _1, string);
-        branch copy _4 -> [bb3, bb4];
+        _0 = const 1_i64;
+        goto -> bb4;
     }
 
     bb3: {
@@ -455,7 +386,7 @@ fn user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
     }
 }
 
-fn user.for_let_chain_widening(items: int[]) -> int {
+fn user.for_let_ascription(items: int[]) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int[] // items // param
@@ -465,7 +396,7 @@ fn user.for_let_chain_widening(items: int[]) -> int {
     let _5: int
     let _6: bool
     let _7: int
-    let _8: int // n
+    let _8: int | string // n
 
     bb0: {
         _2 = const 0_i64;
@@ -558,54 +489,6 @@ fn user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     }
 }
 
-fn user.for_let_multi_chain(items: (int | string | bool)[]) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: (int | string | bool)[] // items // param
-    let _2: int // count
-    let _3: (int | string | bool)[]
-    let _4: int // __for_idx
-    let _5: int
-    let _6: bool
-    let _7: int | string | bool
-    let _8: int // v
-
-    bb0: {
-        _2 = const 0_i64;
-        _3 = copy _1;
-        _4 = const 0_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        _5 = len(_3);
-        _6 = copy _4 < copy _5;
-        branch copy _6 -> [bb4, bb2];
-    }
-
-    bb2: {
-        _0 = copy _2;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-
-    bb4: {
-        _7 = copy _3[_4];
-        fresh_cell(_8);
-        _8 = copy _7;
-        _2 = copy _2 + const 1_i64;
-        goto -> bb5;
-    }
-
-    bb5: {
-        _4 = copy _4 + const 1_i64;
-        goto -> bb1;
-    }
-}
-
 fn user.for_let_with_narrow(items: int[]) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -656,6 +539,33 @@ fn user.for_let_with_narrow(items: int[]) -> int {
     }
 }
 
+fn user.PatternBucket.from_json(j: baml.json.json) -> PatternBucket {
+    // Locals:
+    let _0: PatternBucket // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: int[]
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "values") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(int[]);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = user.PatternBucket { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
 fn user.AppError.from_json(j: baml.json.json) -> AppError {
     // Locals:
     let _0: AppError // _0 // return
@@ -683,260 +593,37 @@ fn user.AppError.from_json(j: baml.json.json) -> AppError {
     }
 }
 
+fn user.PatternMatrix.from_json(j: baml.json.json) -> PatternMatrix {
+    // Locals:
+    let _0: PatternMatrix // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: int[][]
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "rows") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(int[][]);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = user.PatternMatrix { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
 fn user.int_widens_to_alias(v: int | float) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int | float // v // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
-
-    bb0: {
-        _2 = is_type(copy _1, int);
-        branch copy _2 -> [bb1, bb4];
-    }
-
-    bb1: {
-        _3 = is_type(copy _1, int);
-        branch copy _3 -> [bb3, bb2];
-    }
-
-    bb2: {
-        _4 = is_type(copy _1, float);
-        branch copy _4 -> [bb3, bb4];
-    }
-
-    bb3: {
-        _0 = const 1_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.int_widens_to_optional(v: int?) -> int? {
-    // Locals:
-    let _0: int? // _0 // return
-    let _1: int? // v // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
-    let _5: int? // n
-
-    bb0: {
-        _2 = is_type(copy _1, int);
-        branch copy _2 -> [bb1, bb4];
-    }
-
-    bb1: {
-        _3 = copy _1 == const null;
-        branch copy _3 -> [bb3, bb2];
-    }
-
-    bb2: {
-        _4 = is_type(copy _1, int);
-        branch copy _4 -> [bb3, bb4];
-    }
-
-    bb3: {
-        _5 = copy _1;
-        _0 = copy _5;
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.int_widens_to_union(v: int | string) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int | string // v // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
-
-    bb0: {
-        _2 = is_type(copy _1, int);
-        branch copy _2 -> [bb1, bb4];
-    }
-
-    bb1: {
-        _3 = is_type(copy _1, int);
-        branch copy _3 -> [bb3, bb2];
-    }
-
-    bb2: {
-        _4 = is_type(copy _1, string);
-        branch copy _4 -> [bb3, bb4];
-    }
-
-    bb3: {
-        _0 = const 1_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.let_fn_return_widen() -> int | string {
-    // Locals:
-    let _0: int | string // _0 // return
-    let _1: (int) -> int | string throws never // f
-    let _2: (int) -> int | string throws never
-
-    bb0: {
-        _1 = make_closure lambda[0]();
-        _2 = copy _1;
-        _0 = call copy _2(const 0_i64) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(let_fn_return_widen, 0)>(x: int) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: int // x // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.let_four_step_widen() -> int {
-    // Locals:
-    let _0: int // _0 // return
-
-    bb0: {
-        _0 = const 1_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.let_list_widen(items: int[]) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int[] // items // param
-    let _2: (int | string)[] // xs
-
-    bb0: {
-        _2 = copy _1;
-        _0 = call const fn baml.Array.length(copy _2) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.let_literal_to_nullable() -> int {
-    // Locals:
-    let _0: int // _0 // return
-
-    bb0: {
-        _0 = const 1_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.let_literal_to_primitive() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // x
-
-    bb0: {
-        _1 = const 1_i64;
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.let_nested_paren_union_chain(items: (int | string)[]) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: (int | string)[] // items // param
-
-    bb0: {
-        _0 = const 1_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.let_string_literal_widening() -> int {
-    // Locals:
-    let _0: int // _0 // return
-
-    bb0: {
-        _0 = const 1_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.let_three_step_widen() -> int {
-    // Locals:
-    let _0: int // _0 // return
-
-    bb0: {
-        _0 = const 1_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.let_widen_to_nullable_union() -> int {
-    // Locals:
-    let _0: int // _0 // return
-
-    bb0: {
-        _0 = const 1_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.let_wildcard_chain() -> int {
-    // Locals:
-    let _0: int // _0 // return
 
     bb0: {
         _0 = const 1_i64;
@@ -952,27 +639,15 @@ fn user.literal_widens_to_int(v: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // v // param
-    let _2: bool
-    let _3: bool
-    let _4: int // n
+    let _2: int // n
 
     bb0: {
-        _2 = is_type(copy _1, 1);
-        branch copy _2 -> [bb1, bb3];
+        _2 = copy _1;
+        _0 = copy _2;
+        goto -> bb1;
     }
 
     bb1: {
-        _3 = is_type(copy _1, int);
-        branch copy _3 -> [bb2, bb3];
-    }
-
-    bb2: {
-        _4 = copy _1;
-        _0 = copy _4;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -981,48 +656,13 @@ fn user.match_nested_paren_union(v: (int | string)[]) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: (int | string)[] // v // param
-    let _2: bool
 
     bb0: {
-        _2 = is_type(copy _1, (int | string)[]);
-        branch copy _2 -> [bb1, bb2];
-    }
-
-    bb1: {
         _0 = const 1_i64;
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.multi_narrow_chain(v: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // v // param
-    let _2: bool
-    let _3: bool
-    let _4: int // n
-
-    bb0: {
-        _2 = is_type(copy _1, int);
-        branch copy _2 -> [bb1, bb3];
+        goto -> bb1;
     }
 
     bb1: {
-        _3 = is_type(copy _1, int);
-        branch copy _3 -> [bb2, bb3];
-    }
-
-    bb2: {
-        _4 = copy _1;
-        _0 = copy _4;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -1045,25 +685,13 @@ fn user.nested_paren_union_array_optional(v: (int | string)[]?) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: (int | string)[]? // v // param
-    let _2: bool
-    let _3: bool
 
     bb0: {
-        _2 = copy _1 == const null;
-        branch copy _2 -> [bb2, bb1];
+        _0 = const 1_i64;
+        goto -> bb1;
     }
 
     bb1: {
-        _3 = is_type(copy _1, (int | string)[]);
-        branch copy _3 -> [bb2, bb3];
-    }
-
-    bb2: {
-        _0 = const 1_i64;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -1186,29 +814,6 @@ fn user.or_with_repeated_typed_binding(v: int | string) -> int {
     }
 }
 
-fn user.paren_atom_outer_chain(v: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // v // param
-    let _2: bool
-    let _3: int // x
-
-    bb0: {
-        _2 = is_type(copy _1, int);
-        branch copy _2 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = copy _1;
-        _0 = copy _3;
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
 fn user.paren_chains_in_or(v: int) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -1241,71 +846,6 @@ fn user.paren_chains_in_or(v: int) -> int {
     }
 }
 
-fn user.paren_fn_pattern_with_chain(cb: (int) -> int throws never) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: (int) -> int throws never // cb // param
-    let _2: bool
-    let _3: bool
-    let _4: (int) -> int throws never // f
-    let _5: (int) -> int throws never
-
-    bb0: {
-        _2 = is_type(copy _1, (int) -> int throws never);
-        branch copy _2 -> [bb1, bb3];
-    }
-
-    bb1: {
-        _3 = is_type(copy _1, (int) -> int throws never);
-        branch copy _3 -> [bb2, bb3];
-    }
-
-    bb2: {
-        _4 = copy _1;
-        _5 = copy _4;
-        _0 = call copy _5(const 0_i64) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.paren_union_outer_chain(v: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // v // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
-    let _5: int // x
-
-    bb0: {
-        _2 = is_type(copy _1, int);
-        branch copy _2 -> [bb2, bb1];
-    }
-
-    bb1: {
-        _3 = is_type(copy _1, int);
-        branch copy _3 -> [bb2, bb4];
-    }
-
-    bb2: {
-        _4 = is_type(copy _1, int);
-        branch copy _4 -> [bb3, bb4];
-    }
-
-    bb3: {
-        _5 = copy _1;
-        _0 = copy _5;
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
 fn user.risky_error(mode: int) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -1325,6 +865,30 @@ fn user.risky_error(mode: int) -> int {
     bb2: {
         _3 = user.AppError { const 1_i64 };
         throw copy _3;
+    }
+}
+
+fn user.PatternBucket.to_json(self: PatternBucket) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: PatternBucket // self // param
+    let _2: baml.json.json
+    let _3: int[]
+    let _4: PatternBucket
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.Array.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "values": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
     }
 }
 
@@ -1352,6 +916,30 @@ fn user.AppError.to_json(self: AppError) -> baml.json.json {
     }
 }
 
+fn user.PatternMatrix.to_json(self: PatternMatrix) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: PatternMatrix // self // param
+    let _2: baml.json.json
+    let _3: int[][]
+    let _4: PatternMatrix
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.Array.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "rows": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.unwrap_curried(f: (int) -> ((int) -> ((int) -> int throws never) throws never) throws never | (string) -> ((string) -> string throws never) throws never) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -1361,38 +949,32 @@ fn user.unwrap_curried(f: (int) -> ((int) -> ((int) -> int throws never) throws 
     let _4: (int) -> int throws never
     let _5: (int) -> ((int) -> int throws never) throws never
     let _6: (int) -> ((int) -> ((int) -> int throws never) throws never) throws never
-    let _7: bool
 
     bb0: {
         _2 = is_type(copy _1, (int) -> ((int) -> ((int) -> int throws never) throws never) throws never);
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _7 = is_type(copy _1, (string) -> ((string) -> string throws never) throws never);
-        branch copy _7 -> [bb2, bb6];
+        _0 = const 0_i64;
+        goto -> bb5;
     }
 
     bb2: {
-        _0 = const 0_i64;
-        goto -> bb6;
+        _3 = copy _1;
+        _6 = copy _3;
+        _5 = call copy _6(const 1_i64) -> [bb3];
     }
 
     bb3: {
-        _3 = copy _1;
-        _6 = copy _3;
-        _5 = call copy _6(const 1_i64) -> [bb4];
+        _4 = call copy _5(const 2_i64) -> [bb4];
     }
 
     bb4: {
-        _4 = call copy _5(const 2_i64) -> [bb5];
+        _0 = call copy _4(const 3_i64) -> [bb5];
     }
 
     bb5: {
-        _0 = call copy _4(const 3_i64) -> [bb6];
-    }
-
-    bb6: {
         return;
     }
 }
@@ -1404,33 +986,27 @@ fn user.unwrap_typed(cb: (int) -> void throws never | (string) -> void throws ne
     let _2: bool
     let _3: (int) -> void throws never // f
     let _4: (int) -> void throws never
-    let _5: bool
-    let _6: (string) -> void throws never // f
-    let _7: (string) -> void throws never
+    let _5: (string) -> void throws never // f
+    let _6: (string) -> void throws never
 
     bb0: {
         _2 = is_type(copy _1, (int) -> void throws never);
-        branch copy _2 -> [bb3, bb1];
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, (string) -> void throws never);
-        branch copy _5 -> [bb2, bb4];
+        _5 = copy _1;
+        _6 = copy _5;
+        _0 = call copy _6(const "") -> [bb3];
     }
 
     bb2: {
-        _6 = copy _1;
-        _7 = copy _6;
-        _0 = call copy _7(const "") -> [bb4];
+        _3 = copy _1;
+        _4 = copy _3;
+        _0 = call copy _4(const 0_i64) -> [bb3];
     }
 
     bb3: {
-        _3 = copy _1;
-        _4 = copy _3;
-        _0 = call copy _4(const 0_i64) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }

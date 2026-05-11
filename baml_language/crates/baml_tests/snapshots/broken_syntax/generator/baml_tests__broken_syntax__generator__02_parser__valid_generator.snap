@@ -22,8 +22,7 @@ SOURCE_FILE
         CONFIG_VALUE
           STRING_LITERAL "../python"
             QUOTE """
-            DOT "."
-            DOT "."
+            DOT_DOT ".."
             SLASH "/"
             WORD "python"
             QUOTE """
@@ -58,8 +57,7 @@ SOURCE_FILE
         CONFIG_VALUE
           STRING_LITERAL "../typescript"
             QUOTE """
-            DOT "."
-            DOT "."
+            DOT_DOT ".."
             SLASH "/"
             WORD "typescript"
             QUOTE """

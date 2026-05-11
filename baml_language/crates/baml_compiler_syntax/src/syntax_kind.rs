@@ -65,6 +65,7 @@ pub enum SyntaxKind {
     COMMA,             // ,
     SEMICOLON,         // ;
     DOT_DOT_DOT,       // ...
+    DOT_DOT,           // ..
     DOT,               // .
     DOLLAR,            // $
     ARROW,             // ->
@@ -263,6 +264,7 @@ pub enum SyntaxKind {
     //   UNION       := ATOM ('|' ATOM)*
     //   ATOM        := BINDING_PATTERN
     //                | DESTRUCTURE_PATTERN
+    //                | ARRAY_PATTERN
     //                | TYPE_PATTERN
     //                | PAREN_PATTERN
     //
@@ -280,6 +282,10 @@ pub enum SyntaxKind {
     DESTRUCTURE_PATTERN,
     /// `WORD` (shorthand) | `WORD ':' PATTERN` (rename / sub-pattern).
     FIELD_PATTERN,
+    /// `'[' array_pattern_element (',' array_pattern_element)* ']'`.
+    ARRAY_PATTERN,
+    /// `PATTERN` or `'..' PATTERN?`.
+    ARRAY_PATTERN_ELEMENT,
     /// Bare type expression as a pattern (literals, paths, generics, arrays, …).
     /// Does NOT consume `|` — that belongs to `UNION_PATTERN` at the pattern level.
     TYPE_PATTERN,

@@ -12,6 +12,10 @@ class MatchFailure {
     reason: string,
 }
 
+class ArrayPatternTriviaBox {
+    values: int[],
+}
+
 enum MatchStatus {
     Active,
     Inactive,
@@ -347,13 +351,6 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
         _ => "other",
     }
 
-    // ===== Trivia inside chain narrows (block comments around `:`) =====
-    match (x) {
-        let n /* b name trailing */: /* c colon trailing */ /* d link2 leading */ int /* e link2 trailing */: /* f colon2 trailing */ /* g link3 leading */ int | string => {
-            n + 1
-        },
-    }
-
     // ===== Trivia between Or-pattern alternatives (block comments around `|`) =====
     match (x) {
         /* 1 arm leading */
@@ -362,27 +359,6 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
         {
             x
         },
-    }
-
-    // ===== Multi-link chain in arm with comments at every join =====
-    match (x) {
-        let n /* before colon-1 */: /* after colon-1 */ 1 /* between */: /* before colon-2 */ int /* before colon-3 */: /* after colon-3 */ int | string => {
-            0
-        },
-    }
-
-    // ===== Nested Or wrapping a chain, with trivia at boundaries =====
-    match (x) {
-        (/* outer paren leading */(let x /* inner1 name */: /* inner1 colon */ int)
-            |/* between branches */(let x /* inner2 name */: /* inner2 colon */ int)) =>
-        {
-            x
-        },
-    }
-
-    // ===== Wildcard chain narrow with trivia =====
-    match (x) {
-        _ /* underscore trailing */: /* colon trailing */ int => 0,
     }
 
     // ===== Bare type union arm with trivia between members =====

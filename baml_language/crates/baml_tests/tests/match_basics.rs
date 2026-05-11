@@ -71,13 +71,8 @@ async fn match_catch_all_with_variable() {
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 42
-        is_type int
-        pop_jump_if_false L0
-        load_const 42
         load_const 1
-        add_int
-
-      L0:
+        bin_op +
         return
     }
     ");
@@ -1031,7 +1026,7 @@ async fn match_string_literal_with_typed_fallback() {
             match (s) {
                 "ok" => 200,
                 "error" => 500,
-                _: string => 0
+                string => 0
             }
         }
         function main() -> int {
@@ -1056,9 +1051,6 @@ async fn match_string_literal_with_typed_fallback() {
         jump L2
 
       L1:
-        load_var s
-        is_type string
-        pop_jump_if_false L4
         load_const 0
         jump L4
 
@@ -1757,9 +1749,6 @@ async fn match_optional_null_pattern() {
         jump L1
 
       L0:
-        load_var x
-        is_type int
-        pop_jump_if_false L2
         load_const "some"
         jump L2
 
@@ -1808,9 +1797,6 @@ async fn match_optional_value_pattern() {
         jump L1
 
       L0:
-        load_var x
-        is_type int
-        pop_jump_if_false L2
         load_const "some"
         jump L2
 
@@ -1867,9 +1853,6 @@ async fn match_optional_with_literal_and_typed() {
         jump L2
 
       L1:
-        load_var x
-        is_type int
-        pop_jump_if_false L4
         load_const "other"
         jump L4
 
@@ -2246,14 +2229,7 @@ async fn match_mixed_instanceof_and_literal() {
         alloc_instance user.Result
         load_const 200
         init_field .code
-        store_var x
-        load_var x
-        is_type Result
-        pop_jump_if_false L0
-        load_var x
         load_field .code
-
-      L0:
         return
     }
     ");

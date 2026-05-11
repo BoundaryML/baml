@@ -26,14 +26,14 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let x"
-                KW_LET "let"
-                WORD "x"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "x"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int"
-                  WORD "int"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR

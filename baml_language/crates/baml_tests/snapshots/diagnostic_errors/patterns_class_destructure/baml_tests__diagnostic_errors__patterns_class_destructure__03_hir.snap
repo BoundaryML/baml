@@ -26,8 +26,8 @@ class user.SameNameOuter {
   field: user.SameNameInner
   other: user.SameNameInner
 }
-function user.class_destructure_chain_binding_middle_link_is_invalid(boxed: user.Box) -> int  [expr] {
-  { let Box { value: value }: alias: user.Box = boxed } value Add alias.value
+function user.class_destructure_box(boxed: user.Box) -> int  [expr] {
+  { let Box<int> { value: value } = boxed } value
 }
 function user.class_destructure_duplicate_binding_name_across_fields() -> int  [expr] {
   { let Person { age: age, flexible_age: age } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } 0
@@ -41,9 +41,6 @@ function user.class_destructure_duplicate_field_key_with_wildcards() -> int  [ex
 function user.class_destructure_field_pattern_type_mismatch() -> int  [expr] {
   {  } match (user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } }) { Person { age: string } => 1, _ => 0 }
 }
-function user.class_destructure_formatter_deep_chain_trivia() -> int  [expr] {
-  { let input = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } }; let Person { address: addr_alias: Address { zip: zip_alias }: user.Address } = input } zip_alias
-}
 function user.class_destructure_formatter_empty_and_trailing_comma_trivia() -> int  [expr] {
   { let input = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } }; let Person {  } = input } match (input) { Person { age: years } => years }
 }
@@ -51,7 +48,7 @@ function user.class_destructure_formatter_trivia_preserved() -> int  [expr] {
   { let input = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } }; let Person { age: years, address: Address { zip: zip } } = input } years Add zip
 }
 function user.class_destructure_invalid_chain_type() -> int  [expr] {
-  { let Person { age: age }: user.Address = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } age
+  { let Person { age: age } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } age
 }
 function user.class_destructure_or_pattern_must_bind_same_names(v: user.Person | int) -> int  [expr] {
   {  } match (v) { Person { age: age } | int => age }
@@ -96,7 +93,10 @@ function user.from_json(j: baml.json.json) -> user.OptionalPerson  [expr] {
   user.OptionalPerson { age: baml.json.from_json(baml.json.field(j, "age")) }
 }
 function user.generic_class_destructure_or_pattern_same_binding_conflicting_types(v: user.Box | user.Box) -> int  [expr] {
-  {  } match (v) { Box { value: value }: user.Box | Box { value: value }: user.Box => 1 }
+  {  } match (v) { Box<int> { value: value } | Box<string> { value: value } => 1 }
+}
+function user.generic_class_destructure_requires_type_args(boxed: user.Box) -> int  [expr] {
+  { let Box { value: value } = boxed } value
 }
 function user.generic_class_type_pattern_in_chain_requires_type_args(boxed: user.Box) -> int  [expr] {
   {  } match (boxed) { value: user.Box => 1 }
@@ -114,7 +114,7 @@ function user.let_class_field_type_narrower_than_field_is_refutable() -> int  [e
   { let Person { flexible_age: int } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } 1
 }
 function user.let_generic_class_field_type_narrower_than_substituted_field_is_refutable() -> int  [expr] {
-  { let boxed: user.Box = user.Box { value: "ready" }; let Box { value: int } = boxed } 1
+  { let boxed: user.Box = user.Box { value: "ready" }; let Box<string> { value: int } = boxed } 1
 }
 function user.let_optional_class_field_narrower_than_field_is_refutable() -> int  [expr] {
   { let OptionalPerson { age: int } = user.OptionalPerson { age: 1 } } 1
@@ -141,7 +141,7 @@ function user.nested_class_field_type_narrower_than_field_is_refutable() -> int 
   { let Person { address: Address { zip: 1 } } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } 1
 }
 function user.nested_generic_class_destructure_duplicate_binding_name() -> int  [expr] {
-  { let boxed: user.Box = user.Box { value: user.SameNameInner { field: 1 } }; let Box { value: value: SameNameInner { field: value } }: user.Box = boxed } 0
+  { let boxed: user.Box = user.Box { value: user.SameNameInner { field: 1 } }; let Box<user.SameNameInner> { value: value: SameNameInner { field: value } } = boxed } 0
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "age": self.age.to_json(), "flexible_age": self.flexible_age.to_json(), "address": self.address.to_json() }

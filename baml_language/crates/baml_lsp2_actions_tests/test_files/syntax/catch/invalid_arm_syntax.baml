@@ -4,7 +4,7 @@ function MayFail(x: int) -> string {
 
 function InvalidArmSyntax(x: int) -> string {
   MayFail(x) catch (e) {
-    _: string => "ok",
+    string => "ok",
     let y = "hi";
   }
 }
@@ -21,18 +21,18 @@ function InvalidArmSyntax(x: int) -> string {
 //    │ Note: Error code: E0010
 // ───╯
 // Warning: unreachable arm
-//    ╭─[ catch_invalid_arm_syntax.baml:7:18 ]
+//    ╭─[ catch_invalid_arm_syntax.baml:7:15 ]
 //    │
-//  7 │     _: string => "ok",
-//    │                  ──┬─  
-//    │                    ╰─── unreachable arm
+//  7 │     string => "ok",
+//    │               ──┬─  
+//    │                 ╰─── unreachable arm
 //    │ 
 //    │ Note: Error code: E0063
 // ───╯
 // Warning: unreachable arm
-//    ╭─[ catch_invalid_arm_syntax.baml:7:23 ]
+//    ╭─[ catch_invalid_arm_syntax.baml:7:20 ]
 //    │
-//  7 │ ╭─▶     _: string => "ok",
+//  7 │ ╭─▶     string => "ok",
 //  8 │ ├─▶     let y = "hi";
 //    │ │                       
 //    │ ╰─────────────────────── unreachable arm

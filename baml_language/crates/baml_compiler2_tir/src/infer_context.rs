@@ -106,9 +106,18 @@ pub enum TirTypeError {
         first_type: Ty,
         other_type: Ty,
     },
+    /// A generic class destructure with fields must write its type arguments
+    /// directly on the class pattern, e.g. `Box<int> { value }`.
+    GenericClassDestructureRequiresTypeArgs { class_name: Name },
+    /// A rest pattern (`..`) carries a sub-pattern (`..let r`, `..[a, b]`,
+    /// `..pat: T`, etc.). Currently unsupported — only bare `..` is allowed
+    /// while we settle the rest-vs-slice typing semantics.
+    RestSubPatternNotSupported,
     /// A `let` statement or `for-let` binding uses a pattern that can fail
     /// for values of the type flowing into it.
-    RefutablePatternInLet { context: &'static str },
+    RefutablePatternInLet {
+        context: crate::builder::IrrefutableContextKind,
+    },
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
@@ -305,9 +314,18 @@ impl fmt::Display for TirTypeError {
                 humanize_ty(first_type),
                 humanize_ty(other_type)
             ),
+            TirTypeError::GenericClassDestructureRequiresTypeArgs { class_name } => write!(
+                f,
+                "generic class destructure `{class_name} {{ ... }}` must specify type arguments"
+            ),
+            TirTypeError::RestSubPatternNotSupported => write!(
+                f,
+                "rest pattern `..` cannot carry a sub-pattern; only bare `..` is allowed"
+            ),
             TirTypeError::RefutablePatternInLet { context } => write!(
                 f,
-                "refutable pattern in {context} binding; refutable patterns belong in `match`"
+                "refutable pattern in {} binding; refutable patterns belong in `match`",
+                context.as_str()
             ),
             TirTypeError::InvalidCatchBindingType { type_name } => write!(
                 f,

@@ -43,7 +43,7 @@ function user.bad(x: user.T) -> user.T  [expr] {
   {  } x
 }
 function user.bare_in_union_param(f: user.Foo | user.Foo) -> string  [expr] {
-  {  } match (f) { _: user.Foo => "specific", _: user.Foo => "bare" }
+  {  } match (f) { user.Foo => "specific", user.Foo => "bare" }
 }
 function user.create(value: user.T) -> user.Factory  [expr] {
   {  } user.Factory { data: value }
@@ -103,7 +103,7 @@ function user.get_first(self: ?) -> user.A  [expr] {
   {  } self.first
 }
 function user.get_or_default(self: ?, default: user.T) -> user.T  [expr] {
-  {  } match (self.value) { v: user.T => v, _: null => default }
+  {  } match (self.value) { v: user.T => v, null => default }
 }
 function user.get_second(self: ?) -> user.B  [expr] {
   {  } self.second

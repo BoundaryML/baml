@@ -669,30 +669,66 @@ impl<'a> AstGraphBuilder<'a> {
             ast::Pattern::Wildcard => "_".to_string(),
             // Render as `let x` so it doesn't collapse into a path/type label
             // (the new grammar requires the keyword for bindings).
-            ast::Pattern::Bind { name } => format!("let {name}"),
+            ast::Pattern::Bind { name, subpat } => match subpat {
+                Some(sp) => format!("let {name}: {}", self.format_pattern(*sp)),
+                None => format!("let {name}"),
+            },
             ast::Pattern::Type(ty) => ty.to_string(),
-            ast::Pattern::Class { class, fields } => {
+            ast::Pattern::Class {
+                class,
+                generic_args,
+                fields,
+            } => {
                 let class_path: Vec<_> = class.iter().map(baml_base::Name::as_str).collect();
+                let generic_args = if generic_args.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "<{}>",
+                        generic_args
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
                 let field_strs: Vec<_> = fields
                     .iter()
                     .map(|f| format!("{}: {}", f.field, self.format_pattern(f.pat)))
                     .collect();
-                format!("{} {{ {} }}", class_path.join("."), field_strs.join(", "))
+                format!(
+                    "{}{} {{ {} }}",
+                    class_path.join("."),
+                    generic_args,
+                    field_strs.join(", ")
+                )
             }
-            // Chain binds tighter than Or, so an Or child of a Chain needs
-            // explicit parens (`(a | b): int`); a Chain child of an Or does
-            // NOT (`a: int | b: string` already groups correctly), but we
-            // parenthesize it anyway for label readability.
+            ast::Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ascription,
+            } => {
+                let mut parts: Vec<String> =
+                    prefix.iter().map(|p| self.format_pattern(*p)).collect();
+                if let Some(rest) = rest {
+                    parts.push(match rest.pat {
+                        Some(p) => format!("..{}", self.format_pattern(p)),
+                        None => "..".to_string(),
+                    });
+                }
+                parts.extend(suffix.iter().map(|p| self.format_pattern(*p)));
+                let arr = format!("[{}]", parts.join(", "));
+                match ascription {
+                    Some(ty) => format!("{arr}: {ty}"),
+                    None => arr,
+                }
+            }
             ast::Pattern::Or(pats) => pats
                 .iter()
                 .map(|p| self.format_pattern_child(*p, ChildContext::Or))
                 .collect::<Vec<_>>()
                 .join(" | "),
-            ast::Pattern::Chain(pats) => pats
-                .iter()
-                .map(|p| self.format_pattern_child(*p, ChildContext::Chain))
-                .collect::<Vec<_>>()
-                .join(" : "),
         }
     }
 
@@ -702,7 +738,7 @@ impl<'a> AstGraphBuilder<'a> {
         let s = self.format_pattern(pat_id);
         let needs_parens = matches!(
             (&self.body.patterns[pat_id], parent),
-            (ast::Pattern::Or(_), ChildContext::Chain) | (ast::Pattern::Chain(_), ChildContext::Or)
+            (ast::Pattern::Or(_), ChildContext::Or)
         );
         if needs_parens { format!("({s})") } else { s }
     }
@@ -720,7 +756,6 @@ fn call_callee_name(body: &ast::ExprBody, id: ast::ExprId) -> String {
 #[derive(Clone, Copy)]
 enum ChildContext {
     Or,
-    Chain,
 }
 
 // ---------------------------------------------------------------------------
@@ -1096,7 +1131,10 @@ mod tests {
     #[test]
     fn format_pattern_bind_renders_with_let_keyword() {
         let body = make_ast_body(|_, _, patterns, _| {
-            patterns.alloc(ast::Pattern::Bind { name: "x".into() });
+            patterns.alloc(ast::Pattern::Bind {
+                name: "x".into(),
+                subpat: None,
+            });
             None
         });
         let builder = AstGraphBuilder::new("Func", &body);
@@ -1105,55 +1143,24 @@ mod tests {
     }
 
     #[test]
-    fn format_pattern_or_inside_chain_is_parenthesized() {
-        // Chain([Or([Bind a, Bind b]), Type int]) — without parens, would
-        // render `let a | let b : int` which the new grammar parses as
-        // `let a | (let b : int)`. Render `(let a | let b) : int`.
+    fn format_pattern_bind_with_ascription_renders_chain() {
+        // `let x: int` is now Bind { name: x, subpat: Some(Type(int)) }.
         let body = make_ast_body(|_, _, patterns, _| {
-            let a = patterns.alloc(ast::Pattern::Bind { name: "a".into() });
-            let b = patterns.alloc(ast::Pattern::Bind { name: "b".into() });
-            let or = patterns.alloc(ast::Pattern::Or(vec![a, b]));
-            let int_ty = patterns.alloc(ast::Pattern::Type(ast::TypeExpr::Path {
+            let int_ty = ast::TypeExpr::Path {
                 segments: vec!["int".into()],
                 generic_args: vec![],
                 attrs: vec![],
-            }));
-            patterns.alloc(ast::Pattern::Chain(vec![or, int_ty]));
+            };
+            let inner = patterns.alloc(ast::Pattern::Type(int_ty));
+            patterns.alloc(ast::Pattern::Bind {
+                name: "x".into(),
+                subpat: Some(inner),
+            });
             None
         });
         let builder = AstGraphBuilder::new("Func", &body);
-        let chain_pat = body.patterns.iter().last().unwrap().0;
-        assert_eq!(builder.format_pattern(chain_pat), "(let a | let b) : int");
-    }
-
-    #[test]
-    fn format_pattern_chain_inside_or_is_parenthesized() {
-        // Or([Chain([Bind a, Type int]), Chain([Bind a, Type string])])
-        // — render `(let a : int) | (let a : string)` for label readability.
-        let body = make_ast_body(|_, _, patterns, _| {
-            let a1 = patterns.alloc(ast::Pattern::Bind { name: "a".into() });
-            let int_ty = patterns.alloc(ast::Pattern::Type(ast::TypeExpr::Path {
-                segments: vec!["int".into()],
-                generic_args: vec![],
-                attrs: vec![],
-            }));
-            let chain1 = patterns.alloc(ast::Pattern::Chain(vec![a1, int_ty]));
-            let a2 = patterns.alloc(ast::Pattern::Bind { name: "a".into() });
-            let str_ty = patterns.alloc(ast::Pattern::Type(ast::TypeExpr::Path {
-                segments: vec!["string".into()],
-                generic_args: vec![],
-                attrs: vec![],
-            }));
-            let chain2 = patterns.alloc(ast::Pattern::Chain(vec![a2, str_ty]));
-            patterns.alloc(ast::Pattern::Or(vec![chain1, chain2]));
-            None
-        });
-        let builder = AstGraphBuilder::new("Func", &body);
-        let or_pat = body.patterns.iter().last().unwrap().0;
-        assert_eq!(
-            builder.format_pattern(or_pat),
-            "(let a : int) | (let a : string)"
-        );
+        let pat = body.patterns.iter().last().unwrap().0;
+        assert_eq!(builder.format_pattern(pat), "let x: int");
     }
 
     #[test]
@@ -1226,7 +1233,10 @@ mod tests {
                 then_branch: then_b,
                 else_branch: Some(else_b),
             });
-            let pat = patterns.alloc(ast::Pattern::Bind { name: "x".into() });
+            let pat = patterns.alloc(ast::Pattern::Bind {
+                name: "x".into(),
+                subpat: None,
+            });
             let let_stmt = stmts.alloc(ast::Stmt::Let {
                 pattern: pat,
                 initializer: Some(if_expr),

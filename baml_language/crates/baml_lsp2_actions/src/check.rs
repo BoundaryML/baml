@@ -1149,6 +1149,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::NonExhaustiveMatch { .. } => DiagnosticId::NonExhaustiveMatch,
         TirTypeError::UnreachableArm => DiagnosticId::UnreachableArm,
         TirTypeError::OrPatternBindingTypeMismatch { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::GenericClassDestructureRequiresTypeArgs { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::RestSubPatternNotSupported => DiagnosticId::TypeMismatch,
         TirTypeError::RefutablePatternInLet { .. } => DiagnosticId::RefutablePatternInLet,
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
         TirTypeError::ThrowsContractViolation { .. }

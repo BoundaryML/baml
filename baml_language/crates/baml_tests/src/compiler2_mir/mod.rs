@@ -154,7 +154,7 @@ fn generic_class_destructure_field_projection_uses_instantiated_type() {
         }
 
         function f(boxed: Box<int>) -> int {
-            let Box { value } = boxed;
+            let Box<int> { value } = boxed;
             return value;
         }
         "#,
@@ -174,6 +174,56 @@ fn generic_class_destructure_field_projection_uses_instantiated_type() {
             .any(|line| line.trim_start().starts_with("let _") && line.contains(": void")),
         "generic class destructure lowered a projected field through a void local:\n{output}"
     );
+}
+
+#[test]
+fn match_or_mixed_array_class_binding_uses_branch_local_rest_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        class NumberBag {
+            field int[]
+        }
+
+        function f(v: NumberBag | int[][]) -> int {
+            match (v) {
+                NumberBag { field } | [[..let field]: int[], .._] => field[0],
+                _ => 0
+            }
+        }
+        "#,
+    );
+    mir_snapshot!(
+        "match_or_mixed_array_class_binding_uses_branch_local_rest_type",
+        render_mir(&db, file)
+    );
+}
+
+#[test]
+fn match_or_class_union_field_access_uses_runtime_dispatch() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        class A { field int }
+        class B { field int }
+        class C { field int }
+        class D { field int }
+        class E { field string }
+
+        function f(v: A | B | C | D | E) -> int {
+            match (v) {
+                A { field: int } | B { field: int } | C { field: int } | D { field: int } => v.field,
+                _ => 0
+            }
+        }
+        "#,
+    );
+    let output = render_mir(&db, file);
+    assert!(output.contains("type_tag"), "{output}");
+    assert!(output.contains("A:") && output.contains("B:"), "{output}");
+    assert!(output.contains("C:") && output.contains("D:"), "{output}");
 }
 
 // ─── Phase 4: reflect.type_of concrete types ─────────────────────────────────

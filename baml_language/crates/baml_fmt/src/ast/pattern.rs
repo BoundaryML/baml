@@ -8,6 +8,7 @@
 //!   UNION       := ATOM ('|' ATOM)*
 //!   ATOM        := BINDING_PATTERN
 //!                | DESTRUCTURE_PATTERN
+//!                | ARRAY_PATTERN
 //!                | TYPE_PATTERN
 //!                | PAREN_PATTERN
 //!                | WILDCARD_PATTERN
@@ -20,7 +21,9 @@ use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
 use crate::{
-    ast::{FromCST, KnownKind, StrongAstError, SyntaxNodeIter, Token, Type, tokens as t},
+    ast::{
+        FromCST, GenericArgs, KnownKind, StrongAstError, SyntaxNodeIter, Token, Type, tokens as t,
+    },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::{EmittableTrivia, TriviaSliceExt},
 };
@@ -89,6 +92,7 @@ pub enum MatchPattern {
     Wildcard(WildcardPattern),
     Binding(BindingPattern),
     Destructure(DestructurePattern),
+    Array(ArrayPattern),
     Type(TypePattern),
     Paren(ParenPattern),
     Union(UnionPattern),
@@ -120,6 +124,7 @@ impl MatchPattern {
                 BindingPattern::from_node(&node).map(MatchPattern::Binding)
             }
             SyntaxKind::TYPE_PATTERN => TypePattern::from_node(&node).map(MatchPattern::Type),
+            SyntaxKind::ARRAY_PATTERN => ArrayPattern::from_node(&node).map(MatchPattern::Array),
             SyntaxKind::PAREN_PATTERN => ParenPattern::from_node(&node).map(MatchPattern::Paren),
             SyntaxKind::UNION_PATTERN => UnionPattern::from_node(&node).map(MatchPattern::Union),
             SyntaxKind::CHAIN_PATTERN => ChainPattern::from_node(&node).map(MatchPattern::Chain),
@@ -147,6 +152,7 @@ impl Printable for MatchPattern {
             MatchPattern::Wildcard(p) => p.print(shape, printer),
             MatchPattern::Binding(p) => p.print(shape, printer),
             MatchPattern::Destructure(p) => p.print(shape, printer),
+            MatchPattern::Array(p) => p.print(shape, printer),
             MatchPattern::Type(p) => p.print(shape, printer),
             MatchPattern::Paren(p) => p.print(shape, printer),
             MatchPattern::Union(p) => p.print(shape, printer),
@@ -158,6 +164,7 @@ impl Printable for MatchPattern {
             MatchPattern::Wildcard(p) => p.leftmost_token(),
             MatchPattern::Binding(p) => p.leftmost_token(),
             MatchPattern::Destructure(p) => p.leftmost_token(),
+            MatchPattern::Array(p) => p.leftmost_token(),
             MatchPattern::Type(p) => p.leftmost_token(),
             MatchPattern::Paren(p) => p.leftmost_token(),
             MatchPattern::Union(p) => p.leftmost_token(),
@@ -169,6 +176,7 @@ impl Printable for MatchPattern {
             MatchPattern::Wildcard(p) => p.rightmost_token(),
             MatchPattern::Binding(p) => p.rightmost_token(),
             MatchPattern::Destructure(p) => p.rightmost_token(),
+            MatchPattern::Array(p) => p.rightmost_token(),
             MatchPattern::Type(p) => p.rightmost_token(),
             MatchPattern::Paren(p) => p.rightmost_token(),
             MatchPattern::Union(p) => p.rightmost_token(),
@@ -223,11 +231,17 @@ impl Printable for WildcardPattern {
     }
 }
 
-/// `let WORD` — introduces a name binding.
+/// `let WORD` or `let WORD : <pattern>` — name binding with an optional
+/// sub-pattern. The sub-pattern can be a type ascription (`let x: int`),
+/// another binding (`let x: let y`), a structural destructure
+/// (`let x: [a, b]`, `let x: Class { f }`), etc. The parser folds the
+/// `: <pattern>` directly into the [`SyntaxKind::BINDING_PATTERN`] node
+/// (no `CHAIN_PATTERN` wrapper).
 #[derive(Debug)]
 pub struct BindingPattern {
     pub let_keyword: t::Let,
     pub name: t::Word,
+    pub subpat: Option<(t::Colon, Box<MatchPattern>)>,
 }
 
 impl BindingPattern {
@@ -235,23 +249,50 @@ impl BindingPattern {
         let mut it = SyntaxNodeIter::new(node);
         let let_keyword = it.expect_parse()?;
         let name = it.expect_parse()?;
+        let subpat = if let Some(colon_elem) = it.next_if_kind(SyntaxKind::COLON) {
+            let colon = t::Colon::from_cst(colon_elem)?;
+            let pattern: MatchPattern = it.expect_parse()?;
+            Some((colon, Box::new(pattern)))
+        } else {
+            None
+        };
         it.expect_end()?;
-        Ok(Self { let_keyword, name })
+        Ok(Self {
+            let_keyword,
+            name,
+            subpat,
+        })
     }
 }
 
 impl Printable for BindingPattern {
-    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.let_keyword);
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
-        PrintInfo::default_single_line()
+        let mut info = PrintInfo::default_single_line();
+        if let Some((colon, pattern)) = &self.subpat {
+            let (_, name_trailing) = printer.trivia.get_for_range_split(self.name.span());
+            print_trivia_squished_spaced(printer, name_trailing, true, false);
+            let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
+            print_trivia_squished_spaced(printer, colon_leading, true, false);
+            printer.print_raw_token(colon);
+            printer.print_str(" ");
+            print_trivia_squished_spaced(printer, colon_trailing, false, true);
+            let pattern_leading = printer.trivia.get_leading_for_element(&**pattern);
+            print_trivia_squished_spaced(printer, pattern_leading, false, true);
+            info.multi_lined |= printer.print(&**pattern, shape).multi_lined;
+        }
+        info
     }
     fn leftmost_token(&self) -> TextRange {
         self.let_keyword.span()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.name.span()
+        self.subpat
+            .as_ref()
+            .map(|(_, p)| p.rightmost_token())
+            .unwrap_or_else(|| self.name.span())
     }
 }
 
@@ -261,6 +302,7 @@ pub struct DestructurePattern {
     pub let_keyword: Option<t::Let>,
     pub first: t::Word,
     pub rest: Vec<(t::Dot, t::Word)>,
+    pub generic_args: Option<GenericArgs>,
     pub open_brace: t::LBrace,
     pub fields: Vec<(FieldPattern, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
@@ -280,6 +322,10 @@ impl DestructurePattern {
             let word = it.expect_parse()?;
             rest.push((dot, word));
         }
+        let generic_args = it
+            .next_if_kind(SyntaxKind::GENERIC_ARGS)
+            .map(GenericArgs::from_cst)
+            .transpose()?;
         let open_brace = it.expect_parse()?;
         let mut fields = Vec::new();
         let close_brace = loop {
@@ -301,6 +347,7 @@ impl DestructurePattern {
             let_keyword,
             first,
             rest,
+            generic_args,
             open_brace,
             fields,
             close_brace,
@@ -316,6 +363,9 @@ impl DestructurePattern {
         for (dot, word) in &self.rest {
             printer.print_raw_token(dot);
             printer.print_raw_token(word);
+        }
+        if let Some(generic_args) = &self.generic_args {
+            printer.print(generic_args, Shape::unlimited_single_line());
         }
     }
 
@@ -488,6 +538,241 @@ impl Printable for FieldPattern {
             .as_ref()
             .map(|(_, p)| p.rightmost_token())
             .unwrap_or_else(|| self.name.span())
+    }
+}
+
+#[derive(Debug)]
+pub struct ArrayPattern {
+    pub open_bracket: t::LBracket,
+    pub elements: Vec<(ArrayPatternElement, Option<t::Comma>)>,
+    pub close_bracket: t::RBracket,
+    /// `[…]: T` — optional type ascription folded into the
+    /// [`SyntaxKind::ARRAY_PATTERN`] node by the parser.
+    pub ascription: Option<(t::Colon, Type)>,
+}
+
+impl ArrayPattern {
+    fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
+        let mut it = SyntaxNodeIter::new(node);
+        let open_bracket = it.expect_parse()?;
+        let mut elements = Vec::new();
+        let close_bracket = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(SyntaxKind::R_BRACKET, it.parent));
+            };
+            if elem.kind() == SyntaxKind::R_BRACKET {
+                break t::RBracket::from_cst(elem)?;
+            }
+            let element = ArrayPatternElement::from_cst(elem)?;
+            let comma = it
+                .next_if_kind(SyntaxKind::COMMA)
+                .map(t::Comma::from_cst)
+                .transpose()?;
+            elements.push((element, comma));
+        };
+        let ascription = if let Some(colon_elem) = it.next_if_kind(SyntaxKind::COLON) {
+            let colon = t::Colon::from_cst(colon_elem)?;
+            let ty: Type = it.expect_parse()?;
+            Some((colon, ty))
+        } else {
+            None
+        };
+        it.expect_end()?;
+        Ok(Self {
+            open_bracket,
+            elements,
+            close_bracket,
+            ascription,
+        })
+    }
+
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        printer.print_raw_token(&self.open_bracket);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_bracket.span());
+        try_print_trivia_single_line_spaced(printer, open_trailing, false, true)?;
+
+        for (idx, (element, comma)) in self.elements.iter().enumerate() {
+            let (element_leading, element_trailing) = printer.trivia.get_for_element(element);
+            try_print_trivia_single_line_spaced(printer, element_leading, false, true)?;
+            if printer
+                .print(element, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+            try_print_trivia_single_line_spaced(printer, element_trailing, true, false)?;
+
+            if idx + 1 < self.elements.len() {
+                if let Some(comma) = comma {
+                    let (comma_leading, comma_trailing) =
+                        printer.trivia.get_for_range_split(comma.span());
+                    try_print_trivia_single_line_spaced(printer, comma_leading, true, false)?;
+                    printer.print_raw_token(comma);
+                    try_print_trivia_single_line_spaced(printer, comma_trailing, true, false)?;
+                } else {
+                    printer.print_str(",");
+                }
+                printer.print_str(" ");
+            } else if let Some(comma) = comma {
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(comma.span());
+                try_print_trivia_single_line_spaced(printer, comma_leading, true, false)?;
+                try_print_trivia_single_line_spaced(printer, comma_trailing, true, false)?;
+            }
+        }
+
+        let (close_leading, _) = printer
+            .trivia
+            .get_for_range_split(self.close_bracket.span());
+        try_print_trivia_single_line_spaced(printer, close_leading, true, false)?;
+        printer.print_raw_token(&self.close_bracket);
+
+        if let Some((colon, ty)) = &self.ascription {
+            let (_, close_trailing) = printer
+                .trivia
+                .get_for_range_split(self.close_bracket.span());
+            try_print_trivia_single_line_spaced(printer, close_trailing, true, false)?;
+            let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
+            try_print_trivia_single_line_spaced(printer, colon_leading, true, false)?;
+            printer.print_raw_token(colon);
+            printer.print_str(" ");
+            try_print_trivia_single_line_spaced(printer, colon_trailing, false, true)?;
+            if printer
+                .print(ty, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+        }
+
+        (printer.output.len() <= shape.width).then(PrintInfo::default_single_line)
+    }
+}
+
+impl PrintMultiLine for ArrayPattern {
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_bracket);
+        printer.print_trivia_all_trailing_for(self.open_bracket.span());
+        printer.print_newline();
+
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        for (element, comma) in &self.elements {
+            printer.print_trivia_all_leading_with_newline_for(
+                element.leftmost_token(),
+                inner_shape.indent,
+            );
+            printer.print_spaces(inner_shape.indent);
+            printer.print(element, inner_shape.clone());
+            let element_trailing = printer.trivia.get_trailing_for_element(element);
+            print_trivia_squished_spaced(printer, element_trailing, true, false);
+            if let Some(comma) = comma {
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(comma.span());
+                print_trivia_squished_spaced(printer, comma_leading, true, false);
+                printer.print_raw_token(comma);
+                printer.print_trivia_trailing(comma_trailing);
+            } else {
+                printer.print_str(",");
+            }
+            printer.print_newline();
+        }
+
+        printer.print_trivia_all_leading_with_newline_for(self.close_bracket.span(), shape.indent);
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_bracket);
+        if let Some((colon, ty)) = &self.ascription {
+            let (_, close_trailing) = printer
+                .trivia
+                .get_for_range_split(self.close_bracket.span());
+            print_trivia_squished_spaced(printer, close_trailing, true, false);
+            let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
+            print_trivia_squished_spaced(printer, colon_leading, true, false);
+            printer.print_raw_token(colon);
+            printer.print_str(" ");
+            print_trivia_squished_spaced(printer, colon_trailing, false, true);
+            printer.print(ty, shape);
+        }
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for ArrayPattern {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.open_bracket.span()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.ascription
+            .as_ref()
+            .map(|(_, ty)| ty.rightmost_token())
+            .unwrap_or_else(|| self.close_bracket.span())
+    }
+}
+
+#[derive(Debug)]
+pub struct ArrayPatternElement {
+    pub rest: Option<t::DotDot>,
+    pub pattern: Option<MatchPattern>,
+}
+
+impl FromCST for ArrayPatternElement {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::ARRAY_PATTERN_ELEMENT)?;
+        let mut it = SyntaxNodeIter::new(&node);
+        let rest = it
+            .next_if_kind(SyntaxKind::DOT_DOT)
+            .map(t::DotDot::from_cst)
+            .transpose()?;
+        let pattern = it.next().map(MatchPattern::from_cst).transpose()?;
+        it.expect_end()?;
+        Ok(Self { rest, pattern })
+    }
+}
+
+impl Printable for ArrayPatternElement {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        if let Some(rest) = &self.rest {
+            printer.print_raw_token(rest);
+        }
+        if let Some(pattern) = &self.pattern {
+            if let Some(rest) = &self.rest {
+                let (_, rest_trailing) = printer.trivia.get_for_range_split(rest.span());
+                print_trivia_squished_spaced(printer, rest_trailing, true, true);
+                let pattern_leading = printer.trivia.get_leading_for_element(pattern);
+                print_trivia_squished_spaced(printer, pattern_leading, false, true);
+            }
+            printer.print(pattern, shape)
+        } else {
+            PrintInfo::default_single_line()
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.rest
+            .as_ref()
+            .map(super::tokens::Token::span)
+            .or_else(|| self.pattern.as_ref().map(Printable::leftmost_token))
+            .unwrap_or(TextRange::empty(0.into()))
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.pattern
+            .as_ref()
+            .map(Printable::rightmost_token)
+            .or_else(|| self.rest.as_ref().map(super::tokens::Token::span))
+            .unwrap_or(TextRange::empty(0.into()))
     }
 }
 

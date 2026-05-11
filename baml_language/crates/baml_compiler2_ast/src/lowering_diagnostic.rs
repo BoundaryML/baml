@@ -86,6 +86,15 @@ pub enum LoweringDiagnostic {
 
     /// `void` was used outside of a function return type position.
     VoidInNonReturnPosition { context: String, span: TextRange },
+
+    /// A `:` type ascription was applied to a pattern that doesn't accept
+    /// one. Only `let x: T` and `[…]: T` are supported. Things like
+    /// `_: T`, `int: T`, `Class { … }: T`, `(a | b): T`, and progressive
+    /// chains (`let x: T1: T2`) are all rejected.
+    InvalidPatternAscription {
+        reason: &'static str,
+        span: TextRange,
+    },
 }
 
 impl LoweringDiagnostic {
@@ -200,6 +209,12 @@ impl LoweringDiagnostic {
                 format!("`void` can only be used as a function return type, not as {context}"),
                 *span,
                 "`void` not allowed here",
+            ),
+            LoweringDiagnostic::InvalidPatternAscription { reason, span } => (
+                DiagnosticId::TypeMismatch,
+                format!("invalid pattern type ascription: {reason}"),
+                *span,
+                "type ascription not allowed here",
             ),
         };
 

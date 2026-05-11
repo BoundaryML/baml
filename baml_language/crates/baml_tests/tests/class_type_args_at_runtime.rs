@@ -96,8 +96,8 @@ async fn union_dispatch_generic_class_int() {
         class Foo<T> { value T }
         function pick(x: Foo<int> | Foo<string>) -> string {
             match (x) {
-                _: Foo<int>    => "int",
-                _: Foo<string> => "string",
+                Foo<int>    => "int",
+                Foo<string> => "string",
             }
         }
         function main() -> string {
@@ -118,8 +118,8 @@ async fn union_dispatch_generic_class_string() {
         class Foo<T> { value T }
         function pick(x: Foo<int> | Foo<string>) -> string {
             match (x) {
-                _: Foo<int>    => "int",
-                _: Foo<string> => "string",
+                Foo<int>    => "int",
+                Foo<string> => "string",
             }
         }
         function main() -> string {
@@ -143,8 +143,8 @@ async fn is_type_parametric_class_same_args() {
         class Foo<T> { value T }
         function check(f: Foo<int> | Foo<string>) -> bool {
             match (f) {
-                _: Foo<int> => true,
-                _: Foo<string> => false,
+                Foo<int> => true,
+                Foo<string> => false,
             }
         }
         function main() -> bool {
@@ -163,8 +163,8 @@ async fn is_type_parametric_class_different_args() {
         class Foo<T> { value T }
         function check(f: Foo<int> | Foo<string>) -> bool {
             match (f) {
-                _: Foo<int> => true,
-                _: Foo<string> => false,
+                Foo<int> => true,
+                Foo<string> => false,
             }
         }
         function main() -> bool {
@@ -175,7 +175,7 @@ async fn is_type_parametric_class_different_args() {
     assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
 }
 
-/// Bare-class match arm (`_: Foo<int>`) still matches when the union includes
+/// Bare-class match arm (`Foo<int>`) still matches when the union includes
 /// only `Foo<int>` — backward-compatible monomorphic matching path.
 #[tokio::test]
 async fn is_type_bare_class_still_matches() {
@@ -184,7 +184,7 @@ async fn is_type_bare_class_still_matches() {
         class Foo<T> { value T }
         function check(f: Foo<int> | string) -> bool {
             match (f) {
-                _: Foo<int> => true,
+                Foo<int> => true,
                 _ => false,
             }
         }

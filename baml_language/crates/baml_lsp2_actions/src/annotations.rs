@@ -148,9 +148,15 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
             // outermost pattern is a Chain — any chain is treated as
             // "has annotation."
             let pat = &expr_body.patterns[*pattern];
+            // A `let x: <pattern>` binding (Bind with sub-pattern) or a
+            // bare type pattern already carries an explicit annotation
+            // — skip.
             if matches!(
                 pat,
-                baml_compiler2_ast::Pattern::Chain(_) | baml_compiler2_ast::Pattern::Type(_)
+                baml_compiler2_ast::Pattern::Bind {
+                    subpat: Some(_),
+                    ..
+                } | baml_compiler2_ast::Pattern::Type(_)
             ) {
                 continue;
             }

@@ -43,7 +43,7 @@ function user.SingleCatchTyped(x: int) -> string throws never {
   { : string | "caught string"
     catch (MayFail(x) : string) : unknown
       catch (e)
-        _: string =>
+        string =>
           "caught string" : "caught string"
   }
 }
@@ -51,10 +51,10 @@ function user.CatchWithFallback(x: int) -> string throws never {
   { : string | "caught string" | "caught int fallback"
     catch (MayFailIntOrString(x) : string) : unknown
       catch (e)
-        _: string =>
+        string =>
           "caught string" : "caught string"
       catch (e2)
-        _: int =>
+        int =>
           "caught int fallback" : "caught int fallback"
   }
 }
@@ -62,7 +62,7 @@ function user.CatchWithTypedArm(x: int) -> string throws never {
   { : string | "caught string"
     catch (MayFail(x) : string) : unknown
       catch (e)
-        _: string =>
+        string =>
           "caught string" : "caught string"
   }
 }
@@ -70,9 +70,9 @@ function user.MultipleCatchArms(x: int) -> string throws never {
   { : string | "caught string" | "caught int"
     catch (MayFailIntOrString(x) : string) : unknown
       catch (e)
-        _: string =>
+        string =>
           "caught string" : "caught string"
-        _: int =>
+        int =>
           "caught int" : "caught int"
   }
 }
@@ -102,16 +102,16 @@ function user.ThrowStatement(x: int) -> string throws never {
     throw "error" : "error"
     "unreachable" : unknown
   }
-  ?? 3181..3199: unreachable code: 1 statement(s) after diverging statement
+  ?? 3163..3181: unreachable code: 1 statement(s) after diverging statement
 }
 function user.ChainedCatchClauses(x: int) -> string throws never {
   { : string | "first handler" | "second handler"
     catch (MayFailIntOrString(x) : string) : unknown
       catch (e)
-        _: string =>
+        string =>
           "first handler" : "first handler"
       catch (e2)
-        _: int =>
+        int =>
           "second handler" : "second handler"
   }
 }

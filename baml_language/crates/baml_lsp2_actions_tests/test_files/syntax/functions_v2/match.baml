@@ -37,4 +37,31 @@ function Remand(s: Situation) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: type mismatch: expected user.Pet, got user.Rock
+//     ╭─[ functions_v2_match.baml:30:32 ]
+//     │
+//  30 │ ╭─▶       let dog: Dog => "Bowwow",
+//  31 │ ├─▶       let rock: Rock => "...",
+//     │ │                                    
+//     │ ╰──────────────────────────────────── type mismatch: expected user.Pet, got user.Rock
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
+// Error: unreachable arm
+//     ╭─[ functions_v2_match.baml:31:25 ]
+//     │
+//  31 │       let rock: Rock => "...",
+//     │                         ──┬──  
+//     │                           ╰──── unreachable arm
+//     │ 
+//     │ Note: Error code: E0063
+// ────╯
+// Error: unreachable arm
+//     ╭─[ functions_v2_match.baml:32:12 ]
+//     │
+//  32 │       _ => "...",
+//     │            ──┬──  
+//     │              ╰──── unreachable arm
+//     │ 
+//     │ Note: Error code: E0063
+// ────╯

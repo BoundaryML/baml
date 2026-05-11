@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 9227
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -20,16 +19,16 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let items"
-                KW_LET "let"
-                WORD "items"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "items"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
@@ -41,16 +40,16 @@ SOURCE_FILE
             R_BRACKET "]"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let step1"
-                KW_LET "let"
-                WORD "step1"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "step1"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "items.map"
@@ -113,16 +112,16 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let words"
-                KW_LET "let"
-                WORD "words"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "words"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "string[]"
-                  WORD "string"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "string[]"
+                    WORD "string"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL
             L_BRACKET "["
@@ -455,14 +454,14 @@ SOURCE_FILE
               R_BRACE "}"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let a"
-                KW_LET "let"
-                WORD "a"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "a"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int"
-                  WORD "int"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
           EQUALS "="
           CALL_EXPR
             WORD "id"
@@ -472,14 +471,14 @@ SOURCE_FILE
               R_PAREN ")"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let b"
-                KW_LET "let"
-                WORD "b"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "b"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "string"
-                  WORD "string"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "string"
+                    WORD "string"
           EQUALS "="
           CALL_EXPR
             WORD "id"
@@ -667,16 +666,16 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let items"
-                KW_LET "let"
-                WORD "items"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "items"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
@@ -734,18 +733,18 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let matrix"
-                KW_LET "let"
-                WORD "matrix"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "matrix"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[][]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[][]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL
             L_BRACKET "["
@@ -826,16 +825,16 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let items"
-                KW_LET "let"
-                WORD "items"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "items"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
@@ -901,16 +900,16 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let items"
-                KW_LET "let"
-                WORD "items"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "items"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[10, 20, 30]"
             L_BRACKET "["
@@ -979,16 +978,16 @@ SOURCE_FILE
             QUOTE """
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let items"
-                KW_LET "let"
-                WORD "items"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "items"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
@@ -1000,16 +999,16 @@ SOURCE_FILE
             R_BRACKET "]"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let mapped"
-                KW_LET "let"
-                WORD "mapped"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "mapped"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "items.map"
@@ -1204,16 +1203,16 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let items"
-                KW_LET "let"
-                WORD "items"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "items"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
@@ -1262,16 +1261,16 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let nums"
-                KW_LET "let"
-                WORD "nums"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "nums"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
@@ -1352,16 +1351,16 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let items"
-                KW_LET "let"
-                WORD "items"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "items"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
@@ -1407,16 +1406,16 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let items"
-                KW_LET "let"
-                WORD "items"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "items"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
@@ -1428,16 +1427,16 @@ SOURCE_FILE
             R_BRACKET "]"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let step1"
-                KW_LET "let"
-                WORD "step1"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "step1"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "items.map"
@@ -2045,16 +2044,16 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let items"
-                KW_LET "let"
-                WORD "items"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "items"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
@@ -2310,17 +2309,17 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let items"
-                KW_LET "let"
-                WORD "items"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "items"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int?[]"
-                  WORD "int"
-                  QUESTION "?"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int?[]"
+                    WORD "int"
+                    QUESTION "?"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[1, null, 3]"
             L_BRACKET "["
@@ -2397,16 +2396,16 @@ SOURCE_FILE
             QUOTE """
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let items"
-                KW_LET "let"
-                WORD "items"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "items"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "int[]"
-                  WORD "int"
-                  L_BRACKET "["
-                  R_BRACKET "]"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int[]"
+                    WORD "int"
+                    L_BRACKET "["
+                    R_BRACKET "]"
           EQUALS "="
           ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["

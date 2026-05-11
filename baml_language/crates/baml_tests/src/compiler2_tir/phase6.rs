@@ -1581,3 +1581,193 @@ function f() -> int {
         "post-loop push should be checked against the loop-established element type, got:\n{output}"
     );
 }
+
+#[test]
+fn array_rest_binding_annotation_must_be_array_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> int {
+    let [..let rest: int] = [1, 2]
+    return 0
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("rest pattern `..` cannot carry a sub-pattern"),
+        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
+    );
+}
+
+#[test]
+fn array_rest_binding_array_annotation_is_valid() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> int {
+    let [..let rest: int[]] = [1, 2]
+    return rest[0]
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("let [..rest: int[]] = [1, 2] : int[]"),
+        "rest pattern annotation should be checked against the rest slice type, got:\n{output}"
+    );
+    assert!(
+        !output.contains("type mismatch"),
+        "array rest annotation should be valid, got:\n{output}"
+    );
+}
+
+#[test]
+fn array_rest_cannot_use_class_destructure_for_rest_slice() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Box {
+    value int
+}
+
+function f(boxes: Box[]) -> int {
+    let [..Box { value }] = boxes
+    return value
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("rest pattern `..` cannot carry a sub-pattern"),
+        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
+    );
+}
+
+#[test]
+fn array_nested_rest_annotation_must_match_rest_slice() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(xs: int[]) -> int {
+    match (xs) {
+        [..[let x]: int] => x,
+        _ => 0
+    }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("rest pattern `..` cannot carry a sub-pattern"),
+        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
+    );
+}
+
+#[test]
+fn nested_refutable_array_under_rest_is_rejected_in_let() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(xs: int[]) -> int {
+    let [..[let x]] = xs
+    return x
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("refutable pattern in let binding"),
+        "nested exact array under rest should still make the let refutable, got:\n{output}"
+    );
+}
+
+#[test]
+fn refutable_array_pattern_is_rejected_in_for_binding() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(rows: int[][]) -> int {
+    let total = 0
+    for (let [let x] in rows) {
+        total += x
+    }
+    return total
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("refutable pattern in for-let binding"),
+        "exact array pattern in for-let should be rejected as refutable, got:\n{output}"
+    );
+}
+
+#[test]
+fn or_pattern_same_binding_with_conflicting_types_is_rejected() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class A {
+    field int
+}
+
+class B {
+    field string
+}
+
+function f(value: A | B) -> int {
+    match (value) {
+        A { field: let x } | B { field: let x } => 1
+    }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("Or-pattern alternatives bind `x` with conflicting types"),
+        "same or-pattern binding name with incompatible types should be rejected, got:\n{output}"
+    );
+}
+
+#[test]
+fn mixed_or_pattern_preserves_partial_expected_type_for_generic_return() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class A {
+    field int
+}
+
+function produce<T>() -> T {
+    throw "boom"
+}
+
+function f() -> int {
+    let A { field } | [..let field] = produce()
+    return field
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("produce<T>() : user.A"),
+        "mixed OR should preserve the informative class branch as a partial expected type for generic return inference, got:\n{output}"
+    );
+}

@@ -152,3 +152,65 @@ def test_runtime_init_called_at_import():
     import baml_sdk
     assert hasattr(baml_sdk, "lorem")
     assert hasattr(baml_sdk, "ipsum")
+
+
+# ---------------------------------------------------------------------------
+# Shorthand-client api_key wiring
+#
+# `client "openai/gpt-4o-mini"` and `client "anthropic/..."` lower into
+# the `from_shorthand` rust syscall, which has no syntactic api_key
+# binding — there's no `env.OPENAI_API_KEY` in the source for the
+# compiler to thread. The rust path must populate `api_key` itself from
+# the provider's canonical env var (OPENAI_API_KEY / ANTHROPIC_API_KEY).
+# These tests pin that contract by inspecting the auth header on the
+# `Request` returned by `*$build_request`, which is the last station
+# before bytes hit the network.
+# ---------------------------------------------------------------------------
+
+
+def test_extract_resume_build_request_includes_openai_api_key(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-shorthand-test")
+    from baml_sdk import lorem
+
+    request = lorem.ExtractResume__build_request("Some resume text")
+    # Authorization header is added by `auth_openai`; case-insensitive
+    # because reqwest may normalize the casing on the wire, but the
+    # build_request output preserves what we set.
+    headers_lower = {k.lower(): v for k, v in request.headers.items()}
+    assert "authorization" in headers_lower, (
+        f"shorthand openai client did not set authorization header: {request.headers!r}"
+    )
+    assert headers_lower["authorization"] == "Bearer sk-openai-shorthand-test", (
+        f"unexpected authorization header: {headers_lower['authorization']!r}"
+    )
+
+
+def test_streaming_extract_build_request_includes_openai_api_key(monkeypatch):
+    # `openai-responses` shares the OPENAI_API_KEY convention with
+    # `openai`, and auth_openai routes both through the same Bearer
+    # header.
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-responses-test")
+    from baml_sdk import lorem
+
+    request = lorem.StreamingExtract__build_request("Some text to summarize")
+    headers_lower = {k.lower(): v for k, v in request.headers.items()}
+    assert "authorization" in headers_lower, (
+        f"shorthand openai-responses client did not set authorization header: {request.headers!r}"
+    )
+    assert headers_lower["authorization"] == "Bearer sk-openai-responses-test", (
+        f"unexpected authorization header: {headers_lower['authorization']!r}"
+    )
+
+
+def test_classify_sentiment_build_request_includes_anthropic_api_key(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-shorthand-test")
+    from baml_sdk import ipsum
+
+    request = ipsum.ClassifySentiment__build_request("I love this!")
+    headers_lower = {k.lower(): v for k, v in request.headers.items()}
+    assert "x-api-key" in headers_lower, (
+        f"shorthand anthropic client did not set x-api-key header: {request.headers!r}"
+    )
+    assert headers_lower["x-api-key"] == "sk-ant-shorthand-test", (
+        f"unexpected x-api-key header: {headers_lower['x-api-key']!r}"
+    )

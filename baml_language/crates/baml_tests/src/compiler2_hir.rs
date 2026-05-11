@@ -560,6 +560,81 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_array_pattern_bindings_produce_hir_diagnostic() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "dup_array_pattern.baml",
+            r#"
+function foo(xs: int[]) -> int {
+  let [let x, let x] = xs else { return 0 };
+  x
+}
+"#,
+        );
+
+        let index = file_semantic_index(&db, file);
+        let diags = index.diagnostics();
+        assert!(diags.iter().any(
+            |d| matches!(d, Hir2Diagnostic::DuplicatePatternBinding { name, .. } if name == &Name::new("x"))
+        ));
+    }
+
+    #[test]
+    fn duplicate_class_pattern_bindings_produce_hir_diagnostic() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "dup_class_pattern.baml",
+            r#"
+class User {
+  a int
+  b int
+}
+
+function foo(user: User) -> int {
+  let User { a: let x, b: let x } = user;
+  x
+}
+"#,
+        );
+
+        let index = file_semantic_index(&db, file);
+        let diags = index.diagnostics();
+        assert!(diags.iter().any(
+            |d| matches!(d, Hir2Diagnostic::DuplicatePatternBinding { name, .. } if name == &Name::new("x"))
+        ));
+    }
+
+    #[test]
+    fn duplicate_chain_alias_and_inner_binding_produce_hir_diagnostic() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "dup_chain_pattern.baml",
+            r#"
+class User {
+  name string
+}
+
+function foo(user: User) -> string {
+  let x: User { name: let x } = user;
+  x
+}
+"#,
+        );
+
+        let index = file_semantic_index(&db, file);
+        let diags = index.diagnostics();
+        assert!(diags.iter().any(
+            |d| matches!(d, Hir2Diagnostic::DuplicatePatternBinding { name, .. } if name == &Name::new("x"))
+        ));
+    }
+
+    #[test]
     fn shadowing_initializer_resolves_previous_binding() {
         use baml_compiler2_hir::scope::ScopeKind;
         use text_size::TextSize;
