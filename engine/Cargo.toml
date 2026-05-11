@@ -96,7 +96,7 @@ itertools = "0.14.0"
 jsonish = { path = "baml-lib/jsonish" }
 log = "0.4.20"
 # TODO: disable imports, etc
-minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", default-features = false, features = [
+minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp2", default-features = false, features = [
   "macros",
   "builtins",
   "debug",
@@ -113,7 +113,7 @@ minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "val
   # loader
   #
 ] }
-minijinja-contrib = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", features = ["pycompat"] }
+minijinja-contrib = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp2", features = ["pycompat"] }
 once_cell = "1"
 pathdiff = "0.2.2"
 pest = "2.8.1"
