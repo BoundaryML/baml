@@ -70,13 +70,14 @@ const teamMembers: TeamMember[] = [
   },
   {
     bio: 'Avery works on the places where language tooling meets product polish, making BAML easier to understand, test, and ship.',
+    image: '/avery.png',
     name: 'Avery',
     role: 'Engineer',
   },
   {
     name: 'Dhilan Shah',
     role: 'Engineer',
-    image: '/dhilan.jpg',
+    image: '/dhilan.png',
     bio: 'Dhilan works across the stack on the parts of BAML that developers actually touch — the website, the playground, and the integrations that make the language feel approachable. He believes the fastest way to learn a tool is to try it and have it not get in your way.',
   },
 ];

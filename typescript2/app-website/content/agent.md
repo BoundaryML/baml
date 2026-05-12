@@ -2,57 +2,54 @@
 
 BAML is a typed, compiled language for defining LLM-powered and ML-powered functions as first-class primitives. Write a schema and a prompt; the compiler emits idiomatic client code in Python, TypeScript, Ruby, and Go with structured outputs, streaming, retries, and tests.
 
-This file is intended for AI coding agents. It explains the product thesis first, then includes the practical BAML agent guide.
+This file is intended for AI coding agents. It contains the product thesis and the commands to install BAML.
 
 ## Thesis
 
-We want to make a language that agents are really good at writing. BAML files are small, explicit, and compiler-checkable. The prompt, schema, tests, provider, and generated client boundary are all in one place, so an agent does not have to infer the contract by chasing Python decorators, JSON schemas, hidden prompts, and parser code across a repo.
+**We want to make a language that agents are really good at writing, and humans are really good at understanding.** The next wave of software will be edited by agents and reviewed by humans. That only works if the source is explicit, compact, compiler-checkable, and close to the model boundary it controls.
 
-- Agents can edit one BAML function instead of four drift-prone files.
-- The compiler gives fast feedback when a field, union arm, or return type is wrong.
-- `baml describe` gives agents a semantic description of project and stdlib APIs before they guess.
+- Agents should edit one coherent program instead of chasing hidden prompts, JSON schemas, parser code, and client wrappers across a repo.
+- Humans should be able to scan that same program and understand the types, prompts, providers, tests, and control flow without running the whole app in their head.
+- The compiler should be the shared feedback loop for both of them: fast enough for agents to iterate, strict enough for people to trust.
 
-```bash
-$ baml describe TriageTicket
-
-function TriageTicket(input: string) -> Ticket
-client: GPT4o
-input:
-  input string
-output:
-  Ticket {
-    priority "low" | "medium" | "high"
-    summary string
-  }
-generated:
-  TriageTicket$parse
-  TriageTicket$render_prompt
-  TriageTicket$build_request
-```
-
-We want to give people the right abstractions to build on top of their ML models: everything from inline comments that get stripped from your LLM prompts to support for Python and Typescript and making it easy to switch between ML service providers.
+**BAML started at the model boundary because that is where today's AI code breaks first.** Prompts, schemas, parsing, retries, tests, and generated clients tend to drift apart as soon as a demo becomes a product. BAML puts those pieces in one file and gives them language semantics instead of framework conventions.
 
 ```baml
-class Ticket {
-  priority "low" | "medium" | "high"
-  summary string
+class ToolCall {
+  intent "answer" | "read_file" | "run_bash"
+  confidence float
+  args map<string, string>
 }
 
-function TriageTicket(input: string) -> Ticket {
+function PickTool(history: string[]) -> ToolCall {
   client GPT4o
   prompt #"
-    Classify this support ticket.
+    Choose the next tool for this agent loop.
     {{ ctx.output_format }}
-
-    Ticket: {{ input }}
+    {{ _.role("user") }} {{ history }}
   "#
+}
+
+function should_continue(call: ToolCall) -> bool {
+  call.intent != "answer" && call.confidence > 0.7
 }
 ```
 
-We want to enable people to test the ML features and products that they're building, which is especially important when you're dealing with probabilistic systems and defining correctness is harder than enumerating edge cases!
+**For v1, that foundation is growing into a Turing-complete language.** Not just schemas. Typed functions, tagged unions, `match`, loops, tests, a standard library, and a VM. The goal is to let the ML-shaped part of an application become an actual program.
 
-- `baml-cli test` runs test blocks against real providers or recorded fixtures.
-- `@@assert` constraints fail CI when an ML feature regresses.
+```baml
+type Tool = Answer | ReadFile | RunBash
+
+function dispatch(tool: Tool) -> string {
+  match (tool) {
+    a: Answer   => a.text,
+    r: ReadFile => baml.fs.read(r.path),
+    b: RunBash  => baml.sys.shell(b.command).stdout,
+  }
+}
+```
+
+**Tests have to live next to the behavior they protect.** AI systems are probabilistic, but the product contract still needs to be checked. BAML test blocks make the expected behavior visible to developers, CI, and coding agents.
 
 ```baml
 test "refund-is-high-priority" {
@@ -67,38 +64,28 @@ testset "triage-regression" {
 }
 ```
 
-We want it to be easy to deploy changes to your ML features: you should be able to both self-host everything that calls an OpenAI API and ask us to handle that for you, function-as-a-service style.
+**Provider choice, deployment shape, and observability should be language-level concerns.** If model calls are part of the program, switching providers, tracking cost and reliability, and deploying changes should not require a pile of disconnected glue code.
 
-We want our users to be able to monitor their ML usage and ask questions about the precision and recall of their deployed model, about the costs of the current deployment, and about the reliability of the current deployment.
+**The thesis is not that every AI app needs another framework.** It is that agent-authored software needs a source format that is precise enough for machines to edit and legible enough for humans to own. BAML is our attempt to make that format a real programming language.
 
-We want it to be straightforward to refine your ML usage, whether that means LLM prompt tuning, fine-tuning an existing open-source model, or training a special-purpose model from scratch.
+## Installation
 
-And we think that the right way to do all this is to start with:
+### Claude Code plugin (recommended)
 
-- a freely available, open-source schema language for your ML APIs,
-- code generation for your LLM interactions, and
-- robust, fast, easy-to-use tooling to support every step of the process.
+Inside Claude Code, run:
 
-For v1, that foundation is growing into a Turing-complete language: typed functions, tagged unions, `match`, loops, tests, a standard library, and a VM.
-
-```baml
-type Tool = Answer | ReadFile | RunBash
-
-function dispatch(tool: Tool) -> string {
-  match (tool) {
-    a: Answer   => a.text,
-    r: ReadFile => baml.fs.read(r.path),
-    b: RunBash  => baml.sys.shell(b.command).stdout,
-  }
-}
+```
+/plugin marketplace add BoundaryML/baml-skill
+/plugin install baml@boundaryml-baml
 ```
 
-Importantly, this approach has a number of advantages compared to competitors in the space:
+### Manual install
 
-- We can offer our users a flexible, end-to-end platform. No one likes stitching together 10 products to build their workflow.
-- We don't have lock-in: our schema language, compiler, and IDE integrations are all freely available and open-source, so if users want to use just those, they're more than welcome to.
-- We can build our platform and ecosystem incrementally. Every platform suffers from the critical mass challenge - that you have to build out an entire platform for using it to be attractive, and then get enough adoption to accrue network effects - but everything that we want to build will be independently useful, so we'll be able to respond much more quickly to our users as we build out.
-- We're not tied to LLMs: if the winds shift and the industry discovers new model architectures, hosting patterns, or whatnot, we'll be well-positioned to respond, because our value proposition is giving you the right abstractions for your ML APIs. We have a lot of special support for working with LLMs, because the existing general-purpose LLMs are wildly useful. But there's definitely some insanity to the fact that API calls in the LLM world can and do take multiple seconds.
+- **Python**: `uv add baml-py && uv run baml-cli init`
+- **TypeScript**: `npm install @boundaryml/baml && npx baml-cli init`
+- **Ruby**: `bundle add baml && bundle exec baml-cli init`
+- **Go**: `go install github.com/boundaryml/baml/baml-cli@latest && baml-cli init`
+- **Other languages**: https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages
 
 ## Links
 
@@ -107,7 +94,3 @@ Importantly, this approach has a number of advantages compared to competitors in
 - GitHub: https://github.com/BoundaryML/baml
 - Discord: https://boundaryml.com/discord
 - Full agent guide: https://boundaryml.com/agent/guide
-
-## Detailed BAML Agent Guide
-
-The full agent guide follows below.
