@@ -529,22 +529,25 @@ const HeroCodeWindow = () => (
 
 type InstallPath = 'claude' | 'codex';
 
-const claudeInstallPrompt = 'claude plugin add boundaryml/baml';
-const codexInstallPrompt = 'codex plugin add boundaryml/baml';
+const claudeInstallCommands = [
+  '/plugin marketplace add BoundaryML/baml-skill',
+  '/plugin install baml@boundaryml-baml',
+];
+const codexInstallCommands = ['codex plugin add boundaryml/baml'];
 const installOptions: {
   id: InstallPath;
   label: string;
   icon?: string;
-  command: string;
+  commands: string[];
 }[] = [
   {
-    command: claudeInstallPrompt,
+    commands: claudeInstallCommands,
     icon: '/Claude Color SVG.svg',
     id: 'claude',
     label: 'Claude plugin',
   },
   {
-    command: codexInstallPrompt,
+    commands: codexInstallCommands,
     icon: '/Codex Color.svg',
     id: 'codex',
     label: 'Codex plugin',
@@ -586,21 +589,32 @@ const HeroSection = () => {
               >
                 Install
               </p>
-              <div style={{ maxWidth: 400, width: '100%' }}>
-                <ScriptCopyBtn
-                  className="block w-full max-w-none"
-                  codeLanguage="bash"
-                  commandMap={{ bash: selected.command } as const}
-                  darkTheme="none"
-                  lightTheme="none"
-                  onCopy={(command) =>
-                    posthog.capture('install_command_copied', {
-                      install_path: installPath,
-                      command,
-                    })
-                  }
-                  showMultiplePackageOptions={false}
-                />
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  maxWidth: 400,
+                  width: '100%',
+                }}
+              >
+                {selected.commands.map((command) => (
+                  <ScriptCopyBtn
+                    className="block w-full max-w-none"
+                    codeLanguage="bash"
+                    commandMap={{ bash: command } as const}
+                    darkTheme="none"
+                    key={command}
+                    lightTheme="none"
+                    onCopy={(copied) =>
+                      posthog.capture('install_command_copied', {
+                        install_path: installPath,
+                        command: copied,
+                      })
+                    }
+                    showMultiplePackageOptions={false}
+                  />
+                ))}
               </div>
               <div className="mt-3 flex gap-2">
                 {installOptions.map((opt) => (
