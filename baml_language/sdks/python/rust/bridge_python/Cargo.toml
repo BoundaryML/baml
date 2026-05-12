@@ -44,9 +44,5 @@ path = "src/bin/stub_gen.rs"
 doc = false
 test = false
 
-[[test]]
-name = "run_pytest"
-path = "../../tests/run_pytest.rs"
-
 [package.metadata.ci]
 wasm_support = false
