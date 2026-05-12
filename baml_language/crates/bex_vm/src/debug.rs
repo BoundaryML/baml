@@ -145,7 +145,7 @@ pub(crate) fn display_instruction(
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
             display_global_ref(*index, globals, objects, compile_time_globals)
         }
-        Instruction::Call { callee, .. } | Instruction::DispatchFuture(callee) => {
+        Instruction::Call { callee, .. } | Instruction::ScheduleFuture(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
         Instruction::LoadVar(index)
@@ -376,7 +376,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::AllocInstance { .. }
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Color::Cyan,
-        Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
+        Instruction::ScheduleFuture(_) | Instruction::Await => Color::BrightGreen,
         Instruction::Watch(_) | Instruction::Unwatch(_) | Instruction::Notify(_) => {
             Color::BrightRed
         }
@@ -812,7 +812,7 @@ fn display_instruction_textual(
         // --- Calls ---
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
         Instruction::CallIndirect => "call_indirect".to_string(),
-        Instruction::DispatchFuture(_) => format!("dispatch_future {}", meta_str(&"")),
+        Instruction::ScheduleFuture(_) => format!("schedule_future {}", meta_str(&"")),
         Instruction::Await => "await".to_string(),
 
         // --- Control ---
@@ -1057,7 +1057,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
         | Instruction::Call { .. }
-        | Instruction::DispatchFuture(_)
+        | Instruction::ScheduleFuture(_)
         | Instruction::AllocInstance { .. }
         | Instruction::AllocVariant(_)
         | Instruction::Watch(_)
@@ -1238,7 +1238,7 @@ pub fn display_compact_bytecode(
             | OpCode::AllocArray
             | OpCode::AllocMap
             | OpCode::AllocVariant
-            | OpCode::DispatchFuture
+            | OpCode::ScheduleFuture
             | OpCode::Watch
             | OpCode::Unwatch
             | OpCode::Notify

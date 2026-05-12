@@ -79,7 +79,7 @@ pub(crate) enum LocalClassification {
     /// At def sites: emit rvalue but NOT store (leave on stack).
     /// At Return: don't emit `LoadVar` for _0 (value already on stack).
     ReturnPhi,
-    /// Call result immediate: defined by Call/Await/DispatchFuture, used exactly once
+    /// Call result immediate: defined by Call/Await/ScheduleFuture, used exactly once
     /// immediately in the continuation block.
     /// At def site (after Call): don't emit Store (leave on stack).
     /// At use site: don't emit `LoadVar` (value already on stack from Call).
@@ -829,7 +829,7 @@ fn collect_uses_in_terminator(
                 }
             }
         }
-        Terminator::DispatchFuture {
+        Terminator::ScheduleFuture {
             callee,
             args,
             future,
@@ -1205,7 +1205,7 @@ fn is_return_phi(
                 // For terminator definitions, check if the continuation leads to return safely
                 let continuation = match &block.terminator {
                     Some(Terminator::Call { target, .. }) => Some(*target),
-                    Some(Terminator::DispatchFuture { resume, .. }) => Some(*resume),
+                    Some(Terminator::ScheduleFuture { resume, .. }) => Some(*resume),
                     Some(Terminator::Await { target, .. }) => Some(*target),
                     _ => None,
                 };
@@ -1258,7 +1258,7 @@ fn can_be_virtual(
         return false;
     };
 
-    // Definitions in terminators (Call/Await/DispatchFuture) cannot be inlined
+    // Definitions in terminators (Call/Await/ScheduleFuture) cannot be inlined
     // because the value comes from the operation itself, not from a re-emittable rvalue
     if def.statement_ref == StatementRef::Terminator {
         return false;
@@ -1566,11 +1566,11 @@ fn is_pure_constant(rvalue: &Rvalue) -> bool {
     matches!(rvalue, Rvalue::Use(Operand::Constant(_)))
 }
 
-/// Check if a local is a "call result immediate": defined by Call/Await/DispatchFuture,
+/// Check if a local is a "call result immediate": defined by Call/Await/ScheduleFuture,
 /// used exactly once in the continuation block.
 ///
 /// Call result immediate applies when:
-/// 1. The local is defined by a Call/Await/DispatchFuture terminator
+/// 1. The local is defined by a Call/Await/ScheduleFuture terminator
 /// 2. It has exactly one use
 /// 3. The use is in the continuation block (target of the Call)
 ///
@@ -1585,7 +1585,7 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
         return false;
     }
 
-    // Must have a definition from a terminator (Call/Await/DispatchFuture)
+    // Must have a definition from a terminator (Call/Await/ScheduleFuture)
     let Some(def) = &du.def else {
         return false;
     };
@@ -1595,7 +1595,7 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
         return false;
     }
 
-    // Get the defining block and check that its terminator is Call/Await/DispatchFuture
+    // Get the defining block and check that its terminator is Call/Await/ScheduleFuture
     // that defines this local.
     let def_block = body.block(def.block);
     match &def_block.terminator {
@@ -1605,7 +1605,7 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
         Some(Terminator::Await { destination, .. }) => {
             matches!(destination, Place::Local(l) if *l == local)
         }
-        Some(Terminator::DispatchFuture { future, .. }) => {
+        Some(Terminator::ScheduleFuture { future, .. }) => {
             matches!(future, Place::Local(l) if *l == local)
         }
         _ => false,

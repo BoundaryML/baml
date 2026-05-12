@@ -347,14 +347,14 @@ pub enum Instruction {
     /// `Vm::objects` array.
     AllocVariant(ObjectIndex),
 
-    /// Dispatch a statically-known global `sys_op` and create a pending future.
+    /// Schedule a statically-known global `sys_op` and create a pending future.
     ///
-    /// Format: `DISPATCH_FUTURE g` where `g` is the global index of the
+    /// Format: `SCHEDULE_FUTURE g` where `g` is the global index of the
     /// `sys_op` function.
     ///
     /// Arguments are pushed onto the eval stack. The callee is read from
     /// `Vm::globals[g]`, and arity is read from function metadata.
-    DispatchFuture(GlobalIndex),
+    ScheduleFuture(GlobalIndex),
 
     /// Awaits the future on top of the stack.
     ///
@@ -715,7 +715,7 @@ pub enum OpCode {
     AllocMap,
     AllocInstance,
     AllocVariant,
-    DispatchFuture,
+    ScheduleFuture,
     Watch,
     Unwatch,
     Notify,
@@ -822,7 +822,7 @@ impl OpCode {
             | Self::AllocArray
             | Self::AllocMap
             | Self::AllocVariant
-            | Self::DispatchFuture
+            | Self::ScheduleFuture
             | Self::Watch
             | Self::Unwatch
             | Self::Notify
@@ -930,7 +930,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::AllocMap as u8 => Ok(Self::AllocMap),
             x if x == Self::AllocInstance as u8 => Ok(Self::AllocInstance),
             x if x == Self::AllocVariant as u8 => Ok(Self::AllocVariant),
-            x if x == Self::DispatchFuture as u8 => Ok(Self::DispatchFuture),
+            x if x == Self::ScheduleFuture as u8 => Ok(Self::ScheduleFuture),
             x if x == Self::Watch as u8 => Ok(Self::Watch),
             x if x == Self::Unwatch as u8 => Ok(Self::Unwatch),
             x if x == Self::Notify as u8 => Ok(Self::Notify),
@@ -1031,7 +1031,7 @@ impl std::fmt::Display for OpCode {
             Self::AllocMap => "ALLOC_MAP",
             Self::AllocInstance => "ALLOC_INSTANCE",
             Self::AllocVariant => "ALLOC_VARIANT",
-            Self::DispatchFuture => "DISPATCH_FUTURE",
+            Self::ScheduleFuture => "SCHEDULE_FUTURE",
             Self::Watch => "WATCH",
             Self::Unwatch => "UNWATCH",
             Self::Notify => "NOTIFY",
@@ -1282,7 +1282,7 @@ impl std::fmt::Display for Instruction {
                 write!(f, "ALLOC_INSTANCE {class_obj} ntypeargs={ntypeargs}")
             }
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
-            Instruction::DispatchFuture(callee) => write!(f, "DISPATCH_FUTURE {callee}"),
+            Instruction::ScheduleFuture(callee) => write!(f, "SCHEDULE_FUTURE {callee}"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
@@ -1351,7 +1351,7 @@ pub enum OperandMeta {
     Var(String),
     /// `LoadField`, `StoreField` — field name.
     Field(String),
-    /// `Call`, `DispatchFuture` — function name.
+    /// `Call`, `ScheduleFuture` — function name.
     Callable(String),
     /// `LoadGlobal`, `StoreGlobal` — display value.
     Global(String),
@@ -1763,7 +1763,7 @@ impl Bytecode {
                 // ── GlobalIndex operand → u32 ───────────────────────
                 Instruction::LoadGlobal(g)
                 | Instruction::StoreGlobal(g)
-                | Instruction::DispatchFuture(g)
+                | Instruction::ScheduleFuture(g)
                 | Instruction::MakeBoundMethod(g) => {
                     code.extend_from_slice(
                         &u32::try_from(g.into_raw())
@@ -2016,7 +2016,7 @@ impl Bytecode {
             Instruction::AllocMap(_) => OpCode::AllocMap,
             Instruction::AllocInstance { .. } => OpCode::AllocInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
-            Instruction::DispatchFuture(_) => OpCode::DispatchFuture,
+            Instruction::ScheduleFuture(_) => OpCode::ScheduleFuture,
             Instruction::Watch(_) => OpCode::Watch,
             Instruction::Unwatch(_) => OpCode::Unwatch,
             Instruction::Notify(_) => OpCode::Notify,

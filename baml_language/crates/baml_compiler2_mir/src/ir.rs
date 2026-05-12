@@ -378,10 +378,10 @@ pub enum Terminator {
     /// an Unreachable terminator, it's a compiler bug.
     Unreachable,
 
-    /// Dispatch an async operation (LLM call) without blocking.
+    /// Schedule an async operation (LLM call) without blocking.
     ///
     /// This is a suspend point - control returns to the embedder.
-    DispatchFuture {
+    ScheduleFuture {
         /// The LLM function to call.
         callee: Operand,
         /// Arguments to the function.
@@ -467,7 +467,7 @@ impl Terminator {
                 succs
             }
             Terminator::Unreachable => vec![],
-            Terminator::DispatchFuture { resume, .. } => vec![*resume],
+            Terminator::ScheduleFuture { resume, .. } => vec![*resume],
             Terminator::Await { target, unwind, .. } => {
                 let mut succs = vec![*target];
                 if let Some(u) = unwind {

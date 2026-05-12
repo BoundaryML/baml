@@ -573,7 +573,7 @@ function baml.env.get(key: string) -> string? {
 
 function baml.env.get_or_panic(key: string) -> string {
     load_var key
-    dispatch_future baml.env.get
+    schedule_future baml.env.get
     await
     store_var _2
     load_var _2
@@ -2166,21 +2166,21 @@ function baml.llm.Client.__make_stream(self: null, sse: baml.http.SseStream, fun
     call baml.llm.Client.to_primitive_client
     store_var primitive
     load_var function_name
-    dispatch_future baml.llm.get_return_type
+    schedule_future baml.llm.get_return_type
     await
     store_var return_type
     load_var function_name
-    dispatch_future baml.llm.get_stream_return_type
+    schedule_future baml.llm.get_stream_return_type
     await
     store_var stream_return_type
     load_var primitive
-    dispatch_future baml.llm.PrimitiveClient.new_stream_accumulator
+    schedule_future baml.llm.PrimitiveClient.new_stream_accumulator
     await
     store_var acc
     load_const null
     load_var return_type
     load_var stream_return_type
-    dispatch_future baml.llm.StreamCache.new
+    schedule_future baml.llm.StreamCache.new
     await
     store_var cache
     load_type #0
@@ -2567,20 +2567,20 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     load_var context
     load_field .args
     load_var return_type
-    dispatch_future baml.llm.PrimitiveClient.render_prompt
+    schedule_future baml.llm.PrimitiveClient.render_prompt
     await
     store_var prompt
     load_var primitive
     load_var prompt
-    dispatch_future baml.llm.PrimitiveClient.specialize_prompt
+    schedule_future baml.llm.PrimitiveClient.specialize_prompt
     await
     store_var specialized
     load_var primitive
     load_var specialized
     load_var return_type
-    dispatch_future baml.llm.PrimitiveClient.build_request
+    schedule_future baml.llm.PrimitiveClient.build_request
     await
-    dispatch_future baml.http.send
+    schedule_future baml.http.send
     await
     store_var http_response
     load_var http_response
@@ -2590,7 +2590,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
 
   L10:
     load_var http_response
-    dispatch_future baml.http.Response.text
+    schedule_future baml.http.Response.text
     await
     store_var error_body
     jump L11
@@ -2605,7 +2605,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     cmp_op >
     pop_jump_if_false L12
     load_var active_delay_ms
-    dispatch_future baml.sys.sleep
+    schedule_future baml.sys.sleep
     await
     pop 1
 
@@ -2619,13 +2619,13 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
 
   L13:
     load_var http_response
-    dispatch_future baml.http.Response.text
+    schedule_future baml.http.Response.text
     await
     store_var body
     load_var primitive
     load_var body
     load_type #0
-    dispatch_future baml.llm.PrimitiveClient.parse
+    schedule_future baml.llm.PrimitiveClient.parse
     await
     jump L15
     load_var e
@@ -2635,7 +2635,7 @@ function baml.llm.Client.execute_once_oneshot(self: null, context: baml.llm.Exec
     cmp_op >
     pop_jump_if_false L14
     load_var active_delay_ms
-    dispatch_future baml.sys.sleep
+    schedule_future baml.sys.sleep
     await
     pop 1
 
@@ -2753,20 +2753,20 @@ function baml.llm.Client.execute_once_stream(self: null, context: baml.llm.Execu
     load_var context
     load_field .args
     load_var return_type
-    dispatch_future baml.llm.PrimitiveClient.render_prompt
+    schedule_future baml.llm.PrimitiveClient.render_prompt
     await
     store_var prompt
     load_var primitive
     load_var prompt
-    dispatch_future baml.llm.PrimitiveClient.specialize_prompt
+    schedule_future baml.llm.PrimitiveClient.specialize_prompt
     await
     store_var specialized
     load_var primitive
     load_var specialized
     load_var return_type
-    dispatch_future baml.llm.PrimitiveClient.build_request_stream
+    schedule_future baml.llm.PrimitiveClient.build_request_stream
     await
-    dispatch_future baml.http.fetch_sse
+    schedule_future baml.http.fetch_sse
     await
     store_var sse
     load_var self
@@ -3117,7 +3117,7 @@ function baml.llm.Client.to_primitive_client(self: null) -> baml.llm.PrimitiveCl
 
   L0:
     load_var self
-    dispatch_future baml.llm.Client.get_constructor
+    schedule_future baml.llm.Client.get_constructor
     await
     call_indirect
     jump L2
@@ -3125,7 +3125,7 @@ function baml.llm.Client.to_primitive_client(self: null) -> baml.llm.PrimitiveCl
   L1:
     load_var self
     load_field .name
-    dispatch_future baml.llm.from_shorthand
+    schedule_future baml.llm.from_shorthand
     await
 
   L2:
@@ -3606,13 +3606,13 @@ function baml.llm.Stream.final(self: null) -> void {
   L0:
     load_var self
     load_field ._acc
-    dispatch_future baml.llm.StreamAccumulator.is_done
+    schedule_future baml.llm.StreamAccumulator.is_done
     await
     unary_op !
     pop_jump_if_false L2
     load_var self
     load_field ._sse
-    dispatch_future baml.http.SseStream.next
+    schedule_future baml.http.SseStream.next
     await
     store_var _7
     load_var _7
@@ -3625,24 +3625,24 @@ function baml.llm.Stream.final(self: null) -> void {
     load_var self
     load_field ._acc
     load_var _7
-    dispatch_future baml.llm.StreamAccumulator.add_events
+    schedule_future baml.llm.StreamAccumulator.add_events
     await
     pop 1
     load_var self
     load_field ._acc
-    dispatch_future baml.llm.StreamAccumulator.is_done
+    schedule_future baml.llm.StreamAccumulator.is_done
     await
     pop_jump_if_false L0
     load_var self
     load_field ._sse
-    dispatch_future baml.http.SseStream.close
+    schedule_future baml.http.SseStream.close
     await
     pop 1
 
   L2:
     load_var self
     load_field ._acc
-    dispatch_future baml.llm.StreamAccumulator.finish_reason
+    schedule_future baml.llm.StreamAccumulator.finish_reason
     await
     store_var _23
     load_var _23
@@ -3655,18 +3655,18 @@ function baml.llm.Stream.final(self: null) -> void {
     load_var self
     load_field ._client
     load_var _23
-    dispatch_future baml.llm.PrimitiveClient.validate_finish_reason
+    schedule_future baml.llm.PrimitiveClient.validate_finish_reason
     await
     pop 1
     load_var self
     load_field ._acc
-    dispatch_future baml.llm.StreamAccumulator.content
+    schedule_future baml.llm.StreamAccumulator.content
     await
     load_var self
     load_field ._cache
     load_type #0
     load_type #1
-    dispatch_future baml.llm.__sap_parse_final
+    schedule_future baml.llm.__sap_parse_final
     await
     return
 
@@ -3738,7 +3738,7 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
   L2:
     load_var self
     load_field ._sse
-    dispatch_future baml.http.SseStream.next
+    schedule_future baml.http.SseStream.next
     await
     store_var _3
     load_var _3
@@ -3751,12 +3751,12 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
     load_var self
     load_field ._acc
     load_var _3
-    dispatch_future baml.llm.StreamAccumulator.add_events
+    schedule_future baml.llm.StreamAccumulator.add_events
     await
     pop 1
     load_var self
     load_field ._acc
-    dispatch_future baml.llm.StreamAccumulator.is_done
+    schedule_future baml.llm.StreamAccumulator.is_done
     await
     pop_jump_if_false L4
     jump L6
@@ -3764,13 +3764,13 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
   L4:
     load_var self
     load_field ._acc
-    dispatch_future baml.llm.StreamAccumulator.content
+    schedule_future baml.llm.StreamAccumulator.content
     await
     load_var self
     load_field ._cache
     load_type #0
     load_type #1
-    dispatch_future baml.llm.__sap_parse_partial
+    schedule_future baml.llm.__sap_parse_partial
     await
     store_var parsed
     load_var parsed
@@ -3785,7 +3785,7 @@ function baml.llm.Stream.next(self: null) -> void | baml.stream.StreamFinished {
   L6:
     load_var self
     load_field ._sse
-    dispatch_future baml.http.SseStream.close
+    schedule_future baml.http.SseStream.close
     await
     pop 1
     alloc_instance baml.stream.StreamFinished
@@ -4035,7 +4035,7 @@ function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache<
 
 function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request {
     load_var function_name
-    dispatch_future baml.llm.get_return_type
+    schedule_future baml.llm.get_return_type
     await
     store_var return_type
     load_var client
@@ -4049,14 +4049,14 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
     load_var primitive_client
     load_var specialized_prompt
     load_var return_type
-    dispatch_future baml.llm.PrimitiveClient.build_request
+    schedule_future baml.llm.PrimitiveClient.build_request
     await
     return
 }
 
 function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request {
     load_var function_name
-    dispatch_future baml.llm.get_return_type
+    schedule_future baml.llm.get_return_type
     await
     store_var return_type
     load_var client
@@ -4070,14 +4070,14 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
     load_var primitive_client
     load_var specialized_prompt
     load_var return_type
-    dispatch_future baml.llm.PrimitiveClient.build_request_stream
+    schedule_future baml.llm.PrimitiveClient.build_request_stream
     await
     return
 }
 
 function baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> void {
     load_var function_name
-    dispatch_future baml.llm.get_jinja_template
+    schedule_future baml.llm.get_jinja_template
     await
     store_var jinja_string
     load_type #0
@@ -4108,35 +4108,35 @@ function baml.llm.get_stream_return_type(function_name: string) -> type {
 
 function baml.llm.parse(function_name: string, json: string) -> void {
     load_var function_name
-    dispatch_future baml.llm.get_return_type
+    schedule_future baml.llm.get_return_type
     await
     store_var return_type
     load_var function_name
-    dispatch_future baml.llm.get_stream_return_type
+    schedule_future baml.llm.get_stream_return_type
     await
     store_var stream_return_type
     load_const null
     load_var return_type
     load_var stream_return_type
-    dispatch_future baml.llm.StreamCache.new
+    schedule_future baml.llm.StreamCache.new
     await
     store_var cache
     load_var json
     load_var cache
     load_type #0
     load_type #1
-    dispatch_future baml.llm.__sap_parse_final
+    schedule_future baml.llm.__sap_parse_final
     await
     return
 }
 
 function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
     load_var function_name
-    dispatch_future baml.llm.get_jinja_template
+    schedule_future baml.llm.get_jinja_template
     await
     store_var jinja_string
     load_var function_name
-    dispatch_future baml.llm.get_return_type
+    schedule_future baml.llm.get_return_type
     await
     store_var return_type
     load_var client
@@ -4146,19 +4146,19 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     load_var jinja_string
     load_var args
     load_var return_type
-    dispatch_future baml.llm.PrimitiveClient.render_prompt
+    schedule_future baml.llm.PrimitiveClient.render_prompt
     await
     store_var prompt
     load_var primitive_client
     load_var prompt
-    dispatch_future baml.llm.PrimitiveClient.specialize_prompt
+    schedule_future baml.llm.PrimitiveClient.specialize_prompt
     await
     return
 }
 
 function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream<void, void> {
     load_var function_name
-    dispatch_future baml.llm.get_jinja_template
+    schedule_future baml.llm.get_jinja_template
     await
     store_var jinja_string
     load_type #0

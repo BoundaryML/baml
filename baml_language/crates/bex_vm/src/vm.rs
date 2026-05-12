@@ -3534,12 +3534,12 @@ impl BexVm {
                 self.stack.push(Value::Object(variant_ptr));
             }
 
-            Instruction::DispatchFuture(callee) => {
+            Instruction::ScheduleFuture(callee) => {
                 let callee_value = self.globals[callee];
                 let expected_type = FunctionType::SysOp;
                 let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
 
-                // Can't dispatch if it's not a function
+                // Can't schedule if it's not a function
                 let Object::Function(callable_future) = self.get_object(callee_ptr) else {
                     return Err(VmInternalError::TypeError {
                         expected: expected_type.into(),
@@ -5399,8 +5399,8 @@ impl BexVm {
                     self.stack.push(Value::Object(variant_ptr));
                 }
 
-                // ── DispatchFuture ────────────────────────────────────────────
-                OpCode::DispatchFuture => {
+                // ── ScheduleFuture ────────────────────────────────────────────
+                OpCode::ScheduleFuture => {
                     let raw = { read_u32_unchecked(code, pc) };
                     let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let callee_value = self.globals[callee];

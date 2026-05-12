@@ -92,9 +92,9 @@ fn .<lambda(<lambda($init_test_32, 0)>, 1)>(testset: testing.TestCollector) -> n
     let _2: baml.http.Response // req
     let _3: string
     let _4: string
-    let _5: future<baml.http.Response>
+    let _5: future<baml.http.Response, null>
     let _6: string // data
-    let _7: future<string>
+    let _7: future<string, null>
     let _8: string[] // tests
     let _9: string
     let _10: string[]
@@ -110,7 +110,7 @@ fn .<lambda(<lambda($init_test_32, 0)>, 1)>(testset: testing.TestCollector) -> n
     bb0: {
         _4 = copy capture[0];
         _3 = const "http://localhost:8000/" + copy _4;
-        _5 = dispatch_future const fn baml.http.fetch(copy _3) -> bb1;
+        _5 = schedule_future const fn baml.http.fetch(copy _3) -> bb1;
     }
 
     bb1: {
@@ -118,7 +118,7 @@ fn .<lambda(<lambda($init_test_32, 0)>, 1)>(testset: testing.TestCollector) -> n
     }
 
     bb2: {
-        _7 = dispatch_future const fn baml.http.Response.text(copy _2) -> bb3;
+        _7 = schedule_future const fn baml.http.Response.text(copy _2) -> bb3;
     }
 
     bb3: {

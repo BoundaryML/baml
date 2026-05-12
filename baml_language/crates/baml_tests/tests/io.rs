@@ -24,7 +24,7 @@ fn io_input_with_prompt_bytecode() {
     insta::assert_snapshot!(bytecode, @r#"
     function main() -> string {
         load_const "Enter your name: "
-        dispatch_future baml.io.input
+        schedule_future baml.io.input
         await
         return
     }
@@ -44,7 +44,7 @@ fn io_input_no_prompt_bytecode() {
     insta::assert_snapshot!(bytecode, @r#"
     function main() -> string {
         load_const null
-        dispatch_future baml.io.input
+        schedule_future baml.io.input
         await
         return
     }
@@ -64,7 +64,7 @@ fn io_input_fully_qualified_bytecode() {
     insta::assert_snapshot!(bytecode, @r#"
     function main() -> string {
         load_const "Enter text: "
-        dispatch_future baml.io.input
+        schedule_future baml.io.input
         await
         return
     }

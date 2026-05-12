@@ -3342,7 +3342,12 @@ impl LoweringContext<'_> {
                 }),
             };
             let result_ty = self.builder.local_ty(dest_local);
-            let future_ty = Ty::Future(Box::new(result_ty), TyAttr::default());
+            // BEP-034 v1: Phase A defaults the throws type to Null. Phase C/D
+            // will plumb the sys-op's declared throws type through TIR.
+            let throws_ty = Ty::Null {
+                attr: TyAttr::default(),
+            };
+            let future_ty = Ty::Future(Box::new(result_ty), Box::new(throws_ty), TyAttr::default());
             let future_local = self.builder.temp(future_ty);
             let future_place = Place::Local(future_local);
             let resume = self.builder.create_block();
@@ -3359,7 +3364,7 @@ impl LoweringContext<'_> {
             } else {
                 arg_operands
             };
-            self.builder.dispatch_future(
+            self.builder.schedule_future(
                 callee_operand,
                 sys_op_arg_operands,
                 future_place.clone(),
@@ -7361,7 +7366,7 @@ pub fn lower_function<'db>(
             // synthetic trailing value-arg slot for each generic type parameter
             // (e.g. `parse<T>` gets one extra `baml_type::Ty` slot after the
             // regular params).  We must include those synthetic slots in the
-            // arity so that `DispatchFuture` pops the correct number of args
+            // arity so that `ScheduleFuture` pops the correct number of args
             // from the stack.
             let extra_arity = if matches!(kind, BuiltinKind::Io) {
                 // For IO builtins (`$rust_io_function`), the compiler injects

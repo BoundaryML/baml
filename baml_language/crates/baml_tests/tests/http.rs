@@ -57,9 +57,9 @@ async fn http_fetch_and_text() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> string {
         load_const "{URI}/data"
-        dispatch_future baml.http.fetch
+        schedule_future baml.http.fetch
         await
-        dispatch_future baml.http.Response.text
+        schedule_future baml.http.Response.text
         await
         return
     }
@@ -91,7 +91,7 @@ async fn http_response_status() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> int {
         load_const "{URI}/status"
-        dispatch_future baml.http.fetch
+        schedule_future baml.http.fetch
         await
         load_field .status_code
         return
@@ -125,7 +125,7 @@ async fn foreign_class_field_access_compiles_correctly() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> int {
         load_const "{URI}/test"
-        dispatch_future baml.http.fetch
+        schedule_future baml.http.fetch
         await
         load_field .status_code
         return
@@ -155,7 +155,7 @@ async fn http_response_ok_true() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> bool {
         load_const "{URI}/ok"
-        dispatch_future baml.http.fetch
+        schedule_future baml.http.fetch
         await
         call baml.http.Response.ok
         return
@@ -185,7 +185,7 @@ async fn http_response_ok_false() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> bool {
         load_const "{URI}/notfound"
-        dispatch_future baml.http.fetch
+        schedule_future baml.http.fetch
         await
         call baml.http.Response.ok
         return
@@ -216,7 +216,7 @@ async fn http_response_url() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> string {
         load_const "{URI}/endpoint"
-        dispatch_future baml.http.fetch
+        schedule_future baml.http.fetch
         await
         load_field .url
         return
@@ -240,7 +240,7 @@ async fn http_fetch_network_error() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> int {
         load_const "http://localhost:1"
-        dispatch_future baml.http.fetch
+        schedule_future baml.http.fetch
         await
         load_field .status_code
         return
@@ -272,15 +272,15 @@ async fn http_response_text_consumed() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> string {
         load_const "{URI}/once"
-        dispatch_future baml.http.fetch
+        schedule_future baml.http.fetch
         await
         store_var response
         load_var response
-        dispatch_future baml.http.Response.text
+        schedule_future baml.http.Response.text
         await
         store_var first
         load_var response
-        dispatch_future baml.http.Response.text
+        schedule_future baml.http.Response.text
         await
         return
     }

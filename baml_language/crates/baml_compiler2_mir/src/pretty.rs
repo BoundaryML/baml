@@ -288,13 +288,13 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
         Terminator::Unreachable => {
             write!(f, "unreachable;")
         }
-        Terminator::DispatchFuture {
+        Terminator::ScheduleFuture {
             callee,
             args,
             future,
             resume,
         } => {
-            write!(f, "{future} = dispatch_future ")?;
+            write!(f, "{future} = schedule_future ")?;
             write_operand(f, callee)?;
             write!(f, "(")?;
             for (i, arg) in args.iter().enumerate() {

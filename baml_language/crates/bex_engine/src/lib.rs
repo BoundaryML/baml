@@ -71,6 +71,7 @@
 mod conversion;
 mod function_call_context;
 mod future;
+mod thread;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex, atomic::Ordering},
@@ -102,7 +103,10 @@ use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
 use web_time::{Instant, SystemTime};
 
-pub use crate::future::{FutureManager, FutureManagerGuard, FutureManagerInner};
+pub use crate::{
+    future::{FutureManager, FutureManagerGuard, FutureManagerInner},
+    thread::{BexThread, ThreadId},
+};
 
 // ============================================================================
 // Engine Types

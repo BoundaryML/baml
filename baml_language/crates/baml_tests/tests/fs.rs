@@ -38,9 +38,9 @@ async fn fs_open_and_read() {
     function main() -> string {
         load_const "{TMPDIR}/hello.txt"
         load_const "r"
-        dispatch_future baml.fs.open
+        schedule_future baml.fs.open
         await
-        dispatch_future baml.fs.File.text
+        schedule_future baml.fs.File.text
         await
         return
     }
@@ -68,9 +68,9 @@ async fn fs_open_and_read_bytes() {
     function main() -> uint8array {
         load_const "{TMPDIR}/hello.txt"
         load_const "r"
-        dispatch_future baml.fs.open
+        schedule_future baml.fs.open
         await
-        dispatch_future baml.fs.File.bytes
+        schedule_future baml.fs.File.bytes
         await
         return
     }
@@ -98,9 +98,9 @@ async fn fs_open_nonexistent_file() {
     function main() -> string {
         load_const "{TMPDIR}/nonexistent.txt"
         load_const "r"
-        dispatch_future baml.fs.open
+        schedule_future baml.fs.open
         await
-        dispatch_future baml.fs.File.text
+        schedule_future baml.fs.File.text
         await
         return
     }
@@ -125,7 +125,7 @@ async fn fs_write_string() {
     function main() -> int {
         load_const "{TMPDIR}/output.txt"
         load_const "Hello, world!"
-        dispatch_future baml.fs.write
+        schedule_future baml.fs.write
         await
         return
     }
@@ -154,14 +154,14 @@ async fn fs_write_bytes() {
     function main() -> int {
         load_const "{TMPDIR}/source.bin"
         load_const "r"
-        dispatch_future baml.fs.open
+        schedule_future baml.fs.open
         await
-        dispatch_future baml.fs.File.bytes
+        schedule_future baml.fs.File.bytes
         await
         store_var data
         load_const "{TMPDIR}/copy.bin"
         load_var data
-        dispatch_future baml.fs.write_bytes
+        schedule_future baml.fs.write_bytes
         await
         return
     }
@@ -189,7 +189,7 @@ async fn fs_write_creates_parent_dirs() {
     function main() -> int {
         load_const "{TMPDIR}/nested/dir/file.txt"
         load_const "nested content"
-        dispatch_future baml.fs.write
+        schedule_future baml.fs.write
         await
         return
     }
@@ -217,7 +217,7 @@ async fn fs_write_overwrites_existing() {
     function main() -> int {
         load_const "{TMPDIR}/existing.txt"
         load_const "new content"
-        dispatch_future baml.fs.write
+        schedule_future baml.fs.write
         await
         return
     }
@@ -247,14 +247,14 @@ async fn fs_roundtrip_write_and_read() {
     function main() -> string {
         load_const "{TMPDIR}/roundtrip.txt"
         load_const "roundtrip data"
-        dispatch_future baml.fs.write
+        schedule_future baml.fs.write
         await
         pop 1
         load_const "{TMPDIR}/roundtrip.txt"
         load_const "r"
-        dispatch_future baml.fs.open
+        schedule_future baml.fs.open
         await
-        dispatch_future baml.fs.File.text
+        schedule_future baml.fs.File.text
         await
         return
     }
@@ -283,17 +283,17 @@ async fn fs_file_rw_seek_and_read() {
     function main() -> string {
         load_const "{TMPDIR}/data.txt"
         load_const "r+"
-        dispatch_future baml.fs.open
+        schedule_future baml.fs.open
         await
         store_var file
         load_var file
         load_const "start"
         load_const 6
-        dispatch_future baml.fs.File.seek_from
+        schedule_future baml.fs.File.seek_from
         await
         pop 1
         load_var file
-        dispatch_future baml.fs.File.text
+        schedule_future baml.fs.File.text
         await
         return
     }
@@ -324,28 +324,28 @@ async fn fs_file_rw_write_and_read_back() {
     function main() -> string {
         load_const "{TMPDIR}/data.txt"
         load_const "r+"
-        dispatch_future baml.fs.open
+        schedule_future baml.fs.open
         await
         store_var file
         load_var file
         load_const "start"
         load_const 6
-        dispatch_future baml.fs.File.seek_from
+        schedule_future baml.fs.File.seek_from
         await
         pop 1
         load_var file
         load_const "to Rust!!"
-        dispatch_future baml.fs.File.write
+        schedule_future baml.fs.File.write
         await
         pop 1
         load_var file
         load_const "start"
         load_const 0
-        dispatch_future baml.fs.File.seek_from
+        schedule_future baml.fs.File.seek_from
         await
         pop 1
         load_var file
-        dispatch_future baml.fs.File.text
+        schedule_future baml.fs.File.text
         await
         return
     }
@@ -378,25 +378,25 @@ async fn fs_file_rw_write_bytes() {
     function main() -> int {
         load_const "{TMPDIR}/source.bin"
         load_const "r"
-        dispatch_future baml.fs.open
+        schedule_future baml.fs.open
         await
-        dispatch_future baml.fs.File.bytes
+        schedule_future baml.fs.File.bytes
         await
         store_var bytes
         load_const "{TMPDIR}/data.bin"
         load_const "r+"
-        dispatch_future baml.fs.open
+        schedule_future baml.fs.open
         await
         store_var file
         load_var file
         load_const "start"
         load_const 0
-        dispatch_future baml.fs.File.seek_from
+        schedule_future baml.fs.File.seek_from
         await
         pop 1
         load_var file
         load_var bytes
-        dispatch_future baml.fs.File.write_bytes
+        schedule_future baml.fs.File.write_bytes
         await
         return
     }
@@ -425,10 +425,10 @@ async fn fs_file_write_on_readonly_errors() {
     function main() -> int {
         load_const "{TMPDIR}/readonly.txt"
         load_const "r"
-        dispatch_future baml.fs.open
+        schedule_future baml.fs.open
         await
         load_const "should fail"
-        dispatch_future baml.fs.File.write
+        schedule_future baml.fs.File.write
         await
         return
     }
@@ -478,7 +478,7 @@ async fn fs_exists_returns_true() {
     insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
     function main() -> bool {
         load_const "{TMPDIR}/here.txt"
-        dispatch_future baml.fs.exists
+        schedule_future baml.fs.exists
         await
         return
     }
@@ -549,7 +549,7 @@ async fn fs_size_returns_length() {
     insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
     function main() -> int {
         load_const "{TMPDIR}/data.bin"
-        dispatch_future baml.fs.size
+        schedule_future baml.fs.size
         await
         return
     }

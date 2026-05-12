@@ -379,12 +379,12 @@ fn baml.env.get_or_panic(key: string) -> string {
     let _0: string // _0 // return
     let _1: string // key // param
     let _2: string?
-    let _3: future<string?>
+    let _3: future<string?, null>
     let _4: bool
     let _5: string
 
     bb0: {
-        _3 = dispatch_future const fn baml.env.get(copy _1) -> bb1;
+        _3 = schedule_future const fn baml.env.get(copy _1) -> bb1;
     }
 
     bb1: {
@@ -2179,15 +2179,15 @@ fn baml.llm.build_request(client: baml.llm.Client, function_name: string, args: 
     let _2: string // function_name // param
     let _3: map<string, unknown> // args // param
     let _4: type // return_type
-    let _5: future<type>
+    let _5: future<type, null>
     let _6: baml.llm.PrimitiveClient // primitive_client
     let _7: baml.llm.PromptAst // specialized_prompt
     let _8: baml.llm.PromptAst
     let _9: type
-    let _10: future<baml.http.Request>
+    let _10: future<baml.http.Request, null>
 
     bb0: {
-        _5 = dispatch_future const fn baml.llm.get_return_type(copy _2) -> bb1;
+        _5 = schedule_future const fn baml.llm.get_return_type(copy _2) -> bb1;
     }
 
     bb1: {
@@ -2205,7 +2205,7 @@ fn baml.llm.build_request(client: baml.llm.Client, function_name: string, args: 
     bb4: {
         _8 = copy _7;
         _9 = copy _4;
-        _10 = dispatch_future const fn baml.llm.PrimitiveClient.build_request(copy _6, copy _8, copy _9) -> bb5;
+        _10 = schedule_future const fn baml.llm.PrimitiveClient.build_request(copy _6, copy _8, copy _9) -> bb5;
     }
 
     bb5: {
@@ -2224,15 +2224,15 @@ fn baml.llm.build_request_stream(client: baml.llm.Client, function_name: string,
     let _2: string // function_name // param
     let _3: map<string, unknown> // args // param
     let _4: type // return_type
-    let _5: future<type>
+    let _5: future<type, null>
     let _6: baml.llm.PrimitiveClient // primitive_client
     let _7: baml.llm.PromptAst // specialized_prompt
     let _8: baml.llm.PromptAst
     let _9: type
-    let _10: future<baml.http.Request>
+    let _10: future<baml.http.Request, null>
 
     bb0: {
-        _5 = dispatch_future const fn baml.llm.get_return_type(copy _2) -> bb1;
+        _5 = schedule_future const fn baml.llm.get_return_type(copy _2) -> bb1;
     }
 
     bb1: {
@@ -2250,7 +2250,7 @@ fn baml.llm.build_request_stream(client: baml.llm.Client, function_name: string,
     bb4: {
         _8 = copy _7;
         _9 = copy _4;
-        _10 = dispatch_future const fn baml.llm.PrimitiveClient.build_request_stream(copy _6, copy _8, copy _9) -> bb5;
+        _10 = schedule_future const fn baml.llm.PrimitiveClient.build_request_stream(copy _6, copy _8, copy _9) -> bb5;
     }
 
     bb5: {
@@ -2269,7 +2269,7 @@ fn baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, ar
     let _2: string // function_name // param
     let _3: map<string, unknown> // args // param
     let _4: string // jinja_string
-    let _5: future<string>
+    let _5: future<string, null>
     let _6: baml.llm.ExecutionContext // context
     let _7: string
     let _8: void // result
@@ -2277,7 +2277,7 @@ fn baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, ar
     let _10: type
 
     bb0: {
-        _5 = dispatch_future const fn baml.llm.get_jinja_template(copy _2) -> bb1;
+        _5 = schedule_future const fn baml.llm.get_jinja_template(copy _2) -> bb1;
     }
 
     bb1: {
@@ -2395,20 +2395,20 @@ fn baml.llm.parse(function_name: string, json: string) -> void {
     let _1: string // function_name // param
     let _2: string // json // param
     let _3: type // return_type
-    let _4: future<type>
+    let _4: future<type, null>
     let _5: type // stream_return_type
-    let _6: future<type>
+    let _6: future<type, null>
     let _7: baml.llm.StreamCache<void, void> // cache
     let _8: type
     let _9: type
-    let _10: future<baml.llm.StreamCache<void, void>>
+    let _10: future<baml.llm.StreamCache<void, void>, null>
     let _11: baml.llm.StreamCache<void, void>
     let _12: type
     let _13: type
-    let _14: future<void>
+    let _14: future<void, null>
 
     bb0: {
-        _4 = dispatch_future const fn baml.llm.get_return_type(copy _1) -> bb1;
+        _4 = schedule_future const fn baml.llm.get_return_type(copy _1) -> bb1;
     }
 
     bb1: {
@@ -2416,7 +2416,7 @@ fn baml.llm.parse(function_name: string, json: string) -> void {
     }
 
     bb2: {
-        _6 = dispatch_future const fn baml.llm.get_stream_return_type(copy _1) -> bb3;
+        _6 = schedule_future const fn baml.llm.get_stream_return_type(copy _1) -> bb3;
     }
 
     bb3: {
@@ -2426,7 +2426,7 @@ fn baml.llm.parse(function_name: string, json: string) -> void {
     bb4: {
         _8 = copy _3;
         _9 = copy _5;
-        _10 = dispatch_future const fn baml.llm.StreamCache.new(const null, copy _8, copy _9) -> bb5;
+        _10 = schedule_future const fn baml.llm.StreamCache.new(const null, copy _8, copy _9) -> bb5;
     }
 
     bb5: {
@@ -2437,7 +2437,7 @@ fn baml.llm.parse(function_name: string, json: string) -> void {
         _11 = copy _7;
         _12 = load_type(#0);
         _13 = load_type(#1);
-        _14 = dispatch_future const fn baml.llm.__sap_parse_final(copy _2, copy _11, copy _12, copy _13) -> bb7;
+        _14 = schedule_future const fn baml.llm.__sap_parse_final(copy _2, copy _11, copy _12, copy _13) -> bb7;
     }
 
     bb7: {
@@ -2456,19 +2456,19 @@ fn baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: 
     let _2: string // function_name // param
     let _3: map<string, unknown> // args // param
     let _4: string // jinja_string
-    let _5: future<string>
+    let _5: future<string, null>
     let _6: type // return_type
-    let _7: future<type>
+    let _7: future<type, null>
     let _8: baml.llm.PrimitiveClient // primitive_client
     let _9: baml.llm.PromptAst // prompt
     let _10: string
     let _11: type
-    let _12: future<baml.llm.PromptAst>
+    let _12: future<baml.llm.PromptAst, null>
     let _13: baml.llm.PromptAst
-    let _14: future<baml.llm.PromptAst>
+    let _14: future<baml.llm.PromptAst, null>
 
     bb0: {
-        _5 = dispatch_future const fn baml.llm.get_jinja_template(copy _2) -> bb1;
+        _5 = schedule_future const fn baml.llm.get_jinja_template(copy _2) -> bb1;
     }
 
     bb1: {
@@ -2476,7 +2476,7 @@ fn baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: 
     }
 
     bb2: {
-        _7 = dispatch_future const fn baml.llm.get_return_type(copy _2) -> bb3;
+        _7 = schedule_future const fn baml.llm.get_return_type(copy _2) -> bb3;
     }
 
     bb3: {
@@ -2490,7 +2490,7 @@ fn baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: 
     bb5: {
         _10 = copy _4;
         _11 = copy _6;
-        _12 = dispatch_future const fn baml.llm.PrimitiveClient.render_prompt(copy _8, copy _10, copy _3, copy _11) -> bb6;
+        _12 = schedule_future const fn baml.llm.PrimitiveClient.render_prompt(copy _8, copy _10, copy _3, copy _11) -> bb6;
     }
 
     bb6: {
@@ -2499,7 +2499,7 @@ fn baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: 
 
     bb7: {
         _13 = copy _9;
-        _14 = dispatch_future const fn baml.llm.PrimitiveClient.specialize_prompt(copy _8, copy _13) -> bb8;
+        _14 = schedule_future const fn baml.llm.PrimitiveClient.specialize_prompt(copy _8, copy _13) -> bb8;
     }
 
     bb8: {
@@ -2609,7 +2609,7 @@ fn baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, 
     let _2: string // function_name // param
     let _3: map<string, unknown> // args // param
     let _4: string // jinja_string
-    let _5: future<string>
+    let _5: future<string, null>
     let _6: baml.llm.ExecutionContext // context
     let _7: string
     let _8: baml.llm.Stream<void, void> // result
@@ -2618,7 +2618,7 @@ fn baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, 
     let _11: type
 
     bb0: {
-        _5 = dispatch_future const fn baml.llm.get_jinja_template(copy _2) -> bb1;
+        _5 = schedule_future const fn baml.llm.get_jinja_template(copy _2) -> bb1;
     }
 
     bb1: {
@@ -2730,15 +2730,15 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
     let _3: string // function_name // param
     let _4: baml.llm.PrimitiveClient // primitive
     let _5: type // return_type
-    let _6: future<type>
+    let _6: future<type, null>
     let _7: type // stream_return_type
-    let _8: future<type>
+    let _8: future<type, null>
     let _9: baml.llm.StreamAccumulator // acc
-    let _10: future<baml.llm.StreamAccumulator>
+    let _10: future<baml.llm.StreamAccumulator, null>
     let _11: baml.llm.StreamCache<void, void> // cache
     let _12: type
     let _13: type
-    let _14: future<baml.llm.StreamCache<void, void>>
+    let _14: future<baml.llm.StreamCache<void, void>, null>
     let _15: baml.llm.PrimitiveClient
     let _16: baml.llm.StreamAccumulator
     let _17: baml.llm.StreamCache<void, void>
@@ -2748,7 +2748,7 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
     }
 
     bb1: {
-        _6 = dispatch_future const fn baml.llm.get_return_type(copy _3) -> bb2;
+        _6 = schedule_future const fn baml.llm.get_return_type(copy _3) -> bb2;
     }
 
     bb2: {
@@ -2756,7 +2756,7 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
     }
 
     bb3: {
-        _8 = dispatch_future const fn baml.llm.get_stream_return_type(copy _3) -> bb4;
+        _8 = schedule_future const fn baml.llm.get_stream_return_type(copy _3) -> bb4;
     }
 
     bb4: {
@@ -2764,7 +2764,7 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
     }
 
     bb5: {
-        _10 = dispatch_future const fn baml.llm.PrimitiveClient.new_stream_accumulator(copy _4) -> bb6;
+        _10 = schedule_future const fn baml.llm.PrimitiveClient.new_stream_accumulator(copy _4) -> bb6;
     }
 
     bb6: {
@@ -2774,7 +2774,7 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
     bb7: {
         _12 = copy _5;
         _13 = copy _7;
-        _14 = dispatch_future const fn baml.llm.StreamCache.new(const null, copy _12, copy _13) -> bb8;
+        _14 = schedule_future const fn baml.llm.StreamCache.new(const null, copy _12, copy _13) -> bb8;
     }
 
     bb8: {
@@ -3155,35 +3155,35 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     let _9: string
     let _10: map<string, unknown>
     let _11: type
-    let _12: future<baml.llm.PromptAst>
+    let _12: future<baml.llm.PromptAst, null>
     let _13: baml.llm.PromptAst // specialized
     let _14: baml.llm.PromptAst
-    let _15: future<baml.llm.PromptAst>
+    let _15: future<baml.llm.PromptAst, null>
     let _16: baml.http.Request // http_request
     let _17: baml.llm.PromptAst
     let _18: type
-    let _19: future<baml.http.Request>
+    let _19: future<baml.http.Request, null>
     let _20: baml.http.Response // http_response
     let _21: baml.http.Request
-    let _22: future<baml.http.Response>
+    let _22: future<baml.http.Response, null>
     let _23: bool
     let _24: string // body
-    let _25: future<string>
+    let _25: future<string, null>
     let _26: void // result
     let _27: unknown // e
     let _28: string
     let _29: type
-    let _30: future<void>
+    let _30: future<void, null>
     let _31: void
     let _32: bool
-    let _33: future<void>
+    let _33: future<void, null>
     let _34: baml.errors.LlmClient
     let _35: string // error_body
     let _36: unknown // e
-    let _37: future<string>
+    let _37: future<string, null>
     let _38: void
     let _39: bool
-    let _40: future<void>
+    let _40: future<void, null>
     let _41: baml.errors.DevOther
     let _42: string
     let _43: string
@@ -3265,7 +3265,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
         _9 = copy _2.0;
         _10 = copy _2.1;
         _11 = copy _7;
-        _12 = dispatch_future const fn baml.llm.PrimitiveClient.render_prompt(copy _6, copy _9, copy _10, copy _11) -> bb12;
+        _12 = schedule_future const fn baml.llm.PrimitiveClient.render_prompt(copy _6, copy _9, copy _10, copy _11) -> bb12;
     }
 
     bb12: {
@@ -3274,7 +3274,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
 
     bb13: {
         _14 = copy _8;
-        _15 = dispatch_future const fn baml.llm.PrimitiveClient.specialize_prompt(copy _6, copy _14) -> bb14;
+        _15 = schedule_future const fn baml.llm.PrimitiveClient.specialize_prompt(copy _6, copy _14) -> bb14;
     }
 
     bb14: {
@@ -3284,7 +3284,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     bb15: {
         _17 = copy _13;
         _18 = copy _7;
-        _19 = dispatch_future const fn baml.llm.PrimitiveClient.build_request(copy _6, copy _17, copy _18) -> bb16;
+        _19 = schedule_future const fn baml.llm.PrimitiveClient.build_request(copy _6, copy _17, copy _18) -> bb16;
     }
 
     bb16: {
@@ -3293,7 +3293,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
 
     bb17: {
         _21 = copy _16;
-        _22 = dispatch_future const fn baml.http.send(copy _21) -> bb18;
+        _22 = schedule_future const fn baml.http.send(copy _21) -> bb18;
     }
 
     bb18: {
@@ -3309,7 +3309,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 
     bb21: {
-        _37 = dispatch_future const fn baml.http.Response.text(copy _20) -> bb22;
+        _37 = schedule_future const fn baml.http.Response.text(copy _20) -> bb22;
     }
 
     bb22: {
@@ -3317,7 +3317,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 
     bb23: {
-        _25 = dispatch_future const fn baml.http.Response.text(copy _20) -> bb24;
+        _25 = schedule_future const fn baml.http.Response.text(copy _20) -> bb24;
     }
 
     bb24: {
@@ -3327,7 +3327,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     bb25: {
         _28 = copy _24;
         _29 = load_type(#0);
-        _30 = dispatch_future const fn baml.llm.PrimitiveClient.parse(copy _6, copy _28, copy _29) -> bb26;
+        _30 = schedule_future const fn baml.llm.PrimitiveClient.parse(copy _6, copy _28, copy _29) -> bb26;
     }
 
     bb26: {
@@ -3354,7 +3354,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 
     bb31: {
-        _33 = dispatch_future const fn baml.sys.sleep(copy _3) -> bb32;
+        _33 = schedule_future const fn baml.sys.sleep(copy _3) -> bb32;
     }
 
     bb32: {
@@ -3386,7 +3386,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 
     bb38: {
-        _40 = dispatch_future const fn baml.sys.sleep(copy _3) -> bb39;
+        _40 = schedule_future const fn baml.sys.sleep(copy _3) -> bb39;
     }
 
     bb39: {
@@ -3452,17 +3452,17 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     let _9: string
     let _10: map<string, unknown>
     let _11: type
-    let _12: future<baml.llm.PromptAst>
+    let _12: future<baml.llm.PromptAst, null>
     let _13: baml.llm.PromptAst // specialized
     let _14: baml.llm.PromptAst
-    let _15: future<baml.llm.PromptAst>
+    let _15: future<baml.llm.PromptAst, null>
     let _16: baml.http.Request // http_request
     let _17: baml.llm.PromptAst
     let _18: type
-    let _19: future<baml.http.Request>
+    let _19: future<baml.http.Request, null>
     let _20: baml.http.SseStream // sse
     let _21: baml.http.Request
-    let _22: future<baml.http.SseStream>
+    let _22: future<baml.http.SseStream, null>
     let _23: baml.llm.Stream<void, void> // stream
     let _24: baml.http.SseStream
     let _25: string
@@ -3545,7 +3545,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
         _9 = copy _2.0;
         _10 = copy _2.1;
         _11 = copy _7;
-        _12 = dispatch_future const fn baml.llm.PrimitiveClient.render_prompt(copy _6, copy _9, copy _10, copy _11) -> bb12;
+        _12 = schedule_future const fn baml.llm.PrimitiveClient.render_prompt(copy _6, copy _9, copy _10, copy _11) -> bb12;
     }
 
     bb12: {
@@ -3554,7 +3554,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
 
     bb13: {
         _14 = copy _8;
-        _15 = dispatch_future const fn baml.llm.PrimitiveClient.specialize_prompt(copy _6, copy _14) -> bb14;
+        _15 = schedule_future const fn baml.llm.PrimitiveClient.specialize_prompt(copy _6, copy _14) -> bb14;
     }
 
     bb14: {
@@ -3564,7 +3564,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     bb15: {
         _17 = copy _13;
         _18 = copy _7;
-        _19 = dispatch_future const fn baml.llm.PrimitiveClient.build_request_stream(copy _6, copy _17, copy _18) -> bb16;
+        _19 = schedule_future const fn baml.llm.PrimitiveClient.build_request_stream(copy _6, copy _17, copy _18) -> bb16;
     }
 
     bb16: {
@@ -3573,7 +3573,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
 
     bb17: {
         _21 = copy _16;
-        _22 = dispatch_future const fn baml.http.fetch_sse(copy _21) -> bb18;
+        _22 = schedule_future const fn baml.http.fetch_sse(copy _21) -> bb18;
     }
 
     bb18: {
@@ -3931,41 +3931,41 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     let _2: bool
     let _3: bool
     let _4: () -> bool throws baml.errors.LlmClient
-    let _5: future<bool>
+    let _5: future<bool, null>
     let _6: string // next
     let _7: string?
     let _8: () -> string? throws baml.errors.Io
-    let _9: future<string?>
+    let _9: future<string?, null>
     let _10: bool
     let _11: string // next
     let _12: null
     let _13: (string) -> null throws baml.errors.LlmClient
     let _14: string
-    let _15: future<null>
+    let _15: future<null, null>
     let _16: bool
     let _17: () -> bool throws baml.errors.LlmClient
-    let _18: future<bool>
+    let _18: future<bool, null>
     let _19: null
     let _20: () -> null throws never
-    let _21: future<null>
+    let _21: future<null, null>
     let _22: null
     let _23: string?
     let _24: () -> string? throws baml.errors.LlmClient
-    let _25: future<string?>
+    let _25: future<string?, null>
     let _26: bool
     let _27: void
     let _28: string // reason
     let _29: (string) -> null throws baml.errors.LlmClient
     let _30: string
-    let _31: future<null>
+    let _31: future<null, null>
     let _32: string // content
     let _33: () -> string throws baml.errors.LlmClient
-    let _34: future<string>
+    let _34: future<string, null>
     let _35: string
     let _36: baml.llm.StreamCache<void, void>
     let _37: type
     let _38: type
-    let _39: future<void>
+    let _39: future<void, null>
 
     bb0: {
         goto -> bb1;
@@ -3973,7 +3973,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
 
     bb1: {
         _4 = copy _1.1;
-        _5 = dispatch_future const fn baml.llm.StreamAccumulator.is_done(copy _4) -> bb2;
+        _5 = schedule_future const fn baml.llm.StreamAccumulator.is_done(copy _4) -> bb2;
     }
 
     bb2: {
@@ -3987,7 +3987,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
 
     bb4: {
         _8 = copy _1.2;
-        _9 = dispatch_future const fn baml.http.SseStream.next(copy _8) -> bb5;
+        _9 = schedule_future const fn baml.http.SseStream.next(copy _8) -> bb5;
     }
 
     bb5: {
@@ -4008,7 +4008,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     bb8: {
         _13 = copy _1.1;
         _14 = copy _6;
-        _15 = dispatch_future const fn baml.llm.StreamAccumulator.add_events(copy _13, copy _14) -> bb9;
+        _15 = schedule_future const fn baml.llm.StreamAccumulator.add_events(copy _13, copy _14) -> bb9;
     }
 
     bb9: {
@@ -4017,7 +4017,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
 
     bb10: {
         _17 = copy _1.1;
-        _18 = dispatch_future const fn baml.llm.StreamAccumulator.is_done(copy _17) -> bb11;
+        _18 = schedule_future const fn baml.llm.StreamAccumulator.is_done(copy _17) -> bb11;
     }
 
     bb11: {
@@ -4030,7 +4030,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
 
     bb13: {
         _20 = copy _1.2;
-        _21 = dispatch_future const fn baml.http.SseStream.close(copy _20) -> bb14;
+        _21 = schedule_future const fn baml.http.SseStream.close(copy _20) -> bb14;
     }
 
     bb14: {
@@ -4039,7 +4039,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
 
     bb15: {
         _24 = copy _1.1;
-        _25 = dispatch_future const fn baml.llm.StreamAccumulator.finish_reason(copy _24) -> bb16;
+        _25 = schedule_future const fn baml.llm.StreamAccumulator.finish_reason(copy _24) -> bb16;
     }
 
     bb16: {
@@ -4055,7 +4055,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
         _28 = copy _23;
         _29 = copy _1.0;
         _30 = copy _28;
-        _31 = dispatch_future const fn baml.llm.PrimitiveClient.validate_finish_reason(copy _29, copy _30) -> bb19;
+        _31 = schedule_future const fn baml.llm.PrimitiveClient.validate_finish_reason(copy _29, copy _30) -> bb19;
     }
 
     bb19: {
@@ -4064,7 +4064,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
 
     bb20: {
         _33 = copy _1.1;
-        _34 = dispatch_future const fn baml.llm.StreamAccumulator.content(copy _33) -> bb21;
+        _34 = schedule_future const fn baml.llm.StreamAccumulator.content(copy _33) -> bb21;
     }
 
     bb21: {
@@ -4076,7 +4076,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
         _36 = copy _1.3;
         _37 = load_type(#0);
         _38 = load_type(#1);
-        _39 = dispatch_future const fn baml.llm.__sap_parse_final(copy _35, copy _36, copy _37, copy _38) -> bb23;
+        _39 = schedule_future const fn baml.llm.__sap_parse_final(copy _35, copy _36, copy _37, copy _38) -> bb23;
     }
 
     bb23: {
@@ -4809,28 +4809,28 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     let _2: string // next
     let _3: string?
     let _4: () -> string? throws baml.errors.Io
-    let _5: future<string?>
+    let _5: future<string?, null>
     let _6: bool
     let _7: string // next
     let _8: null
     let _9: (string) -> null throws baml.errors.LlmClient
     let _10: string
-    let _11: future<null>
+    let _11: future<null, null>
     let _12: bool
     let _13: () -> bool throws baml.errors.LlmClient
-    let _14: future<bool>
+    let _14: future<bool, null>
     let _15: null
     let _16: () -> null throws never
-    let _17: future<null>
+    let _17: future<null, null>
     let _18: string // content
     let _19: () -> string throws baml.errors.LlmClient
-    let _20: future<string>
+    let _20: future<string, null>
     let _21: void | baml.stream.StreamNoYield // parsed
     let _22: string
     let _23: baml.llm.StreamCache<void, void>
     let _24: type
     let _25: type
-    let _26: future<void | baml.stream.StreamNoYield>
+    let _26: future<void | baml.stream.StreamNoYield, null>
     let _27: bool
     let _28: void // parsed
 
@@ -4848,7 +4848,7 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
 
     bb3: {
         _4 = copy _1.2;
-        _5 = dispatch_future const fn baml.http.SseStream.next(copy _4) -> bb4;
+        _5 = schedule_future const fn baml.http.SseStream.next(copy _4) -> bb4;
     }
 
     bb4: {
@@ -4869,7 +4869,7 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     bb7: {
         _9 = copy _1.1;
         _10 = copy _2;
-        _11 = dispatch_future const fn baml.llm.StreamAccumulator.add_events(copy _9, copy _10) -> bb8;
+        _11 = schedule_future const fn baml.llm.StreamAccumulator.add_events(copy _9, copy _10) -> bb8;
     }
 
     bb8: {
@@ -4878,7 +4878,7 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
 
     bb9: {
         _13 = copy _1.1;
-        _14 = dispatch_future const fn baml.llm.StreamAccumulator.is_done(copy _13) -> bb10;
+        _14 = schedule_future const fn baml.llm.StreamAccumulator.is_done(copy _13) -> bb10;
     }
 
     bb10: {
@@ -4891,7 +4891,7 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
 
     bb12: {
         _19 = copy _1.1;
-        _20 = dispatch_future const fn baml.llm.StreamAccumulator.content(copy _19) -> bb13;
+        _20 = schedule_future const fn baml.llm.StreamAccumulator.content(copy _19) -> bb13;
     }
 
     bb13: {
@@ -4903,7 +4903,7 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
         _23 = copy _1.3;
         _24 = load_type(#0);
         _25 = load_type(#1);
-        _26 = dispatch_future const fn baml.llm.__sap_parse_partial(copy _22, copy _23, copy _24, copy _25) -> bb15;
+        _26 = schedule_future const fn baml.llm.__sap_parse_partial(copy _22, copy _23, copy _24, copy _25) -> bb15;
     }
 
     bb15: {
@@ -4923,7 +4923,7 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
 
     bb18: {
         _16 = copy _1.2;
-        _17 = dispatch_future const fn baml.http.SseStream.close(copy _16) -> bb19;
+        _17 = schedule_future const fn baml.http.SseStream.close(copy _16) -> bb19;
     }
 
     bb19: {
@@ -5929,9 +5929,9 @@ fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.Primit
     let _2: bool
     let _3: (baml.String, string) -> bool throws never
     let _4: string
-    let _5: future<baml.llm.PrimitiveClient>
+    let _5: future<baml.llm.PrimitiveClient, null>
     let _6: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
-    let _7: future<() -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument>
+    let _7: future<() -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument, null>
 
     bb0: {
         _3 = copy _1.0;
@@ -5943,7 +5943,7 @@ fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.Primit
     }
 
     bb2: {
-        _7 = dispatch_future const fn baml.llm.Client.get_constructor(copy _1) -> bb3;
+        _7 = schedule_future const fn baml.llm.Client.get_constructor(copy _1) -> bb3;
     }
 
     bb3: {
@@ -5956,7 +5956,7 @@ fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.Primit
 
     bb5: {
         _4 = copy _1.0;
-        _5 = dispatch_future const fn baml.llm.from_shorthand(copy _4) -> bb6;
+        _5 = schedule_future const fn baml.llm.from_shorthand(copy _4) -> bb6;
     }
 
     bb6: {

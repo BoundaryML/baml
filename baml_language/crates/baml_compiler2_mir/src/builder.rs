@@ -363,8 +363,8 @@ impl MirBuilder {
         self.set_terminator(Terminator::ThrowIfPanic { value, otherwise });
     }
 
-    /// Emit a dispatch future (for LLM calls).
-    pub(crate) fn dispatch_future(
+    /// Emit a schedule future (for sys-op / LLM calls).
+    pub(crate) fn schedule_future(
         &mut self,
         callee: Operand,
         args: Vec<Operand>,
@@ -373,9 +373,9 @@ impl MirBuilder {
     ) {
         debug_assert!(
             matches!(future, Place::Local(_)),
-            "DispatchFuture future handle place must be local"
+            "ScheduleFuture future handle place must be local"
         );
-        self.set_terminator(Terminator::DispatchFuture {
+        self.set_terminator(Terminator::ScheduleFuture {
             callee,
             args,
             future,

@@ -162,7 +162,7 @@ fn is_stack_carry_use_safe(
                     }
                     *target
                 }
-                Some(Terminator::DispatchFuture { future, resume, .. }) => {
+                Some(Terminator::ScheduleFuture { future, resume, .. }) => {
                     if !matches!(future, Place::Local(l) if *l == local) {
                         return false;
                     }
@@ -471,7 +471,7 @@ fn simulate_terminator_stack(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::DispatchFuture {
+        Terminator::ScheduleFuture {
             callee,
             args,
             future,

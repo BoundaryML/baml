@@ -505,7 +505,7 @@ impl TypeCtx {
             | baml_type::Ty::Void { .. }
             | baml_type::Ty::WatchAccessor(_, _)
             | baml_type::Ty::BuiltinUnknown { .. }
-            | baml_type::Ty::Future(_, _)) => {
+            | baml_type::Ty::Future(_, _, _)) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
@@ -587,7 +587,7 @@ impl TypeCtx {
             | ::baml_type::Ty::Void { .. }
             | ::baml_type::Ty::WatchAccessor(_, _)
             | ::baml_type::Ty::BuiltinUnknown { .. }
-            | ::baml_type::Ty::Future(_, _)) => {
+            | ::baml_type::Ty::Future(_, _, _)) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };

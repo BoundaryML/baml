@@ -1475,7 +1475,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit(Instruction::Unreachable);
             }
 
-            Terminator::DispatchFuture {
+            Terminator::ScheduleFuture {
                 callee,
                 args,
                 future,
@@ -1492,12 +1492,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     .map(GlobalIndex::from_raw)
                     .unwrap_or_else(|| {
                         panic!(
-                            "dispatch_future callee must resolve to a statically-known global function: {callee:?}"
+                            "schedule_future callee must resolve to a statically-known global function: {callee:?}"
                         )
                     });
 
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                let inst = self.emit(Instruction::DispatchFuture(global_callee));
+                let inst = self.emit(Instruction::ScheduleFuture(global_callee));
                 if let Some(name) = &func_name {
                     self.set_operand(inst, OperandMeta::Callable(name.clone()));
                 }

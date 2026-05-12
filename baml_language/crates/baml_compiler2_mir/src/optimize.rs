@@ -147,7 +147,7 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
             }
         }
         Terminator::Unreachable => {}
-        Terminator::DispatchFuture { resume, .. } => remap(resume),
+        Terminator::ScheduleFuture { resume, .. } => remap(resume),
         Terminator::Await { target, unwind, .. } => {
             remap(target);
             if let Some(u) = unwind {
@@ -219,7 +219,7 @@ fn rewrite_block_ids_in_terminator_with_map(
             }
         }
         Terminator::Unreachable => {}
-        Terminator::DispatchFuture { resume, .. } => remap(resume),
+        Terminator::ScheduleFuture { resume, .. } => remap(resume),
         Terminator::Await { target, unwind, .. } => {
             remap(target);
             if let Some(u) = unwind {
@@ -408,7 +408,7 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     }
                     scan_place(destination, &mut set);
                 }
-                Terminator::DispatchFuture {
+                Terminator::ScheduleFuture {
                     callee,
                     args,
                     future,
@@ -465,7 +465,7 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
         // Terminator destinations also count as definitions.
         if let Some(dest) = match &block.terminator {
             Some(Terminator::Call { destination, .. }) => Some(destination),
-            Some(Terminator::DispatchFuture { future, .. }) => Some(future),
+            Some(Terminator::ScheduleFuture { future, .. }) => Some(future),
             Some(Terminator::Await { destination, .. }) => Some(destination),
             Some(Terminator::ShortCircuit { destination, .. }) => Some(destination),
             _ => None,
@@ -610,7 +610,7 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
 
 fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
     // For terminator destination places (Call::destination, Await::destination,
-    // DispatchFuture::future): these are writes, so don't count plain Local
+    // ScheduleFuture::future): these are writes, so don't count plain Local
     // destinations. But if the destination is a projection (Field/Index), the
     // base local IS being read (partial update), so count it.
     let count_dest_place = |p: &Place, uses: &mut [usize]| {
@@ -634,7 +634,7 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
             }
             count_dest_place(destination, uses);
         }
-        Terminator::DispatchFuture {
+        Terminator::ScheduleFuture {
             callee,
             args,
             future,
@@ -902,7 +902,7 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
                 apply_subst_to_operand(arg, subst);
             }
         }
-        Terminator::DispatchFuture { callee, args, .. } => {
+        Terminator::ScheduleFuture { callee, args, .. } => {
             apply_subst_to_operand(callee, subst);
             for arg in args {
                 apply_subst_to_operand(arg, subst);
@@ -930,14 +930,14 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
     let mut uses = count_local_uses(body);
 
     // Force-alive: terminator destination locals can't be removed because
-    // the terminator has side effects (Call, Await, DispatchFuture).
+    // the terminator has side effects (Call, Await, ScheduleFuture).
     // Even if the destination local has 0 read-uses, we must keep it.
     for block in &body.blocks {
         if let Some(term) = &block.terminator {
             let dest_local = match term {
                 Terminator::Call { destination, .. } => Some(destination.base_local()),
                 Terminator::Await { destination, .. } => Some(destination.base_local()),
-                Terminator::DispatchFuture { future, .. } => Some(future.base_local()),
+                Terminator::ScheduleFuture { future, .. } => Some(future.base_local()),
                 // ShortCircuit is side-effect-free (pure control flow), so its
                 // destination can be dead-eliminated like any other local.
                 _ => None,
@@ -1135,7 +1135,7 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             }
             remap_place(destination, map);
         }
-        Terminator::DispatchFuture {
+        Terminator::ScheduleFuture {
             callee,
             args,
             future,
@@ -1336,7 +1336,7 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     }
                     check_place(destination, &blk);
                 }
-                Terminator::DispatchFuture {
+                Terminator::ScheduleFuture {
                     callee,
                     args,
                     future,
