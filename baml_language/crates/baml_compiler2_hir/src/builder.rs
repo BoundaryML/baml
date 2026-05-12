@@ -246,6 +246,24 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
+    /// Emit a `DuplicateDefinition` diagnostic for any parameter name that
+    /// appears more than once in a function or lambda signature. Applies
+    /// uniformly to positional and defaulted parameters — both share the
+    /// same `params` vector, and any name collision among them would make
+    /// later references to the name ambiguous within the body.
+    fn emit_duplicate_param_diagnostics(&mut self, params: &[ast::Param]) {
+        let mut seen: FxHashMap<Name, Vec<MemberSite>> = FxHashMap::default();
+        for param in params {
+            seen.entry(param.name.clone())
+                .or_default()
+                .push(MemberSite {
+                    range: param.name_span,
+                    kind: DefinitionKind::Parameter,
+                });
+        }
+        self.emit_duplicate_diagnostics(seen);
+    }
+
     /// Emit `DuplicateDefinition` diagnostics for any name with more than one site.
     fn emit_duplicate_diagnostics(&mut self, seen: FxHashMap<Name, Vec<MemberSite>>) {
         let scope = self.current_scope_path();
@@ -798,6 +816,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .params
                 .push((param.name.clone(), idx));
         }
+        self.emit_duplicate_param_diagnostics(&func_def.params);
         self.lambda_stack.push(scope_id);
         for param in &func_def.params {
             if let Some(default) = param.default {
@@ -955,6 +974,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .params
                 .push((param.name.clone(), idx));
         }
+        self.emit_duplicate_param_diagnostics(&f.params);
         for param in &f.params {
             if let Some(default) = param.default {
                 self.walk_expr(

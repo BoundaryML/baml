@@ -542,6 +542,77 @@ mod tests {
         assert!(sites.iter().all(|s| s.kind == DefinitionKind::Variant));
     }
 
+    /// Duplicate parameter names within a function signature — across any
+    /// combination of positional and defaulted parameters — produce a
+    /// `DuplicateDefinition` diagnostic.
+    #[test]
+    fn duplicate_function_param_produces_diagnostic() {
+        use baml_compiler2_hir::{contributions::DefinitionKind, diagnostic::Hir2Diagnostic};
+
+        let cases: &[(&str, &str, &str)] = &[
+            (
+                "positional/positional",
+                "dup_param_pos_pos.baml",
+                "function Foo(x: int, x: string) -> string { x }",
+            ),
+            (
+                "positional/defaulted",
+                "dup_param_pos_opt.baml",
+                "function Foo(x: int, x: string = \"hi\") -> string { x }",
+            ),
+            (
+                "defaulted/defaulted",
+                "dup_param_opt_opt.baml",
+                "function Foo(x: int = 0, x: string = \"hi\") -> string { x }",
+            ),
+        ];
+
+        for (label, file_name, source) in cases {
+            let mut db = make_db();
+            let file = db.add_file(file_name, source);
+            let index = file_semantic_index(&db, file);
+            let diags = index.diagnostics();
+            let dups: Vec<_> = diags
+                .iter()
+                .filter(|d| matches!(d, Hir2Diagnostic::DuplicateDefinition { name, .. } if name == &Name::new("x")))
+                .collect();
+            assert_eq!(
+                dups.len(),
+                1,
+                "{label}: expected 1 duplicate diagnostic for 'x'"
+            );
+            let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0] else {
+                panic!("{label}: expected DuplicateDefinition diagnostic");
+            };
+            assert_eq!(scope.as_ref().unwrap(), &Name::new("Foo"), "{label}");
+            assert_eq!(sites.len(), 2, "{label}");
+            assert!(
+                sites.iter().all(|s| s.kind == DefinitionKind::Parameter),
+                "{label}: all sites should be Parameter kind"
+            );
+        }
+    }
+
+    /// Distinct parameter names in a function signature do not produce a
+    /// duplicate diagnostic — regression guard against over-firing.
+    #[test]
+    fn distinct_function_params_have_no_duplicate_diagnostic() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "distinct_params.baml",
+            "function Foo(x: int, y: string = \"hi\") -> string { y }",
+        );
+        let index = file_semantic_index(&db, file);
+        let diags = index.diagnostics();
+        assert!(
+            !diags
+                .iter()
+                .any(|d| matches!(d, Hir2Diagnostic::DuplicateDefinition { .. }))
+        );
+    }
+
     /// Same-scope let shadowing is legal and does not produce duplicate diagnostics.
     #[test]
     fn same_scope_let_shadowing_has_no_duplicate_diagnostic() {
