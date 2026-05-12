@@ -1189,6 +1189,9 @@ fn receiver_immut_extraction_expr(val: &str, recv: &Receiver, needs_owned: bool)
         "Float" => format!(
             "match {val} {{ Value::Float(f) => *f, other => return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}.into()) }}"
         ),
+        // Bigint is heap-allocated behind an Arc; always clone the Arc so the
+        // trait method receives an owned `Arc<BigInt>` regardless of needs_owned.
+        "Bigint" => format!("vm.as_bigint({val})?.clone()"),
         name if is_media_class(name) => {
             let kind = media_kind_expr(&recv.class_name);
             if needs_owned {
@@ -1532,6 +1535,9 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
         // (`i64` / `f64` / `bool`) is `Copy` and that's the natural Rust idiom.
         "Int" => "i64".to_string(),
         "Float" => "f64".to_string(),
+        // Bigint is heap-allocated; the glue extracts and clones the Arc so the
+        // trait method receives an owned `Arc<num_bigint::BigInt>`.
+        "Bigint" => "std::sync::Arc<num_bigint::BigInt>".to_string(),
         name if is_media_class(name) => {
             // For `//baml:mut_vm` methods the view struct cannot coexist with
             // `&mut BexVm` (split-borrow).  Use the raw `Value` instead so the

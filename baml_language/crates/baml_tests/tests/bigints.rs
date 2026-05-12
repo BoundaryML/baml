@@ -1,8 +1,4 @@
-//! Tests for the `bigint` builtin class (BEP-022, Phase 2 and Phase 3).
-//!
-//! Phase 2 covers `bigint.parse(text: string) -> bigint`.
-//! Phase 3 adds the `42n` literal syntax so bigint values can be written
-//! directly in BAML source without calling `bigint.parse`.
+//! Tests for the `bigint` builtin class (BEP-022).
 //!
 //! The VM returns bigint values as their decimal string representation via the
 //! external API (`BexExternalValue::String`) until a dedicated
@@ -146,6 +142,441 @@ async fn bigint_parse_empty_throws() {
     let output = baml_test!(
         r#"
         function main() -> bigint { bigint.parse("") }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+// ─── abs ──────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn bigint_abs_positive() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (3n).abs() }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_abs_negative() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (-7n).abs() }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("7".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_abs_zero() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (0n).abs() }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_abs_large_negative() {
+    // Absolute value of a number larger than i64::MAX — only possible with bigint.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (-99999999999999999999n).abs() }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("99999999999999999999".to_string()))
+    );
+}
+
+// ─── min / max ────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn bigint_min_self_smaller() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (3n).min(5n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_min_other_smaller() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (5n).min(3n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_min_equal() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (3n).min(3n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_min_negative() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (-2n).min(0n) }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("-2".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn bigint_max_self_larger() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (5n).max(3n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("5".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_max_other_larger() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (3n).max(5n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("5".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_max_equal() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (3n).max(3n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+}
+
+// ─── clamp ────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn bigint_clamp_in_range() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (5n).clamp(0n, 10n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("5".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_clamp_below_min() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (-3n).clamp(0n, 10n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_clamp_above_max() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (15n).clamp(0n, 10n) }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("10".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn bigint_clamp_at_min() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (0n).clamp(0n, 10n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_clamp_at_max() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (10n).clamp(0n, 10n) }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("10".to_string()))
+    );
+}
+
+// ─── isqrt ────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn bigint_isqrt_perfect_square() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (16n).isqrt() }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("4".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_isqrt_non_perfect_square() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (10n).isqrt() }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_isqrt_zero() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (0n).isqrt() }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_isqrt_one() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (1n).isqrt() }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("1".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_isqrt_negative_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (-1n).isqrt() }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+// ─── pow ──────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn bigint_pow_basic() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (2n).pow(10n) }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("1024".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn bigint_pow_zero_exp() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (2n).pow(0n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("1".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_pow_zero_base_zero_exp() {
+    // 0^0 == 1 by convention
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (0n).pow(0n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("1".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_pow_negative_base() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (-2n).pow(3n) }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("-8".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn bigint_pow_negative_exp_returns_zero() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (2n).pow(-1n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_pow_large() {
+    // 2^256 is a 78-digit number; verify the result length and value prefix.
+    // The exact value starts with 115792089237316195... (decimal).
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (2n).pow(256n) }
+    "#
+    );
+    let Ok(BexExternalValue::String(s)) = &output.result else {
+        panic!("expected String result, got: {:?}", output.result);
+    };
+    // 2^256 has exactly 78 decimal digits.
+    assert_eq!(s.len(), 78, "2^256 should be a 78-digit number, got: {s}");
+    assert!(
+        s.starts_with("115792089237316195"),
+        "unexpected prefix: {s}"
+    );
+}
+
+// ─── ilog ─────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn bigint_ilog_base10() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (1000n).ilog(10n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_ilog_base2() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (1024n).ilog(2n) }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("10".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn bigint_ilog_one_returns_zero() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (1n).ilog(10n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_ilog_zero_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (0n).ilog(10n) }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn bigint_ilog_negative_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (-5n).ilog(10n) }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn bigint_ilog_base_one_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (10n).ilog(1n) }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+// ─── random ───────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn bigint_random_single_element_range() {
+    // [0, 1) contains exactly one value: 0
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { bigint.random(0n, 1n) }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+}
+
+#[tokio::test]
+async fn bigint_random_in_range() {
+    // Sample from [10, 20); result must be in that range.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { bigint.random(10n, 20n) }
+    "#
+    );
+    let Ok(BexExternalValue::String(s)) = &output.result else {
+        panic!("expected String result, got: {:?}", output.result);
+    };
+    let n: i64 = s.parse().expect("result should parse as i64");
+    assert!((10..20).contains(&n), "random result {n} not in [10, 20)");
+}
+
+#[tokio::test]
+async fn bigint_random_empty_range_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { bigint.random(5n, 5n) }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn bigint_random_lower_greater_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { bigint.random(10n, 0n) }
     "#
     );
     let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
