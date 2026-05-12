@@ -141,30 +141,6 @@ impl LeafBody {
         })
     }
 
-    pub(crate) fn needs_unset_default_pyi(&self) -> bool {
-        self.symbols.iter().any(|(s, _)| match s {
-            EmittedSymbol::Class(c) => {
-                c.static_methods.iter().any(|m| {
-                    m.arg_defaults
-                        .iter()
-                        .flatten()
-                        .any(default_pyi_renders_as_unset)
-                }) || c.instance_methods.iter().any(|m| {
-                    m.arg_defaults
-                        .iter()
-                        .flatten()
-                        .any(default_pyi_renders_as_unset)
-                })
-            }
-            EmittedSymbol::Function(f) => f
-                .arg_defaults
-                .iter()
-                .flatten()
-                .any(default_pyi_renders_as_unset),
-            _ => false,
-        })
-    }
-
     pub(crate) fn is_empty(&self) -> bool {
         self.symbols.is_empty()
     }
@@ -1335,10 +1311,6 @@ fn render_param_pyi(
 }
 
 fn render_default_pyi(default: &FunctionArgumentDefault) -> String {
-    if default_pyi_renders_as_unset(default) {
-        return "_UNSET".to_string();
-    }
-
     match default {
         FunctionArgumentDefault::Null => "None".to_string(),
         FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(lit)) => {
@@ -1346,12 +1318,8 @@ fn render_default_pyi(default: &FunctionArgumentDefault) -> String {
         }
         FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList) => "[]".to_string(),
         FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap) => "{}".to_string(),
-        FunctionArgumentDefault::Expression { .. } => unreachable!("handled above"),
+        FunctionArgumentDefault::Expression { .. } => "...".to_string(),
     }
-}
-
-fn default_pyi_renders_as_unset(default: &FunctionArgumentDefault) -> bool {
-    matches!(default, FunctionArgumentDefault::Expression { .. })
 }
 
 fn render_literal_default(lit: &Literal) -> String {
@@ -1421,25 +1389,11 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         }
     }
 
-    let mut runtime_imports: Vec<(&'static str, &'static str)> = Vec::new();
+    // `_BamlPyHandle` alias mirrors the `.py` import so type checkers
+    // can resolve `$rust_type` field annotations.
     if body.needs_baml_pyhandle() {
-        runtime_imports.push(("BamlPyHandle", "_BamlPyHandle"));
-    }
-    if body.needs_unset_default_pyi() {
-        runtime_imports.push(("UNSET", "_UNSET"));
-    }
-    if !runtime_imports.is_empty() {
         out.push('\n');
-        if runtime_imports.len() == 1 {
-            let (original, alias) = runtime_imports[0];
-            writeln!(out, "from baml.baml_core import {original} as {alias}").unwrap();
-        } else {
-            out.push_str("from baml.baml_core import (\n");
-            for (original, alias) in &runtime_imports {
-                writeln!(out, "    {original} as {alias},").unwrap();
-            }
-            out.push_str(")\n");
-        }
+        out.push_str("from baml_core import BamlPyHandle as _BamlPyHandle\n");
     }
 
     // The `.pyi` re-declares TypeVars because stubs don't import from

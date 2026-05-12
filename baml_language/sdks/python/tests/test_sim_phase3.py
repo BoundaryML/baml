@@ -37,7 +37,7 @@ def test_import_surface():
 
 
 def test_factory_keyword_only_omission_contract():
-    from baml.baml_core import UNSET, _build_kwargs
+    from baml_core import UNSET, _build_kwargs
 
     assert _build_kwargs(("cats",), {"max_results": 5}, ["query", "max_results"], 1) == {
         "query": "cats",
@@ -59,7 +59,7 @@ def test_factory_keyword_only_omission_contract():
 
 
 def test_generated_client_defaulted_params_sync():
-    from baml.baml_core import UNSET
+    from baml_core import UNSET
     from baml_sdk.lorem import default_score, mutate_default
 
     assert default_score("cats") == 10
@@ -78,7 +78,7 @@ def test_generated_client_defaulted_params_sync():
 
 @pytest.mark.asyncio
 async def test_generated_client_defaulted_params_async():
-    from baml.baml_core import UNSET
+    from baml_core import UNSET
     from baml_sdk.lorem import default_score_async, mutate_default_async
 
     assert await default_score_async("cats") == 10

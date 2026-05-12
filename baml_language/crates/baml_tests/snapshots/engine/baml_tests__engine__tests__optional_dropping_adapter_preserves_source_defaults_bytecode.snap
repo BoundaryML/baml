@@ -35,8 +35,7 @@ function main() -> int {
     load_const 1
     load_const 5
     load_var _2
-    load_const ?
-    make_closure .<optional-adapter(main, 0)>
+    make_closure .<optional-adapter(main, 0)>, 1
     call_indirect
     return
 }

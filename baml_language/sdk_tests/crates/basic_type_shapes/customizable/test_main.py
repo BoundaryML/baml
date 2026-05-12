@@ -156,8 +156,8 @@ def test_defaults_emitted_define_function_required_count():
 def test_defaults_pyi_literal_defaults_project_directly():
     """BEP-033 §"sentinel problem": literal defaults (scalars, null,
     empty collections) project directly into the `.pyi` so callers see
-    the real default value. The `_UNSET` sentinel is reserved for
-    *expression* defaults, which the host can't evaluate."""
+    the real default value. Expression defaults use the stub ellipsis
+    placeholder because the host can't evaluate them."""
     from pathlib import Path
     import baml_sdk.defaults as defaults_mod
 
@@ -188,23 +188,25 @@ def test_defaults_pyi_signatures_keyword_only_for_defaulted_only():
     assert "def all_required(a: int, *, b" not in pyi
 
 
-def test_defaults_pyi_expression_defaults_render_as_unset():
-    """BEP-033 §"sentinel problem" Python row: expression defaults use
-    `_UNSET` because the host can't evaluate BAML expressions. The
-    `.pyi` must also import the sentinel."""
+def test_defaults_pyi_expression_defaults_render_as_ellipsis():
+    """BEP-033 §"sentinel problem" Python row: runtime expression
+    defaults use a sentinel, but `.pyi` signatures use the PEP 484
+    ellipsis placeholder so the public parameter type stays clean."""
     from pathlib import Path
     import baml_sdk.defaults as defaults_mod
 
     pyi = Path(defaults_mod.__file__).with_suffix(".pyi").read_text()
-    # Sentinel import is present.
-    assert "from baml.baml_core import UNSET as _UNSET" in pyi
-    # Non-empty array default lowers to `_UNSET`, not `[1, 2, 3]`.
-    assert "def with_expr_default(*, items: typing.List[int] = _UNSET) -> int" in pyi
+    # The runtime sentinel should not leak into stubs.
+    assert "_UNSET" not in pyi
+    assert "from baml_core import UNSET" not in pyi
+    # Non-empty array default lowers to `...`, not `[1, 2, 3]`.
+    assert "def with_expr_default(*, items: typing.List[int] = ...) -> int" in pyi
     # Nullable + expression default — BEP §"Nullable params with
-    # expression defaults" (the "trickiest case"). The sentinel is
-    # what distinguishes "not passed" from `None` in Python.
+    # expression defaults" (the "trickiest case"). Runtime still uses
+    # the sentinel to distinguish "not passed" from `None`; the stub
+    # uses ellipsis to mark the parameter as defaulted.
     assert (
-        "def nullable_with_expr(*, items: typing.Union[typing.List[int], None] = _UNSET)"
+        "def nullable_with_expr(*, items: typing.Union[typing.List[int], None] = ...)"
         in pyi
     )
 

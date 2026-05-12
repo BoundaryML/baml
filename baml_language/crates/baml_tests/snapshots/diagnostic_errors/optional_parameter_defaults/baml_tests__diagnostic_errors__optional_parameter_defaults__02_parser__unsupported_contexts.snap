@@ -201,14 +201,14 @@ SOURCE_FILE
         L_BRACE "{"
         LET_STMT
           PATTERN
-            CHAIN_PATTERN
-              BINDING_PATTERN "let f"
-                KW_LET "let"
-                WORD "f"
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "f"
               COLON ":"
-              TYPE_PATTERN
-                TYPE_EXPR "NamedLimit"
-                  WORD "NamedLimit"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "NamedLimit"
+                    WORD "NamedLimit"
           EQUALS "="
           WORD "Filtered"
         CALL_EXPR

@@ -1700,12 +1700,13 @@ mod tests {
         ));
 
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
-        assert!(pyi.contains("from baml.baml_core import UNSET as _UNSET\n"));
+        assert!(!pyi.contains("UNSET"));
+        assert!(!pyi.contains("_UNSET"));
         assert!(pyi.contains(
-            "def search(query: str, *, max_results: int = 10, filter: str = _UNSET, tags: typing.List[str] = [], metadata: typing.Dict[str, str] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
+            "def search(query: str, *, max_results: int = 10, filter: str = ..., tags: typing.List[str] = [], metadata: typing.Dict[str, str] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def search_async(query: str, *, max_results: int = 10, filter: str = _UNSET, tags: typing.List[str] = [], metadata: typing.Dict[str, str] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
+            "async def search_async(query: str, *, max_results: int = 10, filter: str = ..., tags: typing.List[str] = [], metadata: typing.Dict[str, str] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
         ));
     }
 
@@ -1751,7 +1752,7 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
 
-        assert!(!pyi.contains("from baml.baml_core import UNSET as _UNSET\n"));
+        assert!(!pyi.contains("from baml_core import UNSET as _UNSET\n"));
         assert!(!pyi.contains("_UNSET"));
         assert!(pyi.contains(
             "def defaults(*, tags: typing.List[str] = [], metadata: typing.Dict[str, int] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
