@@ -269,6 +269,15 @@ pub type ObjectPool = Pool<Object, ObjectKind>;
 /// - [`RootHaver::collect_roots`] / [`RootHaver::forward_roots`] are only
 ///   called by the GC while every permit is parked — so the `&mut` view they
 ///   take through the [`UnsafeCell`] cannot alias any reader.
+///
+/// The "caller holds a permit for the slice's lifetime" obligation is
+/// **not** enforced by the type system: `SharedGlobals` is `Send + Sync +
+/// Clone`, so the lifetime of `&Self` (and any `&[Value]` projected from
+/// it via [`Self::as_slice`]) is decoupled from any specific
+/// [`ActiveHeapPermit`](crate)'s lifetime. Misuse causes UB. Where
+/// possible, prefer [`Self::get`] (returns `Value` by copy) to avoid
+/// holding the slice borrow across any operation that could end the
+/// caller's permit.
 pub struct SharedGlobals {
     inner: Arc<SharedGlobalsInner>,
 }
@@ -351,11 +360,26 @@ impl SharedGlobals {
 
     /// Borrow the underlying globals as a slice.
     ///
-    /// Caller must hold an active heap permit (excludes any concurrent
-    /// `forward_roots` mutation). The borrow must not outlive the
-    /// permit's active lifetime.
+    /// # Unenforced contract
+    ///
+    /// Caller must hold an active heap permit for the *entire* lifetime
+    /// of the returned `&[Value]`. The slice borrow is tied to `&self`,
+    /// **not** to the permit — Rust's type system has no way to express
+    /// that relationship through `SharedGlobals` (`SharedGlobals` is
+    /// `Clone` and `Send + Sync`, so its `&` lifetime is decoupled from
+    /// any specific permit's). If the permit drops while the slice is
+    /// still alive and a GC runs `forward_roots` on this `SharedGlobals`
+    /// (which mutates `inner.values` via [`UnsafeCell`]), the resulting
+    /// aliasing is **undefined behavior**.
+    ///
+    /// Prefer [`Self::get`] (returns `Value` by copy) whenever the call
+    /// site only needs a single element. `as_slice` exists for the
+    /// `VmGlobals::as_slice` / `VmGlobals::Index<GlobalIndex>` paths
+    /// which are already governed by the wider VM-permit invariant.
     pub fn as_slice(&self) -> &[Value] {
-        // SAFETY: caller holds an active heap permit.
+        // SAFETY: caller upholds the unenforced contract above — they
+        // hold an active heap permit and won't release it before the
+        // returned slice's last use.
         unsafe { &*self.inner.values.get() }
     }
 }

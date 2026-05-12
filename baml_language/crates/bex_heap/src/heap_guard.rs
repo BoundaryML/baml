@@ -371,5 +371,31 @@ impl<T: ?Sized + RootHaver> PermitCell<T> {
 // gain access via a semaphore permit; the GC gains access by draining all permits
 // while holding the manager mutex. `RootHaver: Send` ensures the inner value is safe
 // to move between threads, which is what's actually happening — never true sharing.
+//
+// # `Sync` is unconditional even for `T: !Sync` — why this is sound
+//
+// The unconditional `Sync` impl below is **structurally** load-bearing:
+// `Weak<PermitCell<dyn RootHaver>>` lives in
+// `HeapPermitManager::holders: Mutex<Vec<Weak<...>>>`, and `Mutex<Vec<Weak<U>>>`
+// requires `U: Send + Sync`. Constraining the bound to `T: Sync` would
+// reject every `T: !Sync` `RootHaver` (e.g. `BexVm`, which intentionally
+// is not `Sync`).
+//
+// What rescues soundness is the *safe wrappers* that hand out access to
+// the inner `T`: `ActiveHeapPermit<T>` and `SharedHeapPermitGuard<'_, T>`
+// each carry a `_marker: PhantomData<T>` field that re-ties the wrapper's
+// auto-`Send`/`Sync` derivation to `T`. So while `&PermitCell<T>` is
+// `Sync` regardless of `T`, the only safe way to project a `&T` out of
+// it is through one of those wrappers, and `&Wrapper<T>: Sync` iff
+// `T: Sync`. Two threads cannot simultaneously hold `&Wrapper<T>: Sync`
+// for `T: !Sync`, so two threads cannot simultaneously call `.holder()`
+// to observe `&T`.
+//
+// **Maintenance hazard**: any future safe API that returns `&T` from a
+// `&PermitCell<T>` *without* the `PhantomData<T>` re-tie (or another
+// equivalent `T: Sync` requirement on the consumer) silently breaks the
+// contract above. If you add such an API, also tighten this `Sync` impl
+// to `T: Sync` (and accept that some `RootHaver`s can no longer be
+// holders), or rework the holders Mutex's element type.
 unsafe impl<T: ?Sized + RootHaver> Send for PermitCell<T> {}
 unsafe impl<T: ?Sized + RootHaver> Sync for PermitCell<T> {}

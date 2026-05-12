@@ -274,6 +274,36 @@ impl FutureManagerGuard<'_> {
     /// `debug_assert` below encodes that invariant: if `complete_pending` ever
     /// observes a non-`Pending` heap state, a caller has violated the
     /// removal/transition contract.
+    ///
+    /// ## Why the Phase 1 `debug_assert` cannot trip for `Async` futures
+    ///
+    /// Concretely: there is exactly one writer per `future_id`, the writer
+    /// always observes `Pending` first, and no other code path can race a
+    /// non-Pending transition between the writer's observation and its own
+    /// terminal-state write. Trace:
+    ///
+    /// 1. **All `cancel_future` call sites** are at
+    ///    `crates/bex_engine/src/lib.rs:1508`, `:1528`, and `:1811`. The
+    ///    first two live inside the engine event loop, on the same VM that
+    ///    just allocated the future. Site `:1528` is inside the
+    ///    `SysOpResult::Ready` arm and so is unreachable for the
+    ///    `SysOpResult::Async` (`run_future`) path. Site `:1811` is inside
+    ///    `run_future` itself, of which there is exactly one task per
+    ///    `future_id`.
+    /// 2. **After the VM yields a permit at `Await` (`lib.rs:1594`)** and
+    ///    parks at `future.await`, the engine event loop is **not running**
+    ///    for that VM, so site `:1508` cannot fire either.
+    /// 3. **External `cancel_function_call`** (`lib.rs:1073`) only fires
+    ///    the cancel `CancellationToken` — it does **not** call
+    ///    `cancel_future`. Cancellation reaches the future only via
+    ///    `run_future`'s own `tokio::select!`, which then routes through
+    ///    site `:1811`.
+    ///
+    /// Conclusion: for `Async` futures, only the single `run_future` task
+    /// can transition `Pending` → terminal. Any future code change that
+    /// adds a fourth `cancel_future` call site (or that lets the engine
+    /// loop run for a parked VM) breaks this invariant — the
+    /// `debug_assert` below will catch it immediately.
     fn complete_pending(
         &mut self,
         id: FutureId,

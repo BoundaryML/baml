@@ -568,22 +568,6 @@ impl BexHeap {
     /// call this for spaces that grow exclusively at GC safepoints (Gen1/Gen2),
     /// or while holding exclusive access to the space being scanned.
     #[inline]
-    /// Bug H, check 3 helper (heap_debug only): is `ptr` inside the
-    /// inactive (former active) space?
-    ///
-    /// Used by the engine's post-`forward_roots` integrity sweep to detect
-    /// stale references the GC failed to forward. The inactive space's
-    /// chunks still exist (their slots have been overwritten with
-    /// `Sentinel::FromSpacePoison` in heap_debug builds), so checking
-    /// `ptr_in_chunked_vec` against `inactive` is safe even after
-    /// `finalize_inactive_space` has run.
-    #[cfg(feature = "heap_debug")]
-    pub fn debug_ptr_in_inactive(&self, ptr: HeapPtr) -> bool {
-        let raw = ptr.as_ptr() as *const Object;
-        // SAFETY: GC has parked all permits before the engine calls this.
-        unsafe { Self::ptr_in_chunked_vec(&*self.inactive.get(), raw) }
-    }
-
     unsafe fn ptr_in_chunked_vec(vec: &ChunkedVec<Object>, raw_ptr: *const Object) -> bool {
         // `num_chunks` and `chunk_start_ptr` now serialize on the
         // ChunkedVec's internal RwLock, so the brief window is safe even
@@ -599,6 +583,22 @@ impl BexHeap {
             }
         }
         false
+    }
+
+    /// Bug H, check 3 helper (heap_debug only): is `ptr` inside the
+    /// inactive (former active) space?
+    ///
+    /// Used by the engine's post-`forward_roots` integrity sweep to detect
+    /// stale references the GC failed to forward. The inactive space's
+    /// chunks still exist (their slots have been overwritten with
+    /// `Sentinel::FromSpacePoison` in heap_debug builds), so checking
+    /// `ptr_in_chunked_vec` against `inactive` is safe even after
+    /// `finalize_inactive_space` has run.
+    #[cfg(feature = "heap_debug")]
+    pub fn debug_ptr_in_inactive(&self, ptr: HeapPtr) -> bool {
+        let raw = ptr.as_ptr() as *const Object;
+        // SAFETY: GC has parked all permits before the engine calls this.
+        unsafe { Self::ptr_in_chunked_vec(&*self.inactive.get(), raw) }
     }
 
     /// Mark the card dirty for the card containing `container_ptr` in Gen2.

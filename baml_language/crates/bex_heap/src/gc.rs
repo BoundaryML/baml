@@ -8,6 +8,22 @@
 //!   to inactive, swaps inactive↔Gen2, clears Gen0 and Gen1
 //! - **Compacting**: No fragmentation; all live objects are contiguous in Gen2
 //! - **Handle-aware**: Handles updated to point to new object locations
+//!
+//! # Invariant: compile-time objects do not contain runtime `HeapPtr`s
+//!
+//! When the BFS in `copy_collection` / `collect_garbage_minor` encounters a
+//! compile-time pointer it identity-maps it into `forwarding` and stops —
+//! it does **not** call `add_references_to_worklist` on the compile-time
+//! object's payload. This shortcut is sound only because every compile-time
+//! `Object` variant (`Function`, `Class`, `Enum`, `Type`) is a leaf with no
+//! `HeapPtr` fields. If a future change adds a runtime-`HeapPtr` field to
+//! one of those variants, the BFS would silently miss anything reachable
+//! only through it and the GC would reclaim live objects.
+//!
+//! `add_references_to_worklist` carries a `debug_assert!` that fires if it
+//! is ever handed a compile-time pointer whose payload would have produced
+//! a runtime reference, so a regression of this invariant surfaces as an
+//! immediate panic in debug builds (and under `heap_debug`).
 
 use std::{cell::UnsafeCell, collections::HashMap};
 
@@ -156,8 +172,25 @@ impl BexHeap {
                 continue;
             }
 
-            // Compile-time objects are permanent — keep their pointer unchanged.
+            // Compile-time objects are permanent — keep their pointer
+            // unchanged and skip tracing their outgoing references (see
+            // the module-level "compile-time objects do not contain
+            // runtime HeapPtrs" invariant).
             if self.is_compile_time_ptr(old_ptr) {
+                #[cfg(debug_assertions)]
+                {
+                    // SAFETY: GC runs at safepoints; the compile-time
+                    // object's payload is stable for the program lifetime.
+                    let obj = unsafe { old_ptr.get() };
+                    let mut tmp = Vec::new();
+                    self.add_references_to_worklist(obj, &mut tmp);
+                    debug_assert!(
+                        tmp.iter().all(|p| self.is_compile_time_ptr(*p)),
+                        "compile-time object {old_ptr:?} contains a runtime \
+                         HeapPtr — module-level invariant violated; the GC's \
+                         compile-time shortcut would silently miss it"
+                    );
+                }
                 forwarding.insert(old_ptr, old_ptr);
                 continue;
             }
