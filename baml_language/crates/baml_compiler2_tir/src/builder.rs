@@ -7856,6 +7856,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             match (&a, &b) {
                 (PrimitiveType::Int, PrimitiveType::Float)
                 | (PrimitiveType::Float, PrimitiveType::Int) => Some(PrimitiveType::Float),
+                (PrimitiveType::Int, PrimitiveType::Bigint)
+                | (PrimitiveType::Bigint, PrimitiveType::Int) => Some(PrimitiveType::Bigint),
                 _ => None,
             }
         }
@@ -7883,7 +7885,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             (Some(PrimitiveType::Float), _) | (_, Some(PrimitiveType::Float)) => {
                 Ty::Primitive(PrimitiveType::Float, TyAttr::default())
             }
-            (Some(PrimitiveType::Bigint), Some(PrimitiveType::Bigint)) => {
+            (Some(PrimitiveType::Bigint | PrimitiveType::Int), Some(PrimitiveType::Bigint))
+            | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Int)) => {
                 Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())
             }
             (Some(PrimitiveType::Int), Some(PrimitiveType::Int)) => {
@@ -7934,7 +7937,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             (Some(PrimitiveType::Int), Some(PrimitiveType::Int)) => {
                 Ty::Primitive(PrimitiveType::Int, TyAttr::default())
             }
-            (Some(PrimitiveType::Bigint), Some(PrimitiveType::Bigint)) => {
+            (Some(PrimitiveType::Bigint | PrimitiveType::Int), Some(PrimitiveType::Bigint))
+            | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Int)) => {
                 Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())
             }
             _ => Ty::Unknown {

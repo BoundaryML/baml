@@ -3070,8 +3070,34 @@ impl LoweringContext<'_> {
             }
         }
 
-        let left = self.lower_to_operand(lhs);
-        let right = self.lower_to_operand(rhs);
+        // Mixed `int OP bigint` (or `bigint OP int`): widen the `int` operand
+        // with an `IntToBigint` coercion so the binop has matching `bigint`
+        // operands. Applies to arithmetic, bitwise, and comparison ops (the
+        // result type of a comparison is `bool`, but both operands still need
+        // to share the `bigint` representation for the typed opcode).
+        let lhs_ty = self.expr_ty(lhs);
+        let rhs_ty = self.expr_ty(rhs);
+        let lhs_is_int = matches!(
+            lhs_ty,
+            Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
+        );
+        let rhs_is_int = matches!(
+            rhs_ty,
+            Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
+        );
+        let lhs_is_bigint = matches!(
+            lhs_ty,
+            Ty::Bigint { .. } | Ty::Literal(baml_type::Literal::Bigint(_), _)
+        );
+        let rhs_is_bigint = matches!(
+            rhs_ty,
+            Ty::Bigint { .. } | Ty::Literal(baml_type::Literal::Bigint(_), _)
+        );
+        let widen_lhs = lhs_is_int && rhs_is_bigint;
+        let widen_rhs = rhs_is_int && lhs_is_bigint;
+
+        let left = self.lower_to_operand_widening(lhs, widen_lhs);
+        let right = self.lower_to_operand_widening(rhs, widen_rhs);
         if let Some(mir_op) = Self::convert_binop(op) {
             self.builder.assign(
                 dest,
@@ -3225,7 +3251,18 @@ impl LoweringContext<'_> {
 
         let place = self.lower_lvalue(inner_target);
         let current = Operand::Copy(place.clone());
-        let rhs = self.lower_to_operand(value);
+        // Mixed `bigint OP= int`: widen the int rhs so the binop sees matching
+        // `bigint` operands.
+        let target_ty = self.expr_ty(inner_target);
+        let value_ty = self.expr_ty(value);
+        let widen_rhs = matches!(
+            target_ty,
+            Ty::Bigint { .. } | Ty::Literal(baml_type::Literal::Bigint(_), _)
+        ) && matches!(
+            value_ty,
+            Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
+        );
+        let rhs = self.lower_to_operand_widening(value, widen_rhs);
         let mir_op = Self::convert_assign_op(op);
         self.builder.assign(
             place,
@@ -5507,7 +5544,18 @@ impl LoweringContext<'_> {
                 } else {
                     let place = self.lower_lvalue(target);
                     let current = Operand::Copy(place.clone());
-                    let rhs = self.lower_to_operand(value);
+                    // Mixed `bigint OP= int`: widen the int rhs so the binop
+                    // sees matching `bigint` operands.
+                    let target_ty = self.expr_ty(target);
+                    let value_ty = self.expr_ty(value);
+                    let widen_rhs = matches!(
+                        target_ty,
+                        Ty::Bigint { .. } | Ty::Literal(baml_type::Literal::Bigint(_), _)
+                    ) && matches!(
+                        value_ty,
+                        Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
+                    );
+                    let rhs = self.lower_to_operand_widening(value, widen_rhs);
                     let mir_op = Self::convert_assign_op(op);
                     self.builder.assign(
                         place,

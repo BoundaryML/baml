@@ -836,3 +836,75 @@ async fn test_bigint_arithmetic_huge() {
         Ok(BexExternalValue::String("18446744073709551617".to_string()))
     );
 }
+
+// ─── mixed `int OP bigint` arithmetic ──────────────────────────────
+
+#[tokio::test]
+async fn test_bigint_int_mixed_add_left() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 2n + 3 == 5n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_int_mixed_add_right() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 3 + 2n == 5n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_int_mixed_mul() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 2n * 3 == 6n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_int_mixed_shl() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return (1n << 4) == 16n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_int_mixed_bitand_negative() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return ((-1n) & 255) == 255n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_int_mixed_comparison_gt() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 5n > 3; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_int_mixed_comparison_eq() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 5 == 5n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
