@@ -6,9 +6,9 @@
 
 use baml_type::Ty;
 use bex_external_types::{BexExternalAdt, BexExternalValue, WeakHeapRef};
-use bex_vm_types::{HeapPtr, Object, Value};
+use bex_vm_types::{HeapPtr, Object, PermitProof, Value};
 
-use crate::{BexHeap, heap_guard::PermitProof};
+use crate::BexHeap;
 
 #[derive(Debug, PartialEq, thiserror::Error, Clone)]
 pub enum AccessError {

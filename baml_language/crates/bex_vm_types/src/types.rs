@@ -1100,13 +1100,29 @@ impl Future {
 
     /// Transition to `Ready`.
     ///
+    /// Fires the generational write barrier on `heap` for `self_ptr`
+    /// before the value write. This is required because a `Future` can
+    /// survive across GCs (rooted by `FutureManagerInner::active_futures`)
+    /// and may end up in Gen2; if `value` is a `Value::Object` referring
+    /// to a younger-generation heap object, the next Minor GC's
+    /// dirty-card scan must find this reference. Without the barrier the
+    /// young object would be reclaimed and the `Future`'s `value` left
+    /// dangling.
+    ///
     /// # Safety
     ///
     /// Caller must hold `future_permit` (single-writer invariant). The
     /// future must currently be in `Pending` state — overwriting `value`
     /// after a previous `set_ready`/`set_error` would race with
-    /// concurrent readers.
-    pub unsafe fn set_ready(&self, value: Value) {
+    /// concurrent readers. `self_ptr` must be the [`HeapPtr`] under which
+    /// `self` lives (so the write barrier marks the correct card).
+    pub unsafe fn set_ready(
+        &self,
+        heap: &impl crate::WriteBarrier,
+        self_ptr: HeapPtr,
+        value: Value,
+    ) {
+        heap.write_barrier(self_ptr, value);
         // SAFETY: single-writer invariant via `future_permit`.
         unsafe { (*self.value.get()).write(value) };
         self.state.store(FutureTag::Ready as u8, Ordering::Release);
@@ -1114,11 +1130,20 @@ impl Future {
 
     /// Transition to `Error`.
     ///
+    /// Fires the generational write barrier — see [`Self::set_ready`].
+    ///
     /// # Safety
     ///
-    /// See [`Self::set_ready`] — caller must hold `future_permit` and the
-    /// future must currently be `Pending`.
-    pub unsafe fn set_error(&self, value: Value) {
+    /// See [`Self::set_ready`] — caller must hold `future_permit`, the
+    /// future must currently be `Pending`, and `self_ptr` must point at
+    /// `self`'s heap slot.
+    pub unsafe fn set_error(
+        &self,
+        heap: &impl crate::WriteBarrier,
+        self_ptr: HeapPtr,
+        value: Value,
+    ) {
+        heap.write_barrier(self_ptr, value);
         // SAFETY: single-writer invariant via `future_permit`.
         unsafe { (*self.value.get()).write(value) };
         self.state.store(FutureTag::Error as u8, Ordering::Release);

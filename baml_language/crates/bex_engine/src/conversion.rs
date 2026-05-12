@@ -363,16 +363,24 @@ impl BexEngine {
                 Value::Object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
             }
             BexExternalValue::FunctionRef { global_index } => {
-                if global_index >= self.globals.len() {
+                // `convert_external_to_vm_value` runs while `holder`'s
+                // active heap permit is held, so we route through the
+                // permit-proof-gated `SharedGlobals` API. The slice's
+                // lifetime is tied to the proof, which is bounded by
+                // `holder.proof()`'s borrow of `holder` — both end at the
+                // close of this function call.
+                let proof = holder.proof();
+                let len = self.globals.len(proof);
+                let slice = self.globals.as_slice(proof);
+                if global_index >= len {
                     return Err(EngineError::TypeMismatch {
                         message: format!(
-                            "FunctionRef global_index {} out of bounds (globals len {})",
-                            global_index,
-                            self.globals.len()
+                            "FunctionRef global_index {global_index} out of \
+                             bounds (globals len {len})"
                         ),
                     });
                 }
-                self.globals[global_index]
+                slice[global_index]
             }
         })
     }
