@@ -43,11 +43,11 @@ async fn match_catch_all_named_binding() {
     "
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 42
         load_const 1
-        bin_op +
+        add_int
         return
     }
     ");

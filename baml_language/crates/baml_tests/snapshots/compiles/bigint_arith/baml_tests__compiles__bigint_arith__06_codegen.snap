@@ -1,0 +1,72 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.AddBigints() -> bigint {
+    load_const 2n
+    load_const 3n
+    add_bigint
+    return
+}
+
+function user.BitAndBigints() -> bigint {
+    load_const 15n
+    load_const 240n
+    bit_and_bigint
+    return
+}
+
+function user.BitOrBigints() -> bigint {
+    load_const 15n
+    load_const 240n
+    bit_or_bigint
+    return
+}
+
+function user.BitXorBigints() -> bigint {
+    load_const 170n
+    load_const 255n
+    bit_xor_bigint
+    return
+}
+
+function user.DivBigints() -> bigint {
+    load_const 7n
+    load_const 2n
+    div_bigint
+    return
+}
+
+function user.ModBigints() -> bigint {
+    load_const 7n
+    load_const 2n
+    mod_bigint
+    return
+}
+
+function user.MulBigints() -> bigint {
+    load_const 2n
+    load_const 3n
+    mul_bigint
+    return
+}
+
+function user.ShlBigints() -> bigint {
+    load_const 1n
+    load_const 4n
+    shl_bigint
+    return
+}
+
+function user.ShrBigints() -> bigint {
+    load_const 256n
+    load_const 4n
+    shr_bigint
+    return
+}
+
+function user.SubBigints() -> bigint {
+    load_const 5n
+    load_const 3n
+    sub_bigint
+    return
+}

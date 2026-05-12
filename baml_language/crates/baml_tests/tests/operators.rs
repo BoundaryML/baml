@@ -308,7 +308,7 @@ async fn negative_int_arithmetic() {
         load_const 5
         unary_op -
         load_const 3
-        bin_op +
+        add_int
         return
     }
     ");
@@ -331,7 +331,7 @@ async fn negative_int_comparison() {
         load_const 5
         unary_op -
         load_const 0
-        cmp_op <
+        cmp_int_op <
         return
     }
     ");

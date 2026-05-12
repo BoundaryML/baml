@@ -1,0 +1,54 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.AddBigints() -> bigint throws never {
+  { : bigint
+    2n + 3n : bigint
+  }
+}
+function user.SubBigints() -> bigint throws never {
+  { : bigint
+    5n - 3n : bigint
+  }
+}
+function user.MulBigints() -> bigint throws never {
+  { : bigint
+    2n * 3n : bigint
+  }
+}
+function user.DivBigints() -> bigint throws never {
+  { : bigint
+    7n / 2n : bigint
+  }
+}
+function user.ModBigints() -> bigint throws never {
+  { : bigint
+    7n % 2n : bigint
+  }
+}
+function user.BitAndBigints() -> bigint throws never {
+  { : bigint
+    15n & 240n : bigint
+  }
+}
+function user.BitOrBigints() -> bigint throws never {
+  { : bigint
+    15n | 240n : bigint
+  }
+}
+function user.BitXorBigints() -> bigint throws never {
+  { : bigint
+    170n ^ 255n : bigint
+  }
+}
+function user.ShlBigints() -> bigint throws never {
+  { : bigint
+    1n << 4n : bigint
+  }
+}
+function user.ShrBigints() -> bigint throws never {
+  { : bigint
+    256n >> 4n : bigint
+  }
+}

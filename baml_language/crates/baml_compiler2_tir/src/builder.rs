@@ -7803,12 +7803,28 @@ impl<'db> TypeInferenceBuilder<'db> {
                 result
             }
 
-            // Bitwise → int
+            // Bitwise: result type depends on operands (int or bigint).
             BinaryOp::BitAnd
             | BinaryOp::BitOr
             | BinaryOp::BitXor
             | BinaryOp::Shl
-            | BinaryOp::Shr => Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            | BinaryOp::Shr => {
+                let result = Self::infer_bitwise(lhs, rhs);
+                if matches!(result, Ty::Unknown { .. })
+                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    self.context.report_simple(
+                        TirTypeError::InvalidBinaryOp {
+                            op,
+                            lhs: lhs.clone(),
+                            rhs: rhs.clone(),
+                        },
+                        at,
+                    );
+                }
+                result
+            }
 
             // Null coalescing: a ?? b
             // If a: T?, result is T | typeof(b).
@@ -7867,6 +7883,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             (Some(PrimitiveType::Float), _) | (_, Some(PrimitiveType::Float)) => {
                 Ty::Primitive(PrimitiveType::Float, TyAttr::default())
             }
+            (Some(PrimitiveType::Bigint), Some(PrimitiveType::Bigint)) => {
+                Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())
+            }
             (Some(PrimitiveType::Int), Some(PrimitiveType::Int)) => {
                 Ty::Primitive(PrimitiveType::Int, TyAttr::default())
             }
@@ -7879,6 +7898,44 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     }
                 }
+            }
+            _ => Ty::Unknown {
+                attr: TyAttr::default(),
+            },
+        }
+    }
+
+    /// Determine the result type of a bitwise operation.
+    ///
+    /// `(int, int) -> int`, `(bigint, bigint) -> bigint`. Mixed `(int, bigint)`
+    /// widening is handled in Phase 8.
+    fn infer_bitwise(lhs: &Ty, rhs: &Ty) -> Ty {
+        fn base_ty(ty: &Ty) -> Option<PrimitiveType> {
+            match ty {
+                Ty::Primitive(p, _) => Some(p.clone()),
+                Ty::Literal(lit, _, _) => Some(PrimitiveType::from_literal(lit)),
+                Ty::Union(members, _) => {
+                    let mut result: Option<PrimitiveType> = None;
+                    for m in members {
+                        let p = base_ty(m)?;
+                        result = Some(match (result, p) {
+                            (None, p) => p,
+                            (Some(a), b) if a == b => a,
+                            _ => return None,
+                        });
+                    }
+                    result
+                }
+                _ => None,
+            }
+        }
+
+        match (base_ty(lhs), base_ty(rhs)) {
+            (Some(PrimitiveType::Int), Some(PrimitiveType::Int)) => {
+                Ty::Primitive(PrimitiveType::Int, TyAttr::default())
+            }
+            (Some(PrimitiveType::Bigint), Some(PrimitiveType::Bigint)) => {
+                Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())
             }
             _ => Ty::Unknown {
                 attr: TyAttr::default(),

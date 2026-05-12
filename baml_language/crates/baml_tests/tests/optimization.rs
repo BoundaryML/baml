@@ -60,9 +60,9 @@ fn constant_fold_int_arithmetic_chain() {
         load_const 100
         load_const 50
         sub_int
-        bin_op +
+        add_int
         load_const 1
-        bin_op -
+        sub_int
         return
     }
     ");

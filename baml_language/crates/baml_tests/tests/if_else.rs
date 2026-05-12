@@ -750,7 +750,7 @@ async fn if_else_arithmetic_condition() {
         load_const 1
         add_int
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 

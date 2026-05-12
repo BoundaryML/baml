@@ -683,3 +683,156 @@ async fn test_bigint_ordering_large() {
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
+
+// ─── typed arithmetic and bitwise (Phase 7) ─────────────────────────────────
+
+#[tokio::test]
+async fn test_bigint_arithmetic_add() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 2n + 3n == 5n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_arithmetic_sub() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 5n - 3n == 2n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_arithmetic_mul() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 2n * 3n == 6n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_arithmetic_div() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 7n / 2n == 3n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_arithmetic_mod() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 7n % 2n == 1n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_bitwise_and() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return (15n & 240n) == 0n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_bitwise_or() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return (15n | 240n) == 255n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_bitwise_xor() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return (170n ^ 255n) == 85n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_bitwise_shl() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return (1n << 4n) == 16n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_bitwise_shr() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return (256n >> 4n) == 16n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_bitwise_negative() {
+    // num-bigint represents negative bigints in two's-complement for bitwise
+    // ops: -1 & 0xFF == 0xFF (255).
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return ((-1n) & 255n) == 255n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_div_by_zero() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { 1n / 0n }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn test_bigint_mod_by_zero() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { 1n % 0n }
+    "#
+    );
+    let Err(bex_engine::EngineError::UnhandledThrow { .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+}
+
+#[tokio::test]
+async fn test_bigint_arithmetic_huge() {
+    // (2n).pow(64n) + 1n produces 2^64 + 1 = 18446744073709551617,
+    // which does not fit in an i64.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { (2n).pow(64n) + 1n }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("18446744073709551617".to_string()))
+    );
+}

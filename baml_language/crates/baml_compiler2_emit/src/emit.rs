@@ -24,6 +24,18 @@ use bex_vm_types::{
     },
 };
 
+/// Coarse arithmetic-type classification used by [`try_specialize_binary_op`].
+///
+/// Collapses `Ty::Int { .. }` / `Ty::Literal(Int(_))` (and similar) into a
+/// single tag so specialization works regardless of whether TIR preserved a
+/// literal type after constant-folding.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ArithTyClass {
+    Int,
+    Float,
+    Bigint,
+}
+
 // ============================================================================
 // Switch Strategy Analysis
 // ============================================================================
@@ -443,6 +455,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    /// Classify a type for binary-op specialization. Returns `None` if the
+    /// type isn't one of the primitive numeric forms we can specialize on.
+    ///
+    /// Both `Ty::Int { .. }` and `Ty::Literal(Literal::Int(_), _)` map to
+    /// `Int`, and similarly for `Float`/`Bigint`. This lets us specialize
+    /// expressions like `(-1n) & 255n` where the lhs operand carries a
+    /// `Ty::Literal(Bigint(-1))` after constant-folding in TIR.
+    fn classify_arith_ty(ty: &Ty) -> Option<ArithTyClass> {
+        match ty {
+            Ty::Int { .. } => Some(ArithTyClass::Int),
+            Ty::Float { .. } => Some(ArithTyClass::Float),
+            Ty::Bigint { .. } => Some(ArithTyClass::Bigint),
+            Ty::Literal(baml_type::Literal::Int(_), _) => Some(ArithTyClass::Int),
+            Ty::Literal(baml_type::Literal::Float(_), _) => Some(ArithTyClass::Float),
+            Ty::Literal(baml_type::Literal::Bigint(_), _) => Some(ArithTyClass::Bigint),
+            _ => None,
+        }
+    }
+
     /// Try to emit a specialized instruction for a binary operation based on
     /// static operand types. Returns `None` when types can't be resolved or
     /// don't match a specialized form (mixed int/float, strings, bitwise, etc.).
@@ -455,8 +486,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         let left_ty = self.resolve_operand_type(left)?;
         let right_ty = self.resolve_operand_type(right)?;
 
-        match (&left_ty, &right_ty) {
-            (Ty::Int { .. }, Ty::Int { .. }) => match op {
+        let left_class = Self::classify_arith_ty(&left_ty)?;
+        let right_class = Self::classify_arith_ty(&right_ty)?;
+
+        match (left_class, right_class) {
+            (ArithTyClass::Int, ArithTyClass::Int) => match op {
                 BinOp::Add => Some(Instruction::AddInt),
                 BinOp::Sub => Some(Instruction::SubInt),
                 BinOp::Mul => Some(Instruction::MulInt),
@@ -470,7 +504,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 BinOp::Ge => Some(Instruction::CmpIntOp(CmpOp::GtEq)),
                 _ => None, // bitwise ops stay generic
             },
-            (Ty::Float { .. }, Ty::Float { .. }) => match op {
+            (ArithTyClass::Float, ArithTyClass::Float) => match op {
                 BinOp::Add => Some(Instruction::AddFloat),
                 BinOp::Sub => Some(Instruction::SubFloat),
                 BinOp::Mul => Some(Instruction::MulFloat),
@@ -483,14 +517,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 BinOp::Ge => Some(Instruction::CmpFloatOp(CmpOp::GtEq)),
                 _ => None,
             },
-            (Ty::Bigint { .. }, Ty::Bigint { .. }) => match op {
+            (ArithTyClass::Bigint, ArithTyClass::Bigint) => match op {
+                BinOp::Add => Some(Instruction::AddBigint),
+                BinOp::Sub => Some(Instruction::SubBigint),
+                BinOp::Mul => Some(Instruction::MulBigint),
+                BinOp::Div => Some(Instruction::DivBigint),
+                BinOp::Mod => Some(Instruction::ModBigint),
+                BinOp::BitAnd => Some(Instruction::BitAndBigint),
+                BinOp::BitOr => Some(Instruction::BitOrBigint),
+                BinOp::BitXor => Some(Instruction::BitXorBigint),
+                BinOp::Shl => Some(Instruction::ShlBigint),
+                BinOp::Shr => Some(Instruction::ShrBigint),
                 BinOp::Eq => Some(Instruction::CmpBigintOp(CmpOp::Eq)),
                 BinOp::Ne => Some(Instruction::CmpBigintOp(CmpOp::NotEq)),
                 BinOp::Lt => Some(Instruction::CmpBigintOp(CmpOp::Lt)),
                 BinOp::Le => Some(Instruction::CmpBigintOp(CmpOp::LtEq)),
                 BinOp::Gt => Some(Instruction::CmpBigintOp(CmpOp::Gt)),
                 BinOp::Ge => Some(Instruction::CmpBigintOp(CmpOp::GtEq)),
-                _ => None, // arithmetic specialization in Phase 7
             },
             _ => None,
         }
