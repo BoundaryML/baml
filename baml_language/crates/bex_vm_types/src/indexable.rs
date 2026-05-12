@@ -14,7 +14,7 @@
 
 use std::{cell::UnsafeCell, collections::HashMap, marker::PhantomData, sync::Arc};
 
-use crate::{HeapPtr, Object, RootHaver, Value};
+use crate::{HeapPtr, Object, PermitProof, RootHaver, Value};
 
 // Marker types for different pool kinds
 
@@ -274,7 +274,7 @@ pub type ObjectPool = Pool<Object, ObjectKind>;
 /// **not** enforced by the type system: `SharedGlobals` is `Send + Sync +
 /// Clone`, so the lifetime of `&Self` (and any `&[Value]` projected from
 /// it via [`Self::as_slice`]) is decoupled from any specific
-/// [`ActiveHeapPermit`](crate)'s lifetime. Misuse causes UB. Where
+/// `ActiveHeapPermit`'s lifetime. Misuse causes UB. Where
 /// possible, prefer [`Self::get`] (returns `Value` by copy) to avoid
 /// holding the slice borrow across any operation that could end the
 /// caller's permit.
@@ -329,58 +329,65 @@ impl SharedGlobals {
     }
 
     /// Number of globals in the pool.
-    pub fn len(&self) -> usize {
-        // SAFETY: reads the boxed slice's length through the UnsafeCell.
-        // Length is set at construction and never changes, so this is
-        // synchronized regardless of GC state. Explicit `&*` produces a
-        // `&Box<[Value]>` so `.len()` doesn't autoref a raw pointer.
-        unsafe { (&*self.inner.values.get()).len() }
+    ///
+    /// Requires a [`PermitProof`] witnessing that an active heap permit
+    /// is held — this excludes GC's `forward_roots` (the only writer
+    /// against `inner.values`) for the duration of the read.
+    pub fn len(&self, _proof: PermitProof<'_>) -> usize {
+        // SAFETY: `_proof` is the runtime witness that no `forward_roots`
+        // can run concurrently. Explicit `&*` produces a `&Box<[Value]>`
+        // so `.len()` doesn't autoref a raw pointer.
+        #[allow(unsafe_code, reason = "UnsafeCell projection gated by `_proof`")]
+        unsafe {
+            (&*self.inner.values.get()).len()
+        }
     }
 
     /// Whether the pool is empty.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    ///
+    /// See [`Self::len`] for the permit-proof requirement.
+    pub fn is_empty(&self, proof: PermitProof<'_>) -> bool {
+        self.len(proof) == 0
     }
 
     /// Read a global by index.
     ///
-    /// Caller must hold an active heap permit. `Value` is `Copy`, so the
-    /// returned value is decoupled from any aliasing of the underlying
-    /// `UnsafeCell`.
+    /// Requires a [`PermitProof`]; see [`Self::len`].
     ///
     /// # Panics
     ///
     /// Panics if `index` is out of bounds — same contract as slice indexing.
-    pub fn get(&self, index: GlobalIndex) -> Value {
-        // SAFETY: caller holds an active heap permit, so GC's `forward_roots`
-        // is excluded for the duration of this read. Explicit `&*` produces
-        // a `&[Value]` (no autoref through the raw-pointer indexing path).
-        unsafe { (&*self.inner.values.get())[index.into_raw()] }
+    pub fn get(&self, _proof: PermitProof<'_>, index: GlobalIndex) -> Value {
+        // SAFETY: `_proof` excludes concurrent `forward_roots`. `Value`
+        // is `Copy`, so the returned value is decoupled from any
+        // aliasing of the underlying `UnsafeCell` after this returns.
+        // Explicit `&*` produces a `&[Value]` (no autoref through the
+        // raw-pointer indexing path).
+        #[allow(unsafe_code, reason = "UnsafeCell projection gated by `_proof`")]
+        unsafe {
+            (&*self.inner.values.get())[index.into_raw()]
+        }
     }
 
     /// Borrow the underlying globals as a slice.
     ///
-    /// # Unenforced contract
+    /// The returned slice's lifetime is tied to `proof`'s lifetime, not
+    /// to `&self`: dropping the originating [`bex_heap::ActiveHeapPermit`]
+    /// invalidates the proof and therefore the slice borrow. This is the
+    /// type-system guarantee that makes the underlying `UnsafeCell`
+    /// projection sound — GC cannot run `forward_roots` while any
+    /// `PermitProof<'a>` is live, and the borrow checker forces the
+    /// slice borrow to die with the proof.
     ///
-    /// Caller must hold an active heap permit for the *entire* lifetime
-    /// of the returned `&[Value]`. The slice borrow is tied to `&self`,
-    /// **not** to the permit — Rust's type system has no way to express
-    /// that relationship through `SharedGlobals` (`SharedGlobals` is
-    /// `Clone` and `Send + Sync`, so its `&` lifetime is decoupled from
-    /// any specific permit's). If the permit drops while the slice is
-    /// still alive and a GC runs `forward_roots` on this `SharedGlobals`
-    /// (which mutates `inner.values` via [`UnsafeCell`]), the resulting
-    /// aliasing is **undefined behavior**.
-    ///
-    /// Prefer [`Self::get`] (returns `Value` by copy) whenever the call
-    /// site only needs a single element. `as_slice` exists for the
-    /// `VmGlobals::as_slice` / `VmGlobals::Index<GlobalIndex>` paths
-    /// which are already governed by the wider VM-permit invariant.
-    pub fn as_slice(&self) -> &[Value] {
-        // SAFETY: caller upholds the unenforced contract above — they
-        // hold an active heap permit and won't release it before the
-        // returned slice's last use.
-        unsafe { &*self.inner.values.get() }
+    /// [`bex_heap::ActiveHeapPermit`]: <https://docs.rs/bex_heap>
+    pub fn as_slice<'a>(&'a self, _proof: PermitProof<'a>) -> &'a [Value] {
+        // SAFETY: `_proof` excludes concurrent `forward_roots` for `'a`,
+        // and the returned slice borrow cannot outlive `'a` (and hence
+        // cannot outlive the proof, which cannot outlive the permit).
+        #[allow(unsafe_code, reason = "UnsafeCell projection gated by `_proof`")]
+        unsafe {
+            &*self.inner.values.get()
+        }
     }
 }
 
@@ -437,26 +444,34 @@ pub enum VmGlobals {
 
 impl VmGlobals {
     /// Number of globals in the view.
-    pub fn len(&self) -> usize {
+    ///
+    /// `proof` is consumed for the `Shared` variant (where it gates a
+    /// safe read against the `UnsafeCell`-backed `SharedGlobals`); the
+    /// `Owned` variant ignores it. Taking the proof unconditionally
+    /// keeps the API symmetric across variants and matches how
+    /// post-`$init` VM operations always have access to one.
+    pub fn len(&self, proof: PermitProof<'_>) -> usize {
         match self {
             Self::Owned(pool) => pool.len(),
-            Self::Shared(globals) => globals.len(),
+            Self::Shared(globals) => globals.len(proof),
         }
     }
 
     /// Whether the view is empty.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    ///
+    /// See [`Self::len`] for the `proof` parameter.
+    pub fn is_empty(&self, proof: PermitProof<'_>) -> bool {
+        self.len(proof) == 0
     }
 
     /// Read a global by index. `Value` is `Copy` so this returns by value.
     ///
     /// # Panics
     /// Panics if `index` is out of bounds — same contract as slice indexing.
-    pub fn get(&self, index: GlobalIndex) -> Value {
+    pub fn get(&self, proof: PermitProof<'_>, index: GlobalIndex) -> Value {
         match self {
             Self::Owned(pool) => pool[index],
-            Self::Shared(globals) => globals.get(index),
+            Self::Shared(globals) => globals.get(proof, index),
         }
     }
 
@@ -475,28 +490,15 @@ impl VmGlobals {
 
     /// View the globals as a slice. Both variants support O(1) slice access.
     ///
-    /// For [`VmGlobals::Shared`] the caller must hold an active heap permit
-    /// (no concurrent `forward_roots` mutation). See
-    /// [`SharedGlobals::as_slice`].
-    pub fn as_slice(&self) -> &[Value] {
+    /// The returned slice is tied to `proof`'s lifetime: dropping the
+    /// originating [`bex_heap::ActiveHeapPermit`] invalidates the proof
+    /// and therefore the slice borrow. See [`SharedGlobals::as_slice`].
+    ///
+    /// [`bex_heap::ActiveHeapPermit`]: <https://docs.rs/bex_heap>
+    pub fn as_slice<'a>(&'a self, proof: PermitProof<'a>) -> &'a [Value] {
         match self {
             Self::Owned(pool) => &pool.0,
-            Self::Shared(globals) => globals.as_slice(),
-        }
-    }
-}
-
-impl std::ops::Index<GlobalIndex> for VmGlobals {
-    type Output = Value;
-
-    fn index(&self, index: GlobalIndex) -> &Self::Output {
-        match self {
-            Self::Owned(pool) => &pool[index],
-            // SAFETY of underlying read: caller holds an active heap permit
-            // for the lifetime of the returned reference (the same contract
-            // already governs every other use of `&Value` from the engine
-            // hot path).
-            Self::Shared(globals) => &globals.as_slice()[index.into_raw()],
+            Self::Shared(globals) => globals.as_slice(proof),
         }
     }
 }
@@ -653,7 +655,11 @@ mod shared_globals_tests {
         // Take a fresh `as_slice()` view; the in-place rewrite must be
         // visible through the *same* `Arc<UnsafeCell<...>>` that any
         // existing `SharedGlobals` clone observes.
-        let slice = globals.as_slice();
+        //
+        // SAFETY: single-threaded test, no concurrent `forward_roots`.
+        #[allow(unsafe_code, reason = "test mock proof")]
+        let proof = unsafe { PermitProof::new() };
+        let slice = globals.as_slice(proof);
         assert_eq!(slice[0], Value::Object(new1));
         assert_eq!(slice[1], Value::Int(42));
         assert_eq!(slice[2], Value::Object(new2));
@@ -676,6 +682,10 @@ mod shared_globals_tests {
         held_by_holder.forward_roots(&forwarding);
 
         // The engine-side clone (`original`) must see the rewrite.
-        assert_eq!(original.get(GlobalIndex::from_raw(0)), Value::Object(new));
+        // SAFETY: single-threaded test; no concurrent `forward_roots`.
+        #[allow(unsafe_code, reason = "test mock proof")]
+        let proof = unsafe { PermitProof::new() };
+        let v = original.get(proof, GlobalIndex::from_raw(0));
+        assert_eq!(v, Value::Object(new));
     }
 }

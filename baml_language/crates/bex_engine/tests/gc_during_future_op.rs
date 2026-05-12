@@ -34,7 +34,6 @@ fn make_engine(source: &str) -> Arc<BexEngine> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "temporarily disabled: flaky GC/future interaction panics in chunked_vec"]
 async fn no_deadlock_between_gc_and_concurrent_schedule_future() {
     // Pre-fix this hung once a VM started a `ScheduleFuture` critical section
     // and another VM concurrently entered `request_park`: GC's
@@ -106,7 +105,6 @@ async fn no_deadlock_between_gc_and_concurrent_schedule_future() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "temporarily disabled: flaky GC/future interaction panics in chunked_vec"]
 async fn gc_during_await_completes_promptly() {
     // Single call that schedules a future and awaits it; concurrent GC
     // requests must not block that progress. This isolates the `Await`

@@ -5,7 +5,7 @@
 //! - A single exclusive heap access [`HeapGuard`], or
 //! - Any number of non-exclusive tracked active heap permits [`ActiveHeapPermit`].
 
-use ::bex_vm_types::{HeapPtr, RootHaver};
+use ::bex_vm_types::{HeapPtr, PermitProof, RootHaver};
 use ::core::{
     cell::UnsafeCell,
     marker::PhantomData,
@@ -101,21 +101,18 @@ impl<T: RootHaver> HeapPermit<T> for ActiveHeapPermit<T> {
         unsafe { self.state.holder_mut() }
     }
     fn proof(&self) -> PermitProof<'_> {
-        PermitProof {
-            _marker: PhantomData,
+        // SAFETY: `&self` proves an `ActiveHeapPermit<T>` is held for the
+        // returned proof's lifetime, which is the very invariant
+        // `PermitProof::new` requires. This is the canonical safe
+        // constructor referenced by `PermitProof`'s docs.
+        #[allow(
+            unsafe_code,
+            reason = "this is the canonical safe constructor of PermitProof"
+        )]
+        unsafe {
+            PermitProof::new()
         }
     }
-}
-
-/// A type-erased proof that an [`ActiveHeapPermit`] is held in the current
-/// scope (for at least lifetime `'a`).
-///
-/// Constructed via [`ActiveHeapPermit::proof`]. Carries no runtime data — the
-/// GC-exclusion guarantee comes from the lifetime, which is bound by the
-/// originating permit's borrow.
-#[derive(Clone, Copy)]
-pub struct PermitProof<'a> {
-    _marker: PhantomData<&'a ()>,
 }
 
 impl<T: RootHaver> Deref for ActiveHeapPermit<T> {
@@ -229,8 +226,13 @@ impl<'a, T: RootHaver> HeapPermit<T> for SharedHeapPermitGuard<'a, T> {
         unsafe { self.state.holder_mut() }
     }
     fn proof(&self) -> PermitProof<'_> {
-        PermitProof {
-            _marker: PhantomData,
+        // SAFETY: see `ActiveHeapPermit::proof`.
+        #[allow(
+            unsafe_code,
+            reason = "this is the canonical safe constructor of PermitProof"
+        )]
+        unsafe {
+            PermitProof::new()
         }
     }
 }

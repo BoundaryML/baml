@@ -18,8 +18,10 @@ use bex_vm::BexVm;
 use bex_vm_types::{HeapPtr, RootHaver, Value};
 
 fn make_vm() -> BexVm {
-    // The program contents don't matter — we only need a VM with a live
-    // TLAB. `from_program` calls `Tlab::new`, which reserves a chunk.
+    // The program contents don't matter — we only need a VM whose TLAB
+    // can be materialized on demand. `BexVm::new` builds the TLAB with
+    // `Tlab::new_empty` (lazy refill) so the chunk is reserved on the
+    // first allocation under the VM's permit, not at construction time.
     let program = compile_source("function noop() -> int { 0 }");
     BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program")
 }
@@ -27,7 +29,14 @@ fn make_vm() -> BexVm {
 #[test]
 fn forward_roots_invalidates_tlab() {
     let mut vm = make_vm();
-    assert!(vm.tlab.is_valid(), "fresh TLAB should hold a chunk");
+    // `Tlab::new_empty` defers chunk reservation until first alloc, so a
+    // fresh VM has an invalid TLAB by construction. Force a refill by
+    // allocating once, then verify `forward_roots` invalidates it.
+    let _ = vm.tlab.alloc_string("force_refill".to_string());
+    assert!(
+        vm.tlab.is_valid(),
+        "TLAB should hold a chunk after the first allocation"
+    );
 
     vm.forward_roots(&HashMap::new());
     assert!(

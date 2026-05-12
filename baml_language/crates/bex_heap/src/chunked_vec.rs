@@ -917,25 +917,39 @@ mod tests {
     fn test_set_concurrent_with_resize_does_not_uaf() {
         use std::{sync::Arc, thread};
 
+        const NUM_SETTERS: usize = 4;
+        const SLOTS_PER_SETTER: usize = 2;
         // Chunk size of 2 so each `resize_to(N)` adds chunks, exercising
         // the outer-Vec growth path frequently.
         let vec: Arc<ChunkedVec<i32, 2>> = Arc::new(ChunkedVec::new());
-        // Pre-populate slots that the setters will hammer.
-        vec.resize_to(2);
+        // Pre-allocate one dedicated slot range per setter so the
+        // concurrent `set()` calls write **disjoint** indices — that's
+        // `set`'s actual safety contract. Multiple writers to the same
+        // index would be UB even on top of the `chunks_lock` RwLock fix.
+        vec.resize_to(NUM_SETTERS * SLOTS_PER_SETTER);
 
-        let setters: Vec<_> = (0..4)
+        let setters: Vec<_> = (0..NUM_SETTERS)
             .map(|tid| {
                 let vec = Arc::clone(&vec);
                 thread::spawn(move || {
+                    let base = tid * SLOTS_PER_SETTER;
                     for i in 0..200 {
-                        // SAFETY: Different `tid` values write the same
-                        // index but the test does not assert on the
-                        // intermediate value — we only care that no UAF
-                        // occurs. Final-value semantics are race-resolved
-                        // by the last writer.
+                        // SAFETY: each thread owns the slot range
+                        // `[tid*SLOTS_PER_SETTER, (tid+1)*SLOTS_PER_SETTER)`
+                        // exclusively, so the concurrent `set`s observe
+                        // `set`'s "different indices only" contract.
+                        // What we *are* racing is the outer-Vec buffer
+                        // pointer read inside `set`/`element_ptr` against
+                        // the grower thread's `resize_with` + `Vec::push`.
                         unsafe {
-                            vec.set(0, tid * 1000 + i);
-                            vec.set(1, tid * 1000 + i + 1);
+                            for slot in 0..SLOTS_PER_SETTER {
+                                #[expect(
+                                    clippy::cast_possible_wrap,
+                                    reason = "test data, values stay small"
+                                )]
+                                let value = (tid * 1_000 + i) as i32 + slot as i32;
+                                vec.set(base + slot, value);
+                            }
                         }
                     }
                 })
@@ -947,7 +961,8 @@ mod tests {
             // Grow past several outer-Vec capacity-doubling boundaries
             // (4 → 8 → 16 → 32 …): with chunk_size=2, every other
             // resize_to bump triggers another outer-Vec push.
-            for n in (2..400).step_by(2) {
+            let start = NUM_SETTERS * SLOTS_PER_SETTER;
+            for n in (start..400).step_by(2) {
                 grower_vec.resize_to(n);
             }
         });
@@ -957,10 +972,11 @@ mod tests {
         }
         grower.join().expect("grower panicked");
 
-        // Best-effort sanity: the slots are still readable; the vec did not
-        // wedge or panic with `len=0`.
-        assert!(*vec.get(0) >= 0);
-        assert!(*vec.get(1) >= 0);
-        assert!(vec.len() >= 2);
+        // Best-effort sanity: every slot the setters owned is still
+        // readable and the vec didn't wedge with `len=0`.
+        for idx in 0..NUM_SETTERS * SLOTS_PER_SETTER {
+            assert!(*vec.get(idx) >= 0);
+        }
+        assert!(vec.len() >= NUM_SETTERS * SLOTS_PER_SETTER);
     }
 }
