@@ -33,7 +33,7 @@ use text_size::TextRange;
 use crate::{
     builder::TypeInferenceBuilder,
     infer_context::{InferContext, TypeCheckDiagnostics},
-    ty::{Ty, TyAttr},
+    ty::{FunctionParamTy, Ty, TyAttr},
 };
 
 fn inference_owner_scope(
@@ -148,8 +148,118 @@ pub struct ScopeInference<'db> {
     /// Populated for lambda scopes so LSP can resolve unannotated lambda
     /// parameter types (e.g. `items.map((item) -> { item. })`).
     param_types: Vec<(Name, Ty)>,
+    /// Full parameter binding plan for checked calls.
+    call_plans: FxHashMap<ExprId, CallPlan>,
+    /// Function value adapters required after structural function subtyping.
+    ///
+    /// Optional parameters are matched by name in TIR types, but runtime calls
+    /// are positional and exact-arity. MIR uses this metadata to synthesize a
+    /// wrapper that drops/reorders optional parameters before the VM sees the
+    /// call.
+    function_coercions: FxHashMap<ExprId, FunctionCoercion>,
+    /// Expression metadata produced while checking parameter defaults.
+    ///
+    /// Defaults live in a separate AST arena from the function body, so their
+    /// `ExprId`s and `PatId`s are not safe to merge into the normal per-scope
+    /// maps above.
+    parameter_defaults: DefaultParameterInference<'db>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefaultParameterInference<'db> {
+    pub(crate) expressions: FxHashMap<ExprId, Ty>,
+    pub(crate) pattern_types: FxHashMap<PatId, Ty>,
+    pub(crate) resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
+    pub(crate) catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
+    pub(crate) exhaustive_matches: FxHashSet<ExprId>,
+    pub(crate) path_root_types: FxHashMap<ExprId, Ty>,
+    pub(crate) path_segment_types: FxHashMap<(ExprId, usize), Ty>,
+    pub(crate) path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
+    pub(crate) call_plans: FxHashMap<ExprId, CallPlan>,
+    pub(crate) function_coercions: FxHashMap<ExprId, FunctionCoercion>,
+}
+
+impl DefaultParameterInference<'_> {
+    pub(crate) fn empty() -> Self {
+        Self {
+            expressions: FxHashMap::default(),
+            pattern_types: FxHashMap::default(),
+            resolutions: FxHashMap::default(),
+            catch_residual_throws: FxHashMap::default(),
+            exhaustive_matches: FxHashSet::default(),
+            path_root_types: FxHashMap::default(),
+            path_segment_types: FxHashMap::default(),
+            path_member_resolutions: FxHashMap::default(),
+            call_plans: FxHashMap::default(),
+            function_coercions: FxHashMap::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallPlan {
+    pub bindings: Vec<ParamBinding>,
+}
+
+impl CallPlan {
+    pub fn provided_arg_count(&self) -> usize {
+        self.bindings
+            .iter()
+            .filter(|binding| matches!(binding, ParamBinding::Provided { .. }))
+            .count()
+    }
+
+    pub fn provided_args(&self) -> impl Iterator<Item = ExprId> + '_ {
+        self.bindings.iter().filter_map(|binding| match binding {
+            ParamBinding::Provided { arg, .. } => Some(*arg),
+            ParamBinding::OmittedDefault { .. } => None,
+        })
+    }
+
+    pub fn provided_param_args(&self) -> impl Iterator<Item = (usize, ExprId)> + '_ {
+        self.bindings.iter().filter_map(|binding| match binding {
+            ParamBinding::Provided { param_index, arg } => Some((*param_index, *arg)),
+            ParamBinding::OmittedDefault { .. } => None,
+        })
+    }
+
+    pub fn provided_arg_for_param(&self, param_index: usize) -> Option<ExprId> {
+        self.bindings.iter().find_map(|binding| match binding {
+            ParamBinding::Provided {
+                param_index: binding_param_index,
+                arg,
+            } if *binding_param_index == param_index => Some(*arg),
+            ParamBinding::Provided { .. } | ParamBinding::OmittedDefault { .. } => None,
+        })
+    }
+
+    pub fn matches_provided_args(&self, args: &[ExprId]) -> bool {
+        self.provided_arg_count() == args.len()
+            && args
+                .iter()
+                .all(|arg| self.provided_args().any(|provided| provided == *arg))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParamBinding {
+    Provided {
+        param_index: usize,
+        arg: ExprId,
+    },
+    OmittedDefault {
+        param_index: usize,
+        param_name: Name,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionCoercion {
+    pub source_params: Vec<FunctionParamTy>,
+    pub target_params: Vec<FunctionParamTy>,
+    pub target_return: Ty,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -200,6 +310,78 @@ impl<'db> ScopeInference<'db> {
     /// Look up the type of a parameter by index.
     pub fn param_type(&self, param_idx: usize) -> Option<&Ty> {
         self.param_types.get(param_idx).map(|(_, ty)| ty)
+    }
+
+    /// Look up the full argument binding plan for a call expression.
+    pub fn call_plan(&self, expr_id: ExprId) -> Option<&CallPlan> {
+        self.call_plans.get(&expr_id)
+    }
+
+    pub fn call_plan_for_provided_args(&self, args: &[ExprId]) -> Option<&CallPlan> {
+        self.call_plans
+            .values()
+            .find(|plan| plan.matches_provided_args(args))
+    }
+
+    /// Iterate over all call binding plans in this scope.
+    pub fn iter_call_plans(&self) -> impl Iterator<Item = (&ExprId, &CallPlan)> {
+        self.call_plans.iter()
+    }
+
+    /// Iterate over all function adapters required by checked coercions.
+    pub fn iter_function_coercions(&self) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
+        self.function_coercions.iter()
+    }
+
+    /// Iterate over all default-parameter expression types for this scope.
+    pub fn iter_default_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
+        self.parameter_defaults.expressions.iter()
+    }
+
+    /// Iterate over all default-parameter pattern types for this scope.
+    pub fn iter_default_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
+        self.parameter_defaults.pattern_types.iter()
+    }
+
+    /// Iterate over all default-parameter member resolutions for this scope.
+    pub fn iter_default_resolutions(
+        &self,
+    ) -> impl Iterator<Item = (&ExprId, &MemberResolution<'db>)> {
+        self.parameter_defaults.resolutions.iter()
+    }
+
+    /// Iterate over all exhaustive default-parameter match expressions.
+    pub fn iter_default_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
+        self.parameter_defaults.exhaustive_matches.iter()
+    }
+
+    /// Iterate over all default-parameter path root types.
+    pub fn iter_default_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
+        self.parameter_defaults.path_root_types.iter()
+    }
+
+    /// Iterate over all default-parameter path prefix types.
+    pub fn iter_default_path_segment_types(&self) -> impl Iterator<Item = (&(ExprId, usize), &Ty)> {
+        self.parameter_defaults.path_segment_types.iter()
+    }
+
+    /// Iterate over all default-parameter per-segment path member resolutions.
+    pub fn iter_default_path_member_resolutions(
+        &self,
+    ) -> impl Iterator<Item = (&ExprId, &Vec<MemberResolution<'db>>)> {
+        self.parameter_defaults.path_member_resolutions.iter()
+    }
+
+    /// Iterate over all default-parameter call binding plans.
+    pub fn iter_default_call_plans(&self) -> impl Iterator<Item = (&ExprId, &CallPlan)> {
+        self.parameter_defaults.call_plans.iter()
+    }
+
+    /// Iterate over all default-parameter function adapters.
+    pub fn iter_default_function_coercions(
+        &self,
+    ) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
+        self.parameter_defaults.function_coercions.iter()
     }
 
     /// Iterate over all (`ExprId`, Ty) pairs for expressions in this scope.
@@ -362,6 +544,9 @@ fn infer_scope_types_cycle_initial<'db>(
         path_member_resolutions: FxHashMap::default(),
         nested_lambda_types: FxHashMap::default(),
         param_types: Vec::new(),
+        call_plans: FxHashMap::default(),
+        function_coercions: FxHashMap::default(),
+        parameter_defaults: DefaultParameterInference::empty(),
         extra: None,
     }
 }
@@ -504,9 +689,9 @@ pub fn infer_scope_types<'db>(
                         let sig_sm = baml_compiler2_ppir::elaborated_function_signature_source_map(
                             db, func_loc,
                         );
-                        for (i, (param_name, param_te)) in sig.params.iter().enumerate() {
-                            let param_ty = if param_name.as_str() == "self"
-                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
+                        for (i, param) in sig.params.iter().enumerate() {
+                            let param_ty = if param.name.as_str() == "self"
+                                && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
                             {
                                 // `self` parameter with no type annotation — infer from enclosing class
                                 enclosing_class_name
@@ -528,7 +713,7 @@ pub fn infer_scope_types<'db>(
                                 let mut param_diags = Vec::new();
                                 let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                                     db,
-                                    param_te,
+                                    &param.ty,
                                     pkg_items,
                                     &pkg_info.namespace_path,
                                     &generic_params,
@@ -548,9 +733,18 @@ pub fn infer_scope_types<'db>(
                                 }
                                 ty
                             };
-                            builder.add_local(param_name.clone(), param_ty.clone());
-                            builder.param_types.push((param_name.clone(), param_ty));
+                            builder.add_local(param.name.clone(), param_ty.clone());
+                            builder.param_types.push((param.name.clone(), param_ty));
                         }
+
+                        let param_types = builder.param_types.clone();
+                        let parameter_defaults =
+                            baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+                        builder.check_function_parameter_defaults(
+                            &func_data.params,
+                            &parameter_defaults,
+                            &param_types,
+                        );
 
                         // Check root expression against declared return type
                         if let Some(root_expr) = expr_body.root_expr {
@@ -783,7 +977,7 @@ pub fn infer_scope_types<'db>(
                                                 contextual_param_tys
                                                     .as_ref()
                                                     .and_then(|pts| pts.get(i))
-                                                    .map(|(_, ty)| ty.clone())
+                                                    .map(|param| param.ty.clone())
                                             })
                                             .unwrap_or(Ty::Unknown {
                                                 attr: TyAttr::default(),
@@ -923,7 +1117,7 @@ pub fn infer_scope_types<'db>(
                                                 contextual_param_tys
                                                     .as_ref()
                                                     .and_then(|pts| pts.get(i))
-                                                    .map(|(_, ty)| ty.clone())
+                                                    .map(|param| param.ty.clone())
                                             })
                                             .unwrap_or(Ty::Unknown {
                                                 attr: TyAttr::default(),
@@ -986,7 +1180,10 @@ pub fn infer_scope_types<'db>(
         path_segment_types,
         path_member_resolutions,
         param_types,
+        call_plans,
+        function_coercions,
         nested_lambda_types,
+        parameter_defaults,
     ) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
@@ -1006,6 +1203,9 @@ pub fn infer_scope_types<'db>(
         path_member_resolutions,
         nested_lambda_types,
         param_types,
+        call_plans,
+        function_coercions,
+        parameter_defaults,
         extra,
     }
 }

@@ -366,12 +366,13 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
 
             // ── Check parameters ─────────────────────────────────────────
-            for (param_idx, (param_name, param_type_expr)) in sig.params.iter().enumerate() {
-                if param_name.as_str() != name {
+            for (param_idx, param) in sig.params.iter().enumerate() {
+                if param.name.as_str() != name {
                     continue;
                 }
 
-                let type_str = crate::utils::display_type_expr(param_type_expr);
+                let type_str = crate::utils::display_type_expr(&param.ty);
+                let optional = if param.has_default { "?" } else { "" };
 
                 // Find the parameter's source span from the signature source map.
                 let param_span =
@@ -414,7 +415,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     file,
                     name_span: param_span,
                     item_range: func.span,
-                    shape: format!("{name}: {type_str}"),
+                    shape: format!("{name}{optional}: {type_str}"),
                     full_body: func_body,
                     docstring: None,
                     resolved_type: Some(type_str),
@@ -846,7 +847,10 @@ fn resolve_type_for_item(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> Opt
             return_type,
             ..
         } => {
-            let param_strs: Vec<String> = params.iter().map(|(n, t)| format!("{n}: {t}")).collect();
+            let param_strs: Vec<String> = params
+                .iter()
+                .map(crate::type_info::FunctionParamInfo::render)
+                .collect();
             let ret = return_type.map(|r| format!(" -> {r}")).unwrap_or_default();
             Some(format!("({}){}", param_strs.join(", "), ret))
         }
@@ -914,8 +918,8 @@ fn find_dependencies(
         baml_compiler2_hir::contributions::Definition::Function(func_loc) => {
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
             // Collect type names from params and return type.
-            for (_param_name, type_expr) in &sig.params {
-                collect_type_expr_deps(db, file, type_expr, &mut deps, &mut seen);
+            for param in &sig.params {
+                collect_type_expr_deps(db, file, &param.ty, &mut deps, &mut seen);
             }
             if let Some(ret) = &sig.return_type {
                 collect_type_expr_deps(db, file, ret, &mut deps, &mut seen);
@@ -1085,8 +1089,8 @@ fn collect_ty_deps(
             throws,
             ..
         } => {
-            for (_name, ty) in params {
-                collect_ty_deps(db, files, ty, deps, seen);
+            for param in params {
+                collect_ty_deps(db, files, &param.ty, deps, seen);
             }
             collect_ty_deps(db, files, ret, deps, seen);
             collect_ty_deps(db, files, throws, deps, seen);

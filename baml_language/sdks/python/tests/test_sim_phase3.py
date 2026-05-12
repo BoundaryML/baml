@@ -36,6 +36,65 @@ def test_import_surface():
     assert callable(get_runtime)
 
 
+def test_factory_keyword_only_omission_contract():
+    from baml_core import UNSET, _build_kwargs
+
+    assert _build_kwargs(("cats",), {"max_results": 5}, ["query", "max_results"], 1) == {
+        "query": "cats",
+        "max_results": 5,
+    }
+    assert _build_kwargs(("cats",), {"max_results": UNSET}, ["query", "max_results"], 1) == {
+        "query": "cats",
+    }
+    assert _build_kwargs(("cats",), {"query": UNSET}, ["query"], 1) == {
+        "query": "cats",
+    }
+    assert _build_kwargs(("cats",), {"max_results": None}, ["query", "max_results"], 1) == {
+        "query": "cats",
+        "max_results": None,
+    }
+
+    with pytest.raises(TypeError):
+        _build_kwargs(("cats", 5), {}, ["query", "max_results"], 1)
+
+
+def test_generated_client_defaulted_params_sync():
+    from baml_core import UNSET
+    from baml_sdk.lorem import default_score, mutate_default
+
+    assert default_score("cats") == 10
+    assert default_score("cats", max_results=5) == 5
+    assert default_score(query="cats", filter="recent") == 110
+    assert default_score("cats", filter=None) == 10
+    assert default_score("cats", max_results=UNSET, filter="recent") == 110
+
+    with pytest.raises(TypeError):
+        default_score("cats", 5)
+
+    assert mutate_default() == 1
+    assert mutate_default() == 1
+    assert mutate_default(items=[1, 2]) == 3
+
+
+@pytest.mark.asyncio
+async def test_generated_client_defaulted_params_async():
+    from baml_core import UNSET
+    from baml_sdk.lorem import default_score_async, mutate_default_async
+
+    assert await default_score_async("cats") == 10
+    assert await default_score_async("cats", max_results=5) == 5
+    assert await default_score_async(query="cats", filter="recent") == 110
+    assert await default_score_async("cats", filter=None) == 10
+    assert await default_score_async("cats", max_results=UNSET, filter="recent") == 110
+
+    with pytest.raises(TypeError):
+        await default_score_async("cats", 5)
+
+    assert await mutate_default_async() == 1
+    assert await mutate_default_async() == 1
+    assert await mutate_default_async(items=[1, 2]) == 3
+
+
 def test_factory_roundtrip_sync():
     """Dict-in call: Rust Map→Instance coercion still works; the outbound
     class_value gets decoded through _resolve_type into a typed MyLorem."""

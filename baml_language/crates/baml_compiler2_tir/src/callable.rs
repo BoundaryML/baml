@@ -8,7 +8,7 @@ use baml_compiler2_hir::{
 use rustc_hash::FxHashMap;
 
 use crate::{
-    inference::{MemberResolution, ScopeInference, infer_scope_types},
+    inference::{CallPlan, MemberResolution, ScopeInference, infer_scope_types},
     lower_type_expr::lower_type_expr_in_ns,
     package_interface::package_resolution_context,
     throw_inference::{function_throw_sets, throw_set_key},
@@ -73,11 +73,11 @@ fn signature_cycle_initial_callable_throws<'db>(
     generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
     let mut facts = BTreeSet::new();
-    for (_, param_ty) in &sig.params {
+    for param in &sig.params {
         let mut diags = Vec::new();
         let lowered = lower_type_expr_in_ns(
             db,
-            param_ty,
+            &param.ty,
             pkg_items,
             &pkg_info.namespace_path,
             &generic_params,
@@ -222,7 +222,14 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
         args: &[baml_compiler2_ast::ExprId],
         unwrap_optional_callee: bool,
     ) -> Option<Ty> {
-        instantiated_callee_throws(self.inference, callee_expr_id, args, unwrap_optional_callee)
+        let call_plan = self.inference.call_plan_for_provided_args(args);
+        instantiated_callee_throws(
+            self.inference,
+            callee_expr_id,
+            args,
+            unwrap_optional_callee,
+            call_plan,
+        )
     }
 
     fn named_callee_summary(
@@ -262,6 +269,7 @@ pub(crate) fn instantiated_callee_throws(
     callee_expr_id: baml_compiler2_ast::ExprId,
     args: &[baml_compiler2_ast::ExprId],
     unwrap_optional_callee: bool,
+    call_plan: Option<&CallPlan>,
 ) -> Option<Ty> {
     let callee_ty = inference.expression_type(callee_expr_id)?;
     let typed_callee = if unwrap_optional_callee {
@@ -281,14 +289,29 @@ pub(crate) fn instantiated_callee_throws(
     };
 
     let mut bindings: FxHashMap<Name, Ty> = FxHashMap::default();
-    for ((_, param_ty), arg_expr_id) in effective_params.iter().zip(args.iter()) {
-        let arg_ty = inference
-            .expression_type(*arg_expr_id)
-            .cloned()
-            .unwrap_or(Ty::Unknown {
-                attr: TyAttr::default(),
-            });
-        crate::generics::infer_bindings_allow_typevars(param_ty, &arg_ty, &mut bindings);
+    if let Some(call_plan) = call_plan {
+        for (param_index, arg_expr_id) in call_plan.provided_param_args() {
+            let Some(param) = effective_params.get(param_index) else {
+                continue;
+            };
+            let arg_ty = inference
+                .expression_type(arg_expr_id)
+                .cloned()
+                .unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
+            crate::generics::infer_bindings_allow_typevars(&param.ty, &arg_ty, &mut bindings);
+        }
+    } else {
+        for (param, arg_expr_id) in effective_params.iter().zip(args.iter()) {
+            let arg_ty = inference
+                .expression_type(*arg_expr_id)
+                .cloned()
+                .unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
+            crate::generics::infer_bindings_allow_typevars(&param.ty, &arg_ty, &mut bindings);
+        }
     }
 
     Some(crate::generics::substitute_ty(&throws, &bindings))

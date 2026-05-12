@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 5968
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -417,9 +416,10 @@ SOURCE_FILE
               R_BRACKET "]"
             DOT "."
             WORD "map"
-          CALL_ARGS "(transform)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "transform"
+            CALL_ARG "transform"
+              WORD "transform"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -493,10 +493,11 @@ SOURCE_FILE
             WORD "map"
           CALL_ARGS
             L_PAREN "("
-            PATH_EXPR "Employee.full_name"
-              WORD "Employee"
-              DOT "."
-              WORD "full_name"
+            CALL_ARG
+              PATH_EXPR "Employee.full_name"
+                WORD "Employee"
+                DOT "."
+                WORD "full_name"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -558,9 +559,10 @@ SOURCE_FILE
               R_BRACKET "]"
             DOT "."
             WORD "map"
-          CALL_ARGS "(check)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "check"
+            CALL_ARG "check"
+              WORD "check"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -597,10 +599,11 @@ SOURCE_FILE
           WORD "enc"
           CALL_ARGS
             L_PAREN "("
-            STRING_LITERAL "payload"
-              QUOTE """
-              WORD "payload"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "payload"
+                QUOTE """
+                WORD "payload"
+                QUOTE """
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -645,11 +648,13 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "f"
-          CALL_ARGS "(a, b)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "a"
+            CALL_ARG "a"
+              WORD "a"
             COMMA ","
-            WORD "b"
+            CALL_ARG "b"
+              WORD "b"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -728,24 +733,30 @@ SOURCE_FILE
           L_BRACKET "["
           CALL_EXPR
             WORD "apply"
-            CALL_ARGS "(do_add, 3, 4)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "do_add"
+              CALL_ARG "do_add"
+                WORD "do_add"
               COMMA ","
-              INTEGER_LITERAL "3"
+              CALL_ARG "3"
+                INTEGER_LITERAL "3"
               COMMA ","
-              INTEGER_LITERAL "4"
+              CALL_ARG "4"
+                INTEGER_LITERAL "4"
               R_PAREN ")"
           COMMA ","
           CALL_EXPR
             WORD "apply"
-            CALL_ARGS "(do_mul, 3, 4)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "do_mul"
+              CALL_ARG "do_mul"
+                WORD "do_mul"
               COMMA ","
-              INTEGER_LITERAL "3"
+              CALL_ARG "3"
+                INTEGER_LITERAL "3"
               COMMA ","
-              INTEGER_LITERAL "4"
+              CALL_ARG "4"
+                INTEGER_LITERAL "4"
               R_PAREN ")"
           R_BRACKET "]"
         R_BRACE "}"
@@ -788,9 +799,10 @@ SOURCE_FILE
             WORD "items"
             DOT "."
             WORD "map"
-          CALL_ARGS "(f)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "f"
+            CALL_ARG "f"
+              WORD "f"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -840,12 +852,14 @@ SOURCE_FILE
           WORD "apply_to_each"
           CALL_ARGS
             L_PAREN "("
-            WORD "employees"
+            CALL_ARG "employees"
+              WORD "employees"
             COMMA ","
-            PATH_EXPR "Employee.full_name"
-              WORD "Employee"
-              DOT "."
-              WORD "full_name"
+            CALL_ARG
+              PATH_EXPR "Employee.full_name"
+                WORD "Employee"
+                DOT "."
+                WORD "full_name"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -1017,10 +1031,11 @@ SOURCE_FILE
           WORD "greeter"
           CALL_ARGS
             L_PAREN "("
-            STRING_LITERAL "Hello"
-              QUOTE """
-              WORD "Hello"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "Hello"
+                QUOTE """
+                WORD "Hello"
+                QUOTE """
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 31040
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -56,9 +55,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "cb"
-          CALL_ARGS "(1)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "1"
+            CALL_ARG "1"
+              INTEGER_LITERAL "1"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -128,9 +128,10 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "cb"
-          CALL_ARGS "(inner)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "inner"
+            CALL_ARG "inner"
+              WORD "inner"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -176,9 +177,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "accept_hidden"
-          CALL_ARGS "(risky)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "risky"
+            CALL_ARG "risky"
+              WORD "risky"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF

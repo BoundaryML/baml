@@ -284,11 +284,11 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             ..
         } => {
             out.push_str("Fn(");
-            for (i, (_, p)) in params.iter().enumerate() {
+            for (i, param) in params.iter().enumerate() {
                 if i > 0 {
                     out.push(',');
                 }
-                write_ty_identity(out, p);
+                write_ty_identity(out, &param.ty);
             }
             out.push_str(")->");
             write_ty_identity(out, ret);

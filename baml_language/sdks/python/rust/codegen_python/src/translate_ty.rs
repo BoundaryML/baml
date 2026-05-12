@@ -89,15 +89,25 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 .join(", ")
         ),
         Ty::BuiltinUnknown => "typing.Any".to_string(),
-        Ty::Callable { params, ret } => format!(
-            "typing.Callable[[{}], {}]",
-            params
+        Ty::Callable { params, ret } => {
+            let ret = translate_ty(ret, ctx);
+            if params
                 .iter()
-                .map(|param| translate_ty(param, ctx))
-                .collect::<Vec<_>>()
-                .join(", "),
-            translate_ty(ret, ctx)
-        ),
+                .any(|param| param.mode == baml_codegen_types::CodegenFunctionParamMode::Optional)
+            {
+                format!("typing.Callable[..., {ret}]")
+            } else {
+                format!(
+                    "typing.Callable[[{}], {}]",
+                    params
+                        .iter()
+                        .map(|param| translate_ty(&param.ty, ctx))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    ret
+                )
+            }
+        }
         Ty::Unit => "None".to_string(),
         Ty::BamlOptions => "baml.Options".to_string(),
         // `$rust_type` fields in stdlib stubs (Response._body, SseStream._handle, …).
@@ -230,6 +240,22 @@ mod tests {
                 .collect(),
             BaseName::new(bare_name),
         )
+    }
+
+    fn callable_param(ty: Ty) -> baml_codegen_types::CallableParam {
+        baml_codegen_types::CallableParam {
+            name: None,
+            ty,
+            mode: baml_codegen_types::CodegenFunctionParamMode::Required,
+        }
+    }
+
+    fn optional_callable_param(name: &str, ty: Ty) -> baml_codegen_types::CallableParam {
+        baml_codegen_types::CallableParam {
+            name: Some(BaseName::new(name)),
+            ty,
+            mode: baml_codegen_types::CodegenFunctionParamMode::Optional,
+        }
     }
 
     fn assert_ty(case: &Case) {
@@ -565,7 +591,7 @@ mod tests {
             Case {
                 label: "callable two params",
                 ty: Ty::Callable {
-                    params: vec![Ty::Int, Ty::String],
+                    params: vec![callable_param(Ty::Int), callable_param(Ty::String)],
                     ret: Box::new(Ty::Bool),
                 },
                 ctx: ctx(&["lorem"]),
@@ -583,11 +609,23 @@ mod tests {
             Case {
                 label: "callable nested params",
                 ty: Ty::Callable {
-                    params: vec![Ty::List(Box::new(Ty::Int))],
+                    params: vec![callable_param(Ty::List(Box::new(Ty::Int)))],
                     ret: Box::new(Ty::Optional(Box::new(Ty::String))),
                 },
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Callable[[typing.List[int]], typing.Optional[str]]",
+            },
+            Case {
+                label: "callable optional params",
+                ty: Ty::Callable {
+                    params: vec![
+                        callable_param(Ty::String),
+                        optional_callable_param("limit", Ty::Int),
+                    ],
+                    ret: Box::new(Ty::Bool),
+                },
+                ctx: ctx(&["lorem"]),
+                expected: "typing.Callable[..., bool]",
             },
             Case {
                 label: "union stream and non stream classes",

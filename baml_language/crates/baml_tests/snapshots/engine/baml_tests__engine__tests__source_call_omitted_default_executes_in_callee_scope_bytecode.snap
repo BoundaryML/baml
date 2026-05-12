@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/engine.rs
+---
+function add(base: int, amount: int) -> int {
+    load_var amount
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_var base
+    load_const 2
+    add_int
+    store_var amount
+
+  L0:
+    load_var base
+    load_var amount
+    add_int
+    return
+}
+
+function main() -> int {
+    load_const 5
+    load_const <omitted>
+    call user.add
+    return
+}

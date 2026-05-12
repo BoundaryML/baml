@@ -1071,7 +1071,7 @@ impl Printable for FunctionType {
 /// Exists in [`FunctionType`] but also in [`ParenType`] for some reason.
 #[derive(Debug)]
 pub struct FunctionTypeParam {
-    pub name: Option<(t::Word, Option<t::Colon>)>,
+    pub name: Option<(t::Word, Option<t::Question>, Option<t::Colon>)>,
     pub ty: Type,
 }
 
@@ -1083,11 +1083,15 @@ impl FromCST for FunctionTypeParam {
 
         let name = if let Some(name) = it.next_if_kind(SyntaxKind::WORD) {
             let name = t::Word::new_from_span(name.text_range());
+            let question = it
+                .next_if_kind(SyntaxKind::QUESTION)
+                .map(t::Question::from_cst)
+                .transpose()?;
             let colon = it
                 .next_if_kind(SyntaxKind::COLON)
                 .map(t::Colon::from_cst)
                 .transpose()?;
-            Some((name, colon))
+            Some((name, question, colon))
         } else {
             None
         };
@@ -1102,8 +1106,11 @@ impl FromCST for FunctionTypeParam {
 
 impl Printable for FunctionTypeParam {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        if let Some((name, colon)) = &self.name {
+        if let Some((name, question, colon)) = &self.name {
             printer.print_raw_token(name);
+            if let Some(question) = question {
+                printer.print_raw_token(question);
+            }
             if let Some(colon) = colon {
                 printer.print_raw_token(colon);
             } else {
@@ -1116,7 +1123,7 @@ impl Printable for FunctionTypeParam {
     fn leftmost_token(&self) -> TextRange {
         self.name
             .as_ref()
-            .map_or(self.ty.leftmost_token(), |(name, _)| name.span())
+            .map_or(self.ty.leftmost_token(), |(name, _, _)| name.span())
     }
     fn rightmost_token(&self) -> TextRange {
         self.ty.rightmost_token()
@@ -1245,5 +1252,78 @@ impl From<ConstrainedType<UnionTypeMember>> for ConstrainedType<Type> {
             ty: Box::new((*member.ty).into()),
             attrs: member.attrs,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_db::{
+        baml_compiler_parser::parse_green,
+        baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode},
+    };
+    use baml_project::ProjectDatabase;
+
+    use super::*;
+
+    fn function_type_param(source: &str, index: usize) -> FunctionTypeParam {
+        let mut db = ProjectDatabase::new();
+        let file = db.add_file("test.baml", source);
+        let parsed = parse_green(&db, file);
+        let syntax_tree = SyntaxNode::new_root(parsed);
+        let node = syntax_tree
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
+            .nth(index)
+            .expect("expected FUNCTION_TYPE_PARAM");
+
+        FunctionTypeParam::from_cst(SyntaxElement::Node(node))
+            .expect("expected FunctionTypeParam to parse")
+    }
+
+    #[test]
+    fn function_type_param_optional_name_round_trips() {
+        let source = "type Searcher = (name?: string) -> int\n";
+        let param = function_type_param(source, 0);
+        let Some((name, question, colon)) = &param.name else {
+            panic!("expected named function type param");
+        };
+
+        assert!(question.is_some(), "expected optional marker before colon");
+        assert!(colon.is_some(), "expected colon after optional marker");
+        assert_eq!(param.leftmost_token(), name.span());
+
+        let formatted = crate::format(source, &crate::FormatOptions::default())
+            .expect("formatter should print optional function type params");
+        assert!(formatted.contains("(name?: string) -> int"));
+        assert_eq!(
+            crate::format(&formatted, &crate::FormatOptions::default())
+                .expect("formatter should be idempotent"),
+            formatted
+        );
+    }
+
+    #[test]
+    fn function_type_param_optional_name_with_optional_type_round_trips() {
+        let source = "type Searcher = (name?: (string)?) -> int\n";
+        let param = function_type_param(source, 0);
+
+        assert!(
+            param
+                .name
+                .as_ref()
+                .and_then(|(_, q, _)| q.as_ref())
+                .is_some()
+        );
+        assert!(matches!(param.ty, Type::Optional(_)));
+
+        let formatted = crate::format(source, &crate::FormatOptions::default())
+            .expect("formatter should disambiguate optional parameter and optional type");
+        assert!(formatted.contains("name?:"));
+        assert!(formatted.contains("string"));
+        assert_eq!(
+            crate::format(&formatted, &crate::FormatOptions::default())
+                .expect("formatter should be idempotent"),
+            formatted
+        );
     }
 }

@@ -1,0 +1,41 @@
+---
+source: crates/baml_tests/src/engine.rs
+---
+function combine(x: int, a: int, b: int) -> int {
+    load_var a
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 10
+    store_var a
+
+  L0:
+    load_var b
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const 100
+    store_var b
+
+  L1:
+    load_var x
+    load_var a
+    bin_op +
+    load_var b
+    add_int
+    return
+}
+
+function main() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_global user.combine
+    store_deref ?1
+    load_const 1
+    load_const 5
+    load_var _2
+    make_closure .<optional-adapter(main, 0)>, 1
+    call_indirect
+    return
+}

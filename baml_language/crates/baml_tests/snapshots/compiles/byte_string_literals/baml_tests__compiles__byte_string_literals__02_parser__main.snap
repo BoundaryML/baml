@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4587
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -190,9 +189,10 @@ SOURCE_FILE
             WORD "data"
             DOT "."
             WORD "at"
-          CALL_ARGS "(0)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "0"
+            CALL_ARG "0"
+              INTEGER_LITERAL "0"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -336,9 +336,10 @@ SOURCE_FILE
             WORD "data"
             DOT "."
             WORD "at"
-          CALL_ARGS "(0)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "0"
+            CALL_ARG "0"
+              INTEGER_LITERAL "0"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -392,11 +393,12 @@ SOURCE_FILE
           WORD "ByteStringPassAndReturn"
           CALL_ARGS
             L_PAREN "("
-            BYTE_STRING_LITERAL "b"abc""
-              WORD "b"
-              QUOTE """
-              WORD "abc"
-              QUOTE """
+            CALL_ARG
+              BYTE_STRING_LITERAL "b"abc""
+                WORD "b"
+                QUOTE """
+                WORD "abc"
+                QUOTE """
             R_PAREN ")"
         R_BRACE "}"
 

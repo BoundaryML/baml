@@ -1591,7 +1591,7 @@ impl Printable for CallExpr {
 #[derive(Debug)]
 pub struct CallArgs {
     pub open_paren: t::LParen,
-    pub args: Vec<(Expression, Option<t::Comma>)>,
+    pub args: Vec<(CallArg, Option<t::Comma>)>,
     pub close_paren: t::RParen,
 }
 impl FromCST for CallArgs {
@@ -1613,12 +1613,19 @@ impl FromCST for CallArgs {
                 break t::RParen::from_cst(elem)?;
             }
 
-            let expr = Expression::from_cst(elem)?;
+            let arg = if elem.kind() == SyntaxKind::CALL_ARG {
+                CallArg::from_cst(elem)?
+            } else {
+                CallArg {
+                    label: None,
+                    expr: Expression::from_cst(elem)?,
+                }
+            };
             let comma = it
                 .next_if_kind(SyntaxKind::COMMA)
                 .map(t::Comma::from_cst)
                 .transpose()?;
-            args.push((expr, comma));
+            args.push((arg, comma));
         };
 
         it.expect_end()?;
@@ -1628,6 +1635,93 @@ impl FromCST for CallArgs {
             args,
             close_paren,
         })
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::CALL_ARG`] node.
+#[derive(Debug)]
+pub struct CallArg {
+    pub label: Option<(t::Word, t::Equals)>,
+    pub expr: Expression,
+}
+
+impl FromCST for CallArg {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::CALL_ARG)?;
+
+        let children: Vec<_> = node
+            .children_with_tokens()
+            .filter(|elem| !elem.kind().is_trivia())
+            .collect();
+
+        let (label, expr_elem) = if children.len() >= 3
+            && matches!(children[0].kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT)
+            && children[1].kind() == SyntaxKind::EQUALS
+        {
+            let name = t::Word::new_from_span(children[0].text_range());
+            let equals = t::Equals::from_cst(children[1].clone())?;
+            (Some((name, equals)), children[2].clone())
+        } else {
+            let Some(expr_elem) = children.first().cloned() else {
+                return Err(StrongAstError::missing_desc(
+                    "call argument",
+                    node.text_range(),
+                ));
+            };
+            (None, expr_elem)
+        };
+
+        let expr = Expression::from_cst(expr_elem)?;
+
+        Ok(CallArg { label, expr })
+    }
+}
+
+impl CallArg {
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let mut len = 0;
+        if let Some((name, equals)) = &self.label {
+            let (_, name_trailing) = input.trivia.get_for_range_split(name.span());
+            let (equals_leading, equals_trailing) = input.trivia.get_for_range_split(equals.span());
+            let expr_leading = input.trivia.get_leading_for_element(&self.expr);
+            len += usize::from(name.span().len())
+                + name_trailing.try_squished_len(input.input)?
+                + equals_leading.try_squished_len(input.input)?
+                + " = ".len()
+                + equals_trailing.try_squished_len(input.input)?
+                + expr_leading.try_squished_len(input.input)?;
+        }
+        len += self.expr.single_line_width(input)?;
+        Some(len)
+    }
+}
+
+impl Printable for CallArg {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        if let Some((name, equals)) = &self.label {
+            printer.print_raw_token(name);
+            let (_, name_trailing) = printer.trivia.get_for_range_split(name.span());
+            let (equals_leading, equals_trailing) =
+                printer.trivia.get_for_range_split(equals.span());
+            let expr_leading = printer.trivia.get_leading_for_element(&self.expr);
+            printer.print_trivia_squished(name_trailing);
+            printer.print_trivia_squished(equals_leading);
+            printer.print_str(" = ");
+            printer.print_trivia_squished(equals_trailing);
+            printer.print_trivia_squished(expr_leading);
+        }
+        printer.print(&self.expr, shape)
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.label
+            .as_ref()
+            .map_or_else(|| self.expr.leftmost_token(), |(name, _)| name.span())
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.expr.rightmost_token()
     }
 }
 

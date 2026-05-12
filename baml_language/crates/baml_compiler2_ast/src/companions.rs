@@ -12,7 +12,7 @@ use baml_base::Name;
 
 use crate::{
     DeclarativeMeta,
-    ast::{FunctionBodyDef, FunctionDef, Param, SpannedTypeExpr, TypeExpr},
+    ast::{FunctionBodyDef, FunctionDef, FunctionDefaults, Param, SpannedTypeExpr, TypeExpr},
     lower_cst::{synthesize_llm_builtin_call, synthesize_llm_parse_call},
 };
 
@@ -84,6 +84,7 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
             expr: TypeExpr::String { attrs: vec![] },
             span: parent.span,
         }),
+        default: None,
         span: parent.span,
         name_span: parent.name_span,
     };
@@ -97,6 +98,7 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
         name,
         generic_params: parent.generic_params.clone(),
         params: vec![json_param],
+        defaults: FunctionDefaults::empty(),
         return_type,
         throws: None,
         body: Some(FunctionBodyDef::Expr(body, source_map)),
@@ -141,6 +143,7 @@ fn make_llm_companion(
         name,
         generic_params: parent.generic_params.clone(),
         params: parent.params.clone(),
+        defaults: parent.defaults.clone(),
         return_type: Some(return_type),
         throws: None,
         body: Some(FunctionBodyDef::Expr(body, source_map)),

@@ -10,7 +10,7 @@ use baml_compiler_syntax::{SyntaxKind, ast as cst};
 use rowan::ast::AstNode;
 
 use crate::{
-    ast::{Expr, ExprId},
+    ast::{CallArg, Expr, ExprId},
     lower_expr_body::EnvVarRef,
 };
 
@@ -92,7 +92,7 @@ pub(crate) fn lower_config_value_with_env_refs(
         return alloc(Expr::Call {
             callee,
             type_args: vec![],
-            args: vec![arg],
+            args: vec![CallArg::positional(arg)],
         });
     }
 

@@ -155,11 +155,12 @@ fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
             .iter()
             .map(|p| {
                 let name = p.name().map(|s| Name::new(&s));
+                let optional = p.is_optional();
                 let ty = p
                     .ty()
                     .map(|t| lower_type_expr_inner(&t, false))
                     .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
-                AstFunctionTypeParam { name, ty }
+                AstFunctionTypeParam { name, optional, ty }
             })
             .collect();
         let ret = type_expr

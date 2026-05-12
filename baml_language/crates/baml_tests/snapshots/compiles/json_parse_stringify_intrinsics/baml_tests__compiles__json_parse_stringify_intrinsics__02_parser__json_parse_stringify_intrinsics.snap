@@ -38,9 +38,10 @@ SOURCE_FILE
               WORD "json"
               DOT "."
               WORD "parse"
-            CALL_ARGS "(s)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "s"
+              CALL_ARG "s"
+                WORD "s"
               R_PAREN ")"
         CALL_EXPR
           PATH_EXPR "baml.json.stringify"
@@ -49,9 +50,10 @@ SOURCE_FILE
             WORD "json"
             DOT "."
             WORD "stringify"
-          CALL_ARGS "(j)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "j"
+            CALL_ARG "j"
+              WORD "j"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -89,9 +91,10 @@ SOURCE_FILE
               WORD "json"
               DOT "."
               WORD "parse"
-            CALL_ARGS "(s)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "s"
+              CALL_ARG "s"
+                WORD "s"
               R_PAREN ")"
         CALL_EXPR
           PATH_EXPR "baml.json.stringify_pretty"
@@ -100,9 +103,10 @@ SOURCE_FILE
             WORD "json"
             DOT "."
             WORD "stringify_pretty"
-          CALL_ARGS "(j)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "j"
+            CALL_ARG "j"
+              WORD "j"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -140,9 +144,10 @@ SOURCE_FILE
               WORD "json"
               DOT "."
               WORD "parse"
-            CALL_ARGS "(s)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "s"
+              CALL_ARG "s"
+                WORD "s"
               R_PAREN ")"
         MATCH_EXPR
           KW_MATCH "match"
@@ -170,9 +175,10 @@ SOURCE_FILE
                 WORD "json"
                 DOT "."
                 WORD "stringify"
-              CALL_ARGS "(arr)"
+              CALL_ARGS
                 L_PAREN "("
-                WORD "arr"
+                CALL_ARG "arr"
+                  WORD "arr"
                 R_PAREN ")"
           MATCH_ARM
             PATTERN
@@ -200,9 +206,10 @@ SOURCE_FILE
                 WORD "json"
                 DOT "."
                 WORD "stringify"
-              CALL_ARGS "(m)"
+              CALL_ARGS
                 L_PAREN "("
-                WORD "m"
+                CALL_ARG "m"
+                  WORD "m"
                 R_PAREN ")"
           MATCH_ARM
             PATTERN

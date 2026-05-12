@@ -13,10 +13,10 @@ use text_size::TextRange;
 use crate::{
     LoweringDiagnostic,
     ast::{
-        ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CatchArm, CatchArmId, CatchClause,
-        CatchClauseKind, Expr, ExprBody, ExprId, FieldPat, FunctionBodyDef, FunctionDef, LetOrigin,
-        Literal, LoopOrigin, MatchArm, MatchArmId, Param, PatId, Pattern, SpannedTypeExpr,
-        SpreadField, Stmt, StmtId, TypeAnnotId, TypeExpr, UnaryOp,
+        ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
+        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionBodyDef,
+        FunctionDef, FunctionDefaults, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param,
+        PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TypeAnnotId, TypeExpr, UnaryOp,
     },
 };
 
@@ -116,6 +116,35 @@ pub(crate) fn lower_block_node(
     let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone())
         .map(|block| ctx.lower_block_expr(&block));
     ctx.finish(root_expr)
+}
+
+pub(crate) fn lower_default_expr_nodes(
+    defaults: &[(usize, baml_compiler_syntax::SyntaxElement)],
+    param_names: &[Name],
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<EnvVarRef>,
+) -> (FunctionDefaults, Vec<(usize, DefaultExprId)>) {
+    let mut ctx = LoweringContext::new();
+    for name in param_names {
+        ctx.names_in_scope.insert(name.to_string());
+    }
+
+    let mut lowered = Vec::with_capacity(defaults.len());
+    for (idx, element) in defaults {
+        let expr = match element {
+            rowan::NodeOrToken::Node(node) => ctx.lower_expr(node),
+            rowan::NodeOrToken::Token(token) => ctx.alloc_expr(
+                lower_bare_token_expr(token.kind(), token.text()),
+                token.text_range(),
+            ),
+        };
+        lowered.push((*idx, DefaultExprId::new(expr)));
+    }
+
+    let (exprs, source_map, ctx_diags, ctx_env_refs) = ctx.finish(None);
+    diags.extend(ctx_diags);
+    env_var_refs.extend(ctx_env_refs);
+    (FunctionDefaults { exprs, source_map }, lowered)
 }
 
 /// Lower a testset `BLOCK_EXPR` body node to an owned `ExprBody` + `AstSourceMap`.
@@ -1720,62 +1749,12 @@ impl LoweringContext {
             }
         };
 
-        // Find CALL_ARGS node and extract arguments
-        let args = node
+        let lowered_args = node
             .children()
             .find(|n| n.kind() == SyntaxKind::CALL_ARGS)
-            .map(|args_node| {
-                let mut args = Vec::new();
-                for element in args_node.children_with_tokens() {
-                    match element {
-                        rowan::NodeOrToken::Node(child_node) => {
-                            // Skip COMMA and other punctuation nodes if any
-                            if is_expr_node_kind(child_node.kind()) {
-                                args.push(self.lower_expr(&child_node));
-                            }
-                        }
-                        rowan::NodeOrToken::Token(token) => {
-                            let span = token.text_range();
-                            match token.kind() {
-                                SyntaxKind::INTEGER_LITERAL => {
-                                    let value = token.text().parse::<i64>().unwrap_or(0);
-                                    args.push(
-                                        self.alloc_expr(Expr::Literal(Literal::Int(value)), span),
-                                    );
-                                }
-                                SyntaxKind::FLOAT_LITERAL => {
-                                    let text = token.text().to_string();
-                                    args.push(
-                                        self.alloc_expr(Expr::Literal(Literal::Float(text)), span),
-                                    );
-                                }
-                                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
-                                    let content = strip_string_delimiters(token.text());
-                                    args.push(
-                                        self.alloc_expr(
-                                            Expr::Literal(Literal::String(content)),
-                                            span,
-                                        ),
-                                    );
-                                }
-                                k if is_ident_token(k) => {
-                                    let text = token.text();
-                                    let e = match text {
-                                        "true" => Expr::Literal(Literal::Bool(true)),
-                                        "false" => Expr::Literal(Literal::Bool(false)),
-                                        "null" => Expr::Null,
-                                        _ => Expr::Path(vec![Name::new(text)]),
-                                    };
-                                    args.push(self.alloc_expr(e, span));
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-                args
-            })
+            .map(|args_node| self.lower_call_args_node(&args_node))
             .unwrap_or_default();
+        let (args, label_spans) = Self::finalize_call_args(lowered_args);
 
         let id = self.alloc_expr(
             Expr::Call {
@@ -1785,10 +1764,88 @@ impl LoweringContext {
             },
             node.text_range(),
         );
+        self.record_call_arg_label_spans(id, label_spans);
         if self.needs_chain_wrap.remove(&callee) {
             self.needs_chain_wrap.insert(id);
         }
         id
+    }
+
+    fn finalize_call_args(
+        lowered_args: Vec<(CallArg, Option<TextRange>)>,
+    ) -> (Vec<CallArg>, Vec<(ExprId, TextRange)>) {
+        let mut args = Vec::with_capacity(lowered_args.len());
+        let mut label_spans = Vec::with_capacity(lowered_args.len());
+
+        for (arg, label_span) in lowered_args {
+            if let Some(label_span) = label_span {
+                label_spans.push((arg.expr, label_span));
+            }
+            args.push(arg);
+        }
+
+        (args, label_spans)
+    }
+
+    fn record_call_arg_label_spans(
+        &mut self,
+        call_id: ExprId,
+        label_spans: Vec<(ExprId, TextRange)>,
+    ) {
+        for (arg_expr, label_span) in label_spans {
+            self.source_map
+                .call_arg_label_spans
+                .insert((call_id, arg_expr), label_span);
+        }
+    }
+
+    fn lower_call_args_node(
+        &mut self,
+        args_node: &SyntaxNode,
+    ) -> Vec<(CallArg, Option<TextRange>)> {
+        args_node
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::CALL_ARG)
+            .filter_map(|node| self.lower_call_arg_node(&node))
+            .collect()
+    }
+
+    fn lower_call_arg_node(&mut self, node: &SyntaxNode) -> Option<(CallArg, Option<TextRange>)> {
+        let cst_arg = baml_compiler_syntax::ast::CallArg::cast(node.clone())?;
+        let label_token = cst_arg.label();
+        let label = label_token.as_ref().map(|token| Name::new(token.text()));
+        let label_span = label_token.as_ref().map(rowan::SyntaxToken::text_range);
+
+        let expr = if let Some(expr_node) = cst_arg.expr_syntax() {
+            self.lower_expr(&expr_node)
+        } else {
+            let expr_search_start = label_token.as_ref().map(|label_token| {
+                node.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .filter(|token| !token.kind().is_trivia())
+                    .filter(|token| token.text_range().start() >= label_token.text_range().end())
+                    .find(|token| token.kind() == SyntaxKind::EQUALS)
+                    .map_or(label_token.text_range().end(), |token| {
+                        token.text_range().end()
+                    })
+            });
+            let expr_token = node
+                .children_with_tokens()
+                .filter_map(rowan::NodeOrToken::into_token)
+                .filter(|token| !token.kind().is_trivia())
+                .filter(|token| {
+                    expr_search_start
+                        .map(|start| token.text_range().start() >= start)
+                        .unwrap_or(true)
+                })
+                .find(|token| token.kind() != SyntaxKind::COMMA)?;
+            self.alloc_expr(
+                lower_bare_token_expr(expr_token.kind(), expr_token.text()),
+                expr_token.text_range(),
+            )
+        };
+
+        Some((CallArg { label, expr }, label_span))
     }
 
     fn lower_path_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -1911,7 +1968,7 @@ impl LoweringContext {
             Expr::Call {
                 callee,
                 type_args: vec![],
-                args: vec![arg],
+                args: vec![CallArg::positional(arg)],
             },
             range,
         )
@@ -2065,62 +2122,15 @@ impl LoweringContext {
             }
         };
 
-        let args = node
+        let lowered_args = node
             .children()
             .find(|n| n.kind() == SyntaxKind::CALL_ARGS)
-            .map(|args_node| {
-                let mut args = Vec::new();
-                for element in args_node.children_with_tokens() {
-                    match element {
-                        rowan::NodeOrToken::Node(child_node) => {
-                            if is_expr_node_kind(child_node.kind()) {
-                                args.push(self.lower_expr(&child_node));
-                            }
-                        }
-                        rowan::NodeOrToken::Token(token) => {
-                            let span = token.text_range();
-                            match token.kind() {
-                                SyntaxKind::INTEGER_LITERAL => {
-                                    let value = token.text().parse::<i64>().unwrap_or(0);
-                                    args.push(
-                                        self.alloc_expr(Expr::Literal(Literal::Int(value)), span),
-                                    );
-                                }
-                                SyntaxKind::FLOAT_LITERAL => {
-                                    let text = token.text().to_string();
-                                    args.push(
-                                        self.alloc_expr(Expr::Literal(Literal::Float(text)), span),
-                                    );
-                                }
-                                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
-                                    let content = strip_string_delimiters(token.text());
-                                    args.push(
-                                        self.alloc_expr(
-                                            Expr::Literal(Literal::String(content)),
-                                            span,
-                                        ),
-                                    );
-                                }
-                                SyntaxKind::WORD => {
-                                    let text = token.text();
-                                    let e = match text {
-                                        "true" => Expr::Literal(Literal::Bool(true)),
-                                        "false" => Expr::Literal(Literal::Bool(false)),
-                                        "null" => Expr::Null,
-                                        _ => Expr::Path(vec![Name::new(text)]),
-                                    };
-                                    args.push(self.alloc_expr(e, span));
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-                args
-            })
+            .map(|args_node| self.lower_call_args_node(&args_node))
             .unwrap_or_default();
+        let (args, label_spans) = Self::finalize_call_args(lowered_args);
 
         let id = self.alloc_expr(Expr::OptionalCall { callee, args }, node.text_range());
+        self.record_call_arg_label_spans(id, label_spans);
         self.needs_chain_wrap.remove(&callee);
         self.needs_chain_wrap.insert(id);
         id
@@ -2351,12 +2361,21 @@ impl LoweringContext {
         let generic_params = crate::lower_cst::extract_generic_params(node);
 
         // Lower parameter list — gives us Vec<Param>
-        let params = node
+        let (params, defaults) = node
             .children()
             .find(|n| n.kind() == SyntaxKind::PARAMETER_LIST)
             .and_then(ast::ParameterList::cast)
-            .map(|pl| crate::lower_cst::lower_params(&pl, "<lambda>", &mut self.diags))
-            .unwrap_or_default();
+            .map(|pl| {
+                crate::lower_cst::lower_params_with_defaults(
+                    &pl,
+                    "lambda",
+                    "lambda parameters",
+                    &mut self.diags,
+                    false,
+                    &mut self.env_var_refs,
+                )
+            })
+            .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
         let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
 
@@ -2421,6 +2440,7 @@ impl LoweringContext {
             name: Name::new("<anonymous function>"),
             generic_params,
             params,
+            defaults,
             return_type,
             throws,
             body,
@@ -2872,6 +2892,7 @@ impl LoweringContext {
             name: Name::new("<test body>"),
             generic_params: vec![],
             params: vec![],
+            defaults: FunctionDefaults::empty(),
             return_type: None,
             throws: None,
             body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
@@ -2906,7 +2927,11 @@ impl LoweringContext {
             Expr::Call {
                 callee: method_target,
                 type_args: vec![],
-                args: vec![name_expr, lambda_arg, runner_arg],
+                args: vec![
+                    CallArg::positional(name_expr),
+                    CallArg::positional(lambda_arg),
+                    CallArg::positional(runner_arg),
+                ],
             },
             span,
         )
@@ -2954,6 +2979,7 @@ impl LoweringContext {
                 },
                 span,
             }),
+            default: None,
             span,
             name_span: span,
         };
@@ -2962,6 +2988,7 @@ impl LoweringContext {
             name: Name::new("<testset collector>"),
             generic_params: vec![],
             params: vec![sub_param],
+            defaults: FunctionDefaults::empty(),
             return_type: None,
             throws: None,
             body: Some(FunctionBodyDef::Expr(sub_body, sub_source_map)),
@@ -2996,7 +3023,11 @@ impl LoweringContext {
             Expr::Call {
                 callee: method_target,
                 type_args: vec![],
-                args: vec![name_expr, sub_collector_arg, runner_arg],
+                args: vec![
+                    CallArg::positional(name_expr),
+                    CallArg::positional(sub_collector_arg),
+                    CallArg::positional(runner_arg),
+                ],
             },
             span,
         )
@@ -3050,37 +3081,6 @@ impl LoweringContext {
 
         self.alloc_stmt(Stmt::HeaderComment { name, level }, node.text_range())
     }
-}
-
-/// Check if a `SyntaxKind` represents an expression node (vs. punctuation/keyword).
-fn is_expr_node_kind(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::EXPR
-            | SyntaxKind::BINARY_EXPR
-            | SyntaxKind::UNARY_EXPR
-            | SyntaxKind::CALL_EXPR
-            | SyntaxKind::PATH_EXPR
-            | SyntaxKind::FIELD_ACCESS_EXPR
-            | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
-            | SyntaxKind::ENV_ACCESS_EXPR
-            | SyntaxKind::INDEX_EXPR
-            | SyntaxKind::OPTIONAL_INDEX_EXPR
-            | SyntaxKind::OPTIONAL_CALL_EXPR
-            | SyntaxKind::IF_EXPR
-            | SyntaxKind::MATCH_EXPR
-            | SyntaxKind::CATCH_EXPR
-            | SyntaxKind::THROW_EXPR
-            | SyntaxKind::BLOCK_EXPR
-            | SyntaxKind::PAREN_EXPR
-            | SyntaxKind::ARRAY_LITERAL
-            | SyntaxKind::STRING_LITERAL
-            | SyntaxKind::RAW_STRING_LITERAL
-            | SyntaxKind::BYTE_STRING_LITERAL
-            | SyntaxKind::OBJECT_LITERAL
-            | SyntaxKind::MAP_LITERAL
-            | SyntaxKind::LAMBDA_EXPR
-    )
 }
 
 /// Strip string delimiters from raw token text, decoding escape sequences for

@@ -27,7 +27,7 @@ fn deep_copy_value_recursive(
     copied_objects: &mut HashMap<HeapPtr, HeapPtr>,
 ) -> Value {
     match value {
-        Value::Null | Value::Int(_) | Value::Float(_) | Value::Bool(_) => value,
+        Value::OmittedArg | Value::Null | Value::Int(_) | Value::Float(_) | Value::Bool(_) => value,
 
         Value::Object(ptr) => {
             if let Some(&new_ptr) = copied_objects.get(&ptr) {
@@ -139,6 +139,7 @@ fn deep_equals_recursive(
     visited: &mut HashMap<(HeapPtr, HeapPtr), bool>,
 ) -> bool {
     match (a, b) {
+        (Value::OmittedArg, Value::OmittedArg) => true,
         (Value::Null, Value::Null) => true,
         (Value::Int(a), Value::Int(b)) => a == b,
         (Value::Float(a), Value::Float(b)) => (a.is_nan() && b.is_nan()) || a == b,

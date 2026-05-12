@@ -294,9 +294,10 @@ SOURCE_FILE
             WORD "items"
             DOT "."
             WORD "get"
-          CALL_ARGS "(0)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "0"
+            CALL_ARG "0"
+              INTEGER_LITERAL "0"
             R_PAREN ")"
         SEMICOLON ";"
         CALL_EXPR
@@ -310,14 +311,12 @@ SOURCE_FILE
             WORD "items"
             DOT "."
             WORD "get"
-          CALL_ARGS "// 6 method trailing
-    ( // 7 open paren trailing
-    // 8 arg leading
-    0 // 9 arg trailing
-    // 10 close paren leading
-    )"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "0"
+            CALL_ARG "// 7 open paren trailing
+    // 8 arg leading
+    0"
+              INTEGER_LITERAL "0"
             R_PAREN ")"
         SEMICOLON ";"
         CALL_EXPR
@@ -331,14 +330,12 @@ SOURCE_FILE
             WORD "items"
             DOT "."
             WORD "get"
-          CALL_ARGS "/* 6 method trailing */
-    ( /* 7 open paren trailing */
-    /* 8 arg leading */
-    0 /* 9 arg trailing */
-    /* 10 close paren leading */
-    )"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "0"
+            CALL_ARG "/* 7 open paren trailing */
+    /* 8 arg leading */
+    0"
+              INTEGER_LITERAL "0"
             R_PAREN ")"
         SEMICOLON ";"
         INDEX_EXPR "items[0]"
@@ -565,11 +562,27 @@ SOURCE_FILE
               WORD "get"
             CALL_ARGS
               L_PAREN "("
-              BINARY_EXPR
+              CALL_ARG
                 BINARY_EXPR
                   BINARY_EXPR
                     BINARY_EXPR
                       BINARY_EXPR
+                        BINARY_EXPR
+                          CALL_EXPR
+                            PATH_EXPR "user.profile.items.len"
+                              WORD "user"
+                              DOT "."
+                              WORD "profile"
+                              DOT "."
+                              WORD "items"
+                              DOT "."
+                              WORD "len"
+                            CALL_ARGS "()"
+                              L_PAREN "("
+                              R_PAREN ")"
+                          MINUS "-"
+                          INTEGER_LITERAL "1"
+                        PLUS "+"
                         CALL_EXPR
                           PATH_EXPR "user.profile.items.len"
                             WORD "user"
@@ -582,38 +595,23 @@ SOURCE_FILE
                           CALL_ARGS "()"
                             L_PAREN "("
                             R_PAREN ")"
-                        MINUS "-"
-                        INTEGER_LITERAL "1"
-                      PLUS "+"
-                      CALL_EXPR
-                        PATH_EXPR "user.profile.items.len"
-                          WORD "user"
-                          DOT "."
-                          WORD "profile"
-                          DOT "."
-                          WORD "items"
-                          DOT "."
-                          WORD "len"
-                        CALL_ARGS "()"
-                          L_PAREN "("
-                          R_PAREN ")"
-                    MINUS "-"
-                    INTEGER_LITERAL "2"
-                  PLUS "+"
-                  CALL_EXPR
-                    PATH_EXPR "user.profile.items.len"
-                      WORD "user"
-                      DOT "."
-                      WORD "profile"
-                      DOT "."
-                      WORD "items"
-                      DOT "."
-                      WORD "len"
-                    CALL_ARGS "()"
-                      L_PAREN "("
-                      R_PAREN ")"
-                MINUS "-"
-                INTEGER_LITERAL "3"
+                      MINUS "-"
+                      INTEGER_LITERAL "2"
+                    PLUS "+"
+                    CALL_EXPR
+                      PATH_EXPR "user.profile.items.len"
+                        WORD "user"
+                        DOT "."
+                        WORD "profile"
+                        DOT "."
+                        WORD "items"
+                        DOT "."
+                        WORD "len"
+                      CALL_ARGS "()"
+                        L_PAREN "("
+                        R_PAREN ")"
+                  MINUS "-"
+                  INTEGER_LITERAL "3"
               R_PAREN ")"
           DOT "."
           WORD "label"
@@ -630,34 +628,37 @@ SOURCE_FILE
             WORD "slice"
           CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "0"
+            CALL_ARG "0"
+              INTEGER_LITERAL "0"
             COMMA ","
-            BINARY_EXPR
-              CALL_EXPR
-                PATH_EXPR "user.profile.items.len"
-                  WORD "user"
-                  DOT "."
-                  WORD "profile"
-                  DOT "."
-                  WORD "items"
-                  DOT "."
-                  WORD "len"
-                CALL_ARGS "()"
-                  L_PAREN "("
-                  R_PAREN ")"
-              MINUS "-"
-              INTEGER_LITERAL "1"
+            CALL_ARG
+              BINARY_EXPR
+                CALL_EXPR
+                  PATH_EXPR "user.profile.items.len"
+                    WORD "user"
+                    DOT "."
+                    WORD "profile"
+                    DOT "."
+                    WORD "items"
+                    DOT "."
+                    WORD "len"
+                  CALL_ARGS "()"
+                    L_PAREN "("
+                    R_PAREN ")"
+                MINUS "-"
+                INTEGER_LITERAL "1"
             COMMA ","
-            PATH_EXPR "user.profile.settings.preferences.size"
-              WORD "user"
-              DOT "."
-              WORD "profile"
-              DOT "."
-              WORD "settings"
-              DOT "."
-              WORD "preferences"
-              DOT "."
-              WORD "size"
+            CALL_ARG
+              PATH_EXPR "user.profile.settings.preferences.size"
+                WORD "user"
+                DOT "."
+                WORD "profile"
+                DOT "."
+                WORD "settings"
+                DOT "."
+                WORD "preferences"
+                DOT "."
+                WORD "size"
             R_PAREN ")"
         SEMICOLON ";"
         CALL_EXPR
@@ -791,13 +792,29 @@ SOURCE_FILE
               WORD "get"
             CALL_ARGS
               L_PAREN "("
-              BINARY_EXPR
+              CALL_ARG
                 BINARY_EXPR
                   BINARY_EXPR
-                    CALL_EXPR
-                      PATH_EXPR "// 12 trailing
+                    BINARY_EXPR
+                      CALL_EXPR
+                        PATH_EXPR "// 12 trailing
     // 13 leading
     user.profile.items.len"
+                          WORD "user"
+                          DOT "."
+                          WORD "profile"
+                          DOT "."
+                          WORD "items"
+                          DOT "."
+                          WORD "len"
+                        CALL_ARGS "()"
+                          L_PAREN "("
+                          R_PAREN ")"
+                      MINUS "-"
+                      INTEGER_LITERAL "1"
+                    PLUS "+"
+                    CALL_EXPR
+                      PATH_EXPR "user.profile.items.len"
                         WORD "user"
                         DOT "."
                         WORD "profile"
@@ -808,23 +825,8 @@ SOURCE_FILE
                       CALL_ARGS "()"
                         L_PAREN "("
                         R_PAREN ")"
-                    MINUS "-"
-                    INTEGER_LITERAL "1"
-                  PLUS "+"
-                  CALL_EXPR
-                    PATH_EXPR "user.profile.items.len"
-                      WORD "user"
-                      DOT "."
-                      WORD "profile"
-                      DOT "."
-                      WORD "items"
-                      DOT "."
-                      WORD "len"
-                    CALL_ARGS "()"
-                      L_PAREN "("
-                      R_PAREN ")"
-                MINUS "-"
-                INTEGER_LITERAL "2"
+                  MINUS "-"
+                  INTEGER_LITERAL "2"
               R_PAREN ")"
           DOT "."
           WORD "label"
@@ -915,9 +917,10 @@ SOURCE_FILE
             WORD "items"
             DOT "."
             WORD "get"
-          CALL_ARGS "(  0  )"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "0"
+            CALL_ARG "0"
+              INTEGER_LITERAL "0"
             R_PAREN ")"
         SEMICOLON ";"
         CALL_EXPR

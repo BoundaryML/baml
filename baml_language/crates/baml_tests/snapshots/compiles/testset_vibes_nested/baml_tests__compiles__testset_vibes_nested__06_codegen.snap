@@ -8,7 +8,7 @@ function $init() -> null {
     return
 }
 
-function $init_test() -> null {
+function $init_test(registry: unknown) -> null {
     load_var ?1
     call ?
     pop 1

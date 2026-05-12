@@ -165,6 +165,7 @@ mod tests {
                 name: BaseName::new("x"),
                 docstring: None,
                 ty: Ty::Int,
+                default: None,
             }],
             return_type: Ty::Int,
             watchers: Vec::new(),

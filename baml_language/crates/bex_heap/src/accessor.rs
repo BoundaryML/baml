@@ -678,6 +678,7 @@ fn owned_inner(
                 }
             }
         }
+        BexValue::Value(Value::OmittedArg) => unconvertible("omitted argument"),
         BexValue::Value(Value::Null) => Ok(BexExternalValue::Null),
         BexValue::Value(Value::Int(i)) => Ok(BexExternalValue::Int(*i)),
         BexValue::Value(Value::Float(f)) => Ok(BexExternalValue::Float(*f)),

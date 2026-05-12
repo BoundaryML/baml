@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 10262
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -366,9 +365,10 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "add_to_value"
-          CALL_ARGS "(10)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "10"
+            CALL_ARG "10"
+              INTEGER_LITERAL "10"
             R_PAREN ")"
         R_BRACE "}"
 

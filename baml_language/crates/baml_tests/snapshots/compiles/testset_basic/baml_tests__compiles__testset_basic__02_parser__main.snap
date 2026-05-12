@@ -25,9 +25,10 @@ SOURCE_FILE
               WORD "assert"
               DOT "."
               WORD "is_true"
-            CALL_ARGS "(true)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "true"
+              CALL_ARG "true"
+                WORD "true"
               R_PAREN ")"
           R_BRACE "}"
       TEST_EXPR_DEF
@@ -43,9 +44,10 @@ SOURCE_FILE
               WORD "assert"
               DOT "."
               WORD "is_true"
-            CALL_ARGS "(true)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "true"
+              CALL_ARG "true"
+                WORD "true"
               R_PAREN ")"
           R_BRACE "}"
       R_BRACE "}"

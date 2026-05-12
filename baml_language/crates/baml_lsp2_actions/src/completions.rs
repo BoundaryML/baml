@@ -43,7 +43,7 @@ use baml_compiler2_hir::{
     signature::function_signature,
 };
 use baml_compiler2_tir::ty::{PrimitiveType, Ty};
-use rowan::NodeOrToken;
+use rowan::{NodeOrToken, ast::AstNode};
 use text_size::TextSize;
 
 use crate::{Db, utils};
@@ -54,7 +54,15 @@ fn format_function_signature(db: &dyn Db, func_loc: FunctionLoc<'_>) -> String {
     let params: Vec<String> = sig
         .params
         .iter()
-        .map(|(name, te)| format!("{}: {}", name.as_str(), utils::display_type_expr(te)))
+        .map(|param| {
+            let optional = if param.has_default { "?" } else { "" };
+            format!(
+                "{}{}: {}",
+                param.name.as_str(),
+                optional,
+                utils::display_type_expr(&param.ty)
+            )
+        })
         .collect();
     let ret = sig
         .return_type
@@ -85,14 +93,14 @@ fn format_builtin_method_signature(
         .params
         .iter()
         .enumerate()
-        .filter_map(|(idx, (name, te))| {
-            if mode == BuiltinMethodMode::Instance && idx == 0 && name.as_str() == "self" {
+        .filter_map(|(idx, param)| {
+            if mode == BuiltinMethodMode::Instance && idx == 0 && param.name.as_str() == "self" {
                 None
             } else {
                 Some(format!(
                     "{}: {}",
-                    name.as_str(),
-                    utils::display_type_expr(te)
+                    param.name.as_str(),
+                    utils::display_type_expr(&param.ty)
                 ))
             }
         })
@@ -144,6 +152,8 @@ pub enum CompletionKind {
     Method,
     /// A namespace (module) containing other definitions.
     Module,
+    /// A named function parameter in a call argument list.
+    Parameter,
 }
 
 // ── Completion ────────────────────────────────────────────────────────────────
@@ -186,6 +196,11 @@ impl Completion {
         self.sort_text = Some(sort.into());
         self
     }
+
+    fn with_insert_text(mut self, insert_text: impl Into<String>) -> Self {
+        self.insert_text = Some(insert_text.into());
+        self
+    }
 }
 
 // ── CompletionContext ─────────────────────────────────────────────────────────
@@ -199,6 +214,8 @@ enum CompletionContext {
     MemberAccess,
     /// Cursor is in a value expression inside a function body.
     ValuePosition,
+    /// Cursor is inside a function call argument list.
+    CallArguments,
     /// Cursor is at the top level (not inside any item body).
     TopLevel,
     /// Context cannot be determined (e.g., cursor in a comment or string).
@@ -224,6 +241,9 @@ pub fn completions_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Co
         CompletionContext::TypePosition => completions_for_type_position(db, file, offset),
         CompletionContext::MemberAccess => completions_for_field_access(db, file, &token, offset),
         CompletionContext::ValuePosition => completions_for_value_position(db, file, offset),
+        CompletionContext::CallArguments => {
+            completions_for_call_arguments(db, file, &token, offset)
+        }
         CompletionContext::TopLevel => completions_for_top_level(),
         CompletionContext::Unknown => Vec::new(),
     }
@@ -247,6 +267,10 @@ fn detect_context(
     // Walk prev_sibling_or_token to find the token just before the cursor's token.
     if is_field_access_position(token) {
         return CompletionContext::MemberAccess;
+    }
+
+    if find_call_args_completion_ancestor(token).is_some() {
+        return CompletionContext::CallArguments;
     }
 
     // Walk ancestors to detect the structural context.
@@ -277,7 +301,6 @@ fn detect_context(
             | SyntaxKind::BINARY_EXPR
             | SyntaxKind::UNARY_EXPR
             | SyntaxKind::CALL_EXPR
-            | SyntaxKind::CALL_ARGS
             | SyntaxKind::PATH_EXPR
             | SyntaxKind::PAREN_EXPR
             | SyntaxKind::BLOCK_EXPR
@@ -414,6 +437,212 @@ fn is_in_type_annotation(node: &SyntaxNode) -> bool {
         current = n.parent();
     }
     false
+}
+
+// ── Call-argument completions ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+struct CallParamCompletion {
+    name: String,
+    ty: String,
+    optional: bool,
+}
+
+fn find_call_args_completion_ancestor(
+    token: &baml_compiler_syntax::SyntaxToken,
+) -> Option<SyntaxNode> {
+    let parent = token.parent()?;
+    match parent.kind() {
+        SyntaxKind::CALL_ARGS => Some(parent),
+        SyntaxKind::CALL_ARG => parent
+            .parent()
+            .filter(|node| node.kind() == SyntaxKind::CALL_ARGS),
+        _ => None,
+    }
+}
+
+fn completions_for_call_arguments(
+    db: &dyn Db,
+    file: SourceFile,
+    token: &baml_compiler_syntax::SyntaxToken,
+    offset: TextSize,
+) -> Vec<Completion> {
+    let Some(args_node) = find_call_args_completion_ancestor(token) else {
+        return Vec::new();
+    };
+    let Some(call_node) = args_node.parent().filter(|node| {
+        matches!(
+            node.kind(),
+            SyntaxKind::CALL_EXPR | SyntaxKind::OPTIONAL_CALL_EXPR
+        )
+    }) else {
+        return Vec::new();
+    };
+
+    let provided = provided_call_args(&args_node, offset);
+    let Some(params) = call_params_for_call_node(db, file, offset, &call_node, &args_node) else {
+        return completions_for_value_position(db, file, offset);
+    };
+
+    let mut items = Vec::new();
+    for (idx, param) in params.into_iter().enumerate() {
+        if idx < provided.positional_count || provided.named.contains(&param.name) {
+            continue;
+        }
+        let detail = if param.optional {
+            format!("{} (optional)", param.ty)
+        } else {
+            param.ty.clone()
+        };
+        let sort_group = usize::from(param.optional);
+        items.push(
+            Completion::new(param.name.as_str(), CompletionKind::Parameter)
+                .with_detail(detail)
+                .with_insert_text(format!("{} = ", param.name))
+                .with_sort(format!("{sort_group}_{}", param.name)),
+        );
+    }
+
+    items
+}
+
+struct ProvidedCallArgs {
+    named: HashSet<String>,
+    positional_count: usize,
+}
+
+fn provided_call_args(args_node: &SyntaxNode, offset: TextSize) -> ProvidedCallArgs {
+    let mut named = HashSet::new();
+    let mut positional_count = 0;
+
+    for node in args_node
+        .children()
+        .filter(|node| node.kind() == SyntaxKind::CALL_ARG)
+    {
+        let Some(arg) = baml_compiler_syntax::ast::CallArg::cast(node.clone()) else {
+            continue;
+        };
+        if let Some(label) = arg.label() {
+            named.insert(label.text().to_string());
+        } else if node.text_range().end() <= offset {
+            positional_count += 1;
+        }
+    }
+
+    ProvidedCallArgs {
+        named,
+        positional_count,
+    }
+}
+
+fn call_params_for_call_node(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+    call_node: &SyntaxNode,
+    args_node: &SyntaxNode,
+) -> Option<Vec<CallParamCompletion>> {
+    let callee_name = callee_name_token(call_node, args_node)?;
+    let name = Name::new(callee_name.text());
+    let method_like = callee_has_dot_before_args(call_node, args_node);
+
+    match baml_compiler2_tir::resolve::resolve_name_at(
+        db,
+        file,
+        callee_name.text_range().start(),
+        &name,
+    ) {
+        baml_compiler2_tir::resolve::ResolvedName::Item(Definition::Function(func_loc))
+        | baml_compiler2_tir::resolve::ResolvedName::Builtin(Definition::Function(func_loc)) => {
+            Some(function_params_for_completion(db, func_loc, method_like))
+        }
+        baml_compiler2_tir::resolve::ResolvedName::Local {
+            definition_site: Some(site),
+            ..
+        } => local_variable_ty(db, file, offset, site).and_then(|ty| params_from_function_ty(&ty)),
+        _ => None,
+    }
+}
+
+fn callee_name_token(
+    call_node: &SyntaxNode,
+    args_node: &SyntaxNode,
+) -> Option<baml_compiler_syntax::SyntaxToken> {
+    let args_start = args_node.text_range().start();
+    call_node
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .filter(|token| token.text_range().end() <= args_start)
+        .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
+        .last()
+}
+
+fn callee_has_dot_before_args(call_node: &SyntaxNode, args_node: &SyntaxNode) -> bool {
+    let args_start = args_node.text_range().start();
+    call_node
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .any(|token| token.kind() == SyntaxKind::DOT && token.text_range().end() <= args_start)
+}
+
+fn function_params_for_completion(
+    db: &dyn Db,
+    func_loc: FunctionLoc<'_>,
+    method_like: bool,
+) -> Vec<CallParamCompletion> {
+    let file = func_loc.file(db);
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
+    let sig = function_signature(db, func_loc);
+
+    let mut params: Vec<CallParamCompletion> =
+        if let Some(exported) = iface.lookup_function(&pkg_info.namespace_path, &sig.name) {
+            exported
+                .params
+                .iter()
+                .filter_map(|param| {
+                    param.name.as_ref().map(|name| CallParamCompletion {
+                        name: name.as_str().to_string(),
+                        ty: utils::display_ty(&param.ty),
+                        optional: param.is_optional(),
+                    })
+                })
+                .collect()
+        } else {
+            sig.params
+                .iter()
+                .map(|param| CallParamCompletion {
+                    name: param.name.as_str().to_string(),
+                    ty: utils::display_type_expr(&param.ty),
+                    optional: param.has_default,
+                })
+                .collect()
+        };
+
+    if method_like && params.first().is_some_and(|param| param.name == "self") {
+        params.remove(0);
+    }
+
+    params
+}
+
+fn params_from_function_ty(ty: &Ty) -> Option<Vec<CallParamCompletion>> {
+    let Ty::Function { params, .. } = ty else {
+        return None;
+    };
+    Some(
+        params
+            .iter()
+            .filter_map(|param| {
+                param.name.as_ref().map(|name| CallParamCompletion {
+                    name: name.as_str().to_string(),
+                    ty: utils::display_ty(&param.ty),
+                    optional: param.is_optional(),
+                })
+            })
+            .collect(),
+    )
 }
 
 // ── Type-position completions ─────────────────────────────────────────────────
@@ -716,7 +945,7 @@ fn method_has_self_param(db: &dyn Db, func_loc: FunctionLoc<'_>) -> bool {
     function_signature(db, func_loc)
         .params
         .first()
-        .is_some_and(|(name, _)| name.as_str() == "self")
+        .is_some_and(|param| param.name.as_str() == "self")
 }
 
 fn completions_for_builtin_class_methods(
@@ -1044,14 +1273,14 @@ fn local_variable_ty(
                     let func_loc =
                         baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-                    sig.params.get(param_idx).map(|(_, te)| {
+                    sig.params.get(param_idx).map(|param| {
                         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
                         let pkg_id = PackageId::new(db, pkg_info.package);
                         let pkg = package_items(db, pkg_id);
                         let mut diags = Vec::new();
                         baml_compiler2_tir::lower_type_expr::lower_type_expr(
                             db,
-                            te,
+                            &param.ty,
                             pkg,
                             &[],
                             &mut diags,

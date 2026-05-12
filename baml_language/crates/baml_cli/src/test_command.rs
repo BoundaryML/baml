@@ -6,7 +6,7 @@ use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
 use bex_engine::{
-    BexEngine, BexExternalValue, CancellationToken, FunctionCallContextBuilder,
+    BexCallArg, BexEngine, BexExternalValue, CancellationToken, FunctionCallContextBuilder,
     test_arg_to_external,
 };
 use clap::Args;
@@ -246,7 +246,7 @@ fn run_legacy_test(ctx: &RunCtx, t: &DiscoveredTest, passed: &mut usize, failed:
     };
 
     match ctx.rt.block_on(
-        ctx.engine.call_function(
+        ctx.engine.call_function_bound_args(
             &t.function_name,
             ordered_args,
             FunctionCallContextBuilder::new(CallId::next())
@@ -272,19 +272,23 @@ fn build_ordered_args(
     engine: &BexEngine,
     function_name: &str,
     test_case: &bex_vm_types::TestCase,
-) -> Result<Vec<BexExternalValue>> {
+) -> Result<Vec<BexCallArg>> {
     let params = engine
         .function_params(function_name)
         .map_err(|e| anyhow!("failed to get params for {function_name}: {e:?}"))?;
 
-    let ordered: Vec<BexExternalValue> = params
+    let ordered: Vec<BexCallArg> = params
         .into_iter()
-        .map(|(name, _ty)| {
-            test_case
-                .args
-                .get(name)
-                .map(test_arg_to_external)
-                .ok_or_else(|| anyhow!("missing argument '{name}' for function {function_name}"))
+        .map(|(name, _ty, has_default)| {
+            if let Some(value) = test_case.args.get(name) {
+                Ok(BexCallArg::Provided(Box::new(test_arg_to_external(value))))
+            } else if has_default {
+                Ok(BexCallArg::OmittedDefault)
+            } else {
+                Err(anyhow!(
+                    "missing argument '{name}' for function {function_name}"
+                ))
+            }
         })
         .collect::<Result<_>>()?;
 

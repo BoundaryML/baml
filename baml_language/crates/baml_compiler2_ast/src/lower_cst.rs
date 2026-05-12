@@ -15,10 +15,10 @@ use rowan::ast::AstNode;
 use crate::{
     DeclarativeMeta, LoweringDiagnostic,
     ast::{
-        AstSourceMap, BuiltinKind, ConfigItemDef, EnumDef, Expr, ExprBody, ExprId, FieldDef,
-        FunctionBodyDef, FunctionDef, GeneratorDef, Interpolation, Item, LetDef, LetOrigin,
-        LlmBodyDef, Param, RawAttribute, RawAttributeArg, RawPrompt, SpannedTypeExpr,
-        TemplateStringDef, TestDef, TypeAliasDef, VariantDef,
+        AstSourceMap, BuiltinKind, CallArg, ConfigItemDef, EnumDef, Expr, ExprBody, ExprId,
+        FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, GeneratorDef, Interpolation,
+        Item, LetDef, LetOrigin, LlmBodyDef, Param, RawAttribute, RawAttributeArg, RawPrompt,
+        SpannedTypeExpr, TemplateStringDef, TestDef, TypeAliasDef, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -199,11 +199,21 @@ fn lower_function(
     let name_span = name_token.text_range();
 
     let generic_params = extract_generic_params(node);
+    let parameter_context = format!("function `{}`", name.as_str());
 
-    let params = func
+    let (params, defaults) = func
         .param_list()
-        .map(|pl| lower_params(&pl, name.as_str(), diags))
-        .unwrap_or_default();
+        .map(|pl| {
+            lower_params_with_defaults(
+                &pl,
+                name.as_str(),
+                &parameter_context,
+                diags,
+                true,
+                env_var_refs,
+            )
+        })
+        .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = func.return_type().map(|te| {
         let expr = lower_type_expr::lower_type_expr_node(&te);
@@ -278,6 +288,7 @@ fn lower_function(
         name,
         generic_params,
         params,
+        defaults,
         return_type,
         throws,
         body,
@@ -322,12 +333,78 @@ fn check_builtin_body(expr_body_node: &SyntaxNode) -> Option<BuiltinKind> {
 
 pub(crate) fn lower_params(
     pl: &ast::ParameterList,
-    function_name: &str,
+    owner_name: &str,
+    unsupported_default_context: &str,
     diags: &mut Vec<LoweringDiagnostic>,
 ) -> Vec<Param> {
-    pl.params()
-        .filter_map(|p| lower_param(&p, function_name, diags))
-        .collect()
+    let mut env_var_refs = Vec::new();
+    lower_params_with_defaults(
+        pl,
+        owner_name,
+        unsupported_default_context,
+        diags,
+        false,
+        &mut env_var_refs,
+    )
+    .0
+}
+
+pub(crate) fn lower_params_with_defaults(
+    pl: &ast::ParameterList,
+    owner_name: &str,
+    unsupported_default_context: &str,
+    diags: &mut Vec<LoweringDiagnostic>,
+    defaults_allowed: bool,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
+) -> (Vec<Param>, FunctionDefaults) {
+    let mut default_nodes = Vec::new();
+    let mut params = Vec::new();
+    for p in pl.params() {
+        let default_expr = p.default_expr_syntax();
+        let lowered_param_idx = params.len();
+
+        match lower_param(&p, owner_name, diags) {
+            Some(param) => {
+                if let Some(default_expr) = default_expr.clone() {
+                    if !defaults_allowed {
+                        diags.push(LoweringDiagnostic::UnsupportedParameterDefault {
+                            context: unsupported_default_context.to_string(),
+                            span: default_expr.text_range(),
+                        });
+                    }
+                    default_nodes.push((lowered_param_idx, default_expr));
+                }
+                params.push(param);
+            }
+            None => {
+                let Some(default_expr) = default_expr else {
+                    continue;
+                };
+                if !defaults_allowed {
+                    diags.push(LoweringDiagnostic::UnsupportedParameterDefault {
+                        context: unsupported_default_context.to_string(),
+                        span: default_expr.text_range(),
+                    });
+                }
+                default_nodes.push((usize::MAX, default_expr));
+            }
+        }
+    }
+
+    let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
+    let (defaults, default_ids) = lower_expr_body::lower_default_expr_nodes(
+        &default_nodes,
+        &param_names,
+        diags,
+        env_var_refs,
+    );
+    for (idx, default_id) in default_ids {
+        if let Some(param) = params.get_mut(idx) {
+            param.default = Some(default_id);
+        }
+    }
+
+    (params, defaults)
 }
 
 pub(crate) fn lower_param(
@@ -366,6 +443,7 @@ pub(crate) fn lower_param(
                 span: te_span,
             }
         }),
+        default: None,
         span: param.syntax().text_range(),
         name_span: name_token.text_range(),
     })
@@ -487,7 +565,11 @@ pub fn synthesize_llm_builtin_call(
     let call = alloc(Expr::Call {
         callee,
         type_args,
-        args: vec![client_arg, fn_name_expr, args_map],
+        args: vec![
+            CallArg::positional(client_arg),
+            CallArg::positional(fn_name_expr),
+            CallArg::positional(args_map),
+        ],
     });
 
     let body = ExprBody {
@@ -509,6 +591,7 @@ pub fn synthesize_llm_builtin_call(
         catch_arm_spans: Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
+        call_arg_label_spans: std::collections::HashMap::new(),
     };
 
     (body, source_map)
@@ -552,7 +635,10 @@ pub(crate) fn synthesize_llm_parse_call(
     let call = alloc(Expr::Call {
         callee,
         type_args: vec![],
-        args: vec![fn_name_expr, json_expr],
+        args: vec![
+            CallArg::positional(fn_name_expr),
+            CallArg::positional(json_expr),
+        ],
     });
 
     let body = ExprBody {
@@ -574,6 +660,7 @@ pub(crate) fn synthesize_llm_parse_call(
         catch_arm_spans: Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
+        call_arg_label_spans: std::collections::HashMap::new(),
     };
 
     (body, source_map)
@@ -646,7 +733,10 @@ pub fn synthesize_llm_make_stream_call(
     let call = alloc(Expr::Call {
         callee,
         type_args: vec![],
-        args: vec![sse_expr, fn_name_expr],
+        args: vec![
+            CallArg::positional(sse_expr),
+            CallArg::positional(fn_name_expr),
+        ],
     });
 
     let body = ExprBody {
@@ -668,6 +758,7 @@ pub fn synthesize_llm_make_stream_call(
         catch_arm_spans: Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
+        call_arg_label_spans: std::collections::HashMap::new(),
     };
 
     (body, source_map)
@@ -1131,6 +1222,7 @@ fn synthesize_init_test_function(
             },
             span,
         }),
+        default: None,
         span,
         name_span: span,
     };
@@ -1139,6 +1231,7 @@ fn synthesize_init_test_function(
         name: Name::new(&fn_name),
         generic_params: vec![],
         params: vec![registry_param],
+        defaults: FunctionDefaults::empty(),
         return_type: None,
         throws: None,
         body: Some(FunctionBodyDef::Expr(body, source_map)),
@@ -1176,6 +1269,7 @@ fn synthesize_register_call(
                 name: Name::new("<test body>"),
                 generic_params: vec![],
                 params: vec![],
+                defaults: FunctionDefaults::empty(),
                 return_type: Some(SpannedTypeExpr {
                     expr: crate::ast::TypeExpr::Void { attrs: vec![] },
                     span,
@@ -1208,7 +1302,11 @@ fn synthesize_register_call(
                 Expr::Call {
                     callee: method_call_target,
                     type_args: vec![],
-                    args: vec![name_arg, lambda_arg, runner_arg],
+                    args: vec![
+                        CallArg::positional(name_arg),
+                        CallArg::positional(lambda_arg),
+                        CallArg::positional(runner_arg),
+                    ],
                 },
                 span,
             )
@@ -1239,6 +1337,7 @@ fn synthesize_register_call(
                     },
                     span,
                 }),
+                default: None,
                 span,
                 name_span: span,
             };
@@ -1247,6 +1346,7 @@ fn synthesize_register_call(
                 name: Name::new("<testset collector>"),
                 generic_params: vec![],
                 params: vec![testset_param],
+                defaults: FunctionDefaults::empty(),
                 return_type: Some(SpannedTypeExpr {
                     expr: crate::ast::TypeExpr::Void { attrs: vec![] },
                     span,
@@ -1280,7 +1380,11 @@ fn synthesize_register_call(
                 Expr::Call {
                     callee: method_call_target,
                     type_args: vec![],
-                    args: vec![name_arg, collector_arg, runner_arg],
+                    args: vec![
+                        CallArg::positional(name_arg),
+                        CallArg::positional(collector_arg),
+                        CallArg::positional(runner_arg),
+                    ],
                 },
                 span,
             )
@@ -1341,9 +1445,10 @@ fn lower_template_string(
     };
 
     let ts_name = name_token.text().to_string();
+    let context = format!("template_string `{ts_name}`");
     let params = ts
         .param_list()
-        .map(|pl| lower_params(&pl, &ts_name, diags))
+        .map(|pl| lower_params(&pl, &ts_name, &context, diags))
         .unwrap_or_default();
 
     let body = ts.raw_string().map(|rs| lower_raw_prompt(&rs));
@@ -1441,6 +1546,7 @@ fn synthesize_retry_policy_let(
         catch_arm_spans: la_arena::Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
+        call_arg_label_spans: std::collections::HashMap::new(),
     };
 
     Some(Item::Let(LetDef {
@@ -1685,6 +1791,7 @@ fn synthesize_client_let(
         catch_arm_spans: la_arena::Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
+        call_arg_label_spans: std::collections::HashMap::new(),
     };
 
     Item::Let(LetDef {
@@ -1946,6 +2053,7 @@ fn synthesize_client_new_companion(
         catch_arm_spans: la_arena::Arena::new(),
         member_access_member_spans: std::collections::HashMap::new(),
         path_segment_spans: std::collections::HashMap::new(),
+        call_arg_label_spans: std::collections::HashMap::new(),
     };
 
     let func_name = format!("{client_name}$new");
@@ -1953,6 +2061,7 @@ fn synthesize_client_new_companion(
         name: Name::new(&func_name),
         generic_params: vec![],
         params: vec![],
+        defaults: FunctionDefaults::empty(),
         return_type: None,
         throws: None,
         body: Some(FunctionBodyDef::Expr(body, source_map)),

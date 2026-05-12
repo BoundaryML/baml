@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 26718
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -31,14 +30,15 @@ SOURCE_FILE
               WORD "connect"
             CALL_ARGS
               L_PAREN "("
-              STRING_LITERAL "127.0.0.1:8080"
-                QUOTE """
-                FLOAT_LITERAL "127.0"
-                DOT "."
-                FLOAT_LITERAL "0.1"
-                COLON ":"
-                INTEGER_LITERAL "8080"
-                QUOTE """
+              CALL_ARG
+                STRING_LITERAL "127.0.0.1:8080"
+                  QUOTE """
+                  FLOAT_LITERAL "127.0"
+                  DOT "."
+                  FLOAT_LITERAL "0.1"
+                  COLON ":"
+                  INTEGER_LITERAL "8080"
+                  QUOTE """
               R_PAREN ")"
           SEMICOLON ";"
         CALL_EXPR
@@ -73,12 +73,13 @@ SOURCE_FILE
                 WORD "connect"
               CALL_ARGS
                 L_PAREN "("
-                STRING_LITERAL "localhost:3000"
-                  QUOTE """
-                  WORD "localhost"
-                  COLON ":"
-                  INTEGER_LITERAL "3000"
-                  QUOTE """
+                CALL_ARG
+                  STRING_LITERAL "localhost:3000"
+                    QUOTE """
+                    WORD "localhost"
+                    COLON ":"
+                    INTEGER_LITERAL "3000"
+                    QUOTE """
                 R_PAREN ")"
             DOT "."
             WORD "read"
@@ -113,12 +114,13 @@ SOURCE_FILE
               WORD "connect"
             CALL_ARGS
               L_PAREN "("
-              STRING_LITERAL "server1:80"
-                QUOTE """
-                WORD "server1"
-                COLON ":"
-                INTEGER_LITERAL "80"
-                QUOTE """
+              CALL_ARG
+                STRING_LITERAL "server1:80"
+                  QUOTE """
+                  WORD "server1"
+                  COLON ":"
+                  INTEGER_LITERAL "80"
+                  QUOTE """
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
@@ -136,12 +138,13 @@ SOURCE_FILE
               WORD "connect"
             CALL_ARGS
               L_PAREN "("
-              STRING_LITERAL "server2:80"
-                QUOTE """
-                WORD "server2"
-                COLON ":"
-                INTEGER_LITERAL "80"
-                QUOTE """
+              CALL_ARG
+                STRING_LITERAL "server2:80"
+                  QUOTE """
+                  WORD "server2"
+                  COLON ":"
+                  INTEGER_LITERAL "80"
+                  QUOTE """
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
@@ -206,14 +209,15 @@ SOURCE_FILE
               WORD "connect"
             CALL_ARGS
               L_PAREN "("
-              STRING_LITERAL "127.0.0.1:8080"
-                QUOTE """
-                FLOAT_LITERAL "127.0"
-                DOT "."
-                FLOAT_LITERAL "0.1"
-                COLON ":"
-                INTEGER_LITERAL "8080"
-                QUOTE """
+              CALL_ARG
+                STRING_LITERAL "127.0.0.1:8080"
+                  QUOTE """
+                  FLOAT_LITERAL "127.0"
+                  DOT "."
+                  FLOAT_LITERAL "0.1"
+                  COLON ":"
+                  INTEGER_LITERAL "8080"
+                  QUOTE """
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT

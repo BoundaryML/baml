@@ -285,7 +285,8 @@ function user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
 
   L0:
     load_var cb
-    is_type string
+    pop 1
+    load_const false
     pop_jump_if_false L2
     load_const 1
     jump L2

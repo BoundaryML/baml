@@ -52,9 +52,10 @@ SOURCE_FILE
               TYPE_EXPR "T"
                 WORD "T"
               GREATER ">"
-          CALL_ARGS "(s)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "s"
+            CALL_ARG "s"
+              WORD "s"
             R_PAREN ")"
         R_BRACE "}"
 
