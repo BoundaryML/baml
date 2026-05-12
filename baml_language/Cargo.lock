@@ -1135,6 +1135,7 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "la-arena",
+ "num-bigint",
  "rowan 0.16.1",
  "rustc-hash 2.1.2",
  "smol_str 0.3.6",

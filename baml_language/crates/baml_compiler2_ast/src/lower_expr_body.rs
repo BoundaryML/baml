@@ -190,6 +190,11 @@ pub(crate) fn lower_testset_block_node(
 /// Used for runner expressions that are simple literals or identifiers.
 fn lower_bare_token_expr(kind: SyntaxKind, text: &str) -> Expr {
     match kind {
+        SyntaxKind::BIGINT_LITERAL => {
+            let digits = text.strip_suffix('n').unwrap_or(text);
+            let value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10).unwrap_or_default();
+            Expr::Literal(Literal::Bigint(value))
+        }
         SyntaxKind::INTEGER_LITERAL => {
             if let Ok(v) = text.parse::<i64>() {
                 Expr::Literal(Literal::Int(v))
@@ -391,6 +396,13 @@ impl LoweringContext {
                 };
                 Some(self.alloc_expr(expr, span))
             }
+            SyntaxKind::BIGINT_LITERAL => {
+                let text = token.text();
+                let digits = text.strip_suffix('n').unwrap_or(text);
+                let value =
+                    num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10).unwrap_or_default();
+                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span))
+            }
             SyntaxKind::INTEGER_LITERAL => {
                 let value = token.text().parse::<i64>().unwrap_or(0);
                 Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span))
@@ -551,6 +563,13 @@ impl LoweringContext {
                                 _ => Expr::Path(vec![Name::new(text)]),
                             };
                             self.alloc_expr(e, span)
+                        }
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let text = token.text();
+                            let digits = text.strip_suffix('n').unwrap_or(text);
+                            let value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10)
+                                .unwrap_or_default();
+                            self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span)
                         }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
@@ -788,6 +807,19 @@ impl LoweringContext {
                             // First QUESTION sets a provisional op; second one confirms.
                             op = Some(BinaryOp::NullCoalesce);
                         }
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let text = token.text();
+                            let digits = text.strip_suffix('n').unwrap_or(text);
+                            let value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10)
+                                .unwrap_or_default();
+                            let expr_id =
+                                self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span);
+                            if lhs.is_none() {
+                                lhs = Some(expr_id);
+                            } else {
+                                rhs = Some(expr_id);
+                            }
+                        }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
                             let expr_id = self.alloc_expr(Expr::Literal(Literal::Int(value)), span);
@@ -960,6 +992,19 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => {
                     let span = token.text_range();
                     match token.kind() {
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let text = token.text();
+                            let digits = text.strip_suffix('n').unwrap_or(text);
+                            let value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10)
+                                .unwrap_or_default();
+                            let expr_id =
+                                self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span);
+                            if lhs.is_none() {
+                                lhs = Some(expr_id);
+                            } else {
+                                rhs = Some(expr_id);
+                            }
+                        }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
                             let expr_id = self.alloc_expr(Expr::Literal(Literal::Int(value)), span);
@@ -1020,6 +1065,14 @@ impl LoweringContext {
                         SyntaxKind::MINUS_MINUS => {
                             op = Some(UnaryOp::Neg);
                             double_op = true;
+                        }
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let text = token.text();
+                            let digits = text.strip_suffix('n').unwrap_or(text);
+                            let value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10)
+                                .unwrap_or_default();
+                            operand =
+                                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span));
                         }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
@@ -1134,6 +1187,15 @@ impl LoweringContext {
                     if scrutinee.is_none() {
                         let span = token.text_range();
                         match token.kind() {
+                            SyntaxKind::BIGINT_LITERAL => {
+                                let text = token.text();
+                                let digits = text.strip_suffix('n').unwrap_or(text);
+                                let value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10)
+                                    .unwrap_or_default();
+                                scrutinee = Some(
+                                    self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span),
+                                );
+                            }
                             SyntaxKind::INTEGER_LITERAL => {
                                 let value = token.text().parse::<i64>().unwrap_or(0);
                                 scrutinee =
@@ -1202,6 +1264,20 @@ impl LoweringContext {
                                             guard = Some(self.alloc_expr(e, range));
                                             break;
                                         }
+                                        SyntaxKind::BIGINT_LITERAL => {
+                                            let text = t.text();
+                                            let digits = text.strip_suffix('n').unwrap_or(text);
+                                            let value = num_bigint::BigInt::parse_bytes(
+                                                digits.as_bytes(),
+                                                10,
+                                            )
+                                            .unwrap_or_default();
+                                            guard = Some(self.alloc_expr(
+                                                Expr::Literal(Literal::Bigint(value)),
+                                                t.text_range(),
+                                            ));
+                                            break;
+                                        }
                                         SyntaxKind::INTEGER_LITERAL => {
                                             let value = t.text().parse::<i64>().unwrap_or(0);
                                             guard = Some(self.alloc_expr(
@@ -1230,6 +1306,17 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => match token.kind() {
                     SyntaxKind::FAT_ARROW => {
                         seen_fat_arrow = true;
+                    }
+                    SyntaxKind::BIGINT_LITERAL if seen_fat_arrow && body.is_none() => {
+                        let text = token.text();
+                        let digits = text.strip_suffix('n').unwrap_or(text);
+                        let value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10)
+                            .unwrap_or_default();
+                        body =
+                            Some(self.alloc_expr(
+                                Expr::Literal(Literal::Bigint(value)),
+                                token.text_range(),
+                            ));
                     }
                     SyntaxKind::INTEGER_LITERAL if seen_fat_arrow && body.is_none() => {
                         let value = token.text().parse::<i64>().unwrap_or(0);
@@ -1699,6 +1786,17 @@ impl LoweringContext {
                 },
                 rowan::NodeOrToken::Token(token) => match token.kind() {
                     SyntaxKind::FAT_ARROW => seen_fat_arrow = true,
+                    SyntaxKind::BIGINT_LITERAL if seen_fat_arrow && body.is_none() => {
+                        let text = token.text();
+                        let digits = text.strip_suffix('n').unwrap_or(text);
+                        let value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10)
+                            .unwrap_or_default();
+                        body =
+                            Some(self.alloc_expr(
+                                Expr::Literal(Literal::Bigint(value)),
+                                token.text_range(),
+                            ));
+                    }
                     SyntaxKind::INTEGER_LITERAL if seen_fat_arrow && body.is_none() => {
                         let value = token.text().parse::<i64>().unwrap_or(0);
                         body = Some(
@@ -1816,6 +1914,15 @@ impl LoweringContext {
         {
             match token.kind() {
                 SyntaxKind::KW_THROW => continue,
+                SyntaxKind::BIGINT_LITERAL => {
+                    let text = token.text();
+                    let digits = text.strip_suffix('n').unwrap_or(text);
+                    let value =
+                        num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10).unwrap_or_default();
+                    return Some(
+                        self.alloc_expr(Expr::Literal(Literal::Bigint(value)), token.text_range()),
+                    );
+                }
                 SyntaxKind::INTEGER_LITERAL => {
                     let value = token.text().parse::<i64>().unwrap_or(0);
                     return Some(
@@ -2617,6 +2724,13 @@ impl LoweringContext {
                         };
                         return Some(self.alloc_expr(e, span));
                     }
+                    SyntaxKind::BIGINT_LITERAL => {
+                        let text = token.text();
+                        let digits = text.strip_suffix('n').unwrap_or(text);
+                        let value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10)
+                            .unwrap_or_default();
+                        return Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span));
+                    }
                     SyntaxKind::INTEGER_LITERAL => {
                         let value = token.text().parse::<i64>().unwrap_or(0);
                         return Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
@@ -2652,6 +2766,13 @@ impl LoweringContext {
 
         let span = token.text_range();
         match token.kind() {
+            SyntaxKind::BIGINT_LITERAL => {
+                let text = token.text();
+                let digits = text.strip_suffix('n').unwrap_or(text);
+                let value =
+                    num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10).unwrap_or_default();
+                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span))
+            }
             SyntaxKind::INTEGER_LITERAL => {
                 let value = token.text().parse::<i64>().unwrap_or(0);
                 Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span))
@@ -2743,6 +2864,15 @@ impl LoweringContext {
                     let span = token.text_range();
                     match token.kind() {
                         SyntaxKind::KW_RETURN | SyntaxKind::SEMICOLON => continue,
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let text = token.text();
+                            let digits = text.strip_suffix('n').unwrap_or(text);
+                            let value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10)
+                                .unwrap_or_default();
+                            result =
+                                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span));
+                            break;
+                        }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
                             result =

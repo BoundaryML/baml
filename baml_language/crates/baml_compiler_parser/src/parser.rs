@@ -62,6 +62,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Word => SyntaxKind::WORD,
         TokenKind::Quote => SyntaxKind::QUOTE,
         TokenKind::Hash => SyntaxKind::HASH,
+        TokenKind::BigintLiteral => SyntaxKind::BIGINT_LITERAL,
         TokenKind::IntegerLiteral => SyntaxKind::INTEGER_LITERAL,
         TokenKind::FloatLiteral => SyntaxKind::FLOAT_LITERAL,
 
@@ -1965,14 +1966,16 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        // Negative numeric literal type: `-42`, `-3.14`. Recognised before
+        // Negative numeric literal type: `-42`, `-3.14`, `-7n`. Recognised before
         // the unary-`-` falls through to the generic error path so literal
         // unions like `-1 | 0 | 1` and pattern atoms like `match { -42 => ... }`
         // parse uniformly. Floats still error to match the positive case.
         if self.at(TokenKind::Minus)
             && matches!(
                 self.peek(1).map(|t| t.kind),
-                Some(TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
+                Some(
+                    TokenKind::BigintLiteral | TokenKind::IntegerLiteral | TokenKind::FloatLiteral
+                )
             )
         {
             let next_kind = self.peek(1).map(|t| t.kind);
@@ -1988,6 +1991,12 @@ impl<'a> Parser<'a> {
             }
             self.bump(); // -
             self.bump(); // number
+            return;
+        }
+
+        // Check for bigint literal types: 42n | 0n | 99999999999999999999n
+        if self.at(TokenKind::BigintLiteral) {
+            self.bump();
             return;
         }
 
@@ -4387,8 +4396,11 @@ impl<'a> Parser<'a> {
 
     /// Parse primary expression (literals, identifiers, parentheses)
     fn parse_primary_expr(&mut self) {
-        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
-            // Numeric literal
+        if self.at(TokenKind::BigintLiteral)
+            || self.at(TokenKind::IntegerLiteral)
+            || self.at(TokenKind::FloatLiteral)
+        {
+            // Numeric literal (bigint, integer, or float)
             self.bump();
         } else if self.parse_any_string() {
             // String literal

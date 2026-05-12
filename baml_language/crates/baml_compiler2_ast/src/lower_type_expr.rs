@@ -215,6 +215,14 @@ fn lower_base_type(type_expr: &CstTypeExpr) -> TypeExpr {
         };
     }
 
+    if let Some(digits_str) = type_expr.bigint_literal() {
+        let value = num_bigint::BigInt::parse_bytes(digits_str.as_bytes(), 10).unwrap_or_default();
+        return TypeExpr::Literal {
+            value: baml_base::Literal::Bigint(value),
+            attrs: vec![],
+        };
+    }
+
     if let Some(i) = type_expr.integer_literal() {
         return TypeExpr::Literal {
             value: baml_base::Literal::Int(i),
@@ -296,6 +304,14 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
     if let Some(s) = parts.string_literal() {
         return TypeExpr::Literal {
             value: baml_base::Literal::String(s),
+            attrs: vec![],
+        };
+    }
+
+    if let Some(digits_str) = parts.bigint_literal() {
+        let value = num_bigint::BigInt::parse_bytes(digits_str.as_bytes(), 10).unwrap_or_default();
+        return TypeExpr::Literal {
+            value: baml_base::Literal::Bigint(value),
             attrs: vec![],
         };
     }

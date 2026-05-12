@@ -3260,6 +3260,30 @@ impl BexVm {
             Instruction::UnaryOp(op) => {
                 let value = self.stack.ensure_pop();
 
+                // Handle bigint negation separately because it requires heap allocation.
+                if matches!(op, UnaryOp::Neg) {
+                    if let Value::Object(ptr) = value {
+                        let negated_arc = match self.get_object(ptr) {
+                            Object::Bigint(bi) => Some(std::sync::Arc::new(-bi.as_ref().clone())),
+                            _ => None,
+                        };
+                        match negated_arc {
+                            Some(arc) => {
+                                let result = self.alloc_bigint(arc);
+                                self.stack.push(result);
+                                return Ok(None);
+                            }
+                            None => {
+                                return Err(VmInternalError::CannotApplyUnaryOp {
+                                    op,
+                                    value: self.type_of(&Value::Object(ptr)),
+                                }
+                                .into());
+                            }
+                        }
+                    }
+                }
+
                 let result = match (op, value) {
                     (UnaryOp::Not, Value::Bool(value)) => Value::Bool(!value),
                     (UnaryOp::Neg, Value::Int(value)) => Value::Int(-value),
@@ -6955,6 +6979,27 @@ impl BexVm {
                     match val {
                         Value::Int(n) => self.stack.push(Value::Int(-n)),
                         Value::Float(n) => self.stack.push(Value::Float(-n)),
+                        Value::Object(ptr) => {
+                            let negated_arc = match self.get_object(ptr) {
+                                Object::Bigint(bi) => {
+                                    Some(std::sync::Arc::new(-bi.as_ref().clone()))
+                                }
+                                _ => None,
+                            };
+                            match negated_arc {
+                                Some(arc) => {
+                                    let result = self.alloc_bigint(arc);
+                                    self.stack.push(result);
+                                }
+                                None => {
+                                    return Err(VmInternalError::CannotApplyUnaryOp {
+                                        op: UnaryOp::Neg,
+                                        value: self.type_of(&Value::Object(ptr)),
+                                    }
+                                    .into());
+                                }
+                            }
+                        }
                         _ => {
                             return Err(VmInternalError::CannotApplyUnaryOp {
                                 op: UnaryOp::Neg,

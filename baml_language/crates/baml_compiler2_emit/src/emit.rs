@@ -1219,9 +1219,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.set_operand(inst, OperandMeta::Const(v.to_string()));
             }
             Constant::Bigint(v) => {
-                let idx = self.add_constant(ConstValue::Bigint(v.clone()));
-                let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(format!("{v}n")));
+                // Bigints are heap-allocated objects like strings.
+                // Push an Object::Bigint into the compile-time objects pool and
+                // reference it via ConstValue::Object so that `to_value()` can
+                // resolve it to a HeapPtr at load time.
+                let operand_str = format!("{v}n");
+                let obj_idx = self.objects.len();
+                self.objects
+                    .push(Object::Bigint(std::sync::Arc::new(v.clone())));
+                let const_idx =
+                    self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
+                let inst = self.emit(Instruction::LoadConst(const_idx));
+                self.set_operand(inst, OperandMeta::Const(operand_str));
             }
             Constant::Float(v) => {
                 let idx = self.add_constant(ConstValue::Float(*v));

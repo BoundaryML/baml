@@ -7901,6 +7901,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Primitive(PrimitiveType::Float, attr) => {
                     Ty::Primitive(PrimitiveType::Float, attr.clone())
                 }
+                Ty::Primitive(PrimitiveType::Bigint, attr) => {
+                    Ty::Primitive(PrimitiveType::Bigint, attr.clone())
+                }
                 Ty::Unknown { attr } | Ty::Error { attr } => Ty::Unknown { attr: attr.clone() },
                 _ => {
                     self.context.report_simple(
@@ -7948,6 +7951,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         TyAttr::default(),
                     ))
                 }
+                LiteralValue::Bigint(n) => Some(Ty::Literal(
+                    LiteralValue::Bigint(-n.clone()),
+                    f,
+                    TyAttr::default(),
+                )),
                 _ => None,
             },
             baml_compiler2_ast::UnaryOp::Not => match lit {
