@@ -877,6 +877,13 @@ pub enum Object {
     /// otherwise.
     String(String),
 
+    /// Heap-allocated arbitrary-precision integer.
+    ///
+    /// `Value: Copy` so bigints must live on the heap behind an `Arc`. The
+    /// `Arc` lets multiple values share the same allocation (e.g. after a
+    /// `let y = x` assignment) without deep-copying the underlying digit slice.
+    Bigint(std::sync::Arc<num_bigint::BigInt>),
+
     /// Byte array (uint8array).
     Uint8Array(Vec<u8>),
 
@@ -922,6 +929,9 @@ enum ObjectSerde {
     BoundMethod(BoundMethod),
     Cell(Cell),
     String(String),
+    // `Arc<BigInt>` isn't `Serialize` (serde's `rc` feature is off), so the proxy
+    // holds the inner `BigInt` by value — the same representation `ConstValue::Bigint` uses.
+    Bigint(num_bigint::BigInt),
     Uint8Array(Vec<u8>),
     Array(Vec<Value>),
     Map(IndexMap<String, Value>),
@@ -942,6 +952,7 @@ impl Serialize for Object {
             Self::BoundMethod(v) => ObjectSerde::BoundMethod(v.clone()),
             Self::Cell(v) => ObjectSerde::Cell(v.clone()),
             Self::String(v) => ObjectSerde::String(v.clone()),
+            Self::Bigint(v) => ObjectSerde::Bigint((**v).clone()),
             Self::Uint8Array(v) => ObjectSerde::Uint8Array(v.clone()),
             Self::Array(v) => ObjectSerde::Array(v.clone()),
             Self::Map(v) => ObjectSerde::Map(v.clone()),
@@ -976,6 +987,7 @@ impl<'de> Deserialize<'de> for Object {
             ObjectSerde::BoundMethod(v) => Self::BoundMethod(v),
             ObjectSerde::Cell(v) => Self::Cell(v),
             ObjectSerde::String(v) => Self::String(v),
+            ObjectSerde::Bigint(v) => Self::Bigint(std::sync::Arc::new(v)),
             ObjectSerde::Uint8Array(v) => Self::Uint8Array(v),
             ObjectSerde::Array(v) => Self::Array(v),
             ObjectSerde::Map(v) => Self::Map(v),
@@ -1040,6 +1052,7 @@ impl std::fmt::Display for Object {
             Object::BoundMethod(_) => write!(f, "<bound_method>"),
             Object::Cell(cell) => write!(f, "<cell {}>", cell.value),
             Object::String(string) => string.fmt(f),
+            Object::Bigint(bi) => write!(f, "{bi}"),
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
             Object::Array(array) => write!(f, "<array len={}>", array.len()),
             Object::Map(map) => write!(f, "<map len={}>", map.len()),
@@ -1627,6 +1640,7 @@ pub enum ObjectType {
     Cell,
     Class,
     String,
+    Bigint,
     Enum,
     Variant,
     Future(FutureType),
@@ -1648,6 +1662,7 @@ impl ObjectType {
             Object::Enum(_) => Self::Enum,
             Object::Variant(_) => Self::Enum,
             Object::String(_) => Self::String,
+            Object::Bigint(_) => Self::Bigint,
             Object::Uint8Array(_) => Self::Uint8Array,
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
@@ -1691,6 +1706,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::UnscheduledFuture => write!(f, "unscheduled_future"),
             ObjectType::String => write!(f, "string"),
+            ObjectType::Bigint => write!(f, "bigint"),
             ObjectType::Uint8Array => write!(f, "uint8array"),
             ObjectType::Collector => write!(f, "collector"),
             ObjectType::Type => write!(f, "type"),

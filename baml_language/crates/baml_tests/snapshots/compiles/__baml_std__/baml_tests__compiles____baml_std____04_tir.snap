@@ -5,6 +5,15 @@ source: crates/baml_tests/src/generated_tests.rs
 
 === TIR2 (package baml) ===
 
+--- <builtin>/baml/bigint.baml ---
+class baml.Bigint {
+}
+function baml.Bigint.from_json(j: baml.json.json) -> baml.Bigint throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Bigint {  } : baml.Bigint
+}
+class baml.Bigint$stream {
+}
+
 --- <builtin>/baml/bool.baml ---
 class baml.Bool {
 }

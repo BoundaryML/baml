@@ -102,6 +102,7 @@ fn format_value_recursive(
                 Ok(result)
             }
 
+            Object::Bigint(bi) => Ok(bi.to_string()),
             Object::String(s) => Ok(format!("\"{s}\"")),
             Object::Enum(e) => Ok(e.name.display_name.to_string()),
             Object::Variant(variant) => {

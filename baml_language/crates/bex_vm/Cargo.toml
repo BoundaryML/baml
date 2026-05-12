@@ -29,6 +29,7 @@ colored = { workspace = true }
 getrandom = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
+num-bigint = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 web-time = { workspace = true }

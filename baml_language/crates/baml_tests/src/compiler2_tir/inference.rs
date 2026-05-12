@@ -348,7 +348,7 @@ fn class_field_bigint() {
       x: bigint
     }
     function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "x": self.x.to_json() } : map<string, unknown>
+      map { "x": self.x.to_json() } : map<string, baml.json.json>
     }
     function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       Foo { x: baml.json.from_json<bigint>(baml.json.field(j, "x")) } : user.Foo

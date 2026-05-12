@@ -4,6 +4,41 @@ source: crates/baml_tests/src/generated_tests.rs
 === MIR2 ===
 
 === MIR2 (package baml) ===
+fn baml.Bigint.abs = builtin(vm)
+
+fn baml.Bigint.clamp = builtin(vm)
+
+fn baml.Bigint.from_json(j: baml.json.json) -> baml.Bigint {
+    // Locals:
+    let _0: baml.Bigint // _0 // return
+    let _1: baml.json.json // j // param
+
+    bb0: {
+        _0 = baml.Bigint {  };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.Bigint.ilog = builtin(vm)
+
+fn baml.Bigint.isqrt = builtin(vm)
+
+fn baml.Bigint.max = builtin(vm)
+
+fn baml.Bigint.min = builtin(vm)
+
+fn baml.Bigint.parse = builtin(vm)
+
+fn baml.Bigint.pow = builtin(vm)
+
+fn baml.Bigint.random = builtin(vm)
+
+fn baml.Bigint.to_json = builtin(vm)
+
 fn baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
     // Locals:
     let _0: baml.Bool // _0 // return

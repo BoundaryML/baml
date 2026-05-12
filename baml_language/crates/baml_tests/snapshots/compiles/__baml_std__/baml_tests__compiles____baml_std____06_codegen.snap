@@ -85,6 +85,41 @@ function baml.Array.to_json(self: null) -> baml.json.json {
 function baml.Array.unshift(self: null, item: void) -> int {
 }
 
+function baml.Bigint.abs(self: null) -> bigint {
+}
+
+function baml.Bigint.clamp(self: null, min: bigint, max: bigint) -> bigint {
+}
+
+function baml.Bigint.from_json(j: baml.json.json) -> baml.Bigint {
+    alloc_instance baml.Bigint
+    return
+}
+
+function baml.Bigint.ilog(self: null, base: bigint) -> bigint {
+}
+
+function baml.Bigint.isqrt(self: null) -> bigint {
+}
+
+function baml.Bigint.max(self: null, other: bigint) -> bigint {
+}
+
+function baml.Bigint.min(self: null, other: bigint) -> bigint {
+}
+
+function baml.Bigint.parse(text: string) -> bigint {
+}
+
+function baml.Bigint.pow(self: null, exp: bigint) -> bigint {
+}
+
+function baml.Bigint.random(lower: bigint, upper: bigint) -> bigint {
+}
+
+function baml.Bigint.to_json(self: null) -> baml.json.json {
+}
+
 function baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
     alloc_instance baml.Bool
     return

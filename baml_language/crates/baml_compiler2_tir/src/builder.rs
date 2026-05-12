@@ -5447,6 +5447,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         "pdf" => &["media", "Pdf"],
                         "string" => &["String"],
                         "int" => &["Int"],
+                        "bigint" => &["Bigint"],
                         "float" => &["Float"],
                         _ => &[],
                     };
@@ -7079,6 +7080,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             "pdf" => &["media", "Pdf"],
             "string" => &["String"],
             "int" => &["Int"],
+            "bigint" => &["Bigint"],
             "float" => &["Float"],
             _ => return None,
         };
@@ -9723,6 +9725,7 @@ impl TypeInferenceBuilder<'_> {
 fn bare_type_sugar_to_ty(name: &Name) -> Option<Ty> {
     match name.as_str() {
         "int" => Some(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+        "bigint" => Some(Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())),
         "float" => Some(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
         "string" => Some(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
         "bool" => Some(Ty::Primitive(PrimitiveType::Bool, TyAttr::default())),

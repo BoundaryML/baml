@@ -349,6 +349,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
                     .collect();
                 serde_json::Value::Object(entries)
             }
+            Object::Bigint(bi) => serde_json::Value::String(bi.to_string()),
             Object::Instance(_)
             | Object::Class(_)
             | Object::Enum(_)

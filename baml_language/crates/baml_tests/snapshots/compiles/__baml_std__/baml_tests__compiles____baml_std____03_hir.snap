@@ -5,6 +5,23 @@ source: crates/baml_tests/src/generated_tests.rs
 
 === HIR2 (package baml) ===
 
+--- <builtin>/baml/bigint.baml ---
+class baml.Bigint {
+}
+function baml.abs(self: ?) -> bigint  [builtin]
+function baml.clamp(self: ?, min: bigint, max: bigint) -> bigint  [builtin]
+function baml.from_json(j: baml.json.json) -> baml.Bigint  [expr] {
+  baml.Bigint {  }
+}
+function baml.ilog(self: ?, base: bigint) -> bigint  [builtin]
+function baml.isqrt(self: ?) -> bigint  [builtin]
+function baml.max(self: ?, other: bigint) -> bigint  [builtin]
+function baml.min(self: ?, other: bigint) -> bigint  [builtin]
+function baml.parse(text: string) -> bigint  [builtin]
+function baml.pow(self: ?, exp: bigint) -> bigint  [builtin]
+function baml.random(lower: bigint, upper: bigint) -> bigint  [builtin]
+function baml.to_json(self: ?) -> baml.json.json  [builtin]
+
 --- <builtin>/baml/bool.baml ---
 class baml.Bool {
 }

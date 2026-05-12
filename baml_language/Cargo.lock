@@ -1746,6 +1746,7 @@ dependencies = [
  "getrandom 0.2.17",
  "indexmap 2.14.0",
  "log",
+ "num-bigint",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
@@ -5291,6 +5292,8 @@ checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
 dependencies = [
  "num-integer",
  "num-traits",
+ "rand 0.8.6",
+ "serde",
 ]
 
 [[package]]

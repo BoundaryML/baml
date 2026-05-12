@@ -18,6 +18,7 @@
 //! 2. Implement the method in the appropriate sub-module's `impl` block
 
 mod array;
+mod bigint;
 mod float;
 mod future;
 mod int;

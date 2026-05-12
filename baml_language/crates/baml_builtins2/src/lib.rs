@@ -84,6 +84,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "containers.baml"),
     builtin!("baml", "core.baml"),
     builtin!("baml", "int.baml"),
+    builtin!("baml", "bigint.baml"),
     builtin!("baml", "float.baml"),
     builtin!("baml", "bool.baml"),
     builtin!("baml", "null.baml"),

@@ -596,6 +596,7 @@ fn value_type_tag(value: &Value) -> i64 {
             let obj = unsafe { ptr.get() };
             match obj {
                 Object::String(_) => type_tags::STRING,
+                Object::Bigint(_) => type_tags::UNKNOWN,
                 Object::Uint8Array(_) => type_tags::UINT8ARRAY,
                 Object::Variant(_) => type_tags::ENUM,
                 Object::Array(_) => type_tags::LIST,
@@ -834,6 +835,21 @@ impl BexVm {
     pub fn as_string(&self, value: &Value) -> Result<&String, VmInternalError> {
         let ptr = self.as_object_ptr(value, ObjectType::String)?;
         self.get_object(ptr).as_string()
+    }
+
+    /// Get a reference to the `Arc<BigInt>` from a bigint Value.
+    pub fn as_bigint(
+        &self,
+        value: &Value,
+    ) -> Result<&std::sync::Arc<num_bigint::BigInt>, VmInternalError> {
+        let ptr = self.as_object_ptr(value, ObjectType::Bigint)?;
+        match self.get_object(ptr) {
+            Object::Bigint(arc) => Ok(arc),
+            other => Err(VmInternalError::TypeError {
+                expected: ObjectType::Bigint.into(),
+                got: ObjectType::of(other).into(),
+            }),
+        }
     }
 
     /// Get uint8array from a Value.
@@ -1130,6 +1146,11 @@ impl BexVm {
 
     pub fn alloc_string(&mut self, s: String) -> Value {
         Value::Object(self.tlab.alloc(Object::String(s)))
+    }
+
+    /// Allocate a bigint on the heap. Takes an `Arc<BigInt>` to allow sharing.
+    pub fn alloc_bigint(&mut self, arc: std::sync::Arc<num_bigint::BigInt>) -> Value {
+        Value::Object(self.tlab.alloc(Object::Bigint(arc)))
     }
 
     pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> Value {

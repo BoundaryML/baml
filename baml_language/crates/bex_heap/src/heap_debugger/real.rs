@@ -360,6 +360,7 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::String(_)
+            | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
             | Object::Collector(_)

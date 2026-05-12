@@ -224,6 +224,7 @@ impl BexEngine {
             Object::UnscheduledFuture(_) => Err(EngineError::CannotConvert {
                 type_name: "unscheduled_future".to_string(),
             }),
+            Object::Bigint(bi) => Ok(BexExternalValue::String(bi.to_string())),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
@@ -718,7 +719,8 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     members.iter().find(|m| matches!(m, Ty::Uint8Array { .. }))
                 }
                 // Types that don't participate in union discrimination.
-                Object::Function(_)
+                Object::Bigint(_)
+                | Object::Function(_)
                 | Object::Closure(_)
                 | Object::BoundMethod(_)
                 | Object::Cell(_)
@@ -802,6 +804,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
 
                     BexExternalValue::Instance { class_name, fields }
                 }
+                Object::Bigint(bi) => BexExternalValue::String(bi.to_string()),
                 Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.clone()),
                 Object::Variant(variant) => {
                     let enum_obj = vm.get_object(variant.enm);
