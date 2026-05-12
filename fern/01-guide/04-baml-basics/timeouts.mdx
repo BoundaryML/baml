@@ -165,9 +165,8 @@ try:
     result = await b.ExtractData(input)
 except BamlTimeoutError as e:
     # Handle timeout specifically
-    print(f"Request timed out: {e.message}")
-    print(f"Timeout type: {e.timeout_type}")
-    print(f"Configured: {e.configured_value_ms}ms, Elapsed: {e.elapsed_ms}ms")
+    # Available attributes: client_name, message
+    print(f"Request timed out on client '{e.client_name}': {e.message}")
 except BamlClientError as e:
     # Handle other client errors
     print(f"Client error: {e.message}")
@@ -182,9 +181,8 @@ try {
 } catch (e) {
   if (e instanceof BamlTimeoutError) {
     // Handle timeout specifically
-    console.log(`Request timed out: ${e.message}`)
-    console.log(`Timeout type: ${e.timeout_type}`)
-    console.log(`Configured: ${e.configured_value_ms}ms, Elapsed: ${e.elapsed_ms}ms`)
+    // Available attributes: client_name, message
+    console.log(`Request timed out on client '${e.client_name}': ${e.message}`)
   } else {
     // Handle other errors
     console.log(`Error: ${e}`)
@@ -198,8 +196,6 @@ begin
 rescue Baml::TimeoutError => e
   # Handle timeout specifically
   puts "Request timed out: #{e.message}"
-  puts "Timeout type: #{e.timeout_type}"
-  puts "Configured: #{e.configured_value_ms}ms, Elapsed: #{e.elapsed_ms}ms"
 rescue Baml::ClientError => e
   # Handle other client errors
   puts "Client error: #{e.message}"
