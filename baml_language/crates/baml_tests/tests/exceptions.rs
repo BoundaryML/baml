@@ -197,14 +197,14 @@ async fn catch_multiple_literals_dispatch() {
     function fails(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var mode
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -369,7 +369,7 @@ async fn typed_binding_dispatch_string_vs_int() {
     function fails(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -457,7 +457,7 @@ async fn typed_binding_plus_wildcard() {
     function fails(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -520,7 +520,7 @@ async fn named_binding_string_access_value() {
     function fails(mode: int) -> string {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -590,7 +590,7 @@ async fn named_binding_int_access_value() {
     function fails(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -712,7 +712,7 @@ async fn catch_two_user_classes_dispatch_first() {
     function fails(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -809,7 +809,7 @@ async fn catch_user_class_plus_wildcard() {
     function fails(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -878,21 +878,21 @@ async fn catch_three_user_classes_plus_wildcard() {
     function api(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L5
 
       L0:
         load_var mode
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_var mode
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         jump L3
 
@@ -1043,7 +1043,7 @@ async fn named_class_binding_dispatch_access_fields() {
     function fails(mode: int) -> string {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -1173,7 +1173,7 @@ async fn bare_class_dispatch_first() {
     function fails(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -1270,7 +1270,7 @@ async fn bare_class_plus_wildcard() {
     function fails(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -1397,11 +1397,11 @@ async fn catch_division_by_zero() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function divides() -> int {
         load_const 1
         load_const 0
-        bin_op /
+        div_int
         return
     }
 
@@ -1578,11 +1578,11 @@ async fn named_panic_binding_division_by_zero_field() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function divides() -> int {
         load_const 10
         load_const 0
-        bin_op /
+        div_int
         return
     }
 
@@ -1789,14 +1789,14 @@ async fn wildcard_skips_division_by_zero() {
     function risky(x: int) -> int {
         load_var x
         load_const 100
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L0
         jump L1
 
       L0:
         load_const 1
         load_var x
-        bin_op /
+        div_int
         return
 
       L1:
@@ -1839,7 +1839,7 @@ async fn wildcard_skips_index_out_of_bounds() {
     function risky(x: int) -> int {
         load_var x
         load_const 100
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L0
         jump L1
 
@@ -1907,14 +1907,14 @@ async fn panic_arm_plus_wildcard_panic_fires() {
     function risky(x: int) -> int {
         load_var x
         load_const 100
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L0
         jump L1
 
       L0:
         load_const 1
         load_var x
-        bin_op /
+        div_int
         return
 
       L1:
@@ -1991,14 +1991,14 @@ async fn panic_arm_plus_wildcard_no_error() {
     function risky(x: int) -> int {
         load_var x
         load_const 100
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L0
         jump L1
 
       L0:
         load_const 1000
         load_var x
-        bin_op /
+        div_int
         return
 
       L1:
@@ -2070,14 +2070,14 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
     function risky(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L2
 
       L0:
         load_var mode
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
 
       L1:
@@ -2121,7 +2121,7 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
     function do_div() -> int {
         load_const 1
         load_const 0
-        bin_op /
+        div_int
         return
     }
 
@@ -2160,14 +2160,14 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
     function risky(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L3
 
       L0:
         load_var mode
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L2
 
@@ -2564,7 +2564,7 @@ async fn four_arms_division_by_zero_fires() {
     function do_div() -> int {
         load_const 1
         load_const 0
-        bin_op /
+        div_int
         return
     }
 
@@ -2621,21 +2621,21 @@ async fn four_arms_division_by_zero_fires() {
     function risky(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L5
 
       L0:
         load_var mode
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_var mode
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         jump L3
 
@@ -2780,7 +2780,7 @@ async fn four_arms_no_error() {
     function do_div() -> int {
         load_const 1
         load_const 0
-        bin_op /
+        div_int
         return
     }
 
@@ -2837,28 +2837,28 @@ async fn four_arms_no_error() {
     function risky(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L7
 
       L0:
         load_var mode
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L6
 
       L1:
         load_var mode
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         jump L5
 
       L2:
         load_var mode
         load_const 3
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L3
         jump L4
 
@@ -2897,11 +2897,11 @@ async fn four_arms_no_error() {
 #[tokio::test]
 async fn uncaught_division_by_zero() {
     let output = baml_test!(r#" function main() -> int { 1 / 0 } "#);
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 0
-        bin_op /
+        div_int
         return
     }
     ");
@@ -2934,11 +2934,11 @@ async fn wrong_panic_pattern_propagates() {
         }
     "#
     );
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function divides() -> int {
         load_const 1
         load_const 0
-        bin_op /
+        div_int
         return
     }
 
@@ -3017,7 +3017,7 @@ async fn panic_alias_catches_any_panic() {
     function divides() -> int {
         load_const 1
         load_const 0
-        bin_op /
+        div_int
         return
     }
 
@@ -3085,14 +3085,14 @@ async fn panic_alias_plus_wildcard_dispatch() {
     function risky(x: int) -> int {
         load_var x
         load_const 100
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L0
         jump L1
 
       L0:
         load_const 1
         load_var x
-        bin_op /
+        div_int
         return
 
       L1:
@@ -3174,7 +3174,7 @@ async fn nested_inner_catches_panic_outer_catches_rethrow() {
     function divides() -> int {
         load_const 1
         load_const 0
-        bin_op /
+        div_int
         return
     }
 
@@ -3491,21 +3491,21 @@ async fn catch_four_typed_arms_jump_table() {
     function risky(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L5
 
       L0:
         load_var mode
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_var mode
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         jump L3
 
@@ -3604,28 +3604,28 @@ async fn catch_four_typed_arms_plus_wildcard_jump_table() {
     function risky(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L7
 
       L0:
         load_var mode
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L6
 
       L1:
         load_var mode
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         jump L5
 
       L2:
         load_var mode
         load_const 3
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L3
         jump L4
 
@@ -3687,7 +3687,7 @@ async fn catch_two_typed_arms_sequential_chain() {
     function fails(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -3763,7 +3763,7 @@ async fn catch_mixed_literal_and_typed_no_switch() {
     function fails(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L1
 
@@ -4102,28 +4102,28 @@ async fn catch_four_user_classes_instanceof_chain() {
     function api(mode: int) -> int {
         load_var mode
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L7
 
       L0:
         load_var mode
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L6
 
       L1:
         load_var mode
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         jump L5
 
       L2:
         load_var mode
         load_const 3
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L3
         jump L4
 
@@ -4220,21 +4220,21 @@ async fn catch_four_literal_arms() {
     function fails(x: int) -> int {
         load_var x
         load_const 0
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
         jump L5
 
       L0:
         load_var x
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L1
         jump L4
 
       L1:
         load_var x
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L2
         jump L3
 

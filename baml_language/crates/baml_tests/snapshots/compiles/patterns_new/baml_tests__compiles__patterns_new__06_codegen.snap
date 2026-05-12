@@ -308,7 +308,7 @@ function user.for_let_ascription(items: int[]) -> int {
     load_var __for_idx
     load_var items
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -342,7 +342,7 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     load_var __for_idx
     load_var items
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -378,7 +378,7 @@ function user.for_let_with_narrow(items: int[]) -> int {
     load_var __for_idx
     load_var items
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -518,7 +518,7 @@ function user.paren_chains_in_or(v: int) -> int {
 function user.risky_error(mode: int) -> int {
     load_var mode
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L1
 

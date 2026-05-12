@@ -27,7 +27,7 @@ async fn for_loop_sum() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 2
@@ -48,7 +48,7 @@ async fn for_loop_sum() {
         load_var __for_idx
         load_var xs
         call baml.Array.length
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L1
         jump L2
 
@@ -97,7 +97,7 @@ async fn for_loop_with_break() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function for_with_break(xs: int[]) -> int {
         load_const 0
         store_var result
@@ -108,7 +108,7 @@ async fn for_loop_with_break() {
         load_var __for_idx
         load_var xs
         call baml.Array.length
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L2
         load_var xs
         load_var __for_idx
@@ -116,7 +116,7 @@ async fn for_loop_with_break() {
         store_var x
         load_var x
         load_const 10
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L1
         jump L2
 
@@ -173,7 +173,7 @@ async fn for_loop_with_continue() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function for_with_continue(xs: int[]) -> int {
         load_const 0
         store_var result
@@ -184,7 +184,7 @@ async fn for_loop_with_continue() {
         load_var __for_idx
         load_var xs
         call baml.Array.length
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L1
         jump L2
 
@@ -199,7 +199,7 @@ async fn for_loop_with_continue() {
         store_var x
         load_var x
         load_const 10
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L3
         jump L4
 
@@ -252,7 +252,7 @@ async fn for_loop_nested() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 1
         load_const 2
@@ -274,7 +274,7 @@ async fn for_loop_nested() {
         load_var __for_idx
         load_var arr_a
         call baml.Array.length
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L1
         jump L2
 
@@ -294,7 +294,7 @@ async fn for_loop_nested() {
         load_var __for_idx_1
         load_var arr_b
         call baml.Array.length
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L4
         jump L5
 
@@ -311,7 +311,7 @@ async fn for_loop_nested() {
         load_var arr_b
         load_var __for_idx_1
         load_array_element
-        bin_op *
+        mul_int
         add_int
         store_var result
         load_var __for_idx_1
@@ -345,7 +345,7 @@ async fn c_for_sum_to_ten() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 0
         store_var s
@@ -355,7 +355,7 @@ async fn c_for_sum_to_ten() {
       L0:
         load_var i
         load_const 10
-        cmp_op <=
+        cmp_int_op <=
         pop_jump_if_false L1
         jump L2
 

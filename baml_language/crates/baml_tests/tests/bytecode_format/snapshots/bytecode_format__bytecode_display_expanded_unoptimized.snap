@@ -237,7 +237,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
        5    load_var 5             (__for_idx)
        6    load_var 4             (_3)
        7    call 21 ntypeargs=0    (baml.Array.length)
-       8    cmp_op <               
+       8    cmp_int_op <           
        9    pop_jump_if_false +2   (to 11)
        10   jump +5                (to 15)
 
@@ -354,13 +354,13 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
        27   load_var 10                      (__for_idx)
        28   load_var 9                       (_13)
        29   call 21 ntypeargs=0              (baml.Array.length)
-       30   cmp_op <                         
+       30   cmp_int_op <                     
        31   pop_jump_if_false +2             (to 33)
        32   jump +37                         (to 69)
 
   45   33   load_var 7                       (count)
        34   load_const 2                     (0)
-       35   cmp_op >                         
+       35   cmp_int_op >                     
        36   pop_jump_if_false +2             (to 38)
        37   jump +4                          (to 41)
        38   load_var 6                       (full_name)
@@ -372,7 +372,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
        44   store_var 13                     (_28)
        45   load_var 7                       (count)
        46   load_const 5                     (1)
-       47   bin_op +                         
+       47   add_int                          
        48   call 352 ntypeargs=0             (baml.unstable.string)
        49   store_var 14                     (_30)
        50   load_var 13                      (_28)
@@ -460,13 +460,13 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
        27   load_var 10                      (__for_idx)
        28   load_var 9                       (_13)
        29   call 21 ntypeargs=0              (baml.Array.length)
-       30   cmp_op <                         
+       30   cmp_int_op <                     
        31   pop_jump_if_false +2             (to 33)
        32   jump +37                         (to 69)
 
   56   33   load_var 7                       (count)
        34   load_const 2                     (0)
-       35   cmp_op >                         
+       35   cmp_int_op >                     
        36   pop_jump_if_false +2             (to 38)
        37   jump +4                          (to 41)
        38   load_var 6                       (full_name)
@@ -478,7 +478,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
        44   store_var 13                     (_28)
        45   load_var 7                       (count)
        46   load_const 5                     (1)
-       47   bin_op +                         
+       47   add_int                          
        48   call 352 ntypeargs=0             (baml.unstable.string)
        49   store_var 14                     (_30)
        50   load_var 13                      (_28)
@@ -613,7 +613,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         6     load_var 4                       (__for_idx)
         7     load_var 3                       (_3)
         8     call 21 ntypeargs=0              (baml.Array.length)
-        9     cmp_op <                         
+        9     cmp_int_op <                     
         10    pop_jump_if_false +2             (to 12)
         11    jump +42                         (to 53)
 
@@ -627,7 +627,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
         18    load_var 11                      (__for_idx_1)
         19    load_var 10                      (_28)
         20    call 21 ntypeargs=0              (baml.Array.length)
-        21    cmp_op <                         
+        21    cmp_int_op <                     
         22    pop_jump_if_false +2             (to 24)
         23    jump +5                          (to 28)
 
@@ -793,7 +793,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         6    load_var 4             (__for_idx)
         7    load_var 3             (_3)
         8    call 21 ntypeargs=0    (baml.Array.length)
-        9    cmp_op <               
+        9    cmp_int_op <           
         10   pop_jump_if_false +2   (to 12)
         11   jump +42               (to 53)
 
@@ -807,7 +807,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
         18   load_var 7             (__for_idx_1)
         19   load_var 6             (_13)
         20   call 21 ntypeargs=0    (baml.Array.length)
-        21   cmp_op <               
+        21   cmp_int_op <           
         22   pop_jump_if_false +2   (to 24)
         23   jump +5                (to 28)
 
@@ -886,7 +886,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         8    load_var 5                       (__for_idx)
         9    load_var 4                       (_3)
         10   call 21 ntypeargs=0              (baml.Array.length)
-        11   cmp_op <                         
+        11   cmp_int_op <                     
         12   pop_jump_if_false +2             (to 14)
         13   jump +65                         (to 78)
 
@@ -899,7 +899,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
         20   load_var 8                       (__for_idx_1)
         21   load_var 7                       (_12)
         22   call 21 ntypeargs=0              (baml.Array.length)
-        23   cmp_op <                         
+        23   cmp_int_op <                     
         24   pop_jump_if_false +2             (to 26)
         25   jump +5                          (to 30)
 
@@ -1584,14 +1584,14 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
 
   65   55    load_var 6                     (age)
        56    load_const 1                   (2)
-       57    bin_op *                       
+       57    mul_int                        
        58    load_var 9                     (role_mult)
        59    add_int                        
        60    store_var 11                   (base)
 
   66   61    load_var 11                    (base)
        62    load_var 9                     (role_mult)
-       63    cmp_op >                       
+       63    cmp_int_op >                   
        64    pop_jump_if_false +2           (to 66)
        65    jump +4                        (to 69)
 
@@ -1610,7 +1610,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
 
   73   75    load_var 13                    (total)
        76    load_var 2                     (threshold)
-       77    cmp_op >                       
+       77    cmp_int_op >                   
        78    load_const 2                   (true)
        79    cmp_op ==                      
        80    pop_jump_if_false +2           (to 82)

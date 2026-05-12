@@ -8,13 +8,13 @@ function user.Calculate() -> int {
     store_var b
     load_const 3
     load_var b
-    bin_op +
+    add_int
     load_var b
     load_const 2
-    bin_op /
+    div_int
     load_const 1
-    bin_op -
-    bin_op *
+    sub_int
+    mul_int
     return
 }
 

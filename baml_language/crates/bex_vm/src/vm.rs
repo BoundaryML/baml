@@ -3101,6 +3101,27 @@ impl BexVm {
                         })
                     }
 
+                    // Bigint comparison: structural ordering via num_bigint::BigInt's PartialOrd
+                    (Value::Object(left_index), Value::Object(right_index))
+                        if matches!(self.get_object(left_index), Object::Bigint(_))
+                            && matches!(self.get_object(right_index), Object::Bigint(_)) =>
+                    {
+                        let Object::Bigint(left_bi) = self.get_object(left_index) else {
+                            unreachable!()
+                        };
+                        let Object::Bigint(right_bi) = self.get_object(right_index) else {
+                            unreachable!()
+                        };
+                        Value::Bool(match op {
+                            CmpOp::Eq => left_bi == right_bi,
+                            CmpOp::NotEq => left_bi != right_bi,
+                            CmpOp::Lt => left_bi < right_bi,
+                            CmpOp::LtEq => left_bi <= right_bi,
+                            CmpOp::Gt => left_bi > right_bi,
+                            CmpOp::GtEq => left_bi >= right_bi,
+                        })
+                    }
+
                     _ => Value::Bool(match op {
                         CmpOp::Eq => left == right,
                         CmpOp::NotEq => left != right,
@@ -3270,6 +3291,33 @@ impl BexVm {
                     CmpOp::Gt => l > r,
                     CmpOp::GtEq => l >= r,
                 }));
+            }
+
+            // ── Specialized bigint comparison ────────────────────────
+            Instruction::CmpBigintOp(op) => {
+                let Value::Object(ri) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let Value::Object(li) = self.stack.ensure_pop() else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                };
+                let result = {
+                    let Object::Bigint(rb) = self.get_object(ri) else {
+                        unsafe { std::hint::unreachable_unchecked() }
+                    };
+                    let Object::Bigint(lb) = self.get_object(li) else {
+                        unsafe { std::hint::unreachable_unchecked() }
+                    };
+                    match op {
+                        CmpOp::Eq => lb == rb,
+                        CmpOp::NotEq => lb != rb,
+                        CmpOp::Lt => lb < rb,
+                        CmpOp::LtEq => lb <= rb,
+                        CmpOp::Gt => lb > rb,
+                        CmpOp::GtEq => lb >= rb,
+                    }
+                };
+                self.stack.push(Value::Bool(result));
             }
 
             Instruction::UnaryOp(op) => {
@@ -4927,6 +4975,27 @@ impl BexVm {
                         }
                         .into());
                     }
+                })
+            }
+
+            // Bigint comparison: structural ordering via num_bigint::BigInt's PartialOrd
+            (Value::Object(li), Value::Object(ri))
+                if matches!(self.get_object(li), Object::Bigint(_))
+                    && matches!(self.get_object(ri), Object::Bigint(_)) =>
+            {
+                let Object::Bigint(lb) = self.get_object(li) else {
+                    unreachable!()
+                };
+                let Object::Bigint(rb) = self.get_object(ri) else {
+                    unreachable!()
+                };
+                Value::Bool(match op {
+                    CmpOp::Eq => lb == rb,
+                    CmpOp::NotEq => lb != rb,
+                    CmpOp::Lt => lb < rb,
+                    CmpOp::LtEq => lb <= rb,
+                    CmpOp::Gt => lb > rb,
+                    CmpOp::GtEq => lb >= rb,
                 })
             }
 
@@ -6973,6 +7042,116 @@ impl BexVm {
                         std::hint::unreachable_unchecked()
                     };
                     self.stack.push(Value::Bool(l >= r));
+                }
+
+                // ── Specialized bigint comparison (skip type dispatch) ────────
+                OpCode::CmpBigintEq => {
+                    let Value::Object(ri) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Object(li) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let result = {
+                        let Object::Bigint(rb) = self.get_object(ri) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Object::Bigint(lb) = self.get_object(li) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        lb == rb
+                    };
+                    self.stack.push(Value::Bool(result));
+                }
+                OpCode::CmpBigintNotEq => {
+                    let Value::Object(ri) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Object(li) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let result = {
+                        let Object::Bigint(rb) = self.get_object(ri) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Object::Bigint(lb) = self.get_object(li) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        lb != rb
+                    };
+                    self.stack.push(Value::Bool(result));
+                }
+                OpCode::CmpBigintLt => {
+                    let Value::Object(ri) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Object(li) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let result = {
+                        let Object::Bigint(rb) = self.get_object(ri) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Object::Bigint(lb) = self.get_object(li) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        lb < rb
+                    };
+                    self.stack.push(Value::Bool(result));
+                }
+                OpCode::CmpBigintLtEq => {
+                    let Value::Object(ri) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Object(li) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let result = {
+                        let Object::Bigint(rb) = self.get_object(ri) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Object::Bigint(lb) = self.get_object(li) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        lb <= rb
+                    };
+                    self.stack.push(Value::Bool(result));
+                }
+                OpCode::CmpBigintGt => {
+                    let Value::Object(ri) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Object(li) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let result = {
+                        let Object::Bigint(rb) = self.get_object(ri) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Object::Bigint(lb) = self.get_object(li) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        lb > rb
+                    };
+                    self.stack.push(Value::Bool(result));
+                }
+                OpCode::CmpBigintGtEq => {
+                    let Value::Object(ri) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let Value::Object(li) = self.stack.ensure_pop() else {
+                        std::hint::unreachable_unchecked()
+                    };
+                    let result = {
+                        let Object::Bigint(rb) = self.get_object(ri) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Object::Bigint(lb) = self.get_object(li) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        lb >= rb
+                    };
+                    self.stack.push(Value::Bool(result));
                 }
 
                 // ── Int-to-Bigint widening ────────────────────────────────────

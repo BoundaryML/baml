@@ -438,7 +438,7 @@ async fn watch_break_unwatches() {
         load_var __for_idx
         load_var _2
         call baml.Array.length
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L3
         load_var _2
         load_var __for_idx
@@ -449,7 +449,7 @@ async fn watch_break_unwatches() {
         watch x
         load_var x
         load_const 1
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L1
         jump L2
 
@@ -524,7 +524,7 @@ async fn watch_continue_unwatches() {
         load_var __for_idx
         load_var _2
         call baml.Array.length
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L1
         jump L2
 
@@ -542,7 +542,7 @@ async fn watch_continue_unwatches() {
         watch x
         load_var x
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L3
         jump L4
 
@@ -743,7 +743,7 @@ async fn watch_for_throw_unwatches() {
         load_var __for_idx
         load_var _1
         call baml.Array.length
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L1
         jump L2
 
@@ -761,7 +761,7 @@ async fn watch_for_throw_unwatches() {
         watch x
         load_var x
         load_const 2
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L3
         jump L4
 
@@ -848,7 +848,7 @@ async fn watch_while_throw_unwatches() {
       L0:
         load_var i
         load_const 3
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L1
         jump L2
 
@@ -864,7 +864,7 @@ async fn watch_while_throw_unwatches() {
         watch x
         load_var x
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L3
         jump L4
 
@@ -1138,7 +1138,7 @@ async fn watch_match_arm_fallthrough_unwatches() {
       L2:
         load_var result
         load_const 1
-        bin_op +
+        add_int
         return
     }
 
@@ -1230,7 +1230,7 @@ async fn watch_switch_arm_fallthrough_unwatches() {
       L5:
         load_var result
         load_const 1
-        bin_op +
+        add_int
         return
     }
 
@@ -1295,7 +1295,7 @@ async fn watch_catch_arm_fallthrough_unwatches() {
       L0:
         load_var result
         load_const 1
-        bin_op +
+        add_int
         return
     }
     "#);
@@ -1662,7 +1662,7 @@ async fn block_notification_basic() {
         notify_block entering_computation
         load_const 1
         load_const 2
-        bin_op +
+        add_int
         return
     }
     ");
@@ -1693,7 +1693,7 @@ async fn block_notification_multiple() {
         notify_block second_block
         load_const 1
         load_const 2
-        bin_op +
+        add_int
         return
     }
     ");
@@ -1767,7 +1767,7 @@ async fn viz_header_before_while() {
         entry: "header_before_while",
     };
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function header_before_while() -> int {
         load_const 0
         store_var x
@@ -1776,7 +1776,7 @@ async fn viz_header_before_while() {
       L0:
         load_var x
         load_const 1
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L1
         jump L2
 
@@ -1851,7 +1851,7 @@ async fn viz_multiple_headers_only_one_before_if() {
         notify_block SecondHeader
         load_const 1
         load_const 0
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L0
         jump L1
 

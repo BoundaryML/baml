@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.EqSameAlloc() -> bool throws never {
+  { : bool
+    42n == 42n : bool
+  }
+}
+function user.EqDistinctAllocs() -> bool throws never {
+  { : bool
+    let a: bigint = 42n : 42n -> bigint
+    let b: bigint = bigint.parse("42") : bigint
+    a == b : bool
+  }
+}
+function user.OrderingLt() -> bool throws never {
+  { : bool
+    3n < 5n : bool
+  }
+}
+function user.OrderingGtEq() -> bool throws never {
+  { : bool
+    5n >= 5n : bool
+  }
+}

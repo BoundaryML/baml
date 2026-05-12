@@ -324,13 +324,13 @@ async fn deep_copy_complex_nested_structure() {
         load_const 0
         load_array_element
         load_field .value
-        bin_op +
+        add_int
         load_var copy
         load_field .data
         load_const "first"
         load_map_element
         load_field .value
-        bin_op +
+        add_int
         return
     }
     "#);

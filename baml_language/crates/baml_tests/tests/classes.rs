@@ -116,13 +116,13 @@ async fn constructor_with_preceding_variables() {
         load_field .x
         load_var obj
         load_field .y
-        bin_op +
+        add_int
         load_const 10
-        bin_op +
+        add_int
         load_const 20
-        bin_op +
+        add_int
         load_const 30
-        bin_op +
+        add_int
         return
     }
     ");
@@ -355,11 +355,11 @@ async fn nested_constructor_with_preceding_variables() {
         load_field .val
         load_var obj
         load_field .x
-        bin_op +
+        add_int
         load_const 5
-        bin_op +
+        add_int
         load_const 10
-        bin_op +
+        add_int
         return
     }
     ");
@@ -839,7 +839,7 @@ async fn method_call() {
         load_field .value
         load_var other
         load_field .value
-        bin_op +
+        add_int
         init_field .value
         return
     }

@@ -72,7 +72,7 @@ async fn match_catch_all_with_variable() {
     function main() -> int {
         load_const 42
         load_const 1
-        bin_op +
+        add_int
         return
     }
     ");
@@ -1899,7 +1899,7 @@ async fn match_arithmetic_scrutinee() {
     function classify(a: int, b: int) -> string {
         load_var a
         load_var b
-        bin_op +
+        add_int
         load_const 0
         cmp_int_op ==
         pop_jump_if_false L0
@@ -1908,7 +1908,7 @@ async fn match_arithmetic_scrutinee() {
       L0:
         load_var a
         load_var b
-        bin_op +
+        add_int
         load_const 1
         cmp_int_op ==
         pop_jump_if_false L1
@@ -2083,7 +2083,7 @@ async fn match_in_loop() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 0
         store_var sum
@@ -2093,7 +2093,7 @@ async fn match_in_loop() {
       L0:
         load_var i
         load_const 5
-        cmp_op <
+        cmp_int_op <
         pop_jump_if_false L1
         jump L2
 

@@ -210,6 +210,7 @@ pub(crate) fn display_instruction(
         | Instruction::DivFloat
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
+        | Instruction::CmpBigintOp(_)
         | Instruction::IntToBigint
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
@@ -366,6 +367,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::DivFloat
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
+        | Instruction::CmpBigintOp(_)
         | Instruction::IntToBigint
         | Instruction::UnaryOp(_) => Color::BrightBlue,
         Instruction::Jump(_)
@@ -790,6 +792,7 @@ fn display_instruction_textual(
         Instruction::DivFloat => "div_float".to_string(),
         Instruction::CmpIntOp(op) => format!("cmp_int_op {op}"),
         Instruction::CmpFloatOp(op) => format!("cmp_float_op {op}"),
+        Instruction::CmpBigintOp(op) => format!("cmp_bigint_op {op}"),
         Instruction::IntToBigint => "int_to_bigint".to_string(),
         Instruction::UnaryOp(op) => format!("unary_op {op}"),
 
@@ -1210,6 +1213,12 @@ pub fn display_compact_bytecode(
             | OpCode::CmpFloatLtEq
             | OpCode::CmpFloatGt
             | OpCode::CmpFloatGtEq
+            | OpCode::CmpBigintEq
+            | OpCode::CmpBigintNotEq
+            | OpCode::CmpBigintLt
+            | OpCode::CmpBigintLtEq
+            | OpCode::CmpBigintGt
+            | OpCode::CmpBigintGtEq
             | OpCode::Not
             | OpCode::Neg
             | OpCode::LoadNull

@@ -21,7 +21,7 @@ async fn call_result_immediate_right_operand_subtraction() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function id(x: int) -> int {
         load_var x
         return
@@ -33,7 +33,7 @@ async fn call_result_immediate_right_operand_subtraction() {
         store_var _1
         load_const 1
         load_var _1
-        bin_op -
+        sub_int
         return
     }
     ");
@@ -50,11 +50,11 @@ async fn phi_like_right_operand_subtraction() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_const 2
         load_const 1
-        cmp_op >
+        cmp_int_op >
         pop_jump_if_false L0
         jump L1
 
@@ -109,7 +109,7 @@ async fn cross_block_field_mutation() {
         store_var t
         load_const 1
         load_const 1
-        cmp_op ==
+        cmp_int_op ==
         pop_jump_if_false L0
 
       L0:

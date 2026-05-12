@@ -616,3 +616,70 @@ async fn bigint_random_lower_greater_throws() {
         panic!("expected UnhandledThrow, got: {:?}", output.result);
     };
 }
+
+// ─── equality and ordering ─────────────────────────────────────────
+
+#[tokio::test]
+async fn test_bigint_eq_same_alloc() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 42n == 42n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_eq_distinct_allocs() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let a: bigint = 42n;
+            let b: bigint = bigint.parse("42");
+            return a == b;
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_ordering_lt() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 3n < 5n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_ordering_gt_eq() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 5n >= 5n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_ordering_ne() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 42n != 43n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn test_bigint_ordering_large() {
+    // Compare values larger than i64::MAX to verify BigInt arithmetic, not i64.
+    let output = baml_test!(
+        r#"
+        function main() -> bool { return 99999999999999999999n > 99999999999999999998n; }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}

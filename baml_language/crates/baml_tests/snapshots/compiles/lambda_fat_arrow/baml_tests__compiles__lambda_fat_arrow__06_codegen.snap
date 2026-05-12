@@ -53,7 +53,7 @@ function user.test_mixed() -> int {
     store_var _5
     load_var _3
     load_var _5
-    bin_op +
+    add_int
     return
 }
 

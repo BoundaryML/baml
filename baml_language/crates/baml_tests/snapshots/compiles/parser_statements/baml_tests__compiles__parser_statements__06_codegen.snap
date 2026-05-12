@@ -4,14 +4,14 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.ConditionalLogic(age: int) -> string {
     load_var age
     load_const 18
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var age
     load_const 65
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -116,7 +116,7 @@ function user.assign_in_loop() -> int {
   L0:
     load_var i
     load_const 5
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -139,14 +139,14 @@ function user.assign_in_loop() -> int {
 function user.block_with_tail() -> int {
     load_const 1
     load_const 2
-    bin_op +
+    add_int
     return
 }
 
 function user.break_in_for() -> int {
     load_const 0
     load_const 10
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L0
 
   L0:
@@ -175,7 +175,7 @@ function user.c_style_for_loop() -> int {
   L0:
     load_var i
     load_const 10
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -202,7 +202,7 @@ function user.continue_in_for() -> int {
   L0:
     load_var i
     load_const 10
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -293,7 +293,7 @@ function user.iterator_style_for_loop() -> int {
     load_var __for_idx
     load_var _2
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -318,18 +318,18 @@ function user.iterator_style_for_loop() -> int {
 function user.let_mixed_semicolons() -> int {
     load_const 1
     load_const 2
-    bin_op +
+    add_int
     load_const 3
-    bin_op +
+    add_int
     load_const 4
-    bin_op +
+    add_int
     return
 }
 
 function user.let_no_semicolons() -> int {
     load_const 1
     load_const 2
-    bin_op +
+    add_int
     return
 }
 
@@ -344,7 +344,7 @@ function user.let_statements() -> int {
     load_field .x
     load_var point
     load_field .y
-    bin_op +
+    add_int
     return
 }
 
@@ -400,7 +400,7 @@ function user.nested_for_loop() -> int {
     load_var __for_idx
     load_var _2
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -425,7 +425,7 @@ function user.nested_for_loop() -> int {
     load_var __for_idx_1
     load_var _8
     call baml.Array.length
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L4
     jump L5
 
@@ -442,7 +442,7 @@ function user.nested_for_loop() -> int {
     load_var _8
     load_var __for_idx_1
     load_array_element
-    bin_op *
+    mul_int
     add_int
     store_var result
     load_var __for_idx_1
@@ -456,7 +456,7 @@ function user.nested_while_loop() -> int {
   L0:
     load_const 0
     load_const 10
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -471,7 +471,7 @@ function user.nested_while_loop() -> int {
   L3:
     load_var j
     load_const 10
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L0
     load_var j
     load_const 1
@@ -516,7 +516,7 @@ function user.simple_while_loop() -> int {
   L0:
     load_var i
     load_const 10
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 

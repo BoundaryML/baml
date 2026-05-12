@@ -483,6 +483,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 BinOp::Ge => Some(Instruction::CmpFloatOp(CmpOp::GtEq)),
                 _ => None,
             },
+            (Ty::Bigint { .. }, Ty::Bigint { .. }) => match op {
+                BinOp::Eq => Some(Instruction::CmpBigintOp(CmpOp::Eq)),
+                BinOp::Ne => Some(Instruction::CmpBigintOp(CmpOp::NotEq)),
+                BinOp::Lt => Some(Instruction::CmpBigintOp(CmpOp::Lt)),
+                BinOp::Le => Some(Instruction::CmpBigintOp(CmpOp::LtEq)),
+                BinOp::Gt => Some(Instruction::CmpBigintOp(CmpOp::Gt)),
+                BinOp::Ge => Some(Instruction::CmpBigintOp(CmpOp::GtEq)),
+                _ => None, // arithmetic specialization in Phase 7
+            },
             _ => None,
         }
     }
@@ -2206,9 +2215,14 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // is called rather than the generic `walk_rvalue_pull` inlining path.
                 // MakeBoundMethod must also be handled specially: it is not handled by
                 // `walk_rvalue_pull` (which panics on it), so route through `emit_rvalue_pull`.
+                // BinaryOp must be routed through `emit_rvalue_pull` so that the
+                // type-aware specialization in `try_specialize_binary_op` can fire
+                // (e.g. emitting `CmpBigintOp` instead of the generic `CmpOp`).
                 if matches!(
                     rvalue,
-                    Rvalue::MakeClosure { .. } | Rvalue::MakeBoundMethod { .. }
+                    Rvalue::MakeClosure { .. }
+                        | Rvalue::MakeBoundMethod { .. }
+                        | Rvalue::BinaryOp { .. }
                 ) {
                     self.emit_rvalue_pull(&rvalue);
                     return Ok(LocalPullAction::Done);
