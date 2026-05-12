@@ -7,6 +7,7 @@ pub mod collector;
 pub mod engine;
 pub mod error;
 mod ffi;
+pub mod host_call_table;
 pub mod host_spans;
 mod panic;
 
@@ -17,6 +18,10 @@ pub use ffi::{
     callbacks::{CallbackFn, register_callback},
     functions::{call_function, cancel_function_call},
     handle::{clone_handle, release_handle},
+    host_value::{
+        HostDispatchFn, complete_host_call, register_host_dispatch_callback,
+        register_host_release_callback,
+    },
     objects::{flush_events, free_buffer},
     runtime::{create_baml_runtime, destroy_baml_runtime, invoke_runtime_cli, version},
 };
