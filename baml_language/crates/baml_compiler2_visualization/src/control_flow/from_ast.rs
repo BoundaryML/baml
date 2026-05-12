@@ -893,6 +893,7 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
 fn format_literal_ast(lit: &ast::Literal) -> String {
     match lit {
         ast::Literal::Int(n) => n.to_string(),
+        ast::Literal::Bigint(n) => format!("{n}n"),
         ast::Literal::Float(s) => s.clone(),
         ast::Literal::String(s) => format!("{s:?}"),
         ast::Literal::Bool(b) => b.to_string(),

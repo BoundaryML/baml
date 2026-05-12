@@ -426,6 +426,7 @@ impl OutputFormatContent {
         match ty {
             Ty::String { .. } => Ok(Some("string".to_string())),
             Ty::Int { .. } => Ok(Some("int".to_string())),
+            Ty::Bigint { .. } => Ok(Some("bigint".to_string())),
             Ty::Float { .. } => Ok(Some("float".to_string())),
             Ty::Bool { .. } => Ok(Some("bool".to_string())),
             Ty::Null { .. } => Ok(Some("null".to_string())),
@@ -691,6 +692,7 @@ fn render_literal(lit: &LiteralValue) -> String {
     match lit {
         LiteralValue::String(s) => format!("\"{s}\""),
         LiteralValue::Int(n) => n.to_string(),
+        LiteralValue::Bigint(n) => format!("{n}n"),
         LiteralValue::Float(f) => f.clone(),
         LiteralValue::Bool(b) => b.to_string(),
     }

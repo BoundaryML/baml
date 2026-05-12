@@ -162,6 +162,7 @@ pub fn display_ty(ty: &Ty) -> String {
         Ty::EnumVariant(qn, v, _) => format!("{qn}.{v}"),
         Ty::Primitive(p, _) => match p {
             PrimitiveType::Int => "int".to_string(),
+            PrimitiveType::Bigint => "bigint".to_string(),
             PrimitiveType::Float => "float".to_string(),
             PrimitiveType::String => "string".to_string(),
             PrimitiveType::Bool => "bool".to_string(),
@@ -261,6 +262,7 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
                 .unwrap_or_else(|| "unknown".to_string())
         }
         TypeExpr::Int { .. } => "int".to_string(),
+        TypeExpr::Bigint { .. } => "bigint".to_string(),
         TypeExpr::Float { .. } => "float".to_string(),
         TypeExpr::String { .. } => "string".to_string(),
         TypeExpr::Bool { .. } => "bool".to_string(),

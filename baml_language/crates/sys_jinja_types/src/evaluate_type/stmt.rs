@@ -436,6 +436,7 @@ pub(super) fn truthy(ty: &Type) -> Option<Type> {
         Type::Undefined => None,
         Type::None => None,
         Type::Int => None,
+        Type::Bigint => None,
         Type::Float => None,
         Type::Number => None,
         Type::String => None,

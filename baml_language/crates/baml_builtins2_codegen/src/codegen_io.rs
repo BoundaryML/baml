@@ -181,6 +181,7 @@ fn owned_rust_type(
     match ty {
         BamlType::String => quote! { String },
         BamlType::Int => quote! { i64 },
+        BamlType::Bigint => quote! { std::sync::Arc<num_bigint::BigInt> },
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
@@ -448,6 +449,7 @@ fn clean_rust_type(
     match ty {
         BamlType::String => quote! { String },
         BamlType::Int => quote! { i64 },
+        BamlType::Bigint => quote! { std::sync::Arc<num_bigint::BigInt> },
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },

@@ -6228,6 +6228,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     }
                 }),
+            // bigint literal / bigint → Bigint companion class
+            Ty::Primitive(PrimitiveType::Bigint, _)
+            | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
+                .resolve_builtin_member(&["Bigint"], &[], member, at)
+                .unwrap_or_else(|| {
+                    self.context.report_at_member_simple(
+                        TirTypeError::UnresolvedMember {
+                            base_type: base_ty.clone(),
+                            member: member.clone(),
+                        },
+                        at,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
+                }),
             // float literal / float → Float companion class
             Ty::Primitive(PrimitiveType::Float, _)
             | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
@@ -6607,6 +6623,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Primitive(PrimitiveType::Int, _)
             | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
                 .resolve_builtin_method(&["Int"], &[], member)
+                .map(BuiltinResolution::into_ty),
+            Ty::Primitive(PrimitiveType::Bigint, _)
+            | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
+                .resolve_builtin_method(&["Bigint"], &[], member)
                 .map(BuiltinResolution::into_ty),
             Ty::Primitive(PrimitiveType::Float, _)
             | Ty::Literal(baml_base::Literal::Float(_), _, _) => self

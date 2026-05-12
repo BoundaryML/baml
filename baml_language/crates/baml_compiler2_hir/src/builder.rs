@@ -1631,6 +1631,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .collect::<Vec<_>>()
                 .join("."),
             ast::TypeExpr::Int { .. } => "int".to_string(),
+            ast::TypeExpr::Bigint { .. } => "bigint".to_string(),
             ast::TypeExpr::Float { .. } => "float".to_string(),
             ast::TypeExpr::String { .. } => "string".to_string(),
             ast::TypeExpr::Bool { .. } => "bool".to_string(),

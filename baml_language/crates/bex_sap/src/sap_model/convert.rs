@@ -353,6 +353,10 @@ impl TypeCtx {
                 sap_model::Ty::Resolved(TyResolved::LiteralInt(IntLiteralTy(*i))),
                 convert_ty_attrs(attr),
             ),
+            baml_type::Ty::Literal(baml_type::Literal::Bigint(..), ..) => {
+                // Bigint literal SAP parsing is not yet implemented (Phase 2+).
+                return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
+            }
             baml_type::Ty::Literal(baml_type::Literal::Float(..), ..) => {
                 return Err(ConvertError::FloatLiteral);
             }
@@ -499,7 +503,9 @@ impl TypeCtx {
                     convert_ty_attrs(&attr),
                 )
             }
-            unparsable @ (baml_type::Ty::Uint8Array { .. }
+            // Bigint SAP parsing is not yet implemented (Phase 9+).
+            unparsable @ (baml_type::Ty::Bigint { .. }
+            | baml_type::Ty::Uint8Array { .. }
             | baml_type::Ty::Opaque(_, _)
             | baml_type::Ty::Function { .. }
             | baml_type::Ty::Void { .. }
@@ -551,6 +557,7 @@ impl TypeCtx {
 
         let field_attrs = match field_type {
             ::baml_type::Ty::Int { .. }
+            | ::baml_type::Ty::Bigint { .. }
             | ::baml_type::Ty::Float { .. }
             | ::baml_type::Ty::String { .. }
             | ::baml_type::Ty::Bool { .. }
@@ -741,7 +748,10 @@ fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
         | baml_type::Ty::Bool { .. }
         | baml_type::Ty::Null { .. }
         | baml_type::Ty::Literal(..) => Ok(Vec::new()),
-        baml_type::Ty::Uint8Array { .. } | baml_type::Ty::Media(..) => Err(()),
+        // Bigint SAP parsing not yet implemented (Phase 9+).
+        baml_type::Ty::Bigint { .. }
+        | baml_type::Ty::Uint8Array { .. }
+        | baml_type::Ty::Media(..) => Err(()),
         baml_type::Ty::Class(name, _, _) => Ok(vec![name.clone()]),
         baml_type::Ty::Enum(..) | baml_type::Ty::EnumVariant(..) => Ok(Vec::new()),
         baml_type::Ty::Optional(inner, _) => is_sap_parseable(inner),
@@ -764,7 +774,7 @@ fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
         | baml_type::Ty::Void { .. }
         | baml_type::Ty::WatchAccessor(..)
         | baml_type::Ty::BuiltinUnknown { .. }
-        | baml_type::Ty::Future(..) => Err(()),
+        | baml_type::Ty::Future(..) => Err(()), // Bigint is already handled above via Uint8Array/Media arm
     }
 }
 

@@ -114,6 +114,7 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
     match ty {
         // Primitives
         Tir2Ty::Primitive(PrimitiveType::Int, attr) => Ty::Int { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::Bigint, attr) => Ty::Bigint { attr: attr.clone() },
         Tir2Ty::Primitive(PrimitiveType::Float, attr) => Ty::Float { attr: attr.clone() },
         Tir2Ty::Primitive(PrimitiveType::String, attr) => Ty::String { attr: attr.clone() },
         Tir2Ty::Primitive(PrimitiveType::Bool, attr) => Ty::Bool { attr: attr.clone() },
@@ -2525,6 +2526,7 @@ impl LoweringContext<'_> {
         use baml_base::Literal;
         match lit {
             Literal::Int(v) => Constant::Int(*v),
+            Literal::Bigint(v) => Constant::Bigint(v.clone()),
             Literal::Float(s) => {
                 // Literal::Float stores a string representation — parse to f64
                 let v: f64 = s.parse().unwrap_or(0.0);

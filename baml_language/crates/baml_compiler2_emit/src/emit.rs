@@ -431,6 +431,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         match operand {
             Operand::Constant(c) => match c {
                 Constant::Int(_) => Some(Ty::int()),
+                Constant::Bigint(_) => Some(Ty::bigint()),
                 Constant::Float(_) => Some(Ty::float()),
                 Constant::String(_) => Some(Ty::string()),
                 Constant::Bool(_) => Some(Ty::bool()),
@@ -1216,6 +1217,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let idx = self.add_constant(ConstValue::Int(*v));
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const(v.to_string()));
+            }
+            Constant::Bigint(v) => {
+                let idx = self.add_constant(ConstValue::Bigint(v.clone()));
+                let inst = self.emit(Instruction::LoadConst(idx));
+                self.set_operand(inst, OperandMeta::Const(format!("{v}n")));
             }
             Constant::Float(v) => {
                 let idx = self.add_constant(ConstValue::Float(*v));
@@ -2456,6 +2462,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // ── Primitive type tags ───────────────────────────────────────
                 let type_tag = match ty {
                     Ty::Int { .. } => Some(baml_type::typetag::INT),
+                    Ty::Bigint { .. } => Some(baml_type::typetag::BIGINT),
                     Ty::String { .. } => Some(baml_type::typetag::STRING),
                     Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
                     Ty::Null { .. } => Some(baml_type::typetag::NULL),
@@ -2467,6 +2474,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     Ty::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
                     Ty::Literal(lit, _) => Some(match lit {
                         baml_base::Literal::Int(_) => baml_type::typetag::INT,
+                        baml_base::Literal::Bigint(_) => baml_type::typetag::BIGINT,
                         baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,
                         baml_base::Literal::String(_) => baml_type::typetag::STRING,
                         baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,

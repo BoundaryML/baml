@@ -46,6 +46,7 @@ pub fn find_recursive_aliases(
 enum StructuralTy {
     // Primitives
     Int,
+    Bigint,
     Float,
     String,
     Bool,
@@ -230,12 +231,16 @@ impl StructuralTy {
                 StructuralTy::Map { key: k2, value: v2 },
             ) => k1.is_subtype_of(k2, assumptions) && v1.is_subtype_of(v2, assumptions),
 
+            // Int <: Bigint (numeric widening)
+            (StructuralTy::Int, StructuralTy::Bigint) => true,
             // Int <: Float
             (StructuralTy::Int, StructuralTy::Float) => true,
 
             // Literal types are subtypes of their base types
             (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Int) => true,
+            (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Bigint) => true,
             (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Float) => true,
+            (StructuralTy::Literal(LiteralValue::Bigint(_)), StructuralTy::Bigint) => true,
             (StructuralTy::Literal(LiteralValue::Float(_)), StructuralTy::Float) => true,
             (StructuralTy::Literal(LiteralValue::String(_)), StructuralTy::String) => true,
             (StructuralTy::Literal(LiteralValue::Bool(_)), StructuralTy::Bool) => true,
@@ -399,6 +404,7 @@ fn normalize_impl(
     match ty {
         Ty::Primitive(p, _) => match p {
             PrimitiveType::Int => StructuralTy::Int,
+            PrimitiveType::Bigint => StructuralTy::Bigint,
             PrimitiveType::Float => StructuralTy::Float,
             PrimitiveType::String => StructuralTy::String,
             PrimitiveType::Bool => StructuralTy::Bool,

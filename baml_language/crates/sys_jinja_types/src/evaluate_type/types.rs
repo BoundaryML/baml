@@ -32,6 +32,7 @@ pub enum Type {
     Undefined,
     None,
     Int,
+    Bigint,
     Float,
     // Too large to handle
     Number,
@@ -94,6 +95,8 @@ impl Type {
 
             (Type::Int, Type::Number) => true,
             (Type::Int, _) => false,
+
+            (Type::Bigint, _) => false,
 
             (Type::Float, Type::Number) => true,
             (Type::Float, _) => false,
@@ -198,6 +201,7 @@ impl Type {
             Type::Undefined => "undefined".into(),
             Type::None => "none".into(),
             Type::Int => "int".into(),
+            Type::Bigint => "bigint".into(),
             Type::Float => "float".into(),
             Type::Number => "number".into(),
             Type::String => "string".into(),

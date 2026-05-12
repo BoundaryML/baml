@@ -49,6 +49,9 @@ pub enum TypeExpr {
     Int {
         attrs: Vec<RawAttribute>,
     },
+    Bigint {
+        attrs: Vec<RawAttribute>,
+    },
     Float {
         attrs: Vec<RawAttribute>,
     },
@@ -138,6 +141,7 @@ impl TypeExpr {
         match self {
             Self::Path { attrs, .. }
             | Self::Int { attrs }
+            | Self::Bigint { attrs }
             | Self::Float { attrs }
             | Self::String { attrs }
             | Self::Bool { attrs }
@@ -165,6 +169,7 @@ impl TypeExpr {
         match self {
             Self::Path { attrs, .. }
             | Self::Int { attrs }
+            | Self::Bigint { attrs }
             | Self::Float { attrs }
             | Self::String { attrs }
             | Self::Bool { attrs }
@@ -227,6 +232,7 @@ impl std::fmt::Display for TypeExpr {
                 Ok(())
             }
             TypeExpr::Int { .. } => write!(f, "int"),
+            TypeExpr::Bigint { .. } => write!(f, "bigint"),
             TypeExpr::Float { .. } => write!(f, "float"),
             TypeExpr::String { .. } => write!(f, "string"),
             TypeExpr::Bool { .. } => write!(f, "bool"),

@@ -470,6 +470,7 @@ fn expr_desc_spans<'db>(
                     }
                 }
                 Literal::Int(i) => i.to_string(),
+                Literal::Bigint(n) => format!("{n}n"),
                 Literal::Float(f) => f.clone(),
                 Literal::Bool(b) => b.to_string(),
             };
@@ -2044,6 +2045,7 @@ impl CompilerRunner {
                         format!("\"{}\"", truncated)
                     }
                     Literal::Int(i) => i.to_string(),
+                    Literal::Bigint(n) => format!("{n}n"),
                     Literal::Float(f) => f.clone(),
                     Literal::Bool(b) => b.to_string(),
                 },

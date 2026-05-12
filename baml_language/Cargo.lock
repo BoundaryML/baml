@@ -1004,6 +1004,7 @@ name = "baml_base"
 version = "0.0.0-beta"
 dependencies = [
  "ariadne",
+ "num-bigint",
  "salsa",
  "serde",
  "smol_str 0.3.6",
@@ -1185,6 +1186,7 @@ dependencies = [
  "baml_type",
  "indexmap 2.14.0",
  "log",
+ "num-bigint",
  "rustc-hash 2.1.2",
  "salsa",
  "smol_str 0.3.6",
@@ -1518,6 +1520,7 @@ name = "baml_type"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "num-bigint",
  "serde",
 ]
 
@@ -1761,6 +1764,7 @@ dependencies = [
  "bex_resource_types",
  "codspeed-divan-compat",
  "indexmap 2.14.0",
+ "num-bigint",
  "serde",
  "serde_json",
  "tokio",

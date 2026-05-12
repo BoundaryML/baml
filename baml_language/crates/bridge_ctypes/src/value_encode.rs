@@ -208,6 +208,10 @@ fn literal_to_field_type_literal(lit: &Literal) -> BamlTyLiteral {
     let literal = match lit {
         Literal::String(s) => LiteralOneof::StringLiteral(BamlLiteralString { value: s.clone() }),
         Literal::Int(i) => LiteralOneof::IntLiteral(BamlLiteralInt { value: *i }),
+        // Bigint FFI encoding not yet implemented; represent as decimal string.
+        Literal::Bigint(n) => LiteralOneof::StringLiteral(BamlLiteralString {
+            value: n.to_string(),
+        }),
         Literal::Bool(b) => LiteralOneof::BoolLiteral(BamlLiteralBool { value: *b }),
         Literal::Float(s) => LiteralOneof::StringLiteral(BamlLiteralString { value: s.clone() }),
     };
@@ -359,6 +363,8 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
         // BuiltinUnknown is used for dynamic types (e.g., map values, array elements)
         // when the element type isn't known at compile time.
         Ty::BuiltinUnknown { .. } => Some(FieldType::UnknownType(BamlTyUnknown {})),
+        // Bigint FFI encoding is not yet implemented (Phase 10+).
+        Ty::Bigint { .. } => unimplemented!("bigint FFI type encoding is not yet implemented"),
         Ty::TypeAlias(_, _)
         | Ty::Future(..)
         | Ty::Function { .. }

@@ -115,6 +115,7 @@ mod tests {
 
         // ── Leaves ──
         (Int $(, Attr($a:expr))*) => { TypeExpr::Int { attrs: type_expr!(@attrs $(, Attr($a))*) } };
+        (Bigint $(, Attr($a:expr))*) => { TypeExpr::Bigint { attrs: type_expr!(@attrs $(, Attr($a))*) } };
         (Float $(, Attr($a:expr))*) => { TypeExpr::Float { attrs: type_expr!(@attrs $(, Attr($a))*) } };
         (String $(, Attr($a:expr))*) => { TypeExpr::String { attrs: type_expr!(@attrs $(, Attr($a))*) } };
         (Bool $(, Attr($a:expr))*) => { TypeExpr::Bool { attrs: type_expr!(@attrs $(, Attr($a))*) } };
@@ -192,6 +193,9 @@ mod tests {
 
         match expr {
             TypeExpr::Int { attrs } => TypeExpr::Int {
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::Bigint { attrs } => TypeExpr::Bigint {
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Float { attrs } => TypeExpr::Float {

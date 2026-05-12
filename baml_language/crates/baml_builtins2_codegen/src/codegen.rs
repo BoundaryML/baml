@@ -508,6 +508,7 @@ fn copy_field_type(ty: &BamlType) -> String {
     match ty {
         BamlType::RustType => "Arc<dyn Any + Send + Sync>".to_string(),
         BamlType::Int => "i64".to_string(),
+        BamlType::Bigint => "Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
         BamlType::Bool => "bool".to_string(),
         BamlType::Null => "()".to_string(),
@@ -1220,6 +1221,7 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool, needs_owned: bool) ->
         BamlType::Int => format!(
             "match {val} {{ Value::Int(i) => *i, other => return Err(VmInternalError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}.into()) }}"
         ),
+        BamlType::Bigint => format!("vm.as_bigint({val})?.clone()"),
         BamlType::Float => format!(
             "match {val} {{ Value::Float(f) => *f, other => return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}.into()) }}"
         ),
@@ -1335,6 +1337,7 @@ fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
             }
         }
         BamlType::Int | BamlType::Float | BamlType::Bool | BamlType::Null => name.to_string(),
+        BamlType::Bigint => name.to_string(),
         // Media class view types (Pdf, Audio, Video, Image) are Named and need to be passed by ref
         BamlType::Named(class_name) if is_media_class(class_name.as_str()) => {
             format!("&{name}")
@@ -1389,6 +1392,7 @@ fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
         BamlType::String => format!("vm.alloc_string({name})"),
         BamlType::Uint8Array => format!("vm.alloc_uint8array({name})"),
         BamlType::Int => format!("Value::Int({name})"),
+        BamlType::Bigint => format!("vm.alloc_bigint({name})"),
         BamlType::Float => format!("Value::Float({name})"),
         BamlType::Bool => format!("Value::Bool({name})"),
         BamlType::Null => "Value::Null".to_string(),
@@ -1418,6 +1422,7 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
             }
         }
         BamlType::Int => "i64".to_string(),
+        BamlType::Bigint => "std::sync::Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
         BamlType::Bool => "bool".to_string(),
         BamlType::Null => "()".to_string(),
@@ -1455,6 +1460,7 @@ fn baml_type_to_output(ty: &BamlType) -> String {
     match ty {
         BamlType::String => "String".to_string(),
         BamlType::Int => "i64".to_string(),
+        BamlType::Bigint => "std::sync::Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
         BamlType::Bool => "bool".to_string(),
         BamlType::Null => "()".to_string(),
@@ -1557,6 +1563,7 @@ fn receiver_baml_type(recv: &Receiver) -> BamlType {
         "String" => BamlType::String,
         "Uint8Array" => BamlType::Uint8Array,
         "Int" => BamlType::Int,
+        "Bigint" => BamlType::Bigint,
         "Float" => BamlType::Float,
         "Pdf" | "Audio" | "Video" | "Image" => BamlType::Named(recv.class_name.clone()),
         _ => BamlType::Named(recv.class_name.clone()),

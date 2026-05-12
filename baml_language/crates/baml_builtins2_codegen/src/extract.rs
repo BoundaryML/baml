@@ -524,6 +524,7 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
 fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
     match ty {
         TypeExpr::Int { .. } => BamlType::Int,
+        TypeExpr::Bigint { .. } => BamlType::Bigint,
         TypeExpr::Float { .. } => BamlType::Float,
         TypeExpr::String { .. } => BamlType::String,
         TypeExpr::Bool { .. } => BamlType::Bool,

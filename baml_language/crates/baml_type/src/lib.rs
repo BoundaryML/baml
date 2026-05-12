@@ -114,6 +114,9 @@ pub enum Ty {
     Int {
         attr: TyAttr,
     },
+    Bigint {
+        attr: TyAttr,
+    },
     Float {
         attr: TyAttr,
     },
@@ -221,6 +224,7 @@ impl Ty {
     pub fn with_attr(self, attr: TyAttr) -> Ty {
         match self {
             Ty::Int { .. } => Ty::Int { attr },
+            Ty::Bigint { .. } => Ty::Bigint { attr },
             Ty::Float { .. } => Ty::Float { attr },
             Ty::String { .. } => Ty::String { attr },
             Ty::Bool { .. } => Ty::Bool { attr },
@@ -259,6 +263,7 @@ impl Ty {
     pub fn attr(&self) -> &TyAttr {
         match self {
             Ty::Int { attr }
+            | Ty::Bigint { attr }
             | Ty::Float { attr }
             | Ty::String { attr }
             | Ty::Bool { attr }
@@ -288,6 +293,13 @@ impl Ty {
     /// `int` with default attributes.
     pub fn int() -> Self {
         Ty::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `bigint` with default attributes.
+    pub fn bigint() -> Self {
+        Ty::Bigint {
             attr: TyAttr::default(),
         }
     }
@@ -509,6 +521,10 @@ impl Ty {
             (Ty::Literal(Literal::Bool(_), _), Ty::Bool { .. }) => true,
             // Literal int widens to float
             (Ty::Literal(Literal::Int(_), _), Ty::Float { .. }) => true,
+            // Literal int widens to bigint
+            (Ty::Literal(Literal::Int(_), _), Ty::Bigint { .. }) => true,
+            // Literal bigint widens to bigint
+            (Ty::Literal(Literal::Bigint(_), _), Ty::Bigint { .. }) => true,
 
             // Null is a subtype of Optional<T>
             (Ty::Null { .. }, Ty::Optional(..)) => true,
@@ -535,6 +551,8 @@ impl Ty {
                 },
             ) => k1 == k2 && v1.is_subtype_of(v2),
 
+            // Int is a subtype of Bigint (numeric widening)
+            (Ty::Int { .. }, Ty::Bigint { .. }) => true,
             // Int is a subtype of Float (numeric widening)
             (Ty::Int { .. }, Ty::Float { .. }) => true,
 
@@ -605,6 +623,7 @@ impl Ty {
                 Ok(())
             }
             Ty::Int { .. }
+            | Ty::Bigint { .. }
             | Ty::Float { .. }
             | Ty::String { .. }
             | Ty::Bool { .. }
@@ -655,10 +674,12 @@ impl fmt::Display for Ty {
             Ty::Media(kind, _) => write!(f, "{kind}"),
             Ty::Literal(lit, _) => match lit {
                 Literal::Int(i) => write!(f, "{i}"),
+                Literal::Bigint(n) => write!(f, "{n}n"),
                 Literal::Float(s) => write!(f, "{s}"),
                 Literal::String(s) => write!(f, "{s:?}"),
                 Literal::Bool(b) => write!(f, "{b}"),
             },
+            Ty::Bigint { .. } => write!(f, "bigint"),
             Ty::Class(tn, args, _) => {
                 write!(f, "{tn}")?;
                 if !args.is_empty() {
