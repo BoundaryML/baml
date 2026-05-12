@@ -469,6 +469,11 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         Rvalue::LoadType(template) => {
             write!(f, "load_type({template})")
         }
+        Rvalue::IntToBigint(operand) => {
+            write!(f, "int_to_bigint(")?;
+            write_operand(f, operand)?;
+            write!(f, ")")
+        }
     }
 }
 

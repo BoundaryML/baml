@@ -726,6 +726,9 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
         Rvalue::LoadType(_) => {
             // LoadType takes no local operands — the template is compile-time data.
         }
+        Rvalue::IntToBigint(operand) => {
+            walk_operand_locals(operand, f);
+        }
     }
 }
 
@@ -1463,6 +1466,7 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
         Rvalue::MakeBoundMethod { receiver, .. } => operand_has_projection(receiver),
         Rvalue::LoadType(_) => false,
+        Rvalue::IntToBigint(operand) => operand_has_projection(operand),
     }
 }
 

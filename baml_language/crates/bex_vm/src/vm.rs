@@ -3238,6 +3238,21 @@ impl BexVm {
                 }));
             }
 
+            // ── Int-to-Bigint widening ───────────────────────────────
+            Instruction::IntToBigint => {
+                let v = self.stack.ensure_pop();
+                let Value::Int(n) = v else {
+                    return Err(VmInternalError::TypeError {
+                        expected: Type::Int,
+                        got: self.type_of(&v),
+                    }
+                    .into());
+                };
+                let bi = num_bigint::BigInt::from(n);
+                let result = self.alloc_bigint(std::sync::Arc::new(bi));
+                self.stack.push(result);
+            }
+
             // ── Specialized float comparison ─────────────────────────
             #[allow(clippy::float_cmp)]
             Instruction::CmpFloatOp(op) => {
@@ -6958,6 +6973,21 @@ impl BexVm {
                         std::hint::unreachable_unchecked()
                     };
                     self.stack.push(Value::Bool(l >= r));
+                }
+
+                // ── Int-to-Bigint widening ────────────────────────────────────
+                OpCode::IntToBigint => {
+                    let v = self.stack.ensure_pop();
+                    let Value::Int(n) = v else {
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Int,
+                            got: self.type_of(&v),
+                        }
+                        .into());
+                    };
+                    let bi = num_bigint::BigInt::from(n);
+                    let result = self.alloc_bigint(std::sync::Arc::new(bi));
+                    self.stack.push(result);
                 }
 
                 // ── Expanded unary ────────────────────────────────────────────

@@ -3431,19 +3431,63 @@ impl LoweringContext<'_> {
 
 impl LoweringContext<'_> {
     fn lower_call_arg_operands(&mut self, expr_id: AstExprId, args: &[AstExprId]) -> Vec<Operand> {
+        // Resolve the callee's func_loc so we can check if any param is `bigint`.
+        // We extract the information we need from the resolution tables before
+        // mutably borrowing `self` for lowering, to satisfy the borrow checker.
+        //
+        // We build a map from `param_index → bool` (is_bigint) using an immutable
+        // borrow.  `FunctionLoc` is `Copy` (it's a Salsa interned id) so we can
+        // safely store the value without retaining the borrow.
+        let param_bigint_flags: Vec<(usize, bool)> = {
+            let callee_func_loc = self.callee_func_loc_for_call(expr_id);
+            if let Some(fl) = callee_func_loc {
+                let sig = baml_compiler2_ppir::function_signature(self.db, fl);
+                sig.params
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| (i, matches!(p.ty, AstTypeExpr::Bigint { .. })))
+                    .collect()
+            } else {
+                vec![]
+            }
+        };
+        let param_is_bigint = |idx: usize| -> bool {
+            param_bigint_flags
+                .iter()
+                .find(|(i, _)| *i == idx)
+                .map(|(_, b)| *b)
+                .unwrap_or(false)
+        };
+
         let Some(plan) = self
             .call_plans
             .get(&self.expr_metadata_key(expr_id))
             .cloned()
         else {
+            // No call plan: lower each arg without widening (type checker would
+            // have already flagged mismatches).
             return args.iter().map(|&a| self.lower_to_operand(a)).collect();
         };
 
+        // Build a map from arg ExprId → its parameter index, so we can look
+        // up the destination type when lowering each argument.
+        let arg_to_param: FxHashMap<AstExprId, usize> = plan
+            .provided_param_args()
+            .map(|(param_idx, arg)| (arg, param_idx))
+            .collect();
+
+        // Pre-lower each provided arg in source order (the order `args` appear
+        // in the call expression).  This preserves the original evaluation
+        // order, which matters for side effects.
+        // For `bigint`-typed params, insert an implicit `int → bigint` widening
+        // coercion when the arg expression produces an `int`.
         let provided_args: Vec<_> = plan.provided_args().collect();
-        let mut lowered_args = FxHashMap::default();
+        let mut lowered_args: FxHashMap<AstExprId, Operand> = FxHashMap::default();
         for &arg in args {
             if provided_args.contains(&arg) {
-                lowered_args.insert(arg, self.lower_to_operand(arg));
+                let param_idx = arg_to_param.get(&arg).copied().unwrap_or(usize::MAX);
+                let is_bigint = param_is_bigint(param_idx);
+                lowered_args.insert(arg, self.lower_to_operand_widening(arg, is_bigint));
             }
         }
 
@@ -4342,6 +4386,112 @@ impl LoweringContext<'_> {
         Operand::Copy(Place::Local(temp))
     }
 
+    /// Returns `true` if an `int`→`bigint` implicit widening is needed.
+    ///
+    /// The widening applies when the destination type is `bigint` and the
+    /// source expression's type is `int` (or a literal-int type, which is a
+    /// subtype of `int` and therefore of `bigint`).
+    fn needs_int_to_bigint_widen(&self, dest_ty: &Ty, src_expr_id: AstExprId) -> bool {
+        if !matches!(dest_ty, Ty::Bigint { .. }) {
+            return false;
+        }
+        let src_ty = self.expr_ty(src_expr_id);
+        matches!(
+            src_ty,
+            Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
+        )
+    }
+
+    /// Lower `expr_id` into `dest`, inserting an `int → bigint` widening
+    /// coercion when the destination's MIR type is `bigint` and the expression
+    /// produces an `int`.
+    ///
+    /// In all other cases this is identical to `lower_expr`.
+    fn lower_expr_widening(&mut self, expr_id: AstExprId, dest: Place, dest_ty: &Ty) {
+        if self.needs_int_to_bigint_widen(dest_ty, expr_id) {
+            // Lower the int expression into a temporary, then coerce.
+            let src_ty = self.expr_ty(expr_id);
+            let int_temp = self.builder.temp(src_ty);
+            self.lower_expr(expr_id, Place::local(int_temp));
+            self.builder.assign(
+                dest,
+                Rvalue::IntToBigint(Operand::Move(Place::Local(int_temp))),
+            );
+        } else {
+            self.lower_expr(expr_id, dest);
+        }
+    }
+
+    /// Like `lower_to_operand`, but if `param_is_bigint` is `true` and the
+    /// source expression produces an `int`, inserts an `IntToBigint` coercion.
+    ///
+    /// Used in `lower_call_arg_operands` to handle implicit widening at call
+    /// sites where an `int` argument is passed to a `bigint` parameter.
+    fn lower_to_operand_widening(&mut self, expr_id: AstExprId, param_is_bigint: bool) -> Operand {
+        if param_is_bigint {
+            let src_ty = self.expr_ty(expr_id);
+            if matches!(
+                src_ty,
+                Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
+            ) {
+                // Lower into an int temp, then wrap with IntToBigint.
+                let int_temp = self.builder.temp(src_ty);
+                self.lower_expr(expr_id, Place::local(int_temp));
+                let bigint_ty = Ty::Bigint {
+                    attr: TyAttr::default(),
+                };
+                let bigint_temp = self.builder.temp(bigint_ty);
+                self.builder.assign(
+                    Place::local(bigint_temp),
+                    Rvalue::IntToBigint(Operand::Move(Place::Local(int_temp))),
+                );
+                return Operand::Copy(Place::Local(bigint_temp));
+            }
+        }
+        self.lower_to_operand(expr_id)
+    }
+
+    /// Extract the `FunctionLoc` for the callee of the given call expression,
+    /// if one can be resolved from the member-resolution table.
+    ///
+    /// Returns `None` for unknown callees, higher-order calls, intrinsics, etc.
+    fn callee_func_loc_for_call(
+        &self,
+        call_expr_id: AstExprId,
+    ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'_>> {
+        use baml_compiler2_tir::inference::MemberResolution;
+        // Get the callee expr from the call body.
+        let callee = match &self.body.exprs[call_expr_id] {
+            AstExpr::Call { callee, .. } => *callee,
+            _ => return None,
+        };
+
+        // Try flat resolution first (handles simple `Name(...)` and `pkg.fn(...)` calls).
+        if let Some(res) = self.resolutions.get(&self.expr_metadata_key(callee)) {
+            return match res {
+                MemberResolution::Free { func_loc }
+                | MemberResolution::BoundMethod { func_loc, .. }
+                | MemberResolution::UnboundMethod { func_loc, .. } => Some(*func_loc),
+                _ => None,
+            };
+        }
+
+        // Try path_member_resolutions (handles `self.method()` and multi-segment paths).
+        if let Some(resolutions) = self
+            .path_member_resolutions
+            .get(&self.expr_metadata_key(callee))
+        {
+            return resolutions.last().and_then(|r| match r {
+                MemberResolution::Free { func_loc }
+                | MemberResolution::BoundMethod { func_loc, .. }
+                | MemberResolution::UnboundMethod { func_loc, .. } => Some(*func_loc),
+                _ => None,
+            });
+        }
+
+        None
+    }
+
     fn emit_panic_call(&mut self, message: &str, _expr_id: AstExprId) {
         // Emit a call to baml.sys.panic with the error message
         let callee = Operand::Constant(Constant::Function(ItemRef::Free {
@@ -5040,7 +5190,7 @@ impl LoweringContext<'_> {
                 );
 
                 if let Some(init) = initializer {
-                    self.lower_expr(init, Place::local(local));
+                    self.lower_expr_widening(init, Place::local(local), &local_ty);
                 } else {
                     self.builder.assign(
                         Place::local(local),
@@ -5288,7 +5438,8 @@ impl LoweringContext<'_> {
             AstStmt::Return(expr) => {
                 let ret = Local(0); // _0 is always the return place
                 if let Some(e) = expr {
-                    self.lower_expr(e, Place::local(ret));
+                    let ret_ty = self.builder.local_ty(ret);
+                    self.lower_expr_widening(e, Place::local(ret), &ret_ty);
                 }
                 // Unwatch all watched locals in this function (the stack is
                 // swapped at lambda boundaries, so depth=0 covers exactly the

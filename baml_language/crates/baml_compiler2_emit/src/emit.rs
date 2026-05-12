@@ -1207,6 +1207,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.set_operand(inst, OperandMeta::Global(func_name));
             return;
         }
+        if let Rvalue::IntToBigint(operand) = rvalue {
+            self.emit_operand_pull(operand);
+            self.emit(Instruction::IntToBigint);
+            return;
+        }
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
@@ -2269,6 +2274,11 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error> {
         self.emit(Self::unaryop_instruction(op));
+        Ok(())
+    }
+
+    fn int_to_bigint(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::IntToBigint);
         Ok(())
     }
 

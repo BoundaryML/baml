@@ -7,6 +7,39 @@
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
+// ─── int → bigint widening (Phase 5) ─────────────────────────────────────────
+
+#[tokio::test]
+async fn test_int_to_bigint_assign() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint {
+            let x: bigint = 42;
+            x
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("42".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn test_int_to_bigint_arg() {
+    let output = baml_test!(
+        baml: r#"
+        function Identity(x: bigint) -> bigint { x }
+        function Caller() -> bigint { Identity(42) }
+    "#,
+        entry: "Caller",
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("42".to_string()))
+    );
+}
+
 // ─── literal syntax (Phase 3) ─────────────────────────────────────────────────
 
 #[tokio::test]
