@@ -1505,6 +1505,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_jump_unless_fallthrough(*resume);
             }
 
+            Terminator::Spawn {
+                closure,
+                name,
+                future,
+                resume,
+            } => {
+                // Push closure then name. The runtime `OpCode::Spawn`
+                // pops them in reverse: name first, then closure.
+                self.emit_operand_pull(closure);
+                self.emit_operand_pull(name);
+                self.emit(Instruction::Spawn);
+                self.emit_store_place(future);
+                self.emit_jump_unless_fallthrough(*resume);
+            }
+
             Terminator::Await {
                 future,
                 destination,

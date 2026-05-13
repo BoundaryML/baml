@@ -147,7 +147,9 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
             }
         }
         Terminator::Unreachable => {}
-        Terminator::ScheduleFuture { resume, .. } => remap(resume),
+        Terminator::ScheduleFuture { resume, .. } | Terminator::Spawn { resume, .. } => {
+            remap(resume);
+        }
         Terminator::Await { target, unwind, .. } => {
             remap(target);
             if let Some(u) = unwind {
@@ -219,7 +221,9 @@ fn rewrite_block_ids_in_terminator_with_map(
             }
         }
         Terminator::Unreachable => {}
-        Terminator::ScheduleFuture { resume, .. } => remap(resume),
+        Terminator::ScheduleFuture { resume, .. } | Terminator::Spawn { resume, .. } => {
+            remap(resume);
+        }
         Terminator::Await { target, unwind, .. } => {
             remap(target);
             if let Some(u) = unwind {
@@ -420,6 +424,16 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     }
                     scan_place(future, &mut set);
                 }
+                Terminator::Spawn {
+                    closure,
+                    name,
+                    future,
+                    ..
+                } => {
+                    scan_operand(closure, &mut set);
+                    scan_operand(name, &mut set);
+                    scan_place(future, &mut set);
+                }
                 Terminator::Branch { condition, .. } => scan_operand(condition, &mut set),
                 Terminator::Switch { discriminant, .. } => {
                     scan_operand(discriminant, &mut set);
@@ -465,7 +479,9 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
         // Terminator destinations also count as definitions.
         if let Some(dest) = match &block.terminator {
             Some(Terminator::Call { destination, .. }) => Some(destination),
-            Some(Terminator::ScheduleFuture { future, .. }) => Some(future),
+            Some(Terminator::ScheduleFuture { future, .. } | Terminator::Spawn { future, .. }) => {
+                Some(future)
+            }
             Some(Terminator::Await { destination, .. }) => Some(destination),
             Some(Terminator::ShortCircuit { destination, .. }) => Some(destination),
             _ => None,
@@ -644,6 +660,16 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
             for arg in args {
                 count_in_operand(arg, uses);
             }
+            count_dest_place(future, uses);
+        }
+        Terminator::Spawn {
+            closure,
+            name,
+            future,
+            ..
+        } => {
+            count_in_operand(closure, uses);
+            count_in_operand(name, uses);
             count_dest_place(future, uses);
         }
         Terminator::Await {
@@ -908,6 +934,10 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
                 apply_subst_to_operand(arg, subst);
             }
         }
+        Terminator::Spawn { closure, name, .. } => {
+            apply_subst_to_operand(closure, subst);
+            apply_subst_to_operand(name, subst);
+        }
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
             apply_subst_to_operand(value, subst);
         }
@@ -919,6 +949,7 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
         | Terminator::Unreachable
         | Terminator::Await { .. } => {}
     }
+    // Spawn carries operands but no callee, handled above.
 }
 
 // ============================================================================
@@ -1147,6 +1178,16 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             }
             remap_place(future, map);
         }
+        Terminator::Spawn {
+            closure,
+            name,
+            future,
+            ..
+        } => {
+            remap_operand(closure, map);
+            remap_operand(name, map);
+            remap_place(future, map);
+        }
         Terminator::Await {
             future,
             destination,
@@ -1346,6 +1387,16 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     for a in args {
                         check_operand(a, &blk);
                     }
+                    check_place(future, &blk);
+                }
+                Terminator::Spawn {
+                    closure,
+                    name,
+                    future,
+                    ..
+                } => {
+                    check_operand(closure, &blk);
+                    check_operand(name, &blk);
                     check_place(future, &blk);
                 }
                 Terminator::Await {

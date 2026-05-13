@@ -3587,6 +3587,39 @@ impl BexVm {
                 return Ok(Some(VmExecState::ScheduleFuture(object_index)));
             }
 
+            Instruction::Spawn => {
+                // BEP-034: pops `[closure, name]` off the eval stack, in
+                // that order — `name` is on top. Builds an
+                // `UnscheduledFuture { kind: Spawn { closure }, name }`
+                // and yields it to the engine, which routes the spawn
+                // through `BexEngine::spawn_thread`.
+                let name_value = self.stack.ensure_pop();
+                let closure_value = self.stack.ensure_pop();
+
+                let closure_ptr =
+                    self.as_object_ptr(&closure_value, ObjectType::Function(FunctionType::Any))?;
+                let name_ptr = match name_value {
+                    Value::Null => None,
+                    Value::Object(ptr) => Some(ptr),
+                    ref other => {
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Object(ObjectType::String),
+                            got: self.type_of(other),
+                        }
+                        .into());
+                    }
+                };
+
+                let pending_future = UnscheduledFuture {
+                    kind: ::bex_vm_types::UnscheduledKind::Spawn {
+                        closure: closure_ptr,
+                    },
+                    name: name_ptr,
+                };
+                let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
+                return Ok(Some(VmExecState::ScheduleFuture(object_index)));
+            }
+
             Instruction::Await => {
                 let value = self.stack.ensure_stack_top();
 
@@ -5440,6 +5473,33 @@ impl BexVm {
                             args: future_args,
                         },
                         name: None,
+                    };
+                    let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
+                    return Ok(Some(VmExecState::ScheduleFuture(object_index)));
+                }
+
+                // ── Spawn (BEP-034) ────────────────────────────────────────────
+                OpCode::Spawn => {
+                    let name_value = self.stack.ensure_pop();
+                    let closure_value = self.stack.ensure_pop();
+                    let closure_ptr = self
+                        .as_object_ptr(&closure_value, ObjectType::Function(FunctionType::Any))?;
+                    let name_ptr = match name_value {
+                        Value::Null => None,
+                        Value::Object(ptr) => Some(ptr),
+                        ref other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: Type::Object(ObjectType::String),
+                                got: self.type_of(other),
+                            }
+                            .into());
+                        }
+                    };
+                    let pending_future = bex_vm_types::types::UnscheduledFuture {
+                        kind: ::bex_vm_types::UnscheduledKind::Spawn {
+                            closure: closure_ptr,
+                        },
+                        name: name_ptr,
                     };
                     let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
                     return Ok(Some(VmExecState::ScheduleFuture(object_index)));

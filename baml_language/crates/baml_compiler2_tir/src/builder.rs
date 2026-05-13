@@ -2234,6 +2234,38 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 result
             }
+            Expr::Spawn {
+                name,
+                body: spawn_body,
+            } => {
+                // BEP-034: `spawn name? { body } : Future<T, E>` where the
+                // body has type `T throws E`. The name (if any) is parsed
+                // for type info but not validated against `string` in
+                // Phase C — a more thorough check belongs in a dedicated
+                // diagnostic pass after the surface lands.
+                if let Some(name_id) = name {
+                    let _ = self.infer_expr(*name_id, body);
+                }
+                let body_ty = self.infer_expr(*spawn_body, body);
+                // Phase C approximates the throws set as `Null` per
+                // implementation plan ("Future<T, never> ≈ Future<T,
+                // null> in v1"). Threading the spawn body's effective
+                // throws set through requires the full throws-analysis
+                // pass; deferred to a follow-up.
+                let throws_ty = Ty::Primitive(PrimitiveType::Null, TyAttr::default());
+                Ty::Future(Box::new(body_ty), Box::new(throws_ty), TyAttr::default())
+            }
+            Expr::Await { future } => {
+                // BEP-034: `await e : T` where `e : Future<T, E>`.
+                let fut_ty = self.infer_expr(*future, body);
+                match fut_ty {
+                    Ty::Future(value, _error, _) => *value,
+                    Ty::Unknown { .. } | Ty::Error { .. } => fut_ty,
+                    _ => Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                }
+            }
             Expr::Missing => Ty::Unknown {
                 attr: TyAttr::default(),
             },
@@ -3568,6 +3600,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     || Self::ty_contains_recovery_unknown(ret)
                     || Self::ty_contains_recovery_unknown(throws)
             }
+            Ty::Future(value, error, _) => {
+                Self::ty_contains_recovery_unknown(value)
+                    || Self::ty_contains_recovery_unknown(error)
+            }
             Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::TypeAlias(..)
@@ -3608,6 +3644,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .any(|(_, ty)| Self::ty_contains_unfilled_generic_class(ty))
                     || Self::ty_contains_unfilled_generic_class(ret)
                     || Self::ty_contains_unfilled_generic_class(throws)
+            }
+            Ty::Future(value, error, _) => {
+                Self::ty_contains_unfilled_generic_class(value)
+                    || Self::ty_contains_unfilled_generic_class(error)
             }
             Ty::Enum(..)
             | Ty::EnumVariant(..)
@@ -4150,6 +4190,27 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::OptionalChain { expr } => {
                 self.collect_throw_facts_from_expr(*expr, body, out);
+            }
+            Expr::Spawn {
+                name,
+                body: spawn_body,
+            } => {
+                // A spawn body's throws are scoped to the spawned thread;
+                // they reach the surrounding function only when the
+                // future is `await`ed. We still walk the name expression
+                // (it can throw) and recurse into the body so that any
+                // throws facts coming from `await` inside the body
+                // bubble through normally.
+                if let Some(name_id) = name {
+                    self.collect_throw_facts_from_expr(*name_id, body, out);
+                }
+                self.collect_throw_facts_from_expr(*spawn_body, body, out);
+            }
+            Expr::Await { future } => {
+                // `await` re-throws the future's error. The error type
+                // lives on the `Future<T, E>` annotation; for v1 we
+                // treat the future expression itself as the source.
+                self.collect_throw_facts_from_expr(*future, body, out);
             }
             Expr::Lambda(_)
             | Expr::Literal(_)
@@ -7261,6 +7322,10 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
                 })
                 .collect(),
             Ty::Class(qtn, _, _) => vec![Ctor::Class(qtn.clone())],
+            // Futures are non-exhaustive at the pattern level: there is
+            // no surface syntax to match against `Future<T, E>` other
+            // than a wildcard.
+            Ty::Future(..) => vec![Ctor::NonExhaustive],
             // Slice path in `split_ctors` enumerates length classes from
             // the matrix; this branch is only reached if the algorithm
             // calls into us with a List directly, in which case empty

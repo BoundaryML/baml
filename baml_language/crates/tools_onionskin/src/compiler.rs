@@ -603,6 +603,23 @@ fn expr_desc_spans<'db>(
         Expr::OptionalChain { expr } => {
             spans.extend(expr_desc_spans(*expr, body, inference));
         }
+        Expr::Spawn {
+            name,
+            body: spawn_body,
+        } => {
+            spans.push(DetailSpan::Code("spawn ".into()));
+            if let Some(name_id) = name {
+                spans.extend(expr_desc_spans(*name_id, body, inference));
+                spans.push(DetailSpan::Code(" ".into()));
+            }
+            spans.push(DetailSpan::Code("{ ".into()));
+            spans.extend(expr_desc_spans(*spawn_body, body, inference));
+            spans.push(DetailSpan::Code(" }".into()));
+        }
+        Expr::Await { future } => {
+            spans.push(DetailSpan::Code("await ".into()));
+            spans.extend(expr_desc_spans(*future, body, inference));
+        }
         Expr::Missing => {
             spans.push(DetailSpan::Code("<missing>".into()));
         }
@@ -2052,6 +2069,12 @@ impl CompilerRunner {
                     )
                 }
                 Expr::OptionalChain { expr } => expr_desc(*expr, body),
+                Expr::Spawn {
+                    body: spawn_body, ..
+                } => {
+                    format!("spawn {{ {} }}", expr_desc(*spawn_body, body))
+                }
+                Expr::Await { future } => format!("await {}", expr_desc(*future, body)),
                 Expr::Missing => "<missing>".into(),
             }
         }

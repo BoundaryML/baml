@@ -407,6 +407,28 @@ impl MirBuilder {
         });
     }
 
+    /// BEP-034: emit a spawn terminator. Pops a closure operand plus an
+    /// optional name operand and binds the resulting `Future<T, E>`
+    /// handle into `future`.
+    pub(crate) fn spawn(
+        &mut self,
+        closure: Operand,
+        name: Operand,
+        future: Place,
+        resume: BlockId,
+    ) {
+        debug_assert!(
+            matches!(future, Place::Local(_)),
+            "Spawn future handle place must be local"
+        );
+        self.set_terminator(Terminator::Spawn {
+            closure,
+            name,
+            future,
+            resume,
+        });
+    }
+
     // ========================================================================
     // Convenience Helpers
     // ========================================================================

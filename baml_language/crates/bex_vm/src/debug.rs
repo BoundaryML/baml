@@ -235,6 +235,7 @@ pub(crate) fn display_instruction(
         | Instruction::CaptureRef(_)
         | Instruction::Return
         | Instruction::SendEvent
+        | Instruction::Spawn
         | Instruction::LoadType(_) => String::new(),
     };
 
@@ -376,7 +377,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::AllocInstance { .. }
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Color::Cyan,
-        Instruction::ScheduleFuture(_) | Instruction::Await => Color::BrightGreen,
+        Instruction::ScheduleFuture(_) | Instruction::Spawn | Instruction::Await => {
+            Color::BrightGreen
+        }
         Instruction::Watch(_) | Instruction::Unwatch(_) | Instruction::Notify(_) => {
             Color::BrightRed
         }
@@ -813,6 +816,7 @@ fn display_instruction_textual(
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
         Instruction::CallIndirect => "call_indirect".to_string(),
         Instruction::ScheduleFuture(_) => format!("schedule_future {}", meta_str(&"")),
+        Instruction::Spawn => "spawn".to_string(),
         Instruction::Await => "await".to_string(),
 
         // --- Control ---
@@ -1165,6 +1169,7 @@ pub fn display_compact_bytecode(
             | OpCode::Unreachable
             | OpCode::MakeCell
             | OpCode::SendEvent
+            | OpCode::Spawn
             | OpCode::Add
             | OpCode::Sub
             | OpCode::Mul

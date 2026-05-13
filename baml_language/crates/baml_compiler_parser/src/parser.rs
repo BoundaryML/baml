@@ -54,6 +54,8 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Catch => SyntaxKind::KW_CATCH,
         TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
         TokenKind::Throws => SyntaxKind::KW_THROWS,
+        TokenKind::Spawn => SyntaxKind::KW_SPAWN,
+        TokenKind::Await => SyntaxKind::KW_AWAIT,
 
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
@@ -4254,9 +4256,44 @@ impl<'a> Parser<'a> {
                 p.bump(); // operator
                 p.parse_expr_bp(PREFIX_BP); // operand: postfix ops bind tighter
             });
+        } else if self.at(TokenKind::Await) {
+            // BEP-034 `await expr` — prefix operator binding like other
+            // prefixes so postfix `.`/`()`/`[]` still attach to the
+            // awaited value.
+            self.with_node(SyntaxKind::AWAIT_EXPR, |p| {
+                p.bump(); // `await`
+                p.parse_expr_bp(PREFIX_BP);
+            });
+        } else if self.at(TokenKind::Spawn) {
+            // BEP-034 `spawn name_expr? block`.
+            self.parse_spawn_expr();
         } else {
             self.parse_primary_expr();
         }
+    }
+
+    /// Parse `spawn name_expr? { body }`. The name expression is optional
+    /// and is parsed until we see `{` (v1 has no `with` clause). The body
+    /// is always a brace-delimited block.
+    fn parse_spawn_expr(&mut self) {
+        self.with_node(SyntaxKind::SPAWN_EXPR, |p| {
+            p.bump(); // `spawn`
+            // Optional name expression: anything that can lead an
+            // expression and is not `{`. We parse the name with a binding
+            // power of 0 (no infix beyond what naturally terminates at
+            // `{`), then the brace-block.
+            if !p.at(TokenKind::LBrace) {
+                // The name is a regular expression; restrict binding
+                // power so we stop at `{` rather than try to interpret
+                // the block as a body of a function call.
+                p.parse_expr_bp(1);
+            }
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("'{' after spawn".to_string());
+            }
+        });
     }
 
     /// Parse primary expression (literals, identifiers, parentheses)

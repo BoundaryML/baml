@@ -356,6 +356,13 @@ pub enum Instruction {
     /// `Vm::globals[g]`, and arity is read from function metadata.
     ScheduleFuture(GlobalIndex),
 
+    /// BEP-034 `spawn { body }`. Pops `[closure_value, name_value]` from
+    /// the stack, allocates an `UnscheduledFuture { kind: Spawn { closure
+    /// }, name }` into the TLAB, and yields
+    /// `VmExecState::ScheduleFuture(ptr)` so the engine routes the
+    /// closure to a fresh `BexThread`.
+    Spawn,
+
     /// Awaits the future on top of the stack.
     ///
     /// VM yields execution back to the embedder because it is blocked awaiting
@@ -716,6 +723,7 @@ pub enum OpCode {
     AllocInstance,
     AllocVariant,
     ScheduleFuture,
+    Spawn,
     Watch,
     Unwatch,
     Notify,
@@ -762,6 +770,7 @@ impl OpCode {
             | Self::Unreachable
             | Self::MakeCell
             | Self::SendEvent
+            | Self::Spawn
             | Self::Add
             | Self::Sub
             | Self::Mul
@@ -931,6 +940,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::AllocInstance as u8 => Ok(Self::AllocInstance),
             x if x == Self::AllocVariant as u8 => Ok(Self::AllocVariant),
             x if x == Self::ScheduleFuture as u8 => Ok(Self::ScheduleFuture),
+            x if x == Self::Spawn as u8 => Ok(Self::Spawn),
             x if x == Self::Watch as u8 => Ok(Self::Watch),
             x if x == Self::Unwatch as u8 => Ok(Self::Unwatch),
             x if x == Self::Notify as u8 => Ok(Self::Notify),
@@ -1032,6 +1042,7 @@ impl std::fmt::Display for OpCode {
             Self::AllocInstance => "ALLOC_INSTANCE",
             Self::AllocVariant => "ALLOC_VARIANT",
             Self::ScheduleFuture => "SCHEDULE_FUTURE",
+            Self::Spawn => "SPAWN",
             Self::Watch => "WATCH",
             Self::Unwatch => "UNWATCH",
             Self::Notify => "NOTIFY",
@@ -1283,6 +1294,7 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
             Instruction::ScheduleFuture(callee) => write!(f, "SCHEDULE_FUTURE {callee}"),
+            Instruction::Spawn => write!(f, "SPAWN"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
@@ -1688,7 +1700,8 @@ impl Bytecode {
                 | Instruction::ThrowIfPanic
                 | Instruction::Unreachable
                 | Instruction::MakeCell
-                | Instruction::SendEvent => {}
+                | Instruction::SendEvent
+                | Instruction::Spawn => {}
 
                 // ── Expanded sub-enum ops: no operands ──────────────
                 Instruction::BinOp(_)
@@ -2017,6 +2030,7 @@ impl Bytecode {
             Instruction::AllocInstance { .. } => OpCode::AllocInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
             Instruction::ScheduleFuture(_) => OpCode::ScheduleFuture,
+            Instruction::Spawn => OpCode::Spawn,
             Instruction::Watch(_) => OpCode::Watch,
             Instruction::Unwatch(_) => OpCode::Unwatch,
             Instruction::Notify(_) => OpCode::Notify,

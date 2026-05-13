@@ -499,6 +499,30 @@ fn simulate_terminator_stack(
             sim.push();
             simulate_store_place_stack(future, sim, classifications)
         }
+        Terminator::Spawn {
+            closure,
+            name,
+            future,
+            ..
+        } => {
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            if pull_semantics::walk_operand_pull(&mut sink, closure).is_err() {
+                return false;
+            }
+            if pull_semantics::walk_operand_pull(&mut sink, name).is_err() {
+                return false;
+            }
+            if !sim.pop_n(2) {
+                return false;
+            }
+            sim.push();
+            simulate_store_place_stack(future, sim, classifications)
+        }
         Terminator::Await {
             future,
             destination,

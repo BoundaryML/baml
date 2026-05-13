@@ -91,6 +91,10 @@ pub enum TokenKind {
     CatchAll,
     #[token("throws")]
     Throws,
+    #[token("spawn")]
+    Spawn,
+    #[token("await")]
+    Await,
 
     // Other keywords
     #[token("watch")]
@@ -294,6 +298,8 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Catch => "catch",
             TokenKind::CatchAll => "catch_all",
             TokenKind::Throws => "throws",
+            TokenKind::Spawn => "spawn",
+            TokenKind::Await => "await",
             TokenKind::Watch => "watch",
             TokenKind::Instanceof => "instanceof",
             TokenKind::Dynamic => "dynamic",

@@ -392,6 +392,23 @@ pub enum Terminator {
         resume: BlockId,
     },
 
+    /// BEP-034 `spawn name? { body }` — schedules a fresh BAML thread to
+    /// run `closure`'s body and yields a `Future<T, E>` handle.
+    ///
+    /// `closure` carries the body packaged via `MakeClosure` (a 0-arg
+    /// lambda that captures the surrounding bindings); `name` is an
+    /// optional human-readable label.
+    Spawn {
+        /// Closure object representing the spawn body.
+        closure: Operand,
+        /// Optional name expression (string or null).
+        name: Operand,
+        /// Where to store the resulting Future handle.
+        future: Place,
+        /// Block to resume after the spawn schedules.
+        resume: BlockId,
+    },
+
     /// Await a future - suspend until result is ready.
     ///
     /// This is a suspend point - control returns to the embedder.
@@ -468,6 +485,7 @@ impl Terminator {
             }
             Terminator::Unreachable => vec![],
             Terminator::ScheduleFuture { resume, .. } => vec![*resume],
+            Terminator::Spawn { resume, .. } => vec![*resume],
             Terminator::Await { target, unwind, .. } => {
                 let mut succs = vec![*target];
                 if let Some(u) = unwind {

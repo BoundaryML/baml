@@ -851,6 +851,25 @@ fn collect_uses_in_terminator(
                 }
             }
         }
+        Terminator::Spawn {
+            closure,
+            name,
+            future,
+            ..
+        } => {
+            collect_uses_in_operand(closure, block, StatementRef::Terminator, def_use);
+            collect_uses_in_operand(name, block, StatementRef::Terminator, def_use);
+            if let Place::Local(local) = future {
+                if let Some(du) = def_use.get_mut(local) {
+                    du.def = Some(DefLocation {
+                        block,
+                        statement_ref: StatementRef::Terminator,
+                        rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
+                    });
+                    du.all_defs.push((block, StatementRef::Terminator));
+                }
+            }
+        }
         Terminator::Await {
             future,
             destination,

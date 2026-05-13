@@ -305,6 +305,18 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             }
             write!(f, ") -> {resume};")
         }
+        Terminator::Spawn {
+            closure,
+            name,
+            future,
+            resume,
+        } => {
+            write!(f, "{future} = spawn ")?;
+            write_operand(f, closure)?;
+            write!(f, " name=")?;
+            write_operand(f, name)?;
+            write!(f, " -> {resume};")
+        }
         Terminator::Await {
             future,
             destination,
