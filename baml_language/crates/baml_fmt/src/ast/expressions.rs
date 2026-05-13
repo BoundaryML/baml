@@ -927,11 +927,31 @@ impl IsExpr {
 
 impl Printable for IsExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        // Mirrors `BinaryExpr::try_print_single_line`'s trivia handling so
+        // comments around the `is` keyword (e.g. `v /*hint*/ is int`) round-
+        // trip instead of being silently dropped.
         let mut multi_lined = false;
+
         multi_lined |= printer.print(&*self.lhs, shape.clone()).multi_lined;
-        printer.print_spaces(1);
+
+        let lhs_trailing = printer.trivia.get_trailing_for_element(&*self.lhs);
+        let (kw_leading, kw_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
+
+        let mut left_trivia_len = printer.print_trivia_squished(lhs_trailing);
+        left_trivia_len += printer.print_trivia_squished(kw_leading);
+        if left_trivia_len == 0 {
+            printer.print_spaces(1);
+        }
+
         printer.print_raw_token(&self.keyword);
-        printer.print_spaces(1);
+
+        let pat_leading = printer.trivia.get_leading_for_element(&self.pattern);
+        let mut right_trivia_len = printer.print_trivia_squished(kw_trailing);
+        right_trivia_len += printer.print_trivia_squished(pat_leading);
+        if right_trivia_len == 0 {
+            printer.print_spaces(1);
+        }
+
         multi_lined |= printer.print(&self.pattern, shape).multi_lined;
         PrintInfo { multi_lined }
     }

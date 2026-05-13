@@ -4698,6 +4698,39 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty
     }
 
+    /// Same as [`Self::resolve_type_expr`], but anchors diagnostics at the
+    /// pattern's source span (via [`Self::report_at_pat_or_expr`]) instead
+    /// of falling all the way back to the surrounding scrutinee
+    /// expression. Used by pattern-lowering call sites where we have a
+    /// `PatId` in scope so the squiggle lands on the actual type name.
+    fn resolve_type_expr_at_pat(
+        &mut self,
+        ty: &TypeExpr,
+        pat_id: PatId,
+        fallback_expr: ExprId,
+    ) -> Ty {
+        if let TypeExpr::Path { segments, .. } = ty {
+            if segments.len() == 1 {
+                if let Some(resolved) = bare_type_sugar_to_ty(&segments[0]) {
+                    return resolved;
+                }
+            }
+        }
+        let mut diags = Vec::new();
+        let resolved = crate::lower_type_expr::lower_type_expr_in_ns(
+            self.context.db(),
+            ty,
+            self.package_items,
+            &self.ns_context,
+            &self.generic_params,
+            &mut diags,
+        );
+        for diag in diags {
+            self.report_at_pat_or_expr(diag, pat_id, fallback_expr);
+        }
+        resolved
+    }
+
     fn ty_panic_subset(&self, ty: &Ty) -> Option<Ty> {
         match ty {
             Ty::Class(qtn, _, _) => qtn.is_panic_type().then(|| ty.clone()),
@@ -8843,7 +8876,7 @@ impl TypeInferenceBuilder<'_> {
             ast::Pattern::Bind { name, subpat } => {
                 self.lower_bind_pat(pat_id, name.clone(), *subpat, scrut_ty, body, at_expr)
             }
-            ast::Pattern::Type(t) => self.lower_type_pat(t, scrut_ty, at_expr),
+            ast::Pattern::Type(t) => self.lower_type_pat(t, pat_id, scrut_ty, at_expr),
             ast::Pattern::Class {
                 class,
                 generic_args,
@@ -8925,10 +8958,15 @@ impl TypeInferenceBuilder<'_> {
     fn lower_type_pat(
         &mut self,
         ty_expr: &TypeExpr,
+        pat_id: PatId,
         scrut_ty: &Ty,
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
-        let resolved = self.resolve_type_expr(ty_expr, at_expr);
+        // Anchor "unresolved type" / "type mismatch" diagnostics at the
+        // pattern's own span rather than the surrounding expression so the
+        // squiggle lands on the type name (e.g. `Frobnitz`), not the
+        // scrutinee.
+        let resolved = self.resolve_type_expr_at_pat(ty_expr, pat_id, at_expr);
         let dpat = self.dpat_for_type(&resolved, scrut_ty);
         let matched = self.intersect_pattern_flow_types(scrut_ty, &resolved);
         crate::pattern_lowering::PatternResult {

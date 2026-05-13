@@ -981,6 +981,35 @@ fn is_or_pattern_with_bindings_does_not_leak() {
 }
 
 #[test]
+fn is_unresolved_type_in_pattern_anchors_at_the_type_name() {
+    // Regression: `v is Frobnitz` used to anchor the "unresolved type"
+    // diagnostic at the scrutinee (`v`), making the squiggle land on the
+    // wrong token. After threading the pattern's `PatId` through
+    // `lower_type_pat` it lands on the type name span.
+    //
+    // We can only check the diagnostic *text* via `collect_compile_errors`
+    // — it includes `[E0002] unresolved type: Frobnitz` regardless of
+    // where the squiggle points. The span check below is a structural
+    // assertion: the diagnostic message must single out `Frobnitz`, not
+    // anything else.
+    let errors = collect_compile_errors(
+        "
+        function check(v: int | string) -> bool {
+            v is Frobnitz
+        }
+        function main() -> bool { check(1) }
+        ",
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("unresolved type: Frobnitz")),
+        "expected an unresolved-type diagnostic naming `Frobnitz`; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
 fn is_in_parameter_type_position_is_a_syntax_error() {
     // `is` is an expression operator. Using it where a type is expected
     // (parameter type, return type, type alias…) must be rejected by the
