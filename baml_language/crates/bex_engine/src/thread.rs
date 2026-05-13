@@ -8,6 +8,11 @@
 
 #![allow(dead_code, unreachable_pub)]
 
+#[allow(dead_code)]
+fn _assert_send<T: Send>() {}
+#[allow(dead_code)]
+fn _assert_sync<T: Sync>() {}
+
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicU64, Ordering},
@@ -86,6 +91,18 @@ impl BexThread {
             settles_future: Some(settles_future),
             parent: Some(parent),
         }
+    }
+
+    /// The future this thread settles on termination, if it is a spawned
+    /// child. Named with the `vm_thread_` prefix so the call site reads
+    /// clearly through an `ActiveHeapPermit<BexThread>` deref.
+    pub fn vm_thread_settles_future(&self) -> Option<FutureId> {
+        self.settles_future
+    }
+
+    /// This thread's own cancellation token.
+    pub fn vm_thread_cancel(&self) -> &CancellationToken {
+        &self.cancel
     }
 }
 

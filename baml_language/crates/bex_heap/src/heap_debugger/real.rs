@@ -338,8 +338,18 @@ impl BexHeap {
                 FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => {}
             },
             Object::UnscheduledFuture(future) => {
-                for value in &future.args {
-                    self.debug_assert_valid_value(value);
+                if let Some(name_ptr) = future.name {
+                    self.debug_assert_valid_index(name_ptr);
+                }
+                match &future.kind {
+                    bex_vm_types::UnscheduledKind::SysOp { args, .. } => {
+                        for value in args {
+                            self.debug_assert_valid_value(value);
+                        }
+                    }
+                    bex_vm_types::UnscheduledKind::Spawn { closure } => {
+                        self.debug_assert_valid_index(*closure);
+                    }
                 }
             }
             Object::Closure(closure) => {

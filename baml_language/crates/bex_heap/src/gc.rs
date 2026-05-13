@@ -325,10 +325,20 @@ impl BexHeap {
                 }
             }
             Object::UnscheduledFuture(future) => {
-                worklist.extend(future.args.iter().filter_map(|v| match v {
-                    Value::Object(ptr) => Some(*ptr),
-                    _ => None,
-                }));
+                if let Some(name_ptr) = future.name {
+                    worklist.push(name_ptr);
+                }
+                match &future.kind {
+                    bex_vm_types::UnscheduledKind::SysOp { args, .. } => {
+                        worklist.extend(args.iter().filter_map(|v| match v {
+                            Value::Object(ptr) => Some(*ptr),
+                            _ => None,
+                        }));
+                    }
+                    bex_vm_types::UnscheduledKind::Spawn { closure } => {
+                        worklist.push(*closure);
+                    }
+                }
             }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
@@ -413,8 +423,22 @@ impl BexHeap {
                 }
             }
             Object::UnscheduledFuture(future) => {
-                for value in &mut future.args {
-                    self.fixup_value(value, forwarding);
+                if let Some(name_ptr) = &mut future.name
+                    && let Some(&new_ptr) = forwarding.get(name_ptr)
+                {
+                    *name_ptr = new_ptr;
+                }
+                match &mut future.kind {
+                    bex_vm_types::UnscheduledKind::SysOp { args, .. } => {
+                        for value in args {
+                            self.fixup_value(value, forwarding);
+                        }
+                    }
+                    bex_vm_types::UnscheduledKind::Spawn { closure } => {
+                        if let Some(&new_ptr) = forwarding.get(closure) {
+                            *closure = new_ptr;
+                        }
+                    }
                 }
             }
             // Primitives have no references
@@ -670,13 +694,25 @@ impl BexHeap {
                 }
             }
             Object::UnscheduledFuture(future) => {
-                worklist.extend(
-                    future
-                        .args
-                        .iter()
-                        .filter_map(Value::as_object_ptr)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
+                if let Some(name_ptr) = future.name
+                    && self.generation_of(name_ptr).is_young()
+                {
+                    worklist.push(name_ptr);
+                }
+                match &future.kind {
+                    bex_vm_types::UnscheduledKind::SysOp { args, .. } => {
+                        worklist.extend(
+                            args.iter()
+                                .filter_map(Value::as_object_ptr)
+                                .filter(|ptr| self.generation_of(*ptr).is_young()),
+                        );
+                    }
+                    bex_vm_types::UnscheduledKind::Spawn { closure } => {
+                        if self.generation_of(*closure).is_young() {
+                            worklist.push(*closure);
+                        }
+                    }
+                }
             }
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
@@ -1776,8 +1812,11 @@ mod tests {
         let arg1 = tlab.alloc_string("arg1".to_string());
         let arg2 = tlab.alloc_string("arg2".to_string());
         let future_ptr = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
-            operation: SysOp::BamlEnvGet,
-            args: vec![Value::Object(arg1), Value::Object(arg2)],
+            kind: bex_vm_types::UnscheduledKind::SysOp {
+                operation: SysOp::BamlEnvGet,
+                args: vec![Value::Object(arg1), Value::Object(arg2)],
+            },
+            name: None,
         }));
 
         let roots = vec![future_ptr];
@@ -2274,8 +2313,11 @@ mod tests {
 
         // --- Container: Object::UnscheduledFuture ---
         let future_container = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
-            operation: SysOp::BamlEnvGet,
-            args: vec![Value::Object(leaf_for_future)],
+            kind: bex_vm_types::UnscheduledKind::SysOp {
+                operation: SysOp::BamlEnvGet,
+                args: vec![Value::Object(leaf_for_future)],
+            },
+            name: None,
         }));
 
         // --- Container: Object::Instance ---
@@ -2387,8 +2429,11 @@ mod tests {
         let Object::UnscheduledFuture(pending) = (unsafe { new_roots[4].get() }) else {
             panic!("new_roots[4] not UnscheduledFuture")
         };
-        let Value::Object(fut_leaf) = pending.args[0] else {
-            panic!("future.args[0] not Object")
+        let bex_vm_types::UnscheduledKind::SysOp { args, .. } = &pending.kind else {
+            panic!("expected SysOp kind")
+        };
+        let Value::Object(fut_leaf) = args[0] else {
+            panic!("future args[0] not Object")
         };
         let Object::String(s) = (unsafe { fut_leaf.get() }) else {
             panic!("future arg leaf not String")

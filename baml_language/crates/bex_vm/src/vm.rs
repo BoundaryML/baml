@@ -922,13 +922,19 @@ impl BexVm {
         ))
     }
 
-    /// Bootstraps the VM preparing the given function to run.
+    /// Bootstraps the VM preparing the given callable to run.
+    ///
+    /// `function` may point to either an [`Object::Function`] or an
+    /// [`Object::Closure`]. Closure entry points are used by BEP-034
+    /// `spawn { ... }`: the compiler lowers the body to a lambda, wraps it
+    /// in a closure that carries the captured environment, then hands the
+    /// closure pointer to a fresh `BexThread` which calls `set_entry_point`.
     pub fn set_entry_point(&mut self, function: HeapPtr, args: &[Value]) {
-        debug_assert!(
-            matches!(self.get_object(function), Object::Function(_)),
-            "expect function as entry point, got {:?}",
-            self.get_object(function)
-        );
+        let type_args = match self.get_object(function) {
+            Object::Function(_) => vec![],
+            Object::Closure(closure) => closure.captured_type_args.clone(),
+            other => panic!("expect function or closure as entry point, got {other:?}"),
+        };
 
         self.stack.extend(args.iter().copied());
 
@@ -936,7 +942,7 @@ impl BexVm {
             function,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
-            type_args: vec![],
+            type_args,
             faulting_pc: 0,
         }));
 
@@ -3567,8 +3573,11 @@ impl BexVm {
 
                 // Create the unscheduled future to hand off to the embedder.
                 let pending_future = UnscheduledFuture {
-                    operation: sys_op,
-                    args: future_args,
+                    kind: ::bex_vm_types::UnscheduledKind::SysOp {
+                        operation: sys_op,
+                        args: future_args,
+                    },
+                    name: None,
                 };
 
                 // Allocate the unscheduled future.
@@ -5426,8 +5435,11 @@ impl BexVm {
                     let args_offset = StackIndex::from_raw(args_offset);
                     let future_args: Vec<Value> = self.stack.drain(args_offset..).collect();
                     let pending_future = bex_vm_types::types::UnscheduledFuture {
-                        operation: sys_op,
-                        args: future_args,
+                        kind: ::bex_vm_types::UnscheduledKind::SysOp {
+                            operation: sys_op,
+                            args: future_args,
+                        },
+                        name: None,
                     };
                     let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
                     return Ok(Some(VmExecState::ScheduleFuture(object_index)));
