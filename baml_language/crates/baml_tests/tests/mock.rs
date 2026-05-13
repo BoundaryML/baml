@@ -160,6 +160,43 @@ async fn mock_intercepts_indirect_bound_method_call() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
 }
 
+/// KNOWN GAP — `YieldToCall` re-entry isn't intercepted. Native helpers
+/// like `array.map` invoke their callback via
+/// `NativeCallResult::YieldToCall`, which dispatches through
+/// `execute_call_from_locals_offset` directly — bypassing the Call /
+/// CallIndirect / DispatchFuture intercept sites.
+///
+/// Passing the mocked target as a direct callback to `.map(...)` exposes
+/// this: with the fix the result is `45` (triple ran on each element);
+/// today it is `30` (original `double` ran). Marked `#[ignore]` so the
+/// suite stays green until `execute_call_from_locals_offset` consults
+/// `mock_stack` or every YieldToCall site does.
+#[tokio::test]
+#[ignore = "YieldToCall (e.g. array.map callback) does not consult mock_stack (open gap)"]
+async fn mock_intercepts_yield_to_call_callback() {
+    let output = baml_test!(
+        r#"
+        function double(n: int) -> int { n * 2 }
+        function triple(n: int) -> int { n * 3 }
+
+        function main() -> int {
+            let m = baml.mock.Mock.new(double, triple)
+            m.scope<int, unknown>(() -> int throws unknown {
+                // Pass `double` directly so `array.map`'s native helper
+                // dispatches it via YieldToCall — the path that today
+                // skips the mock check.
+                [1, 2, 3, 4, 5].map(double)
+                    .reduce((acc: int, x: int) -> int { acc + x }, 0)
+            })
+        }
+    "#
+    );
+
+    // Triple applied to [1..=5] sums to 3+6+9+12+15 = 45.
+    // Currently observed: 30 (double ran — mock did not intercept).
+    assert_eq!(output.result, Ok(BexExternalValue::Int(45)));
+}
+
 /// GC stress: a Closure replacement that captures a heap-allocated cell
 /// (the counter) is pushed onto the mock stack, and the body allocates
 /// aggressively to force collection while the override is active. The
