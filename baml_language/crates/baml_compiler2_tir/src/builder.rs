@@ -2551,8 +2551,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(*condition, body);
 
                 // Extract narrowings from the condition expression.
-                let narrowings =
-                    crate::narrowing::extract_narrowings(*condition, body, &self.expressions);
+                let narrowings = crate::narrowing::extract_narrowings(
+                    *condition,
+                    body,
+                    &self.expressions,
+                    &self.pattern_types,
+                );
 
                 // Apply then-branch narrowings, saving originals.
                 let saved = crate::narrowing::apply_then_narrowings(&narrowings, &mut self.locals);
@@ -3123,8 +3127,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(*condition, body);
 
                 // Extract narrowings from the condition expression.
-                let narrowings =
-                    crate::narrowing::extract_narrowings(*condition, body, &self.expressions);
+                let narrowings = crate::narrowing::extract_narrowings(
+                    *condition,
+                    body,
+                    &self.expressions,
+                    &self.pattern_types,
+                );
 
                 // Apply then-branch narrowings, saving originals.
                 let saved = crate::narrowing::apply_then_narrowings(&narrowings, &mut self.locals);
@@ -3857,8 +3865,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // infer_expr for the Expr::If will re-infer it (idempotent: the
                 // type is recorded and cached in self.expressions).
                 self.infer_expr(condition, body);
-                let narrowings =
-                    crate::narrowing::extract_narrowings(condition, body, &self.expressions);
+                let narrowings = crate::narrowing::extract_narrowings(
+                    condition,
+                    body,
+                    &self.expressions,
+                    &self.pattern_types,
+                );
 
                 // Run the normal check_stmt (which handles the full Expr::If
                 // including inner narrowing for the branches).

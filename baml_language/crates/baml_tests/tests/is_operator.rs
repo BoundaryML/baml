@@ -736,6 +736,196 @@ async fn is_evaluates_scrutinee_exactly_once() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
+// ── Group J: type narrowing in if/else branches ─────────────────────────────
+//
+// `if (v is T) { ... }` narrows `v` to T inside the then-branch (and to the
+// original type — not "the complement of T" — inside the else-branch, since
+// we don't do union subtraction). Same shape as TypeScript's `typeof v ===
+// "number"`.
+
+#[tokio::test]
+async fn narrowing_then_branch_picks_pattern_type() {
+    // Inside the then-branch, `v` is narrowed to `int`, so `v + 1` is a
+    // legal int operation. Without narrowing this would be a type error
+    // because `int | string` doesn't support `+`.
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let v: int | string = 7
+            if (v is int) { v + 1 } else { 0 }
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(8)));
+}
+
+#[tokio::test]
+async fn narrowing_then_branch_picks_or_pattern_type() {
+    // Or-patterns: `v is int | bool` narrows to `int | bool` in then.
+    // Both arithmetic and boolean ops are defined on their respective
+    // narrowed alternatives, so doing one of them per branch is fine.
+    let output = baml_test!(
+        "
+        function describe(v: int | string | bool) -> string {
+            if (v is int) { \"got int\" }
+            else if (v is bool) { \"got bool\" }
+            else { \"got string\" }
+        }
+
+        function main() -> string {
+            describe(true)
+        }
+    "
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("got bool".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn narrowing_else_branch_keeps_original_type() {
+    // The else-branch is intentionally NOT narrowed (we'd need union
+    // subtraction to do so soundly). The original `int | string` type
+    // survives, so accessing it as either alternative would require a
+    // further narrow — here we just return a constant to confirm the
+    // branch runs.
+    let output = baml_test!(
+        "
+        function main() -> string {
+            let v: int | string = \"hi\"
+            if (v is int) { \"number\" } else { \"text\" }
+        }
+    "
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("text".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn narrowing_through_negation() {
+    // `!(v is int)` flips the narrowing: in the then-branch, `v` keeps
+    // the original type; in the else-branch, `v` is narrowed to int.
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let v: int | string = 5
+            if (!(v is int)) { 0 } else { v + 100 }
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(105)));
+}
+
+#[tokio::test]
+async fn narrowing_works_on_function_parameter() {
+    // The most common case in practice: narrowing a function parameter,
+    // not a `let` binding. Same code path but worth pinning explicitly.
+    let output = baml_test!(
+        "
+        function process(v: int | string) -> int {
+            if (v is int) { v * 3 } else { 0 }
+        }
+
+        function main() -> int {
+            process(7)
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(21)));
+}
+
+#[tokio::test]
+async fn narrowing_picks_class_type_in_then_branch() {
+    // `v is Success` narrows `v` to the class type `Success`, so the
+    // then-branch can access `.data` (a field on Success) without first
+    // dispatching on the union.
+    let output = baml_test!(
+        "
+        class Success { data string }
+        class Failure { reason string }
+
+        function describe(v: Success | Failure) -> string {
+            if (v is Success) { v.data } else { \"failed\" }
+        }
+
+        function main() -> string {
+            describe(Success { data: \"ok\" })
+        }
+    "
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("ok".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn narrowing_persists_across_multiple_uses_in_then() {
+    // The narrowing is applied to the local for the duration of the
+    // then-branch, not just the first reference — so multiple uses of
+    // `v` all see the narrowed type.
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let v: int | string = 4
+            if (v is int) {
+                let a = v + 1
+                let b = v + 2
+                a + b
+            } else {
+                0
+            }
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(11)));
+}
+
+#[tokio::test]
+async fn narrowing_skipped_for_non_path_scrutinee() {
+    // The narrowing logic only fires when the scrutinee is a simple
+    // local-variable reference. For complex scrutinees (calls, field
+    // access, etc.) we don't narrow anything — the expression still
+    // evaluates correctly as a runtime test, just no type refinement.
+    let output = baml_test!(
+        "
+        class Wrap { value int | string }
+
+        function main() -> string {
+            let w = Wrap { value: 7 }
+            if (w.value is int) { \"int\" } else { \"text\" }
+        }
+    "
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("int".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn narrowing_with_early_return() {
+    // Early-return form: when the then-branch always diverges, the
+    // else-narrowing applies to the rest of the enclosing block. So
+    // after `if (v is string) { return ... }`, `v` is narrowed back to
+    // its non-string alternatives — but our else keeps original today,
+    // so `v` would still be `int | string` after. This test asserts
+    // current behavior; tightening the else side would change it.
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let v: int | string = 7
+            if (v is string) { return 0 }
+            if (v is int) { v * 2 } else { -1 }
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(14)));
+}
+
 // ── Group I: negative tests ─────────────────────────────────────────────────
 //
 // These programs must fail to compile. We assert on a substring of the

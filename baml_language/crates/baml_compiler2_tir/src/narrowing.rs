@@ -10,6 +10,9 @@
 //! - `x == null` → then: null, else: remove null
 //! - `x` (truthiness) → then: remove null, else: original
 //! - `!(x == null)` → same as `x != null` (negation flips then/else)
+//! - `x is <pattern>` → then: pattern's matched type, else: original
+//!   (TypeScript-style: precise else-narrowing would require union
+//!   subtraction, which we don't do yet)
 //!
 //! ## Early-return narrowing
 //!
@@ -25,7 +28,7 @@
 //! type-check without errors.
 
 use baml_base::Name;
-use baml_compiler2_ast::{BinaryOp, Expr, ExprBody, ExprId, UnaryOp};
+use baml_compiler2_ast::{BinaryOp, Expr, ExprBody, ExprId, PatId, UnaryOp};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -60,13 +63,24 @@ pub struct Narrowing {
 /// - `body`: the `ExprBody` arena for the current scope
 /// - `expr_types`: the accumulated expression type map (from `self.expressions`
 ///   in the builder — expressions inferred *before* the condition are present)
+/// - `pattern_types`: the per-`PatId` matched-type map (from `self.pattern_types`
+///   in the builder — populated when `<expr> is <pattern>` is inferred). Read
+///   only by the `Expr::Is` branch; null-only conditions ignore it.
 pub fn extract_narrowings(
     condition: ExprId,
     body: &ExprBody,
     expr_types: &FxHashMap<ExprId, Ty>,
+    pattern_types: &FxHashMap<PatId, Ty>,
 ) -> Vec<Narrowing> {
     let mut narrowings = Vec::new();
-    collect_narrowings(condition, body, expr_types, false, &mut narrowings);
+    collect_narrowings(
+        condition,
+        body,
+        expr_types,
+        pattern_types,
+        false,
+        &mut narrowings,
+    );
     narrowings
 }
 
@@ -75,6 +89,7 @@ fn collect_narrowings(
     expr_id: ExprId,
     body: &ExprBody,
     expr_types: &FxHashMap<ExprId, Ty>,
+    pattern_types: &FxHashMap<PatId, Ty>,
     negated: bool,
     out: &mut Vec<Narrowing>,
 ) {
@@ -139,7 +154,36 @@ fn collect_narrowings(
             op: UnaryOp::Not,
             expr: inner,
         } => {
-            collect_narrowings(*inner, body, expr_types, !negated, out);
+            collect_narrowings(*inner, body, expr_types, pattern_types, !negated, out);
+        }
+
+        // `name is <pattern>` — narrow `name` to the pattern's matched type
+        // in the then-branch (or in the else-branch if negated). The opposite
+        // branch keeps the original type since we don't do union subtraction.
+        Expr::Is { scrutinee, pattern } => {
+            let Expr::Path(segments) = &body.exprs[*scrutinee] else {
+                return;
+            };
+            if segments.len() != 1 {
+                return;
+            }
+            let name = &segments[0];
+            let Some(original_ty) = expr_types.get(scrutinee) else {
+                return;
+            };
+            let Some(matched_ty) = pattern_types.get(pattern) else {
+                return;
+            };
+            let (then_type, else_type) = if negated {
+                (original_ty.clone(), matched_ty.clone())
+            } else {
+                (matched_ty.clone(), original_ty.clone())
+            };
+            out.push(Narrowing {
+                name: name.clone(),
+                then_type,
+                else_type,
+            });
         }
 
         // Truthiness: if (x) where x is optional — then-branch removes null
