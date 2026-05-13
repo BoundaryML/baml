@@ -376,6 +376,19 @@ impl BexHeap {
                     _ => None,
                 }));
             }
+            Object::Function(f) => {
+                // Runtime-compiled functions carry a per-function aux pool of
+                // HeapPtrs referenced by `MakeClosure` / `AllocInstance` /
+                // `AllocVariant` operands (see `BexVm::resolve_obj_idx`). Walk
+                // it as outgoing references.
+                //
+                // For build-time functions this vec is empty and the loop is
+                // a no-op; the function still has no other heap-allocated
+                // outgoing fields (bytecode, types, names are plain Rust data).
+                for ptr in &f.aux_object_ptrs {
+                    worklist.push(*ptr);
+                }
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -383,7 +396,6 @@ impl BexHeap {
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
-            | Object::Function(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Type(_) => {}
@@ -498,6 +510,15 @@ impl BexHeap {
                     self.fixup_value(value, forwarding);
                 }
             }
+            Object::Function(f) => {
+                // Update aux-pool entries (see add_references_to_worklist).
+                // Empty for build-time functions.
+                for ptr in &mut f.aux_object_ptrs {
+                    if let Some(&new_ptr) = forwarding.get(ptr) {
+                        *ptr = new_ptr;
+                    }
+                }
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -505,7 +526,6 @@ impl BexHeap {
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
-            | Object::Function(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Type(_) => {}
@@ -759,6 +779,16 @@ impl BexHeap {
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
             }
+            Object::Function(f) => {
+                // Per-function aux pool (runtime-compiled only). Empty for
+                // build-time functions.
+                worklist.extend(
+                    f.aux_object_ptrs
+                        .iter()
+                        .copied()
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
+            }
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -766,7 +796,6 @@ impl BexHeap {
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
-            | Object::Function(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Type(_) => {}
@@ -2707,5 +2736,172 @@ mod tests {
         assert_eq!(heap.should_collect(), Some(CollectionLevel::Minor));
 
         drop(remapped);
+    }
+
+    // ========================================================================
+    // gen0 Object::Function GC behaviour
+    //
+    // These tests verify that an Object::Function allocated into gen0 (as will
+    // happen when runtime compilation returns a compiled lambda) is handled
+    // correctly by the GC:
+    //
+    //   1. When no roots keep it alive it is collected.
+    //   2. When a root holds a pointer to it the pointer is forwarded and the
+    //      object survives.
+    //   3. The function's per-function aux pool is walked and forwarded.
+    //
+    // The tests construct a minimal `Function` with valid fields but empty
+    // bytecode; only the GC behaviour (collection / forwarding) is exercised.
+    // ========================================================================
+
+    /// Build a minimal `Function` object suitable for gen0 allocation tests.
+    ///
+    /// The bytecode is empty; `real_local_count` and `arity` are both 0.
+    fn make_dummy_function() -> bex_vm_types::Function {
+        use baml_type::{Span, Ty, TyAttr};
+        use bex_vm_types::{Bytecode, FunctionKind, FunctionOrigin};
+
+        bex_vm_types::Function {
+            name: "dummy".to_string(),
+            source_file: String::new(),
+            arity: 0,
+            real_local_count: 0,
+            bytecode: Bytecode::default(),
+            kind: FunctionKind::Bytecode,
+            local_names: vec![],
+            debug_locals: vec![],
+            span: Span::fake(),
+            block_notifications: vec![],
+            viz_nodes: vec![],
+            return_type: Ty::int(),
+            stream_return_type: Ty::Null {
+                attr: TyAttr::default(),
+            },
+            param_names: vec![],
+            param_types: vec![],
+            param_has_default: vec![],
+            throws_type: None,
+            origin: FunctionOrigin::UserDefined,
+            body_meta: None,
+            trace: false,
+            aux_object_ptrs: Vec::new(),
+        }
+    }
+
+    /// A gen0-allocated `Object::Function` with no surviving roots must be
+    /// collected by a major GC.
+    #[test]
+    fn gen0_function_is_collected_when_unreachable() {
+        use crate::heap::Generation;
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let fn_obj = Object::Function(Box::new(make_dummy_function()));
+        let ptr = tlab.alloc(fn_obj);
+
+        // Sanity: the freshly-allocated ptr is in gen0, not compile_time.
+        assert!(!heap.is_compile_time_ptr(ptr));
+        assert_eq!(heap.generation_of(ptr), Generation::Gen0);
+
+        // Run major GC with no roots — the function object must not survive.
+        let (stats, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
+
+        assert_eq!(
+            stats.live_count, 0,
+            "unreachable function must be collected"
+        );
+        assert!(
+            !forwarding.contains_key(&ptr),
+            "unreachable function must not appear in forwarding map"
+        );
+    }
+
+    /// A gen0-allocated `Object::Function` that is kept alive by a root must
+    /// survive major GC and have its pointer forwarded correctly.
+    #[test]
+    fn gen0_function_survives_with_root() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let fn_obj = Object::Function(Box::new(make_dummy_function()));
+        let ptr = tlab.alloc(fn_obj);
+
+        // Run major GC with the function as a root.
+        let (stats, new_roots, forwarding) = unsafe { heap.collect_garbage(&[ptr]) };
+
+        assert_eq!(stats.live_count, 1, "rooted function must survive GC");
+
+        // The forwarding map must map old ptr → new ptr.
+        let new_ptr = forwarding
+            .get(&ptr)
+            .copied()
+            .expect("rooted function must be in forwarding map");
+        assert_eq!(
+            new_ptr, new_roots[0],
+            "remapped root must match forwarding entry"
+        );
+
+        // The new pointer must still point to an Object::Function.
+        // SAFETY: GC has completed; new_ptr is valid in the post-GC heap.
+        let obj = unsafe { new_ptr.get() };
+        assert!(
+            matches!(obj, Object::Function(_)),
+            "forwarded pointer must still reference a Function object, got {obj:?}"
+        );
+    }
+
+    /// A function whose `aux_object_ptrs` references a gen0 aux object must
+    /// (a) keep the aux object alive via that reference and (b) have its
+    /// `aux_object_ptrs` entry forwarded to the aux object's new address.
+    ///
+    /// This is the GC-side of the per-function aux pool mechanism that lets
+    /// runtime-compiled functions reference heap objects that don't live in
+    /// the immortal compile-time pool.
+    #[test]
+    fn gen0_function_aux_pool_is_walked_and_forwarded() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        // First allocate an aux object (a string is the simplest leaf).
+        let aux_ptr = tlab.alloc(Object::String("aux-payload".into()));
+
+        // Build a Function whose aux pool references the aux object.
+        let mut func = make_dummy_function();
+        func.aux_object_ptrs.push(aux_ptr);
+        let fn_ptr = tlab.alloc(Object::Function(Box::new(func)));
+
+        // Only the function is a root; the aux object is reachable only
+        // through the function's aux pool.
+        let (stats, new_roots, forwarding) = unsafe { heap.collect_garbage(&[fn_ptr]) };
+
+        assert_eq!(
+            stats.live_count, 2,
+            "function + aux object both survive (got live_count={})",
+            stats.live_count
+        );
+
+        let new_fn_ptr = new_roots[0];
+        let new_aux_ptr = forwarding
+            .get(&aux_ptr)
+            .copied()
+            .expect("aux object must be in forwarding map (kept alive by function)");
+
+        // SAFETY: GC has completed; both ptrs are valid in the post-GC heap.
+        let fn_obj = unsafe { new_fn_ptr.get() };
+        let Object::Function(f) = fn_obj else {
+            panic!("forwarded fn ptr must point to Object::Function");
+        };
+        assert_eq!(
+            f.aux_object_ptrs,
+            vec![new_aux_ptr],
+            "function's aux_object_ptrs entry must be forwarded to aux object's new address"
+        );
+
+        let aux_obj = unsafe { new_aux_ptr.get() };
+        let Object::String(s) = aux_obj else {
+            panic!("forwarded aux ptr must still point to Object::String");
+        };
+        assert_eq!(s.as_str(), "aux-payload");
     }
 }

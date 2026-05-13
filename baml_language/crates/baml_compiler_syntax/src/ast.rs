@@ -2583,6 +2583,7 @@ impl BlockExpr {
                         | SyntaxKind::OPTIONAL_INDEX_EXPR
                         | SyntaxKind::OPTIONAL_CALL_EXPR
                         | SyntaxKind::PAREN_EXPR
+                        | SyntaxKind::LAMBDA_EXPR
                         | SyntaxKind::ARRAY_LITERAL
                         | SyntaxKind::OBJECT_LITERAL
                         | SyntaxKind::MAP_LITERAL

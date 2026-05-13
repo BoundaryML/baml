@@ -1,11 +1,12 @@
 //! Code generation for the `ErrorClass` enum.
 //!
 //! Reads `NativeClassDef` entries whose `namespace_prefix` is `"baml.errors"`
-//! and generates an `ErrorClass` fieldless enum with `fqn()`, `name()`, `ALL`,
-//! `ALL_NAMES`, and `from_name()`.
+//! (primary error namespace) or any additional error-bearing namespace listed in
+//! [`EXTRA_ERROR_NAMESPACES`] and generates an `ErrorClass` fieldless enum with
+//! `fqn()`, `name()`, `ALL`, `ALL_NAMES`, and `from_name()`.
 //!
-//! Generated from `errors.baml` class definitions so that adding a new error
-//! type only requires editing the `.baml` file.
+//! Generated from `.baml` class definitions so that adding a new error type
+//! only requires editing the source file.
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -14,11 +15,24 @@ use crate::types::NativeClassDef;
 
 const ERRORS_NAMESPACE: &str = "baml.errors";
 
+/// Additional namespaces whose classes are included in `ErrorClass`.
+///
+/// Classes from these namespaces have their full FQN (`<namespace>.<ClassName>`)
+/// used as the FQN in the generated enum, unlike `baml.errors.*` which always
+/// uses the `ERRORS_NAMESPACE` prefix.
+///
+/// Currently empty — populated by future packages (e.g. `reflect.Package`
+/// adding `baml.reflect.CompileError`).
+const EXTRA_ERROR_NAMESPACES: &[&str] = &[];
+
 /// Generate the `ErrorClass` enum and associated methods.
 pub fn generate_error_enums(class_defs: &[NativeClassDef]) -> String {
     let errors: Vec<&NativeClassDef> = class_defs
         .iter()
-        .filter(|c| c.namespace_prefix == ERRORS_NAMESPACE)
+        .filter(|c| {
+            c.namespace_prefix == ERRORS_NAMESPACE
+                || EXTRA_ERROR_NAMESPACES.contains(&c.namespace_prefix.as_str())
+        })
         .collect();
 
     if errors.is_empty() {
@@ -35,9 +49,11 @@ pub fn generate_error_enums(class_defs: &[NativeClassDef]) -> String {
 
 fn generate_error_class_enum(errors: &[&NativeClassDef]) -> TokenStream {
     let variant_idents: Vec<_> = errors.iter().map(|e| format_ident!("{}", e.name)).collect();
+    // Use each class's actual namespace prefix as the FQN base so that classes from
+    // extra namespaces get `<namespace>.ClassName` rather than `baml.errors.ClassName`.
     let fqns: Vec<String> = errors
         .iter()
-        .map(|e| format!("{ERRORS_NAMESPACE}.{}", e.name))
+        .map(|e| format!("{}.{}", e.namespace_prefix, e.name))
         .collect();
     let names: Vec<&str> = errors.iter().map(|e| e.name.as_str()).collect();
 

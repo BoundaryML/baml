@@ -395,6 +395,20 @@ pub struct Function {
     /// Whether this function should be traced (emit span notifications on call/return).
     /// Set to `true` for LLM functions by the compiler.
     pub trace: bool,
+
+    /// Per-function auxiliary `HeapPtr` pool. Populated only for runtime-compiled
+    /// functions (gen0) whose `MakeClosure` / `AllocInstance` / `AllocVariant`
+    /// instructions need to reference heap objects that don't live in the
+    /// engine's immortal `Program.objects` compile-time pool.
+    ///
+    /// For build-time functions this is empty and dispatch falls back to
+    /// `BexHeap::compile_time_ptr(obj_idx)`. For runtime-compiled functions
+    /// the dispatch helper `BexVm::resolve_obj_idx` reads from here first.
+    ///
+    /// GC: these are outgoing references of `Object::Function` — walked by
+    /// `add_references_to_worklist` and `fixup_object_references` in
+    /// `bex_heap::gc`.
+    pub aux_object_ptrs: Vec<crate::HeapPtr>,
 }
 
 impl std::fmt::Display for Function {

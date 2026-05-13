@@ -634,6 +634,39 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             .collect();
         let debug_locals = Self::build_debug_locals(mir, &self.local_slots);
 
+        // Extract type metadata from MIR locals. `_0` is always the return
+        // place; `_1..=_arity` are the parameters in declaration order.
+        // Top-level functions overwrite these after `compile_mir_function`
+        // returns (via `compute_function_metadata_from_item_tree` at
+        // `crates/baml_compiler2_emit/src/lib.rs`); lambdas keep them.
+        let return_type =
+            mir.locals
+                .first()
+                .map(|l| l.ty.clone())
+                .unwrap_or_else(|| baml_type::Ty::Null {
+                    attr: baml_type::TyAttr::default(),
+                });
+        let param_names: Vec<String> = (1..=self.arity)
+            .map(|i| {
+                mir.locals
+                    .get(i)
+                    .and_then(|l| l.name.as_ref())
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| format!("_arg{}", i - 1))
+            })
+            .collect();
+        let param_types: Vec<baml_type::Ty> = (1..=self.arity)
+            .map(|i| {
+                mir.locals
+                    .get(i)
+                    .map(|l| l.ty.clone())
+                    .unwrap_or_else(|| baml_type::Ty::Null {
+                        attr: baml_type::TyAttr::default(),
+                    })
+            })
+            .collect();
+        let param_has_default: Vec<bool> = vec![false; self.arity];
+
         // 5. Build the Function
         // Note: `name` is set by the caller after `compile_mir_function` returns.
         // `span` is set by `compile_mir_function` from the MIR function span.
@@ -649,19 +682,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             span: Span::fake(),
             block_notifications: self.block_notifications,
             viz_nodes,
-            return_type: baml_type::Ty::Null {
-                attr: baml_type::TyAttr::default(),
-            },
+            return_type,
             stream_return_type: baml_type::Ty::Null {
                 attr: baml_type::TyAttr::default(),
             },
-            param_names: Vec::new(),
-            param_types: Vec::new(),
-            param_has_default: Vec::new(),
+            param_names,
+            param_types,
+            param_has_default,
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
             trace: false,
+            // Build-time functions: aux pool stays empty; dispatch falls back
+            // to compile-time pool resolution. Runtime-compiled functions get
+            // this populated by `BexVm::alloc_function_gen0` (in a future commit).
+            aux_object_ptrs: Vec::new(),
         }
     }
 

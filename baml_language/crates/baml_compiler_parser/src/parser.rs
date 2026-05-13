@@ -4545,7 +4545,8 @@ impl<'a> Parser<'a> {
                 // - `Quote` / `Hash` for string-literal types (`"a"`,
                 //   `#"raw"#`)
                 // - `LParen` / `RParen` for parenthesized union types
-                //   (`(int | string)`)
+                //   (`(int | string)`) and function types (`(int) -> int`)
+                // - `Arrow` for function types (`() -> int`)
                 TokenKind::Word
                 | TokenKind::Dot
                 | TokenKind::Comma
@@ -4559,7 +4560,8 @@ impl<'a> Parser<'a> {
                 | TokenKind::Quote
                 | TokenKind::Hash
                 | TokenKind::LParen
-                | TokenKind::RParen => {}
+                | TokenKind::RParen
+                | TokenKind::Arrow => {}
                 // Anything else — operators, braces, EOF-ish tokens — can't
                 // appear in a type, so this `<` is a comparison.
                 _ => return false,

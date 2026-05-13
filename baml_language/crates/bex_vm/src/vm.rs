@@ -788,6 +788,39 @@ impl BexVm {
         self.heap.compile_time_ptr(idx.into_raw())
     }
 
+    /// Resolve an `ObjectIndex` operand from inside an instruction dispatch
+    /// (e.g. `MakeClosure`, `AllocInstance`, `AllocVariant`, `IsType` against
+    /// `ConstValue::ClassWithTypeArgs`).
+    ///
+    /// For build-time functions the operand indexes into the immortal
+    /// compile-time pool, identical to `idx_to_ptr`. For runtime-compiled
+    /// functions whose `aux_object_ptrs` is non-empty, the operand indexes
+    /// into that per-function gen0 pool instead — so a runtime-compiled
+    /// snippet can reference heap objects that don't live in `Program.objects`.
+    ///
+    /// Falls back to `compile_time_ptr` if the active frame is not a bytecode
+    /// frame, the active function has no aux pool, or the index is out of
+    /// range. The fallback preserves prior behavior and shouldn't trigger
+    /// for correctly-emitted bytecode.
+    #[inline]
+    pub fn resolve_obj_idx(&self, obj_idx: ObjectIndex) -> HeapPtr {
+        if let Some(Frame::Bytecode(bf)) = self.frames.last() {
+            // SAFETY: frame `function` is always a valid HeapPtr (kept alive
+            // by frame root walking) and `bf.function.get()` is the standard
+            // way to read it elsewhere in this file.
+            let func_obj = unsafe { bf.function.get() };
+            if let Object::Function(f) = func_obj {
+                if !f.aux_object_ptrs.is_empty() {
+                    let raw = obj_idx.into_raw();
+                    if raw < f.aux_object_ptrs.len() {
+                        return f.aux_object_ptrs[raw];
+                    }
+                }
+            }
+        }
+        self.heap.compile_time_ptr(obj_idx.into_raw())
+    }
+
     /// Helper method to get `HeapPtr` from a Value, with type checking.
     fn as_object_ptr(
         &self,
@@ -3492,8 +3525,9 @@ impl BexVm {
                 class_obj: index,
                 ntypeargs,
             } => {
-                // Convert compile-time ObjectIndex to HeapPtr
-                let class_ptr = self.idx_to_ptr(index);
+                // Resolve ObjectIndex via active-function aux pool with
+                // compile-time fallback (see `resolve_obj_idx` doc-comment).
+                let class_ptr = self.resolve_obj_idx(index);
 
                 // Pop class-level type args from the stack (sitting below any
                 // field init instructions that follow).  When ntypeargs == 0
@@ -3548,8 +3582,9 @@ impl BexVm {
             // TODO: Contains a lot of typechecking, we know at compile time
             // that all this stuff is right. Should do something about it.
             Instruction::AllocVariant(enum_index) => {
-                // Convert compile-time ObjectIndex to HeapPtr
-                let enum_ptr = self.idx_to_ptr(enum_index);
+                // Resolve ObjectIndex via active-function aux pool with
+                // compile-time fallback.
+                let enum_ptr = self.resolve_obj_idx(enum_index);
                 // Extract the variant count before popping from stack to avoid borrow conflicts
                 let variant_count = {
                     let Object::Enum(enm) = self.get_object(enum_ptr) else {
@@ -4232,7 +4267,7 @@ impl BexVm {
                         // that the instance's class_type_args match the
                         // expected templates (substituted with current
                         // frame.type_args for TypeArgRef leaves).
-                        let class_ptr = self.idx_to_ptr(*class_obj);
+                        let class_ptr = self.resolve_obj_idx(*class_obj);
                         match value {
                             Value::Object(val_ptr) => match self.get_object(val_ptr) {
                                 Object::Instance(inst) if inst.class == class_ptr => {
@@ -4383,7 +4418,7 @@ impl BexVm {
                     vec![]
                 };
 
-                let function_ptr = self.idx_to_ptr(obj_idx);
+                let function_ptr = self.resolve_obj_idx(obj_idx);
                 let closure = Object::Closure(Closure {
                     function: function_ptr,
                     captures,
@@ -5377,7 +5412,7 @@ impl BexVm {
                 OpCode::AllocInstance => {
                     let raw = { read_u32_unchecked(code, pc) };
                     let ntypeargs = { read_u16_unchecked(code, pc) } as usize;
-                    let class_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
+                    let class_ptr = self.resolve_obj_idx(ObjectIndex::from_raw(raw as usize));
 
                     // Pop class-level type args from the stack (sitting below any
                     // field init instructions that follow).
@@ -5425,7 +5460,7 @@ impl BexVm {
 
                 OpCode::AllocVariant => {
                     let raw = { read_u32_unchecked(code, pc) };
-                    let enum_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
+                    let enum_ptr = self.resolve_obj_idx(ObjectIndex::from_raw(raw as usize));
                     let variant_count = {
                         let Object::Enum(enm) = self.get_object(enum_ptr) else {
                             return Err(VmInternalError::TypeError {
@@ -5977,7 +6012,7 @@ impl BexVm {
                             class_obj,
                             type_args_templates,
                         } => {
-                            let class_ptr = self.idx_to_ptr(*class_obj);
+                            let class_ptr = self.resolve_obj_idx(*class_obj);
                             match value {
                                 Value::Object(val_ptr) => match self.get_object(val_ptr) {
                                     Object::Instance(inst) if inst.class == class_ptr => {
@@ -6112,7 +6147,7 @@ impl BexVm {
                         vec![]
                     };
 
-                    let function_ptr = self.idx_to_ptr(ObjectIndex::from_raw(obj_idx_raw));
+                    let function_ptr = self.resolve_obj_idx(ObjectIndex::from_raw(obj_idx_raw));
                     let closure = Object::Closure(Closure {
                         function: function_ptr,
                         captures,

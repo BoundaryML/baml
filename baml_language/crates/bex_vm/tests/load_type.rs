@@ -69,6 +69,7 @@ fn inject_function(
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
         trace: false,
+        aux_object_ptrs: Vec::new(),
     };
 
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));
