@@ -41,8 +41,9 @@ use ::core::any::TypeId;
 use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, FutureRead, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
-    ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
+    BinOp, CmpOp, EnginePackages, FunctionKind, FutureRead, HeapPtr, Instruction, Object,
+    ObjectIndex, ObjectPool, ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value,
+    Variant, VmGlobals,
     bytecode::{self, BlockNotification},
     types::{
         BoundMethod, Cell, Closure, ConstValue, Function, FunctionType, FutureType, Instance, Type,
@@ -67,6 +68,21 @@ pub const MAX_FRAMES: usize = 256;
 pub struct BytecodeFrame {
     /// Pointer to the running function (or closure) object.
     pub function: HeapPtr,
+    /// Pointer to the `Object::Package` this frame's function belongs to.
+    ///
+    /// Resolved at frame push from `function.package_name` via
+    /// `vm.packages.get(&name)`. `None` when no matching package is registered
+    /// — typically VMs constructed via `BexVm::from_program` (tests / standalone
+    /// analysis tools) that don't go through the engine's package
+    /// construction. Functions emitted by `BexEngine::new` always resolve to a
+    /// compile-time-pool `Object::Package`.
+    ///
+    /// Consumed by the package-routed dispatch path (`LoadGlobal`, `Call` by
+    /// global slot, etc.) once that lands. The pointer is to a compile-time
+    /// `Object::Package` for build-time functions (stable across GC); a
+    /// future Phase 5 commit will add the gen0 case for runtime-compiled
+    /// packages.
+    pub package: Option<HeapPtr>,
     /// Instruction pointer (IP). Points to the next instruction.
     pub instruction_ptr: usize,
     /// Local variables offset in the eval stack.
@@ -88,9 +104,15 @@ pub struct BytecodeFrame {
 impl RootHaver for BytecodeFrame {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         roots.push(self.function);
+        if let Some(pkg) = self.package {
+            roots.push(pkg);
+        }
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.function = roots.get(&self.function).copied().unwrap_or(self.function);
+        if let Some(pkg) = self.package {
+            self.package = Some(roots.get(&pkg).copied().unwrap_or(pkg));
+        }
     }
 }
 
@@ -306,6 +328,17 @@ pub struct BexVm {
     /// is constructed with `VmGlobals::Shared`; `StoreGlobal` against the
     /// shared view is a `VmInternalError`.
     pub globals: VmGlobals,
+
+    /// Engine-wide name → `Object::Package` `HeapPtr` index.
+    ///
+    /// Used at frame push to resolve `Function.package_name` → the owning
+    /// `Object::Package` `HeapPtr`, which is then cached on
+    /// [`BytecodeFrame::package`]. Cloning is a cheap Arc bump.
+    ///
+    /// For VMs constructed via `BexVm::from_program` (tests / standalone
+    /// analysis tools) this is empty; frame pushes then leave
+    /// `BytecodeFrame::package = None`.
+    pub packages: EnginePackages,
 
     /// Resolved class names mapping fully-qualified class names to their heap pointers.
     ///
@@ -634,6 +667,61 @@ impl BexVm {
         }
     }
 
+    /// Read a global by slot through the package-routed dispatch path.
+    ///
+    /// Post-`$init` VMs route reads through the active bytecode frame's
+    /// `package`: the frame's owning `Object::Package` holds a
+    /// `PackageGlobals::Static(SharedGlobals)` (build-time, an Arc-clone of
+    /// the engine's globals) or `PackageGlobals::Dynamic(Vec)` (runtime,
+    /// added in Phase 5). Both yield the same flat-slot semantics; per
+    /// the per-package slot-space invariant a `Call { slot=K }` always
+    /// reaches the correct global for the function's package.
+    ///
+    /// During `$init` (`VmGlobals::Owned`) the package's `Static`
+    /// `SharedGlobals` still holds `Null` placeholders until
+    /// `SharedGlobals::commit_init` fires at the end of engine
+    /// construction, so reads must come from the mutable `GlobalPool`
+    /// directly. The match on `VmGlobals::Owned` below handles this.
+    ///
+    /// For VMs without an active bytecode frame (entry-point bootstrap,
+    /// native frames on top) or constructed via `BexVm::from_program`
+    /// (which leaves `frame.package = None`), this falls back to the
+    /// historical `self.globals.get(...)` path.
+    fn read_global(&self, idx: bex_vm_types::GlobalIndex) -> Value {
+        if matches!(self.globals, VmGlobals::Shared(_))
+            && let Some(Frame::Bytecode(bf)) = self.frames.last()
+            && let Some(pkg_ptr) = bf.package
+            && let Object::Package(pkg) = self.get_object(pkg_ptr)
+        {
+            return pkg.globals.read(self.proof(), idx);
+        }
+        self.globals.get(self.proof(), idx)
+    }
+
+    /// Resolve the `Object::Package` `HeapPtr` for a function this VM is
+    /// about to push a bytecode frame for.
+    ///
+    /// Reads the function's `package_name` (unwrapping `Closure` and
+    /// `BoundMethod` to their underlying `Function`) and looks it up in
+    /// `self.packages`. Returns `None` when the heap value isn't a function
+    /// or when no matching package is registered (typically `BexVm::from_program`
+    /// VMs that bypass `BexEngine::new`'s package construction).
+    fn resolve_frame_package(&self, function: HeapPtr) -> Option<HeapPtr> {
+        let name = match self.get_object(function) {
+            Object::Function(f) => &f.package_name,
+            Object::Closure(c) => match self.get_object(c.function) {
+                Object::Function(f) => &f.package_name,
+                _ => return None,
+            },
+            Object::BoundMethod(bm) => match self.get_object(bm.function) {
+                Object::Function(f) => &f.package_name,
+                _ => return None,
+            },
+            _ => return None,
+        };
+        self.packages.get(name)
+    }
+
     /// Create a new VM with a shared heap.
     ///
     /// The heap is shared across all VMs. Each VM gets its own TLAB
@@ -641,6 +729,7 @@ impl BexVm {
     pub fn new(
         heap: Arc<BexHeap>,
         globals: VmGlobals,
+        packages: EnginePackages,
         resolved_class_names: HashMap<String, HeapPtr>,
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
@@ -685,6 +774,7 @@ impl BexVm {
             early_yield,
             tlab,
             globals,
+            packages,
             resolved_class_names,
             error_class_ptrs,
             panic_class_ptrs,
@@ -1009,9 +1099,17 @@ impl BexVm {
                 .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw()))),
         );
 
+        // `from_program` is a test/standalone constructor that bypasses
+        // `BexEngine::new`'s package-construction pass, so no packages are
+        // registered. Frame pushes will leave `BytecodeFrame::package = None`,
+        // which the package-routed dispatch path handles by falling back to
+        // `self.globals` — preserving existing test semantics.
+        let packages = EnginePackages::from_map(HashMap::new());
+
         Ok(Self::new(
             heap,
             globals,
+            packages,
             resolved_class_names,
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
@@ -1029,8 +1127,10 @@ impl BexVm {
 
         self.stack.extend(args.iter().copied());
 
+        let package = self.resolve_frame_package(function);
         self.frames.push(Frame::Bytecode(BytecodeFrame {
             function,
+            package,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
             type_args: vec![],
@@ -1255,9 +1355,11 @@ impl BexVm {
         // Params.
         self.stack.extend(args.iter().copied());
 
+        let package = self.resolve_frame_package(function_ptr);
         // Push the new frame.
         self.frames.push(Frame::Bytecode(BytecodeFrame {
             function: function_ptr,
+            package,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(locals_offset),
             type_args: vec![],
@@ -1911,8 +2013,10 @@ impl BexVm {
                 } else {
                     closure_type_args
                 };
+                let package = self.resolve_frame_package(callee_ptr);
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
                     function: callee_ptr,
+                    package,
                     instruction_ptr: 0,
                     locals_offset,
                     type_args: initial_type_args,
@@ -2492,7 +2596,7 @@ impl BexVm {
             }
 
             Instruction::LoadGlobal(index) => {
-                let value = self.globals.get(self.proof(), index);
+                let value = self.read_global(index);
                 self.stack.push(value);
             }
 
@@ -3634,7 +3738,7 @@ impl BexVm {
             }
 
             Instruction::DispatchFuture(callee) => {
-                let callee_value = self.globals.get(self.proof(), callee);
+                let callee_value = self.read_global(callee);
                 let expected_type = FunctionType::SysOp;
                 let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
 
@@ -3863,7 +3967,7 @@ impl BexVm {
             }
 
             Instruction::Call { callee, ntypeargs } => {
-                let callee_value = self.globals.get(self.proof(), callee);
+                let callee_value = self.read_global(callee);
                 let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
 
                 // Pop `ntypeargs` Object::Type values from the stack into a Vec<Ty>.
@@ -4431,7 +4535,7 @@ impl BexVm {
 
             Instruction::MakeBoundMethod(global_idx) => {
                 let receiver = self.stack.ensure_pop();
-                let callee_value = self.globals.get(self.proof(), global_idx);
+                let callee_value = self.read_global(global_idx);
                 let function_ptr =
                     self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
                 debug_assert!(
@@ -5277,7 +5381,7 @@ impl BexVm {
                 OpCode::LoadGlobal => {
                     let raw = { read_u32_unchecked(code, pc) };
                     let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let value = self.globals.get(self.proof(), global_idx);
+                    let value = self.read_global(global_idx);
                     self.stack.push(value);
                 }
 
@@ -5502,7 +5606,7 @@ impl BexVm {
                 OpCode::DispatchFuture => {
                     let raw = { read_u32_unchecked(code, pc) };
                     let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let callee_value = self.globals.get(self.proof(), callee);
+                    let callee_value = self.read_global(callee);
                     let expected_type = FunctionType::SysOp;
                     let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
                     let Object::Function(callable_future) = self.get_object(callee_ptr) else {
@@ -5668,7 +5772,7 @@ impl BexVm {
                     let raw = read_u32_unchecked(code, pc);
                     let ntypeargs = read_u16_unchecked(code, pc) as usize;
                     let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let callee_value = self.globals.get(self.proof(), callee_global);
+                    let callee_value = self.read_global(callee_global);
                     let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
 
                     // Pop `ntypeargs` Object::Type values from the stack into a Vec<Ty>.
@@ -6195,7 +6299,7 @@ impl BexVm {
                     let raw = { read_u32_unchecked(code, pc) };
                     let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let receiver = self.stack.ensure_pop();
-                    let callee_value = self.globals.get(self.proof(), global_idx);
+                    let callee_value = self.read_global(global_idx);
                     let function_ptr =
                         self.as_object_ptr(&callee_value, FunctionType::Callable.into())?;
                     let bound = Object::BoundMethod(BoundMethod {

@@ -389,6 +389,43 @@ impl SharedGlobals {
             &*self.inner.values.get()
         }
     }
+
+    /// Commit a freshly populated globals vec into the shared storage.
+    ///
+    /// Used by `BexEngine::new` after `$init` writes top-level let-binding
+    /// values into a `VmGlobals::Owned(GlobalPool)` view. The engine
+    /// constructs an empty `SharedGlobals` of the correct size up-front so
+    /// build-time `Object::Package` instances can be allocated into the
+    /// compile-time semi-space carrying `PackageGlobals::Static(globals.clone())`;
+    /// `commit_init` then copies the post-`$init` values into the
+    /// already-shared underlying `Box<[Value]>` so every Package and every
+    /// post-`$init` VM observes the populated state without re-pointing any
+    /// `Arc`.
+    ///
+    /// # Panics
+    /// Panics if `values.len()` differs from the underlying box's length.
+    ///
+    /// # Safety
+    /// Caller must ensure exclusive access — no VM is reading or writing
+    /// the shared globals concurrently. This is the case during
+    /// `BexEngine::new` between `$init` completing and the engine
+    /// returning, where no other VM exists and no GC can fire.
+    pub unsafe fn commit_init(&self, values: &[Value]) {
+        // SAFETY: caller upholds the exclusive-access contract; the
+        // `UnsafeCell` projection is sound by that invariant alone. We
+        // sanity-check the size to surface a clearly-described panic
+        // rather than UB if the bookkeeping somehow drifts.
+        #[expect(unsafe_code, reason = "exclusive-access contract documented above")]
+        let slice = unsafe { &mut *self.inner.values.get() };
+        assert_eq!(
+            slice.len(),
+            values.len(),
+            "SharedGlobals::commit_init size mismatch (expected {}, got {})",
+            slice.len(),
+            values.len(),
+        );
+        slice.copy_from_slice(values);
+    }
 }
 
 impl RootHaver for SharedGlobals {
@@ -415,6 +452,49 @@ impl RootHaver for SharedGlobals {
                 *ptr = new;
             }
         }
+    }
+}
+
+/// Engine-wide name → `Object::Package` `HeapPtr` index.
+///
+/// Each loaded package (`baml`, `log`, `reflect`, `user`, ...) is constructed
+/// during `BexEngine::new` and allocated into the compile-time semi-space.
+/// This map records the stable `HeapPtr` for each by name.
+///
+/// Because compile-time-pool entries never move, no `RootHaver` /
+/// forwarding-aware storage is required: the `HashMap` is built once during
+/// engine init and is immutable thereafter. Reads need no `PermitProof`.
+///
+/// Runtime-compiled packages (constructed via `reflect.Package.new`) live in
+/// gen0 and are NOT held by this map — they're heap values owned by user
+/// variables / VM frames and must remain GC-collectible when the last user
+/// reference drops.
+#[derive(Clone, Debug)]
+pub struct EnginePackages {
+    inner: Arc<HashMap<String, HeapPtr>>,
+}
+
+impl EnginePackages {
+    /// Build an `EnginePackages` from the engine-init package map.
+    pub fn from_map(map: HashMap<String, HeapPtr>) -> Self {
+        Self {
+            inner: Arc::new(map),
+        }
+    }
+
+    /// Look up a package by name.
+    pub fn get(&self, name: &str) -> Option<HeapPtr> {
+        self.inner.get(name).copied()
+    }
+
+    /// Number of registered packages.
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Whether the map is empty.
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
     }
 }
 

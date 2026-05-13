@@ -24,7 +24,8 @@ use indexmap::IndexMap;
 use crate::{
     bytecode::Bytecode,
     heap_ptr::HeapPtr,
-    indexable::{ObjectPool, SharedGlobals},
+    indexable::{GlobalIndex, ObjectPool, SharedGlobals},
+    roots::PermitProof,
 };
 
 // ============================================================================
@@ -967,6 +968,25 @@ pub enum PackageGlobals {
     /// `&mut Package.globals` — no Arc sharing means no `make_mut` clone
     /// hazard.
     Dynamic(Vec<Value>),
+}
+
+impl PackageGlobals {
+    /// Read a global at the given slot.
+    ///
+    /// `Static` reads delegate to [`SharedGlobals::get`] (gated by `proof`
+    /// to exclude concurrent GC `forward_roots`). `Dynamic` reads index
+    /// directly into the owned vec; the `proof` parameter still gates GC
+    /// because the surrounding `Object::Package` lives in gen0 and must
+    /// not be moved mid-read.
+    ///
+    /// # Panics
+    /// Panics if `slot` is out of bounds — same contract as slice indexing.
+    pub fn read(&self, proof: PermitProof<'_>, slot: GlobalIndex) -> Value {
+        match self {
+            Self::Static(globals) => globals.get(proof, slot),
+            Self::Dynamic(vec) => vec[slot.into_raw()],
+        }
+    }
 }
 
 /// A closure: a function object paired with a list of captured variable cells.
