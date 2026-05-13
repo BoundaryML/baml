@@ -79,7 +79,7 @@ pub(crate) enum LocalClassification {
     /// At def sites: emit rvalue but NOT store (leave on stack).
     /// At Return: don't emit `LoadVar` for _0 (value already on stack).
     ReturnPhi,
-    /// Call result immediate: defined by Call/Await/ScheduleFuture, used exactly once
+    /// Call result immediate: defined by Call/Await/SysOp, used exactly once
     /// immediately in the continuation block.
     /// At def site (after Call): don't emit Store (leave on stack).
     /// At use site: don't emit `LoadVar` (value already on stack from Call).
@@ -829,18 +829,18 @@ fn collect_uses_in_terminator(
                 }
             }
         }
-        Terminator::ScheduleFuture {
+        Terminator::SysOp {
             callee,
             args,
-            future,
+            destination,
             ..
         } => {
             collect_uses_in_operand(callee, block, StatementRef::Terminator, def_use);
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
             }
-            // Record the def for the future place
-            if let Place::Local(local) = future {
+            // Record the def for the destination place
+            if let Place::Local(local) = destination {
                 if let Some(du) = def_use.get_mut(local) {
                     du.def = Some(DefLocation {
                         block,
@@ -1224,7 +1224,7 @@ fn is_return_phi(
                 // For terminator definitions, check if the continuation leads to return safely
                 let continuation = match &block.terminator {
                     Some(Terminator::Call { target, .. }) => Some(*target),
-                    Some(Terminator::ScheduleFuture { resume, .. }) => Some(*resume),
+                    Some(Terminator::SysOp { target, .. }) => Some(*target),
                     Some(Terminator::Await { target, .. }) => Some(*target),
                     _ => None,
                 };
@@ -1277,7 +1277,7 @@ fn can_be_virtual(
         return false;
     };
 
-    // Definitions in terminators (Call/Await/ScheduleFuture) cannot be inlined
+    // Definitions in terminators (Call/Await/SysOp) cannot be inlined
     // because the value comes from the operation itself, not from a re-emittable rvalue
     if def.statement_ref == StatementRef::Terminator {
         return false;
@@ -1585,11 +1585,11 @@ fn is_pure_constant(rvalue: &Rvalue) -> bool {
     matches!(rvalue, Rvalue::Use(Operand::Constant(_)))
 }
 
-/// Check if a local is a "call result immediate": defined by Call/Await/ScheduleFuture,
+/// Check if a local is a "call result immediate": defined by Call/Await/SysOp,
 /// used exactly once in the continuation block.
 ///
 /// Call result immediate applies when:
-/// 1. The local is defined by a Call/Await/ScheduleFuture terminator
+/// 1. The local is defined by a Call/Await/SysOp terminator
 /// 2. It has exactly one use
 /// 3. The use is in the continuation block (target of the Call)
 ///
@@ -1604,7 +1604,7 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
         return false;
     }
 
-    // Must have a definition from a terminator (Call/Await/ScheduleFuture)
+    // Must have a definition from a terminator (Call/Await/SysOp)
     let Some(def) = &du.def else {
         return false;
     };
@@ -1614,7 +1614,7 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
         return false;
     }
 
-    // Get the defining block and check that its terminator is Call/Await/ScheduleFuture
+    // Get the defining block and check that its terminator is Call/Await/SysOp
     // that defines this local.
     let def_block = body.block(def.block);
     match &def_block.terminator {
@@ -1624,8 +1624,8 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
         Some(Terminator::Await { destination, .. }) => {
             matches!(destination, Place::Local(l) if *l == local)
         }
-        Some(Terminator::ScheduleFuture { future, .. }) => {
-            matches!(future, Place::Local(l) if *l == local)
+        Some(Terminator::SysOp { destination, .. }) => {
+            matches!(destination, Place::Local(l) if *l == local)
         }
         _ => false,
     }

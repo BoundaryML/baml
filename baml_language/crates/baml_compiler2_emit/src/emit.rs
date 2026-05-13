@@ -1475,11 +1475,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit(Instruction::Unreachable);
             }
 
-            Terminator::ScheduleFuture {
+            Terminator::SysOp {
                 callee,
                 args,
-                future,
-                resume,
+                destination,
+                target,
+                unwind: _,
             } => {
                 let func_name = pull_semantics::resolve_constant_function_name(
                     callee,
@@ -1492,17 +1493,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     .map(GlobalIndex::from_raw)
                     .unwrap_or_else(|| {
                         panic!(
-                            "schedule_future callee must resolve to a statically-known global function: {callee:?}"
+                            "sys_op callee must resolve to a statically-known global function: {callee:?}"
                         )
                     });
 
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                let inst = self.emit(Instruction::ScheduleFuture(global_callee));
+                let inst = self.emit(Instruction::SysOp(global_callee));
                 if let Some(name) = &func_name {
                     self.set_operand(inst, OperandMeta::Callable(name.clone()));
                 }
-                self.emit_store_place(future);
-                self.emit_jump_unless_fallthrough(*resume);
+                self.emit_store_place(destination);
+                self.emit_jump_unless_fallthrough(*target);
             }
 
             Terminator::Spawn {

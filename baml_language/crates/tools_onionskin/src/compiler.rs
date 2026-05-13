@@ -3908,9 +3908,15 @@ impl CompilerRunner {
                     ));
                     break;
                 }
-                Ok(VmExecState::ScheduleFuture(_)) => {
+                Ok(VmExecState::Spawn(_)) => {
                     self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
-                        "Function schedules a future (not supported in VM Runner)".to_string(),
+                        "Function spawned a future (not supported in VM Runner)".to_string(),
+                    ));
+                    break;
+                }
+                Ok(VmExecState::SysOp { .. }) => {
+                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                        "Function invoked a sys-op (not supported in VM Runner)".to_string(),
                     ));
                     break;
                 }

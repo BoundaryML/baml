@@ -920,12 +920,7 @@ impl std::fmt::Display for Object {
                     write!(f, "<internal error: future #{}>", id.id)
                 }
             },
-            Object::UnscheduledFuture(future) => match &future.kind {
-                UnscheduledKind::SysOp { operation, .. } => {
-                    write!(f, "<unscheduled: {operation}>")
-                }
-                UnscheduledKind::Spawn { .. } => write!(f, "<unscheduled: spawn>"),
-            },
+            Object::UnscheduledFuture(_) => write!(f, "<unscheduled: spawn>"),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
@@ -1199,38 +1194,22 @@ impl std::fmt::Debug for Future {
     }
 }
 
-/// An operation that should be passed to the engine to be scheduled.
+/// A pending user `spawn { body }` request that the engine still has to
+/// dispatch on a fresh `BexThread`.
 ///
-/// BEP-034: an unscheduled future is either a sys-op call (file/HTTP/LLM
-/// I/O) or a `spawn { ... }` block carrying a closure to execute on a new
-/// `BexThread`. Both variants go through the same `ScheduleFuture` /
-/// `FutureManager` machinery in the engine.
+/// BEP-034 phase D′: this struct used to also carry sys-op invocations
+/// (`kind: SysOp { ... }`), but sys-ops now go through the single-yield
+/// `VmExecState::SysOp` path without allocating a heap object. Only the
+/// spawn case survives.
 #[derive(Clone, Debug)]
 pub struct UnscheduledFuture {
-    /// Discriminates between sys-op and user-spawn schedules.
-    pub kind: UnscheduledKind,
+    /// Pointer to an `Object::Closure` carrying the spawn body.
+    pub closure: HeapPtr,
     /// Optional human-readable name attached at the spawn site. Surfaces in
     /// debug, stack traces, and the playground. Held here as a `HeapPtr` so
     /// the GC keeps the underlying string alive while the unscheduled
-    /// future is on the heap. Always `None` for sys-op variants.
+    /// future is on the heap.
     pub name: Option<HeapPtr>,
-}
-
-/// Discriminator for [`UnscheduledFuture`].
-#[derive(Clone, Debug)]
-pub enum UnscheduledKind {
-    /// A statically-resolved sys-op call (file/HTTP/LLM/...).
-    SysOp {
-        /// The system operation to execute.
-        operation: SysOp,
-        /// Arguments to the operation.
-        args: Vec<Value>,
-    },
-    /// A user `spawn { body }` whose body has been packaged as a closure.
-    Spawn {
-        /// Pointer to an `Object::Closure` carrying the spawn body.
-        closure: HeapPtr,
-    },
 }
 
 /// A unique identifier for a future.

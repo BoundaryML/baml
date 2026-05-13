@@ -81,7 +81,6 @@ use ::bex_heap::{HeapPermit as _, Tlab};
 // Re-export event types for callers.
 use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
-use ::sys_types::OpFuture;
 use async_trait::async_trait;
 use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
 pub use bex_events::{HostSpanContext, RuntimeEvent, SpanId};
@@ -1783,142 +1782,92 @@ impl BexEngine {
                     return Ok(ThreadOutcome::RootValue(return_value));
                 }
 
-                VmExecState::ScheduleFuture(unscheduled) => {
-                    // Extract data from unscheduled future. The borrow on
-                    // `thread.vm` ends with this `match` so subsequent
-                    // `thread.vm.stack.push(...)` is free to take `&mut`.
-                    let (kind, name_ptr) = {
+                VmExecState::SysOp { operation, args } => {
+                    // BEP-034 phase D′: single round-trip sys-op call.
+                    // Convert args, race the op against the active
+                    // cancel token, and push the resulting value back
+                    // on the VM stack. No `Object::Future` is
+                    // allocated and no `FutureManager` entry is
+                    // created — the schedule/await dance was pure
+                    // overhead because the user never sees the future.
+                    #[allow(clippy::large_enum_variant)]
+                    enum SysOpOutcome {
+                        Cancelled,
+                        Result(Result<BexExternalValue, OpError>),
+                    }
+
+                    let bex_args: Vec<BexExternalValue> =
+                        args.iter().map(|v| self.vm_arg_to_bex_value(v)).collect();
+
+                    if cancel.is_cancelled() {
+                        return Err(cancelled_unhandled_throw());
+                    }
+
+                    let sys_op_result =
+                        self.execute_sys_op(operation, &bex_args, call_id, cancel, thread.proof());
+
+                    let outcome = match sys_op_result {
+                        SysOpResult::Ready(r) => r,
+                        SysOpResult::Async(fut) => {
+                            // Release the heap permit so concurrent GC
+                            // can run during the wait. Re-acquire
+                            // before touching VM state.
+                            let inactive = thread.release();
+                            self.maybe_collect_garbage().await;
+                            let outcome = tokio::select! {
+                                biased;
+                                () = cancel.cancelled() => SysOpOutcome::Cancelled,
+                                r = fut                  => SysOpOutcome::Result(r),
+                            };
+                            thread = inactive.acquire().await;
+                            match outcome {
+                                SysOpOutcome::Cancelled => {
+                                    return Err(cancelled_unhandled_throw());
+                                }
+                                SysOpOutcome::Result(r) => r,
+                            }
+                        }
+                    };
+
+                    match outcome {
+                        Ok(external) => {
+                            // Convert the external value back into a VM
+                            // Value (allocating string / list / instance
+                            // heap objects as needed) and push it onto
+                            // the eval stack. The bytecode that follows
+                            // this sys-op call is a normal `store_var`
+                            // / projection / whatever the surrounding
+                            // expression expected — no implicit await.
+                            let value = self.convert_external_to_vm_value(&mut thread, external)?;
+                            thread.vm.stack.push(value);
+                        }
+                        Err(op_err) => {
+                            return Err(EngineError::from(op_err));
+                        }
+                    }
+                }
+
+                VmExecState::Spawn(unscheduled) => {
+                    // BEP-034: pull the closure + name off the
+                    // `UnscheduledFuture` heap object and hand them to
+                    // `spawn_thread`, which allocates the future and
+                    // dispatches the body on a fresh `BexThread`.
+                    let (closure, name_ptr) = {
                         let unscheduled = thread
                             .vm
                             .unscheduled_future(unscheduled)
                             .map_err(EngineError::VmInternalError)?;
-                        (unscheduled.kind.clone(), unscheduled.name)
+                        (unscheduled.closure, unscheduled.name)
                     };
-
-                    let (operation, args) = match kind {
-                        ::bex_vm_types::UnscheduledKind::SysOp { operation, args } => (
-                            operation,
-                            args.iter()
-                                .map(|v| self.vm_arg_to_bex_value(v))
-                                .collect::<Vec<BexExternalValue>>(),
-                        ),
-                        ::bex_vm_types::UnscheduledKind::Spawn { closure } => {
-                            let spawn_name: Option<String> =
-                                name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
-                                    Object::String(s) => Some(s.clone()),
-                                    _ => None,
-                                });
-                            // Hand off to the spawn-thread path. This
-                            // allocates the future and a fresh child
-                            // `BexThread`, then dispatches its event loop
-                            // on the tokio runtime. The child's own
-                            // permit holds GC exclusion while it runs.
-                            let future_ptr = Arc::clone(self)
-                                .spawn_thread(cancel.clone(), closure, spawn_name, call_id)
-                                .await?;
-                            thread.vm.stack.push(Value::Object(future_ptr));
-                            continue;
-                        }
-                    };
-
-                    // Setup future. Each `futures.acquire(thread.proof())` is
-                    // scoped tightly so the proof's borrow on `vm` ends
-                    // before any subsequent `vm.stack` mutation; the type
-                    // system enforces GC exclusion via the `'a` tie
-                    // between proof and guard. The cost is one extra
-                    // uncontended Mutex lock on the early-cancel path
-                    // below — far cheaper than restructuring the
-                    // VM-stack-and-cancel choreography.
-                    // TODO: detached cancellation
-                    let future_cancel = cancel.child_token();
-                    let (future_id, future_ptr) = {
-                        let mut g = self.futures.acquire(thread.proof()).await;
-                        g.new_future(future_cancel.clone())
-                    };
+                    let spawn_name: Option<String> =
+                        name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
+                            Object::String(s) => Some(s.clone()),
+                            _ => None,
+                        });
+                    let future_ptr = Arc::clone(self)
+                        .spawn_thread(cancel.clone(), closure, spawn_name, call_id)
+                        .await?;
                     thread.vm.stack.push(Value::Object(future_ptr));
-                    if cancel.is_cancelled() {
-                        // Early cancellation -- don't even start the
-                        // future. (`future_cancel` is a child of `cancel`,
-                        // so checking `cancel` here is equivalent to
-                        // checking the inheriting child.) Re-acquire the
-                        // FutureManager Mutex to cancel the just-created
-                        // entry; see the comment above for why this
-                        // second acquire is structural, not redundant.
-                        self.futures
-                            .acquire(thread.proof())
-                            .await
-                            .cancel_future(future_id)?;
-                        continue;
-                    }
-
-                    // Execute sys_op
-                    let sys_op_result =
-                        self.execute_sys_op(operation, &args, call_id, cancel, thread.proof());
-
-                    match sys_op_result {
-                        SysOpResult::Ready(result) => {
-                            // VM permit is still held, gating GC for the
-                            // duration of this critical section. The
-                            // FutureManager Mutex serializes against other
-                            // mutators; no second semaphore acquire here.
-                            let mut future_permit = self.futures.acquire(thread.proof()).await;
-                            // Cancellation safepoint: if cancellation fires between the
-                            // pre-exec early check and the commit, surface it as a Cancelled
-                            // future rather than fulfilling. The VM's next `Await` will throw
-                            // `baml.panics.Cancelled`.
-                            if cancel.is_cancelled() {
-                                future_permit.cancel_future(future_id)?;
-                                drop(future_permit);
-                                continue;
-                            }
-                            match result {
-                                Ok(external) => {
-                                    match self
-                                        .convert_external_to_vm_value(&mut future_permit, external)
-                                    {
-                                        Ok(value) => {
-                                            future_permit.fulfill_future(future_id, value)?;
-                                        }
-                                        Err(conv_err) => {
-                                            future_permit
-                                                .internal_error_future(future_id, conv_err)?;
-                                        }
-                                    }
-                                }
-                                Err(op_err) => {
-                                    // Route sync sys-op errors through `internal_error_future`
-                                    // so the original error is preserved on the registry's
-                                    // `SetOnce`. The VM's subsequent `Await` yields back to
-                                    // this loop's `Await` branch, where `future_ready` returns
-                                    // the original error to the caller via `?`.
-                                    future_permit.internal_error_future(
-                                        future_id,
-                                        EngineError::from(op_err),
-                                    )?;
-                                }
-                            }
-                            drop(future_permit);
-                        }
-                        SysOpResult::Async(fut) => {
-                            let task = Arc::clone(self).run_future(fut, future_id, future_cancel);
-                            // Surface invariant violations from `run_future` (e.g.
-                            // `FutureNotFound` from a double-transition bug). In normal
-                            // operation each future is only transitioned once by this
-                            // task, so any error is a bug worth investigating.
-                            #[cfg(not(target_arch = "wasm32"))]
-                            tokio::spawn(async move {
-                                if let Err(err) = task.await {
-                                    tracing::error!(?err, ?future_id, "spawned future task failed");
-                                }
-                            });
-                            #[cfg(target_arch = "wasm32")]
-                            wasm_bindgen_futures::spawn_local(async move {
-                                if let Err(err) = task.await {
-                                    tracing::error!(?err, ?future_id, "spawned future task failed");
-                                }
-                            });
-                        }
-                    }
                 }
 
                 VmExecState::Await(future_id) => {
@@ -2113,63 +2062,6 @@ impl BexEngine {
                 }
             }
         }
-    }
-
-    /// Runs a future, handling cancellation.
-    /// When completed, updates the future state on the heap.
-    ///
-    /// Holding-no-permit during the long `select!` wait means GC can run
-    /// freely while the inner sys-op is in flight. After `select!` resolves,
-    /// the spawned task takes a one-shot heap permit (`NoOpRootHaver` —
-    /// nothing to root) so its brief writeback to the `FutureManager`'s
-    /// registry is gated against GC just like any in-VM caller.
-    async fn run_future(
-        self: Arc<Self>,
-        future: OpFuture,
-        future_id: FutureId,
-        cancel: CancellationToken,
-    ) -> Result<(), EngineError> {
-        // Stack-local enum, never stored or sent across threads — the size
-        // mismatch between variants (Cancelled is ZST, Result carries a
-        // ~300-byte BexExternalValue+OpError) doesn't matter here.
-        #[allow(clippy::large_enum_variant)]
-        enum Outcome {
-            Cancelled,
-            Result(Result<BexExternalValue, OpError>),
-        }
-        let outcome = tokio::select! {
-            biased;
-            () = cancel.cancelled() => Outcome::Cancelled,
-            r = future            => Outcome::Result(r),
-        };
-
-        // One-shot heap permit for GC exclusion during the brief writeback.
-        // `()`'s `RootHaver` impl has no roots — this permit is purely a
-        // "block GC while I write" mechanism.
-        let inactive = self.heap_permit_manager.new_permit(()).await;
-        let active = inactive.acquire().await;
-        let mut future_guard = self.futures.acquire(active.proof()).await;
-        match outcome {
-            Outcome::Cancelled => {
-                future_guard.cancel_future(future_id)?;
-            }
-            Outcome::Result(Ok(value)) => {
-                match self.convert_external_to_vm_value(&mut future_guard, value) {
-                    Ok(value) => {
-                        future_guard.fulfill_future(future_id, value)?;
-                    }
-                    Err(conv_err) => {
-                        future_guard.internal_error_future(future_id, conv_err)?;
-                    }
-                }
-            }
-            Outcome::Result(Err(err)) => {
-                future_guard.internal_error_future(future_id, err.into())?;
-            }
-        }
-        drop(future_guard);
-        drop(active);
-        Ok(())
     }
 
     /// Build a `SpanContext` from the current `SpanState`.

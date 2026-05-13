@@ -231,31 +231,7 @@ fn deep_equals_recursive(
                 }
 
                 (Object::UnscheduledFuture(a_fut), Object::UnscheduledFuture(b_fut)) => {
-                    use bex_vm_types::UnscheduledKind;
-                    match (&a_fut.kind, &b_fut.kind) {
-                        (
-                            UnscheduledKind::SysOp {
-                                operation: a_op,
-                                args: a_args,
-                            },
-                            UnscheduledKind::SysOp {
-                                operation: b_op,
-                                args: b_args,
-                            },
-                        ) => {
-                            a_op == b_op
-                                && a_args.len() == b_args.len()
-                                && a_args
-                                    .iter()
-                                    .zip(b_args.iter())
-                                    .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
-                        }
-                        (
-                            UnscheduledKind::Spawn { closure: a_c },
-                            UnscheduledKind::Spawn { closure: b_c },
-                        ) => a_c == b_c,
-                        _ => false,
-                    }
+                    a_fut.closure == b_fut.closure && a_fut.name == b_fut.name
                 }
 
                 _ => false,

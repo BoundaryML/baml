@@ -3414,28 +3414,28 @@ impl LoweringContext<'_> {
         let is_sys_op = self.check_sys_op(callee);
 
         if is_sys_op {
-            // dest must be a local place for Await
+            // BEP-034 phase D′: sys-ops now lower to a single
+            // `Terminator::SysOp` that runs the op inline in the
+            // engine and binds the return value directly into `dest`
+            // — no intermediate `Future` heap object, no separate
+            // `Await` terminator, no `FutureManager` entry.
+            //
+            // The bytecode emit just becomes:
+            //     <args ...>
+            //     SYS_OP g
+            //     <store dest>
             let dest_local = match dest {
                 Place::Local(l) => l,
                 _ => self.builder.temp(Ty::Null {
                     attr: TyAttr::default(),
                 }),
             };
-            let result_ty = self.builder.local_ty(dest_local);
-            // BEP-034 v1: Phase A defaults the throws type to Null. Phase C/D
-            // will plumb the sys-op's declared throws type through TIR.
-            let throws_ty = Ty::Null {
-                attr: TyAttr::default(),
-            };
-            let future_ty = Ty::Future(Box::new(result_ty), Box::new(throws_ty), TyAttr::default());
-            let future_local = self.builder.temp(future_ty);
-            let future_place = Place::Local(future_local);
-            let resume = self.builder.create_block();
-            // For generic IO builtins (`$rust_io_function` with type params),
-            // the compiler injects synthetic trailing value-arg slots — one
-            // `baml_type::Ty` per type parameter.  The Rust glue reads them
-            // positionally after the regular value args.  We therefore append
-            // type-arg operands AFTER the value args here (unlike regular BAML
+            // For generic IO builtins (`$rust_io_function` with type
+            // params), the compiler injects synthetic trailing
+            // value-arg slots — one `baml_type::Ty` per type
+            // parameter.  The Rust glue reads them positionally after
+            // the regular value args.  We therefore append type-arg
+            // operands AFTER the value args here (unlike regular BAML
             // calls where they are prepended as leading args).
             let sys_op_arg_operands = if ntypeargs > 0 {
                 let mut combined = arg_operands;
@@ -3444,16 +3444,13 @@ impl LoweringContext<'_> {
             } else {
                 arg_operands
             };
-            self.builder.schedule_future(
+            self.builder.sys_op(
                 callee_operand,
                 sys_op_arg_operands,
-                future_place.clone(),
-                resume,
+                Place::Local(dest_local),
+                target,
+                unwind,
             );
-            self.builder.set_current_block(resume);
-            let dest_place = Place::Local(dest_local);
-            self.builder
-                .await_(future_place, dest_place, target, unwind);
         } else {
             // Call destinations must be Place::Local in MIR. If `dest` is a
             // projection (Field/Index) or a capture, call into a temp local

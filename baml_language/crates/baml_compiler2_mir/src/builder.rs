@@ -363,23 +363,27 @@ impl MirBuilder {
         self.set_terminator(Terminator::ThrowIfPanic { value, otherwise });
     }
 
-    /// Emit a schedule future (for sys-op / LLM calls).
-    pub(crate) fn schedule_future(
+    /// BEP-034 phase D′: emit a sys-op call. The sys-op is invoked
+    /// inline in the engine (single VM↔engine round trip) and its
+    /// return value is bound directly into `destination`.
+    pub(crate) fn sys_op(
         &mut self,
         callee: Operand,
         args: Vec<Operand>,
-        future: Place,
-        resume: BlockId,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
     ) {
         debug_assert!(
-            matches!(future, Place::Local(_)),
-            "ScheduleFuture future handle place must be local"
+            matches!(destination, Place::Local(_)),
+            "SysOp destination must be a local place"
         );
-        self.set_terminator(Terminator::ScheduleFuture {
+        self.set_terminator(Terminator::SysOp {
             callee,
             args,
-            future,
-            resume,
+            destination,
+            target,
+            unwind,
         });
     }
 

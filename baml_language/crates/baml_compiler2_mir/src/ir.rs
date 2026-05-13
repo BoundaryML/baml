@@ -378,18 +378,23 @@ pub enum Terminator {
     /// an Unreachable terminator, it's a compiler bug.
     Unreachable,
 
-    /// Schedule an async operation (LLM call) without blocking.
+    /// BEP-034 phase D′: invoke a sys-op and bind its return value
+    /// directly into `destination`. Replaces the old `ScheduleFuture` +
+    /// `Await` pair that allocated a `Future` heap object just to
+    /// consume it on the next instruction.
     ///
-    /// This is a suspend point - control returns to the embedder.
-    ScheduleFuture {
-        /// The LLM function to call.
+    /// Suspend point — control returns to the embedder.
+    SysOp {
+        /// The sys-op global to invoke.
         callee: Operand,
-        /// Arguments to the function.
+        /// Arguments to the sys-op.
         args: Vec<Operand>,
-        /// Where to store the future handle.
-        future: Place,
-        /// Block to resume at after dispatch.
-        resume: BlockId,
+        /// Where to store the sys-op's return value.
+        destination: Place,
+        /// Block to resume at after the sys-op returns.
+        target: BlockId,
+        /// Block to jump to if the sys-op throws (catch context).
+        unwind: Option<BlockId>,
     },
 
     /// BEP-034 `spawn name? { body }` — schedules a fresh BAML thread to
@@ -484,7 +489,13 @@ impl Terminator {
                 succs
             }
             Terminator::Unreachable => vec![],
-            Terminator::ScheduleFuture { resume, .. } => vec![*resume],
+            Terminator::SysOp { target, unwind, .. } => {
+                let mut succs = vec![*target];
+                if let Some(u) = unwind {
+                    succs.push(*u);
+                }
+                succs
+            }
             Terminator::Spawn { resume, .. } => vec![*resume],
             Terminator::Await { target, unwind, .. } => {
                 let mut succs = vec![*target];

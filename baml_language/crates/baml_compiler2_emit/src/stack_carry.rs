@@ -162,11 +162,15 @@ fn is_stack_carry_use_safe(
                     }
                     *target
                 }
-                Some(Terminator::ScheduleFuture { future, resume, .. }) => {
-                    if !matches!(future, Place::Local(l) if *l == local) {
+                Some(Terminator::SysOp {
+                    destination,
+                    target,
+                    ..
+                }) => {
+                    if !matches!(destination, Place::Local(l) if *l == local) {
                         return false;
                     }
-                    *resume
+                    *target
                 }
                 _ => return false,
             }
@@ -471,10 +475,10 @@ fn simulate_terminator_stack(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::ScheduleFuture {
+        Terminator::SysOp {
             callee,
             args,
-            future,
+            destination,
             ..
         } => {
             if pull_semantics::resolve_constant_function_name(callee, classifications, def_use)
@@ -497,7 +501,7 @@ fn simulate_terminator_stack(
                 return false;
             }
             sim.push();
-            simulate_store_place_stack(future, sim, classifications)
+            simulate_store_place_stack(destination, sim, classifications)
         }
         Terminator::Spawn {
             closure,
