@@ -97,6 +97,9 @@ class            media.Pdf                        <builtin>/baml/ns_media/media.
 class            media.Audio                      <builtin>/baml/ns_media/media.baml:42
 class            media.Video                      <builtin>/baml/ns_media/media.baml:83
 class            media.Image                      <builtin>/baml/ns_media/media.baml:124
+function         mock.push_override               <builtin>/baml/ns_mock/mock.baml:26
+function         mock.pop_override                <builtin>/baml/ns_mock/mock.baml:32
+class            mock.Mock                        <builtin>/baml/ns_mock/mock.baml:40
 class            net.Socket                       <builtin>/baml/ns_net/net.baml:1
 function         net.connect                      <builtin>/baml/ns_net/net.baml:13
 class            panics.DivisionByZero            <builtin>/baml/ns_panics/panics.baml:1

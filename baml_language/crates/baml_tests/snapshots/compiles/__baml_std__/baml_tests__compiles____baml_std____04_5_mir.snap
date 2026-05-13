@@ -6120,6 +6120,220 @@ fn baml.media.Video.url = builtin(vm)
 
 fn baml.media.Audio.url = builtin(vm)
 
+fn baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<void> {
+    // Locals:
+    let _0: baml.mock.Mock<void> // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: void
+    let _3: baml.json.json
+    let _4: type
+    let _5: void
+    let _6: baml.json.json
+    let _7: type
+    let _8: int
+    let _9: baml.json.json
+    let _10: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "_impl") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(#0);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "_original") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(#0);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _9 = call const fn baml.json.field(copy _1, const "call_count") -> [bb5];
+    }
+
+    bb5: {
+        _10 = load_type(int);
+        _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
+    }
+
+    bb6: {
+        _0 = baml.mock.Mock<TypeArgRef(0)> { copy _2, copy _5, copy _8 };
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn baml.mock.Mock.new(original: void, impl: void) -> baml.mock.Mock<void> {
+    // Locals:
+    let _0: baml.mock.Mock<void> // _0 // return
+    let _1: void // original // param
+    let _2: void // impl // param
+
+    bb0: {
+        _0 = baml.mock.Mock<TypeArgRef(0)> { copy _2, copy _1, const 0_i64 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.mock.pop_override = builtin(vm)
+
+fn baml.mock.push_override = builtin(vm)
+
+fn baml.mock.Mock.replace(self: baml.mock.Mock, impl: void) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: baml.mock.Mock // self // param
+    let _2: void // impl // param
+
+    bb0: {
+        _1.0 = copy _2;
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.mock.Mock.reset(self: baml.mock.Mock) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: baml.mock.Mock // self // param
+
+    bb0: {
+        _1.2 = const 0_i64;
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.mock.Mock.scope(self: baml.mock.Mock, body: () -> void throws never) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: baml.mock.Mock // self // param
+    let _2: () -> void throws never // body // param
+    let _3: null
+    let _4: void
+    let _5: void
+    let _6: type
+    let _7: void // result
+    let _8: unknown // e
+    let _9: null
+    let _10: void
+    let _11: null
+
+    bb0: {
+        _4 = copy _1.1;
+        _5 = copy _1.0;
+        _6 = load_type(#0);
+        _3 = call const fn baml.mock.push_override<copy _6>(copy _4, copy _5) -> [bb1];
+    }
+
+    bb1: {
+        _7 = call copy _2() -> [bb2, unwind: bb5];
+    }
+
+    bb2: {
+        _11 = call const fn baml.mock.pop_override() -> [bb3];
+    }
+
+    bb3: {
+        _0 = copy _7;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+
+    bb5: {
+        throw_if_panic copy _8 -> bb6;
+    }
+
+    bb6: {
+        _9 = call const fn baml.mock.pop_override() -> [bb7];
+    }
+
+    bb7: {
+        _10 = copy _8;
+        throw copy _10;
+    }
+}
+
+fn baml.mock.Mock.spy(original: void) -> baml.mock.Mock<void> {
+    // Locals:
+    let _0: baml.mock.Mock<void> // _0 // return
+    let _1: void // original // param
+
+    bb0: {
+        _0 = baml.mock.Mock<TypeArgRef(0)> { copy _1, copy _1, const 0_i64 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.mock.Mock.to_json(self: baml.mock.Mock) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.mock.Mock // self // param
+    let _2: baml.json.json
+    let _3: void
+    let _4: baml.mock.Mock
+    let _5: baml.json.json
+    let _6: void
+    let _7: baml.mock.Mock
+    let _8: baml.json.json
+    let _9: int
+    let _10: baml.mock.Mock
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.json.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _7 = copy _1;
+        _6 = copy _7.1;
+        _5 = call const fn baml.json.to_json(copy _6) -> [bb2];
+    }
+
+    bb2: {
+        _10 = copy _1;
+        _9 = copy _10.2;
+        _8 = call const fn baml.Int.to_json(copy _9) -> [bb3];
+    }
+
+    bb3: {
+        _0 = { const "_impl": copy _2, const "_original": copy _5, const "call_count": copy _8 };
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
 fn baml.net.Socket.close = builtin(io)
 
 fn baml.net.connect = builtin(io)

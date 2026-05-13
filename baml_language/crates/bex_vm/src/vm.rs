@@ -356,6 +356,18 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_type_args: Vec<baml_type::Ty>,
+
+    /// Active function-override stack for `baml.mock`. Each entry maps a
+    /// target function (`HeapPtr` to an `Object::Function`) to a replacement
+    /// callable (`HeapPtr` to a `Function`/`Closure`/`BoundMethod`). When the
+    /// VM is about to invoke a function (`Call`, `CallIndirect`,
+    /// `DispatchFuture`), it scans this stack top-down and, on a match,
+    /// redirects the call to the replacement instead of the original.
+    ///
+    /// Push/pop are exposed to BAML via `baml.mock.push_override` /
+    /// `baml.mock.pop_override` and are intended to be invoked by
+    /// `Mock.scope`.
+    pub mock_stack: Vec<(HeapPtr, HeapPtr)>,
 }
 
 /// VM execution state.
@@ -694,7 +706,41 @@ impl BexVm {
             current_span_context: None,
             argv,
             pending_call_type_args: Vec::new(),
+            mock_stack: Vec::new(),
         }
+    }
+
+    /// Normalize a callable `HeapPtr` to its underlying `Object::Function`
+    /// pointer, unwrapping `Closure` and `BoundMethod` layers. Returns the
+    /// input pointer unchanged if it doesn't point to a callable.
+    ///
+    /// Used by the mock-override lookup so that an entry registered against
+    /// (e.g.) a plain `Function` still matches when the same call site loads
+    /// the value as a `Closure` with no captures.
+    #[inline]
+    pub fn callable_identity(&self, ptr: HeapPtr) -> HeapPtr {
+        match self.get_object(ptr) {
+            Object::Closure(c) => c.function,
+            Object::BoundMethod(bm) => bm.function,
+            _ => ptr,
+        }
+    }
+
+    /// Scan the mock stack from top to bottom for an override matching the
+    /// given target function pointer. Returns the replacement callable's
+    /// pointer if found.
+    #[inline]
+    pub fn lookup_mock_override(&self, target: HeapPtr) -> Option<HeapPtr> {
+        if self.mock_stack.is_empty() {
+            return None;
+        }
+        let target_id = self.callable_identity(target);
+        for (t, r) in self.mock_stack.iter().rev() {
+            if *t == target_id {
+                return Some(*r);
+            }
+        }
+        None
     }
 
     /// Type-args of the currently dispatching call.
@@ -3611,6 +3657,40 @@ impl BexVm {
                     .into());
                 };
 
+                // Mock-stack interception: if a replacement is registered for
+                // this SysOp, route the call through the replacement closure
+                // via the regular Call path instead of yielding a future. A
+                // `WrapReadyFutureContinuation` native frame is pushed first
+                // so that, after the closure returns, its value is wrapped in
+                // a ready `Future` and pushed back — making the caller's
+                // following `Await` instruction unwrap it synchronously.
+                if let Some(replacement_ptr) = self.lookup_mock_override(callee_ptr) {
+                    let arity = callable_future.arity;
+                    let args_offset = self
+                        .stack
+                        .len()
+                        .checked_sub(arity)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
+                    let locals_offset = StackIndex::from_raw(args_offset);
+                    self.frames.push(Frame::Native(NativeFrame {
+                        function: replacement_ptr,
+                        continuation: Box::new(crate::package_baml::WrapReadyFutureContinuation),
+                    }));
+                    if let Some(state) = self.execute_call_from_locals_offset(
+                        replacement_ptr,
+                        locals_offset,
+                        arity,
+                        frame_idx,
+                        function,
+                    )? {
+                        return Ok(Some(state));
+                    }
+                    if !self.frames.is_empty() {
+                        *frame_idx = self.frames.len() - 1;
+                    }
+                    return Ok(None);
+                }
+
                 // Must be a sys_op - extract the SysOp.
                 let FunctionKind::SysOp(sys_op) = callable_future.kind else {
                     return Err(VmInternalError::TypeError {
@@ -3828,7 +3908,17 @@ impl BexVm {
 
             Instruction::Call { callee, ntypeargs } => {
                 let callee_value = self.globals.get(self.proof(), callee);
-                let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                let (mut callee_ptr, mut arg_count) = self.resolve_callable_target(callee_value)?;
+
+                // Mock-stack interception: redirect to a registered
+                // replacement before any type-arg handling. The replacement's
+                // own arity governs the call from here on.
+                if let Some(replacement_ptr) = self.lookup_mock_override(callee_ptr) {
+                    let (rep_ptr, rep_arity) =
+                        self.resolve_callable_target(Value::Object(replacement_ptr))?;
+                    callee_ptr = rep_ptr;
+                    arg_count = rep_arity;
+                }
 
                 // Pop `ntypeargs` Object::Type values from the stack into a Vec<Ty>.
                 // These sit below the regular value args on the stack:
@@ -4020,7 +4110,15 @@ impl BexVm {
                     }
                 } else {
                     // Plain Function or Closure: existing path.
-                    let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                    let (mut callee_ptr, mut arg_count) =
+                        self.resolve_callable_target(callee_value)?;
+                    // Mock-stack interception (indirect call site).
+                    if let Some(replacement_ptr) = self.lookup_mock_override(callee_ptr) {
+                        let (rep_ptr, rep_arity) =
+                            self.resolve_callable_target(Value::Object(replacement_ptr))?;
+                        callee_ptr = rep_ptr;
+                        arg_count = rep_arity;
+                    }
                     let args_offset = self
                         .stack
                         .len()
@@ -5476,6 +5574,49 @@ impl BexVm {
                         }
                         .into());
                     };
+
+                    // Mock-stack interception: if a replacement is registered
+                    // for this SysOp, route the call through the regular Call
+                    // path instead of yielding a future. The replacement's
+                    // return value is wrapped in a ready `Future` by a
+                    // dedicated continuation so the caller's `Await` works.
+                    if let Some(replacement_ptr) = self.lookup_mock_override(callee_ptr) {
+                        let arity = callable_future.arity;
+                        let args_offset = self
+                            .stack
+                            .len()
+                            .checked_sub(arity)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
+                        let locals_offset = StackIndex::from_raw(args_offset);
+                        // Save pc so the saved frame returns cleanly.
+                        let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                            unsafe { std::hint::unreachable_unchecked() }
+                        };
+                        bf.instruction_ptr = *pc;
+                        self.frames.push(Frame::Native(NativeFrame {
+                            function: replacement_ptr,
+                            continuation: Box::new(
+                                crate::package_baml::WrapReadyFutureContinuation,
+                            ),
+                        }));
+                        if let Some(state) = self.execute_call_from_locals_offset(
+                            replacement_ptr,
+                            locals_offset,
+                            arity,
+                            frame_idx,
+                            function,
+                        )? {
+                            return Ok(Some(state));
+                        }
+                        if !self.frames.is_empty() {
+                            *frame_idx = self.frames.len() - 1;
+                        }
+                        if self.early_yield.should_early_yield() {
+                            return Ok(Some(VmExecState::EarlyYield));
+                        }
+                        return Ok(None);
+                    }
+
                     let FunctionKind::SysOp(sys_op) = callable_future.kind else {
                         return Err(VmInternalError::TypeError {
                             expected: FunctionType::SysOp.into(),
@@ -5633,7 +5774,18 @@ impl BexVm {
                     let ntypeargs = read_u16_unchecked(code, pc) as usize;
                     let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let callee_value = self.globals.get(self.proof(), callee_global);
-                    let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                    let (mut callee_ptr, mut arg_count) =
+                        self.resolve_callable_target(callee_value)?;
+
+                    // Mock-stack interception: redirect to a registered
+                    // replacement before any type-arg handling. The
+                    // replacement's own arity governs the call from here.
+                    if let Some(replacement_ptr) = self.lookup_mock_override(callee_ptr) {
+                        let (rep_ptr, rep_arity) =
+                            self.resolve_callable_target(Value::Object(replacement_ptr))?;
+                        callee_ptr = rep_ptr;
+                        arg_count = rep_arity;
+                    }
 
                     // Pop `ntypeargs` Object::Type values from the stack into a Vec<Ty>.
                     // These sit below the regular value args on the stack.
@@ -5747,7 +5899,15 @@ impl BexVm {
                             return Ok(Some(state));
                         }
                     } else {
-                        let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                        let (mut callee_ptr, mut arg_count) =
+                            self.resolve_callable_target(callee_value)?;
+                        // Mock-stack interception (indirect call site, fast path).
+                        if let Some(replacement_ptr) = self.lookup_mock_override(callee_ptr) {
+                            let (rep_ptr, rep_arity) =
+                                self.resolve_callable_target(Value::Object(replacement_ptr))?;
+                            callee_ptr = rep_ptr;
+                            arg_count = rep_arity;
+                        }
                         let args_offset = self
                             .stack
                             .len()

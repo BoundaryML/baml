@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
-function user.$init_test_32(registry: testing.TestCollector) -> ?  [expr] {
+function user.$init_test_33(registry: testing.TestCollector) -> ?  [expr] {
   { registry.register_test("throwing body bec...", () -> void { {  } risky() }, null) } null
 }
 function user.risky() -> void  [expr] {

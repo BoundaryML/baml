@@ -24,6 +24,8 @@ pub mod json;
 mod map;
 mod math;
 mod media;
+pub(crate) mod mock;
+pub(crate) use mock::WrapReadyFutureContinuation;
 mod primitives;
 mod root;
 mod stack_trace;

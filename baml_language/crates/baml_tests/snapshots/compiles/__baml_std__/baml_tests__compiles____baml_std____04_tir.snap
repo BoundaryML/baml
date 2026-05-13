@@ -1211,6 +1211,59 @@ class baml.media.Image$stream {
   _data: $rust_type
 }
 
+--- <builtin>/baml/ns_mock/mock.baml ---
+class baml.mock.Mock {
+  _impl: T
+  _original: T
+  call_count: int
+}
+function baml.mock.Mock.new(original: unknown, impl: unknown) -> baml.mock.Mock<unknown> throws never {
+  { : baml.mock.Mock<T>
+    Mock { _impl: impl, _original: original, call_count: 0 } : baml.mock.Mock<T>
+  }
+}
+function baml.mock.Mock.spy(original: unknown) -> baml.mock.Mock<unknown> throws never {
+  { : baml.mock.Mock<T>
+    Mock { _impl: original, _original: original, call_count: 0 } : baml.mock.Mock<T>
+  }
+}
+function baml.mock.Mock.replace(self: baml.mock.Mock, impl: unknown) -> void throws never {
+  { : void
+    self._impl = impl : T
+  }
+}
+function baml.mock.Mock.reset(self: baml.mock.Mock) -> void throws never {
+  { : void
+    self.call_count = 0 : 0
+  }
+}
+function baml.mock.Mock.scope<U, EU>(self: baml.mock.Mock, body: () -> U throws EU) -> U throws EU {
+  { : U
+    let _ = baml.mock.push_override<T>(self._original, self._impl) : null
+    let result = : U
+      catch ({ 0 stmts + tail } : U) : U
+        catch_all (e)
+          _ =>
+            { : never
+              let _ = baml.mock.pop_override() : null
+              throw e : EU
+            }
+    let _ = baml.mock.pop_override() : null
+    result : U
+  }
+}
+function baml.mock.Mock.to_json(self: baml.mock.Mock) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "_impl": baml.json.to_json(self._impl), "_original": baml.json.to_json(self._original), "call_count": self.call_count.to_json() } : map<string, baml.json.json>
+}
+function baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Mock { _impl: baml.json.from_json<T>(baml.json.field(j, "_impl")), _original: baml.json.from_json<T>(baml.json.field(j, "_original")), call_count: baml.json.from_json<int>(baml.json.field(j, "call_count")) } : baml.mock.Mock<T>
+}
+class baml.mock.Mock$stream {
+  _impl: null | T
+  _original: null | T
+  call_count: null | int
+}
+
 --- <builtin>/baml/ns_net/net.baml ---
 class baml.net.Socket {
   _handle: $rust_type

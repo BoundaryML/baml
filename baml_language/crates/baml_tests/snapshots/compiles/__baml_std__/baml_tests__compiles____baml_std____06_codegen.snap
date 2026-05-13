@@ -4315,6 +4315,137 @@ function baml.media.Video.to_json(self: null) -> baml.json.json {
 function baml.media.Video.url(self: null) -> string? {
 }
 
+function baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<void> {
+    load_var j
+    load_const "_impl"
+    call baml.json.field
+    store_var _3
+    load_type #0
+    load_var _3
+    call baml.json.from_json
+    store_var _2
+    load_var j
+    load_const "_original"
+    call baml.json.field
+    store_var _6
+    load_type #0
+    load_var _6
+    call baml.json.from_json
+    store_var _5
+    load_var j
+    load_const "call_count"
+    call baml.json.field
+    store_var _9
+    load_type int
+    load_var _9
+    call baml.json.from_json
+    store_var _8
+    load_type #0
+    alloc_instance<1> baml.mock.Mock
+    load_var _2
+    init_field ._impl
+    load_var _5
+    init_field ._original
+    load_var _8
+    init_field .call_count
+    return
+}
+
+function baml.mock.Mock.new(original: void, impl: void) -> baml.mock.Mock<void> {
+    load_type #0
+    alloc_instance<1> baml.mock.Mock
+    load_var impl
+    init_field ._impl
+    load_var original
+    init_field ._original
+    load_const 0
+    init_field .call_count
+    return
+}
+
+function baml.mock.Mock.replace(self: null, impl: void) -> void {
+    load_var self
+    load_var impl
+    store_field ._impl
+    load_const null
+    return
+}
+
+function baml.mock.Mock.reset(self: null) -> void {
+    load_var self
+    load_const 0
+    store_field .call_count
+    load_const null
+    return
+}
+
+function baml.mock.Mock.scope(self: null, body: () -> void throws never) -> void {
+    load_type #0
+    load_var self
+    load_field ._original
+    load_var self
+    load_field ._impl
+    call baml.mock.push_override
+    pop 1
+    load_var body
+    call_indirect
+    store_var result
+    jump L0
+    load_var e
+    throw_if_panic
+    call baml.mock.pop_override
+    pop 1
+    load_var e
+    throw
+
+  L0:
+    call baml.mock.pop_override
+    pop 1
+    load_var result
+    return
+}
+
+function baml.mock.Mock.spy(original: void) -> baml.mock.Mock<void> {
+    load_type #0
+    alloc_instance<1> baml.mock.Mock
+    load_var original
+    init_field ._impl
+    load_var original
+    init_field ._original
+    load_const 0
+    init_field .call_count
+    return
+}
+
+function baml.mock.Mock.to_json(self: null) -> baml.json.json {
+    load_var self
+    load_field ._impl
+    call baml.json.to_json
+    store_var _2
+    load_var self
+    load_field ._original
+    call baml.json.to_json
+    store_var _5
+    load_var self
+    load_field .call_count
+    call baml.Int.to_json
+    store_var _8
+    load_var _2
+    load_var _5
+    load_var _8
+    load_const "_impl"
+    load_const "_original"
+    load_const "call_count"
+    alloc_map 3
+    return
+}
+
+function baml.mock.pop_override() -> null {
+}
+
+function baml.mock.push_override(target: void, replacement: void) -> null {
+}
+
 function baml.net.Socket.close(self: null) -> null {
 }
 
