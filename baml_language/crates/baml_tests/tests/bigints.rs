@@ -40,6 +40,60 @@ async fn test_int_to_bigint_arg() {
     );
 }
 
+#[tokio::test]
+async fn test_int_to_bigint_reassign() {
+    // Plain `x = 42` (Assign, not Let) on a bigint local should widen.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint {
+            let x: bigint = 0n;
+            x = 42;
+            x
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(42)))
+    );
+}
+
+#[tokio::test]
+async fn test_int_to_bigint_field_assign() {
+    // `obj.field = 42` where `field` is a bigint should widen the int rhs.
+    let output = baml_test!(
+        r#"
+        class Box { v bigint }
+        function main() -> bigint {
+            let b = Box { v: 0n };
+            b.v = 42;
+            b.v
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(42)))
+    );
+}
+
+#[tokio::test]
+async fn test_int_to_bigint_alias_param() {
+    // Param declared via a type alias still triggers int→bigint widening.
+    let output = baml_test!(
+        baml: r#"
+        type Big = bigint
+        function Identity(x: Big) -> bigint { x }
+        function Caller() -> bigint { Identity(42) }
+    "#,
+        entry: "Caller",
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(42)))
+    );
+}
+
 // ─── literal syntax (Phase 3) ─────────────────────────────────────────────────
 
 #[tokio::test]

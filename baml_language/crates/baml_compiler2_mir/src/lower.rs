@@ -3217,11 +3217,12 @@ impl LoweringContext<'_> {
         // Push shared null exit — Optional* nodes inside will jump here on null
         self.chain_null_exits.push(bb_null);
 
+        let target_ty = self.expr_ty(inner_target);
         // Lower target as lvalue (this will trigger null checks at each ?. node)
         let place = self.lower_lvalue(inner_target);
 
-        // Lower value and assign
-        self.lower_expr(value, place);
+        // Lower value and assign — widen `int → bigint` if the field is bigint.
+        self.lower_expr_widening(value, place, &target_ty);
 
         self.chain_null_exits.pop();
 
@@ -3479,10 +3480,30 @@ impl LoweringContext<'_> {
             let callee_func_loc = self.callee_func_loc_for_call(expr_id);
             if let Some(fl) = callee_func_loc {
                 let sig = baml_compiler2_ppir::function_signature(self.db, fl);
+                // Resolve each param's type-expr in the callee's namespace so
+                // aliases like `type Big = bigint` are walked through —
+                // matches['p.ty, AstTypeExpr::Bigint { .. }] alone would miss
+                // them and skip the int→bigint widening at the call site.
+                let callee_file = fl.file(self.db);
+                let callee_pkg_info = file_package(self.db, callee_file);
+                let callee_pkg_id = PackageId::new(self.db, callee_pkg_info.package);
+                let callee_pkg_items = package_items(self.db, callee_pkg_id);
                 sig.params
                     .iter()
                     .enumerate()
-                    .map(|(i, p)| (i, matches!(p.ty, AstTypeExpr::Bigint { .. })))
+                    .map(|(i, p)| {
+                        let mut diags = Vec::new();
+                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                            self.db,
+                            &p.ty,
+                            callee_pkg_items,
+                            &callee_pkg_info.namespace_path,
+                            &[],
+                            &mut diags,
+                        );
+                        let ty = self.resolved_aliases.convert(&tir_ty);
+                        (i, matches!(ty, Ty::Bigint { .. }))
+                    })
                     .collect()
             } else {
                 vec![]
@@ -5532,7 +5553,14 @@ impl LoweringContext<'_> {
                     self.lower_assign_optional_chain(inner, value);
                 } else {
                     let place = self.lower_lvalue(target);
-                    self.lower_expr(value, place);
+                    // `expr_ty` doesn't always carry a type for single-segment
+                    // Path lvalues (which lower to `Place::Local`), so prefer
+                    // the local's declared type when available.
+                    let target_ty = match &place {
+                        Place::Local(l) => self.builder.local_ty(*l),
+                        _ => self.expr_ty(target),
+                    };
+                    self.lower_expr_widening(value, place, &target_ty);
                 }
             }
 
