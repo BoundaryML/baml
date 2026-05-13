@@ -6993,18 +6993,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdk_test_basic_type_shapes"
-version = "0.1.0"
-dependencies = [
- "baml_codegen_types",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "codegen_python",
- "sdk_test_build",
-]
-
-[[package]]
 name = "sdk_test_build"
 version = "0.1.0"
 dependencies = [
@@ -7029,6 +7017,18 @@ dependencies = [
 
 [[package]]
 name = "sdk_test_llm_functions"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_types",
+ "baml_db",
+ "baml_project",
+ "baml_workspace",
+ "codegen_python",
+ "sdk_test_build",
+]
+
+[[package]]
+name = "sdk_test_pipelines"
 version = "0.1.0"
 dependencies = [
  "baml_codegen_types",

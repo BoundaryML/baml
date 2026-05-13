@@ -2,7 +2,7 @@
 // in-memory `SymbolPool`. Mirrors the pipeline `baml-cli generate`
 // uses: discover files → ProjectDatabase → diagnostics gate →
 // `build_symbol_pool` → `to_source_code`. Same shape as
-// `python_example_09a/build.rs`.
+// `crates/llm_functions/build.rs`.
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -114,16 +114,16 @@ fn main() {
     }
 
     // 6. pyproject.toml. `uv sync` is invoked at test time by the
-    //    `sdk_test_suite!` macro from `tests/sdk_test.rs`, which
-    //    installs `baml_core` from the local source via
-    //    `[tool.uv.sources]`. uv drives the maturin build-backend
-    //    declared in `sdks/python/pyproject.toml`, so the PyO3
-    //    extension is compiled into the project venv as part of the
-    //    sync. `[tool.uv] package = false` keeps uv from trying to
-    //    install this directory as a wheel; the empty `dev` group
-    //    satisfies maturin's `uv pip install --group dev` step.
+    //    `sdk_test_suite!` macro, which installs `baml_core` from
+    //    the local source via `[tool.uv.sources]`. uv drives the
+    //    maturin build-backend declared in `sdks/python/pyproject.toml`,
+    //    so the PyO3 extension is compiled into the project venv as
+    //    part of the sync. `[tool.uv] package = false` keeps uv from
+    //    trying to install this directory as a wheel; the empty
+    //    `dev` group satisfies maturin's `uv pip install --group dev`
+    //    step.
     let pyproject_toml = r#"[project]
-name = "baml-test-basic-type-shapes"
+name = "baml-test-pipelines"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [

@@ -1,9 +1,10 @@
-# Sdk-test crate for per-Ty-variant type-shape coverage. Each subnamespace
-# under `baml_src/ns_*/` targets a specific family of BAML constructs
-# (literal types, map types, union types, etc.) and emits the
-# corresponding `baml_sdk.<ns>` Python package.
+# Sdk-test crate for the pipeline-style codegen surface — non-LLM
+# functions whose bodies call LLM functions (and other non-LLM
+# helpers) in sequence, plus `testset` / `test` blocks that exercise
+# them. Complements `sdk_test_llm_functions`, which only covers raw
+# LLM-function emission.
 [package]
-name = "sdk_test_basic_type_shapes"
+name = "sdk_test_pipelines"
 version = "0.1.0"
 edition = "2021"
 publish = false
