@@ -333,6 +333,24 @@ function baml.fs.write(path: string, content: string) -> int  [builtin]
 function baml.fs.write_bytes(self: ?, data: uint8array) -> int  [builtin]
 function baml.fs.write_bytes(path: string, content: uint8array) -> int  [builtin]
 
+--- <builtin>/baml/ns_future/future.baml ---
+class baml.future.Future {
+  _handle: $rust_type
+}
+enum baml.future.FutureState {Pending, Ready, Error, Cancelled}
+function baml.future.cancel(self: ?) -> bool  [builtin]
+function baml.future.from_json(j: baml.json.json) -> baml.future.Future  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.future.is_cancelled(self: ?) -> bool  [builtin]
+function baml.future.is_error(self: ?) -> bool  [builtin]
+function baml.future.is_result(self: ?) -> bool  [builtin]
+function baml.future.is_settled(self: ?) -> bool  [builtin]
+function baml.future.state(self: ?) -> baml.future.FutureState  [builtin]
+function baml.future.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+
 --- <builtin>/baml/ns_glob/glob.baml ---
 class baml.glob.Glob {
   _handle: $rust_type

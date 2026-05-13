@@ -31,7 +31,7 @@ function user.HasWith.to_json(self: user.HasWith) -> baml.json.json throws baml.
 function user.HasWith.from_json(j: baml.json.json) -> user.HasWith throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   HasWith { with: baml.json.from_json<int>(baml.json.field(j, "with")) } : user.HasWith
 }
-function user.$init_test_32(registry: testing.TestCollector) -> ? throws never {
+function user.$init_test_33(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("with as field", () -> void { ... }, null) : void
       () -> void { ... } : () -> void throws unknown
@@ -42,7 +42,7 @@ function user.$init_test_32(registry: testing.TestCollector) -> ? throws never {
     null : null
   }
 }
-lambda user.$init_test_32 {
+lambda user.$init_test_33 {
 }
 class user.Foo$stream {
   x: null | int

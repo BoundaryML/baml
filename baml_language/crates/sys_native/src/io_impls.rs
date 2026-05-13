@@ -1306,3 +1306,72 @@ impl io::IoNamespaceHttp for NativeSysOps {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
+
+// ============================================================================
+// BEP-034 Future (stubs)
+//
+// The future class methods cannot be implemented as pure sys-ops because
+// they need access to the engine's FutureManager, which is not part of
+// the SysOpContext. Phase E ships only the surface declaration; the
+// trait stubs below return Unsupported until method dispatch on
+// Object::Future is wired through to the FutureManager.
+// ============================================================================
+
+impl io::IoClassFutureFuture for NativeSysOps {
+    fn cancel(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: owned::future::Future,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn is_settled(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: owned::future::Future,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn is_cancelled(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: owned::future::Future,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn is_result(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: owned::future::Future,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn is_error(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: owned::future::Future,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn state(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: owned::future::Future,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoNamespaceFuture for NativeSysOps {}

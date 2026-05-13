@@ -1140,6 +1140,42 @@ function baml.fs.write(path: string, content: string) -> int {
 function baml.fs.write_bytes(path: string, content: uint8array) -> int {
 }
 
+function baml.future.Future.cancel(self: null) -> bool {
+}
+
+function baml.future.Future.from_json(j: baml.json.json) -> baml.future.Future<void, void> {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.future.Future<#0, #1>
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.future.Future.is_cancelled(self: null) -> bool {
+}
+
+function baml.future.Future.is_error(self: null) -> bool {
+}
+
+function baml.future.Future.is_result(self: null) -> bool {
+}
+
+function baml.future.Future.is_settled(self: null) -> bool {
+}
+
+function baml.future.Future.state(self: null) -> baml.future.FutureState {
+}
+
+function baml.future.Future.to_json(self: null) -> baml.json.json {
+    load_type baml.future.Future<#0, #1>
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
 function baml.glob.Glob.from_json(j: baml.json.json) -> baml.glob.Glob {
     load_var j
     call baml.json.stringify

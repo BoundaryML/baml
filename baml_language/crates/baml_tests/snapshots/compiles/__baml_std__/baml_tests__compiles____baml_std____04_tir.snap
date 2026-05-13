@@ -294,6 +294,21 @@ class baml.fs.MkdirOptions$stream {
   recursive: null | bool
 }
 
+--- <builtin>/baml/ns_future/future.baml ---
+enum baml.future.FutureState
+class baml.future.Future {
+  _handle: $rust_type
+}
+function baml.future.Future.to_json(self: baml.future.Future) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Future<T, E>>(self)) : baml.json.json
+}
+function baml.future.Future.from_json(j: baml.json.json) -> baml.future.Future<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.future.Future<T, E>
+}
+class baml.future.Future$stream {
+  _handle: $rust_type
+}
+
 --- <builtin>/baml/ns_glob/glob.baml ---
 class baml.glob.ScanOptions {
   cwd: string?

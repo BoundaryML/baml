@@ -918,6 +918,75 @@ impl io::IoNamespaceFs for DefaultIoOps {
     }
 }
 
+// BEP-034: `baml.future.Future` method stubs.
+//
+// These satisfy the codegen-generated `IoClassFutureFuture` trait so the
+// crate compiles. The actual method dispatch for `Object::Future` does
+// not flow through the sys-op call path — futures are a primitive heap
+// kind and their methods need access to `FutureManager`, which the
+// sys-op `SysOpContext` does not expose. Phase F wires this through a
+// dedicated method-dispatch special-case on `Object::Future` so calls
+// like `future.cancel()` reach `FutureManagerGuard::cancel_future`
+// directly. Until that lands, every method here returns `Unsupported`.
+impl io::IoClassFutureFuture for DefaultIoOps {
+    fn cancel(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::future::Future,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn is_settled(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::future::Future,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn is_cancelled(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::future::Future,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn is_result(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::future::Future,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn is_error(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::future::Future,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn state(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::future::Future,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoNamespaceFuture for DefaultIoOps {}
+
 impl io::IoClassHttpResponse for DefaultIoOps {
     fn text(
         &self,
