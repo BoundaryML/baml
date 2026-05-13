@@ -127,18 +127,64 @@ async fn mock_intercepts_direct_method_call() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
 }
 
-/// KNOWN GAP — `Instruction::CallIndirect` / `OpCode::CallIndirect`:
-/// the `BoundMethod` branch does NOT consult `mock_stack`. So if a bound
-/// method is *stashed as a value* and then invoked indirectly (rather
-/// than called directly as `c.method(...)`), the override is bypassed.
-///
-/// This test stores `c.bump` in a local and calls it indirectly inside
-/// `scope`. With the fix in place the assertion should be `99`; today
-/// the original method runs and the value is `11`. Marked `#[ignore]` so
-/// the suite stays green until the BoundMethod CallIndirect path is
-/// patched.
+/// `Mock.new(c1.bump, …)` should be **per-instance**: calls on `c1` get
+/// the replacement; calls on a different instance `c2` still run the
+/// original method. The mock entry remembers the receiver from the
+/// `BoundMethod` target.
 #[tokio::test]
-#[ignore = "CallIndirect BoundMethod branch does not consult mock_stack (open gap)"]
+async fn mock_per_instance_via_bound_method_target() {
+    let output = baml_test!(
+        r#"
+        class Counter {
+          function bump(self, n: int) -> int { n + 1 }
+        }
+
+        function main() -> int {
+            let c1 = Counter {}
+            let c2 = Counter {}
+            let m = baml.mock.Mock.new(c1.bump, (n: int) -> int { 99 })
+            m.scope<int, never>(() -> int throws never {
+                c1.bump(10) + c2.bump(10)
+            })
+        }
+    "#
+    );
+
+    // c1.bump intercepted (99); c2.bump original (11). Sum = 110.
+    assert_eq!(output.result, Ok(BexExternalValue::Int(110)));
+}
+
+/// `Mock.new(Counter.bump, …)` (class-method-as-value) should be
+/// **class-wide**: calls on any `Counter` instance route through the
+/// replacement. Mock entry stores `receiver = None`, so the lookup
+/// matches every call regardless of receiver identity.
+#[tokio::test]
+async fn mock_class_wide_via_function_target() {
+    let output = baml_test!(
+        r#"
+        class Counter {
+          function bump(self, n: int) -> int { n + 1 }
+        }
+
+        function main() -> int {
+            let c1 = Counter {}
+            let c2 = Counter {}
+            let m = baml.mock.Mock.new(Counter.bump, (self: Counter, n: int) -> int { 99 })
+            m.scope<int, never>(() -> int throws never {
+                c1.bump(10) + c2.bump(10)
+            })
+        }
+    "#
+    );
+
+    // Both instances intercepted; 99 + 99 = 198.
+    assert_eq!(output.result, Ok(BexExternalValue::Int(198)));
+}
+
+/// `Instruction::CallIndirect` / `OpCode::CallIndirect`'s BoundMethod
+/// branch must consult `mock_stack`: stashing `c.method` in a local and
+/// calling it indirectly should still hit the mock.
+#[tokio::test]
 async fn mock_intercepts_indirect_bound_method_call() {
     let output = baml_test!(
         r#"
@@ -160,19 +206,11 @@ async fn mock_intercepts_indirect_bound_method_call() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
 }
 
-/// KNOWN GAP — `YieldToCall` re-entry isn't intercepted. Native helpers
-/// like `array.map` invoke their callback via
-/// `NativeCallResult::YieldToCall`, which dispatches through
-/// `execute_call_from_locals_offset` directly — bypassing the Call /
-/// CallIndirect / DispatchFuture intercept sites.
-///
-/// Passing the mocked target as a direct callback to `.map(...)` exposes
-/// this: with the fix the result is `45` (triple ran on each element);
-/// today it is `30` (original `double` ran). Marked `#[ignore]` so the
-/// suite stays green until `execute_call_from_locals_offset` consults
-/// `mock_stack` or every YieldToCall site does.
+/// Native helpers like `array.map` invoke their callback via
+/// `NativeCallResult::YieldToCall`. That path must also consult
+/// `mock_stack` so a mocked target passed as a callback gets the
+/// replacement.
 #[tokio::test]
-#[ignore = "YieldToCall (e.g. array.map callback) does not consult mock_stack (open gap)"]
 async fn mock_intercepts_yield_to_call_callback() {
     let output = baml_test!(
         r#"

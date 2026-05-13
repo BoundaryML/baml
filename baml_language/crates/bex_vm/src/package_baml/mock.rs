@@ -18,13 +18,17 @@ impl BamlNamespaceMock for PackageBamlImpl {
     /// and `Instruction::DispatchFuture`.
     fn push_override(vm: &mut BexVm, target: &Value, replacement: &Value) {
         if let (Value::Object(t), Value::Object(r)) = (target, replacement) {
-            // Normalize the target to its underlying function identity so a
-            // Closure-wrapped value pushed here matches a raw Function loaded
-            // at the call site (and vice-versa). The replacement is left
-            // un-normalized — Closures with captures are valid replacements
-            // and must be invoked with their captures intact.
-            let target_id = vm.callable_identity(*t);
-            vm.mock_stack.push((target_id, *r));
+            // Decompose the target into (function ptr, optional receiver):
+            // a `BoundMethod` carries an instance and produces a
+            // per-instance override; everything else is a wildcard match
+            // against the function identity (covers Function, Closure, and
+            // class-method-as-value).
+            let (target_fn, receiver) = vm.callable_identity_with_receiver(*t);
+            vm.mock_stack.push(crate::vm::MockOverride {
+                target_fn,
+                receiver,
+                replacement: *r,
+            });
         }
     }
 
