@@ -1791,6 +1791,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                     shadowed.truncate(saved_len);
                 }
             }
+            Expr::Is { scrutinee, .. } => {
+                // The pattern has no body and its bindings don't escape, so we
+                // only need to recurse into the scrutinee.
+                Self::collect_default_expr_forward_references(
+                    *scrutinee,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
             Expr::Catch { base, clauses } => {
                 Self::collect_default_expr_forward_references(
                     *base,
@@ -2779,6 +2790,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Match {
                 scrutinee, arms, ..
             } => self.infer_match_expr(expr_id, *scrutinee, arms, body),
+            Expr::Is { scrutinee, pattern } => self.infer_is_expr(*scrutinee, *pattern, body),
             Expr::Catch { base, clauses } => {
                 self.infer_catch_expr(expr_id, *base, clauses, body, None)
             }
@@ -4037,6 +4049,42 @@ impl<'db> TypeInferenceBuilder<'db> {
         Self::join_all(&arm_types)
     }
 
+    /// Type-check `<expr> is <pattern>` (Rust `matches!`-style pattern test).
+    ///
+    /// Always evaluates to `bool`. Unlike `match`:
+    ///   - no exhaustiveness check — there's only one pattern, the rest is "false"
+    ///   - no pattern-vs-scrutinee subtype check — `v is string` for `v: int` is
+    ///     legal, it just always evaluates to `false`
+    ///   - pattern bindings are restricted to the pattern itself and discarded,
+    ///     so the surrounding scope never sees them (use `match` / `if let` for
+    ///     binding semantics)
+    ///
+    /// We still lower the pattern (records `pattern_types` so LSP/MIR/codegen
+    /// can read the per-PatId type) and infer the scrutinee — that's how we
+    /// keep "unresolved type" diagnostics inside the pattern working.
+    fn infer_is_expr(
+        &mut self,
+        scrutinee_expr_id: ExprId,
+        pattern_id: PatId,
+        body: &ExprBody,
+    ) -> Ty {
+        let scrutinee_ty = self.infer_expr(scrutinee_expr_id, body);
+
+        // Snapshot the scope so pattern bindings don't leak out — `is` is a
+        // test, not a binder.
+        let snapshot = self.snapshot_scoped_locals();
+        let result = self.analyze_and_lower_no_subtype_check(
+            pattern_id,
+            &scrutinee_ty,
+            body,
+            scrutinee_expr_id,
+        );
+        self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
+        self.restore_scoped_locals(&snapshot);
+
+        Ty::Primitive(PrimitiveType::Bool, TyAttr::default())
+    }
+
     fn infer_catch_expr(
         &mut self,
         catch_expr_id: ExprId,
@@ -4924,6 +4972,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                     self.collect_throw_facts_from_expr(arm.body, body, out);
                 }
+            }
+            Expr::Is { scrutinee, .. } => {
+                self.collect_throw_facts_from_expr(*scrutinee, body, out);
             }
             Expr::Binary { lhs, rhs, .. } => {
                 self.collect_throw_facts_from_expr(*lhs, body, out);

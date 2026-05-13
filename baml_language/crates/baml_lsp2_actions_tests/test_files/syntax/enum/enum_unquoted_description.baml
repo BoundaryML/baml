@@ -27,12 +27,21 @@ enum TestEnum {
 
 //----
 //- diagnostics
-// Error: Expected ')', found identifier
+// Error: Expected ')', found is
 //     ╭─[ enum_enum_unquoted_description.baml:13:10 ]
 //     │
 //  13 │     User is confused
 //     │          ─┬  
-//     │           ╰── Expected ')', found identifier
+//     │           ╰── Expected ')', found is
+//     │ 
+//     │ Note: Error code: E0010
+// ────╯
+// Error: Expected Unexpected token in enum body, found is
+//     ╭─[ enum_enum_unquoted_description.baml:13:10 ]
+//     │
+//  13 │     User is confused
+//     │          ─┬  
+//     │           ╰── Expected Unexpected token in enum body, found is
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -45,12 +54,21 @@ enum TestEnum {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected ')', found identifier
+// Error: Expected ')', found is
 //     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
 //     │
 //  16 │     User is excited
 //     │          ─┬  
-//     │           ╰── Expected ')', found identifier
+//     │           ╰── Expected ')', found is
+//     │ 
+//     │ Note: Error code: E0010
+// ────╯
+// Error: Expected Unexpected token in enum body, found is
+//     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
+//     │
+//  16 │     User is excited
+//     │          ─┬  
+//     │           ╰── Expected Unexpected token in enum body, found is
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -62,19 +80,6 @@ enum TestEnum {
 //     │   ╰── Expected Unexpected token in enum body, found ')'
 //     │ 
 //     │ Note: Error code: E0010
-// ────╯
-// Error: Duplicate variant `TestEnum.is`
-//     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
-//     │
-//  13 │     User is confused
-//     │          ─┬  
-//     │           ╰── first defined as variant here
-//     │ 
-//  16 │     User is excited
-//     │          ─┬  
-//     │           ╰── duplicate variant definition
-//     │ 
-//     │ Note: Error code: E0012
 // ────╯
 // Error: `@description` argument must be a string literal, got `User`
 //     ╭─[ enum_enum_unquoted_description.baml:12:25 ]

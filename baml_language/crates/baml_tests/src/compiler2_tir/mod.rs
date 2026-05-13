@@ -178,6 +178,13 @@ pub(crate) mod support {
                     .collect();
                 format!("match ({scrut}) {{ {} }}", arm_strs.join(", "))
             }
+            Expr::Is { scrutinee, pattern } => {
+                format!(
+                    "{} is {}",
+                    expr_desc(*scrutinee, body),
+                    pat_desc(*pattern, body)
+                )
+            }
             Expr::Catch { base, clauses } => {
                 let base_desc = expr_desc(*base, body);
                 let clause_descs: Vec<String> = clauses
@@ -1465,6 +1472,11 @@ pub(crate) mod support {
                         .collect();
                     format!("match ({scrut}) {{ {} }}", arm_strs.join(", "))
                 }
+                Expr::Is { scrutinee, pattern } => format!(
+                    "{} is {}",
+                    expr_desc_hir(*scrutinee, body, prefix, local_type_names),
+                    pat_desc_hir(*pattern, body, prefix, local_type_names),
+                ),
                 Expr::Catch { base, clauses } => {
                     let base_desc = expr_desc_hir(*base, body, prefix, local_type_names);
                     let clause_descs: Vec<String> = clauses

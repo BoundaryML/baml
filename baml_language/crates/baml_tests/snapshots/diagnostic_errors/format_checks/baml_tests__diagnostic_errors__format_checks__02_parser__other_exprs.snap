@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 29810
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -512,7 +511,7 @@ SOURCE_FILE
           STRING_LITERAL "this is a long string element"
             QUOTE """
             WORD "this"
-            WORD "is"
+            KW_IS "is"
             WORD "a"
             WORD "long"
             WORD "string"
@@ -534,7 +533,7 @@ SOURCE_FILE
             WORD "another"
             WORD "one"
             WORD "that"
-            WORD "is"
+            KW_IS "is"
             WORD "quite"
             WORD "long"
             QUOTE """
@@ -789,7 +788,7 @@ SOURCE_FILE
           STRING_LITERAL "this is a long string"
             QUOTE """
             WORD "this"
-            WORD "is"
+            KW_IS "is"
             WORD "a"
             WORD "long"
             WORD "string"
@@ -808,7 +807,7 @@ SOURCE_FILE
             WORD "yet"
             WORD "another"
             WORD "that"
-            WORD "is"
+            KW_IS "is"
             WORD "quite"
             WORD "long"
             QUOTE """
@@ -828,7 +827,7 @@ SOURCE_FILE
           STRING_LITERAL "this is a long string"
             QUOTE """
             WORD "this"
-            WORD "is"
+            KW_IS "is"
             WORD "a"
             WORD "long"
             WORD "string"
@@ -847,7 +846,7 @@ SOURCE_FILE
             WORD "yet"
             WORD "another"
             WORD "that"
-            WORD "is"
+            KW_IS "is"
             WORD "quite"
             WORD "long"
             QUOTE """
