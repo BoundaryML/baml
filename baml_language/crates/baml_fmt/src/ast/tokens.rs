@@ -75,6 +75,7 @@ define_keyword_tokens! {
     "match" => SyntaxKind::KW_MATCH => Match;
     "watch" => SyntaxKind::KW_WATCH => Watch;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
+    "is" => SyntaxKind::KW_IS => Is;
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
     "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;

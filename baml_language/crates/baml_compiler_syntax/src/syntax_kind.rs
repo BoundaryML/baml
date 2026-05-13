@@ -39,6 +39,7 @@ pub enum SyntaxKind {
     // Other keywords
     KW_WATCH,
     KW_INSTANCEOF,
+    KW_IS,
     KW_DYNAMIC,
     KW_WITH,
 
@@ -197,6 +198,10 @@ pub enum SyntaxKind {
     // Expressions (for attributes and function bodies)
     EXPR,
     BINARY_EXPR,
+    /// `<expr> is <pattern>` — Rust `matches!`-style pattern test, returns bool.
+    ///
+    /// Structure: `<expr> KW_IS <PATTERN>`
+    IS_EXPR,
     UNARY_EXPR,
     CALL_EXPR,
     INDEX_EXPR,

@@ -89,7 +89,7 @@ SOURCE_FILE
     raw string with "quotes"
     and #hashes#"
                 WORD "This"
-                WORD "is"
+                KW_IS "is"
                 WORD "a"
                 WORD "multiline"
                 WORD "raw"

@@ -85,7 +85,7 @@ SOURCE_FILE
       QUOTE """
       WORD "top"
       WORD "level"
-      WORD "is"
+      KW_IS "is"
       WORD "fine"
       QUOTE """
     BLOCK_EXPR
@@ -108,7 +108,7 @@ SOURCE_FILE
       WORD "top"
       WORD "level"
       WORD "set"
-      WORD "is"
+      KW_IS "is"
       WORD "fine"
       QUOTE """
     BLOCK_EXPR
@@ -118,7 +118,7 @@ SOURCE_FILE
         STRING_LITERAL "nested is fine"
           QUOTE """
           WORD "nested"
-          WORD "is"
+          KW_IS "is"
           WORD "fine"
           QUOTE """
         BLOCK_EXPR

@@ -97,6 +97,8 @@ pub enum TokenKind {
     Watch,
     #[token("instanceof")]
     Instanceof,
+    #[token("is")]
+    Is,
     #[token("dynamic")]
     Dynamic,
 
@@ -296,6 +298,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Throws => "throws",
             TokenKind::Watch => "watch",
             TokenKind::Instanceof => "instanceof",
+            TokenKind::Is => "is",
             TokenKind::Dynamic => "dynamic",
 
             // Identifiers and literals
@@ -824,7 +827,7 @@ mod tests {
                 TokenKind::Quote,
                 TokenKind::Word, // This
                 TokenKind::Whitespace,
-                TokenKind::Word, // is
+                TokenKind::Is, // is (now a keyword, even inside strings — the parser assembles string literals from raw tokens)
                 TokenKind::Whitespace,
                 TokenKind::Word, // a
                 TokenKind::Whitespace,
@@ -856,13 +859,13 @@ mod tests {
                 TokenKind::Whitespace, //
                 TokenKind::Word,       // This
                 TokenKind::Whitespace, //
-                TokenKind::Word,       // is
+                TokenKind::Is, // is (keyword; the parser, not the lexer, recognises this as comment content)
                 TokenKind::Whitespace, //
-                TokenKind::Word,       // a
+                TokenKind::Word, // a
                 TokenKind::Whitespace, //
-                TokenKind::Word,       // comment
-                TokenKind::Newline,    // \n
-                TokenKind::Word,       // code
+                TokenKind::Word, // comment
+                TokenKind::Newline, // \n
+                TokenKind::Word, // code
             ]
         );
 
