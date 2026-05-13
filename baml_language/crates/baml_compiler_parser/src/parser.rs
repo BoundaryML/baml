@@ -5754,8 +5754,61 @@ impl<'a> Parser<'a> {
 /// Parse tokens into a green tree.
 ///
 /// Returns the green tree and any parse errors encountered.
+/// Emit a `SyntaxHint` event for any adjacent token pair that visually
+/// resembles a bigint literal but isn't a valid one — `42N` (uppercase suffix),
+/// `42.5n`, `42.5N` (float-with-suffix). The lexer splits these into two
+/// tokens (e.g. `IntegerLiteral("42")` + `Word("N")`) and the user gets a
+/// confusing downstream error otherwise.
+///
+/// Adjacency is checked via source-range endpoints (no intervening whitespace
+/// or comment trivia) so `42 N` or `42.5 n` (with a separator) don't fire.
+fn scan_malformed_bigint_literals(tokens: &[Token], events: &mut Vec<Event>) {
+    for window in tokens.windows(2) {
+        let (a, b) = (&window[0], &window[1]);
+        if b.kind != TokenKind::Word {
+            continue;
+        }
+        if a.span.range.end() != b.span.range.start() {
+            // Separated by whitespace / comment trivia — not "stuck together".
+            continue;
+        }
+        let combined_span = baml_base::Span {
+            file_id: a.span.file_id,
+            range: TextRange::new(a.span.range.start(), b.span.range.end()),
+        };
+        match (a.kind, b.text.as_str()) {
+            (TokenKind::IntegerLiteral, "N") => {
+                events.push(Event::SyntaxHint {
+                    message: format!(
+                        "bigint literal suffix must be lowercase 'n' — did you mean `{}n`?",
+                        a.text
+                    ),
+                    span: combined_span,
+                });
+            }
+            (TokenKind::FloatLiteral, "n" | "N") => {
+                events.push(Event::SyntaxHint {
+                    message: format!(
+                        "bigint literals are integer-only — `{}` is not a valid bigint",
+                        format_args!("{}{}", a.text, b.text)
+                    ),
+                    span: combined_span,
+                });
+            }
+            _ => {}
+        }
+    }
+}
+
 fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
     let mut parser = Parser::new(tokens);
+
+    // Pre-scan for malformed bigint-shaped literals — adjacent tokens that
+    // *look* like a bigint to the user but the lexer split apart. Emits
+    // `SyntaxHint` events so the diagnostics show alongside other parse
+    // errors. Runs before structural parsing so the hints aren't lost if the
+    // surrounding code has additional errors.
+    scan_malformed_bigint_literals(tokens, &mut parser.events);
 
     parser.start_node(SyntaxKind::SOURCE_FILE);
 
@@ -5851,6 +5904,67 @@ mod tests {
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
         );
+    }
+
+    fn assert_diag_message(errors: &[ParseError], needle: &str) {
+        let has = errors.iter().any(|e| match e {
+            ParseError::InvalidSyntax { message, .. } => message.contains(needle),
+            _ => false,
+        });
+        assert!(
+            has,
+            "expected diagnostic containing {needle:?}, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn diagnoses_bigint_with_uppercase_n_suffix() {
+        // `42N` lexes as `[Integer, Word]`. Without the scan, the user sees
+        // no specific guidance about the wrong-case suffix.
+        let source = "function main() -> bigint { 42N }";
+        let (_root, errors) = parse_source(source);
+        assert_diag_message(&errors, "bigint literal suffix must be lowercase 'n'");
+        assert_diag_message(&errors, "did you mean `42n`?");
+    }
+
+    #[test]
+    fn diagnoses_float_with_bigint_suffix() {
+        // `42.5n` lexes as `[Float, Word("n")]`.
+        let source = "function main() -> bigint { 42.5n }";
+        let (_root, errors) = parse_source(source);
+        assert_diag_message(&errors, "bigint literals are integer-only");
+        assert_diag_message(&errors, "`42.5n` is not a valid bigint");
+    }
+
+    #[test]
+    fn diagnoses_float_with_uppercase_bigint_suffix() {
+        let source = "function main() -> bigint { 42.5N }";
+        let (_root, errors) = parse_source(source);
+        assert_diag_message(&errors, "bigint literals are integer-only");
+    }
+
+    #[test]
+    fn accepts_separated_integer_and_word() {
+        // `42 N` is a normal integer followed by an identifier — no diagnostic.
+        let source = "function main(x N) -> int { 42 }";
+        let (_root, errors) = parse_source(source);
+        let has_bigint_diag = errors.iter().any(|e| match e {
+            ParseError::InvalidSyntax { message, .. } => {
+                message.contains("bigint literal suffix") || message.contains("integer-only")
+            }
+            _ => false,
+        });
+        assert!(
+            !has_bigint_diag,
+            "should not emit bigint-shape diagnostic for separated tokens, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn accepts_valid_bigint_literal() {
+        let source = "function main() -> bigint { 42n }";
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
     }
 
     #[test]

@@ -28,6 +28,28 @@ pub use lower_cst::{
 pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;
 
+/// Parse the digit body of a `bigint` literal into a [`num_bigint::BigInt`].
+///
+/// The lexer ([`baml_compiler_lexer`]) guarantees one-or-more ASCII decimal
+/// digits, so a parse failure here indicates the CST has been corrupted.
+/// Callers should pass the digit-only string (with the trailing `n` suffix
+/// already stripped).
+pub fn parse_bigint_literal_digits(digits: &str) -> num_bigint::BigInt {
+    num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10).unwrap_or_else(|| {
+        unreachable!("CST bigint_literal returned non-decimal digits: {digits:?}")
+    })
+}
+
+/// Parse the raw text of a `BIGINT_LITERAL` token (digits plus trailing
+/// lowercase `n` suffix) into a [`num_bigint::BigInt`]. The lexer guarantees
+/// the suffix is present, so its absence panics with `unreachable!`.
+pub fn parse_bigint_literal_token(text: &str) -> num_bigint::BigInt {
+    let digits = text
+        .strip_suffix('n')
+        .unwrap_or_else(|| unreachable!("BIGINT_LITERAL missing 'n' suffix: {text:?}"));
+    parse_bigint_literal_digits(digits)
+}
+
 /// Decode common escape sequences in a quoted string literal body.
 pub fn unescape_string_literal(input: &str) -> String {
     let mut result = String::with_capacity(input.len());
