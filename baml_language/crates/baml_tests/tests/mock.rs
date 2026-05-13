@@ -104,6 +104,67 @@ async fn mock_replace_changes_active_impl() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1005)));
 }
 
+/// GC stress: a Closure replacement that captures a heap-allocated cell
+/// (the counter) is pushed onto the mock stack, and the body allocates
+/// aggressively to force collection while the override is active. The
+/// captured cell + the closure itself must stay reachable for the call to
+/// dispatch correctly.
+#[tokio::test]
+async fn mock_scope_survives_gc_under_alloc_pressure() {
+    let output = baml_test!(
+        r#"
+        function target(n: int) -> int { n + 1 }
+        function call_target(n: int) -> int { target(n) }
+
+        function main() -> int {
+            // Build a Mock with a Closure replacement that captures `counter`.
+            // The captured cell lives on the heap; the closure itself is
+            // heap-allocated. Both must stay reachable across GC cycles
+            // while pushed onto the mock stack inside `scope`.
+            let counter = 0;
+            let replacement = (n: int) -> int {
+                counter = counter + 1;
+                n * 100
+            };
+            let m = baml.mock.Mock.new(target, replacement);
+
+            let sum = m.scope<int, unknown>(() -> int throws unknown {
+                let acc = 0;
+                let i = 0;
+                // Allocate aggressively + yield periodically via sleep(0).
+                // The sleep is async, which hands control back to the engine
+                // and lets `maybe_collect_garbage` run an actual collection
+                // while the mock is on the stack.
+                while (i < 5000) {
+                    let scratch = [
+                        [i, i + 1, i + 2],
+                        [i + 3, i + 4, i + 5],
+                        [i + 6, i + 7, i + 8],
+                    ];
+                    acc = acc + call_target(scratch[0][0]);
+                    if (i % 100 == 0) {
+                        let _ = baml.sys.sleep(0);
+                    } else {
+                        let _ = 0;
+                    }
+                    i = i + 1;
+                }
+                acc
+            });
+
+            // Reference `counter` after scope to keep its cell alive and to
+            // sanity-check the replacement was actually invoked 20_000 times.
+            sum + counter
+        }
+        "#
+    );
+
+    // Replacement does `n * 100` for n = 0..5000.
+    // sum_{i=0}^{4999} i*100 = 100 * (4999 * 5000 / 2) = 1_249_750_000
+    // counter ends at 5000 → total = 1_249_755_000.
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1_249_755_000)));
+}
+
 /// The override is popped even when the body throws.
 #[tokio::test]
 async fn mock_scope_pops_on_throw() {

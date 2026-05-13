@@ -7024,6 +7024,15 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // Frame function pointers (needed once closures are heap-allocated)
         roots.extend(self.collect_frame_roots());
 
+        // `baml.mock` override entries: target + replacement callables. These
+        // are raw `HeapPtr`s held outside of the value stack, so the GC has
+        // to be told about them explicitly. `forward_roots` patches them up
+        // after a move.
+        for (target, replacement) in &self.mock_stack {
+            roots.push(*target);
+            roots.push(*replacement);
+        }
+
         // Note: Frame locals are stored in the stack at the locals_offset position,
         // so they're already included in the stack iteration above.
     }
@@ -7051,6 +7060,16 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // Frame function pointers (needed once closures are heap-allocated)
         for frame in &mut self.frames {
             frame.forward_roots(roots);
+        }
+
+        // Forward both halves of every active mock override.
+        for (target, replacement) in &mut self.mock_stack {
+            if let Some(&new) = roots.get(target) {
+                *target = new;
+            }
+            if let Some(&new) = roots.get(replacement) {
+                *replacement = new;
+            }
         }
     }
 }
