@@ -7779,7 +7779,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             | BinaryOp::Lt
             | BinaryOp::Le
             | BinaryOp::Gt
-            | BinaryOp::Ge => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
+            | BinaryOp::Ge => {
+                if Self::is_float_bigint_mix(lhs, rhs)
+                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    self.context.report_simple(
+                        TirTypeError::InvalidBinaryOp {
+                            op,
+                            lhs: lhs.clone(),
+                            rhs: rhs.clone(),
+                        },
+                        at,
+                    );
+                }
+                Ty::Primitive(PrimitiveType::Bool, TyAttr::default())
+            }
 
             // Logical → bool
             BinaryOp::And | BinaryOp::Or => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
@@ -7882,6 +7897,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         match (base_ty(lhs), base_ty(rhs)) {
+            // Float / bigint mixing is rejected — bigint values past 2^53 don't
+            // round-trip through f64. Users must explicitly convert.
+            (Some(PrimitiveType::Float), Some(PrimitiveType::Bigint))
+            | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Float)) => Ty::Unknown {
+                attr: TyAttr::default(),
+            },
             (Some(PrimitiveType::Float), _) | (_, Some(PrimitiveType::Float)) => {
                 Ty::Primitive(PrimitiveType::Float, TyAttr::default())
             }
@@ -7906,6 +7927,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             },
         }
+    }
+
+    /// Returns true if one operand is `float`-rooted and the other is
+    /// `bigint`-rooted. Used to reject ambiguous numeric comparisons /
+    /// arithmetic since bigint values past 2^53 don't round-trip through f64.
+    fn is_float_bigint_mix(lhs: &Ty, rhs: &Ty) -> bool {
+        fn base_ty(ty: &Ty) -> Option<PrimitiveType> {
+            match ty {
+                Ty::Primitive(p, _) => Some(p.clone()),
+                Ty::Literal(lit, _, _) => Some(PrimitiveType::from_literal(lit)),
+                _ => None,
+            }
+        }
+        matches!(
+            (base_ty(lhs), base_ty(rhs)),
+            (Some(PrimitiveType::Float), Some(PrimitiveType::Bigint))
+                | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Float))
+        )
     }
 
     /// Determine the result type of a bitwise operation.

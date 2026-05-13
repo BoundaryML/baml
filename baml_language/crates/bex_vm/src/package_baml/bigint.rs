@@ -4,7 +4,10 @@ use bex_vm_types::Value;
 use num_bigint::{BigInt, BigUint, Sign};
 
 use super::{BamlClassBigint, PackageBamlImpl};
-use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
+use crate::{
+    BexVm,
+    errors::{VmBamlError, VmPanic, VmRustFnError},
+};
 
 /// Upper bound on the bit-length of a bigint we are willing to allocate from
 /// `pow` / `shl`. ~268 million bits ≈ 80 million decimal digits ≈ 32 MiB of
@@ -14,8 +17,11 @@ use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 pub(crate) const MAX_BIGINT_BITS: u64 = 1 << 28;
 
 impl BamlClassBigint for PackageBamlImpl {
-    fn to_json(_bigint: Arc<BigInt>) -> Value {
-        unimplemented!("bigint.to_json: not yet implemented")
+    fn to_json(vm: &mut BexVm, bigint: Arc<BigInt>) -> Value {
+        // JSON has no native arbitrary-precision integer; emit a decimal
+        // string so the value round-trips losslessly through any consumer.
+        // Matches `value_to_serde` for `Object::Bigint` in `package_baml::json`.
+        vm.alloc_string(bigint.to_string())
     }
 
     fn abs(bigint: Arc<BigInt>) -> Arc<BigInt> {
@@ -59,17 +65,36 @@ impl BamlClassBigint for PackageBamlImpl {
         if exp.sign() == Sign::Minus {
             return Ok(Arc::new(BigInt::ZERO));
         }
-        // 0^0 == 1 by convention; `BigInt::pow(0)` also yields 1 so this falls
-        // through naturally.
-        //
-        // Pre-flight memory guard: estimate the bit-length of the result and
-        // reject anything that would blow past `MAX_BIGINT_BITS`. We use
-        // `bits() * exp` as an upper bound — exact for `|base| >= 2` and an
-        // over-estimate (still safe) for base in {-1, 0, 1}, which collapse to
-        // tiny results anyway and need no guard.
+        // Short-circuit bases in {-1, 0, 1} — the result has bit-length 0 or 1
+        // regardless of how large `exp` is. Without this, the `bits() * exp`
+        // overestimate below would reject e.g. `(1n).pow(2^29)` with a bogus
+        // AllocFailure even though the result is just `1`.
+        if bigint.as_ref() == &BigInt::ZERO {
+            // 0^0 == 1 by convention; 0^positive == 0.
+            let is_zero_exp = exp.as_ref() == &BigInt::ZERO;
+            return Ok(Arc::new(if is_zero_exp {
+                BigInt::from(1)
+            } else {
+                BigInt::ZERO
+            }));
+        }
+        if bigint.as_ref() == &BigInt::from(1) {
+            return Ok(Arc::new(BigInt::from(1)));
+        }
+        if bigint.as_ref() == &BigInt::from(-1) {
+            // (-1)^even == 1, (-1)^odd == -1.
+            let is_even = exp.as_ref() % 2 == BigInt::ZERO;
+            return Ok(Arc::new(if is_even {
+                BigInt::from(1)
+            } else {
+                BigInt::from(-1)
+            }));
+        }
+        // Pre-flight memory guard for |base| >= 2: bits(b^e) ≤ bits(b) * e
+        // exactly, so reject anything that would blow past `MAX_BIGINT_BITS`.
         let base_bits = bigint.bits();
         // `BigInt::pow` takes a `u32`. Anything outside that range is far past
-        // what we could materialise even with a single-bit base, so map the
+        // what we could materialise even with a 2-bit base, so map the
         // conversion failure straight onto an `AllocFailure` panic.
         let exp_u32 = u32::try_from(exp.as_ref()).map_err(|_| {
             alloc_failure_panic(format!(
@@ -98,14 +123,43 @@ impl BamlClassBigint for PackageBamlImpl {
             }
             .into());
         }
-        // Compute floor(log_base(bigint)) by repeated division.
-        let mut count: u64 = 0;
-        let mut current: BigInt = bigint.as_ref().clone();
-        while current >= *base {
-            current /= base.as_ref();
-            count += 1;
+        // Compute floor(log_base(bigint)). The previous implementation looped
+        // base.pow(0) → base.pow(1) → … via repeated division, which is O(N)
+        // bigint divisions where N = floor(log_base(bigint)). Replace with a
+        // binary search over `k` in `[0, k_max]` using `base.pow(k)` — O(log N)
+        // bigint comparisons and O(log N · M(N)) total bit-work, where M is
+        // the multiplication cost.
+        //
+        // For `base == 2`, short-circuit via `bits()`: floor(log2(x)) is just
+        // `x.bits() - 1` for any positive x.
+        if base.as_ref() == &BigInt::from(2u32) {
+            // bigint > 0, so bits() >= 1.
+            return Ok(Arc::new(BigInt::from(bigint.bits() - 1)));
         }
-        Ok(Arc::new(BigInt::from(count)))
+        // Upper bound: `log_b(x) ≤ bits(x) / (bits(b) - 1)` because for b ≥ 2,
+        // 2^(bits(b)-1) ≤ b, so b^k ≥ 2^(k * (bits(b)-1)). Add 1 for slack and
+        // saturate to u32::MAX since BigInt::pow takes u32.
+        let denom = base.bits().saturating_sub(1).max(1);
+        let k_max_u64 = (bigint.bits() / denom)
+            .saturating_add(1)
+            .min(u64::from(u32::MAX));
+        // Safe: clamped to u32::MAX above.
+        let k_max = u32::try_from(k_max_u64).unwrap_or(u32::MAX);
+
+        let mut lo: u32 = 0;
+        let mut hi: u32 = k_max;
+        while lo < hi {
+            // Bias the midpoint upward so the loop invariant
+            // `base.pow(lo) <= bigint` advances toward `hi`.
+            let mid = lo + (hi - lo).div_ceil(2);
+            let candidate = base.pow(mid);
+            if &candidate <= bigint.as_ref() {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        Ok(Arc::new(BigInt::from(lo)))
     }
 
     fn parse(text: &str) -> Result<Arc<BigInt>, VmRustFnError> {

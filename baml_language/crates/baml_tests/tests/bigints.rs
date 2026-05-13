@@ -94,6 +94,46 @@ async fn test_int_to_bigint_alias_param() {
     );
 }
 
+#[tokio::test]
+async fn test_int_to_bigint_assign_op_add() {
+    // `x += 1` on a bigint local: int rhs must be widened so the binop sees
+    // matching bigint operands.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint {
+            let x: bigint = 0n;
+            x += 1;
+            x
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(1))));
+}
+
+#[tokio::test]
+async fn test_int_to_bigint_assign_op_mul() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint {
+            let x: bigint = 5n;
+            x *= 2;
+            x
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(10)))
+    );
+}
+
+// Note: `b.v += <int>` on a class field (`obj.field += 1`) tickles a
+// pre-existing canary bug where writing a bigint back into a bigint field
+// after a binop fails with "expected Object(String), got Object(Bigint)".
+// `b.v = <bigint>` (plain Assign) works, and `b.v + <int>` (inline binop)
+// works; the field-writeback path is broken. Tracked separately — not
+// addressed in this commit.
+
 // ─── literal syntax (Phase 3) ─────────────────────────────────────────────────
 
 #[tokio::test]
@@ -1041,5 +1081,147 @@ async fn test_bigint_pow_normal_works() {
     assert!(
         s.starts_with("115792089237316195"),
         "unexpected prefix: {s}"
+    );
+}
+
+// ─── pow edge cases (negative exp + small bases) ─────────────────────────
+
+#[tokio::test]
+async fn test_bigint_pow_neg_exp_one() {
+    // (1n).pow(-1n) follows the uniform-negative-exp rule: result 0.
+    let output = baml_test!(r#"function main() -> bigint { return (1n).pow(-1n); }"#);
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
+}
+
+#[tokio::test]
+async fn test_bigint_pow_neg_exp_neg_one() {
+    let output = baml_test!(r#"function main() -> bigint { return (-1n).pow(-2n); }"#);
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
+}
+
+#[tokio::test]
+async fn test_bigint_pow_neg_exp_zero_base() {
+    let output = baml_test!(r#"function main() -> bigint { return (0n).pow(-1n); }"#);
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
+}
+
+#[tokio::test]
+async fn test_bigint_pow_zero_zero() {
+    // 0^0 == 1 by convention.
+    let output = baml_test!(r#"function main() -> bigint { return (0n).pow(0n); }"#);
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(1))));
+}
+
+#[tokio::test]
+async fn test_bigint_pow_one_huge_exponent() {
+    // (1n).pow(LARGE) must not trip the bits()*exp overestimate — it should
+    // return 1n quickly.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { return (1n).pow(1000000000n); }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(1))));
+}
+
+#[tokio::test]
+async fn test_bigint_pow_neg_one_huge_even() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { return (-1n).pow(1000000000n); }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(1))));
+}
+
+#[tokio::test]
+async fn test_bigint_pow_neg_one_huge_odd() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { return (-1n).pow(1000000001n); }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(-1)))
+    );
+}
+
+#[tokio::test]
+async fn test_bigint_pow_zero_huge_exponent() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { return (0n).pow(1000000000n); }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
+}
+
+// ─── ilog efficiency regression (large input, base 2 and general) ────────
+
+#[tokio::test]
+async fn test_bigint_ilog_base_two() {
+    let output = baml_test!(r#"function main() -> bigint { return (1024n).ilog(2n); }"#);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(10)))
+    );
+}
+
+#[tokio::test]
+async fn test_bigint_ilog_base_ten() {
+    let output = baml_test!(r#"function main() -> bigint { return (1000n).ilog(10n); }"#);
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(3))));
+}
+
+#[tokio::test]
+async fn test_bigint_ilog_large_input() {
+    // Exercise the binary-search path on a value where the linear approach
+    // would have taken a million iterations.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { return ((2n).pow(1000n)).ilog(2n); }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(1000)))
+    );
+}
+
+#[tokio::test]
+async fn test_bigint_ilog_floor() {
+    // ilog floors (rounds down).
+    let output = baml_test!(r#"function main() -> bigint { return (1023n).ilog(2n); }"#);
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(9))));
+}
+
+// ─── to_json ────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_bigint_to_json_returns_string() {
+    // Bigint values exceed JSON's safe-integer range, so to_json emits a
+    // decimal string. Matches `value_to_serde`'s shape for `Object::Bigint`.
+    let output = baml_test!(
+        r#"
+        function main() -> baml.json.json { return (42n).to_json(); }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("42".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn test_bigint_to_json_large() {
+    let output = baml_test!(
+        r#"
+        function main() -> baml.json.json { return (99999999999999999999n).to_json(); }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("99999999999999999999".to_string()))
     );
 }

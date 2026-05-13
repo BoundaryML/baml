@@ -3253,17 +3253,35 @@ impl LoweringContext<'_> {
         let place = self.lower_lvalue(inner_target);
         let current = Operand::Copy(place.clone());
         // Mixed `bigint OP= int`: widen the int rhs so the binop sees matching
-        // `bigint` operands.
-        let target_ty = self.expr_ty(inner_target);
-        let value_ty = self.expr_ty(value);
-        let widen_rhs = matches!(
+        // `bigint` operands. `expr_ty` doesn't always carry a type for
+        // single-segment Path lvalues, so derive from the local's declared
+        // type when available (mirrors the plain `AssignOp` path).
+        let target_ty = match &place {
+            Place::Local(l) => self.builder.local_ty(*l),
+            _ => self.expr_ty(inner_target),
+        };
+        let target_is_bigint = matches!(
             target_ty,
             Ty::Bigint { .. } | Ty::Literal(baml_type::Literal::Bigint(_), _)
-        ) && matches!(
-            value_ty,
-            Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
         );
-        let rhs = self.lower_to_operand_widening(value, widen_rhs);
+        // See AssignOp above: TIR coerces the value to the target type, so we
+        // must inspect the AST to detect a natural-int RHS.
+        let rhs = if target_is_bigint && self.value_is_natural_int(value) {
+            let int_temp = self.builder.temp(Ty::Int {
+                attr: TyAttr::default(),
+            });
+            self.lower_expr(value, Place::local(int_temp));
+            let bigint_temp = self.builder.temp(Ty::Bigint {
+                attr: TyAttr::default(),
+            });
+            self.builder.assign(
+                Place::local(bigint_temp),
+                Rvalue::IntToBigint(Operand::Move(Place::Local(int_temp))),
+            );
+            Operand::Copy(Place::Local(bigint_temp))
+        } else {
+            self.lower_to_operand(value)
+        };
         let mir_op = Self::convert_assign_op(op);
         self.builder.assign(
             place,
@@ -4449,6 +4467,36 @@ impl LoweringContext<'_> {
     /// The widening applies when the destination type is `bigint` and the
     /// source expression's type is `int` (or a literal-int type, which is a
     /// subtype of `int` and therefore of `bigint`).
+    /// Returns true if the AST expression's "natural" value type is `int` —
+    /// i.e. it would lower to an int constant or an int-typed local at runtime,
+    /// regardless of any TIR-level coercion applied at the use site.
+    ///
+    /// Used by `AssignOp` widening: TIR coerces an `AssignOp`'s value to the
+    /// target type, so `expr_ty(value)` reports `Bigint` for `x += 1` even
+    /// though the literal lowers to `Constant::Int(1)`. Without this check,
+    /// the widening would be skipped and the runtime would fault with
+    /// `CannotApplyBinOp(Bigint, Int)`.
+    fn value_is_natural_int(&self, expr_id: AstExprId) -> bool {
+        let expr = &self.body.exprs[expr_id];
+        match expr {
+            AstExpr::Literal(baml_base::Literal::Int(_)) => true,
+            AstExpr::Path(segments) if segments.len() == 1 => {
+                if let Some(&local) = self.locals.get(&segments[0]) {
+                    matches!(
+                        self.builder.local_ty(local),
+                        Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
+                    )
+                } else {
+                    false
+                }
+            }
+            _ => matches!(
+                self.expr_ty(expr_id),
+                Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
+            ),
+        }
+    }
+
     fn needs_int_to_bigint_widen(&self, dest_ty: &Ty, src_expr_id: AstExprId) -> bool {
         if !matches!(dest_ty, Ty::Bigint { .. }) {
             return false;
@@ -5573,17 +5621,39 @@ impl LoweringContext<'_> {
                     let place = self.lower_lvalue(target);
                     let current = Operand::Copy(place.clone());
                     // Mixed `bigint OP= int`: widen the int rhs so the binop
-                    // sees matching `bigint` operands.
-                    let target_ty = self.expr_ty(target);
-                    let value_ty = self.expr_ty(value);
-                    let widen_rhs = matches!(
+                    // sees matching `bigint` operands. `expr_ty` doesn't always
+                    // carry a type for single-segment Path lvalues, so derive
+                    // from the local's declared type when available (mirrors
+                    // the `Assign` path).
+                    let target_ty = match &place {
+                        Place::Local(l) => self.builder.local_ty(*l),
+                        _ => self.expr_ty(target),
+                    };
+                    let target_is_bigint = matches!(
                         target_ty,
                         Ty::Bigint { .. } | Ty::Literal(baml_type::Literal::Bigint(_), _)
-                    ) && matches!(
-                        value_ty,
-                        Ty::Int { .. } | Ty::Literal(baml_type::Literal::Int(_), _)
                     );
-                    let rhs = self.lower_to_operand_widening(value, widen_rhs);
+                    // TIR coerces an AssignOp's value to the target type, so
+                    // `expr_ty(value)` reports `Bigint` even when the literal
+                    // is `1`. Inspect the AST directly to catch the natural-int
+                    // case and insert an `IntToBigint` so the binop sees
+                    // matching `bigint` operands.
+                    let rhs = if target_is_bigint && self.value_is_natural_int(value) {
+                        let int_temp = self.builder.temp(Ty::Int {
+                            attr: TyAttr::default(),
+                        });
+                        self.lower_expr(value, Place::local(int_temp));
+                        let bigint_temp = self.builder.temp(Ty::Bigint {
+                            attr: TyAttr::default(),
+                        });
+                        self.builder.assign(
+                            Place::local(bigint_temp),
+                            Rvalue::IntToBigint(Operand::Move(Place::Local(int_temp))),
+                        );
+                        Operand::Copy(Place::Local(bigint_temp))
+                    } else {
+                        self.lower_to_operand(value)
+                    };
                     let mir_op = Self::convert_assign_op(op);
                     self.builder.assign(
                         place,

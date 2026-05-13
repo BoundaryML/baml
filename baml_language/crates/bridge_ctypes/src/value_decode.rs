@@ -37,11 +37,12 @@ pub fn inbound_to_external(
                 const MAX_BIGINT_HEX_LEN: usize = (1 << 28) / 4 + 2;
                 // Hex / base sixteen on the wire. `parse_bytes` honors a leading `-` for negatives.
                 let trimmed = s.trim();
-                if trimmed.len() > MAX_BIGINT_HEX_LEN {
-                    return Err(CtypesError::InvalidBigint(s));
+                let len = trimmed.len();
+                if len > MAX_BIGINT_HEX_LEN {
+                    return Err(CtypesError::InvalidBigint { len });
                 }
                 let bi = num_bigint::BigInt::parse_bytes(trimmed.as_bytes(), 16)
-                    .ok_or_else(|| CtypesError::InvalidBigint(s.clone()))?;
+                    .ok_or(CtypesError::InvalidBigint { len })?;
                 Ok(BexExternalValue::Bigint(bi))
             }
             InboundValueVariant::FloatValue(f) => Ok(BexExternalValue::Float(f)),
@@ -267,6 +268,28 @@ mod tests {
         };
         let table = CffiHandleTable::new();
         let err = inbound_to_external(inbound, &table).expect_err("invalid bigint should error");
-        assert!(matches!(err, CtypesError::InvalidBigint(_)));
+        assert!(matches!(err, CtypesError::InvalidBigint { len: 12 }));
+        assert_eq!(err.to_string(), "Invalid bigint hex string (12 bytes)");
+    }
+
+    #[test]
+    fn test_bigint_decode_too_long() {
+        // Build a hex blob just over the FFI cap so the size check fires
+        // before `parse_bytes`. The error must carry only the length, not the
+        // input itself.
+        let blob = "f".repeat((1 << 28) / 4 + 3);
+        let blob_len = blob.len();
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::BigintValue(blob)),
+        };
+        let table = CffiHandleTable::new();
+        let err = inbound_to_external(inbound, &table).expect_err("over-cap bigint should error");
+        let CtypesError::InvalidBigint { len } = err else {
+            panic!("expected InvalidBigint, got: {err:?}");
+        };
+        assert_eq!(len, blob_len);
+        let message = format!("Invalid bigint hex string ({blob_len} bytes)");
+        // Sanity: the error message does not embed the megabyte-scale input.
+        assert!(message.len() < 200);
     }
 }

@@ -87,11 +87,19 @@ function decodeValueHolder(holder: baml_core.cffi.v1.IBamlOutboundValue): unknow
     if (holder.bigintValue != null) {
         // Hex / base sixteen on the wire (see Phase 10 of the bigint plan).
         // BigInt() accepts a "0x"-prefixed hex literal; strip a leading
-        // minus so we can parse the magnitude.
+        // minus so we can parse the magnitude. Guard against empty or
+        // sign-only inputs — `BigInt("0x")` throws `SyntaxError`, so we
+        // surface a clearer error instead.
         const s = holder.bigintValue as string;
+        const magnitude = s.startsWith('-') ? s.slice(1) : s;
+        if (magnitude.length === 0 || !/^[0-9a-fA-F]+$/.test(magnitude)) {
+            throw new Error(
+                `Invalid bigint hex on the wire: ${JSON.stringify(s)}`,
+            );
+        }
         return s.startsWith('-')
-            ? -BigInt(`0x${s.slice(1)}`)
-            : BigInt(`0x${s}`);
+            ? -BigInt(`0x${magnitude}`)
+            : BigInt(`0x${magnitude}`);
     }
     if (holder.floatValue != null) return holder.floatValue;
     if (holder.boolValue != null) return holder.boolValue;

@@ -742,8 +742,6 @@ pub enum ConstValue {
     OmittedArg,
     Null,
     Int(i64),
-    /// A bigint constant. Converted to an `Object::Bigint` heap allocation at load time.
-    Bigint(num_bigint::BigInt),
     Float(f64),
     Bool(bool),
     /// Index into the object pool (converted to `HeapPtr` at load time).
@@ -786,9 +784,6 @@ impl ConstValue {
             ConstValue::OmittedArg => Value::OmittedArg,
             ConstValue::Null => Value::Null,
             ConstValue::Int(v) => Value::Int(*v),
-            ConstValue::Bigint(_) => unimplemented!(
-                "ConstValue::Bigint runtime resolution is not yet implemented (Phase 2)"
-            ),
             ConstValue::Float(v) => Value::Float(*v),
             ConstValue::Bool(v) => Value::Bool(*v),
             ConstValue::Object(idx) => Value::Object(resolve(*idx)),

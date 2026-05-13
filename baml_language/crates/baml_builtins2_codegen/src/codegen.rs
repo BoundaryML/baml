@@ -1393,6 +1393,16 @@ fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) 
     writeln!(out, "{indent}Ok({conversion})").unwrap();
 }
 
+/// Emit a Rust expression that converts a native method's return value into a
+/// `Value` for the surrounding `Ok({conversion})` line in the glue closure.
+///
+/// **Invariant**: the closure this expression lands in returns
+/// `NativeFunctionResult` (= `Result<Value, VmRustFnError>`, see
+/// `bex_vm::package_baml::NativeFunctionResult`), so any `?` inside the
+/// emitted expression propagates via `VmRustFnError`. In particular the
+/// `Bigint` arm uses `try_alloc_bigint(...)?` so a `VmPanic::AllocFailure`
+/// from a too-large bigint is promoted to `VmRustFnError::Panic` via the
+/// `#[from]` on `VmRustFnError`.
 fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
     match ty {
         BamlType::String => format!("vm.alloc_string({name})"),

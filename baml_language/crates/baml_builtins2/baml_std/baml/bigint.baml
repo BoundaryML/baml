@@ -1,4 +1,13 @@
+/// Arbitrary-precision signed integer.
+///
+/// # Bitwise on negatives
+///
+/// `&`, `|`, `^` use two's-complement semantics — bigints are treated as if
+/// they had an infinite sign-extended bit string. So `(-1n) & 1n == 1n`,
+/// `(-1n) | 0n == -1n`, `(-1n) ^ 0n == -1n`. This matches JavaScript `BigInt`
+/// and Python `int`.
 class Bigint {
+  //baml:mut_vm
   function to_json(self) -> baml.json.json {
     $rust_function
   }
@@ -118,8 +127,10 @@ class Bigint {
   /// Parses `text` as a base-ten signed integer.
   ///
   /// Accepts an optional leading `+` or `-` sign followed by one or more
-  /// ASCII digits. No surrounding whitespace, no underscores, no other
-  /// numeric formats.
+  /// ASCII digits. No surrounding whitespace, no underscore separators,
+  /// no hex / octal / binary prefix (`0x` / `0o` / `0b`), no Unicode digits,
+  /// no scientific notation. Callers needing those should preprocess the
+  /// string.
   ///
   /// Throws `ParseError` if `text` is empty or contains a non-digit character.
   ///
@@ -130,6 +141,8 @@ class Bigint {
   /// bigint.parse("+0")       // 0n
   /// bigint.parse("")         // throws — empty
   /// bigint.parse("12a")      // throws — non-digit
+  /// bigint.parse("0x2a")     // throws — hex prefix not accepted
+  /// bigint.parse("1_000")    // throws — underscores not accepted
   /// bigint.parse(" 5 ")      // throws — whitespace not allowed; trim first
   /// bigint.parse("99999999999999999999")  // 99999999999999999999n
   /// ```
