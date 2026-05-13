@@ -1,0 +1,338 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "if_let_binding_not_visible_after"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_LET_EXPR
+          KW_IF "if"
+          LET_STMT
+            PATTERN
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
+                COLON ":"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
+            EQUALS "="
+            WORD "v"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT "return x;"
+              KW_RETURN "return"
+              WORD "x"
+              SEMICOLON ";"
+            R_BRACE "}"
+        RETURN_STMT "// `x` is out of scope here.
+  return x;"
+          KW_RETURN "return"
+          WORD "x"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "if_let_binding_not_visible_in_else"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_LET_EXPR
+          KW_IF "if"
+          LET_STMT
+            PATTERN
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
+                COLON ":"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
+            EQUALS "="
+            WORD "v"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT "return x;"
+              KW_RETURN "return"
+              WORD "x"
+              SEMICOLON ";"
+            R_BRACE "}"
+          KW_ELSE "else"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT "// `x` is not in scope here — it only exists in the then-branch.
+    return x;"
+              KW_RETURN "return"
+              WORD "x"
+              SEMICOLON ";"
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "if_let_binding_not_visible_to_sibling"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_LET_EXPR
+          KW_IF "if"
+          LET_STMT
+            PATTERN
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
+                COLON ":"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
+            EQUALS "="
+            WORD "v"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT "return x;"
+              KW_RETURN "return"
+              WORD "x"
+              SEMICOLON ";"
+            R_BRACE "}"
+          KW_ELSE "else"
+          IF_LET_EXPR
+            KW_IF "if"
+            LET_STMT
+              PATTERN
+                BINDING_PATTERN
+                  KW_LET "let"
+                  WORD "y"
+                  COLON ":"
+                  PATTERN
+                    TYPE_PATTERN
+                      TYPE_EXPR "string"
+                        WORD "string"
+              EQUALS "="
+              WORD "v"
+            BLOCK_EXPR
+              L_BRACE "{"
+              RETURN_STMT "// `x` is out of scope; only `y` is bound here.
+    return x;"
+                KW_RETURN "return"
+                WORD "x"
+                SEMICOLON ";"
+              R_BRACE "}"
+            KW_ELSE "else"
+            BLOCK_EXPR
+              L_BRACE "{"
+              RETURN_STMT
+                KW_RETURN "return"
+                UNARY_EXPR "-1"
+                  MINUS "-"
+                  INTEGER_LITERAL "1"
+                SEMICOLON ";"
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "while_let_binding_not_visible_after"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        WHILE_LET_STMT
+          KW_WHILE "while"
+          LET_STMT
+            PATTERN
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "n"
+                COLON ":"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "int"
+                      WORD "int"
+            EQUALS "="
+            WORD "v"
+          BLOCK_EXPR
+            L_BRACE "{"
+            BINARY_EXPR
+              WORD "v"
+              EQUALS "="
+              STRING_LITERAL "stop"
+                QUOTE """
+                WORD "stop"
+                QUOTE """
+            SEMICOLON ";"
+            R_BRACE "}"
+        SEMICOLON ";"
+        RETURN_STMT "// `n` is out of scope here.
+  return n;"
+          KW_RETURN "return"
+          WORD "n"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "let_else_binding_not_visible_in_else"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "raw"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "x"
+              COLON ":"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
+          EQUALS "="
+          WORD "raw"
+          KW_ELSE "else"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT "// `x` is not yet in scope — bindings come into scope AFTER the else block.
+    return x;"
+              KW_RETURN "return"
+              WORD "x"
+              SEMICOLON ";"
+            R_BRACE "}"
+          SEMICOLON ";"
+        RETURN_STMT "return x;"
+          KW_RETURN "return"
+          WORD "x"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "let_else_uses_binding_in_else_predicate"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "raw"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "n"
+              COLON ":"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
+          EQUALS "="
+          WORD "raw"
+          KW_ELSE "else"
+          BLOCK_EXPR
+            L_BRACE "{"
+            IF_EXPR
+              KW_IF "if"
+              PAREN_EXPR
+                L_PAREN "("
+                BINARY_EXPR "n > 0"
+                  WORD "n"
+                  GREATER ">"
+                  INTEGER_LITERAL "0"
+                R_PAREN ")"
+              BLOCK_EXPR
+                L_BRACE "{"
+                RETURN_STMT "return 1;"
+                  KW_RETURN "return"
+                  INTEGER_LITERAL "1"
+                  SEMICOLON ";"
+                R_BRACE "}"
+            RETURN_STMT
+              KW_RETURN "return"
+              UNARY_EXPR "-1"
+                MINUS "-"
+                INTEGER_LITERAL "1"
+              SEMICOLON ";"
+            R_BRACE "}"
+          SEMICOLON ";"
+        RETURN_STMT "return n;"
+          KW_RETURN "return"
+          WORD "n"
+          SEMICOLON ";"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

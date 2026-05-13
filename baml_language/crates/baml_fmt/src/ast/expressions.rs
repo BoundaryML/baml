@@ -5,8 +5,8 @@ use rowan::TextRange;
 
 use crate::{
     ast::{
-        BinaryOp, FromCST, KnownKind, MatchPattern, Statement, StrongAstError, SyntaxNodeIter,
-        Token, UnaryOp, tokens as t,
+        BinaryOp, FromCST, KnownKind, LetStmt, MatchPattern, Statement, StrongAstError,
+        SyntaxNodeIter, Token, UnaryOp, tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt,
@@ -21,6 +21,7 @@ pub enum Expression {
     Binary(BinaryExpr),
     Unary(UnaryExpr),
     If(IfExpr),
+    IfLet(Box<IfLetExpr>),
     Match(MatchExpr),
     Call(CallExpr),
     Index(IndexExpr),
@@ -45,6 +46,7 @@ impl Expression {
         !matches!(
             self,
             Expression::If(_)
+                | Expression::IfLet(_)
                 | Expression::Match(_)
                 | Expression::Lambda(_)
                 | Expression::Unknown(_)
@@ -71,6 +73,7 @@ impl FromCST for Expression {
             SyntaxKind::BINARY_EXPR => BinaryExpr::from_cst(elem).map(Expression::Binary)?,
             SyntaxKind::UNARY_EXPR => UnaryExpr::from_cst(elem).map(Expression::Unary)?,
             SyntaxKind::IF_EXPR => IfExpr::from_cst(elem).map(Expression::If)?,
+            SyntaxKind::IF_LET_EXPR => Expression::IfLet(Box::new(IfLetExpr::from_cst(elem)?)),
             SyntaxKind::MATCH_EXPR => MatchExpr::from_cst(elem).map(Expression::Match)?,
             SyntaxKind::CALL_EXPR => CallExpr::from_cst(elem).map(Expression::Call)?,
             SyntaxKind::INDEX_EXPR => IndexExpr::from_cst(elem).map(Expression::Index)?,
@@ -123,6 +126,7 @@ impl Expression {
             Expression::Binary(binary) => binary.single_line_width(input),
             Expression::Unary(unary) => unary.single_line_width(input),
             Expression::If(_) => None,
+            Expression::IfLet(_) => None,
             Expression::Match(_) => None,
             Expression::Call(call) => call.single_line_width(input),
             Expression::Index(index) => index.single_line_width(input),
@@ -168,6 +172,7 @@ impl Printable for Expression {
             Expression::Binary(binary) => binary.print(shape, printer),
             Expression::Unary(unary) => unary.print(shape, printer),
             Expression::If(if_expr) => if_expr.print(shape, printer),
+            Expression::IfLet(if_let_expr) => if_let_expr.print(shape, printer),
             Expression::Match(match_expr) => match_expr.print(shape, printer),
             Expression::EnvAccess(env) => env.print(shape, printer),
             Expression::Block(block) => block.print(shape, printer),
@@ -191,6 +196,7 @@ impl Printable for Expression {
             Expression::Binary(binary) => binary.leftmost_token(),
             Expression::Unary(unary) => unary.leftmost_token(),
             Expression::If(if_expr) => if_expr.leftmost_token(),
+            Expression::IfLet(if_let_expr) => if_let_expr.leftmost_token(),
             Expression::Match(match_expr) => match_expr.leftmost_token(),
             Expression::Call(call) => call.leftmost_token(),
             Expression::Index(index) => index.leftmost_token(),
@@ -217,6 +223,7 @@ impl Printable for Expression {
             Expression::Binary(binary) => binary.rightmost_token(),
             Expression::Unary(unary) => unary.rightmost_token(),
             Expression::If(if_expr) => if_expr.rightmost_token(),
+            Expression::IfLet(if_let_expr) => if_let_expr.rightmost_token(),
             Expression::Match(match_expr) => match_expr.rightmost_token(),
             Expression::Call(call) => call.rightmost_token(),
             Expression::Index(index) => index.rightmost_token(),
@@ -1042,11 +1049,119 @@ impl Printable for IfExpr {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::IF_LET_EXPR`] node.
+///
+/// Surface form: `if let <pat> = <expr> { ... } [else { ... } | else if ...]`.
+/// CST shape: `KW_IF` + `LET_STMT` (pat + init, no trailing semicolon) +
+/// `BLOCK_EXPR` + optional `KW_ELSE` + (`BLOCK_EXPR` | `IF_EXPR` | `IF_LET_EXPR`).
+#[derive(Debug)]
+pub struct IfLetExpr {
+    pub keyword: t::If,
+    pub header: LetStmt,
+    pub block: BlockExpr,
+    pub else_branch: Option<(t::Else, ElseExpr)>,
+}
+
+impl FromCST for IfLetExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::IF_LET_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let keyword = it.expect_parse()?;
+
+        // LET_STMT — the `let <pat> = <expr>` header
+        let let_node = it.expect_node_of_kind(SyntaxKind::LET_STMT)?;
+        let header = LetStmt::from_cst(SyntaxElement::Node(let_node))?;
+
+        // BLOCK_EXPR — then-branch
+        let block: BlockExpr = it.expect_parse()?;
+
+        let else_branch = if let Some(elem) = it.next() {
+            let else_token = t::Else::from_cst(elem)?;
+            let else_body_node = it.expect_node("else body (if / if let / block)")?;
+            let else_body = match else_body_node.kind() {
+                SyntaxKind::IF_EXPR => ElseExpr::If(Box::new(IfExpr::from_cst(
+                    SyntaxElement::Node(else_body_node),
+                )?)),
+                SyntaxKind::IF_LET_EXPR => ElseExpr::IfLet(Box::new(IfLetExpr::from_cst(
+                    SyntaxElement::Node(else_body_node),
+                )?)),
+                SyntaxKind::BLOCK_EXPR => ElseExpr::Block(Box::new(BlockExpr::from_cst(
+                    SyntaxElement::Node(else_body_node),
+                )?)),
+                _ => {
+                    return Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "IF_EXPR, IF_LET_EXPR or BLOCK_EXPR".into(),
+                        found: else_body_node.kind(),
+                        at: else_body_node.text_range(),
+                    });
+                }
+            };
+            Some((else_token, else_body))
+        } else {
+            None
+        };
+
+        it.expect_end()?;
+
+        Ok(IfLetExpr {
+            keyword,
+            header,
+            block,
+            else_branch,
+        })
+    }
+}
+
+impl KnownKind for IfLetExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::IF_LET_EXPR
+    }
+}
+
+impl Printable for IfLetExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+
+        // Delegate header printing to `LetStmt::print_header` so comment
+        // trivia around `=` and the initializer survives. Bypassing
+        // `LetStmt::print` keeps it from emitting a trailing synthetic `;`.
+        let _ = self.header.print_header(shape.clone(), printer);
+
+        printer.print_str(" ");
+        printer.print(&self.block, shape.clone());
+
+        if let Some((else_kw, else_expr)) = &self.else_branch {
+            printer.print_str(" ");
+            printer.print_raw_token(else_kw);
+            printer.print_str(" ");
+            printer.print(else_expr, shape);
+        }
+
+        PrintInfo::default_multi_lined()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some((_, else_expr)) = &self.else_branch {
+            else_expr.rightmost_token()
+        } else {
+            self.block.rightmost_token()
+        }
+    }
+}
+
 /// Used in [`IfExpr`] to represent the else/else-if branch.
 #[derive(Debug)]
 pub enum ElseExpr {
     /// else if
     If(Box<IfExpr>),
+    /// else if let
+    IfLet(Box<IfLetExpr>),
     /// final else block
     Block(Box<BlockExpr>),
 }
@@ -1055,18 +1170,21 @@ impl Printable for ElseExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
             ElseExpr::If(if_expr) => if_expr.print(shape, printer),
+            ElseExpr::IfLet(if_let_expr) => if_let_expr.print(shape, printer),
             ElseExpr::Block(block) => block.print(shape, printer),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
             ElseExpr::If(if_expr) => if_expr.leftmost_token(),
+            ElseExpr::IfLet(if_let_expr) => if_let_expr.leftmost_token(),
             ElseExpr::Block(block) => block.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
             ElseExpr::If(if_expr) => if_expr.rightmost_token(),
+            ElseExpr::IfLet(if_let_expr) => if_let_expr.rightmost_token(),
             ElseExpr::Block(block) => block.rightmost_token(),
         }
     }

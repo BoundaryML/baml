@@ -2926,6 +2926,20 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_let_stmt(&mut self) {
+        self.parse_let_stmt_inner(/* allow_let_else = */ true);
+    }
+
+    /// Parse a let-header (pattern + initializer) wrapped in a `LET_STMT` node.
+    ///
+    /// Used by `if let`, `while let`, and for-in to embed a pattern + value
+    /// without the surrounding statement-level semantics. In those contexts a
+    /// trailing `else` always belongs to the enclosing construct, never to a
+    /// let-else binding.
+    fn parse_let_header_no_else(&mut self) {
+        self.parse_let_stmt_inner(/* allow_let_else = */ false);
+    }
+
+    fn parse_let_stmt_inner(&mut self, allow_let_else: bool) {
         self.with_node(SyntaxKind::LET_STMT, |p| {
             // A let statement's pattern must start with `let`. parse_pattern
             // itself is permissive (it parses any pattern shape, including
@@ -2948,6 +2962,22 @@ impl<'a> Parser<'a> {
                 p.parse_expr_bp(3);
             } else {
                 p.error_unexpected_token("initializer (=)".to_string());
+            }
+
+            // Rust-style `let <pat> = <expr> else { ... };` — an optional
+            // diverging else block. The block must come BEFORE the semicolon.
+            // Downstream lowering recognises a let-else by the presence of a
+            // BLOCK_EXPR child after the initializer.
+            //
+            // In `if let` / `while let` contexts the enclosing form owns the
+            // else clause, so we skip it here when `allow_let_else` is false.
+            if allow_let_else && p.at(TokenKind::Else) {
+                p.bump(); // else
+                if p.at(TokenKind::LBrace) {
+                    p.parse_block_expr();
+                } else {
+                    p.error_unexpected_token("block after 'else' in let-else".to_string());
+                }
             }
 
             // Consume trailing semicolon
@@ -3024,6 +3054,13 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_if_expr(&mut self) {
+        // `if let <pat> = <expr> { ... }` is its own SyntaxKind, so dispatch
+        // before opening an IF_EXPR node. The `let` is immediately after `if`.
+        if self.peek(1).map(|t| t.kind) == Some(TokenKind::Let) {
+            self.parse_if_let_expr();
+            return;
+        }
+
         self.with_node(SyntaxKind::IF_EXPR, |p| {
             p.expect(TokenKind::If);
 
@@ -3042,10 +3079,47 @@ impl<'a> Parser<'a> {
                 p.bump(); // else
 
                 if p.at(TokenKind::If) {
-                    // else if
+                    // else if / else if let
                     p.parse_if_expr();
                 } else if p.at(TokenKind::LBrace) {
                     // else block
+                    p.parse_block_expr();
+                } else {
+                    p.error_unexpected_token("'if' or block after 'else'".to_string());
+                }
+            }
+        });
+    }
+
+    /// Parse `if let <pattern> = <expr> { ... } [else { ... } | else if ...]`.
+    ///
+    /// CST shape mirrors for-in: the `let <pat> = <expr>` header is wrapped in
+    /// a `LET_STMT` child node so downstream code can re-use the same pattern
+    /// + initializer extraction logic.
+    fn parse_if_let_expr(&mut self) {
+        debug_assert!(self.at(TokenKind::If));
+        debug_assert_eq!(self.peek(1).map(|t| t.kind), Some(TokenKind::Let));
+
+        self.with_node(SyntaxKind::IF_LET_EXPR, |p| {
+            p.expect(TokenKind::If);
+            // Parse `let <pat> = <expr>` inside a LET_STMT. We use the
+            // _no_else variant so the upcoming `else` (if any) is parsed as
+            // the if-let's else branch, not a let-else.
+            p.parse_let_header_no_else();
+
+            // Then block
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("block after 'if let' header".to_string());
+            }
+
+            // Optional else clause — block, `else if`, or `else if let`.
+            if p.at(TokenKind::Else) {
+                p.bump(); // else
+                if p.at(TokenKind::If) {
+                    p.parse_if_expr();
+                } else if p.at(TokenKind::LBrace) {
                     p.parse_block_expr();
                 } else {
                     p.error_unexpected_token("'if' or block after 'else'".to_string());
@@ -3807,6 +3881,13 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_while_stmt(&mut self) {
+        // `while let <pat> = <expr> { ... }` is its own SyntaxKind. Dispatch
+        // before opening a WHILE_STMT node when we see `while let`.
+        if self.peek(1).map(|t| t.kind) == Some(TokenKind::Let) {
+            self.parse_while_let_stmt();
+            return;
+        }
+
         self.with_node(SyntaxKind::WHILE_STMT, |p| {
             p.expect(TokenKind::While);
 
@@ -3818,6 +3899,25 @@ impl<'a> Parser<'a> {
                 p.parse_block_expr();
             } else {
                 p.error_unexpected_token("block after while condition".to_string());
+            }
+        });
+    }
+
+    /// Parse `while let <pattern> = <expr> { ... }`.
+    ///
+    /// CST shape: `WHILE_LET_STMT` > [`KW_WHILE`, `LET_STMT`(pat + init), `BLOCK_EXPR`].
+    fn parse_while_let_stmt(&mut self) {
+        debug_assert!(self.at(TokenKind::While));
+        debug_assert_eq!(self.peek(1).map(|t| t.kind), Some(TokenKind::Let));
+
+        self.with_node(SyntaxKind::WHILE_LET_STMT, |p| {
+            p.expect(TokenKind::While);
+            p.parse_let_header_no_else();
+
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("block after 'while let' header".to_string());
             }
         });
     }

@@ -1,0 +1,63 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unresolved name: x
+    ╭─[ main.baml:14:10 ]
+    │
+ 14 │   return x;
+    │          ┬  
+    │          ╰── unresolved name: x
+    │ 
+    │ Note: Error code: E0003
+────╯
+
+  [type] Error: unresolved name: x
+    ╭─[ main.baml:23:12 ]
+    │
+ 23 │     return x;
+    │            ┬  
+    │            ╰── unresolved name: x
+    │ 
+    │ Note: Error code: E0003
+────╯
+
+  [type] Error: unresolved name: x
+    ╭─[ main.baml:33:12 ]
+    │
+ 33 │     return x;
+    │            ┬  
+    │            ╰── unresolved name: x
+    │ 
+    │ Note: Error code: E0003
+────╯
+
+  [type] Error: unresolved name: n
+    ╭─[ main.baml:47:10 ]
+    │
+ 47 │   return n;
+    │          ┬  
+    │          ╰── unresolved name: n
+    │ 
+    │ Note: Error code: E0003
+────╯
+
+  [type] Error: unresolved name: x
+    ╭─[ main.baml:56:12 ]
+    │
+ 56 │     return x;
+    │            ┬  
+    │            ╰── unresolved name: x
+    │ 
+    │ Note: Error code: E0003
+────╯
+
+  [type] Error: unresolved name: n
+    ╭─[ main.baml:64:9 ]
+    │
+ 64 │     if (n > 0) {
+    │         ┬  
+    │         ╰── unresolved name: n
+    │ 
+    │ Note: Error code: E0003
+────╯

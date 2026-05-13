@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.if_let_binding_not_visible_after(v: int | string) -> int  [expr] {
+  { match (v) { x: int => { return x }, _ => {  } }; return x }
+}
+function user.if_let_binding_not_visible_in_else(v: int | string) -> int  [expr] {
+  {  } match (v) { x: int => { return x }, _ => { return x } }
+}
+function user.if_let_binding_not_visible_to_sibling(v: int | string) -> int  [expr] {
+  {  } match (v) { x: int => { return x }, _ => match (v) { y: string => { return x }, _ => { return Neg 1 } } }
+}
+function user.let_else_binding_not_visible_in_else(raw: int | string) -> int  [expr] {
+  { let x: int = match (raw) { x: int => x, _ => { return x } }; return x }
+}
+function user.let_else_uses_binding_in_else_predicate(raw: int | string) -> int  [expr] {
+  { let n: int = match (raw) { n: int => n, _ => { if (n Gt 0) { return 1 }; return Neg 1 } }; return n }
+}
+function user.while_let_binding_not_visible_after(v: int | string) -> int  [expr] {
+  { while true { match (v) { n: int => { v = "stop" }, _ => { break } } }; return n }
+}

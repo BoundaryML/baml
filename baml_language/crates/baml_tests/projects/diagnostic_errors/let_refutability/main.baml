@@ -1,0 +1,95 @@
+// Refutability rules — match Rust's behaviour:
+//
+//   - `if let` / `while let` require a REFUTABLE pattern
+//   - `let pat = expr else { ... };` requires a REFUTABLE pattern
+//   - plain `let pat = expr;` requires an IRREFUTABLE pattern
+//
+// Each function below violates one of these rules. BAML's match-arm
+// exhaustiveness checker fires an "unreachable arm" diagnostic on the
+// synthesised fall-through arm of the desugared match, which is how this
+// refutability constraint is enforced in BAML today.
+//
+// The snapshot for `05_diagnostics` records the exact diagnostic on each
+// function — if you ever wire up a dedicated "irrefutable in if-let"
+// diagnostic, those snapshots will fail and you'll know to update them.
+
+// ── if let with irrefutable patterns ──────────────────────────────────────
+
+// `let x` is a bare binding — always matches. The synthesised wildcard
+// arm has no work to do.
+function if_let_irrefutable_bare_bind() -> int {
+  if let x = 42 {
+    return x + 1;
+  }
+  return 0;
+}
+
+// Wildcard pattern — same story, but with no binding.
+function if_let_irrefutable_wildcard() -> int {
+  if let _ = 5 {
+    return 1;
+  }
+  return 0;
+}
+
+// Type narrow that's a supertype of the scrutinee. Scrutinee is `int`,
+// pattern is `int` — always matches.
+function if_let_irrefutable_supertype_narrow(v: int) -> int {
+  if let n: int = v {
+    return n;
+  }
+  return -1;
+}
+
+// ── while let with irrefutable patterns ───────────────────────────────────
+
+function while_let_irrefutable_bare_bind() -> int {
+  let i = 0;
+  let acc = 0;
+  while let n = i {
+    acc = acc + n;
+    if i >= 3 {
+      break;
+    }
+    i = i + 1;
+  };
+  return acc;
+}
+
+function while_let_irrefutable_supertype_narrow(v: int) -> int {
+  let acc = 0;
+  while let n: int = v {
+    acc = acc + n;
+    break;
+  };
+  return acc;
+}
+
+// ── let else with irrefutable patterns ────────────────────────────────────
+
+// `let n = 5` is irrefutable — the else block can never run, which is the
+// "irrefutable let-else pattern" Rust rejects (rustc rejects via
+// E0005-style check).
+function let_else_irrefutable_bare_bind() -> int {
+  let n = 5 else {
+    return -1;
+  };
+  return n + 1;
+}
+
+// `let n: int = (int)` is irrefutable — same shape.
+function let_else_irrefutable_supertype_narrow(v: int) -> int {
+  let n: int = v else {
+    return -1;
+  };
+  return n;
+}
+
+// The initializer's union shape statically narrows to a single member,
+// making the pattern irrefutable in practice.
+function let_else_irrefutable_static_narrow() -> int {
+  let n: int = 1 + 2 + 3 else {
+    return -1;
+  };
+  return n;
+}

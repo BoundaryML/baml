@@ -245,6 +245,11 @@ pub enum SyntaxKind {
     PAREN_EXPR,
     BLOCK_EXPR,
     IF_EXPR,
+    /// `if let <pattern> = <expr> { ... } [else { ... }]` — Rust-style `if let`.
+    ///
+    /// Desugared at AST lowering to a `match` expression:
+    ///   `match (<expr>) { <pattern> => <then>, _ => <else_branch?> }`
+    IF_LET_EXPR,
     MATCH_EXPR,
     MATCH_ARM,
     MATCH_PATTERN,
@@ -298,6 +303,11 @@ pub enum SyntaxKind {
     LAMBDA_EXPR,
     THROWS_CLAUSE,
     WHILE_STMT,
+    /// `while let <pattern> = <expr> { ... }` — Rust-style `while let`.
+    ///
+    /// Desugared at AST lowering to a `while (true)` loop containing a
+    /// `match` expression whose fail arm `break`s the loop.
+    WHILE_LET_STMT,
     FOR_EXPR,
     LET_STMT,
     WATCH_LET,

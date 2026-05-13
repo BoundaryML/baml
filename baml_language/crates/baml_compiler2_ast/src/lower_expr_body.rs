@@ -490,12 +490,24 @@ impl LoweringContext {
             let is_last = idx == elements.len() - 1;
             match element {
                 BlockElement::Stmt(node) => {
+                    // let-else desugars to multiple statements; handle it
+                    // before the single-statement match below so we can push
+                    // the whole sequence into the enclosing block.
+                    if matches!(node.kind(), SyntaxKind::LET_STMT | SyntaxKind::WATCH_LET) {
+                        if let Some(else_block) = Self::let_stmt_has_else(node) {
+                            let extra = self.lower_let_else_stmt(node, &else_block);
+                            stmts.extend(extra);
+                            continue;
+                        }
+                    }
+
                     let stmt_id = match node.kind() {
                         SyntaxKind::LET_STMT => self.lower_let_stmt(node, false),
                         SyntaxKind::WATCH_LET => self.lower_let_stmt(node, true),
                         SyntaxKind::RETURN_STMT => self.lower_return_stmt(node),
                         SyntaxKind::THROW_STMT => self.lower_throw_stmt(node),
                         SyntaxKind::WHILE_STMT => self.lower_while_stmt(node),
+                        SyntaxKind::WHILE_LET_STMT => self.lower_while_let_stmt(node),
                         SyntaxKind::FOR_EXPR => self.lower_for_stmt(node),
                         SyntaxKind::BREAK_STMT => self.alloc_stmt(Stmt::Break, node.text_range()),
                         SyntaxKind::CONTINUE_STMT => {
@@ -611,6 +623,7 @@ impl LoweringContext {
             SyntaxKind::UNARY_EXPR => self.lower_unary_expr(node),
             SyntaxKind::CALL_EXPR => self.lower_call_expr(node),
             SyntaxKind::IF_EXPR => self.lower_if_expr(node),
+            SyntaxKind::IF_LET_EXPR => self.lower_if_let_expr(node),
             SyntaxKind::MATCH_EXPR => self.lower_match_expr(node),
             SyntaxKind::CATCH_EXPR => self.lower_catch_expr(node),
             SyntaxKind::THROW_EXPR => self.lower_throw_expr(node),
@@ -2853,6 +2866,446 @@ impl LoweringContext {
             range,
         );
         self.alloc_stmt(Stmt::Expr(block_expr), range)
+    }
+
+    // ============================================================================
+    // Helpers shared by let-binding constructs (if-let, while-let, let-else)
+    // ============================================================================
+
+    /// Extract `(pattern, initializer_expr)` from a `LET_STMT` CST child.
+    ///
+    /// Used by `if let` / `while let` headers, which wrap their pattern +
+    /// initializer in a LET_STMT-shaped node (the same shape used by the
+    /// for-in pattern parser). The trailing semicolon — if any — is ignored
+    /// here; in a let-header context it never appears.
+    fn extract_let_pat_and_init(
+        &mut self,
+        let_node: &SyntaxNode,
+        fallback_range: text_size::TextRange,
+    ) -> (PatId, ExprId) {
+        let mut pat_id: Option<PatId> = None;
+        let mut init_id: Option<ExprId> = None;
+        let mut seen_equals = false;
+
+        for elem in let_node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Token(token) => match token.kind() {
+                    SyntaxKind::EQUALS => seen_equals = true,
+                    _ if seen_equals && init_id.is_none() => {
+                        if let Some(id) = self.try_lower_bare_token(&token) {
+                            init_id = Some(id);
+                        }
+                    }
+                    _ => {}
+                },
+                rowan::NodeOrToken::Node(child) => {
+                    if !seen_equals {
+                        if child.kind() == SyntaxKind::PATTERN && pat_id.is_none() {
+                            pat_id = Some(self.lower_pattern(&child));
+                        }
+                    } else if init_id.is_none() {
+                        init_id = Some(self.lower_expr(&child));
+                    }
+                }
+            }
+        }
+
+        let pattern =
+            pat_id.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, fallback_range));
+        let initializer = init_id.unwrap_or_else(|| self.alloc_expr(Expr::Missing, fallback_range));
+        (pattern, initializer)
+    }
+
+    /// Lower `if let <pat> = <expr> { <then> } [else { <else> }]`.
+    ///
+    /// Desugars to:
+    ///
+    /// ```text
+    /// match (<expr>) {
+    ///     <pat> => <then>,
+    ///     _     => <else_branch>,   // empty block if no `else` was provided
+    /// }
+    /// ```
+    ///
+    /// The result is a `MATCH_EXPR` AST node — the if-let form vanishes
+    /// before HIR/TIR/MIR ever see it, so all of pattern exhaustiveness,
+    /// narrowing, and unreachability flow through the existing match
+    /// infrastructure.
+    fn lower_if_let_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let range = node.text_range();
+
+        // Walk the IF_LET_EXPR children.
+        //   KW_IF  LET_STMT  BLOCK_EXPR(then)  [KW_ELSE  (BLOCK_EXPR | IF_EXPR | IF_LET_EXPR)]
+        let mut let_node: Option<SyntaxNode> = None;
+        let mut then_node: Option<SyntaxNode> = None;
+        let mut else_node: Option<SyntaxNode> = None;
+        let mut seen_else = false;
+
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE => {
+                    seen_else = true;
+                }
+                rowan::NodeOrToken::Node(child) => match child.kind() {
+                    SyntaxKind::LET_STMT if let_node.is_none() => {
+                        let_node = Some(child);
+                    }
+                    _ if !seen_else && then_node.is_none() => {
+                        then_node = Some(child);
+                    }
+                    _ if seen_else && else_node.is_none() => {
+                        else_node = Some(child);
+                    }
+                    _ => {}
+                },
+                rowan::NodeOrToken::Token(_) => {}
+            }
+        }
+
+        let (pattern, scrutinee) = if let Some(ln) = let_node {
+            self.extract_let_pat_and_init(&ln, range)
+        } else {
+            (
+                self.alloc_pattern(Pattern::Wildcard, range),
+                self.alloc_expr(Expr::Missing, range),
+            )
+        };
+
+        let then_range = then_node
+            .as_ref()
+            .map(rowan::SyntaxNode::text_range)
+            .unwrap_or(range);
+        let then_expr = then_node
+            .map(|n| self.lower_expr(&n))
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, range));
+
+        // For the no-else case the synthetic block must be ZERO-WIDTH at the
+        // end of the if-let — using `range` here would make the synthetic
+        // else scope overlap the then-block, which breaks position-based
+        // name resolution (HIR's `scope_at_offset` picks the *latest-pushed*
+        // scope containing the offset, and a wide synthetic else would
+        // shadow the real then-block scope for any reference inside it).
+        let synth_else_range = TextRange::empty(range.end());
+        let else_range = else_node
+            .as_ref()
+            .map(rowan::SyntaxNode::text_range)
+            .unwrap_or(synth_else_range);
+        let else_expr = match else_node {
+            Some(n) => self.lower_expr(&n),
+            None => {
+                // No else: synthesise an empty block (unit value).
+                self.alloc_expr(
+                    Expr::Block {
+                        stmts: vec![],
+                        tail_expr: None,
+                    },
+                    synth_else_range,
+                )
+            }
+        };
+
+        // Arm span must cover BOTH the pattern and the body — HIR uses this
+        // span to define the match-arm scope's range. If we used only the
+        // body range, the synthetic pattern (whose span starts at `let y:`,
+        // BEFORE the body) would sit outside the scope, and downstream name
+        // resolution wouldn't always find bindings introduced by the arm
+        // pattern in expressions nested inside the body block.
+        let pattern_span = self.source_map.pattern_span(pattern);
+        let arm_match_range = TextRange::new(pattern_span.start(), then_range.end());
+        let arm_match = MatchArm {
+            pattern,
+            guard: None,
+            body: then_expr,
+        };
+        let arm_match_id = self.alloc_match_arm(arm_match, arm_match_range);
+
+        let wildcard = self.alloc_pattern(Pattern::Wildcard, range);
+        let arm_else = MatchArm {
+            pattern: wildcard,
+            guard: None,
+            body: else_expr,
+        };
+        let arm_else_id = self.alloc_match_arm(arm_else, else_range);
+
+        self.alloc_expr(
+            Expr::Match {
+                scrutinee,
+                scrutinee_type: None,
+                arms: vec![arm_match_id, arm_else_id],
+            },
+            range,
+        )
+    }
+
+    /// Lower `while let <pat> = <expr> { <body> }`.
+    ///
+    /// Desugars to:
+    ///
+    /// ```text
+    /// while (true) {
+    ///     match (<expr>) {
+    ///         <pat> => { <body> },
+    ///         _     => { break; },
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// The loop reads `<expr>` afresh on every iteration (same as Rust).
+    /// The match's fail arm is a block containing a `break` so the loop
+    /// terminates when the pattern stops matching.
+    fn lower_while_let_stmt(&mut self, node: &SyntaxNode) -> StmtId {
+        let range = node.text_range();
+
+        // WHILE_LET_STMT children: KW_WHILE  LET_STMT  BLOCK_EXPR.
+        let mut let_node: Option<SyntaxNode> = None;
+        let mut body_node: Option<SyntaxNode> = None;
+        for child in node.children() {
+            match child.kind() {
+                SyntaxKind::LET_STMT if let_node.is_none() => {
+                    let_node = Some(child);
+                }
+                _ if let_node.is_some() && body_node.is_none() => {
+                    body_node = Some(child);
+                }
+                _ => {}
+            }
+        }
+
+        let (pattern, scrutinee) = if let Some(ln) = let_node {
+            self.extract_let_pat_and_init(&ln, range)
+        } else {
+            (
+                self.alloc_pattern(Pattern::Wildcard, range),
+                self.alloc_expr(Expr::Missing, range),
+            )
+        };
+
+        let body_range = body_node
+            .as_ref()
+            .map(rowan::SyntaxNode::text_range)
+            .unwrap_or(range);
+        let body_expr = body_node
+            .map(|n| self.lower_expr(&n))
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, range));
+
+        // Match-success arm: pat => <body>. The arm scope must cover BOTH
+        // the pattern and the body so bindings introduced by the pattern
+        // resolve inside the body block (see `lower_if_let_expr`).
+        let pattern_span = self.source_map.pattern_span(pattern);
+        let arm_match_range = TextRange::new(pattern_span.start(), body_range.end());
+        let arm_match = MatchArm {
+            pattern,
+            guard: None,
+            body: body_expr,
+        };
+        let arm_match_id = self.alloc_match_arm(arm_match, arm_match_range);
+
+        // Match-fail arm: _ => { break; }
+        //
+        // Use a zero-width span at the END of the while-let for the
+        // synthesised fall-through arm so its scope doesn't accidentally
+        // overlap the body block (which would shadow body-local scopes
+        // during position-based name resolution).
+        let synth_break_range = TextRange::empty(range.end());
+        let break_stmt = self.alloc_stmt(Stmt::Break, synth_break_range);
+        let break_block = self.alloc_expr(
+            Expr::Block {
+                stmts: vec![break_stmt],
+                tail_expr: None,
+            },
+            synth_break_range,
+        );
+        let wildcard = self.alloc_pattern(Pattern::Wildcard, synth_break_range);
+        let arm_break = MatchArm {
+            pattern: wildcard,
+            guard: None,
+            body: break_block,
+        };
+        let arm_break_id = self.alloc_match_arm(arm_break, synth_break_range);
+
+        // The match itself spans the original `let <pat> = <expr> { body }`
+        // header + body. We use the WHILE_LET range here — it's safe because
+        // the match expression doesn't push its own scope; only its arms do
+        // (which we've already given precise ranges).
+        let match_expr = self.alloc_expr(
+            Expr::Match {
+                scrutinee,
+                scrutinee_type: None,
+                arms: vec![arm_match_id, arm_break_id],
+            },
+            range,
+        );
+
+        // while body = { match (...) { ... } }
+        //
+        // The wrapping `while-body` block needs a zero-width span — using
+        // the WHILE_LET range would make the wrapping block scope shadow
+        // the *real* body block scope when resolving names by position.
+        let while_body_synth_range = TextRange::empty(range.end());
+        let match_stmt = self.alloc_stmt(Stmt::Expr(match_expr), while_body_synth_range);
+        let while_body = self.alloc_expr(
+            Expr::Block {
+                stmts: vec![match_stmt],
+                tail_expr: None,
+            },
+            while_body_synth_range,
+        );
+
+        // condition = true (zero-width span, no scope implications)
+        let cond = self.alloc_expr(Expr::Literal(Literal::Bool(true)), while_body_synth_range);
+
+        self.alloc_stmt(
+            Stmt::While {
+                condition: cond,
+                body: while_body,
+                after: None,
+                origin: LoopOrigin::While,
+            },
+            range,
+        )
+    }
+
+    /// Detect whether a `LET_STMT` node carries a let-else `else { ... }` block.
+    /// Used by block lowering to dispatch the let-else desugar path.
+    fn let_stmt_has_else(node: &SyntaxNode) -> Option<SyntaxNode> {
+        debug_assert!(matches!(
+            node.kind(),
+            SyntaxKind::LET_STMT | SyntaxKind::WATCH_LET
+        ));
+        let mut seen_else_kw = false;
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE => {
+                    seen_else_kw = true;
+                }
+                rowan::NodeOrToken::Node(child)
+                    if seen_else_kw && child.kind() == SyntaxKind::BLOCK_EXPR =>
+                {
+                    return Some(child);
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// Lower a let-else statement `let <pat> = <expr> else { <div> };`.
+    ///
+    /// The desugar shape depends on whether the pattern introduces a binding
+    /// — the match arm needs to return the narrowed value so the outer `let`
+    /// receives a value of the *narrowed* type, not the wide scrutinee type.
+    ///
+    /// **With binding** (e.g. `let n: int = v else { return -1; };`):
+    ///
+    /// ```text
+    /// let <pat> = match (<expr>) {
+    ///     <pat-copy> => <binding-name>,   // success: return the narrowed binding
+    ///     _          => { <div> }         // diverging branch
+    /// };
+    /// ```
+    ///
+    /// **Without binding** (wildcard / pure type pattern):
+    ///
+    /// ```text
+    /// match (<expr>) {
+    ///     <pat> => null,
+    ///     _     => { <div> }
+    /// };
+    /// ```
+    ///
+    /// Returns the list of statement ids to append to the parent block. The
+    /// pattern's bindings (if any) are introduced into the outer scope by the
+    /// surrounding `Stmt::Let`, exactly as a plain let would.
+    fn lower_let_else_stmt(
+        &mut self,
+        node: &SyntaxNode,
+        else_block_node: &SyntaxNode,
+    ) -> Vec<StmtId> {
+        let range = node.text_range();
+        let (outer_pattern, init_expr) = self.extract_let_pat_and_init(node, range);
+
+        // Discover the (first) binding name from the outer pattern. Most
+        // BAML patterns have either 0 or 1 names; the destructure form
+        // (multiple names) is gated at the parser level.
+        let binding_name: Option<Name> = self.patterns[outer_pattern]
+            .binding_name(&self.patterns)
+            .cloned();
+
+        // Match-success arm body: either the binding value (so the match
+        // returns the narrowed scrutinee) or `null` (when there's nothing to
+        // bind — we just consume the match for its side effect of verifying
+        // the pattern). Use a zero-width span at the end of the let-else
+        // for these synthetic exprs so their scope ranges don't shadow
+        // user-written scopes inside the let-else.
+        let synth_range = TextRange::empty(range.end());
+        let success_body = match &binding_name {
+            Some(name) => self.alloc_expr(Expr::Path(vec![name.clone()]), synth_range),
+            None => self.alloc_expr(Expr::Null, synth_range),
+        };
+
+        // We need a SECOND copy of the pattern for the match arm: re-lower
+        // the PATTERN child so the arm's pattern has its own PatId distinct
+        // from the outer let's pattern.
+        let arm_pattern = node
+            .children()
+            .find(|c| c.kind() == SyntaxKind::PATTERN)
+            .map(|p| self.lower_pattern(&p))
+            .unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, range));
+
+        // Arm span covers pattern + body so HIR-registered bindings (the
+        // pattern's names) are in-scope for the body's name resolution.
+        let arm_pattern_span = self.source_map.pattern_span(arm_pattern);
+        let success_body_span = self.source_map.expr_span(success_body);
+        let arm_success_range = TextRange::new(arm_pattern_span.start(), success_body_span.end());
+        let arm_success = MatchArm {
+            pattern: arm_pattern,
+            guard: None,
+            body: success_body,
+        };
+        let arm_success_id = self.alloc_match_arm(arm_success, arm_success_range);
+
+        // Match-diverge arm: lowers the user's else block. Expected to
+        // diverge (return / throw / break / continue) — same as Rust.
+        let div_body = self.lower_expr(else_block_node);
+        let wildcard = self.alloc_pattern(Pattern::Wildcard, synth_range);
+        let arm_div = MatchArm {
+            pattern: wildcard,
+            guard: None,
+            body: div_body,
+        };
+        let arm_div_id = self.alloc_match_arm(arm_div, else_block_node.text_range());
+
+        let match_expr = self.alloc_expr(
+            Expr::Match {
+                scrutinee: init_expr,
+                scrutinee_type: None,
+                arms: vec![arm_success_id, arm_div_id],
+            },
+            range,
+        );
+
+        if binding_name.is_some() {
+            // Binding case — outer let binds the pattern's names from the
+            // match result.
+            let outer_let = self.alloc_stmt(
+                Stmt::Let {
+                    pattern: outer_pattern,
+                    initializer: Some(match_expr),
+                    is_watched: false,
+                    origin: LetOrigin::Source,
+                },
+                range,
+            );
+            vec![outer_let]
+        } else {
+            // No-binding case — the match is a statement on its own; we
+            // discard `outer_pattern` since it doesn't introduce any names
+            // and its only purpose was the type/wildcard check that the arm
+            // pattern already performs.
+            let _ = outer_pattern;
+            let match_stmt = self.alloc_stmt(Stmt::Expr(match_expr), range);
+            vec![match_stmt]
+        }
     }
 
     /// Lower a `TEST_EXPR_DEF` node as a `<collector>.register_test(name, lambda, null)` call.

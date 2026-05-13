@@ -278,6 +278,401 @@ function user.edge_type_then_object() -> int {
     return
 }
 
+function user.if_let_as_tail_expr() -> int {
+    load_const 10
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L2
+
+  L1:
+    load_const 10
+
+  L2:
+    return
+}
+
+function user.if_let_body_local_shadows_binding() -> int {
+    load_const 5
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L2
+
+  L1:
+    load_const 100
+
+  L2:
+    return
+}
+
+function user.if_let_chained_else_if_let() -> int {
+    load_const "abc"
+    is_type int
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_const "abc"
+    is_type string
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_const "abc"
+    is_type bool
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const -1
+    jump L6
+
+  L3:
+    load_const 2
+    jump L6
+
+  L4:
+    load_const 1
+    jump L6
+
+  L5:
+    load_const "abc"
+
+  L6:
+    return
+}
+
+function user.if_let_else_if() -> int {
+    load_const true
+    is_type int
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_const true
+    is_type string
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const -1
+    jump L4
+
+  L2:
+    load_const 0
+    jump L4
+
+  L3:
+    load_const true
+
+  L4:
+    return
+}
+
+function user.if_let_else_if_let_chain() -> int {
+    load_const "abc"
+    is_type int
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_const "abc"
+    is_type string
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const -2
+    jump L4
+
+  L2:
+    load_const 1
+    jump L4
+
+  L3:
+    load_const "abc"
+
+  L4:
+    return
+}
+
+function user.if_let_else_sees_outer_not_inner() -> int {
+    load_const "nope"
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 999
+    jump L2
+
+  L1:
+    load_const "nope"
+
+  L2:
+    return
+}
+
+function user.if_let_in_scrutinee(outer: int | string, mid: int | string) -> string {
+    load_var outer
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "fallback"
+    jump L2
+
+  L1:
+    load_var outer
+    load_const 2
+    mul_int
+
+  L2:
+    is_type int
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "got_other"
+    jump L5
+
+  L4:
+    load_const "got_int"
+
+  L5:
+    return
+}
+
+function user.if_let_inside_while_let() -> int {
+    load_const 2
+    store_var v
+    load_const 0
+    store_var acc
+
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    load_var v
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var acc
+    return
+
+  L2:
+    load_var v
+    store_var n
+    load_const 100
+    is_type int
+    pop_jump_if_false L3
+    load_var acc
+    load_var n
+    bin_op +
+    load_const 100
+    add_int
+    store_var acc
+
+  L3:
+    load_const "stop"
+    store_var v
+    jump L0
+}
+
+function user.if_let_lambda_captures_binding() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 6
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L2
+
+  L1:
+    load_const 6
+    store_deref ?1
+    load_var x
+    make_closure .<lambda(if_let_lambda_captures_binding, 0)>, 1
+    call_indirect
+
+  L2:
+    return
+}
+
+function user.if_let_nested() -> int {
+    load_const 3
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L4
+
+  L1:
+    load_const 3
+    store_var a
+    load_const 4
+    is_type int
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var a
+    jump L4
+
+  L3:
+    load_var a
+    load_const 4
+    add_int
+
+  L4:
+    return
+}
+
+function user.if_let_shadow_then_restore() -> int {
+    load_const 3
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_const 3
+    load_const 1
+    add_int
+
+  L2:
+    load_const 100
+    add_int
+    return
+}
+
+function user.if_let_siblings_same_name() -> int {
+    load_const 1
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    store_var r1
+    jump L2
+
+  L1:
+    load_const 1
+    store_var r1
+
+  L2:
+    load_const 2
+    is_type int
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 0
+    store_var r2
+    jump L5
+
+  L4:
+    load_const 2
+    store_var r2
+
+  L5:
+    load_var r1
+    load_var r2
+    add_int
+    return
+}
+
+function user.if_let_type_narrow_int() -> int {
+    load_const 7
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L2
+
+  L1:
+    load_const 7
+    load_const 1
+    add_int
+
+  L2:
+    return
+}
+
+function user.if_let_type_narrow_string() -> string {
+    load_const "hi"
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "fallback"
+    jump L2
+
+  L1:
+    load_const "hi"
+
+  L2:
+    return
+}
+
+function user.if_let_with_else() -> int {
+    load_const "nope"
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L2
+
+  L1:
+    load_const "nope"
+
+  L2:
+    return
+}
+
+function user.if_let_with_else_value() -> int {
+    load_const 5
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_const 5
+    load_const 2
+    mul_int
+
+  L2:
+    return
+}
+
 function user.iterator_style_for_loop() -> int {
     load_const 0
     store_var result
@@ -313,6 +708,353 @@ function user.iterator_style_for_loop() -> int {
     add_int
     store_var __for_idx
     jump L0
+}
+
+function user.let_else_after_block_uses_binding() -> int {
+    load_const 5
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L2
+
+  L1:
+    load_const 5
+    load_const 2
+    bin_op *
+
+  L2:
+    return
+}
+
+function user.let_else_binding_captured_in_lambda() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 9
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L2
+
+  L1:
+    load_const 9
+    store_deref ?1
+    load_var n
+    make_closure .<lambda(let_else_binding_captured_in_lambda, 0)>, 1
+    call_indirect
+
+  L2:
+    return
+}
+
+function user.let_else_binds_when_match() -> int {
+    load_const 42
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L2
+
+  L1:
+    load_const 42
+    load_const 1
+    add_int
+
+  L2:
+    return
+}
+
+function user.let_else_else_sees_outer_not_inner_yet() -> int {
+    load_const "oops"
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 11
+    load_const 1
+    sub_int
+    jump L2
+
+  L1:
+    load_const "oops"
+
+  L2:
+    return
+}
+
+function user.let_else_inside_loop_break() -> int {
+    load_const 0
+    store_var acc
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 5
+    cmp_op <
+    pop_jump_if_false L1
+    load_var i
+    store_var v
+    load_var v
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var acc
+    return
+
+  L2:
+    load_var acc
+    load_var v
+    add_int
+    store_var acc
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function user.let_else_inside_loop_continue() -> int {
+    load_const 0
+    store_var acc
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 5
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var acc
+    return
+
+  L2:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    load_var i
+    store_var v
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    load_var acc
+    load_var v
+    add_int
+    store_var acc
+    jump L0
+}
+
+function user.let_else_multiple_bindings_in_sequence() -> int {
+    load_const 1
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L4
+
+  L1:
+    load_const 2
+    is_type int
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const -2
+    jump L4
+
+  L3:
+    load_const 1
+    load_const 2
+    add_int
+
+  L4:
+    return
+}
+
+function user.let_else_returns_on_mismatch() -> int {
+    load_const "oops"
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L2
+
+  L1:
+    load_const "oops"
+
+  L2:
+    return
+}
+
+function user.let_else_sequence_threads_bindings() -> int {
+    load_const 1
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L4
+
+  L1:
+    load_const 1
+    store_var a
+    load_var a
+    load_const 1
+    add_int
+    store_var raw_b
+    load_var raw_b
+    is_type int
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const -2
+    jump L4
+
+  L3:
+    load_var a
+    load_var raw_b
+    add_int
+
+  L4:
+    return
+}
+
+function user.let_else_shadows_outer() -> int {
+    load_const 7
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L2
+
+  L1:
+    load_const 7
+
+  L2:
+    return
+}
+
+function user.let_else_with_break_in_loop() -> int {
+    load_const 0
+    store_var acc
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 6
+    cmp_op <
+    pop_jump_if_false L1
+    load_var i
+    store_var raw
+    load_var raw
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var acc
+    return
+
+  L2:
+    load_var acc
+    load_var raw
+    add_int
+    store_var acc
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function user.let_else_with_call_initializer(x: int | string) -> int {
+    load_var x
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L2
+
+  L1:
+    load_var x
+
+  L2:
+    return
+}
+
+function user.let_else_with_continue_in_loop() -> int {
+    load_const 0
+    store_var acc
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 5
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var acc
+    return
+
+  L2:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    load_var i
+    store_var raw
+    load_var raw
+    is_type int
+    pop_jump_if_false L0
+    load_var acc
+    load_var raw
+    add_int
+    store_var acc
+    jump L0
+}
+
+function user.let_else_with_throw() -> int {
+    load_const 7
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "expected int"
+    throw
+
+  L1:
+    load_const 7
+    return
 }
 
 function user.let_mixed_semicolons() -> int {
@@ -541,4 +1283,347 @@ function user.sub_assign() -> int {
     store_var x
     load_var x
     return
+}
+
+function user.while_let_explicit_break() -> int {
+    load_const 1
+    store_var v
+    load_const 0
+    store_var count
+
+  L0:
+    load_const true
+    pop_jump_if_false L2
+    load_var v
+    is_type int
+    pop_jump_if_false L2
+    load_var v
+    store_var n
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+    load_var n
+    load_const 3
+    cmp_op >=
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var n
+    load_const 1
+    add_int
+    store_var v
+    jump L0
+
+  L2:
+    load_var count
+    return
+}
+
+function user.while_let_explicit_continue() -> int {
+    load_const 0
+    store_var v
+    load_const 0
+    store_var acc
+
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    load_var v
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var acc
+    return
+
+  L2:
+    load_var v
+    store_var n
+    load_var n
+    load_const 1
+    add_int
+    store_var v
+    load_var n
+    load_const 2
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L0
+
+  L3:
+    load_var acc
+    load_var n
+    add_int
+    store_var acc
+    load_var n
+    load_const 4
+    cmp_op >=
+    pop_jump_if_false L0
+    load_const "done"
+    store_var v
+    jump L0
+}
+
+function user.while_let_inside_if_let() -> int {
+    load_const 3
+    store_var inner
+    load_const 0
+    store_var total
+    load_const 1
+    is_type int
+    pop_jump_if_false L1
+
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    load_var inner
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var total
+    return
+
+  L2:
+    load_var total
+    load_const 1
+    bin_op +
+    load_var inner
+    add_int
+    store_var total
+    load_const "stop"
+    store_var inner
+    jump L0
+}
+
+function user.while_let_lambda_captures() -> int {
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_const 3
+    store_var v
+    load_const 0
+    store_var acc
+
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    load_var v
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var acc
+    return
+
+  L2:
+    load_var v
+    store_deref ?3
+    load_var acc
+    store_var _6
+    load_var n
+    make_closure .<lambda(while_let_lambda_captures, 0)>, 1
+    call_indirect
+    store_var _7
+    load_var _6
+    load_var _7
+    add_int
+    store_var acc
+    load_const "stop"
+    store_var v
+    jump L0
+}
+
+function user.while_let_nested() -> int {
+    load_const 1
+    store_var outer
+    load_const 10
+    store_var inner
+    load_const 0
+    store_var acc
+
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    load_var outer
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var acc
+    return
+
+  L2:
+    load_var outer
+    store_var o
+
+  L3:
+    load_const true
+    pop_jump_if_false L4
+    load_var inner
+    is_type int
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const "stop"
+    store_var outer
+    load_const 10
+    store_var inner
+    jump L0
+
+  L5:
+    load_var acc
+    load_var o
+    bin_op +
+    load_var inner
+    add_int
+    store_var acc
+    load_const "stop"
+    store_var inner
+    jump L3
+}
+
+function user.while_let_shadow_then_restore() -> int {
+    load_const 5
+    store_var v
+    load_const 0
+    store_var acc
+
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    load_var v
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var acc
+    load_const 42
+    add_int
+    return
+
+  L2:
+    load_var acc
+    load_var v
+    add_int
+    store_var acc
+    load_const "stop"
+    store_var v
+    jump L0
+}
+
+function user.while_let_type_narrow_terminates_on_mismatch() -> int {
+    load_const 1
+    store_var x
+    load_const 0
+    store_var count
+
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    load_var x
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var count
+    return
+
+  L2:
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+    load_var count
+    load_const 3
+    cmp_op >=
+    pop_jump_if_false L0
+    load_const "stop"
+    store_var x
+    jump L0
+}
+
+function user.while_let_with_assignment_inside() -> int {
+    load_const 5
+    store_var v
+    load_const 0
+    store_var sum
+
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    load_var v
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var sum
+    return
+
+  L2:
+    load_var sum
+    load_var v
+    add_int
+    store_var sum
+    load_var sum
+    load_const 15
+    cmp_op >=
+    pop_jump_if_false L0
+    load_const "done"
+    store_var v
+    jump L0
+}
+
+function user.while_let_with_continue() -> int {
+    load_const 0
+    store_var v
+    load_const 0
+    store_var acc
+
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    load_var v
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var acc
+    return
+
+  L2:
+    load_var v
+    store_var n
+    load_var n
+    load_const 1
+    add_int
+    store_var v
+    load_var n
+    load_const 2
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L0
+
+  L3:
+    load_var acc
+    load_var n
+    add_int
+    store_var acc
+    load_var n
+    load_const 4
+    cmp_op >=
+    pop_jump_if_false L0
+    load_const "stop"
+    store_var v
+    jump L0
 }

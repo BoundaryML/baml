@@ -21,6 +21,7 @@ pub enum Statement {
     Expr(ExpressionStmt),
     Let(LetStmt),
     While(WhileStmt),
+    WhileLet(WhileLetStmt),
     Return(ReturnStmt),
     Break(BreakStmt),
     Continue(ContinueStmt),
@@ -43,6 +44,7 @@ impl FromCST for Statement {
             }
             SyntaxKind::RETURN_STMT => ReturnStmt::from_cst(elem).map(Statement::Return),
             SyntaxKind::WHILE_STMT => WhileStmt::from_cst(elem).map(Statement::While),
+            SyntaxKind::WHILE_LET_STMT => WhileLetStmt::from_cst(elem).map(Statement::WhileLet),
             SyntaxKind::FOR_EXPR => ForStmt::from_cst(elem).map(Statement::For),
             SyntaxKind::BREAK_STMT => BreakStmt::from_cst(elem).map(Statement::Break),
             SyntaxKind::CONTINUE_STMT => ContinueStmt::from_cst(elem).map(Statement::Continue),
@@ -63,6 +65,7 @@ impl Printable for Statement {
             Statement::Expr(expression_stmt) => expression_stmt.print(shape, printer),
             Statement::Let(let_stmt) => let_stmt.print(shape, printer),
             Statement::While(while_stmt) => while_stmt.print(shape, printer),
+            Statement::WhileLet(while_let_stmt) => while_let_stmt.print(shape, printer),
             Statement::Return(return_stmt) => return_stmt.print(shape, printer),
             Statement::Break(break_stmt) => break_stmt.print(shape, printer),
             Statement::Continue(continue_stmt) => continue_stmt.print(shape, printer),
@@ -88,6 +91,7 @@ impl Printable for Statement {
             Statement::Expr(expr) => expr.leftmost_token(),
             Statement::Let(let_stmt) => let_stmt.leftmost_token(),
             Statement::While(while_stmt) => while_stmt.leftmost_token(),
+            Statement::WhileLet(while_let_stmt) => while_let_stmt.leftmost_token(),
             Statement::Return(return_stmt) => return_stmt.leftmost_token(),
             Statement::Break(break_stmt) => break_stmt.leftmost_token(),
             Statement::Continue(continue_stmt) => continue_stmt.leftmost_token(),
@@ -104,6 +108,7 @@ impl Printable for Statement {
             Statement::Expr(expr) => expr.rightmost_token(),
             Statement::Let(let_stmt) => let_stmt.rightmost_token(),
             Statement::While(while_stmt) => while_stmt.rightmost_token(),
+            Statement::WhileLet(while_let_stmt) => while_let_stmt.rightmost_token(),
             Statement::Return(return_stmt) => return_stmt.rightmost_token(),
             Statement::Break(break_stmt) => break_stmt.rightmost_token(),
             Statement::Continue(continue_stmt) => continue_stmt.rightmost_token(),
@@ -181,6 +186,9 @@ pub struct LetStmt {
     pub let_keyword: Option<t::Let>,
     pub pattern: super::MatchPattern,
     pub initializer: Option<(t::Equals, Expression)>,
+    /// Rust-style `let <pat> = <expr> else { ... };` — diverging block that
+    /// runs when the pattern does not match. Always followed by a semicolon.
+    pub let_else: Option<(t::Else, BlockExpr)>,
     /// Not required in some contexts like for-let loops
     pub semicolon: Option<t::Semicolon>,
 }
@@ -218,6 +226,17 @@ impl FromCST for LetStmt {
             None
         };
 
+        // Optional let-else: `else { ... }` before the trailing semicolon.
+        let let_else = if let Some(else_tok) = it.next_if_kind(SyntaxKind::KW_ELSE) {
+            let block_elem = it.expect_next("block after 'else' in let-else")?;
+            Some((
+                t::Else::from_cst(else_tok)?,
+                BlockExpr::from_cst(block_elem)?,
+            ))
+        } else {
+            None
+        };
+
         let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
         it.expect_end()?;
 
@@ -226,13 +245,21 @@ impl FromCST for LetStmt {
             let_keyword,
             pattern,
             initializer,
+            let_else,
             semicolon,
         })
     }
 }
 
-impl Printable for LetStmt {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl LetStmt {
+    /// Print just the `[watch] let <pat> = <expr>` portion (no `else`, no
+    /// trailing `;`), preserving comment trivia around `=` and the
+    /// initializer. Shared by [`Self::print`], [`super::IfLetExpr`], and
+    /// [`super::WhileLetStmt`] so a comment inside the header survives the
+    /// formatter for every form.
+    ///
+    /// Returns whether the header itself was multi-lined.
+    pub(crate) fn print_header(&self, shape: Shape, printer: &mut Printer) -> bool {
         let mut multi_lined = false;
 
         if let Some(watch) = &self.watch {
@@ -261,10 +288,28 @@ impl Printable for LetStmt {
             let expr_leading = printer.trivia.get_leading_for_element(expr);
             printer.print_trivia_squished(expr_leading);
             multi_lined |= printer.print(expr, shape).multi_lined;
-            if self.semicolon.is_some() {
-                let expr_trailing = printer.trivia.get_trailing_for_element(expr);
-                printer.print_trivia_squished(expr_trailing);
-            }
+        }
+
+        multi_lined
+    }
+}
+
+impl Printable for LetStmt {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = self.print_header(shape.clone(), printer);
+
+        if (self.semicolon.is_some() || self.let_else.is_some())
+            && let Some((_, expr)) = &self.initializer
+        {
+            let expr_trailing = printer.trivia.get_trailing_for_element(expr);
+            printer.print_trivia_squished(expr_trailing);
+        }
+
+        if let Some((else_kw, else_block)) = &self.let_else {
+            printer.print_str(" ");
+            printer.print_raw_token(else_kw);
+            printer.print_str(" ");
+            multi_lined |= printer.print(else_block, shape).multi_lined;
         }
 
         if let Some(semicolon) = &self.semicolon {
@@ -288,6 +333,9 @@ impl Printable for LetStmt {
     fn rightmost_token(&self) -> TextRange {
         if let Some(semicolon) = &self.semicolon {
             return semicolon.span();
+        }
+        if let Some((_, block)) = &self.let_else {
+            return block.rightmost_token();
         }
         if let Some((_, expr)) = &self.initializer {
             return expr.rightmost_token();
@@ -333,6 +381,81 @@ impl FromCST for WhileStmt {
 impl KnownKind for WhileStmt {
     fn kind() -> SyntaxKind {
         SyntaxKind::WHILE_STMT
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::WHILE_LET_STMT`] node.
+///
+/// Surface form: `while let <pat> = <expr> { ... }`. CST shape mirrors `for`:
+/// the `let <pat> = <expr>` header is wrapped in a [`LetStmt`] child node
+/// (without trailing semicolon).
+#[derive(Debug)]
+pub struct WhileLetStmt {
+    pub keyword: t::While,
+    pub header: LetStmt,
+    pub body: BlockExpr,
+}
+
+impl FromCST for WhileLetStmt {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::WHILE_LET_STMT)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        // KW_WHILE
+        let keyword = it.expect_parse()?;
+
+        // LET_STMT (pattern + initializer; no else, no trailing semicolon)
+        let let_node = it.expect_node_of_kind(SyntaxKind::LET_STMT)?;
+        let header = LetStmt::from_cst(SyntaxElement::Node(let_node))?;
+
+        // BLOCK_EXPR (loop body)
+        let body: BlockExpr = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(WhileLetStmt {
+            keyword,
+            header,
+            body,
+        })
+    }
+}
+
+impl KnownKind for WhileLetStmt {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::WHILE_LET_STMT
+    }
+}
+
+impl Printable for WhileLetStmt {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+
+        // Delegate header printing to `LetStmt::print_header` so comment
+        // trivia around `=` and the initializer is preserved. We can't
+        // call `LetStmt::print` here because it would emit a synthetic
+        // `;` after the initializer (the header's `semicolon` field is
+        // None and there's no `let_else`).
+        let _ = self.header.print_header(shape.clone(), printer);
+
+        printer.print_str(" ");
+
+        let body_shape = Shape {
+            width: shape.width,
+            indent: shape.indent,
+            first_line_offset: 0,
+        };
+        printer.print(&self.body, body_shape);
+        PrintInfo::default_multi_lined()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.body.rightmost_token()
     }
 }
 

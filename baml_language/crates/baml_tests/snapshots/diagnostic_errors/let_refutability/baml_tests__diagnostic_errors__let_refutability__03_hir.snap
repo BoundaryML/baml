@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.if_let_irrefutable_bare_bind() -> int  [expr] {
+  { match (42) { x => { return x Add 1 }, _ => {  } }; return 0 }
+}
+function user.if_let_irrefutable_supertype_narrow(v: int) -> int  [expr] {
+  { match (v) { n: int => { return n }, _ => {  } }; return Neg 1 }
+}
+function user.if_let_irrefutable_wildcard() -> int  [expr] {
+  { match (5) { _ => { return 1 }, _ => {  } }; return 0 }
+}
+function user.let_else_irrefutable_bare_bind() -> int  [expr] {
+  { let n = match (5) { n => n, _ => { return Neg 1 } }; return n Add 1 }
+}
+function user.let_else_irrefutable_static_narrow() -> int  [expr] {
+  { let n: int = match (1 Add 2 Add 3) { n: int => n, _ => { return Neg 1 } }; return n }
+}
+function user.let_else_irrefutable_supertype_narrow(v: int) -> int  [expr] {
+  { let n: int = match (v) { n: int => n, _ => { return Neg 1 } }; return n }
+}
+function user.while_let_irrefutable_bare_bind() -> int  [expr] {
+  { let i = 0; let acc = 0; while true { match (i) { n => { acc = acc Add n; if (i Ge 3) { break }; i = i Add 1 }, _ => { break } } }; return acc }
+}
+function user.while_let_irrefutable_supertype_narrow(v: int) -> int  [expr] {
+  { let acc = 0; while true { match (v) { n: int => { acc = acc Add n; break }, _ => { break } } }; return acc }
+}

@@ -239,6 +239,286 @@ function user.nested_for_loop() -> int throws never {
     return result : int
   }
 }
+function user.if_let_type_narrow_int() -> int throws never {
+  { : never
+    let x: int | string = 7 : 7 -> int | string
+    match (x : int | string) : void
+      y: int =>
+        { : never
+          return y + 1 : int
+        }
+      _ =>
+        { : void
+        }
+    return Neg 1 : -1
+  }
+}
+function user.if_let_type_narrow_string() -> string throws never {
+  { : never
+    let x: int | string = "hi" : "hi" -> int | string
+    match (x : int | string) : void
+      y: string =>
+        { : never
+          return y : string
+        }
+      _ =>
+        { : void
+        }
+    return "fallback" : "fallback"
+  }
+}
+function user.if_let_with_else() -> int throws never {
+  { : never
+    let x: int | string = "nope" : "nope" -> int | string
+    match (x : int | string) : never
+      y: int =>
+        { : never
+          return y : int
+        }
+      _ =>
+        { : never
+          return Neg 1 : -1
+        }
+  }
+}
+function user.if_let_with_else_value() -> int throws never {
+  { : never
+    let x: int | string = 5 : 5 -> int | string
+    let result = : int | 0 -> int
+      match (x : int | string) : int | 0
+        y: int =>
+          { : int
+            y * 2 : int
+          }
+        _ =>
+          { : 0
+            0 : 0
+          }
+    return result : int
+  }
+}
+function user.if_let_else_if() -> int throws never {
+  { : never
+    let x: int | string | bool = true : true -> int | string | bool
+    match (x : int | string | bool) : never
+      y: int =>
+        { : never
+          return y : int
+        }
+      _ =>
+        match (x : int | string | bool) : never
+          z: string =>
+            { : never
+              return 0 : 0
+            }
+          _ =>
+            { : never
+              return Neg 1 : -1
+            }
+  }
+}
+function user.if_let_else_if_let_chain() -> int throws never {
+  { : never
+    let x: int | string = "abc" : "abc" -> int | string
+    match (x : int | string) : never
+      a: int =>
+        { : never
+          return a : int
+        }
+      _ =>
+        match (x : int | string) : never
+          b: string =>
+            { : never
+              return 1 : 1
+            }
+          _ =>
+            { : never
+              return Neg 2 : -2
+            }
+  }
+}
+function user.if_let_nested() -> int throws never {
+  { : never
+    let outer: int | string = 3 : 3 -> int | string
+    let inner: int | string = 4 : 4 -> int | string
+    match (outer : int | string) : void
+      a: int =>
+        { : never
+          match (inner : int | string) : never
+            b: int =>
+              { : never
+                return a + b : int
+              }
+            _ =>
+              { : never
+                return a : int
+              }
+        }
+      _ =>
+        { : void
+        }
+    return Neg 1 : -1
+  }
+}
+function user.if_let_as_tail_expr() -> int throws never {
+  { : int | -1
+    let v: int | string = 10 : 10 -> int | string
+    match (v : int | string) : int | -1
+      n: int =>
+        { : int
+          n : int
+        }
+      _ =>
+        { : -1
+          Neg 1 : -1
+        }
+  }
+}
+function user.if_let_shadow_then_restore() -> int throws never {
+  { : never
+    let x = 100 : 100 -> int
+    let v: int | string = 3 : 3 -> int | string
+    let inside = : int | 0 -> int
+      match (v : int | string) : int | 0
+        x: int =>
+          { : int
+            x + 1 : int
+          }
+        _ =>
+          { : 0
+            0 : 0
+          }
+    return inside + x : int
+  }
+}
+function user.if_let_else_sees_outer_not_inner() -> int throws never {
+  { : never
+    let n = 999 : 999 -> int
+    let v: int | string = "nope" : "nope" -> int | string
+    return : int
+      match (v : int | string) : int
+        n: int =>
+          { : int
+            n : int
+          }
+        _ =>
+          { : int
+            n : int
+          }
+  }
+}
+function user.if_let_in_scrutinee(outer: int | string, mid: int | string) -> string throws never {
+  { : never
+    let v = : int | "fallback" -> int | string
+      match (outer : int | string) : int | "fallback"
+        y: int =>
+          { : int
+            y * 2 : int
+          }
+        _ =>
+          { : "fallback"
+            "fallback" : "fallback"
+          }
+    match (v : int | string) : never
+      x: int =>
+        { : never
+          return "got_int" : "got_int"
+        }
+      _ =>
+        { : never
+          return "got_other" : "got_other"
+        }
+  }
+}
+function user.if_let_siblings_same_name() -> int throws never {
+  { : never
+    let a: int | string = 1 : 1 -> int | string
+    let b: int | string = 2 : 2 -> int | string
+    let r1 = : int | 0 -> int
+      match (a : int | string) : int | 0
+        x: int =>
+          { : int
+            x : int
+          }
+        _ =>
+          { : 0
+            0 : 0
+          }
+    let r2 = : int | 0 -> int
+      match (b : int | string) : int | 0
+        x: int =>
+          { : int
+            x : int
+          }
+        _ =>
+          { : 0
+            0 : 0
+          }
+    return r1 + r2 : int
+  }
+}
+function user.if_let_chained_else_if_let() -> int throws never {
+  { : never
+    let v: int | string | bool = "abc" : "abc" -> int | string | bool
+    match (v : int | string | bool) : never
+      i: int =>
+        { : never
+          return i : int
+        }
+      _ =>
+        match (v : int | string | bool) : never
+          s: string =>
+            { : never
+              return 1 : 1
+            }
+          _ =>
+            match (v : int | string | bool) : never
+              b: bool =>
+                { : never
+                  return 2 : 2
+                }
+              _ =>
+                { : never
+                  return Neg 1 : -1
+                }
+  }
+}
+function user.if_let_body_local_shadows_binding() -> int throws never {
+  { : never
+    let v: int | string = 5 : 5 -> int | string
+    match (v : int | string) : void
+      x: int =>
+        { : never
+          let x = 100 : 100 -> int
+          return x : int
+        }
+      _ =>
+        { : void
+        }
+    return Neg 1 : -1
+  }
+}
+function user.if_let_lambda_captures_binding() -> int throws never {
+  { : never
+    let v: int | string = 6 : 6 -> int | string
+    match (v : int | string) : void
+      x: int =>
+        { : never
+          let f = : () -> int throws never
+            () -> int { ... } : () -> int throws never
+              {
+                x + 10
+              }
+          return f() : int
+        }
+      _ =>
+        { : void
+        }
+    return Neg 1 : -1
+  }
+}
+lambda user.if_let_lambda_captures_binding {
+}
 function user.ConditionalLogic(age: int) -> string throws never {
   { : never
     if (age < 18 : bool) : never
@@ -278,6 +558,521 @@ function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.
 class user.Point$stream {
   x: null | int
   y: null | int
+}
+function user.let_else_returns_on_mismatch() -> int throws never {
+  { : never
+    let v: int | string = "oops" : "oops" -> int | string
+    let n: int = : int
+      match (v : int | string) : int
+        n: int =>
+          n : int
+        _ =>
+          { : never
+            return Neg 1 : -1
+          }
+    return n : int
+  }
+}
+function user.let_else_binds_when_match() -> int throws never {
+  { : never
+    let v: int | string = 42 : 42 -> int | string
+    let n: int = : int
+      match (v : int | string) : int
+        n: int =>
+          n : int
+        _ =>
+          { : never
+            return Neg 1 : -1
+          }
+    return n + 1 : int
+  }
+}
+function user.let_else_with_throw() -> int throws never {
+  { : never
+    let v: int | string = 7 : 7 -> int | string
+    let n: int = : int
+      match (v : int | string) : int
+        n: int =>
+          n : int
+        _ =>
+          { : never
+            throw "expected int" : "expected int"
+          }
+    return n : int
+  }
+}
+function user.let_else_inside_loop_break() -> int throws never {
+  { : never
+    let acc = 0 : 0 -> int
+    let i = 0 : 0 -> int
+    while i < 5
+      { : void
+        let v: int | string = i : int -> int | string
+        let n: int = : int
+          match (v : int | string) : int
+            n: int =>
+              n : int
+            _ =>
+              { : never
+                break
+              }
+        acc = acc + n : int
+        i = i + 1 : int
+      }
+    return acc : int
+  }
+}
+function user.let_else_inside_loop_continue() -> int throws never {
+  { : never
+    let acc = 0 : 0 -> int
+    let i = 0 : 0 -> int
+    while i < 5
+      { : void
+        i = i + 1 : int
+        let v: int | string = i : int -> int | string
+        let n: int = : int
+          match (v : int | string) : int
+            n: int =>
+              n : int
+            _ =>
+              { : never
+                continue
+              }
+        acc = acc + n : int
+      }
+    return acc : int
+  }
+}
+function user.let_else_multiple_bindings_in_sequence() -> int throws never {
+  { : never
+    let a_raw: int | string = 1 : 1 -> int | string
+    let b_raw: int | string = 2 : 2 -> int | string
+    let a: int = : int
+      match (a_raw : int | string) : int
+        a: int =>
+          a : int
+        _ =>
+          { : never
+            return Neg 1 : -1
+          }
+    let b: int = : int
+      match (b_raw : int | string) : int
+        b: int =>
+          b : int
+        _ =>
+          { : never
+            return Neg 2 : -2
+          }
+    return a + b : int
+  }
+}
+function user.let_else_with_call_initializer(x: int | string) -> int throws never {
+  { : never
+    let n: int = : int
+      match (x : int | string) : int
+        n: int =>
+          n : int
+        _ =>
+          { : never
+            return Neg 1 : -1
+          }
+    return n : int
+  }
+}
+function user.let_else_shadows_outer() -> int throws never {
+  { : never
+    let x = 999 : 999 -> int
+    let raw: int | string = 7 : 7 -> int | string
+    let x: int = : int
+      match (raw : int | string) : int
+        x: int =>
+          x : int
+        _ =>
+          { : never
+            return Neg 1 : -1
+          }
+    return x : int
+  }
+}
+function user.let_else_else_sees_outer_not_inner_yet() -> int throws never {
+  { : never
+    let n = 11 : 11 -> int
+    let raw: int | string = "oops" : "oops" -> int | string
+    let n: int = : int
+      match (raw : int | string) : int
+        n: int =>
+          n : int
+        _ =>
+          { : never
+            return n - 1 : int
+          }
+    return n : int
+  }
+}
+function user.let_else_sequence_threads_bindings() -> int throws never {
+  { : never
+    let raw_a: int | string = 1 : 1 -> int | string
+    let a: int = : int
+      match (raw_a : int | string) : int
+        a: int =>
+          a : int
+        _ =>
+          { : never
+            return Neg 1 : -1
+          }
+    let raw_b: int | string = a + 1 : int -> int | string
+    let b: int = : int
+      match (raw_b : int | string) : int
+        b: int =>
+          b : int
+        _ =>
+          { : never
+            return Neg 2 : -2
+          }
+    return a + b : int
+  }
+}
+function user.let_else_with_break_in_loop() -> int throws never {
+  { : never
+    let acc = 0 : 0 -> int
+    let i = 0 : 0 -> int
+    while i < 6
+      { : void
+        let raw: int | string = i : int -> int | string
+        let n: int = : int
+          match (raw : int | string) : int
+            n: int =>
+              n : int
+            _ =>
+              { : never
+                break
+              }
+        acc = acc + n : int
+        i = i + 1 : int
+      }
+    return acc : int
+  }
+}
+function user.let_else_with_continue_in_loop() -> int throws never {
+  { : never
+    let acc = 0 : 0 -> int
+    let i = 0 : 0 -> int
+    while i < 5
+      { : void
+        i = i + 1 : int
+        let raw: int | string = i : int -> int | string
+        let n: int = : int
+          match (raw : int | string) : int
+            n: int =>
+              n : int
+            _ =>
+              { : never
+                continue
+              }
+        acc = acc + n : int
+      }
+    return acc : int
+  }
+}
+function user.let_else_binding_captured_in_lambda() -> int throws never {
+  { : never
+    let raw: int | string = 9 : 9 -> int | string
+    let n: int = : int
+      match (raw : int | string) : int
+        n: int =>
+          n : int
+        _ =>
+          { : never
+            return Neg 1 : -1
+          }
+    let f = : () -> int throws never
+      () -> int { ... } : () -> int throws never
+        {
+          n + 1
+        }
+    return f() : int
+  }
+}
+lambda user.let_else_binding_captured_in_lambda {
+}
+function user.let_else_after_block_uses_binding() -> int throws never {
+  { : never
+    let raw: int | string = 5 : 5 -> int | string
+    let n: int = : int
+      match (raw : int | string) : int
+        n: int =>
+          n : int
+        _ =>
+          { : never
+            return Neg 1 : -1
+          }
+    let doubled = n * 2 : int
+    return doubled : int
+  }
+}
+function user.while_let_type_narrow_terminates_on_mismatch() -> int throws never {
+  { : never
+    let x: int | string = 1 : 1 -> int | string
+    let count = 0 : 0 -> int
+    while true
+      { : void
+        match (x : int | string) : void
+          n: int =>
+            { : void
+              count = count + 1 : int
+              if (count >= 3 : bool) : void
+                { : void
+                  x = "stop" : "stop"
+                }
+            }
+          _ =>
+            { : never
+              break
+            }
+      }
+    return count : int
+  }
+}
+function user.while_let_with_assignment_inside() -> int throws never {
+  { : never
+    let v: int | string = 5 : 5 -> int | string
+    let sum = 0 : 0 -> int
+    while true
+      { : void
+        match (v : int | string) : void
+          n: int =>
+            { : void
+              sum = sum + n : int
+              if (sum >= 15 : bool) : void
+                { : void
+                  v = "done" : "done"
+                }
+            }
+          _ =>
+            { : never
+              break
+            }
+      }
+    return sum : int
+  }
+}
+function user.while_let_nested() -> int throws never {
+  { : never
+    let outer: int | string = 1 : 1 -> int | string
+    let inner: int | string = 10 : 10 -> int | string
+    let acc = 0 : 0 -> int
+    while true
+      { : void
+        match (outer : int | string) : void
+          o: int =>
+            { : void
+              while true
+                { : void
+                  match (inner : int | string) : void
+                    i: int =>
+                      { : void
+                        acc = acc + o + i : int
+                        inner = "stop" : "stop"
+                      }
+                    _ =>
+                      { : never
+                        break
+                      }
+                }
+              outer = "stop" : "stop"
+              inner = 10 : 10
+            }
+          _ =>
+            { : never
+              break
+            }
+      }
+    return acc : int
+  }
+}
+function user.while_let_with_continue() -> int throws never {
+  { : never
+    let v: int | string = 0 : 0 -> int | string
+    let acc = 0 : 0 -> int
+    while true
+      { : void
+        match (v : int | string) : void
+          n: int =>
+            { : void
+              v = n + 1 : int
+              if (n == 2 : bool) : void
+                { : never
+                  continue
+                }
+              acc = acc + n : int
+              if (n >= 4 : bool) : void
+                { : void
+                  v = "stop" : "stop"
+                }
+            }
+          _ =>
+            { : never
+              break
+            }
+      }
+    return acc : int
+  }
+}
+function user.while_let_shadow_then_restore() -> int throws never {
+  { : never
+    let n = 42 : 42 -> int
+    let v: int | string = 5 : 5 -> int | string
+    let acc = 0 : 0 -> int
+    while true
+      { : void
+        match (v : int | string) : void
+          n: int =>
+            { : void
+              acc = acc + n : int
+              v = "stop" : "stop"
+            }
+          _ =>
+            { : never
+              break
+            }
+      }
+    return acc + n : int
+  }
+}
+function user.while_let_explicit_break() -> int throws never {
+  { : never
+    let v: int | string = 1 : 1 -> int | string
+    let count = 0 : 0 -> int
+    while true
+      { : void
+        match (v : int | string) : void
+          n: int =>
+            { : void
+              count = count + 1 : int
+              if (n >= 3 : bool) : void
+                { : never
+                  break
+                }
+              v = n + 1 : int
+            }
+          _ =>
+            { : never
+              break
+            }
+      }
+    return count : int
+  }
+}
+function user.while_let_explicit_continue() -> int throws never {
+  { : never
+    let v: int | string = 0 : 0 -> int | string
+    let acc = 0 : 0 -> int
+    while true
+      { : void
+        match (v : int | string) : void
+          n: int =>
+            { : void
+              v = n + 1 : int
+              if (n == 2 : bool) : void
+                { : never
+                  continue
+                }
+              acc = acc + n : int
+              if (n >= 4 : bool) : void
+                { : void
+                  v = "done" : "done"
+                }
+            }
+          _ =>
+            { : never
+              break
+            }
+      }
+    return acc : int
+  }
+}
+function user.while_let_lambda_captures() -> int throws never {
+  { : never
+    let v: int | string = 3 : 3 -> int | string
+    let acc = 0 : 0 -> int
+    while true
+      { : void
+        match (v : int | string) : void
+          n: int =>
+            { : void
+              let f = : () -> int throws never
+                () -> int { ... } : () -> int throws never
+                  {
+                    n + 1
+                  }
+              acc = acc + f() : int
+              v = "stop" : "stop"
+            }
+          _ =>
+            { : never
+              break
+            }
+      }
+    return acc : int
+  }
+}
+lambda user.while_let_lambda_captures {
+}
+function user.while_let_inside_if_let() -> int throws never {
+  { : never
+    let outer: int | string = 1 : 1 -> int | string
+    let inner: int | string = 3 : 3 -> int | string
+    let total = 0 : 0 -> int
+    match (outer : int | string) : void
+      x: int =>
+        { : void
+          while true
+            { : void
+              match (inner : int | string) : void
+                y: int =>
+                  { : void
+                    total = total + x + y : int
+                    inner = "stop" : "stop"
+                  }
+                _ =>
+                  { : never
+                    break
+                  }
+            }
+        }
+      _ =>
+        { : void
+        }
+    return total : int
+  }
+}
+function user.if_let_inside_while_let() -> int throws never {
+  { : never
+    let v: int | string = 2 : 2 -> int | string
+    let other: int | string = 100 : 100 -> int | string
+    let acc = 0 : 0 -> int
+    while true
+      { : void
+        match (v : int | string) : void
+          n: int =>
+            { : void
+              match (other : int | string) : void
+                m: int =>
+                  { : void
+                    acc = acc + n + m : int
+                  }
+                _ =>
+                  { : void
+                  }
+              v = "stop" : "stop"
+            }
+          _ =>
+            { : never
+              break
+            }
+      }
+    return acc : int
+  }
 }
 function user.simple_while_loop() -> int throws never {
   { : never
