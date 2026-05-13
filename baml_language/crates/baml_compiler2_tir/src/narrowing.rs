@@ -10,9 +10,10 @@
 //! - `x == null` → then: null, else: remove null
 //! - `x` (truthiness) → then: remove null, else: original
 //! - `!(x == null)` → same as `x != null` (negation flips then/else)
-//! - `x is <pattern>` → then: pattern's matched type, else: original
-//!   (TypeScript-style: precise else-narrowing would require union
-//!   subtraction, which we don't do yet)
+//! - `x is <pattern>` → then: pattern's matched type, else: scrutinee
+//!   union minus the matched members (TypeScript-style for `typeof` /
+//!   `instanceof`; falls back to the original scrutinee type when the
+//!   subtraction doesn't simplify, e.g. literal patterns on primitives)
 //!
 //! ## Early-return narrowing
 //!
@@ -158,8 +159,11 @@ fn collect_narrowings(
         }
 
         // `name is <pattern>` — narrow `name` to the pattern's matched type
-        // in the then-branch (or in the else-branch if negated). The opposite
-        // branch keeps the original type since we don't do union subtraction.
+        // in the then-branch (or in the else-branch if negated). The
+        // opposite branch tries to subtract the matched members from the
+        // scrutinee union, TypeScript-style; when subtraction can't
+        // simplify (literal pattern over a primitive, single non-union
+        // scrutinee, no overlap, …) it falls back to the original.
         Expr::Is { scrutinee, pattern } => {
             let Expr::Path(segments) = &body.exprs[*scrutinee] else {
                 return;
@@ -174,10 +178,11 @@ fn collect_narrowings(
             let Some(matched_ty) = pattern_types.get(pattern) else {
                 return;
             };
+            let complement = subtract_pattern_type(original_ty, matched_ty);
             let (then_type, else_type) = if negated {
-                (original_ty.clone(), matched_ty.clone())
+                (complement, matched_ty.clone())
             } else {
-                (matched_ty.clone(), original_ty.clone())
+                (matched_ty.clone(), complement)
             };
             out.push(Narrowing {
                 name: name.clone(),
@@ -258,6 +263,80 @@ fn is_nullable(ty: &Ty) -> bool {
         Ty::Union(members, _) => members
             .iter()
             .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null, _))),
+        _ => false,
+    }
+}
+
+/// Compute the complement of `matched` within `scrutinee` for the
+/// else-branch of a pattern test. Decomposes top-level unions on both
+/// sides and keeps each scrutinee member whose "shape" (ignoring
+/// `TyAttr` and `Freshness`) doesn't appear in `matched`.
+///
+/// Falls back to the original scrutinee when:
+///   - the scrutinee isn't a union (no members to drop)
+///   - no scrutinee member matched (preserve fidelity)
+///   - subtraction would leave an empty union (pattern covered everything;
+///     callers will handle the else side being effectively dead)
+///
+/// We deliberately avoid `Ty`'s derived `PartialEq` because that compares
+/// `TyAttr` exactly — narrowing-derived types frequently carry
+/// `TyAttr::default()` while source-derived members may not. Comparing by
+/// shape only is sound for the membership test we need here.
+pub(crate) fn subtract_pattern_type(scrutinee: &Ty, matched: &Ty) -> Ty {
+    let matched_set: Vec<&Ty> = match matched {
+        Ty::Union(members, _) => members.iter().collect(),
+        _ => vec![matched],
+    };
+
+    let scrut_members: Vec<&Ty> = match scrutinee {
+        Ty::Union(members, _) => members.iter().collect(),
+        _ => return scrutinee.clone(),
+    };
+
+    let remaining: Vec<Ty> = scrut_members
+        .iter()
+        .filter(|m| !matched_set.iter().any(|w| ty_shape_eq(m, w)))
+        .map(|m| (*m).clone())
+        .collect();
+
+    if remaining.len() == scrut_members.len() {
+        // No member subtracted — return the original to avoid pretending we
+        // refined when we didn't.
+        return scrutinee.clone();
+    }
+
+    match remaining.len() {
+        0 => Ty::Never {
+            attr: TyAttr::default(),
+        },
+        1 => remaining.into_iter().next().unwrap(),
+        _ => Ty::Union(remaining, TyAttr::default()),
+    }
+}
+
+/// Structural shape-equality for `Ty` that ignores `TyAttr` and literal
+/// `Freshness`. Used only by [`subtract_pattern_type`] to decide whether a
+/// scrutinee union member is "covered" by the pattern's matched set.
+///
+/// Returns `false` for compound shapes we don't bother decomposing
+/// (function types, type variables, error/unknown). Returning `false`
+/// keeps the member in the residual — that's the conservative direction
+/// (less narrowing, never unsound).
+fn ty_shape_eq(a: &Ty, b: &Ty) -> bool {
+    match (a, b) {
+        (Ty::Primitive(p1, _), Ty::Primitive(p2, _)) => p1 == p2,
+        (Ty::Class(n1, args1, _), Ty::Class(n2, args2, _)) => {
+            n1 == n2
+                && args1.len() == args2.len()
+                && args1.iter().zip(args2).all(|(a, b)| ty_shape_eq(a, b))
+        }
+        (Ty::Enum(n1, _), Ty::Enum(n2, _)) => n1 == n2,
+        (Ty::EnumVariant(n1, v1, _), Ty::EnumVariant(n2, v2, _)) => n1 == n2 && v1 == v2,
+        (Ty::TypeAlias(n1, _), Ty::TypeAlias(n2, _)) => n1 == n2,
+        (Ty::List(t1, _), Ty::List(t2, _)) => ty_shape_eq(t1, t2),
+        (Ty::Map(k1, v1, _), Ty::Map(k2, v2, _)) => ty_shape_eq(k1, k2) && ty_shape_eq(v1, v2),
+        (Ty::Optional(t1, _), Ty::Optional(t2, _)) => ty_shape_eq(t1, t2),
+        (Ty::Literal(l1, _, _), Ty::Literal(l2, _, _)) => l1 == l2,
         _ => false,
     }
 }

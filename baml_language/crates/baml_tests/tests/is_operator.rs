@@ -784,12 +784,9 @@ async fn narrowing_then_branch_picks_or_pattern_type() {
 }
 
 #[tokio::test]
-async fn narrowing_else_branch_keeps_original_type() {
-    // The else-branch is intentionally NOT narrowed (we'd need union
-    // subtraction to do so soundly). The original `int | string` type
-    // survives, so accessing it as either alternative would require a
-    // further narrow — here we just return a constant to confirm the
-    // branch runs.
+async fn narrowing_else_branch_runs_for_non_matching_value() {
+    // Plain runtime check: the else branch fires when the pattern
+    // doesn't match. (Separate test below pins the type narrowing.)
     let output = baml_test!(
         "
         function main() -> string {
@@ -802,6 +799,98 @@ async fn narrowing_else_branch_keeps_original_type() {
         output.result,
         Ok(BexExternalValue::String("text".to_string()))
     );
+}
+
+#[tokio::test]
+async fn narrowing_else_branch_subtracts_matched_type() {
+    // Precise else-narrowing: `v: int | string`, `if (v is int)` —
+    // inside the else, `v` is narrowed to `string`, so a `string`-only
+    // operation type-checks. Without subtraction this would have been
+    // `int | string` and `.length()` would fail since `int` has no
+    // such method.
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let v: int | string = \"hi\"
+            if (v is int) { 0 } else { v.length() }
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+#[tokio::test]
+async fn narrowing_else_branch_subtracts_or_pattern() {
+    // Or-pattern on the matched side: `is int | bool` subtracts both
+    // `int` and `bool` from a `int | string | bool` scrutinee, leaving
+    // `string` in the else.
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let v: int | string | bool = \"hello\"
+            if (v is int | bool) { 0 } else { v.length() }
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(5)));
+}
+
+#[tokio::test]
+async fn narrowing_else_branch_with_class_types() {
+    // Subtracting a class type from a `Foo | Bar` union narrows to the
+    // other class in the else, so its specific field is reachable.
+    let output = baml_test!(
+        "
+        class Success { data string }
+        class Failure { reason string }
+
+        function describe(v: Success | Failure) -> string {
+            if (v is Success) { v.data } else { v.reason }
+        }
+
+        function main() -> string {
+            describe(Failure { reason: \"oops\" })
+        }
+    "
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("oops".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn narrowing_else_branch_with_literal_pattern_keeps_original() {
+    // Edge case: a literal pattern like `v is 0` doesn't subtract
+    // anything meaningful from `int` (the pattern covers one value, not
+    // a member of the union). We fall back to the original scrutinee
+    // type in the else — the program still type-checks the same way it
+    // would without narrowing.
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let n: int = 5
+            if (n is 0) { 0 } else { n + 1 }
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
+}
+
+#[tokio::test]
+async fn narrowing_negation_subtracts_in_then_branch() {
+    // `!(v is int)` flips the narrowing: in the then-branch `v` is now
+    // the *complement* (e.g. `string`), so its string-only operations
+    // type-check.
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let v: int | string = \"abc\"
+            if (!(v is int)) { v.length() } else { 0 }
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
 #[tokio::test]
