@@ -910,6 +910,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             (ty, throws.span, true)
         } else if let Some(contextual) = contextual_throws {
             (contextual.clone(), func_def.span, false)
+        } else if Self::is_spawn_body_lambda(func_def) {
+            // BEP-034: a `spawn { body }` body is wrapped in a synthetic
+            // 0-arg lambda whose throws are captured into the resulting
+            // `Future<T, E>`'s E parameter, not propagated to the
+            // enclosing function. Use `Unknown` here so
+            // `check_throws_surface`'s open-slot check skips the
+            // declared-vs-effective comparison; the effective throws are
+            // still computed and read by `infer_expr`'s Spawn arm to
+            // build the Future's E.
+            (
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+                func_def.span,
+                false,
+            )
         } else {
             (
                 Ty::Never {
@@ -919,6 +935,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 false,
             )
         }
+    }
+
+    /// Synthetic lambda produced by `lower_spawn_expr` carries the name
+    /// `<spawn>`. The marker is the only safe way to distinguish a
+    /// user-written `() => { ... }` from spawn's body wrapper at this
+    /// layer (their `FunctionDef`s are otherwise identical).
+    fn is_spawn_body_lambda(func_def: &baml_compiler2_ast::FunctionDef) -> bool {
+        func_def.name.as_str() == "<spawn>"
     }
 
     fn throws_surface_has_open_slot(throws_facts: &BTreeSet<Ty>) -> bool {
@@ -2241,7 +2265,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // BEP-034: `spawn name? { body } : Future<T, E>` where
                 // `body` has type `T throws E`. After AST lowering the
                 // body is wrapped in a synthetic 0-arg lambda; we infer
-                // the lambda's type and peel its return type out as `T`.
+                // the lambda's type, peel out its return as `T`, and
+                // pull its effective throws (computed and stored by
+                // `infer_lambda_body`) as `E`.
                 if let Some(name_id) = name {
                     let _ = self.infer_expr(*name_id, body);
                 }
@@ -2250,12 +2276,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Ty::Function { ret, .. } => ret.as_ref().clone(),
                     _ => lambda_ty.clone(),
                 };
-                // Phase C approximates the throws set as `Null` per
-                // implementation plan ("Future<T, never> ≈ Future<T,
-                // null> in v1"). Threading the spawn body's effective
-                // throws set through requires the full throws-analysis
-                // pass; deferred to a follow-up.
-                let throws_ty = Ty::Primitive(PrimitiveType::Null, TyAttr::default());
+                // Read the body's effective throws from the side table
+                // populated by `infer_lambda_body`. `Never` means the
+                // body throws nothing; BAML lacks a `never` type
+                // variant, so approximate with `Null` (per the BEP's
+                // "Future<T, never> ≈ Future<T, null> in v1" note).
+                let throws_ty = self
+                    .lambda_effective_throws
+                    .get(spawn_body)
+                    .cloned()
+                    .map_or_else(
+                        || Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        |t| {
+                            if matches!(t, Ty::Never { .. }) {
+                                Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+                            } else {
+                                t
+                            }
+                        },
+                    );
                 Ty::Future(Box::new(value_ty), Box::new(throws_ty), TyAttr::default())
             }
             Expr::Await { future } => {

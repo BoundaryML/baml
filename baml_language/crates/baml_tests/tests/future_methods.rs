@@ -4,15 +4,6 @@
 //! `$rust_function` and implemented in `bex_vm::package_baml::future`.
 //! Each method operates on the heap `Object::Future` directly — no
 //! engine round-trip — so these tests confirm the wiring end-to-end.
-//!
-//! The "Pending" variants of these checks (e.g. `is_settled() == false`
-//! before await) are harder to express here because the only stdlib
-//! sleep — `baml.sys.sleep(int)` — throws `baml.errors.Io`, and the
-//! compiler's throws-inference for spawn bodies currently rejects an
-//! Io-throwing body inside `spawn { … }` unless the outer function is
-//! also declared to throw Io. See `spawn_parallel.rs` for the same
-//! workaround. Once that's relaxed (separate issue), add the
-//! Pending-state tests.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -92,6 +83,66 @@ async fn cancel_settled_future_returns_false() {
         "#
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn is_settled_false_for_pending_future() {
+    // baml.sys.sleep keeps the spawn body Pending; its `throws Io` is
+    // captured in `Future<int, Io>` and doesn't bubble to main's throws.
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let f = spawn { baml.sys.sleep(5000); 42 };
+            f.is_settled()
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(false)));
+}
+
+#[tokio::test]
+async fn cancel_pending_future_returns_true() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let f = spawn { baml.sys.sleep(5000); 42 };
+            f.cancel()
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn is_cancelled_true_after_cancel() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let f = spawn { baml.sys.sleep(5000); 42 };
+            let _ = f.cancel();
+            f.is_cancelled()
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn state_pending_for_pending_future() {
+    let output = baml_test!(
+        r#"
+        function main() -> baml.future.FutureState {
+            let f = spawn { baml.sys.sleep(5000); 42 };
+            f.state()
+        }
+        "#
+    );
+    match output.result {
+        Ok(BexExternalValue::Variant { variant_name, .. }) => {
+            assert_eq!(variant_name, "Pending");
+        }
+        other => panic!("expected Variant Pending, got {other:?}"),
+    }
 }
 
 #[tokio::test]
