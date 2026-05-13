@@ -87,7 +87,15 @@ def _set_inbound_value(inbound_value: baml_inbound_pb2.InboundValue, value: Any,
         inbound_value.bool_value = value
         return
     if isinstance(value, int):
-        inbound_value.int_value = value
+        # Python's `int` is arbitrary-precision, but the wire `int_value`
+        # field is `int64`. Values outside i64 range overflow protobuf
+        # serialization, so route them through `bigint_value` instead.
+        # Hex / base sixteen on the wire (see Phase 10 of the bigint plan);
+        # `format(value, "x")` preserves a leading minus for negatives.
+        if -(1 << 63) <= value < (1 << 63):
+            inbound_value.int_value = value
+        else:
+            inbound_value.bigint_value = format(value, "x")
         return
     if isinstance(value, float):
         inbound_value.float_value = value
@@ -246,6 +254,11 @@ def _baml_ty_to_python_type(baml_ty: baml_outbound_pb2.BamlTy, type_map: BamlTyp
     if which == "string_type":
         return str
     if which == "int_type":
+        return int
+    if which == "bigint_type":
+        # Python's `int` is arbitrary-precision; BAML's `bigint` shares the
+        # same surface, distinguished only by the proto type tag for
+        # round-trips (mirrors `translate_ty.rs` for codegen-time).
         return int
     if which == "float_type":
         return float
@@ -452,6 +465,9 @@ def decode_value(holder, type_map: BamlTypeMap) -> Any:
         return holder.string_value
     if which == "int_value":
         return holder.int_value
+    if which == "bigint_value":
+        # Hex / base sixteen on the wire `int(s, 16)` handles a leading minus sign natively.
+        return int(holder.bigint_value, base=16)
     if which == "float_value":
         return holder.float_value
     if which == "bool_value":

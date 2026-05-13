@@ -29,6 +29,11 @@ function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown): v
         } else {
             iv.floatValue = value;
         }
+    } else if (typeof value === 'bigint') {
+        // Hex / base sixteen on the wire (see Phase 10 of the bigint plan).
+        // BigInt.prototype.toString(16) yields e.g. "-2a"; signed values
+        // round-trip via num-bigint's LowerHex impl on the Rust side.
+        iv.bigintValue = value.toString(16);
     } else if (typeof value === 'string') {
         iv.stringValue = value;
     } else if (value instanceof Uint8Array) {
@@ -79,6 +84,15 @@ function decodeValueHolder(holder: baml_core.cffi.v1.IBamlOutboundValue): unknow
     if (holder.nullValue != null) return null;
     if (holder.stringValue != null) return holder.stringValue;
     if (holder.intValue != null) return Number(holder.intValue);
+    if (holder.bigintValue != null) {
+        // Hex / base sixteen on the wire (see Phase 10 of the bigint plan).
+        // BigInt() accepts a "0x"-prefixed hex literal; strip a leading
+        // minus so we can parse the magnitude.
+        const s = holder.bigintValue as string;
+        return s.startsWith('-')
+            ? -BigInt(`0x${s.slice(1)}`)
+            : BigInt(`0x${s}`);
+    }
     if (holder.floatValue != null) return holder.floatValue;
     if (holder.boolValue != null) return holder.boolValue;
     if (holder.uint8arrayValue != null) return holder.uint8arrayValue;
