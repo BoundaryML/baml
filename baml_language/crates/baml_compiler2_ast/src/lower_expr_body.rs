@@ -191,8 +191,14 @@ pub(crate) fn lower_testset_block_node(
 fn lower_bare_token_expr(kind: SyntaxKind, text: &str) -> Expr {
     match kind {
         SyntaxKind::BIGINT_LITERAL => {
-            let digits = text.strip_suffix('n').unwrap_or(text);
-            let value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10).unwrap_or_default();
+            // Lexer guarantees one-or-more base-ten digits followed by a
+            // lowercase `n` suffix — see `lex_bigint_literal` in
+            // `baml_compiler_lexer/src/tokens.rs`.
+            let digits = text
+                .strip_suffix('n')
+                .unwrap_or_else(|| unreachable!("BIGINT_LITERAL missing 'n' suffix: {text:?}"));
+            let value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10)
+                .unwrap_or_else(|| unreachable!("BIGINT_LITERAL non-decimal digits: {digits:?}"));
             Expr::Literal(Literal::Bigint(value))
         }
         SyntaxKind::INTEGER_LITERAL => {

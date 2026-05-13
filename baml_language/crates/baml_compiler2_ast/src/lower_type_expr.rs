@@ -216,7 +216,12 @@ fn lower_base_type(type_expr: &CstTypeExpr) -> TypeExpr {
     }
 
     if let Some(digits_str) = type_expr.bigint_literal() {
-        let value = num_bigint::BigInt::parse_bytes(digits_str.as_bytes(), 10).unwrap_or_default();
+        // Lexer guarantees digits_str is one or more base-ten digits — see
+        // `bigint_literal` in `baml_compiler_lexer/src/tokens.rs`.
+        let value =
+            num_bigint::BigInt::parse_bytes(digits_str.as_bytes(), 10).unwrap_or_else(|| {
+                unreachable!("CST bigint_literal returned non-decimal digits: {digits_str:?}")
+            });
         return TypeExpr::Literal {
             value: baml_base::Literal::Bigint(value),
             attrs: vec![],
@@ -309,7 +314,12 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
     }
 
     if let Some(digits_str) = parts.bigint_literal() {
-        let value = num_bigint::BigInt::parse_bytes(digits_str.as_bytes(), 10).unwrap_or_default();
+        // Lexer guarantees digits_str is one or more base-ten digits — see
+        // `bigint_literal` in `baml_compiler_lexer/src/tokens.rs`.
+        let value =
+            num_bigint::BigInt::parse_bytes(digits_str.as_bytes(), 10).unwrap_or_else(|| {
+                unreachable!("CST bigint_literal returned non-decimal digits: {digits_str:?}")
+            });
         return TypeExpr::Literal {
             value: baml_base::Literal::Bigint(value),
             attrs: vec![],

@@ -296,12 +296,22 @@ fn bigint_from_finite_f64(f: f64) -> Option<BigInt> {
     }
     let rounded = f.round();
     // Fast path: in i128 range, the cast is exact (and avoids the formatting hit).
+    // `i128::MAX as f64` rounds to a power of two slightly above `i128::MAX`,
+    // so the range check alone can admit values that truncate during cast.
+    // Round-trip the candidate back through `f64` to detect that case.
     #[allow(clippy::cast_precision_loss)]
     if (i128::MIN as f64) <= rounded && rounded <= (i128::MAX as f64) {
         #[allow(clippy::cast_possible_truncation)]
-        return Some(BigInt::from(rounded as i128));
+        let candidate = rounded as i128;
+        // Exact-equality is intentional — anything else admits the truncation.
+        #[expect(clippy::float_cmp)]
+        let lossless = (candidate as f64) == rounded;
+        if lossless {
+            return Some(BigInt::from(candidate));
+        }
     }
-    // Out-of-i128-range: format with no fractional digits and parse via BigInt.
+    // Out-of-i128-range (or lossy near the boundary): format with no fractional
+    // digits and parse via BigInt.
     let s = format!("{rounded:.0}");
     BigInt::parse_bytes(s.as_bytes(), 10)
 }

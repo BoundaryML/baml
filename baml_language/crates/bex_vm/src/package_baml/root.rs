@@ -168,6 +168,9 @@ fn deep_equals_recursive(
                 (Object::String(a), Object::String(b)) => a == b,
                 (Object::Uint8Array(a), Object::Uint8Array(b)) => a == b,
 
+                // Different `Arc`s with the same numeric value must compare equal.
+                (Object::Bigint(a), Object::Bigint(b)) => a == b,
+
                 (Object::Array(a_values), Object::Array(b_values)) => {
                     a_values.len() == b_values.len()
                         && a_values
