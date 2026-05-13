@@ -1439,4 +1439,174 @@ function Summarize(input: string) -> string {
 
         assert!(db.get_project().is_some());
     }
+
+    #[test]
+    fn test_graph_diff_add_call_integration() {
+        use baml_compiler2_visualization::control_flow::compute_graph_diff;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let path = std::path::Path::new("/tmp/test.baml");
+
+        // Before: single call
+        db.add_or_update_file(
+            path,
+            r#"
+function Pipeline(text: string) -> string {
+    let summary = Summarize(text);
+    summary
+}
+"#,
+        );
+        let base = db.ast_control_flow_graph("Pipeline").unwrap();
+
+        // After: add a second call
+        db.add_or_update_file(
+            path,
+            r#"
+function Pipeline(text: string) -> string {
+    let summary = Summarize(text);
+    let edited = EditSummary(summary);
+    edited
+}
+"#,
+        );
+        let head = db.ast_control_flow_graph("Pipeline").unwrap();
+
+        let diff = compute_graph_diff(&base, &head);
+        assert_eq!(diff.added.len(), 1, "EditSummary node added");
+        assert_eq!(diff.removed.len(), 0, "no nodes removed");
+
+        let added_node = &head.nodes[&diff.added[0]];
+        assert_eq!(added_node.callee_name.as_deref(), Some("EditSummary"));
+    }
+
+    #[test]
+    fn test_graph_diff_add_branch_integration() {
+        use baml_compiler2_visualization::control_flow::compute_graph_diff;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let path = std::path::Path::new("/tmp/test.baml");
+
+        // Before: flat call
+        db.add_or_update_file(
+            path,
+            r#"
+function Route(text: string) -> string {
+    let result = Process(text);
+    result
+}
+"#,
+        );
+        let base = db.ast_control_flow_graph("Route").unwrap();
+
+        // After: wrapped in conditional
+        db.add_or_update_file(
+            path,
+            r#"
+function Route(text: string, fast: bool) -> string {
+    let result = if (fast) {
+        QuickProcess(text)
+    } else {
+        Process(text)
+    };
+    result
+}
+"#,
+        );
+        let head = db.ast_control_flow_graph("Route").unwrap();
+
+        let diff = compute_graph_diff(&base, &head);
+        assert_eq!(diff.removed.len(), 0, "no nodes removed");
+        // Process should be matched via calleeName despite reparenting
+        let process_matched = diff
+            .unchanged
+            .iter()
+            .chain(diff.modified.iter())
+            .any(|(_, h)| head.nodes[h].callee_name.as_deref() == Some("Process"));
+        assert!(process_matched, "Process should be matched via calleeName");
+        assert!(
+            diff.added.len() >= 3,
+            "at least wrapper + branch structure + QuickProcess added"
+        );
+    }
+
+    #[test]
+    fn test_graph_diff_nested_changes_integration() {
+        use baml_compiler2_visualization::control_flow::compute_graph_diff;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let path = std::path::Path::new("/tmp/test.baml");
+
+        // Before: two headers with calls
+        db.add_or_update_file(
+            path,
+            r#"
+function ContentPipeline(text: string) -> string {
+    //# Analyze
+    let summary = Summarize(text);
+
+    //# Generate
+    let draft = GenerateDraft(summary);
+    let edited = EditDraft(draft);
+    edited
+}
+"#,
+        );
+        let base = db.ast_control_flow_graph("ContentPipeline").unwrap();
+
+        // After: EditDraft removed, conditional added in Generate section
+        db.add_or_update_file(
+            path,
+            r#"
+function ContentPipeline(text: string) -> string {
+    //# Analyze
+    let summary = Summarize(text);
+
+    //# Generate
+    let draft = if (is_long(summary)) {
+        GenerateLongDraft(summary)
+    } else {
+        GenerateDraft(summary)
+    };
+    draft
+}
+"#,
+        );
+        let head = db.ast_control_flow_graph("ContentPipeline").unwrap();
+
+        let diff = compute_graph_diff(&base, &head);
+
+        // EditDraft should be removed
+        assert!(
+            diff.removed
+                .iter()
+                .any(|id| { base.nodes[id].callee_name.as_deref() == Some("EditDraft") }),
+            "EditDraft should be removed"
+        );
+
+        // GenerateDraft should be matched via calleeName
+        let gd_matched = diff
+            .unchanged
+            .iter()
+            .chain(diff.modified.iter())
+            .any(|(b, h)| {
+                base.nodes[b].callee_name.as_deref() == Some("GenerateDraft")
+                    && head.nodes[h].callee_name.as_deref() == Some("GenerateDraft")
+            });
+        assert!(gd_matched, "GenerateDraft matched via calleeName");
+
+        // Summarize should be unchanged
+        let summarize_matched = diff
+            .unchanged
+            .iter()
+            .chain(diff.modified.iter())
+            .any(|(b, h)| {
+                base.nodes[b].callee_name.as_deref() == Some("Summarize")
+                    && head.nodes[h].callee_name.as_deref() == Some("Summarize")
+            });
+        assert!(summarize_matched, "Summarize should still be matched");
+    }
 }
