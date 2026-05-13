@@ -120,6 +120,7 @@ fn deep_copy_value_recursive(
                 Object::Closure(c) => vm.tlab.alloc(Object::Closure(c)),
                 Object::BoundMethod(bm) => vm.tlab.alloc(Object::BoundMethod(bm)),
                 Object::Cell(cell) => vm.tlab.alloc(Object::Cell(cell)),
+                Object::Package(pkg) => vm.tlab.alloc(Object::Package(pkg)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
             };

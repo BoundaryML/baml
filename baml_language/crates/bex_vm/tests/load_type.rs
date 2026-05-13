@@ -70,6 +70,7 @@ fn inject_function(
         body_meta: None,
         trace: false,
         aux_object_ptrs: Vec::new(),
+        package_name: "user".to_string(),
     };
 
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));

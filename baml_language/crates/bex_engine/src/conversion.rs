@@ -215,6 +215,9 @@ impl BexEngine {
             Object::Cell(_) => Err(EngineError::CannotConvert {
                 type_name: "cell".to_string(),
             }),
+            Object::Package(_) => Err(EngineError::CannotConvert {
+                type_name: "package".to_string(),
+            }),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),
@@ -684,7 +687,8 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                 | Object::UnscheduledFuture(_)
                 | Object::RustData(_)
                 | Object::Collector(_)
-                | Object::Type(_) => None,
+                | Object::Type(_)
+                | Object::Package(_) => None,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => None,
             }
@@ -785,7 +789,8 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                 | Object::UnscheduledFuture(_)
                 | Object::RustData(_)
                 | Object::Collector(_)
-                | Object::Type(_) => {
+                | Object::Type(_)
+                | Object::Package(_) => {
                     panic!(
                         "Cannot convert object type to BexExternalValue for sys op: {:?}",
                         ObjectType::of(obj)

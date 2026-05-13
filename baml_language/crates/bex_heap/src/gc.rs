@@ -27,7 +27,7 @@
 
 use std::{cell::UnsafeCell, collections::HashMap};
 
-use bex_vm_types::{HeapPtr, Object, Value};
+use bex_vm_types::{HeapPtr, Object, PackageGlobals, Value};
 
 use crate::{
     BexHeap,
@@ -389,7 +389,26 @@ impl BexHeap {
                     worklist.push(*ptr);
                 }
             }
-            // Primitives have no references
+            Object::Package(pkg) => {
+                // Items are HeapPtrs to user-visible package members
+                // (functions, classes, enums). Walk each.
+                for ptr in pkg.items.values() {
+                    worklist.push(*ptr);
+                }
+                // Globals: only `Dynamic` (runtime-compiled, owned) is walked
+                // here. `Static` (compile-time, Arc-clone of engine's
+                // `SharedGlobals`) is forwarded once by the engine's permit-
+                // registered `RootHaver`; walking it through every Package
+                // clone would redundantly re-forward the shared vec.
+                if let PackageGlobals::Dynamic(globals) = &pkg.globals {
+                    for value in globals {
+                        if let Value::Object(ptr) = value {
+                            worklist.push(*ptr);
+                        }
+                    }
+                }
+            }
+            // Primitives have no references.
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
             Object::String(_)
@@ -519,7 +538,28 @@ impl BexHeap {
                     }
                 }
             }
-            // Primitives have no references
+            Object::Package(pkg) => {
+                // Items: HashMap<String, HeapPtr> — forward each.
+                for ptr in pkg.items.values_mut() {
+                    if let Some(&new_ptr) = forwarding.get(&*ptr) {
+                        *ptr = new_ptr;
+                    }
+                }
+                // Globals: only `Dynamic` (runtime, exclusively owned by
+                // this Package) is forwarded here. `Static` (Arc-clone of
+                // engine's `SharedGlobals`) is forwarded by the engine's
+                // own permit-registered `RootHaver`.
+                if let PackageGlobals::Dynamic(globals) = &mut pkg.globals {
+                    for value in globals.iter_mut() {
+                        if let Value::Object(ptr) = value
+                            && let Some(&new_ptr) = forwarding.get(ptr)
+                        {
+                            *ptr = new_ptr;
+                        }
+                    }
+                }
+            }
+            // Primitives have no references.
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
             Object::String(_)
@@ -788,6 +828,25 @@ impl BexHeap {
                         .copied()
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
+            }
+            Object::Package(pkg) => {
+                // Items always. Globals only for `Dynamic` (owned by the
+                // Package); `Static` is forwarded by the engine's permit-
+                // registered RootHaver and must not be double-walked here.
+                worklist.extend(
+                    pkg.items
+                        .values()
+                        .copied()
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
+                if let PackageGlobals::Dynamic(globals) = &pkg.globals {
+                    worklist.extend(
+                        globals
+                            .iter()
+                            .filter_map(Value::as_object_ptr)
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
+                }
             }
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
@@ -2785,6 +2844,7 @@ mod tests {
             body_meta: None,
             trace: false,
             aux_object_ptrs: Vec::new(),
+            package_name: String::new(),
         }
     }
 

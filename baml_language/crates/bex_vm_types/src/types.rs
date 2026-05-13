@@ -21,7 +21,11 @@ use std::{
 use baml_type::Ty;
 use indexmap::IndexMap;
 
-use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
+use crate::{
+    bytecode::Bytecode,
+    heap_ptr::HeapPtr,
+    indexable::{ObjectPool, SharedGlobals},
+};
 
 // ============================================================================
 // Type Tags for Jump Table Dispatch
@@ -409,6 +413,22 @@ pub struct Function {
     /// `add_references_to_worklist` and `fixup_object_references` in
     /// `bex_heap::gc`.
     pub aux_object_ptrs: Vec<crate::HeapPtr>,
+
+    /// Owning package name (e.g. `"baml"`, `"user"`, `"reflect"`, `"_pkg_42"`).
+    ///
+    /// Build-time emit derives this from each function's fully-qualified name
+    /// (first segment of `"baml.math.trunc"` is `"baml"`); runtime emit sets it
+    /// from the owning runtime package's name.
+    ///
+    /// At frame push the VM looks up this name in `BexEngine::packages` to
+    /// resolve the `Object::Package` handle and cache the package's globals
+    /// vec on `BytecodeFrame.package_globals`. Per-instruction dispatch
+    /// (`Call`, `LoadGlobal`) then reads from the frame-cached globals slice.
+    ///
+    /// Empty string means "host package" (the implicit `"user"` namespace) for
+    /// transitional build-time emit; will be filled in concretely by Phase 4b
+    /// emit changes.
+    pub package_name: String,
 }
 
 impl std::fmt::Display for Function {
@@ -866,6 +886,15 @@ pub enum Object {
     /// A type descriptor value — wraps a `baml_type::Ty`.
     Type(Box<baml_type::Ty>),
 
+    /// First-class package handle — every loaded package (`baml`, `log`, `reflect`,
+    /// `user`, ...) has exactly one `Object::Package` in the compile-time semi-space.
+    /// Runtime-compiled packages created via `reflect.Package.new(...)` allocate
+    /// additional `Object::Package` instances in gen0.
+    ///
+    /// Carries the package name, its per-package globals vec, and a name → item
+    /// `HeapPtr` map. See `Package` struct for full field documentation.
+    Package(Box<Package>),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
 }
@@ -874,6 +903,71 @@ const _: () = assert!(
     std::mem::size_of::<Object>() <= 80,
     "Object enum size regression — expected <= 80 bytes"
 );
+
+/// First-class package handle.
+///
+/// Every loaded package (`baml`, `log`, `reflect`, `user`, ...) has exactly one
+/// `Object::Package` constructed at engine load time in the compile-time semi-space.
+/// Runtime-compiled packages created via `reflect.Package.new(...)` allocate
+/// additional `Object::Package` instances in gen0.
+#[derive(Clone, Debug)]
+pub struct Package {
+    /// Package name (e.g. `"baml"`, `"user"`, `"reflect"`, `"_pkg_42"`).
+    /// Used as the lookup key in `BexEngine::packages` and matches
+    /// `Function.package_name` for build-time emit and runtime emit alike.
+    pub name: String,
+
+    /// User-visible items (functions, classes, enums) defined in this package,
+    /// keyed by unqualified name (e.g. `"main"`, `"MyClass"`). Populated at
+    /// engine load (build-time packages) or `Package.add_compile` (runtime).
+    ///
+    /// Phase 4b initial state: empty for build-time packages — Phase 5
+    /// populates entries when `pkg.get<F>(name)` becomes available.
+    ///
+    /// GC: each `HeapPtr` is an outgoing reference walked by
+    /// `add_references_to_worklist`.
+    pub items: HashMap<String, HeapPtr>,
+
+    /// Per-package globals — the slot space this package's emitted
+    /// `Call { GlobalIndex }` and `LoadGlobal` instructions index into.
+    ///
+    /// See [`PackageGlobals`] for the static vs. dynamic split.
+    pub globals: PackageGlobals,
+}
+
+/// Per-package globals storage.
+///
+/// The split corresponds to whether the package's slot space is immutable
+/// once `$init` has finished (compile-time / build-time packages) or grows
+/// over the package's lifetime (runtime-compiled packages whose globals
+/// expand on each `add_compile`).
+#[derive(Clone, Debug)]
+pub enum PackageGlobals {
+    /// Compile-time package: a clone of the engine's single `SharedGlobals`
+    /// instance, frozen after `$init`. All build-time packages dispatch
+    /// through the same underlying flat globals vec via Arc-cloned handles.
+    ///
+    /// GC: forwarding is handled exactly once by the engine's permit-
+    /// registered `SharedGlobals` `RootHaver` (see `_globals_permit` in
+    /// `BexEngine`). Package's GC arm does NOT walk this variant — doing so
+    /// would redundantly re-forward an already-forwarded shared vec for
+    /// every Package clone holding it.
+    Static(SharedGlobals),
+
+    /// Runtime-compiled package: an owned, exclusive vec that grows as
+    /// `Package.add_compile` adds new top-level items (each new function or
+    /// top-level `let` claims a fresh slot).
+    ///
+    /// Crucially this is *not* registered as a `RootHaver`: the vec is
+    /// reachable only through the owning `Object::Package` heap value, so
+    /// when the user drops their last handle the Package becomes garbage
+    /// and the vec dies with it.
+    ///
+    /// GC: forwarded by Package's GC arm using direct mutation through
+    /// `&mut Package.globals` — no Arc sharing means no `make_mut` clone
+    /// hazard.
+    Dynamic(Vec<Value>),
+}
 
 /// A closure: a function object paired with a list of captured variable cells.
 #[derive(Clone, Debug)]
@@ -947,6 +1041,7 @@ impl std::fmt::Display for Object {
                 }
             },
             Object::UnscheduledFuture(future) => write!(f, "<unscheduled: {}>", future.operation),
+            Object::Package(pkg) => write!(f, "<package {}>", pkg.name),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
@@ -1367,6 +1462,8 @@ pub enum ObjectType {
     Collector,
     Type,
     RustData,
+    /// First-class package handle (`Object::Package`).
+    Package,
 }
 
 impl ObjectType {
@@ -1389,6 +1486,7 @@ impl ObjectType {
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
             Object::UnscheduledFuture(_) => Self::UnscheduledFuture,
+            Object::Package(_) => Self::Package,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
             // Object::BamlType(_) => Self::Any, // TODO
@@ -1428,6 +1526,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Collector => write!(f, "collector"),
             ObjectType::Type => write!(f, "type"),
             ObjectType::RustData => write!(f, "rust_data"),
+            ObjectType::Package => write!(f, "package"),
         }
     }
 }

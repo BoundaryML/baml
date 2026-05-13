@@ -672,6 +672,7 @@ fn owned_inner(
                 Object::Closure(_) => unconvertible("closure"),
                 Object::BoundMethod(_) => unconvertible("bound_method"),
                 Object::Cell(_) => unconvertible("cell"),
+                Object::Package(_) => unconvertible("package"),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(sentinel_kind) => {
                     unconvertible(&format!("sentinel: {:?}", sentinel_kind))

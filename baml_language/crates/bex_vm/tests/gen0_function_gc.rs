@@ -59,6 +59,7 @@ fn make_minimal_function() -> Function {
         body_meta: None,
         trace: false,
         aux_object_ptrs: Vec::new(),
+        package_name: String::new(),
     }
 }
 

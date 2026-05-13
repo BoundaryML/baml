@@ -246,6 +246,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 body_meta: function.body_meta,
                 trace: function.trace,
                 aux_object_ptrs: function.aux_object_ptrs,
+                package_name: function.package_name,
             }))
         }
         other => other,

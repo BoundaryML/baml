@@ -472,6 +472,7 @@ pub fn generate_project_bytecode_with_opt(
                         &mir.lambdas,
                         &line_starts,
                         &source_file,
+                        pkg_info_pass4.package.as_str(),
                         &globals,
                         &classes,
                         &class_object_indices,
@@ -498,6 +499,7 @@ pub fn generate_project_bytecode_with_opt(
                         compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
                     f.name.clone_from(&fq_name);
                     f.source_file.clone_from(&source_file);
+                    f.package_name = pkg_info_pass4.package.to_string();
                     f
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Intrinsic) => {
@@ -534,6 +536,7 @@ pub fn generate_project_bytecode_with_opt(
                         body_meta: None,
                         trace: false,
                         aux_object_ptrs: Vec::new(),
+                        package_name: pkg_info_pass4.package.to_string(),
                     }
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Vm) => Function {
@@ -562,6 +565,7 @@ pub fn generate_project_bytecode_with_opt(
                     body_meta: None,
                     trace: false,
                     aux_object_ptrs: Vec::new(),
+                    package_name: pkg_info_pass4.package.to_string(),
                 },
             };
 
@@ -665,6 +669,7 @@ pub fn generate_project_bytecode_with_opt(
             // Compile all let-binding initializers into a single $init function.
             let init_fn = compile_init_function(
                 db,
+                pkg_name.as_str(),
                 &sorted_bindings,
                 &globals,
                 &classes,
@@ -798,6 +803,7 @@ pub fn generate_project_bytecode_with_opt(
                 body_meta: None,
                 trace: false,
                 aux_object_ptrs: Vec::new(),
+                package_name: pkg_name.clone(),
             };
 
             let chainer_name = if pkg_name.as_str() == "user" {
@@ -1215,6 +1221,7 @@ fn compile_lambdas_flat(
     lambdas: &[baml_compiler2_mir::MirFunction],
     line_starts: &[u32],
     source_file: &str,
+    package_name: &str,
     globals: &HashMap<String, usize>,
     classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
@@ -1233,6 +1240,7 @@ fn compile_lambdas_flat(
                     &lambda.lambdas,
                     line_starts,
                     source_file,
+                    package_name,
                     globals,
                     classes,
                     class_object_indices,
@@ -1259,6 +1267,8 @@ fn compile_lambdas_flat(
                     compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
                 f.name.clone_from(&lambda_name);
                 f.source_file = source_file.to_string();
+                // Lambdas inherit their containing function's package.
+                f.package_name = package_name.to_string();
                 let idx = objects.len();
                 objects.push(Object::Function(Box::new(f)));
                 idx
@@ -1283,6 +1293,7 @@ fn compile_lambdas_flat(
 #[allow(clippy::too_many_arguments)]
 fn compile_init_function<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
+    pkg_name: &str,
     sorted_bindings: &[(String, LetLoc<'db>, baml_base::SourceFile)],
     globals: &HashMap<String, usize>,
     classes: &HashMap<String, HashMap<String, usize>>,
@@ -1317,6 +1328,7 @@ fn compile_init_function<'db>(
                     &lambdas,
                     &line_starts,
                     &source_file,
+                    pkg_name,
                     globals,
                     classes,
                     class_object_indices,
@@ -1343,6 +1355,7 @@ fn compile_init_function<'db>(
                 helper.name = format!("$init_let_{i}");
                 helper.source_file.clone_from(&source_file);
                 helper.arity = 0;
+                helper.package_name = pkg_name.to_string();
                 helper
             }
             None => {
@@ -1378,6 +1391,7 @@ fn compile_init_function<'db>(
                     body_meta: None,
                     trace: false,
                     aux_object_ptrs: Vec::new(),
+                    package_name: pkg_name.to_string(),
                 }
             }
         };
@@ -1453,6 +1467,7 @@ fn compile_init_function<'db>(
         body_meta: None,
         trace: false,
         aux_object_ptrs: Vec::new(),
+        package_name: pkg_name.to_string(),
     })
 }
 
