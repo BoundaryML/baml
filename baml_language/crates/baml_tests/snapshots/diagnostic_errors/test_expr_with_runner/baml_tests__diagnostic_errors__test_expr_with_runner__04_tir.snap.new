@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 47316
+---
+=== TIR2 ===
+function user.$init_test_34(registry: testing.TestCollector) -> ? throws never {
+  { : null
+    registry.register_test("with quorum", () -> void { ... }, testing.Quorum(5, 3)) : void
+      () -> void { ... } : () -> void throws unknown
+        {
+          let result = "hello"
+          assert.not_null(result)
+        }
+    null : null
+  }
+  !! 23..38: unresolved name: Quorum
+}
+lambda user.$init_test_34 {
+}

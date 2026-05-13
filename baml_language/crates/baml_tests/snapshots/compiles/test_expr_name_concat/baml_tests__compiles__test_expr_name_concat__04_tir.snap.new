@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 26148
+---
+=== TIR2 ===
+function user.$init_test_34(registry: testing.TestCollector) -> ? throws never {
+  { : null
+    registry.register_test_set("concat names", (testset: testing.TestCollector) -> void { ... }, null) : void
+      (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws unknown
+        {
+          testset.register_test("prefix_" + "suffix", () -> { ... }, null)
+          testset.register_test_set("nested_" + "group", (testset: testing.TestCollector) -> { ... }, null)
+          null
+        }
+    null : null
+  }
+}
+lambda user.$init_test_34 {
+}
+lambda user.$init_test_34 {
+}
+lambda user.$init_test_34 {
+}
+lambda user.$init_test_34 {
+}

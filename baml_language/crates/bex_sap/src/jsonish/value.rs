@@ -374,6 +374,21 @@ impl<'de> serde::de::Visitor<'de> for ValueVisitor {
         while let Some((key, value)) = map.next_entry::<Cow<'de, str>, Value<'de>>()? {
             object.push((key, value));
         }
+        // serde_json's `arbitrary_precision` feature represents out-of-i64/u64
+        // numbers as a single-entry map keyed by `$serde_json::private::Number`
+        // whose value is the source-text decimal as a String. Recognize that
+        // shape and produce a real `Value::Number` so downstream coercers
+        // (notably the bigint path) can see the original digits.
+        if object.len() == 1 {
+            let (key, value) = &object[0];
+            if key.as_ref() == "$serde_json::private::Number" {
+                if let Value::String(s, _) = value {
+                    if let Ok(num) = s.parse::<serde_json::Number>() {
+                        return Ok(Value::Number(num, CompletionState::Complete));
+                    }
+                }
+            }
+        }
         Ok(Value::Object(object, CompletionState::Complete))
     }
 }

@@ -1,10 +1,13 @@
 use std::{borrow::Cow, sync::LazyLock};
 
+use num_bigint::BigInt;
 use regex::Regex;
 
 use super::{ParsingContext, ParsingError, array_helper::coerce_array_to_singular};
 use crate::{
-    baml_value::{BamlBool, BamlFloat, BamlInt, BamlMedia, BamlNull, BamlString, BamlValue},
+    baml_value::{
+        BamlBigint, BamlBool, BamlFloat, BamlInt, BamlMedia, BamlNull, BamlString, BamlValue,
+    },
     deserializer::{
         coercer::TypeCoercer,
         deserialize_flags::{DeserializerConditions, Flag},
@@ -12,8 +15,8 @@ use crate::{
     },
     jsonish::{self, CompletionState},
     sap_model::{
-        AttrLiteral, BoolTy, FloatTy, FromLiteral as _, IntTy, MediaTy, NullTy, PrimitiveTy,
-        StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
+        AttrLiteral, BigintTy, BoolTy, FloatTy, FromLiteral as _, IntTy, MediaTy, NullTy,
+        PrimitiveTy, StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
     },
 };
 
@@ -34,6 +37,10 @@ where
             }
             PrimitiveTy::Int(ty) => IntTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
                 .map(|v| v.map(|v| v.map_value(Into::into))),
+            PrimitiveTy::Bigint(ty) => {
+                BigintTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
+                    .map(|v| v.map(|v| v.map_value(Into::into)))
+            }
             PrimitiveTy::Float(ty) => FloatTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
                 .map(|v| v.map(|v| v.map_value(Into::into))),
             PrimitiveTy::Bool(ty) => BoolTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
@@ -57,6 +64,10 @@ where
             }
             PrimitiveTy::Int(ty) => IntTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
                 .map(|v| v.map_value(Into::into)),
+            PrimitiveTy::Bigint(ty) => {
+                BigintTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
+                    .map(|v| v.map_value(Into::into))
+            }
             PrimitiveTy::Float(ty) => {
                 FloatTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
                     .map(|v| v.map_value(Into::into))
@@ -250,6 +261,228 @@ where
             DeserializerMeta {
                 flags,
                 ty: TyWithMeta::new(TyResolvedRef::Int(IntTy), target.meta),
+            },
+        ))
+    }
+}
+
+/// Parses a `serde_json::Number` that exceeded `i64`/`u64` range as a `BigInt`.
+///
+/// `serde_json` keeps the original digit sequence in the `Number`'s `Display`
+/// output, so for arbitrary-precision integer literals the string form is the
+/// canonical source — `as_i64`/`as_u64` only succeed for in-range values.
+fn parse_bigint_from_number_text(n: &serde_json::Number) -> Option<BigInt> {
+    let s = n.to_string();
+    // Reject anything that looks like a non-integer (decimal point, exponent).
+    // The float-fallback path below handles those cases explicitly.
+    if s.contains('.') || s.contains('e') || s.contains('E') {
+        return None;
+    }
+    BigInt::parse_bytes(s.as_bytes(), 10)
+}
+
+/// Converts a finite `f64` to a `BigInt` via "round half away from zero".
+///
+/// Returns `None` for NaN or infinity (callers should reject those before
+/// invoking this).
+///
+/// For typical doubles like `42.0`, this rounds to `42` and produces
+/// `BigInt::from(42)`. For huge floats beyond `i128` range, we go through the
+/// decimal-text representation so we don't lose precision near the upper bound
+/// of the float-representable integers.
+fn bigint_from_finite_f64(f: f64) -> Option<BigInt> {
+    if !f.is_finite() {
+        return None;
+    }
+    let rounded = f.round();
+    // Fast path: in i128 range, the cast is exact (and avoids the formatting hit).
+    #[allow(clippy::cast_precision_loss)]
+    if (i128::MIN as f64) <= rounded && rounded <= (i128::MAX as f64) {
+        #[allow(clippy::cast_possible_truncation)]
+        return Some(BigInt::from(rounded as i128));
+    }
+    // Out-of-i128-range: format with no fractional digits and parse via BigInt.
+    let s = format!("{rounded:.0}");
+    BigInt::parse_bytes(s.as_bytes(), 10)
+}
+
+#[allow(clippy::cast_precision_loss)]
+impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for BigintTy
+where
+    't: 's,
+    's: 'v,
+{
+    fn coerce(
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlBigint, N>>, ParsingError> {
+        let mut flags = DeserializerConditions::new();
+
+        let result = match (value, target.meta.in_progress.as_ref()) {
+            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
+                return Ok(None);
+            }
+            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(lit)) => {
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
+                target.ty.from_literal(lit, ctx)?
+            }
+            (jsonish::Value::Number(n, c), _) => {
+                if matches!(c, CompletionState::Incomplete) {
+                    flags.add_flag(Flag::Incomplete);
+                }
+                if let Some(i) = n.as_i64() {
+                    BamlBigint {
+                        value: BigInt::from(i),
+                    }
+                } else if let Some(u) = n.as_u64() {
+                    BamlBigint {
+                        value: BigInt::from(u),
+                    }
+                } else if let Some(parsed) = parse_bigint_from_number_text(n) {
+                    // Arbitrary-precision integer that exceeded i64/u64.
+                    BamlBigint { value: parsed }
+                } else if let Some(f) = n.as_f64() {
+                    if !f.is_finite() {
+                        return Err(ctx.error_unexpected_type(&target, &value));
+                    }
+                    let Some(bi) = bigint_from_finite_f64(f) else {
+                        return Err(ctx.error_unexpected_type(&target, &value));
+                    };
+                    flags.add_flag(Flag::FloatToBigint(f));
+                    BamlBigint { value: bi }
+                } else {
+                    return Err(ctx.error_unexpected_type(&target, &value));
+                }
+            }
+            (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
+                return Ok(None);
+            }
+            (jsonish::Value::String(s, CompletionState::Incomplete), Some(lit)) => {
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
+                flags.add_flag(Flag::StringToBigint(s.clone()));
+                target.ty.from_literal(lit, ctx)?
+            }
+            (jsonish::Value::String(s, c), _) => {
+                if matches!(c, CompletionState::Incomplete) {
+                    flags.add_flag(Flag::Incomplete);
+                }
+                let trimmed = s.trim();
+                // Trim trailing commas
+                let trimmed = trimmed.trim_end_matches(',');
+                if let Some(bi) = BigInt::parse_bytes(trimmed.as_bytes(), 10) {
+                    flags.add_flag(Flag::StringToBigint(s.clone()));
+                    BamlBigint { value: bi }
+                } else if let Some(n) = trimmed
+                    .parse::<f64>()
+                    .ok()
+                    .or_else(|| float_from_maybe_fraction(trimmed))
+                    .or_else(|| float_from_comma_separated(trimmed))
+                {
+                    if !n.is_finite() {
+                        return Err(ctx.error_unexpected_type(&target, &value));
+                    }
+                    let Some(bi) = bigint_from_finite_f64(n) else {
+                        return Err(ctx.error_unexpected_type(&target, &value));
+                    };
+                    flags.add_flag(Flag::StringToBigint(s.clone()));
+                    flags.add_flag(Flag::FloatToBigint(n));
+                    BamlBigint { value: bi }
+                } else {
+                    return Err(ctx.error_unexpected_type(&target, &value));
+                }
+            }
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
+                return Ok(None);
+            }
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
+                target.ty.from_literal(lit, ctx)?
+            }
+            (jsonish::Value::Array(items, c), _) => {
+                if matches!(c, CompletionState::Incomplete) {
+                    flags.add_flag(Flag::Incomplete);
+                }
+                let target_ty = target.ty;
+                let target_meta = target.meta;
+                let Some(singular) = coerce_array_to_singular(
+                    ctx,
+                    TyWithMeta::new(TyResolvedRef::Bigint(BigintTy), target_meta),
+                    items.iter(),
+                    &|value| {
+                        Self::coerce(ctx, TyWithMeta::new(target_ty, target_meta), value)
+                            .map(|v| v.map(|v| v.map_value(Into::into)))
+                    },
+                )?
+                else {
+                    return Ok(None);
+                };
+                flags.flags.extend_from_slice(&singular.meta.flags.flags);
+                let BamlValue::Bigint(singular) = singular.value else {
+                    unreachable!("coerce_array_to_singular should only return Bigint");
+                };
+                singular
+            }
+            _ => return Err(ctx.error_unexpected_type(&target, &value)),
+        };
+        let result = ValueWithFlags::new(
+            result,
+            DeserializerMeta {
+                flags,
+                ty: target.map_ty(|_| TyResolvedRef::Bigint(BigintTy)),
+            },
+        );
+        Ok(Some(result))
+    }
+
+    fn try_cast(
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlBigint, N>> {
+        let jsonish::Value::Number(num, completion_state) = value else {
+            return None;
+        };
+
+        let flags = match (completion_state, target.meta.in_progress.as_ref()) {
+            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
+            (CompletionState::Incomplete, Some(lit)) => {
+                return target
+                    .ty
+                    .from_literal(lit, ctx)
+                    .map(|ret| {
+                        ValueWithFlags::new(
+                            ret,
+                            DeserializerMeta {
+                                flags: DeserializerConditions::new()
+                                    .with_flag(Flag::DefaultButHadValue(Cow::Borrowed(value))),
+                                ty: target.map_ty(|_| TyResolvedRef::Bigint(BigintTy)),
+                            },
+                        )
+                    })
+                    .ok();
+            }
+            (CompletionState::Incomplete, None) => {
+                DeserializerConditions::new().with_flag(Flag::Incomplete)
+            }
+            (CompletionState::Complete, _) => DeserializerConditions::new(),
+        };
+
+        // Only accept exact JSON integer numbers — no float fallback, no string parsing.
+        let bi = if let Some(i) = num.as_i64() {
+            BigInt::from(i)
+        } else if let Some(u) = num.as_u64() {
+            BigInt::from(u)
+        } else {
+            // Try arbitrary-precision parse from the raw digits.
+            parse_bigint_from_number_text(num)?
+        };
+
+        Some(ValueWithFlags::new(
+            BamlBigint { value: bi },
+            DeserializerMeta {
+                flags,
+                ty: TyWithMeta::new(TyResolvedRef::Bigint(BigintTy), target.meta),
             },
         ))
     }

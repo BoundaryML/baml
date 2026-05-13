@@ -1716,6 +1716,7 @@ dependencies = [
  "derive_more",
  "indexmap 2.14.0",
  "log",
+ "num-bigint",
  "ouroboros",
  "regex",
  "rowan 0.16.1",

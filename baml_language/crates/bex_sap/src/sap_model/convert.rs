@@ -11,9 +11,10 @@ use ::sys_types::{ClassDefinition, EnumDefinition};
 use indexmap::IndexMap;
 
 use crate::sap_model::{
-    self, AnnotatedEnumVariant, AnnotatedField, AnnotatedTy, ArrayTy, AttrLiteral, BoolLiteralTy,
-    BoolTy, ClassTy, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy, MapTy, MediaTy, NullTy,
-    StringLiteralTy, StringTy, TyResolved, TyWithMeta, TypeAnnotations, TypeRefDb, UnionTy,
+    self, AnnotatedEnumVariant, AnnotatedField, AnnotatedTy, ArrayTy, AttrLiteral, BigintLiteralTy,
+    BigintTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy,
+    MapTy, MediaTy, NullTy, StringLiteralTy, StringTy, TyResolved, TyWithMeta, TypeAnnotations,
+    TypeRefDb, UnionTy,
 };
 
 impl crate::sap_model::TypeIdent for TypeName {}
@@ -318,6 +319,10 @@ impl TypeCtx {
                 sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
                 convert_ty_attrs(attr),
             ),
+            baml_type::Ty::Bigint { attr } => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::Bigint(BigintTy)),
+                convert_ty_attrs(attr),
+            ),
             baml_type::Ty::Float { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Float(FloatTy)),
                 convert_ty_attrs(attr),
@@ -353,10 +358,10 @@ impl TypeCtx {
                 sap_model::Ty::Resolved(TyResolved::LiteralInt(IntLiteralTy(*i))),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Literal(baml_type::Literal::Bigint(..), ..) => {
-                // Bigint literal SAP parsing is not yet implemented (Phase 2+).
-                return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
-            }
+            baml_type::Ty::Literal(baml_type::Literal::Bigint(bi), attr) => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::LiteralBigint(BigintLiteralTy(bi.clone()))),
+                convert_ty_attrs(attr),
+            ),
             baml_type::Ty::Literal(baml_type::Literal::Float(..), ..) => {
                 return Err(ConvertError::FloatLiteral);
             }
@@ -503,9 +508,7 @@ impl TypeCtx {
                     convert_ty_attrs(&attr),
                 )
             }
-            // Bigint SAP parsing is not yet implemented (Phase 9+).
-            unparsable @ (baml_type::Ty::Bigint { .. }
-            | baml_type::Ty::Uint8Array { .. }
+            unparsable @ (baml_type::Ty::Uint8Array { .. }
             | baml_type::Ty::Opaque(_, _)
             | baml_type::Ty::Function { .. }
             | baml_type::Ty::Void { .. }
@@ -743,15 +746,13 @@ fn check_parseable(
 fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
     match ty {
         baml_type::Ty::Int { .. }
+        | baml_type::Ty::Bigint { .. }
         | baml_type::Ty::Float { .. }
         | baml_type::Ty::String { .. }
         | baml_type::Ty::Bool { .. }
         | baml_type::Ty::Null { .. }
         | baml_type::Ty::Literal(..) => Ok(Vec::new()),
-        // Bigint SAP parsing not yet implemented (Phase 9+).
-        baml_type::Ty::Bigint { .. }
-        | baml_type::Ty::Uint8Array { .. }
-        | baml_type::Ty::Media(..) => Err(()),
+        baml_type::Ty::Uint8Array { .. } | baml_type::Ty::Media(..) => Err(()),
         baml_type::Ty::Class(name, _, _) => Ok(vec![name.clone()]),
         baml_type::Ty::Enum(..) | baml_type::Ty::EnumVariant(..) => Ok(Vec::new()),
         baml_type::Ty::Optional(inner, _) => is_sap_parseable(inner),
@@ -774,7 +775,7 @@ fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
         | baml_type::Ty::Void { .. }
         | baml_type::Ty::WatchAccessor(..)
         | baml_type::Ty::BuiltinUnknown { .. }
-        | baml_type::Ty::Future(..) => Err(()), // Bigint is already handled above via Uint8Array/Media arm
+        | baml_type::Ty::Future(..) => Err(()),
     }
 }
 
