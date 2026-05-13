@@ -919,3 +919,61 @@ async fn test_bigint_int_mixed_comparison_eq() {
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
+
+// ─── AllocFailure guards ────────────────────────────────────────
+
+/// Asserts that the engine result is an unhandled throw of `baml.panics.AllocFailure`.
+fn assert_alloc_failure(result: &Result<BexExternalValue, bex_engine::EngineError>) {
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = result else {
+        panic!("expected UnhandledThrow with AllocFailure, got: {result:?}");
+    };
+    let BexExternalValue::Instance { class_name, .. } = value.as_ref() else {
+        panic!("expected Instance, got: {value:?}");
+    };
+    assert_eq!(
+        class_name, "baml.panics.AllocFailure",
+        "expected AllocFailure panic, got: {class_name}"
+    );
+}
+
+#[tokio::test]
+async fn test_bigint_pow_alloc_failure() {
+    // (2n).pow(1_000_000_000n) would allocate ~125 MB; we raise AllocFailure
+    // before any allocation is attempted.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { return (2n).pow(1000000000n); }
+    "#
+    );
+    assert_alloc_failure(&output.result);
+}
+
+#[tokio::test]
+async fn test_bigint_shl_alloc_failure() {
+    // 1n << 1_000_000_000n would also far exceed MAX_BIGINT_BITS.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { return 1n << 1000000000n; }
+    "#
+    );
+    assert_alloc_failure(&output.result);
+}
+
+#[tokio::test]
+async fn test_bigint_pow_normal_works() {
+    // (2n).pow(256n) is a 78-digit number — well within MAX_BIGINT_BITS.
+    let output = baml_test!(
+        r#"
+        function main() -> bigint { return (2n).pow(256n); }
+    "#
+    );
+    let Ok(BexExternalValue::Bigint(bi)) = &output.result else {
+        panic!("expected Bigint result, got: {:?}", output.result);
+    };
+    let s = bi.to_string();
+    assert_eq!(s.len(), 78, "2^256 should be a 78-digit number, got: {s}");
+    assert!(
+        s.starts_with("115792089237316195"),
+        "unexpected prefix: {s}"
+    );
+}

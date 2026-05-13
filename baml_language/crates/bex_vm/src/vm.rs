@@ -3435,6 +3435,10 @@ impl BexVm {
                 let Value::Object(li) = self.stack.ensure_pop() else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
+                // Shift count: a value too large for `usize` would shift past
+                // any addressable bit and is treated as `AllocFailure`. Defer
+                // the `to_string` formatting to the error path so the happy
+                // path never allocates a diagnostic.
                 let shift_result = {
                     let Object::Bigint(rb) = self.get_object(ri) else {
                         unsafe { std::hint::unreachable_unchecked() }
@@ -3442,12 +3446,37 @@ impl BexVm {
                     usize::try_from(rb.as_ref())
                 };
                 let Ok(shift) = shift_result else {
-                    // Phase 12 will replace this with a dedicated AllocFailure panic.
-                    let exception = self.error_to_exception_value(VmBamlError::InvalidArgument {
-                        message: "bigint shift count does not fit in usize".to_string(),
-                    });
-                    return Err(VmError::Thrown(exception));
+                    let Object::Bigint(rb) = self.get_object(ri) else {
+                        unsafe { std::hint::unreachable_unchecked() }
+                    };
+                    return Err(VmError::Thrown(self.panic_to_exception_value(
+                        VmPanic::AllocFailure {
+                            message: format!(
+                                "bigint shl: shift count ({rb}) does not fit in usize"
+                            ),
+                        },
+                    )));
                 };
+                let val_bits = {
+                    let Object::Bigint(lb) = self.get_object(li) else {
+                        unsafe { std::hint::unreachable_unchecked() }
+                    };
+                    lb.bits()
+                };
+                let estimated_bits = val_bits.saturating_add(shift as u64);
+                if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
+                    let Object::Bigint(lb) = self.get_object(li) else {
+                        unsafe { std::hint::unreachable_unchecked() }
+                    };
+                    return Err(VmError::Thrown(self.panic_to_exception_value(
+                        VmPanic::AllocFailure {
+                            message: format!(
+                                "bigint shl: result of {lb} << {shift} would require ~{estimated_bits} bits (limit: {})",
+                                crate::package_baml::bigint::MAX_BIGINT_BITS
+                            ),
+                        },
+                    )));
+                }
                 let result = {
                     let Object::Bigint(lb) = self.get_object(li) else {
                         unsafe { std::hint::unreachable_unchecked() }
@@ -3464,24 +3493,26 @@ impl BexVm {
                 let Value::Object(li) = self.stack.ensure_pop() else {
                     unsafe { std::hint::unreachable_unchecked() }
                 };
-                let shift_result = {
-                    let Object::Bigint(rb) = self.get_object(ri) else {
-                        unsafe { std::hint::unreachable_unchecked() }
-                    };
-                    usize::try_from(rb.as_ref())
+                let Object::Bigint(rb) = self.get_object(ri) else {
+                    unsafe { std::hint::unreachable_unchecked() }
                 };
-                let Ok(shift) = shift_result else {
-                    // Phase 12 will replace this with a dedicated AllocFailure panic.
-                    let exception = self.error_to_exception_value(VmBamlError::InvalidArgument {
-                        message: "bigint shift count does not fit in usize".to_string(),
-                    });
-                    return Err(VmError::Thrown(exception));
-                };
+                // Right shift never grows the value, so a shift count too
+                // large for `usize` is treated as "shift past every bit".
+                // `num-bigint`'s `Shr` is an arithmetic right shift (rounds
+                // toward -∞), so positives saturate to 0 and negatives
+                // saturate to -1 — matching `i*::shr`.
+                let shift_opt = usize::try_from(rb.as_ref()).ok();
                 let result = {
                     let Object::Bigint(lb) = self.get_object(li) else {
                         unsafe { std::hint::unreachable_unchecked() }
                     };
-                    lb.as_ref() >> shift
+                    match shift_opt {
+                        Some(shift) => lb.as_ref() >> shift,
+                        None if lb.sign() == num_bigint::Sign::Minus => {
+                            num_bigint::BigInt::from(-1)
+                        }
+                        None => num_bigint::BigInt::ZERO,
+                    }
                 };
                 let value = self.alloc_bigint(std::sync::Arc::new(result));
                 self.stack.push(value);
@@ -7594,6 +7625,8 @@ impl BexVm {
                     let Value::Object(li) = self.stack.ensure_pop() else {
                         std::hint::unreachable_unchecked()
                     };
+                    // Defer the `to_string` formatting to the error path so the
+                    // happy path never allocates a diagnostic.
                     let shift_result = {
                         let Object::Bigint(rb) = self.get_object(ri) else {
                             std::hint::unreachable_unchecked()
@@ -7601,13 +7634,37 @@ impl BexVm {
                         usize::try_from(rb.as_ref())
                     };
                     let Ok(shift) = shift_result else {
-                        // Phase 12 will replace this with a dedicated AllocFailure panic.
-                        let exception =
-                            self.error_to_exception_value(VmBamlError::InvalidArgument {
-                                message: "bigint shift count does not fit in usize".to_string(),
-                            });
-                        return Err(VmError::Thrown(exception));
+                        let Object::Bigint(rb) = self.get_object(ri) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        return Err(VmError::Thrown(self.panic_to_exception_value(
+                            VmPanic::AllocFailure {
+                                message: format!(
+                                    "bigint shl: shift count ({rb}) does not fit in usize"
+                                ),
+                            },
+                        )));
                     };
+                    let val_bits = {
+                        let Object::Bigint(lb) = self.get_object(li) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        lb.bits()
+                    };
+                    let estimated_bits = val_bits.saturating_add(shift as u64);
+                    if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
+                        let Object::Bigint(lb) = self.get_object(li) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        return Err(VmError::Thrown(self.panic_to_exception_value(
+                            VmPanic::AllocFailure {
+                                message: format!(
+                                    "bigint shl: result of {lb} << {shift} would require ~{estimated_bits} bits (limit: {})",
+                                    crate::package_baml::bigint::MAX_BIGINT_BITS
+                                ),
+                            },
+                        )));
+                    }
                     let result = {
                         let Object::Bigint(lb) = self.get_object(li) else {
                             std::hint::unreachable_unchecked()
@@ -7624,25 +7681,25 @@ impl BexVm {
                     let Value::Object(li) = self.stack.ensure_pop() else {
                         std::hint::unreachable_unchecked()
                     };
-                    let shift_result = {
-                        let Object::Bigint(rb) = self.get_object(ri) else {
-                            std::hint::unreachable_unchecked()
-                        };
-                        usize::try_from(rb.as_ref())
+                    let Object::Bigint(rb) = self.get_object(ri) else {
+                        std::hint::unreachable_unchecked()
                     };
-                    let Ok(shift) = shift_result else {
-                        // Phase 12 will replace this with a dedicated AllocFailure panic.
-                        let exception =
-                            self.error_to_exception_value(VmBamlError::InvalidArgument {
-                                message: "bigint shift count does not fit in usize".to_string(),
-                            });
-                        return Err(VmError::Thrown(exception));
-                    };
+                    // Right shift never grows the value, so a shift count too
+                    // large for `usize` is treated as "shift past every bit".
+                    // `num-bigint`'s `Shr` is an arithmetic right shift, so
+                    // positives saturate to 0 and negatives saturate to -1.
+                    let shift_opt = usize::try_from(rb.as_ref()).ok();
                     let result = {
                         let Object::Bigint(lb) = self.get_object(li) else {
                             std::hint::unreachable_unchecked()
                         };
-                        lb.as_ref() >> shift
+                        match shift_opt {
+                            Some(shift) => lb.as_ref() >> shift,
+                            None if lb.sign() == num_bigint::Sign::Minus => {
+                                num_bigint::BigInt::from(-1)
+                            }
+                            None => num_bigint::BigInt::ZERO,
+                        }
                     };
                     let value = self.alloc_bigint(std::sync::Arc::new(result));
                     self.stack.push(value);

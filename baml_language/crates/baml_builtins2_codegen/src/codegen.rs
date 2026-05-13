@@ -40,6 +40,9 @@ fn is_fallible(b: &NativeBuiltin) -> bool {
                 | "baml.media.Video.to_json"
                 | "baml.media.Image.to_json"
                 | "baml.Float.random"
+                // `bigint.pow` raises `AllocFailure` (a panic, not in `throws`) when
+                // the estimated result size exceeds `MAX_BIGINT_BITS`.
+                | "baml.Bigint.pow"
         )
 }
 

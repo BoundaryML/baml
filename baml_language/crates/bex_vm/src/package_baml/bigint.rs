@@ -6,6 +6,13 @@ use num_bigint::{BigInt, BigUint, Sign};
 use super::{BamlClassBigint, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 
+/// Upper bound on the bit-length of a bigint we are willing to allocate from
+/// `pow` / `shl`. ~268 million bits ≈ 80 million decimal digits ≈ 32 MiB of
+/// digits. Beyond this we raise [`VmPanic::AllocFailure`] instead of letting
+/// the allocator either succeed (and starve the rest of the runtime) or abort
+/// the process outright.
+pub(crate) const MAX_BIGINT_BITS: u64 = 1 << 28;
+
 impl BamlClassBigint for PackageBamlImpl {
     fn to_json(_bigint: Arc<BigInt>) -> Value {
         unimplemented!("bigint.to_json: not yet implemented")
@@ -47,18 +54,35 @@ impl BamlClassBigint for PackageBamlImpl {
         Ok(Arc::new(bigint.sqrt()))
     }
 
-    fn pow(bigint: Arc<BigInt>, exp: Arc<BigInt>) -> Arc<BigInt> {
+    fn pow(bigint: Arc<BigInt>, exp: Arc<BigInt>) -> Result<Arc<BigInt>, VmRustFnError> {
         // Negative exponent produces 0 by BEP §Methods (rounding to zero for |base|>1).
         if exp.sign() == Sign::Minus {
-            return Arc::new(BigInt::ZERO);
+            return Ok(Arc::new(BigInt::ZERO));
         }
-        // 0^0 == 1 by convention (also what BigInt::pow gives for 0^0).
-        // Try to convert exponent to u32. If too large, any base |x| >= 2 would
-        // produce an astronomically large number; we saturate at u32::MAX which
-        // is more than enough to produce a number that would timeout or OOM long
-        // before the exponent conversion matters in practice.
-        let exp_u32 = u32::try_from(exp.as_ref()).unwrap_or(u32::MAX);
-        Arc::new(bigint.pow(exp_u32))
+        // 0^0 == 1 by convention; `BigInt::pow(0)` also yields 1 so this falls
+        // through naturally.
+        //
+        // Pre-flight memory guard: estimate the bit-length of the result and
+        // reject anything that would blow past `MAX_BIGINT_BITS`. We use
+        // `bits() * exp` as an upper bound — exact for `|base| >= 2` and an
+        // over-estimate (still safe) for base in {-1, 0, 1}, which collapse to
+        // tiny results anyway and need no guard.
+        let base_bits = bigint.bits();
+        // `BigInt::pow` takes a `u32`. Anything outside that range is far past
+        // what we could materialise even with a single-bit base, so map the
+        // conversion failure straight onto an `AllocFailure` panic.
+        let exp_u32 = u32::try_from(exp.as_ref()).map_err(|_| {
+            alloc_failure_panic(format!(
+                "bigint.pow: exponent ({exp}) exceeds memory limits"
+            ))
+        })?;
+        let estimated_bits = base_bits.saturating_mul(u64::from(exp_u32));
+        if estimated_bits > MAX_BIGINT_BITS {
+            return Err(alloc_failure_panic(format!(
+                "bigint.pow: result of {bigint}^{exp} would require ~{estimated_bits} bits (limit: {MAX_BIGINT_BITS})"
+            )));
+        }
+        Ok(Arc::new(bigint.pow(exp_u32)))
     }
 
     fn ilog(bigint: Arc<BigInt>, base: Arc<BigInt>) -> Result<Arc<BigInt>, VmRustFnError> {
@@ -150,4 +174,10 @@ impl BamlClassBigint for PackageBamlImpl {
             }
         }
     }
+}
+
+/// Build a [`VmRustFnError::Panic`] carrying [`VmPanic::AllocFailure`] with
+/// the given message. Centralises the wrapping so call sites stay readable.
+pub(crate) fn alloc_failure_panic(message: String) -> VmRustFnError {
+    VmRustFnError::Panic(VmPanic::AllocFailure { message })
 }
