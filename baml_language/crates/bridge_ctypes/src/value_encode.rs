@@ -5,8 +5,8 @@ use bex_project::{BexExternalAdt, BexExternalValue, Ty};
 
 use crate::{
     baml_core::cffi::{
-        BamlOutboundHandle, BamlOutboundMapEntry, BamlOutboundValue, BamlTy, BamlTyBool,
-        BamlTyFloat, BamlTyGenericArg, BamlTyInt, BamlTyList, BamlTyLiteral, BamlTyMap,
+        BamlOutboundHandle, BamlOutboundMapEntry, BamlOutboundValue, BamlTy, BamlTyBigint,
+        BamlTyBool, BamlTyFloat, BamlTyGenericArg, BamlTyInt, BamlTyList, BamlTyLiteral, BamlTyMap,
         BamlTyMedia, BamlTyName, BamlTyNull, BamlTyOptional, BamlTyString, BamlTyUint8Array,
         BamlTyUnionVariant, BamlTyUnknown, BamlValueClass, BamlValueEnum, BamlValueList,
         BamlValueMap, BamlValueUnionVariant, baml_outbound_value::Value as BamlValueVariant,
@@ -29,6 +29,10 @@ pub fn external_to_outbound(
     let variant = match value {
         BexExternalValue::Null => None,
         BexExternalValue::Int(i) => Some(BamlValueVariant::IntValue(*i)),
+        // Hex / base sixteen on the wire (see Phase 10 of the bigint plan).
+        // Power-of-two-base parsing is SIMD-friendly; `num-bigint`'s
+        // `LowerHex` impl handles the leading-minus sign convention.
+        BexExternalValue::Bigint(bi) => Some(BamlValueVariant::BigintValue(format!("{bi:x}"))),
         BexExternalValue::Float(f) => Some(BamlValueVariant::FloatValue(*f)),
         BexExternalValue::Bool(b) => Some(BamlValueVariant::BoolValue(*b)),
         BexExternalValue::String(s) => Some(BamlValueVariant::StringValue(s.clone())),
@@ -363,8 +367,7 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
         // BuiltinUnknown is used for dynamic types (e.g., map values, array elements)
         // when the element type isn't known at compile time.
         Ty::BuiltinUnknown { .. } => Some(FieldType::UnknownType(BamlTyUnknown {})),
-        // Bigint FFI encoding is not yet implemented (Phase 10+).
-        Ty::Bigint { .. } => unimplemented!("bigint FFI type encoding is not yet implemented"),
+        Ty::Bigint { .. } => Some(FieldType::BigintType(BamlTyBigint {})),
         Ty::TypeAlias(_, _)
         | Ty::Future(..)
         | Ty::Function { .. }

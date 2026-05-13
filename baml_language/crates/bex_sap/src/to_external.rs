@@ -163,14 +163,7 @@ fn baml_value_inner_to_external(
     match value {
         BamlValue::String(s) => BexExternalValue::String(s.value.to_string()),
         BamlValue::Int(i) => BexExternalValue::Int(i.value),
-        BamlValue::Bigint(_) => {
-            // `BexExternalValue::Bigint` lands in Phase 10 — until then there's no
-            // lossless target variant. We avoid silently truncating to `Int`, so
-            // produce a clear panic if this path is hit before Phase 10.
-            unimplemented!(
-                "BexExternalValue::Bigint conversion is not yet wired up (lands in Phase 10)"
-            )
-        }
+        BamlValue::Bigint(b) => BexExternalValue::Bigint(b.value.clone()),
         BamlValue::Float(f) => BexExternalValue::Float(f.value),
         BamlValue::Bool(b) => BexExternalValue::Bool(b.value),
         BamlValue::Null(_) => BexExternalValue::Null,

@@ -337,6 +337,8 @@ fn bex_value_to_json_impl(value: &BexExternalValue, depth: usize) -> serde_json:
         BexExternalValue::Null => serde_json::Value::Null,
         BexExternalValue::Bool(b) => serde_json::Value::Bool(*b),
         BexExternalValue::Int(i) => serde_json::json!(i),
+        // Bigints can exceed JSON number precision; emit as a decimal string.
+        BexExternalValue::Bigint(b) => serde_json::json!(b.to_string()),
         BexExternalValue::Float(f) => serde_json::json!(f),
         BexExternalValue::String(s) => serde_json::Value::String(s.clone()),
         BexExternalValue::Array { items, .. } => bex_value_vec_to_json_impl(items, depth + 1),
@@ -443,6 +445,9 @@ fn bex_value_to_debug_impl(value: &BexExternalValue, depth: usize) -> String {
         BexExternalValue::Null => "null".to_string(),
         BexExternalValue::Bool(b) => b.to_string(),
         BexExternalValue::Int(i) => i.to_string(),
+        // Display bigint in decimal so logs are LLM- and human-readable;
+        // the FFI wire format uses hex (see `bridge_ctypes::value_encode`).
+        BexExternalValue::Bigint(bi) => bi.to_string(),
         BexExternalValue::Float(f) => bex_vm_types::format_float(*f),
         BexExternalValue::String(s) => format!("{s:?}"),
         BexExternalValue::Array { items, .. } => {

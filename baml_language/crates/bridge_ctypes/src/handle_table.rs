@@ -94,6 +94,7 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
             BexExternalValue::RustData(arc) => Ok(Self::RustData(BexRustData(arc))),
             BexExternalValue::Null
             | BexExternalValue::Int(_)
+            | BexExternalValue::Bigint(_)
             | BexExternalValue::Float(_)
             | BexExternalValue::Bool(_)
             | BexExternalValue::String(_)

@@ -13,6 +13,7 @@ bex_external_types = { workspace = true }
 bex_resource_types = { workspace = true }
 bex_vm_types = { workspace = true }
 indexmap = { workspace = true }
+num-bigint = { workspace = true }
 parking_lot = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync" ] }

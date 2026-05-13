@@ -129,6 +129,9 @@ pub enum BexExternalValue {
     /// 64-bit signed integer.
     Int(i64),
 
+    /// Arbitrary-precision signed integer.
+    Bigint(num_bigint::BigInt),
+
     /// 64-bit floating point.
     Float(f64),
 
@@ -209,6 +212,7 @@ impl std::fmt::Debug for BexExternalValue {
         match self {
             Self::Null => write!(f, "Null"),
             Self::Int(v) => f.debug_tuple("Int").field(v).finish(),
+            Self::Bigint(v) => f.debug_tuple("Bigint").field(v).finish(),
             Self::Float(v) => f.debug_tuple("Float").field(v).finish(),
             Self::Bool(v) => f.debug_tuple("Bool").field(v).finish(),
             Self::String(v) => f.debug_tuple("String").field(v).finish(),
@@ -265,6 +269,7 @@ impl PartialEq for BexExternalValue {
         match (self, other) {
             (Self::Null, Self::Null) => true,
             (Self::Int(a), Self::Int(b)) => a == b,
+            (Self::Bigint(a), Self::Bigint(b)) => a == b,
             (Self::Float(a), Self::Float(b)) => a == b,
             (Self::Bool(a), Self::Bool(b)) => a == b,
             (Self::String(a), Self::String(b)) => a == b,
@@ -405,6 +410,7 @@ impl BexExternalValue {
         match self {
             BexExternalValue::Null => "null",
             BexExternalValue::Int(_) => "int",
+            BexExternalValue::Bigint(_) => "bigint",
             BexExternalValue::Float(_) => "float",
             BexExternalValue::Bool(_) => "bool",
             BexExternalValue::String(_) => "string",

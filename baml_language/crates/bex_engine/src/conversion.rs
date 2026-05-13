@@ -224,7 +224,7 @@ impl BexEngine {
             Object::UnscheduledFuture(_) => Err(EngineError::CannotConvert {
                 type_name: "unscheduled_future".to_string(),
             }),
-            Object::Bigint(bi) => Ok(BexExternalValue::String(bi.to_string())),
+            Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
@@ -271,6 +271,9 @@ impl BexEngine {
             ),
             BexExternalValue::Null => Value::Null,
             BexExternalValue::Int(i) => Value::Int(i),
+            BexExternalValue::Bigint(bi) => {
+                Value::Object(holder.holder_mut().tlab_mut().alloc_bigint(bi))
+            }
             BexExternalValue::Float(f) => Value::Float(f),
             BexExternalValue::Bool(b) => Value::Bool(b),
             BexExternalValue::String(s) => {
@@ -804,7 +807,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
 
                     BexExternalValue::Instance { class_name, fields }
                 }
-                Object::Bigint(bi) => BexExternalValue::String(bi.to_string()),
+                Object::Bigint(bi) => BexExternalValue::Bigint((**bi).clone()),
                 Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.clone()),
                 Object::Variant(variant) => {
                     let enum_obj = vm.get_object(variant.enm);

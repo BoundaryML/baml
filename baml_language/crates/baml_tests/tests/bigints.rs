@@ -1,11 +1,11 @@
 //! Tests for the `bigint` builtin class (BEP-022).
 //!
-//! The VM returns bigint values as their decimal string representation via the
-//! external API (`BexExternalValue::String`) until a dedicated
-//! `BexExternalValue::Bigint` variant is added in a later phase.
+//! The VM returns bigint values across the external API via
+//! `BexExternalValue::Bigint`, wrapping a `num_bigint::BigInt`.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
+use num_bigint::BigInt;
 
 // ─── int → bigint widening (Phase 5) ─────────────────────────────────────────
 
@@ -21,7 +21,7 @@ async fn test_int_to_bigint_assign() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("42".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(42)))
     );
 }
 
@@ -36,7 +36,7 @@ async fn test_int_to_bigint_arg() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("42".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(42)))
     );
 }
 
@@ -51,7 +51,7 @@ async fn bigint_literal_small() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("42".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(42)))
     );
 }
 
@@ -64,7 +64,9 @@ async fn bigint_literal_large() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("99999999999999999999".to_string()))
+        Ok(BexExternalValue::Bigint(
+            BigInt::parse_bytes(b"99999999999999999999", 10).unwrap()
+        ))
     );
 }
 
@@ -77,7 +79,7 @@ async fn bigint_literal_negative() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("-7".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(-7)))
     );
 }
 
@@ -88,7 +90,7 @@ async fn bigint_literal_zero() {
         function main() -> bigint { 0n }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
 }
 
 #[tokio::test]
@@ -103,7 +105,7 @@ async fn bigint_literal_let_binding() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("42".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(42)))
     );
 }
 
@@ -118,7 +120,7 @@ async fn bigint_parse_small() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("12345".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(12345)))
     );
 }
 
@@ -131,7 +133,9 @@ async fn bigint_parse_large() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("99999999999999999999".to_string()))
+        Ok(BexExternalValue::Bigint(
+            BigInt::parse_bytes(b"99999999999999999999", 10).unwrap()
+        ))
     );
 }
 
@@ -144,7 +148,7 @@ async fn bigint_parse_negative() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("-7".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(-7)))
     );
 }
 
@@ -155,7 +159,7 @@ async fn bigint_parse_zero() {
         function main() -> bigint { bigint.parse("0") }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
 }
 
 #[tokio::test]
@@ -191,7 +195,7 @@ async fn bigint_abs_positive() {
         function main() -> bigint { (3n).abs() }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(3))));
 }
 
 #[tokio::test]
@@ -201,7 +205,7 @@ async fn bigint_abs_negative() {
         function main() -> bigint { (-7n).abs() }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("7".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(7))));
 }
 
 #[tokio::test]
@@ -211,7 +215,7 @@ async fn bigint_abs_zero() {
         function main() -> bigint { (0n).abs() }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
 }
 
 #[tokio::test]
@@ -224,7 +228,9 @@ async fn bigint_abs_large_negative() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("99999999999999999999".to_string()))
+        Ok(BexExternalValue::Bigint(
+            BigInt::parse_bytes(b"99999999999999999999", 10).unwrap()
+        ))
     );
 }
 
@@ -237,7 +243,7 @@ async fn bigint_min_self_smaller() {
         function main() -> bigint { (3n).min(5n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(3))));
 }
 
 #[tokio::test]
@@ -247,7 +253,7 @@ async fn bigint_min_other_smaller() {
         function main() -> bigint { (5n).min(3n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(3))));
 }
 
 #[tokio::test]
@@ -257,7 +263,7 @@ async fn bigint_min_equal() {
         function main() -> bigint { (3n).min(3n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(3))));
 }
 
 #[tokio::test]
@@ -269,7 +275,7 @@ async fn bigint_min_negative() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("-2".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(-2)))
     );
 }
 
@@ -280,7 +286,7 @@ async fn bigint_max_self_larger() {
         function main() -> bigint { (5n).max(3n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("5".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(5))));
 }
 
 #[tokio::test]
@@ -290,7 +296,7 @@ async fn bigint_max_other_larger() {
         function main() -> bigint { (3n).max(5n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("5".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(5))));
 }
 
 #[tokio::test]
@@ -300,7 +306,7 @@ async fn bigint_max_equal() {
         function main() -> bigint { (3n).max(3n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(3))));
 }
 
 // ─── clamp ────────────────────────────────────────────────────────────────────
@@ -312,7 +318,7 @@ async fn bigint_clamp_in_range() {
         function main() -> bigint { (5n).clamp(0n, 10n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("5".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(5))));
 }
 
 #[tokio::test]
@@ -322,7 +328,7 @@ async fn bigint_clamp_below_min() {
         function main() -> bigint { (-3n).clamp(0n, 10n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
 }
 
 #[tokio::test]
@@ -334,7 +340,7 @@ async fn bigint_clamp_above_max() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("10".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(10)))
     );
 }
 
@@ -345,7 +351,7 @@ async fn bigint_clamp_at_min() {
         function main() -> bigint { (0n).clamp(0n, 10n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
 }
 
 #[tokio::test]
@@ -357,7 +363,7 @@ async fn bigint_clamp_at_max() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("10".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(10)))
     );
 }
 
@@ -370,7 +376,7 @@ async fn bigint_isqrt_perfect_square() {
         function main() -> bigint { (16n).isqrt() }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("4".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(4))));
 }
 
 #[tokio::test]
@@ -380,7 +386,7 @@ async fn bigint_isqrt_non_perfect_square() {
         function main() -> bigint { (10n).isqrt() }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(3))));
 }
 
 #[tokio::test]
@@ -390,7 +396,7 @@ async fn bigint_isqrt_zero() {
         function main() -> bigint { (0n).isqrt() }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
 }
 
 #[tokio::test]
@@ -400,7 +406,7 @@ async fn bigint_isqrt_one() {
         function main() -> bigint { (1n).isqrt() }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("1".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(1))));
 }
 
 #[tokio::test]
@@ -426,7 +432,7 @@ async fn bigint_pow_basic() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("1024".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(1024)))
     );
 }
 
@@ -437,7 +443,7 @@ async fn bigint_pow_zero_exp() {
         function main() -> bigint { (2n).pow(0n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("1".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(1))));
 }
 
 #[tokio::test]
@@ -448,7 +454,7 @@ async fn bigint_pow_zero_base_zero_exp() {
         function main() -> bigint { (0n).pow(0n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("1".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(1))));
 }
 
 #[tokio::test]
@@ -460,7 +466,7 @@ async fn bigint_pow_negative_base() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("-8".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(-8)))
     );
 }
 
@@ -471,7 +477,7 @@ async fn bigint_pow_negative_exp_returns_zero() {
         function main() -> bigint { (2n).pow(-1n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
 }
 
 #[tokio::test]
@@ -483,9 +489,10 @@ async fn bigint_pow_large() {
         function main() -> bigint { (2n).pow(256n) }
     "#
     );
-    let Ok(BexExternalValue::String(s)) = &output.result else {
-        panic!("expected String result, got: {:?}", output.result);
+    let Ok(BexExternalValue::Bigint(bi)) = &output.result else {
+        panic!("expected Bigint result, got: {:?}", output.result);
     };
+    let s = bi.to_string();
     // 2^256 has exactly 78 decimal digits.
     assert_eq!(s.len(), 78, "2^256 should be a 78-digit number, got: {s}");
     assert!(
@@ -503,7 +510,7 @@ async fn bigint_ilog_base10() {
         function main() -> bigint { (1000n).ilog(10n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("3".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(3))));
 }
 
 #[tokio::test]
@@ -515,7 +522,7 @@ async fn bigint_ilog_base2() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("10".to_string()))
+        Ok(BexExternalValue::Bigint(BigInt::from(10)))
     );
 }
 
@@ -526,7 +533,7 @@ async fn bigint_ilog_one_returns_zero() {
         function main() -> bigint { (1n).ilog(10n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
 }
 
 #[tokio::test]
@@ -575,7 +582,7 @@ async fn bigint_random_single_element_range() {
         function main() -> bigint { bigint.random(0n, 1n) }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("0".to_string())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(0))));
 }
 
 #[tokio::test]
@@ -586,11 +593,13 @@ async fn bigint_random_in_range() {
         function main() -> bigint { bigint.random(10n, 20n) }
     "#
     );
-    let Ok(BexExternalValue::String(s)) = &output.result else {
-        panic!("expected String result, got: {:?}", output.result);
+    let Ok(BexExternalValue::Bigint(bi)) = &output.result else {
+        panic!("expected Bigint result, got: {:?}", output.result);
     };
-    let n: i64 = s.parse().expect("result should parse as i64");
-    assert!((10..20).contains(&n), "random result {n} not in [10, 20)");
+    assert!(
+        *bi >= BigInt::from(10) && *bi < BigInt::from(20),
+        "random result {bi} not in [10, 20)"
+    );
 }
 
 #[tokio::test]
@@ -833,7 +842,9 @@ async fn test_bigint_arithmetic_huge() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("18446744073709551617".to_string()))
+        Ok(BexExternalValue::Bigint(
+            BigInt::parse_bytes(b"18446744073709551617", 10).unwrap()
+        ))
     );
 }
 

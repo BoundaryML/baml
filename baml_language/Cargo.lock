@@ -1500,6 +1500,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "la-arena",
+ "num-bigint",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -1643,6 +1644,7 @@ dependencies = [
  "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.14.0",
+ "num-bigint",
  "tokio",
 ]
 
@@ -1656,6 +1658,7 @@ dependencies = [
  "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.14.0",
+ "num-bigint",
  "parking_lot",
  "thiserror 2.0.18",
  "tokio",
@@ -1928,6 +1931,7 @@ dependencies = [
  "bex_project",
  "bex_resource_types",
  "indexmap 2.14.0",
+ "num-bigint",
  "prost",
  "prost-build",
  "protoc-bin-vendored",

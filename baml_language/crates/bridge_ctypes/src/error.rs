@@ -17,6 +17,9 @@ pub enum CtypesError {
     #[error("Map entry missing key")]
     MapEntryMissingKey,
 
+    #[error("Invalid bigint hex string: {0:?}")]
+    InvalidBigint(String),
+
     #[error("Internal error: {0}")]
     InternalError(String),
 }

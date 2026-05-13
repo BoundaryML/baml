@@ -27,6 +27,10 @@ pub(crate) fn external_value_to_jinja(
         }),
         BexExternalValue::Null => Ok(JinjaValue::from(())), // Maps to None in Jinja
         BexExternalValue::Int(i) => Ok(JinjaValue::from(*i)),
+        // Arbitrary-precision bigints can exceed Jinja's `i128`/`u128`
+        // representations; pass them through as decimal strings so prompts
+        // see a faithful numeric rendering rather than a truncation.
+        BexExternalValue::Bigint(b) => Ok(JinjaValue::from(b.to_string())),
         BexExternalValue::Float(f) => Ok(JinjaValue::from(*f)),
         BexExternalValue::Bool(b) => Ok(JinjaValue::from(*b)),
         BexExternalValue::String(s) => Ok(JinjaValue::from(s.as_str())),

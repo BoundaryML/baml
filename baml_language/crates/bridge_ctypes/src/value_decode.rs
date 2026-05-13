@@ -29,6 +29,12 @@ pub fn inbound_to_external(
         Some(variant) => match variant {
             InboundValueVariant::StringValue(s) => Ok(BexExternalValue::String(s)),
             InboundValueVariant::IntValue(i) => Ok(BexExternalValue::Int(i)),
+            InboundValueVariant::BigintValue(s) => {
+                // Hex / base sixteen on the wire. `parse_bytes` honors a leading `-` for negatives.
+                let bi = num_bigint::BigInt::parse_bytes(s.as_bytes(), 16)
+                    .ok_or_else(|| CtypesError::InvalidBigint(s.clone()))?;
+                Ok(BexExternalValue::Bigint(bi))
+            }
             InboundValueVariant::FloatValue(f) => Ok(BexExternalValue::Float(f)),
             InboundValueVariant::BoolValue(b) => Ok(BexExternalValue::Bool(b)),
             InboundValueVariant::ListValue(list) => convert_list(list, handle_table),
@@ -193,5 +199,65 @@ mod tests {
         };
         let err = inbound_to_external(inbound, &table).expect_err("missing key should error");
         assert!(matches!(err, CtypesError::InvalidHandleKey(9999)));
+    }
+
+    /// Helper: round-trip a `BexExternalValue` through the outbound encoder and
+    /// the inbound decoder by translating the outbound `bigint_value` discriminator
+    /// to the parallel inbound discriminator.
+    fn bigint_round_trip(original: &BexExternalValue) -> BexExternalValue {
+        use crate::{
+            baml_core::cffi::baml_outbound_value::Value as OutboundVariant,
+            handle_table::CffiHandleTableOptions, value_encode::external_to_baml_value,
+        };
+
+        let opts = CffiHandleTableOptions::for_in_process();
+        let outbound = external_to_baml_value(original, &opts).expect("encode succeeds");
+        let s = match outbound.value {
+            Some(OutboundVariant::BigintValue(s)) => s,
+            other => panic!("expected outbound BigintValue, got {other:?}"),
+        };
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::BigintValue(s)),
+        };
+        let table = CffiHandleTable::new();
+        inbound_to_external(inbound, &table).expect("decode succeeds")
+    }
+
+    #[test]
+    fn test_bigint_round_trip_small() {
+        let bi = num_bigint::BigInt::from(42);
+        let v = BexExternalValue::Bigint(bi);
+        let decoded = bigint_round_trip(&v);
+        assert_eq!(decoded, v);
+    }
+
+    #[test]
+    fn test_bigint_round_trip_huge() {
+        let bi = num_bigint::BigInt::parse_bytes(
+            b"99999999999999999999999999999999999999999999999999",
+            10,
+        )
+        .unwrap();
+        let v = BexExternalValue::Bigint(bi);
+        let decoded = bigint_round_trip(&v);
+        assert_eq!(decoded, v);
+    }
+
+    #[test]
+    fn test_bigint_round_trip_negative() {
+        let bi = num_bigint::BigInt::from(-42);
+        let v = BexExternalValue::Bigint(bi);
+        let decoded = bigint_round_trip(&v);
+        assert_eq!(decoded, v);
+    }
+
+    #[test]
+    fn test_bigint_decode_invalid() {
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::BigintValue("not-a-number".into())),
+        };
+        let table = CffiHandleTable::new();
+        let err = inbound_to_external(inbound, &table).expect_err("invalid bigint should error");
+        assert!(matches!(err, CtypesError::InvalidBigint(_)));
     }
 }

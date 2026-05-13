@@ -526,6 +526,7 @@ fn owned_inner(
             BexExternalValue::FunctionRef { .. } => unconvertible("function"),
             BexExternalValue::Null => Ok(BexExternalValue::Null),
             BexExternalValue::Int(i) => Ok(BexExternalValue::Int(*i)),
+            BexExternalValue::Bigint(b) => Ok(BexExternalValue::Bigint(b.clone())),
             BexExternalValue::Float(f) => Ok(BexExternalValue::Float(*f)),
             BexExternalValue::Bool(b) => Ok(BexExternalValue::Bool(*b)),
             BexExternalValue::String(s) => Ok(BexExternalValue::String(s.clone())),
@@ -666,7 +667,7 @@ fn owned_inner(
                     Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone())))
                 }
                 Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
-                Object::Bigint(bi) => Ok(BexExternalValue::String(bi.to_string())),
+                Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
                 Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
                 Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)
                     .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),
