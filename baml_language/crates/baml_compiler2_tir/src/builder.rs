@@ -3187,9 +3187,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             ast::Pattern::Class { .. } => {
                 // TODO(class-destructure): project each field's declared type
                 // via `lookup_class_fields(qn, args)` from `flow_ty` and recurse
-                // with the field type, not `flow_ty`. `Pattern::Class` is
-                // parser-gated so this is unreachable from user syntax today.
-                todo!("class-pattern field-type projection in register_pattern_types");
+                // with the field type, not `flow_ty`.
+                //
+                // Class-destructure syntax is parser-gated (always paired with
+                // an `unexpected token` parse error), but error-recovery paths
+                // — e.g. `if let x { ... }` where the parser misreads `x {` as
+                // `Class { fields }` — can still produce a `Class` pattern that
+                // reaches us. Silently no-op so a malformed program emits its
+                // parse-level diagnostic without panicking the compiler.
             }
 
             ast::Pattern::Chain(parts) | ast::Pattern::Or(parts) => {

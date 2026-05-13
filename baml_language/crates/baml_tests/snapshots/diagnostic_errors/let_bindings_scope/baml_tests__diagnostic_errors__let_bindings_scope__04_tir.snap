@@ -1,0 +1,103 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.if_let_binding_not_visible_after(v: int | string) -> int throws never {
+  { : never
+    match (v : int | string) : void
+      x: int =>
+        { : never
+          return x : int
+        }
+      _ =>
+        { : void
+        }
+    return x : unknown
+  }
+  !! 645..646: unresolved name: x
+}
+function user.if_let_binding_not_visible_in_else(v: int | string) -> int throws never {
+  { : never
+    match (v : int | string) : never
+      x: int =>
+        { : never
+          return x : int
+        }
+      _ =>
+        { : never
+          return x : unknown
+        }
+  }
+  !! 909..910: unresolved name: x
+}
+function user.if_let_binding_not_visible_to_sibling(v: int | string) -> int throws never {
+  { : never
+    match (v : int | string) : never
+      x: int =>
+        { : never
+          return x : int
+        }
+      _ =>
+        match (v : int | string) : never
+          y: string =>
+            { : never
+              return x : unknown
+            }
+          _ =>
+            { : never
+              return Neg 1 : -1
+            }
+  }
+  !! 1203..1204: unresolved name: x
+}
+function user.while_let_binding_not_visible_after(v: int | string) -> int throws never {
+  { : never
+    while true
+      { : void
+        match (v : int | string) : void
+          n: int =>
+            { : void
+              v = "stop" : "stop"
+            }
+          _ =>
+            { : never
+              break
+            }
+      }
+    return n : unknown
+  }
+  !! 1669..1670: unresolved name: n
+}
+function user.let_else_binding_not_visible_in_else(raw: int | string) -> int throws never {
+  { : never
+    let x: int = : int
+      match (raw : int | string) : int
+        x: int =>
+          x : int
+        _ =>
+          { : never
+            return x : unknown
+          }
+    return x : int
+  }
+  !! 2138..2139: unresolved name: x
+}
+function user.let_else_uses_binding_in_else_predicate(raw: int | string) -> int throws never {
+  { : never
+    let n: int = : int
+      match (raw : int | string) : int
+        n: int =>
+          n : int
+        _ =>
+          { : never
+            if (n > 0 : bool) : void
+              { : never
+                return 1 : 1
+              }
+            return Neg 1 : -1
+          }
+    return n : int
+  }
+  !! 2349..2350: unresolved name: n
+  !! 2349..2350: unresolved name: n
+}

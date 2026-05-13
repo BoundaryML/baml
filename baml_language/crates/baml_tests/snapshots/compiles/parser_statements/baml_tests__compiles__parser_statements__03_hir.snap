@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 16488
 ---
 === HIR2 ===
 class user.EdgeFoo {
@@ -78,6 +77,54 @@ function user.iterator_style_for_loop() -> int  [expr] {
 function user.nested_for_loop() -> int  [expr] {
   { let result = 0; for i in [1, 2, 3] { for j in [4, 5, 6] { result Add= i Mul j } }; return result }
 }
+function user.if_let_as_tail_expr() -> int  [expr] {
+  { let v: int | string = 10 } match (v) { n: int => {  } n, _ => {  } Neg 1 }
+}
+function user.if_let_else_if() -> int  [expr] {
+  { let x: int | string | bool = true } match (x) { y: int => { return y }, _ => match (x) { z: string => { return 0 }, _ => { return Neg 1 } } }
+}
+function user.if_let_else_if_let_chain() -> int  [expr] {
+  { let x: int | string = "abc" } match (x) { a: int => { return a }, _ => match (x) { b: string => { return 1 }, _ => { return Neg 2 } } }
+}
+function user.if_let_nested() -> int  [expr] {
+  { let outer: int | string = 3; let inner: int | string = 4; match (outer) { a: int => {  } match (inner) { b: int => { return a Add b }, _ => { return a } }, _ => {  } }; return Neg 1 }
+}
+function user.if_let_type_narrow_int() -> int  [expr] {
+  { let x: int | string = 7; match (x) { y: int => { return y Add 1 }, _ => {  } }; return Neg 1 }
+}
+function user.if_let_type_narrow_string() -> string  [expr] {
+  { let x: int | string = "hi"; match (x) { y: string => { return y }, _ => {  } }; return "fallback" }
+}
+function user.if_let_with_else() -> int  [expr] {
+  { let x: int | string = "nope" } match (x) { y: int => { return y }, _ => { return Neg 1 } }
+}
+function user.if_let_with_else_value() -> int  [expr] {
+  { let x: int | string = 5; let result = match (x) { y: int => {  } y Mul 2, _ => {  } 0 }; return result }
+}
+function user.if_let_body_local_shadows_binding() -> int  [expr] {
+  { let v: int | string = 5; match (v) { x: int => { let x = 100; return x }, _ => {  } }; return Neg 1 }
+}
+function user.if_let_chained_else_if_let() -> int  [expr] {
+  { let v: int | string | bool = "abc" } match (v) { i: int => { return i }, _ => match (v) { s: string => { return 1 }, _ => match (v) { b: bool => { return 2 }, _ => { return Neg 1 } } } }
+}
+function user.if_let_else_sees_outer_not_inner() -> int  [expr] {
+  { let n = 999; let v: int | string = "nope"; return match (v) { n: int => {  } n, _ => {  } n } }
+}
+function user.if_let_in_scrutinee(outer: int | string, mid: int | string) -> string  [expr] {
+  { let v = match (outer) { y: int => {  } y Mul 2, _ => {  } "fallback" } } match (v) { x: int => { return "got_int" }, _ => { return "got_other" } }
+}
+function user.if_let_lambda_captures_binding() -> int  [expr] {
+  { let v: int | string = 6; match (v) { x: int => { let f = () -> int { {  } x Add 10 }; return f() }, _ => {  } }; return Neg 1 }
+}
+function user.if_let_shadow_then_restore() -> int  [expr] {
+  { let x = 100; let v: int | string = 3; let inside = match (v) { x: int => {  } x Add 1, _ => {  } 0 }; return inside Add x }
+}
+function user.if_let_siblings_same_name() -> int  [expr] {
+  { let a: int | string = 1; let b: int | string = 2; let r1 = match (a) { x: int => {  } x, _ => {  } 0 }; let r2 = match (b) { x: int => {  } x, _ => {  } 0 }; return r1 Add r2 }
+}
+
+--- captures ---
+lambda () in ?: captures [x]
 function user.ConditionalLogic(age: int) -> string  [expr] {
   {  } if (age Lt 18) { return "minor" } else if (age Lt 65) { return "adult" } else { return "senior" }
 }
@@ -88,6 +135,87 @@ class user.Point {
 function user.let_statements() -> int  [expr] {
   { let x = 1; let y: int = 2; let z: int[] = [1, 2, 3]; let point: user.Point = user.Point { x: 1, y: 2 }; return point.x Add point.y }
 }
+function user.let_else_binds_when_match() -> int  [expr] {
+  { let v: int | string = 42; let n: int = match (v) { n: int => n, _ => { return Neg 1 } }; return n Add 1 }
+}
+function user.let_else_inside_loop_break() -> int  [expr] {
+  { let acc = 0; let i = 0; while i Lt 5 { let v: int | string = i; let n: int = match (v) { n: int => n, _ => { break } }; acc = acc Add n; i = i Add 1 }; return acc }
+}
+function user.let_else_inside_loop_continue() -> int  [expr] {
+  { let acc = 0; let i = 0; while i Lt 5 { i = i Add 1; let v: int | string = i; let n: int = match (v) { n: int => n, _ => { continue } }; acc = acc Add n }; return acc }
+}
+function user.let_else_multiple_bindings_in_sequence() -> int  [expr] {
+  { let a_raw: int | string = 1; let b_raw: int | string = 2; let a: int = match (a_raw) { a: int => a, _ => { return Neg 1 } }; let b: int = match (b_raw) { b: int => b, _ => { return Neg 2 } }; return a Add b }
+}
+function user.let_else_returns_on_mismatch() -> int  [expr] {
+  { let v: int | string = "oops"; let n: int = match (v) { n: int => n, _ => { return Neg 1 } }; return n }
+}
+function user.let_else_with_call_initializer(x: int | string) -> int  [expr] {
+  { let n: int = match (x) { n: int => n, _ => { return Neg 1 } }; return n }
+}
+function user.let_else_with_throw() -> int  [expr] {
+  { let v: int | string = 7; let n: int = match (v) { n: int => n, _ => { throw "expected int" } }; return n }
+}
+function user.let_else_after_block_uses_binding() -> int  [expr] {
+  { let raw: int | string = 5; let n: int = match (raw) { n: int => n, _ => { return Neg 1 } }; let doubled = n Mul 2; return doubled }
+}
+function user.let_else_binding_captured_in_lambda() -> int  [expr] {
+  { let raw: int | string = 9; let n: int = match (raw) { n: int => n, _ => { return Neg 1 } }; let f = () -> int { {  } n Add 1 }; return f() }
+}
+function user.let_else_else_sees_outer_not_inner_yet() -> int  [expr] {
+  { let n = 11; let raw: int | string = "oops"; let n: int = match (raw) { n: int => n, _ => { return n Sub 1 } }; return n }
+}
+function user.let_else_sequence_threads_bindings() -> int  [expr] {
+  { let raw_a: int | string = 1; let a: int = match (raw_a) { a: int => a, _ => { return Neg 1 } }; let raw_b: int | string = a Add 1; let b: int = match (raw_b) { b: int => b, _ => { return Neg 2 } }; return a Add b }
+}
+function user.let_else_shadows_outer() -> int  [expr] {
+  { let x = 999; let raw: int | string = 7; let x: int = match (raw) { x: int => x, _ => { return Neg 1 } }; return x }
+}
+function user.let_else_wildcard_no_binding() -> int  [expr] {
+  { let raw: int | string = 5; match (raw) { _: int => null, _ => { return Neg 1 } }; return 1 }
+}
+function user.let_else_with_break_in_loop() -> int  [expr] {
+  { let acc = 0; let i = 0; while i Lt 6 { let raw: int | string = i; let n: int = match (raw) { n: int => n, _ => { break } }; acc = acc Add n; i = i Add 1 }; return acc }
+}
+function user.let_else_with_continue_in_loop() -> int  [expr] {
+  { let acc = 0; let i = 0; while i Lt 5 { i = i Add 1; let raw: int | string = i; let n: int = match (raw) { n: int => n, _ => { continue } }; acc = acc Add n }; return acc }
+}
+
+--- captures ---
+lambda () in let_else_binding_captured_in_lambda: captures [n]
+function user.while_let_nested() -> int  [expr] {
+  { let outer: int | string = 1; let inner: int | string = 10; let acc = 0; while true { match (outer) { o: int => { while true { match (inner) { i: int => { acc = acc Add o Add i; inner = "stop" }, _ => { break } } }; outer = "stop"; inner = 10 }, _ => { break } } }; return acc }
+}
+function user.while_let_type_narrow_terminates_on_mismatch() -> int  [expr] {
+  { let x: int | string = 1; let count = 0; while true { match (x) { n: int => { count = count Add 1 } if (count Ge 3) { x = "stop" }, _ => { break } } }; return count }
+}
+function user.while_let_with_assignment_inside() -> int  [expr] {
+  { let v: int | string = 5; let sum = 0; while true { match (v) { n: int => { sum = sum Add n } if (sum Ge 15) { v = "done" }, _ => { break } } }; return sum }
+}
+function user.while_let_with_continue() -> int  [expr] {
+  { let v: int | string = 0; let acc = 0; while true { match (v) { n: int => { v = n Add 1; if (n Eq 2) { continue }; acc = acc Add n } if (n Ge 4) { v = "stop" }, _ => { break } } }; return acc }
+}
+function user.if_let_inside_while_let() -> int  [expr] {
+  { let v: int | string = 2; let other: int | string = 100; let acc = 0; while true { match (v) { n: int => { match (other) { m: int => { acc = acc Add n Add m }, _ => {  } }; v = "stop" }, _ => { break } } }; return acc }
+}
+function user.while_let_explicit_break() -> int  [expr] {
+  { let v: int | string = 1; let count = 0; while true { match (v) { n: int => { count = count Add 1; if (n Ge 3) { break }; v = n Add 1 }, _ => { break } } }; return count }
+}
+function user.while_let_explicit_continue() -> int  [expr] {
+  { let v: int | string = 0; let acc = 0; while true { match (v) { n: int => { v = n Add 1; if (n Eq 2) { continue }; acc = acc Add n } if (n Ge 4) { v = "done" }, _ => { break } } }; return acc }
+}
+function user.while_let_inside_if_let() -> int  [expr] {
+  { let outer: int | string = 1; let inner: int | string = 3; let total = 0; match (outer) { x: int => { while true { match (inner) { y: int => { total = total Add x Add y; inner = "stop" }, _ => { break } } } }, _ => {  } }; return total }
+}
+function user.while_let_lambda_captures() -> int  [expr] {
+  { let v: int | string = 3; let acc = 0; while true { match (v) { n: int => { let f = () -> int { {  } n Add 1 }; acc = acc Add f(); v = "stop" }, _ => { break } } }; return acc }
+}
+function user.while_let_shadow_then_restore() -> int  [expr] {
+  { let n = 42; let v: int | string = 5; let acc = 0; while true { match (v) { n: int => { acc = acc Add n; v = "stop" }, _ => { break } } }; return acc Add n }
+}
+
+--- captures ---
+lambda () in ?: captures [n]
 function user.nested_while_loop() -> int  [expr] {
   { let i = 0; while i Lt 10 { let j = 0; while j Lt 10 { j = j Add 1 } }; return i }
 }

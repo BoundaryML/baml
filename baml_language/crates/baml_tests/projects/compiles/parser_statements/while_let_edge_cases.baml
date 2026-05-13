@@ -1,0 +1,92 @@
+// Edge cases for `while let`:
+//   - binding visibility scoped to loop body only
+//   - break / continue work inside the loop body
+//   - mutations of the scrutinee variable terminate the loop on type change
+//   - nested while-let
+//   - lambda capture of the binding inside the loop body
+
+// Outer `n` is shadowed by the while-let binding inside the body. After the
+// loop, `n` refers to the outer binding again.
+function while_let_shadow_then_restore() -> int {
+  let n = 42;
+  let v: int | string = 5;
+  let acc = 0;
+  while let n: int = v {
+    acc = acc + n;
+    v = "stop";
+  };
+  // After the loop `n` must be the OUTER 42.
+  return acc + n;
+}
+
+// `break` inside while-let exits the loop immediately.
+function while_let_explicit_break() -> int {
+  let v: int | string = 1;
+  let count = 0;
+  while let n: int = v {
+    count = count + 1;
+    if n >= 3 {
+      break;
+    }
+    v = n + 1;
+  };
+  return count;
+}
+
+// `continue` inside while-let goes back to the loop condition without
+// running the rest of the body.
+function while_let_explicit_continue() -> int {
+  let v: int | string = 0;
+  let acc = 0;
+  while let n: int = v {
+    v = n + 1;
+    if n == 2 {
+      continue;
+    }
+    acc = acc + n;
+    if n >= 4 {
+      v = "done";
+    }
+  };
+  return acc;
+}
+
+// Lambda inside while-let body captures the loop binding.
+function while_let_lambda_captures() -> int {
+  let v: int | string = 3;
+  let acc = 0;
+  while let n: int = v {
+    let f = () -> int { n + 1 };
+    acc = acc + f();
+    v = "stop";
+  };
+  return acc;
+}
+
+// while-let nested inside an if-let body.
+function while_let_inside_if_let() -> int {
+  let outer: int | string = 1;
+  let inner: int | string = 3;
+  let total = 0;
+  if let x: int = outer {
+    while let y: int = inner {
+      total = total + x + y;
+      inner = "stop";
+    };
+  }
+  return total;
+}
+
+// if-let nested inside a while-let body.
+function if_let_inside_while_let() -> int {
+  let v: int | string = 2;
+  let other: int | string = 100;
+  let acc = 0;
+  while let n: int = v {
+    if let m: int = other {
+      acc = acc + n + m;
+    }
+    v = "stop";
+  };
+  return acc;
+}

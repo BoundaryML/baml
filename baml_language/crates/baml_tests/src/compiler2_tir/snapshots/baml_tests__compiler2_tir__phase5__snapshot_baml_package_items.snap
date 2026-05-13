@@ -1,13 +1,12 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase5.rs
-assertion_line: 389
 expression: output
 ---
 namespace baml:
   class Array<T> { methods: [length, at, push, pop, concat, reverse, slice, join, map] }
   class Map<K, V> { methods: [length, has, keys, values, set, get] }
-  class String { methods: [length, toLowerCase, toUpperCase, trim, includes, startsWith, endsWith, split, substring, replace, indexOf, charAt, matches, replaceAll] }
-  class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, sort] }
+  class String { methods: [length, toLowerCase, toUpperCase, trim, includes, startsWith, endsWith, split, substring, replace, indexOf, charAt, matches, replaceAll, to_bytes] }
+  class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, to_string, sort] }
   function deep_copy<T>
   function deep_equals<T>
 namespace baml.env:
@@ -29,14 +28,22 @@ namespace baml.errors:
 namespace baml.events:
   function send
 namespace baml.fs:
+  class DirEntry { methods: [] }
   class File { methods: [text, bytes, read, read_bytes, close, seek_from, write, write_bytes] }
+  class MkdirOptions { methods: [] }
   function exists
+  function mkdir
   function open
   function read
+  function read_dir
   function remove
   function size
   function write
   function write_bytes
+namespace baml.glob:
+  class Glob { methods: [scan, matches] }
+  class ScanOptions { methods: [] }
+  function new
 namespace baml.http:
   class Request { methods: [] }
   class Response { methods: [text, bytes, ok] }
@@ -50,7 +57,7 @@ namespace baml.llm:
   class AnthropicOptions { methods: [] }
   class AzureOpenAiOptions { methods: [] }
   class BedrockOptions { methods: [] }
-  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, execute_oneshot, execute_once_oneshot] }
+  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, __make_stream, execute_oneshot, execute_once_oneshot] }
   enum ClientType
   class ExecutionContext { methods: [] }
   class MediaUrlHandler { methods: [] }
@@ -67,6 +74,7 @@ namespace baml.llm:
   function __sap_parse_final<T, S>
   function __sap_parse_partial<T, S>
   function build_request
+  function build_request_stream
   function call_llm_function<T>
   function from_shorthand
   function get_jinja_template
@@ -100,7 +108,10 @@ namespace baml.stream:
   class StreamFinished { methods: [] }
   class StreamNoYield { methods: [] }
 namespace baml.sys:
+  class ProcessOptions { methods: [] }
+  class ShellOutput { methods: [ok] }
   function argv
+  function exec
   function exit
   function now_ms
   function panic

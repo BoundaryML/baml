@@ -1,0 +1,288 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] Error: Expected identifier after 'let', found '='
+   ╭─[ main.baml:9:10 ]
+   │
+ 9 │   if let = v {
+   │          ┬  
+   │          ╰── Expected identifier after 'let', found '='
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [type] Error: unreachable arm
+    ╭─[ main.baml:11:4 ]
+    │
+ 11 │   }
+    │    │ 
+    │    ╰─ unreachable arm
+    │ 
+    │ Note: Error code: E0063
+────╯
+
+  [type] Error: unresolved name: x
+    ╭─[ main.baml:16:57 ]
+    │
+ 16 │ ╭─▶ function if_let_missing_equals(v: int | string) -> int {
+    ┆ ┆   
+ 19 │ ├─▶   }
+    │ │         
+    │ ╰───────── unresolved name: x
+    │     
+    │     Note: Error code: E0003
+────╯
+
+  [parse] Error: Expected class destructure patterns are not yet supported, found identifier
+    ╭─[ main.baml:17:10 ]
+    │
+ 17 │   if let x {
+    │          ┬  
+    │          ╰── Expected class destructure patterns are not yet supported, found identifier
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected field name, found return
+    ╭─[ main.baml:18:5 ]
+    │
+ 18 │     return 1;
+    │     ───┬──  
+    │        ╰──── Expected field name, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected ',' or '}' after field pattern, found integer
+    ╭─[ main.baml:18:12 ]
+    │
+ 18 │     return 1;
+    │            ┬  
+    │            ╰── Expected ',' or '}' after field pattern, found integer
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected field name, found ';'
+    ╭─[ main.baml:18:13 ]
+    │
+ 18 │     return 1;
+    │             ┬  
+    │             ╰── Expected field name, found ';'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected block after 'if let' header, found return
+    ╭─[ main.baml:20:3 ]
+    │
+ 20 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected block after 'if let' header, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected initializer (=), found return
+    ╭─[ main.baml:20:3 ]
+    │
+ 20 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected initializer (=), found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [type] Error: unreachable arm
+    ╭─[ main.baml:27:4 ]
+    │
+ 27 │   }
+    │    │ 
+    │    ╰─ unreachable arm
+    │ 
+    │ Note: Error code: E0063
+────╯
+
+  [parse] Error: Expected block after 'if let' header, found return
+    ╭─[ main.baml:28:3 ]
+    │
+ 28 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected block after 'if let' header, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [type] Error: `if` without `else` cannot be used as a value; add an `else` branch
+    ╭─[ main.baml:32:55 ]
+    │
+ 32 │ ╭─▶ function if_let_missing_body(v: int | string) -> int {
+ 33 │ ├─▶   if let x: int = v
+    │ │                         
+    │ ╰───────────────────────── `if` without `else` cannot be used as a value; add an `else` branch
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [parse] Error: Expected block after 'if let' header, found '}'
+    ╭─[ main.baml:34:1 ]
+    │
+ 34 │ }
+    │ ┬  
+    │ ╰── Expected block after 'if let' header, found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected block after 'while let' header, found return
+    ╭─[ main.baml:39:3 ]
+    │
+ 39 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected block after 'while let' header, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected identifier after 'let', found '='
+    ╭─[ main.baml:44:13 ]
+    │
+ 44 │   while let = v {
+    │             ┬  
+    │             ╰── Expected identifier after 'let', found '='
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [type] Error: unreachable arm
+    ╭─[ main.baml:45:5 ]
+    │
+ 45 │   };
+    │     │ 
+    │     ╰─ unreachable arm
+    │ 
+    │ Note: Error code: E0063
+────╯
+
+  [parse] Error: Expected block after 'while let' header, found return
+    ╭─[ main.baml:46:3 ]
+    │
+ 46 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected block after 'while let' header, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [type] Error: type mismatch: expected int, got int | string
+    ╭─[ main.baml:51:16 ]
+    │
+ 51 │   let x: int = raw else;
+    │                ─┬─  
+    │                 ╰─── type mismatch: expected int, got int | string
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [parse] Error: Expected block after 'else' in let-else, found ';'
+    ╭─[ main.baml:51:24 ]
+    │
+ 51 │   let x: int = raw else;
+    │                        ┬  
+    │                        ╰── Expected block after 'else' in let-else, found ';'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [type] Error: type mismatch: expected int, got int | string
+    ╭─[ main.baml:57:16 ]
+    │
+ 57 │   let x: int = raw else 0;
+    │                ─┬─  
+    │                 ╰─── type mismatch: expected int, got int | string
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [parse] Error: Expected block after 'else' in let-else, found integer
+    ╭─[ main.baml:57:25 ]
+    │
+ 57 │   let x: int = raw else 0;
+    │                         ┬  
+    │                         ╰── Expected block after 'else' in let-else, found integer
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [type] Error: unresolved name: x
+    ╭─[ main.baml:71:9 ]
+    │
+ 71 │ ╭─▶   } else if let x {
+    ┆ ┆   
+ 73 │ ├─▶   }
+    │ │         
+    │ ╰───────── unresolved name: x
+    │     
+    │     Note: Error code: E0003
+────╯
+
+  [parse] Error: Expected class destructure patterns are not yet supported, found identifier
+    ╭─[ main.baml:71:17 ]
+    │
+ 71 │   } else if let x {
+    │                 ┬  
+    │                 ╰── Expected class destructure patterns are not yet supported, found identifier
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected field name, found return
+    ╭─[ main.baml:72:5 ]
+    │
+ 72 │     return 2;
+    │     ───┬──  
+    │        ╰──── Expected field name, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected ',' or '}' after field pattern, found integer
+    ╭─[ main.baml:72:12 ]
+    │
+ 72 │     return 2;
+    │            ┬  
+    │            ╰── Expected ',' or '}' after field pattern, found integer
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected field name, found ';'
+    ╭─[ main.baml:72:13 ]
+    │
+ 72 │     return 2;
+    │             ┬  
+    │             ╰── Expected field name, found ';'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected block after 'if let' header, found return
+    ╭─[ main.baml:74:3 ]
+    │
+ 74 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected block after 'if let' header, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected initializer (=), found return
+    ╭─[ main.baml:74:3 ]
+    │
+ 74 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected initializer (=), found return
+    │ 
+    │ Note: Error code: E0010
+────╯

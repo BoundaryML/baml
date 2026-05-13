@@ -1,0 +1,629 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "if_let_missing_pattern"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_LET_EXPR
+          KW_IF "if"
+          LET_STMT
+            PATTERN
+              BINDING_PATTERN "let"
+                KW_LET "let"
+            EQUALS "="
+            WORD "v"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT "return 1;"
+              KW_RETURN "return"
+              INTEGER_LITERAL "1"
+              SEMICOLON ";"
+            R_BRACE "}"
+        RETURN_STMT "return 0;"
+          KW_RETURN "return"
+          INTEGER_LITERAL "0"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "if_let_missing_equals"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_LET_EXPR
+          KW_IF "if"
+          LET_STMT
+            PATTERN
+              DESTRUCTURE_PATTERN
+                KW_LET "let"
+                WORD "x"
+                L_BRACE "{"
+                FIELD_PATTERN "return"
+                  KW_RETURN "return"
+                INTEGER_LITERAL "1"
+                FIELD_PATTERN ";"
+                  SEMICOLON ";"
+                R_BRACE "}"
+        RETURN_STMT "return 0;"
+          KW_RETURN "return"
+          INTEGER_LITERAL "0"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "if_let_missing_initializer"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_LET_EXPR
+          KW_IF "if"
+          LET_STMT
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let x"
+                  KW_LET "let"
+                  WORD "x"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
+            EQUALS "="
+            BLOCK_EXPR
+              L_BRACE "{"
+              RETURN_STMT "return 1;"
+                KW_RETURN "return"
+                INTEGER_LITERAL "1"
+                SEMICOLON ";"
+              R_BRACE "}"
+        RETURN_STMT "return 0;"
+          KW_RETURN "return"
+          INTEGER_LITERAL "0"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "if_let_missing_body"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_LET_EXPR
+          KW_IF "if"
+          LET_STMT
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let x"
+                  KW_LET "let"
+                  WORD "x"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
+            EQUALS "="
+            WORD "v"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "while_let_missing_body"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        WHILE_LET_STMT
+          KW_WHILE "while"
+          LET_STMT
+            PATTERN
+              CHAIN_PATTERN
+                BINDING_PATTERN "let n"
+                  KW_LET "let"
+                  WORD "n"
+                COLON ":"
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
+            EQUALS "="
+            WORD "v"
+            SEMICOLON ";"
+        RETURN_STMT "return 0;"
+          KW_RETURN "return"
+          INTEGER_LITERAL "0"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "while_let_missing_pattern"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        WHILE_LET_STMT
+          KW_WHILE "while"
+          LET_STMT
+            PATTERN
+              BINDING_PATTERN "let"
+                KW_LET "let"
+            EQUALS "="
+            OBJECT_LITERAL "v {
+  }"
+              WORD "v"
+              L_BRACE "{"
+              R_BRACE "}"
+            SEMICOLON ";"
+        RETURN_STMT "return 0;"
+          KW_RETURN "return"
+          INTEGER_LITERAL "0"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "let_else_missing_else_block"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "raw"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            CHAIN_PATTERN
+              BINDING_PATTERN "let x"
+                KW_LET "let"
+                WORD "x"
+              COLON ":"
+              TYPE_PATTERN
+                TYPE_EXPR "int"
+                  WORD "int"
+          EQUALS "="
+          WORD "raw"
+          KW_ELSE "else"
+          SEMICOLON ";"
+        RETURN_STMT "return x;"
+          KW_RETURN "return"
+          WORD "x"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "let_else_non_block_else"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "raw"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            CHAIN_PATTERN
+              BINDING_PATTERN "let x"
+                KW_LET "let"
+                WORD "x"
+              COLON ":"
+              TYPE_PATTERN
+                TYPE_EXPR "int"
+                  WORD "int"
+          EQUALS "="
+          WORD "raw"
+          KW_ELSE "else"
+        INTEGER_LITERAL "0"
+        SEMICOLON ";"
+        RETURN_STMT "return x;"
+          KW_RETURN "return"
+          WORD "x"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "let_else_missing_semicolon"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "raw"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            CHAIN_PATTERN
+              BINDING_PATTERN "let x"
+                KW_LET "let"
+                WORD "x"
+              COLON ":"
+              TYPE_PATTERN
+                TYPE_EXPR "int"
+                  WORD "int"
+          EQUALS "="
+          WORD "raw"
+          KW_ELSE "else"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT
+              KW_RETURN "return"
+              UNARY_EXPR "-1"
+                MINUS "-"
+                INTEGER_LITERAL "1"
+              SEMICOLON ";"
+            R_BRACE "}"
+        RETURN_STMT "return x;"
+          KW_RETURN "return"
+          WORD "x"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "else_if_let_missing_equals"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR "(false)"
+            L_PAREN "("
+            WORD "false"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT "return 1;"
+              KW_RETURN "return"
+              INTEGER_LITERAL "1"
+              SEMICOLON ";"
+            R_BRACE "}"
+          KW_ELSE "else"
+          IF_LET_EXPR
+            KW_IF "if"
+            LET_STMT
+              PATTERN
+                DESTRUCTURE_PATTERN
+                  KW_LET "let"
+                  WORD "x"
+                  L_BRACE "{"
+                  FIELD_PATTERN "return"
+                    KW_RETURN "return"
+                  INTEGER_LITERAL "2"
+                  FIELD_PATTERN ";"
+                    SEMICOLON ";"
+                  R_BRACE "}"
+        RETURN_STMT "return 0;"
+          KW_RETURN "return"
+          INTEGER_LITERAL "0"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "recovery_anchor"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        RETURN_STMT "return 42;"
+          KW_RETURN "return"
+          INTEGER_LITERAL "42"
+          SEMICOLON ";"
+        R_BRACE "}"
+
+=== ERRORS ===
+Error: Expected identifier after 'let', found '='
+   ╭─[ main.baml:9:10 ]
+   │
+ 9 │   if let = v {
+   │          ┬  
+   │          ╰── Expected identifier after 'let', found '='
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected class destructure patterns are not yet supported, found identifier
+    ╭─[ main.baml:17:10 ]
+    │
+ 17 │   if let x {
+    │          ┬  
+    │          ╰── Expected class destructure patterns are not yet supported, found identifier
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected field name, found return
+    ╭─[ main.baml:18:5 ]
+    │
+ 18 │     return 1;
+    │     ───┬──  
+    │        ╰──── Expected field name, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ',' or '}' after field pattern, found integer
+    ╭─[ main.baml:18:12 ]
+    │
+ 18 │     return 1;
+    │            ┬  
+    │            ╰── Expected ',' or '}' after field pattern, found integer
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected field name, found ';'
+    ╭─[ main.baml:18:13 ]
+    │
+ 18 │     return 1;
+    │             ┬  
+    │             ╰── Expected field name, found ';'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected initializer (=), found return
+    ╭─[ main.baml:20:3 ]
+    │
+ 20 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected initializer (=), found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected block after 'if let' header, found return
+    ╭─[ main.baml:20:3 ]
+    │
+ 20 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected block after 'if let' header, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected block after 'if let' header, found return
+    ╭─[ main.baml:28:3 ]
+    │
+ 28 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected block after 'if let' header, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected block after 'if let' header, found '}'
+    ╭─[ main.baml:34:1 ]
+    │
+ 34 │ }
+    │ ┬  
+    │ ╰── Expected block after 'if let' header, found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected block after 'while let' header, found return
+    ╭─[ main.baml:39:3 ]
+    │
+ 39 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected block after 'while let' header, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected identifier after 'let', found '='
+    ╭─[ main.baml:44:13 ]
+    │
+ 44 │   while let = v {
+    │             ┬  
+    │             ╰── Expected identifier after 'let', found '='
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected block after 'while let' header, found return
+    ╭─[ main.baml:46:3 ]
+    │
+ 46 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected block after 'while let' header, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected block after 'else' in let-else, found ';'
+    ╭─[ main.baml:51:24 ]
+    │
+ 51 │   let x: int = raw else;
+    │                        ┬  
+    │                        ╰── Expected block after 'else' in let-else, found ';'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected block after 'else' in let-else, found integer
+    ╭─[ main.baml:57:25 ]
+    │
+ 57 │   let x: int = raw else 0;
+    │                         ┬  
+    │                         ╰── Expected block after 'else' in let-else, found integer
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected class destructure patterns are not yet supported, found identifier
+    ╭─[ main.baml:71:17 ]
+    │
+ 71 │   } else if let x {
+    │                 ┬  
+    │                 ╰── Expected class destructure patterns are not yet supported, found identifier
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected field name, found return
+    ╭─[ main.baml:72:5 ]
+    │
+ 72 │     return 2;
+    │     ───┬──  
+    │        ╰──── Expected field name, found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ',' or '}' after field pattern, found integer
+    ╭─[ main.baml:72:12 ]
+    │
+ 72 │     return 2;
+    │            ┬  
+    │            ╰── Expected ',' or '}' after field pattern, found integer
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected field name, found ';'
+    ╭─[ main.baml:72:13 ]
+    │
+ 72 │     return 2;
+    │             ┬  
+    │             ╰── Expected field name, found ';'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected initializer (=), found return
+    ╭─[ main.baml:74:3 ]
+    │
+ 74 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected initializer (=), found return
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected block after 'if let' header, found return
+    ╭─[ main.baml:74:3 ]
+    │
+ 74 │   return 0;
+    │   ───┬──  
+    │      ╰──── Expected block after 'if let' header, found return
+    │ 
+    │ Note: Error code: E0010
+────╯

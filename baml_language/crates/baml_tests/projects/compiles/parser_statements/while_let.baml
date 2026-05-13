@@ -1,0 +1,72 @@
+// Tests for `while let` loops, modeled on Rust's `while let`.
+//
+// `while let <pat> = <expr> { body }` desugars at AST lowering time to:
+//   while (true) {
+//       match (<expr>) {
+//           <pat> => { body },
+//           _     => { break; },
+//       }
+//   }
+
+function while_let_type_narrow_terminates_on_mismatch() -> int {
+  // First iteration matches (x: int), second iteration we rewrite x to a
+  // string so the match arm `let n: int` no longer matches and the loop
+  // breaks via the synthesised wildcard arm.
+  let x: int | string = 1;
+  let count = 0;
+  while let n: int = x {
+    count = count + 1;
+    if count >= 3 {
+      x = "stop";
+    }
+  };
+  return count;
+}
+
+function while_let_with_assignment_inside() -> int {
+  let v: int | string = 5;
+  let sum = 0;
+  while let n: int = v {
+    sum = sum + n;
+    if sum >= 15 {
+      v = "done";
+    }
+  };
+  return sum;
+}
+
+// NOTE: irrefutable `while let` (e.g. `while let n = i { ... break }`) is
+// intentionally not covered here — BAML's match exhaustiveness check
+// reports the synthetic break arm as "unreachable arm". Rust rejects the
+// same pattern as `irrefutable while-let pattern`.
+
+function while_let_nested() -> int {
+  let outer: int | string = 1;
+  let inner: int | string = 10;
+  let acc = 0;
+  while let o: int = outer {
+    while let i: int = inner {
+      acc = acc + o + i;
+      inner = "stop";
+    };
+    outer = "stop";
+    inner = 10;
+  };
+  return acc;
+}
+
+function while_let_with_continue() -> int {
+  let v: int | string = 0;
+  let acc = 0;
+  while let n: int = v {
+    v = n + 1;
+    if n == 2 {
+      continue;
+    }
+    acc = acc + n;
+    if n >= 4 {
+      v = "stop";
+    }
+  };
+  return acc;
+}

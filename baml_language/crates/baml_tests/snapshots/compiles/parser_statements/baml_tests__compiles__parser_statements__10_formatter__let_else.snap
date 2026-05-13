@@ -1,0 +1,96 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Tests for `let ... else` statements, modeled on Rust's let-else.
+//
+// `let <pat> = <expr> else { <div> };` desugars at AST lowering time into
+// three statements:
+//
+//   let __let_else_tmp_N = <expr>;
+//   match (__let_else_tmp_N) {
+//       <pat> => null,
+//       _     => { <div> }
+//   };
+//   let <pat> = __let_else_tmp_N;
+//
+// The `<div>` block is expected to diverge (return / throw / break /
+// continue), exactly like Rust's let-else.
+
+function let_else_returns_on_mismatch() -> int {
+    let v: int | string = "oops";
+    let n: int = v else {
+        return -1;
+    };
+    return n;
+}
+
+function let_else_binds_when_match() -> int {
+    let v: int | string = 42;
+    let n: int = v else {
+        return -1;
+    };
+    return n + 1;
+}
+
+function let_else_with_throw() -> int {
+    let v: int | string = 7;
+    let n: int = v else {
+        throw "expected int";
+    };
+    return n;
+}
+
+function let_else_inside_loop_break() -> int {
+    let acc = 0;
+    let i = 0;
+    while (i < 5) {
+        let v: int | string = i;
+        let n: int = v else {
+            break;
+        };
+        acc = acc + n;
+        i = i + 1;
+    }
+    ;
+    return acc;
+}
+
+function let_else_inside_loop_continue() -> int {
+    let acc = 0;
+    let i = 0;
+    while (i < 5) {
+        i = i + 1;
+        let v: int | string = i;
+        let n: int = v else {
+            continue;
+        };
+        acc = acc + n;
+    }
+    ;
+    return acc;
+}
+
+function let_else_multiple_bindings_in_sequence() -> int {
+    let a_raw: int | string = 1;
+    let b_raw: int | string = 2;
+    let a: int = a_raw else {
+        return -1;
+    };
+    let b: int = b_raw else {
+        return -2;
+    };
+    return a + b;
+}
+
+// NOTE: irrefutable let-else (e.g. `let n = 5 else { ... }` or
+// `let n: int = 1+2+3 else {...}` where the initializer is statically
+// known to match the pattern) is intentionally not covered here — BAML's
+// match exhaustiveness check reports the diverge arm as "unreachable arm".
+// Rust rejects the same pattern as `irrefutable let-else pattern`.
+
+function let_else_with_call_initializer(x: int | string) -> int {
+    let n: int = x else {
+        return -1;
+    };
+    return n;
+}

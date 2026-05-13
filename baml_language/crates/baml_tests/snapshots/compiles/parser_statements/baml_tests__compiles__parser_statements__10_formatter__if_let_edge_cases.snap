@@ -1,0 +1,106 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Edge cases that exercise the boundaries of `if let` semantics:
+//   - the binding does NOT leak out past the construct
+//   - the binding does NOT leak into the else branch
+//   - shadowing of an outer binding works and is restored afterwards
+//   - nested `if let` works, including in scrutinee position
+//   - wildcards / pure-type patterns work
+//   - else-if-let chains work
+
+// The outer `x` is shadowed inside the `if let` body, then visible again after.
+function if_let_shadow_then_restore() -> int {
+    let x = 100;
+    let v: int | string = 3;
+    let inside = if let x: int = v {
+        x + 1
+    } else {
+        0
+    };
+    // `x` here MUST refer to the outer binding (100), not the if-let's `x`.
+    return inside + x;
+}
+
+// The if-let binding must NOT be visible in the else branch — Rust's behaviour.
+// Here `n` in the else refers to the outer `n`, NOT the inner if-let's `n`.
+function if_let_else_sees_outer_not_inner() -> int {
+    let n = 999;
+    let v: int | string = "nope";
+    return if let n: int = v {
+        n
+    } else {
+        // Here `n` is the OUTER 999, not the if-let's int binding.
+        n
+    };
+}
+
+// `if let` where the scrutinee expression is itself a nested `if let`. The
+// inner if-let returns `string | int` (one branch evaluates to a string, the
+// other to int) so the outer `let x: int` arm is refutable and both branches
+// are reachable.
+function if_let_in_scrutinee(outer: int | string, mid: int | string) -> string {
+    let v = if let y: int = outer {
+        y * 2
+    } else {
+        "fallback"
+    };
+    if let x: int = v {
+        return "got_int";
+    } else {
+        return "got_other";
+    }
+}
+
+// Two sibling `if let`s reuse the same binding name without conflict.
+function if_let_siblings_same_name() -> int {
+    let a: int | string = 1;
+    let b: int | string = 2;
+    let r1 = if let x: int = a {
+        x
+    } else {
+        0
+    };
+    let r2 = if let x: int = b {
+        x
+    } else {
+        0
+    };
+    return r1 + r2;
+}
+
+// `else if let` chain — three branches, each binds its own name.
+function if_let_chained_else_if_let() -> int {
+    let v: int | string | bool = "abc";
+    if let i: int = v {
+        return i;
+    } else if let s: string = v {
+        return 1;
+    } else if let b: bool = v {
+        return 2;
+    } else {
+        return -1;
+    }
+}
+
+// Body block declares its OWN local that shadows the if-let binding.
+function if_let_body_local_shadows_binding() -> int {
+    let v: int | string = 5;
+    if let x: int = v {
+        let x = 100;
+        return x;
+    }
+    return -1;
+}
+
+// Lambda inside if-let body captures the binding.
+function if_let_lambda_captures_binding() -> int {
+    let v: int | string = 6;
+    if let x: int = v {
+        let f = () -> int {
+            x + 10
+        };
+        return f();
+    }
+    return -1;
+}

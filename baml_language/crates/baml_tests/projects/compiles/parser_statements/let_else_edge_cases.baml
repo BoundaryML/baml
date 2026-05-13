@@ -1,0 +1,102 @@
+// Edge cases for `let ... else`:
+//   - the binding IS visible after the let-else statement
+//   - the binding is NOT visible inside the else block
+//   - shadowing an outer binding with the same name works
+//   - sequence of let-else statements thread bindings forward
+//   - the divergent else block can use control flow (return, throw, break, continue)
+//   - wildcard let-else (no binding) is just a type assertion
+
+// Shadowing: outer `x` is shadowed by the let-else, then the shadow is the
+// only `x` visible until end of scope.
+function let_else_shadows_outer() -> int {
+  let x = 999;
+  let raw: int | string = 7;
+  let x: int = raw else {
+    return -1;
+  };
+  return x;
+}
+
+// Inside the else, the name being bound is NOT yet in scope. Here `outer`
+// (declared before the let-else) is the one used.
+function let_else_else_sees_outer_not_inner_yet() -> int {
+  let n = 11;
+  let raw: int | string = "oops";
+  let n: int = raw else {
+    // `n` here is the OUTER 11, NOT the let-else's binding.
+    return n - 1;
+  };
+  return n;
+}
+
+// Two consecutive let-else statements — bindings thread forward.
+function let_else_sequence_threads_bindings() -> int {
+  let raw_a: int | string = 1;
+  let a: int = raw_a else {
+    return -1;
+  };
+  let raw_b: int | string = a + 1;
+  let b: int = raw_b else {
+    return -2;
+  };
+  return a + b;
+}
+
+// Wildcard let-else — no binding introduced, just a runtime type assertion.
+function let_else_wildcard_no_binding() -> int {
+  let raw: int | string = 5;
+  let _: int = raw else {
+    return -1;
+  };
+  return 1;
+}
+
+// let-else where the else block uses `break` to exit a surrounding loop.
+function let_else_with_break_in_loop() -> int {
+  let acc = 0;
+  let i = 0;
+  while (i < 6) {
+    let raw: int | string = i;
+    let n: int = raw else {
+      break;
+    };
+    acc = acc + n;
+    i = i + 1;
+  };
+  return acc;
+}
+
+// let-else where the else block uses `continue`.
+function let_else_with_continue_in_loop() -> int {
+  let acc = 0;
+  let i = 0;
+  while (i < 5) {
+    i = i + 1;
+    let raw: int | string = i;
+    let n: int = raw else {
+      continue;
+    };
+    acc = acc + n;
+  };
+  return acc;
+}
+
+// let-else's binding is visible in a lambda declared AFTER the let-else.
+function let_else_binding_captured_in_lambda() -> int {
+  let raw: int | string = 9;
+  let n: int = raw else {
+    return -1;
+  };
+  let f = () -> int { n + 1 };
+  return f();
+}
+
+// Outer scope can use the binding even though the else block diverged.
+function let_else_after_block_uses_binding() -> int {
+  let raw: int | string = 5;
+  let n: int = raw else {
+    return -1;
+  };
+  let doubled = n * 2;
+  return doubled;
+}
