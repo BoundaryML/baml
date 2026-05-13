@@ -16,7 +16,12 @@ impl BamlNamespaceMock for PackageBamlImpl {
     /// `HeapPtr` identity of the target is what the interception path
     /// matches against in `Instruction::Call`, `Instruction::CallIndirect`,
     /// and `Instruction::DispatchFuture`.
-    fn push_override(vm: &mut BexVm, target: &Value, replacement: &Value) {
+    fn push_override(
+        vm: &mut BexVm,
+        target: &Value,
+        replacement: &Value,
+        counter_owner: Option<&Value>,
+    ) {
         if let (Value::Object(t), Value::Object(r)) = (target, replacement) {
             // Decompose the target into (function ptr, optional receiver):
             // a `BoundMethod` carries an instance and produces a
@@ -24,10 +29,18 @@ impl BamlNamespaceMock for PackageBamlImpl {
             // against the function identity (covers Function, Closure, and
             // class-method-as-value).
             let (target_fn, receiver) = vm.callable_identity_with_receiver(*t);
+            // `counter_owner` is the `Mock<T>` instance whose `call_count`
+            // field gets bumped on each match. The BAML signature types it
+            // as `Mock<T>?` so callers can opt out by passing `null`.
+            let counter_instance = match counter_owner {
+                Some(Value::Object(o)) => Some(*o),
+                _ => None,
+            };
             vm.mock_stack.push(crate::vm::MockOverride {
                 target_fn,
                 receiver,
                 replacement: *r,
+                counter_instance,
             });
         }
     }

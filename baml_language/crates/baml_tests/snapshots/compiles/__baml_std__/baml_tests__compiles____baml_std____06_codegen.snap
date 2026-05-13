@@ -4385,6 +4385,7 @@ function baml.mock.Mock.scope(self: null, body: () -> void throws never) -> void
     load_field ._original
     load_var self
     load_field ._impl
+    load_var self
     call baml.mock.push_override
     pop 1
     load_var body
@@ -4443,7 +4444,7 @@ function baml.mock.Mock.to_json(self: null) -> baml.json.json {
 function baml.mock.pop_override() -> null {
 }
 
-function baml.mock.push_override(target: void, replacement: void) -> null {
+function baml.mock.push_override(target: void, replacement: void, counter_owner: baml.mock.Mock<void>?) -> null {
 }
 
 function baml.net.Socket.close(self: null) -> null {

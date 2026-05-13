@@ -6243,7 +6243,7 @@ fn baml.mock.Mock.scope(self: baml.mock.Mock, body: () -> void throws never) -> 
         _4 = copy _1.1;
         _5 = copy _1.0;
         _6 = load_type(#0);
-        _3 = call const fn baml.mock.push_override<copy _6>(copy _4, copy _5) -> [bb1];
+        _3 = call const fn baml.mock.push_override<copy _6>(copy _4, copy _5, copy _1) -> [bb1];
     }
 
     bb1: {

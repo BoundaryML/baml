@@ -803,7 +803,7 @@ function baml.mock.new(original: baml.mock.T, impl: baml.mock.T) -> baml.mock.Mo
   {  } baml.mock.Mock { _impl: impl, _original: original, call_count: 0 }
 }
 function baml.mock.pop_override() -> null  [builtin]
-function baml.mock.push_override(target: baml.mock.T, replacement: baml.mock.T) -> null  [builtin]
+function baml.mock.push_override(target: baml.mock.T, replacement: baml.mock.T, counter_owner: baml.mock.Mock?) -> null  [builtin]
 function baml.mock.replace(self: ?, impl: baml.mock.T) -> void  [expr] {
   { self._impl = impl }
 }
@@ -811,7 +811,7 @@ function baml.mock.reset(self: ?) -> void  [expr] {
   { self.call_count = 0 }
 }
 function baml.mock.scope(self: ?, body: () -> baml.mock.U throws baml.mock.EU) -> baml.mock.U  [expr] {
-  { let _ = baml.mock.push_override(self._original, self._impl); let result = {  } body() catch_all (e) { _ => { let _ = baml.mock.pop_override(); throw e } }; let _ = baml.mock.pop_override() } result
+  { let _ = baml.mock.push_override(self._original, self._impl, self); let result = {  } body() catch_all (e) { _ => { let _ = baml.mock.pop_override(); throw e } }; let _ = baml.mock.pop_override() } result
 }
 function baml.mock.spy(original: baml.mock.T) -> baml.mock.Mock  [expr] {
   {  } baml.mock.Mock { _impl: original, _original: original, call_count: 0 }

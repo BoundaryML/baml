@@ -104,6 +104,35 @@ async fn mock_replace_changes_active_impl() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1005)));
 }
 
+/// `call_count` ticks up automatically for each intercepted call inside
+/// `scope` — no need for a user-written counter inside the replacement.
+#[tokio::test]
+async fn mock_scope_auto_increments_call_count() {
+    let output = baml_test!(
+        r#"
+        function double(n: int) -> int { n * 2 }
+        function triple(n: int) -> int { n * 3 }
+        function call_double(n: int) -> int { double(n) }
+
+        function main() -> int {
+            let m = baml.mock.Mock.new(double, triple)
+            let inside = m.scope<int, never>(() -> int throws never {
+                call_double(1) + call_double(2) + call_double(3)
+            })
+            // After scope: replacement ran 3 times, call_count == 3.
+            // call_double(4) outside the scope hits the real `double`,
+            // returns 8, and does NOT bump call_count.
+            let outside = call_double(4)
+            inside * 1000 + outside * 100 + m.call_count
+        }
+    "#
+    );
+
+    // inside = 3 + 6 + 9 = 18 ; outside = 8 ; call_count = 3
+    // result = 18_000 + 800 + 3 = 18_803
+    assert_eq!(output.result, Ok(BexExternalValue::Int(18_803)));
+}
+
 /// Sanity: a direct method call (`c.method(arg)`) is intercepted today.
 /// This is the common case and the compiler appears to lower it through a
 /// path that already consults `mock_stack`. Kept as a regression guard so

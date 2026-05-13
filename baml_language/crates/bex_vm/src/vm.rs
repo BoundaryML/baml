@@ -75,7 +75,17 @@ pub struct MockOverride {
     /// Heap pointer to the replacement callable (`Function`, `Closure`, or
     /// `BoundMethod`). Invoked in place of the target on a match.
     pub replacement: HeapPtr,
+    /// Optional `Mock<T>` instance whose `call_count` field is incremented
+    /// each time this entry intercepts a call. `Mock.scope` passes
+    /// `self` here so callers see the counter tick up without needing a
+    /// BAML-level trampoline closure.
+    pub counter_instance: Option<HeapPtr>,
 }
+
+/// Field index of `call_count` inside a `Mock<T>` instance, matching the
+/// declaration order in `baml/ns_mock/mock.baml` (`_impl`, `_original`,
+/// `call_count`). Used by the VM intercept path to bump the counter.
+pub const MOCK_CALL_COUNT_FIELD_IDX: usize = 2;
 
 /// Bytecode call frame — pushed when entering a bytecode function.
 #[derive(Clone, Debug)]
@@ -764,10 +774,11 @@ impl BexVm {
     /// `(target_fn, call_receiver)`. An entry's `receiver = None` is a
     /// wildcard (matches every call to `target_fn`); `Some(r)` requires
     /// the call to be on a `BoundMethod` whose receiver equals `r`.
-    /// Returns the replacement pointer on a hit.
+    /// Returns the replacement pointer on a hit and bumps the matched
+    /// entry's owning `Mock` instance's `call_count` field (if any).
     #[inline]
     pub fn lookup_mock_override(
-        &self,
+        &mut self,
         target_fn: HeapPtr,
         call_receiver: Option<Value>,
     ) -> Option<HeapPtr> {
@@ -778,18 +789,34 @@ impl BexVm {
             if entry.target_fn != target_fn {
                 continue;
             }
-            match entry.receiver {
-                None => return Some(entry.replacement),
-                Some(want) => {
-                    if let Some(got) = call_receiver {
-                        if want == got {
-                            return Some(entry.replacement);
-                        }
-                    }
+            let matched = match entry.receiver {
+                None => true,
+                Some(want) => call_receiver.is_some_and(|got| want == got),
+            };
+            if matched {
+                let replacement = entry.replacement;
+                let counter_instance = entry.counter_instance;
+                if let Some(inst_ptr) = counter_instance {
+                    self.bump_mock_call_count(inst_ptr);
                 }
+                return Some(replacement);
             }
         }
         None
+    }
+
+    /// Increment the `call_count` field (index `MOCK_CALL_COUNT_FIELD_IDX`)
+    /// of a `Mock<T>` instance. No-op if the pointer isn't an instance or
+    /// the field isn't an `Int` — defensive, since the field's existence
+    /// is guaranteed by the `Mock<T>` class definition but the VM doesn't
+    /// statically know the entry's instance shape.
+    #[inline]
+    fn bump_mock_call_count(&mut self, instance_ptr: HeapPtr) {
+        if let Object::Instance(instance) = self.get_object_mut(instance_ptr) {
+            if let Some(Value::Int(n)) = instance.fields.get_mut(MOCK_CALL_COUNT_FIELD_IDX) {
+                *n = n.saturating_add(1);
+            }
+        }
     }
 
     /// Convenience: caller has a raw callee `HeapPtr` and wants to look up
@@ -805,7 +832,7 @@ impl BexVm {
     /// be inferred from the stack (e.g. `DispatchFuture` for `SysOps`).
     #[inline]
     pub fn lookup_mock_override_for_callee(
-        &self,
+        &mut self,
         callee: HeapPtr,
         args_base: Option<StackIndex>,
     ) -> Option<HeapPtr> {
@@ -3757,13 +3784,18 @@ impl BexVm {
                 let expected_type = FunctionType::SysOp;
                 let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
 
-                // Can't dispatch if it's not a function
-                let Object::Function(callable_future) = self.get_object(callee_ptr) else {
-                    return Err(VmInternalError::TypeError {
-                        expected: expected_type.into(),
-                        got: ObjectType::of(self.get_object(callee_ptr)).into(),
+                // Copy out the function fields we need so the immutable
+                // borrow ends before we may need `&mut self` (for the mock
+                // intercept's counter bump).
+                let (callable_arity, callable_kind) = match self.get_object(callee_ptr) {
+                    Object::Function(f) => (f.arity, f.kind),
+                    other => {
+                        return Err(VmInternalError::TypeError {
+                            expected: expected_type.into(),
+                            got: ObjectType::of(other).into(),
+                        }
+                        .into());
                     }
-                    .into());
                 };
 
                 // Mock-stack interception: if a replacement is registered for
@@ -3779,7 +3811,7 @@ impl BexVm {
                 if let Some(replacement_ptr) =
                     self.lookup_mock_override_for_callee(callee_ptr, None)
                 {
-                    let arity = callable_future.arity;
+                    let arity = callable_arity;
                     let args_offset = self
                         .stack
                         .len()
@@ -3806,17 +3838,19 @@ impl BexVm {
                 }
 
                 // Must be a sys_op - extract the SysOp.
-                let FunctionKind::SysOp(sys_op) = callable_future.kind else {
+                let FunctionKind::SysOp(sys_op) = callable_kind else {
                     return Err(VmInternalError::TypeError {
                         expected: FunctionType::SysOp.into(),
-                        got: FunctionType::from(&callable_future.kind).into(),
+                        got: FunctionType::from(&callable_kind).into(),
                     }
                     .into());
                 };
 
-                let args_offset = self.stack.len().checked_sub(callable_future.arity).ok_or(
-                    VmInternalError::NotEnoughItemsOnStack(callable_future.arity),
-                )?;
+                let args_offset = self
+                    .stack
+                    .len()
+                    .checked_sub(callable_arity)
+                    .ok_or(VmInternalError::NotEnoughItemsOnStack(callable_arity))?;
                 let args_offset = StackIndex::from_raw(args_offset);
 
                 // Collect function call args and cleanup consumed stack.
@@ -5739,12 +5773,15 @@ impl BexVm {
                     let callee_value = self.globals.get(self.proof(), callee);
                     let expected_type = FunctionType::SysOp;
                     let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
-                    let Object::Function(callable_future) = self.get_object(callee_ptr) else {
-                        return Err(VmInternalError::TypeError {
-                            expected: expected_type.into(),
-                            got: ObjectType::of(self.get_object(callee_ptr)).into(),
+                    let (callable_arity, callable_kind) = match self.get_object(callee_ptr) {
+                        Object::Function(f) => (f.arity, f.kind),
+                        other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: expected_type.into(),
+                                got: ObjectType::of(other).into(),
+                            }
+                            .into());
                         }
-                        .into());
                     };
 
                     // Mock-stack interception: if a replacement is registered
@@ -5757,7 +5794,7 @@ impl BexVm {
                     if let Some(replacement_ptr) =
                         self.lookup_mock_override_for_callee(callee_ptr, None)
                     {
-                        let arity = callable_future.arity;
+                        let arity = callable_arity;
                         let args_offset = self
                             .stack
                             .len()
@@ -5793,16 +5830,18 @@ impl BexVm {
                         return Ok(None);
                     }
 
-                    let FunctionKind::SysOp(sys_op) = callable_future.kind else {
+                    let FunctionKind::SysOp(sys_op) = callable_kind else {
                         return Err(VmInternalError::TypeError {
                             expected: FunctionType::SysOp.into(),
-                            got: FunctionType::from(&callable_future.kind).into(),
+                            got: FunctionType::from(&callable_kind).into(),
                         }
                         .into());
                     };
-                    let args_offset = self.stack.len().checked_sub(callable_future.arity).ok_or(
-                        VmInternalError::NotEnoughItemsOnStack(callable_future.arity),
-                    )?;
+                    let args_offset = self
+                        .stack
+                        .len()
+                        .checked_sub(callable_arity)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(callable_arity))?;
                     let args_offset = StackIndex::from_raw(args_offset);
                     let future_args: Vec<Value> = self.stack.drain(args_offset..).collect();
                     let pending_future = bex_vm_types::types::UnscheduledFuture {
@@ -7256,6 +7295,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
             if let Some(Value::Object(receiver)) = entry.receiver {
                 roots.push(receiver);
             }
+            if let Some(inst) = entry.counter_instance {
+                roots.push(inst);
+            }
         }
 
         // Note: Frame locals are stored in the stack at the locals_offset position,
@@ -7298,6 +7340,11 @@ impl ::bex_vm_types::RootHaver for BexVm {
             if let Some(Value::Object(ref mut receiver_ptr)) = entry.receiver {
                 if let Some(&new) = roots.get(receiver_ptr) {
                     *receiver_ptr = new;
+                }
+            }
+            if let Some(inst) = &mut entry.counter_instance {
+                if let Some(&new) = roots.get(inst) {
+                    *inst = new;
                 }
             }
         }

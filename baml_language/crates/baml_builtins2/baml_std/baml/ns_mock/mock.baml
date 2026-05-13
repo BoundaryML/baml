@@ -22,8 +22,12 @@
 /// active mock stack. The override stays in effect until a matching
 /// `pop_override` call. Pairs MUST be balanced — `Mock.scope` is the intended
 /// caller and handles the bookkeeping.
+///
+/// `counter_owner` is the `Mock<T>` instance whose `call_count` field
+/// should be incremented when this override fires. Pass `null` to skip
+/// counter tracking (e.g. tests pushing overrides outside of a `Mock`).
 //baml:mut_vm
-function push_override<T>(target: T, replacement: T) -> null {
+function push_override<T>(target: T, replacement: T, counter_owner: Mock<T>?) -> null {
   $rust_function
 }
 
@@ -69,12 +73,10 @@ class Mock<T> {
   /// function within `body` is redirected to the current `_impl`. The
   /// override is removed when `body` returns or throws.
   ///
-  /// NOTE: `call_count` is **not** automatically incremented for intercepted
-  /// calls inside `scope` in this version — track interceptions from inside
-  /// the replacement closure itself if you need that today.
+  /// `call_count` is incremented on each intercepted call.
   //baml:mut_self
   function scope<U, EU>(self, body: () -> U throws EU) -> U throws EU {
-    let _ = baml.mock.push_override<T>(self._original, self._impl)
+    let _ = baml.mock.push_override<T>(self._original, self._impl, self)
     let result = {
       body()
     } catch_all (e) {
